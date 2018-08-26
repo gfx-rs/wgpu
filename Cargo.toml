@@ -1,0 +1,8 @@
+[package]
+name = "d3d12-rs"
+version = "0.1.0"
+authors = ["msiglreith <m.siglreith@gmail.com>"]
+
+[dependencies]
+bitflags = "1"
+winapi = { version = "0.3", features = ["d3d12","d3dcommon","d3dcompiler","dxgiformat","winerror"] }
