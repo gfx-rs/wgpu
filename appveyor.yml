@@ -23,4 +23,4 @@ install:
 
 build: false
 test_script:
-  - C:\MinGW\bin\mingw32-make.exe all
+  - cargo check
