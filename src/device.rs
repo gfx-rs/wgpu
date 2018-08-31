@@ -258,7 +258,7 @@ impl Device {
             self.CreateCommandSignature(
                 &desc,
                 root_signature.as_mut_ptr(),
-                &d3d12::ID3D12RootSignature::uuidof(),
+                &d3d12::ID3D12CommandSignature::uuidof(),
                 signature.mut_void(),
             )
         };
