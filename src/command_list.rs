@@ -103,6 +103,12 @@ impl GraphicsCommandList {
         }
     }
 
+    pub fn clear_render_target_view(&self, rtv: CpuDescriptor, color: [f32; 4], rects: &[Rect]) {
+        unsafe {
+            self.ClearRenderTargetView(rtv, &color, rects.len() as _, rects.as_ptr());
+        }
+    }
+
     pub fn dispatch(&self, count: WorkGroupCount) {
         unsafe {
             self.Dispatch(count[0], count[1], count[2]);

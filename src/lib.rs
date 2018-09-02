@@ -52,6 +52,11 @@ pub type WorkGroupCount = [u32; 3];
 
 pub type TextureAddressMode = [d3d12::D3D12_TEXTURE_ADDRESS_MODE; 3];
 
+pub struct SampleDesc {
+    pub count: u32,
+    pub quality: u32,
+}
+
 #[repr(u32)]
 pub enum FeatureLevel {
     L9_1 = d3dcommon::D3D_FEATURE_LEVEL_9_1,

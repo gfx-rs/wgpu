@@ -2,14 +2,14 @@
 
 use com::WeakPtr;
 use command_list::{CmdListType, CommandSignature, IndirectArgument};
-use descriptor::{CpuDescriptor, HeapFlags, HeapType};
+use descriptor::{CpuDescriptor, HeapFlags, HeapType, RenderTargetViewDesc};
 use std::ops::Range;
 use winapi::um::d3d12;
 use winapi::Interface;
 use {pso, query, queue};
 use {
     Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap, FeatureLevel,
-    GraphicsCommandList, NodeMask, PipelineState, QueryHeap, RootSignature, Shader,
+    GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature, Shader,
     TextureAddressMode,
 };
 
@@ -264,5 +264,16 @@ impl Device {
         };
 
         (signature, hr)
+    }
+
+    pub fn create_render_target_view(
+        &self,
+        resource: Resource,
+        desc: &RenderTargetViewDesc,
+        descriptor: CpuDescriptor,
+    ) {
+        unsafe {
+            self.CreateRenderTargetView(resource.as_mut_ptr(), &desc.0 as *const _, descriptor);
+        }
     }
 }
