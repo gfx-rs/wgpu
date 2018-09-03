@@ -7,6 +7,11 @@ use {Blob, D3DResult, Error, TextureAddressMode};
 pub type CpuDescriptor = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE;
 pub type GpuDescriptor = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE;
 
+pub struct Binding {
+    pub register: u32,
+    pub space: u32,
+}
+
 #[repr(u32)]
 #[derive(Clone, Copy)]
 pub enum HeapType {
@@ -57,18 +62,12 @@ pub enum DescriptorRangeType {
 #[repr(transparent)]
 pub struct DescriptorRange(d3d12::D3D12_DESCRIPTOR_RANGE);
 impl DescriptorRange {
-    pub fn new(
-        ty: DescriptorRangeType,
-        count: u32,
-        base_register: u32,
-        register_space: u32,
-        offset: u32,
-    ) -> Self {
+    pub fn new(ty: DescriptorRangeType, count: u32, base_binding: Binding, offset: u32) -> Self {
         DescriptorRange(d3d12::D3D12_DESCRIPTOR_RANGE {
             RangeType: ty as _,
             NumDescriptors: count,
-            BaseShaderRegister: base_register,
-            RegisterSpace: register_space,
+            BaseShaderRegister: base_binding.register,
+            RegisterSpace: base_binding.space,
             OffsetInDescriptorsFromTableStart: offset,
         })
     }
@@ -93,12 +92,7 @@ impl RootParameter {
         RootParameter(param)
     }
 
-    pub fn constants(
-        visibility: ShaderVisibility,
-        register: u32,
-        register_space: u32,
-        num: u32,
-    ) -> Self {
+    pub fn constants(visibility: ShaderVisibility, binding: Binding, num: u32) -> Self {
         let mut param = d3d12::D3D12_ROOT_PARAMETER {
             ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
             ShaderVisibility: visibility as _,
@@ -106,8 +100,8 @@ impl RootParameter {
         };
 
         *unsafe { param.u.Constants_mut() } = d3d12::D3D12_ROOT_CONSTANTS {
-            ShaderRegister: register,
-            RegisterSpace: register_space,
+            ShaderRegister: binding.register,
+            RegisterSpace: binding.space,
             Num32BitValues: num,
         };
 
@@ -127,8 +121,7 @@ pub struct StaticSampler(d3d12::D3D12_STATIC_SAMPLER_DESC);
 impl StaticSampler {
     pub fn new(
         visibility: ShaderVisibility,
-        register: u32,
-        register_space: u32,
+        binding: Binding,
 
         filter: d3d12::D3D12_FILTER,
         address_mode: TextureAddressMode,
@@ -149,8 +142,8 @@ impl StaticSampler {
             BorderColor: border_color as _,
             MinLOD: lod.start,
             MaxLOD: lod.end,
-            ShaderRegister: register,
-            RegisterSpace: register_space,
+            ShaderRegister: binding.register,
+            RegisterSpace: binding.space,
             ShaderVisibility: visibility as _,
         })
     }
