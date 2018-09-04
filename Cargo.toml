@@ -8,4 +8,4 @@ bitflags = "1"
 
 [dependencies.winapi]
 version = "0.3"
-features = ["dxgi1_2","dxgi1_3","dxgi1_4","d3d12","d3d12sdklayers","d3dcommon","d3dcompiler","dxgiformat","winerror"]
+features = ["dxgi1_2","dxgi1_3","dxgi1_4","d3d12","d3d12sdklayers","d3dcommon","d3dcompiler","dxgiformat","synchapi","winerror"]
