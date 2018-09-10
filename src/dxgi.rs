@@ -1,0 +1,160 @@
+use com::WeakPtr;
+use std::ptr;
+use winapi::shared::windef::HWND;
+use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype};
+use winapi::um::d3d12;
+use winapi::Interface;
+use {CommandQueue, D3DResult, Resource, SampleDesc, HRESULT};
+
+bitflags! {
+    pub struct FactoryCreationFlags: u32 {
+        const DEBUG = dxgi1_3::DXGI_CREATE_FACTORY_DEBUG;
+    }
+}
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone)]
+pub enum Scaling {
+    Stretch = dxgi1_2::DXGI_SCALING_STRETCH,
+    Identity = dxgi1_2::DXGI_SCALING_NONE,
+    Aspect = dxgi1_2::DXGI_SCALING_ASPECT_RATIO_STRETCH,
+}
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone)]
+pub enum SwapEffect {
+    Discard = dxgi::DXGI_SWAP_EFFECT_DISCARD,
+    Sequential = dxgi::DXGI_SWAP_EFFECT_SEQUENTIAL,
+    FlipDiscard = dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
+    FlipSequential = dxgi::DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
+}
+
+#[repr(u32)]
+#[derive(Debug, Copy, Clone)]
+pub enum AlphaMode {
+    Unspecified = dxgi1_2::DXGI_ALPHA_MODE_UNSPECIFIED,
+    Premultiplied = dxgi1_2::DXGI_ALPHA_MODE_PREMULTIPLIED,
+    Straight = dxgi1_2::DXGI_ALPHA_MODE_STRAIGHT,
+    Ignore = dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
+    ForceDword = dxgi1_2::DXGI_ALPHA_MODE_FORCE_DWORD,
+}
+
+pub type Adapter1 = WeakPtr<dxgi::IDXGIAdapter1>;
+pub type Factory2 = WeakPtr<dxgi1_2::IDXGIFactory2>;
+pub type Factory4 = WeakPtr<dxgi1_4::IDXGIFactory4>;
+pub type SwapChain = WeakPtr<dxgi::IDXGISwapChain>;
+pub type SwapChain1 = WeakPtr<dxgi1_2::IDXGISwapChain1>;
+pub type SwapChain3 = WeakPtr<dxgi1_4::IDXGISwapChain3>;
+
+// TODO: strong types
+pub struct SwapchainDesc {
+    pub width: u32,
+    pub height: u32,
+    pub format: dxgiformat::DXGI_FORMAT,
+    pub stereo: bool,
+    pub sample: SampleDesc,
+    pub buffer_usage: dxgitype::DXGI_USAGE,
+    pub buffer_count: u32,
+    pub scaling: Scaling,
+    pub swap_effect: SwapEffect,
+    pub alpha_mode: AlphaMode,
+    pub flags: u32,
+}
+
+impl Factory2 {
+    // TODO: interface not complete
+    pub fn create_swapchain_for_hwnd(
+        &self,
+        queue: CommandQueue,
+        hwnd: HWND,
+        desc: &SwapchainDesc,
+    ) -> D3DResult<SwapChain1> {
+        let desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
+            AlphaMode: desc.alpha_mode as _,
+            BufferCount: desc.buffer_count,
+            Width: desc.width,
+            Height: desc.height,
+            Format: desc.format,
+            Flags: desc.flags,
+            BufferUsage: desc.buffer_usage,
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: desc.sample.count,
+                Quality: desc.sample.quality,
+            },
+            Scaling: desc.scaling as _,
+            Stereo: desc.stereo as _,
+            SwapEffect: desc.swap_effect as _,
+        };
+
+        let mut swap_chain = SwapChain1::null();
+        let hr = unsafe {
+            self.CreateSwapChainForHwnd(
+                queue.as_mut_ptr() as *mut _,
+                hwnd,
+                &desc,
+                ptr::null(),
+                ptr::null_mut(),
+                swap_chain.mut_void() as *mut *mut _,
+            )
+        };
+
+        (swap_chain, hr)
+    }
+}
+
+impl Factory4 {
+    pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
+        let mut factory = Factory4::null();
+        let hr = unsafe {
+            dxgi1_3::CreateDXGIFactory2(
+                flags.bits(),
+                &dxgi1_4::IDXGIFactory4::uuidof(),
+                factory.mut_void(),
+            )
+        };
+
+        (factory, hr)
+    }
+
+    pub fn as_factory2(&self) -> Factory2 {
+        unsafe { Factory2::from_raw(self.as_mut_ptr() as *mut _) }
+    }
+
+    pub fn enumerate_adapters(&self, id: u32) -> D3DResult<Adapter1> {
+        let mut adapter = Adapter1::null();
+        let hr = unsafe { self.EnumAdapters1(id, adapter.mut_void() as *mut *mut _) };
+
+        (adapter, hr)
+    }
+}
+
+impl SwapChain {
+    pub fn get_buffer(&self, id: u32) -> D3DResult<Resource> {
+        let mut resource = Resource::null();
+        let hr =
+            unsafe { self.GetBuffer(id, &d3d12::ID3D12Resource::uuidof(), resource.mut_void()) };
+
+        (resource, hr)
+    }
+
+    // TODO: present flags
+    pub fn present(&self, interval: u32, flags: u32) -> HRESULT {
+        unsafe { self.Present(interval, flags) }
+    }
+}
+
+impl SwapChain1 {
+    pub fn as_swapchain0(&self) -> SwapChain {
+        unsafe { SwapChain::from_raw(self.as_mut_ptr() as *mut _) }
+    }
+}
+
+impl SwapChain3 {
+    pub fn as_swapchain0(&self) -> SwapChain {
+        unsafe { SwapChain::from_raw(self.as_mut_ptr() as *mut _) }
+    }
+
+    pub fn get_current_back_buffer_index(&self) -> u32 {
+        unsafe { self.GetCurrentBackBufferIndex() }
+    }
+}

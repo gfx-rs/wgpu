@@ -2,15 +2,15 @@
 
 use com::WeakPtr;
 use command_list::{CmdListType, CommandSignature, IndirectArgument};
-use descriptor::{CpuDescriptor, HeapFlags, HeapType};
+use descriptor::{CpuDescriptor, HeapFlags, HeapType, RenderTargetViewDesc};
 use std::ops::Range;
 use winapi::um::d3d12;
 use winapi::Interface;
 use {pso, query, queue};
 use {
     Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap, FeatureLevel,
-    GraphicsCommandList, NodeMask, PipelineState, QueryHeap, RootSignature, Shader,
-    TextureAddressMode,
+    Fence, GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature,
+    Shader, TextureAddressMode,
 };
 
 pub type Device = WeakPtr<d3d12::ID3D12Device>;
@@ -264,5 +264,31 @@ impl Device {
         };
 
         (signature, hr)
+    }
+
+    pub fn create_render_target_view(
+        &self,
+        resource: Resource,
+        desc: &RenderTargetViewDesc,
+        descriptor: CpuDescriptor,
+    ) {
+        unsafe {
+            self.CreateRenderTargetView(resource.as_mut_ptr(), &desc.0 as *const _, descriptor);
+        }
+    }
+
+    // TODO: interface not complete
+    pub fn create_fence(&self, initial: u64) -> D3DResult<Fence> {
+        let mut fence = Fence::null();
+        let hr = unsafe {
+            self.CreateFence(
+                initial,
+                d3d12::D3D12_FENCE_FLAG_NONE,
+                &d3d12::ID3D12Fence::uuidof(),
+                fence.mut_void(),
+            )
+        };
+
+        (fence, hr)
     }
 }

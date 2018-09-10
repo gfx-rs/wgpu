@@ -9,8 +9,10 @@ use winapi::um::{d3d12, d3dcommon};
 mod com;
 pub mod command_allocator;
 pub mod command_list;
+pub mod debug;
 pub mod descriptor;
 pub mod device;
+pub mod dxgi;
 pub mod pso;
 pub mod query;
 pub mod queue;
@@ -20,6 +22,7 @@ pub mod sync;
 pub use self::com::WeakPtr;
 pub use self::command_allocator::CommandAllocator;
 pub use self::command_list::{CommandSignature, GraphicsCommandList};
+pub use self::debug::Debug;
 pub use self::descriptor::{CpuDescriptor, DescriptorHeap, GpuDescriptor, RootSignature};
 pub use self::device::Device;
 pub use self::pso::{CachedPSO, PipelineState, Shader};
@@ -48,6 +51,11 @@ pub type InstanceCount = u32;
 pub type WorkGroupCount = [u32; 3];
 
 pub type TextureAddressMode = [d3d12::D3D12_TEXTURE_ADDRESS_MODE; 3];
+
+pub struct SampleDesc {
+    pub count: u32,
+    pub quality: u32,
+}
 
 #[repr(u32)]
 pub enum FeatureLevel {

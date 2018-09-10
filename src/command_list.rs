@@ -57,9 +57,14 @@ impl IndirectArgument {
 }
 
 pub type CommandSignature = WeakPtr<d3d12::ID3D12CommandSignature>;
+pub type CommandList = WeakPtr<d3d12::ID3D12CommandList>;
 pub type GraphicsCommandList = WeakPtr<d3d12::ID3D12GraphicsCommandList>;
 
 impl GraphicsCommandList {
+    pub fn as_list(&self) -> CommandList {
+        unsafe { CommandList::from_raw(self.as_mut_ptr() as *mut _) }
+    }
+
     pub fn close(&self) -> HRESULT {
         unsafe { self.Close() }
     }
@@ -100,6 +105,12 @@ impl GraphicsCommandList {
                 rects.len() as _,
                 rects.as_ptr(),
             );
+        }
+    }
+
+    pub fn clear_render_target_view(&self, rtv: CpuDescriptor, color: [f32; 4], rects: &[Rect]) {
+        unsafe {
+            self.ClearRenderTargetView(rtv, &color, rects.len() as _, rects.as_ptr());
         }
     }
 

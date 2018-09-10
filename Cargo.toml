@@ -1,8 +1,11 @@
 [package]
-name = "d3d12-rs"
+name = "d3d12"
 version = "0.1.0"
 authors = ["msiglreith <m.siglreith@gmail.com>"]
 
 [dependencies]
 bitflags = "1"
-winapi = { version = "0.3", features = ["d3d12","d3dcommon","d3dcompiler","dxgiformat","winerror"] }
+
+[dependencies.winapi]
+version = "0.3"
+features = ["dxgi1_2","dxgi1_3","dxgi1_4","d3d12","d3d12sdklayers","d3dcommon","d3dcompiler","dxgiformat","synchapi","winerror"]

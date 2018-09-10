@@ -15,6 +15,10 @@ impl<T> WeakPtr<T> {
         WeakPtr(ptr::null_mut())
     }
 
+    pub unsafe fn from_raw(raw: *mut T) -> Self {
+        WeakPtr(raw)
+    }
+
     pub fn is_null(&self) -> bool {
         self.0.is_null()
     }

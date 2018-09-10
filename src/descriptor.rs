@@ -1,6 +1,7 @@
 use com::WeakPtr;
 use std::mem;
 use std::ops::Range;
+use winapi::shared::dxgiformat;
 use winapi::um::d3d12;
 use {Blob, D3DResult, Error, TextureAddressMode};
 
@@ -196,5 +197,25 @@ impl RootSignature {
         };
 
         ((blob, error), hr)
+    }
+}
+
+#[repr(transparent)]
+pub struct RenderTargetViewDesc(pub(crate) d3d12::D3D12_RENDER_TARGET_VIEW_DESC);
+
+impl RenderTargetViewDesc {
+    pub fn texture_2d(format: dxgiformat::DXGI_FORMAT, mip_slice: u32, plane_slice: u32) -> Self {
+        let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: format,
+            ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
+            ..unsafe { mem::zeroed() }
+        };
+
+        *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
+            MipSlice: mip_slice,
+            PlaneSlice: plane_slice,
+        };
+
+        RenderTargetViewDesc(desc)
     }
 }
