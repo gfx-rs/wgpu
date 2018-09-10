@@ -6,7 +6,7 @@ use D3DResult;
 pub type Debug = WeakPtr<d3d12sdklayers::ID3D12Debug>;
 
 impl Debug {
-    pub fn get_debug_interface() -> D3DResult<Self> {
+    pub fn get_interface() -> D3DResult<Self> {
         let mut debug = Debug::null();
         let hr = unsafe {
             d3d12::D3D12GetDebugInterface(&d3d12sdklayers::ID3D12Debug::uuidof(), debug.mut_void())
@@ -15,7 +15,7 @@ impl Debug {
         (debug, hr)
     }
 
-    pub fn enable_debug_layer(&self) {
+    pub fn enable_layer(&self) {
         unsafe { self.EnableDebugLayer() }
     }
 }

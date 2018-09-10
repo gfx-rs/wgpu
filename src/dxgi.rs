@@ -116,7 +116,7 @@ impl Factory4 {
         (factory, hr)
     }
 
-    pub fn as2(&self) -> Factory2 {
+    pub fn as_factory2(&self) -> Factory2 {
         unsafe { Factory2::from_raw(self.as_mut_ptr() as *mut _) }
     }
 
@@ -144,13 +144,13 @@ impl SwapChain {
 }
 
 impl SwapChain1 {
-    pub fn as0(&self) -> SwapChain {
+    pub fn as_swapchain0(&self) -> SwapChain {
         unsafe { SwapChain::from_raw(self.as_mut_ptr() as *mut _) }
     }
 }
 
 impl SwapChain3 {
-    pub fn as0(&self) -> SwapChain {
+    pub fn as_swapchain0(&self) -> SwapChain {
         unsafe { SwapChain::from_raw(self.as_mut_ptr() as *mut _) }
     }
 
