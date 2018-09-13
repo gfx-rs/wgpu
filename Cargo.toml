@@ -1,0 +1,11 @@
+[package]
+name = "gpu"
+version = "0.1.0"
+authors = ["Dzmitry Malyshau <kvark@mozilla.com>"]
+
+[features]
+default = ["gfx-backend-vulkan"]
+
+[dependencies]
+gfx-hal = { git = "https://github.com/gfx-rs/gfx" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", optional = true }
