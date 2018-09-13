@@ -1,0 +1,11 @@
+[package]
+name = "javelin"
+version = "0.1.0"
+authors = ["Dzmitry Malyshau <kvarkus@gmail.com>"]
+
+[dependencies]
+rspirv = "0.5"
+spirv_headers = "1"
+
+[dev-dependencies]
+env_logger = "0.5"
