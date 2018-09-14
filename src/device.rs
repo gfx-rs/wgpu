@@ -1,4 +1,5 @@
 use hal::{self, Device as _Device};
+use memory;
 
 use {BufferHandle, CommandBufferHandle, DeviceHandle};
 
@@ -17,6 +18,7 @@ pub struct CommandBufferDescriptor {
 
 pub struct Device<B: hal::Backend> {
     pub gpu: hal::Gpu<B>,
+    pub memory_properties: hal::MemoryProperties,
 }
 
 pub struct Buffer<B: hal::Backend> {

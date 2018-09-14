@@ -61,5 +61,6 @@ fn adapter_create_device(
     let gpu = adapter.physical_device.open(&[(queue_family, &[1f32])]).unwrap();
     DeviceHandle::new(Device {
         gpu,
+        memory_properties: adapter.physical_device.memory_properties(),
     })
 }

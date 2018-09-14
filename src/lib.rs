@@ -5,6 +5,7 @@ extern crate gfx_backend_vulkan as back;
 extern crate gfx_backend_dx12 as back;
 #[cfg(feature = "gfx-backend-metal")]
 extern crate gfx_backend_metal as back;
+extern crate gfx_memory as memory;
 
 mod command;
 mod device;

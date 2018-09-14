@@ -1,6 +1,6 @@
 use hal;
 
-use {CommandBufferHandle, RenderPassHandle};
+use {CommandBuffer, CommandBufferHandle, RenderPassHandle};
 
 
 pub struct RenderPass<B: hal::Backend> {
@@ -23,5 +23,10 @@ fn render_pass_draw_indexed(
 
 pub extern "C"
 fn render_pass_end(pass: RenderPassHandle) -> CommandBufferHandle {
-    unimplemented!()
+    match pass.unbox() {
+        Some(pass) => CommandBufferHandle::new(CommandBuffer {
+            raw: pass.raw,
+        }),
+        None => CommandBufferHandle::null(),
+    }
 }
