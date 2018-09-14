@@ -7,7 +7,7 @@ fn main() {
     });
     let device = gn::adapter_create_device(adapter, gn::DeviceDescriptor {
         extensions: gn::Extensions {
-            anisotropicFiltering: false,
+            anisotropic_filtering: false,
         },
     });
 }

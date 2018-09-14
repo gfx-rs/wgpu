@@ -4,9 +4,11 @@ version = "0.1.0"
 authors = ["Dzmitry Malyshau <kvark@mozilla.com>"]
 
 [features]
+default = []
 
 [dependencies]
 gfx-hal = { git = "https://github.com/gfx-rs/gfx" }
+gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx" }
 gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", optional = true }
 gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", optional = true }
 gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", optional = true }
