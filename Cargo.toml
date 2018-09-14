@@ -1,5 +1,5 @@
 [package]
-name = "gpu"
+name = "gpu-native"
 version = "0.1.0"
 authors = ["Dzmitry Malyshau <kvark@mozilla.com>"]
 
