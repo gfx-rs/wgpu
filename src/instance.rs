@@ -14,7 +14,7 @@ pub struct AdapterDescriptor {
 
 #[repr(C)]
 pub struct Extensions {
-    anisotropicFiltering: bool,
+    anisotropic_filtering: bool,
 }
 
 #[repr(C)]
