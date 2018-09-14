@@ -1,4 +1,3 @@
-use back;
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
 use {AdapterHandle, Device, DeviceHandle, InstanceHandle};
@@ -28,8 +27,12 @@ pub struct DeviceDescriptor {
 
 pub extern "C"
 fn create_instance() -> InstanceHandle {
-    let inst = back::Instance::create("wgpu", 1);
-    InstanceHandle::new(inst)
+    #[cfg(any(feature = "gfx-backend-vulkan", feature = "gfx-backend-dx12", feature = "gfx-backend-metal"))]
+    {
+        let inst = ::back::Instance::create("wgpu", 1);
+        InstanceHandle::new(inst)
+    }
+    unimplemented!()
 }
 
 pub extern "C"
@@ -59,8 +62,6 @@ fn adapter_create_device(
 ) -> DeviceHandle {
     let queue_family = &adapter.queue_families[0];
     let gpu = adapter.physical_device.open(&[(queue_family, &[1f32])]).unwrap();
-    DeviceHandle::new(Device {
-        gpu,
-        memory_properties: adapter.physical_device.memory_properties(),
-    })
+    let mem_props = adapter.physical_device.memory_properties();
+    DeviceHandle::new(Device::new(gpu, mem_props))
 }

@@ -7,9 +7,10 @@ authors = ["Dzmitry Malyshau <kvark@mozilla.com>"]
 default = []
 
 [dependencies]
-gfx-hal = { git = "https://github.com/gfx-rs/gfx" }
-gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", optional = true }
-gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", optional = true }
-gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", optional = true }
-gfx-memory = { git = "https://github.com/gfx-rs/gfx-memory" }
+gfx-hal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" } # required by gfx-memory
+gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
+gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
+gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
+#gfx-memory = { git = "https://github.com/gfx-rs/gfx-memory" }
+gfx-memory = { git = "https://github.com/kvark/gfx-mem", branch = "update" }

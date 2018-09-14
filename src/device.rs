@@ -17,8 +17,17 @@ pub struct CommandBufferDescriptor {
 }
 
 pub struct Device<B: hal::Backend> {
-    pub gpu: hal::Gpu<B>,
-    pub memory_properties: hal::MemoryProperties,
+    gpu: hal::Gpu<B>,
+    allocator: memory::SmartAllocator<B>,
+}
+
+impl<B: hal::Backend> Device<B> {
+    pub(crate) fn new(gpu: hal::Gpu<B>, mem_props: hal::MemoryProperties) -> Self {
+        Device {
+            gpu,
+            allocator: memory::SmartAllocator::new(mem_props, 1, 1, 1, 1),
+        }
+    }
 }
 
 pub struct Buffer<B: hal::Backend> {
@@ -29,9 +38,10 @@ pub extern "C"
 fn device_create_buffer(
     device: DeviceHandle, desc: BufferDescriptor
 ) -> BufferHandle {
-    //let unbound = device.raw.create_buffer(desc.size, desc.usage).unwrap();
-    //let reqs = device.raw.get_buffer_requirements(&unbound);
-    unimplemented!()
+    let buffer = device.gpu.device.create_buffer(desc.size, desc.usage).unwrap();
+    BufferHandle::new(Buffer {
+        raw: buffer,
+    })
 }
 
 pub extern "C"
