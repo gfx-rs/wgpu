@@ -61,10 +61,9 @@ fn instance_get_adapter(
 
 pub extern "C"
 fn adapter_create_device(
-    adapter: AdapterHandle, desc: DeviceDescriptor
+    mut adapter: AdapterHandle, desc: DeviceDescriptor
 ) -> DeviceHandle {
-    let queue_family = &adapter.queue_families[0];
-    let gpu = adapter.physical_device.open(&[(queue_family, &[1f32])]).unwrap();
+    let (device, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    DeviceHandle::new(Device::new(gpu, mem_props))
+    DeviceHandle::new(Device::new(device, queue_group, mem_props))
 }

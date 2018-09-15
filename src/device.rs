@@ -1,4 +1,4 @@
-use hal::{self, Device as _Device};
+use hal::{self, Device as _Device, QueueGroup};
 use memory;
 
 use {BufferHandle, CommandBufferHandle, DeviceHandle};
@@ -17,14 +17,20 @@ pub struct CommandBufferDescriptor {
 }
 
 pub struct Device<B: hal::Backend> {
-    gpu: hal::Gpu<B>,
+    device: B::Device,
+    queue_group: QueueGroup<B, hal::General>,
     allocator: memory::SmartAllocator<B>,
 }
 
 impl<B: hal::Backend> Device<B> {
-    pub(crate) fn new(gpu: hal::Gpu<B>, mem_props: hal::MemoryProperties) -> Self {
+    pub(crate) fn new(
+        device: B::Device,
+        queue_group: QueueGroup<B, hal::General>,
+        mem_props: hal::MemoryProperties,
+    ) -> Self {
         Device {
-            gpu,
+            device,
+            queue_group,
             allocator: memory::SmartAllocator::new(mem_props, 1, 1, 1, 1),
         }
     }
@@ -38,7 +44,7 @@ pub extern "C"
 fn device_create_buffer(
     device: DeviceHandle, desc: BufferDescriptor
 ) -> BufferHandle {
-    let buffer = device.gpu.device.create_buffer(desc.size, desc.usage).unwrap();
+    let buffer = device.device.create_buffer(desc.size, desc.usage).unwrap();
     BufferHandle::new(Buffer {
         raw: buffer,
     })
