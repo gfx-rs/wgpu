@@ -32,7 +32,10 @@ fn create_instance() -> InstanceHandle {
         let inst = ::back::Instance::create("wgpu", 1);
         InstanceHandle::new(inst)
     }
-    unimplemented!()
+    #[cfg(not(any(feature = "gfx-backend-vulkan", feature = "gfx-backend-dx12", feature = "gfx-backend-metal")))]
+    {
+        unimplemented!()
+    }
 }
 
 pub extern "C"
