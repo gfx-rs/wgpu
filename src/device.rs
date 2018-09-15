@@ -31,7 +31,7 @@ impl<B: hal::Backend> Device<B> {
 }
 
 pub struct Buffer<B: hal::Backend> {
-    pub raw: B::Buffer,
+    pub raw: B::UnboundBuffer,
 }
 
 pub extern "C"
