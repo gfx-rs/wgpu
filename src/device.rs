@@ -1,7 +1,7 @@
 use hal::{self, Device as _Device, QueueGroup};
 use memory;
 
-use {BufferHandle, CommandBufferHandle, DeviceHandle};
+use {BufferHandle, CommandBufferHandle, DeviceHandle, ShaderModuleHandle};
 
 
 pub type BufferUsage = hal::buffer::Usage;
@@ -10,6 +10,11 @@ pub type BufferUsage = hal::buffer::Usage;
 pub struct BufferDescriptor {
     pub size: u64,
     pub usage: BufferUsage,
+}
+
+#[repr(C)]
+pub struct ShaderModuleDescriptor<'a> {
+    pub code: &'a [u8],
 }
 
 #[repr(C)]
@@ -47,6 +52,20 @@ fn device_create_buffer(
     let buffer = device.device.create_buffer(desc.size, desc.usage).unwrap();
     BufferHandle::new(Buffer {
         raw: buffer,
+    })
+}
+
+pub struct ShaderModule<B: hal::Backend> {
+    pub raw: B::ShaderModule,
+}
+
+pub extern "C"
+fn device_create_shader_module(
+    device: DeviceHandle, desc: ShaderModuleDescriptor
+) -> ShaderModuleHandle {
+    let shader = device.device.create_shader_module(desc.code).unwrap();
+    ShaderModuleHandle::new(ShaderModule {
+        raw: shader,
     })
 }
 
