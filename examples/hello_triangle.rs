@@ -10,4 +10,10 @@ fn main() {
             anisotropic_filtering: false,
         },
     });
+    let _vs = gn::device_create_shader_module(device, gn::ShaderModuleDescriptor {
+        code: include_bytes!("./data/hello_triangle.vert.spv"),
+    });
+    let _fs = gn::device_create_shader_module(device, gn::ShaderModuleDescriptor {
+        code: include_bytes!("./data/hello_triangle.frag.spv"),
+    });
 }

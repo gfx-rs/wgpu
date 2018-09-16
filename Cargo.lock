@@ -291,7 +291,7 @@ dependencies = [
 [[package]]
 name = "gfx-memory"
 version = "0.1.0"
-source = "git+https://github.com/kvark/gfx-mem?branch=update#a82aa4221250a493c2fe6fcc22a2b6876742cef2"
+source = "git+https://github.com/gfx-rs/gfx-memory?rev=483d64d#483d64dba6d3e2acfcd8f77a2baade78f120d49f"
 dependencies = [
  "failure 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx-hal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
@@ -307,7 +307,7 @@ dependencies = [
  "gfx-backend-metal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
  "gfx-backend-vulkan 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
  "gfx-hal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
- "gfx-memory 0.1.0 (git+https://github.com/kvark/gfx-mem?branch=update)",
+ "gfx-memory 0.1.0 (git+https://github.com/gfx-rs/gfx-memory?rev=483d64d)",
 ]
 
 [[package]]
@@ -844,7 +844,7 @@ dependencies = [
 "checksum gfx-backend-metal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)" = "<none>"
 "checksum gfx-backend-vulkan 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)" = "<none>"
 "checksum gfx-hal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)" = "<none>"
-"checksum gfx-memory 0.1.0 (git+https://github.com/kvark/gfx-mem?branch=update)" = "<none>"
+"checksum gfx-memory 0.1.0 (git+https://github.com/gfx-rs/gfx-memory?rev=483d64d)" = "<none>"
 "checksum itertools 0.5.10 (registry+https://github.com/rust-lang/crates.io-index)" = "4833d6978da405305126af4ac88569b5d71ff758581ce5a987dbfa3755f694fc"
 "checksum lazy_static 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)" = "76f033c7ad61445c5b347c7382dd1237847eb1bce590fe50365dcb33d546be73"
 "checksum lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "ca488b89a5657b0a2ecd45b95609b3e848cf1755da332a0da46e2b2b1cb371a7"

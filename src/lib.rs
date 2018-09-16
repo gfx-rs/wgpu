@@ -26,6 +26,7 @@ pub type InstanceHandle = Handle<back::Instance>;
 pub type AdapterHandle = Handle<hal::Adapter<B>>;
 pub type DeviceHandle = Handle<Device<B>>;
 pub type BufferHandle = Handle<Buffer<B>>;
+pub type ShaderModuleHandle = Handle<ShaderModule<B>>;
 pub type CommandBufferHandle = Handle<CommandBuffer<B>>;
 pub type RenderPassHandle = Handle<RenderPass<B>>;
 pub type ComputePassHandle = Handle<ComputePass<B>>;
