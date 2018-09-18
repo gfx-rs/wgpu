@@ -1,16 +1,8 @@
 use hal::{self, Device as _Device, QueueGroup};
-use {memory, pipeline};
+use {conv, memory, pipeline, resource};
 
 use {BufferHandle, CommandBufferHandle, DeviceHandle, ShaderModuleHandle};
 
-
-pub type BufferUsage = hal::buffer::Usage;
-
-#[repr(C)]
-pub struct BufferDescriptor {
-    pub size: u64,
-    pub usage: BufferUsage,
-}
 
 #[repr(C)]
 pub struct CommandBufferDescriptor {
@@ -36,17 +28,15 @@ impl<B: hal::Backend> Device<B> {
     }
 }
 
-pub struct Buffer<B: hal::Backend> {
-    pub raw: B::UnboundBuffer,
-}
-
 pub extern "C"
 fn device_create_buffer(
-    device: DeviceHandle, desc: BufferDescriptor
+    device: DeviceHandle, desc: resource::BufferDescriptor
 ) -> BufferHandle {
-    let buffer = device.device.create_buffer(desc.size, desc.usage).unwrap();
-    BufferHandle::new(Buffer {
+    let (usage, memory_properties) = conv::map_buffer_usage(desc.usage);
+    let buffer = device.device.create_buffer(desc.size as u64, usage).unwrap();
+    BufferHandle::new(resource::Buffer {
         raw: buffer,
+        memory_properties,
     })
 }
 
