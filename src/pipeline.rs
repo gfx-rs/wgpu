@@ -33,12 +33,12 @@ pub enum BlendOperation {
 bitflags! {
     #[repr(transparent)]
     pub struct ColorWriteFlags: u32 {
-        const NONE = 0x0;
-        const RED = 0x1;
-        const GREEN = 0x2;
-        const BLUE = 0x4;
-        const ALPHA = 0x8;
-        const ALL = 0x15;
+        const NONE = 0;
+        const RED = 1;
+        const GREEN = 2;
+        const BLUE = 4;
+        const ALPHA = 8;
+        const ALL = 15;
     }
 }
 

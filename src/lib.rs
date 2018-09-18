@@ -13,6 +13,7 @@ extern crate gfx_hal as hal;
 extern crate gfx_memory as memory;
 
 mod binding_model;
+mod conv;
 mod command;
 mod device;
 mod handle;
@@ -29,6 +30,28 @@ pub use self::resource::*;
 
 use back::Backend as B;
 use handle::Handle;
+
+#[repr(C)]
+pub struct Color {
+    pub r: f32,
+    pub g: f32,
+    pub b: f32,
+    pub a: f32,
+}
+
+#[repr(C)]
+pub struct Origin3d {
+    pub x: f32,
+    pub y: f32,
+    pub z: f32,
+}
+
+#[repr(C)]
+pub struct Extent3d {
+    pub width: f32,
+    pub height: f32,
+    pub depth: f32,
+}
 
 pub type InstanceHandle = Handle<back::Instance>;
 pub type AdapterHandle = Handle<hal::Adapter<B>>;
