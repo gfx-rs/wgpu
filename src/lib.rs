@@ -58,7 +58,13 @@ pub type AdapterHandle = Handle<hal::Adapter<B>>;
 pub type DeviceHandle = Handle<Device<B>>;
 pub type BufferHandle = Handle<Buffer<B>>;
 
+// Resource
+pub type TextureViewHandle = Handle<TextureView>;
+pub type TextureHandle = Handle<Texture>;
+pub type SamplerHandle = Handle<Sampler>;
+
 // Binding model
+pub type BindGroupLayoutHandle = Handle<BindGroupLayout>;
 pub type PipelineLayoutHandle = Handle<PipelineLayout<B>>;
 
 // Pipeline
