@@ -1,4 +1,4 @@
-# WebGPU-native
+# WebGPU
 [![Build Status](https://travis-ci.org/gfx-rs/wgpu-native.svg)](https://travis-ci.org/gfx-rs/wgpu-native)
 [![Gitter](https://badges.gitter.im/gfx-rs/gfx.svg)](https://gitter.im/gfx-rs/gfx)
 
