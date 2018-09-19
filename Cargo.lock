@@ -299,19 +299,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gpu-native"
-version = "0.1.0"
-dependencies = [
- "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx-backend-dx12 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
- "gfx-backend-empty 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
- "gfx-backend-metal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
- "gfx-backend-vulkan 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
- "gfx-hal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
- "gfx-memory 0.1.0 (git+https://github.com/gfx-rs/gfx-memory?rev=483d64d)",
-]
-
-[[package]]
 name = "itertools"
 version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -725,6 +712,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "dlib 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "wgpu-native"
+version = "0.1.0"
+dependencies = [
+ "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "gfx-backend-dx12 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
+ "gfx-backend-empty 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
+ "gfx-backend-metal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
+ "gfx-backend-vulkan 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
+ "gfx-hal 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=a435a05)",
+ "gfx-memory 0.1.0 (git+https://github.com/gfx-rs/gfx-memory?rev=483d64d)",
 ]
 
 [[package]]

@@ -1,0 +1,19 @@
+[package]
+name = "wgpu-native"
+version = "0.1.0"
+authors = [
+	"Dzmitry Malyshau <kvark@mozilla.com>",
+	"Joshua Groves <josh@joshgroves.com>",
+]
+
+[features]
+default = []
+
+[dependencies]
+bitflags = "1.0"
+gfx-hal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" } # required by gfx-memory
+gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
+gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
+gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
+gfx-memory = { git = "https://github.com/gfx-rs/gfx-memory", rev = "483d64d" }
