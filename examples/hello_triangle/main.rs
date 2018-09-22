@@ -11,9 +11,9 @@ fn main() {
         },
     });
     let _vs = wgn::device_create_shader_module(device, wgn::ShaderModuleDescriptor {
-        code: include_bytes!("./data/hello_triangle.vert.spv"),
+        code: include_bytes!("./shaders/hello_triangle.vert.spv"),
     });
     let _fs = wgn::device_create_shader_module(device, wgn::ShaderModuleDescriptor {
-        code: include_bytes!("./data/hello_triangle.frag.spv"),
+        code: include_bytes!("./shaders/hello_triangle.frag.spv"),
     });
 }

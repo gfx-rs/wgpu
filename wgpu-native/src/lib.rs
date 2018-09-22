@@ -1,4 +1,5 @@
 #[macro_use] extern crate bitflags;
+#[macro_use] extern crate lazy_static;
 
 #[cfg(feature = "gfx-backend-vulkan")]
 extern crate gfx_backend_vulkan as back;
@@ -13,12 +14,12 @@ extern crate gfx_hal as hal;
 extern crate gfx_memory as memory;
 
 mod binding_model;
-mod conv;
 mod command;
+mod conv;
 mod device;
-mod handle;
 mod instance;
 mod pipeline;
+mod registry;
 mod resource;
 
 pub use self::binding_model::*;
@@ -29,7 +30,7 @@ pub use self::pipeline::*;
 pub use self::resource::*;
 
 use back::Backend as B;
-use handle::Handle;
+use registry::Id;
 
 #[repr(C)]
 pub struct Color {
@@ -53,29 +54,33 @@ pub struct Extent3d {
     pub depth: f32,
 }
 
-pub type InstanceHandle = Handle<back::Instance>;
-pub type AdapterHandle = Handle<hal::Adapter<B>>;
-pub type DeviceHandle = Handle<Device<B>>;
-pub type BufferHandle = Handle<Buffer<B>>;
+pub type InstanceId = Id;
+pub(crate) type InstanceHandle = back::Instance;
+pub type AdapterId = Id;
+pub(crate) type AdapterHandle = hal::Adapter<B>;
+pub type DeviceId = Id;
+pub(crate) type DeviceHandle = Device<B>;
+pub type BufferId = Id;
 
 // Resource
-pub type TextureViewHandle = Handle<TextureView>;
-pub type TextureHandle = Handle<Texture>;
-pub type SamplerHandle = Handle<Sampler>;
+pub type TextureViewId = Id;
+pub type TextureId = Id;
+pub type SamplerId = Id;
 
 // Binding model
-pub type BindGroupLayoutHandle = Handle<BindGroupLayout>;
-pub type PipelineLayoutHandle = Handle<PipelineLayout<B>>;
+pub type BindGroupLayoutId = Id;
+pub type PipelineLayoutId = Id;
 
 // Pipeline
-pub type BlendStateHandle = Handle<BlendState>;
-pub type DepthStencilStateHandle = Handle<DepthStencilState>;
-pub type InputStateHandle = Handle<InputState>;
-pub type ShaderModuleHandle = Handle<ShaderModule<B>>;
-pub type AttachmentStateHandle = Handle<AttachmentState>;
-pub type ComputePipelineHandle = Handle<ComputePipeline>;
-pub type RenderPipelineHandle = Handle<RenderPipeline>;
+pub type BlendStateId = Id;
+pub type DepthStencilStateId = Id;
+pub type InputStateId = Id;
+pub type ShaderModuleId = Id;
+pub(crate) type ShaderModuleHandle = ShaderModule<B>;
+pub type AttachmentStateId = Id;
+pub type ComputePipelineId = Id;
+pub type RenderPipelineId = Id;
 
-pub type CommandBufferHandle = Handle<CommandBuffer<B>>;
-pub type RenderPassHandle = Handle<RenderPass<B>>;
-pub type ComputePassHandle = Handle<ComputePass<B>>;
+pub type CommandBufferId = Id;
+pub type RenderPassId = Id;
+pub type ComputePassId = Id;

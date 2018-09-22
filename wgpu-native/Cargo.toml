@@ -6,11 +6,18 @@ authors = [
 	"Joshua Groves <josh@joshgroves.com>",
 ]
 
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
 [features]
 default = []
+metal = ["gfx-backend-metal"]
+dx12 = ["gfx-backend-dx12"]
+vulkan = ["gfx-backend-vulkan"]
 
 [dependencies]
 bitflags = "1.0"
+lazy_static = "1.1.0"
 gfx-hal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" } # required by gfx-memory
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" }
 gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }

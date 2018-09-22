@@ -6,8 +6,8 @@ pub use self::render::*;
 
 use hal;
 
-use {BufferHandle, Color, CommandBufferHandle, ComputePassHandle, Origin3d,
-    RenderPassHandle, TextureViewHandle, TextureHandle};
+use {BufferId, Color, CommandBufferId, ComputePassId, Origin3d,
+    RenderPassId, TextureViewId, TextureId};
 
 
 #[repr(C)]
@@ -23,7 +23,7 @@ pub enum StoreOp {
 
 #[repr(C)]
 pub struct RenderPassColorAttachmentDescriptor {
-    pub attachment: TextureViewHandle,
+    pub attachment: TextureViewId,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
@@ -31,7 +31,7 @@ pub struct RenderPassColorAttachmentDescriptor {
 
 #[repr(C)]
 pub struct RenderPassDepthStencilAttachmentDescriptor {
-    pub attachment: TextureViewHandle,
+    pub attachment: TextureViewId,
     pub depth_load_op: LoadOp,
     pub depth_store_op: StoreOp,
     pub clear_depth: f32,
@@ -48,7 +48,7 @@ pub struct RenderPassDescriptor<'a> {
 
 #[repr(C)]
 pub struct BufferCopyView {
-    pub buffer: BufferHandle,
+    pub buffer: BufferId,
     pub offset: u32,
     pub row_pitch: u32,
     pub image_height: u32,
@@ -56,7 +56,7 @@ pub struct BufferCopyView {
 
 #[repr(C)]
 pub struct TextureCopyView {
-    pub texture: TextureHandle,
+    pub texture: TextureId,
     pub level: u32,
     pub slice: u32,
     pub origin: Origin3d,
@@ -70,15 +70,15 @@ pub struct CommandBuffer<B: hal::Backend> {
 #[repr(C)]
 pub struct CommandBufferDescriptor;
 
-pub extern "C"
-fn command_buffer_begin_render_pass(
-    command_buffer: CommandBufferHandle
-) -> RenderPassHandle {
+#[no_mangle]
+pub extern "C" fn command_buffer_begin_render_pass(
+    command_buffer: CommandBufferId
+) -> RenderPassId {
     unimplemented!()
 }
 
-pub extern "C"
-fn command_buffer_begin_compute_pass(
-) -> ComputePassHandle {
+#[no_mangle]
+pub extern "C" fn command_buffer_begin_compute_pass(
+) -> ComputePassId {
     unimplemented!()
 }

@@ -1,7 +1,7 @@
 use hal;
 use resource;
 
-use {BlendStateHandle, DepthStencilStateHandle, PipelineLayoutHandle};
+use {BlendStateId, DepthStencilStateId, PipelineLayoutId};
 
 
 #[repr(C)]
@@ -171,7 +171,7 @@ pub struct PipelineStageDescriptor<'a> {
 
 #[repr(C)]
 pub struct ComputePipelineDescriptor<'a> {
-    pub layout: PipelineLayoutHandle,
+    pub layout: PipelineLayoutId,
     pub stages: &'a [PipelineStageDescriptor<'a>],
 }
 
@@ -190,11 +190,11 @@ pub enum PrimitiveTopology {
 
 #[repr(C)]
 pub struct RenderPipelineDescriptor<'a> {
-    pub layout: PipelineLayoutHandle,
+    pub layout: PipelineLayoutId,
     pub stages: &'a [PipelineStageDescriptor<'a>],
     pub primitive_topology: PrimitiveTopology,
-    pub blend_state: &'a [BlendStateHandle],
-    pub depth_stencil_state: DepthStencilStateHandle,
+    pub blend_state: &'a [BlendStateId],
+    pub depth_stencil_state: DepthStencilStateId,
     pub attachment_state: AttachmentState,
 }
 
