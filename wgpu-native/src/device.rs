@@ -4,10 +4,8 @@ use {conv, memory, pipeline, resource};
 use registry;
 use {BufferId, CommandBufferId, DeviceId, ShaderModuleId};
 
-
 #[repr(C)]
-pub struct CommandBufferDescriptor {
-}
+pub struct CommandBufferDescriptor {}
 
 pub struct Device<B: hal::Backend> {
     device: B::Device,
@@ -35,12 +33,14 @@ pub struct ShaderModule<B: hal::Backend> {
 
 #[no_mangle]
 pub extern "C" fn device_create_shader_module(
-    device_id: DeviceId, desc: pipeline::ShaderModuleDescriptor
+    device_id: DeviceId,
+    desc: pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
     let device_registry = registry::DEVICE_REGISTRY.lock().unwrap();
     let device = device_registry.get(device_id).unwrap();
     let shader = device.device.create_shader_module(desc.code).unwrap();
-    registry::SHADER_MODULE_REGISTRY.lock().unwrap().register(ShaderModule {
-        raw: shader,
-    })
+    registry::SHADER_MODULE_REGISTRY
+        .lock()
+        .unwrap()
+        .register(ShaderModule { raw: shader })
 }

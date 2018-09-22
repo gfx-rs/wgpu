@@ -1,5 +1,5 @@
-use std::{borrow, cmp, fmt, ops, ptr};
 use std::sync::{Arc, Mutex};
+use std::{borrow, cmp, fmt, ops, ptr};
 
 use hal::backend::FastHashMap;
 use {AdapterHandle, DeviceHandle, InstanceHandle, ShaderModuleHandle};
@@ -36,8 +36,12 @@ impl<T> Registry<T> {
 }
 
 lazy_static! {
-    pub(crate) static ref ADAPTER_REGISTRY: Arc<Mutex<Registry<AdapterHandle>>> = Arc::new(Mutex::new(Registry::new()));
-    pub(crate) static ref DEVICE_REGISTRY: Arc<Mutex<Registry<DeviceHandle>>> = Arc::new(Mutex::new(Registry::new()));
-    pub(crate) static ref INSTANCE_REGISTRY: Arc<Mutex<Registry<InstanceHandle>>> = Arc::new(Mutex::new(Registry::new()));
-    pub(crate) static ref SHADER_MODULE_REGISTRY: Arc<Mutex<Registry<ShaderModuleHandle>>> = Arc::new(Mutex::new(Registry::new()));
+    pub(crate) static ref ADAPTER_REGISTRY: Arc<Mutex<Registry<AdapterHandle>>> =
+        Arc::new(Mutex::new(Registry::new()));
+    pub(crate) static ref DEVICE_REGISTRY: Arc<Mutex<Registry<DeviceHandle>>> =
+        Arc::new(Mutex::new(Registry::new()));
+    pub(crate) static ref INSTANCE_REGISTRY: Arc<Mutex<Registry<InstanceHandle>>> =
+        Arc::new(Mutex::new(Registry::new()));
+    pub(crate) static ref SHADER_MODULE_REGISTRY: Arc<Mutex<Registry<ShaderModuleHandle>>> =
+        Arc::new(Mutex::new(Registry::new()));
 }

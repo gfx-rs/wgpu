@@ -3,7 +3,6 @@ use resource;
 
 use {BlendStateId, DepthStencilStateId, PipelineLayoutId};
 
-
 #[repr(C)]
 pub enum BlendFactor {
     Zero = 0,

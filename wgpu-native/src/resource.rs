@@ -1,7 +1,6 @@
 use hal;
 
-use {Extent3d};
-
+use Extent3d;
 
 bitflags! {
     #[repr(transparent)]

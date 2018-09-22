@@ -13,7 +13,7 @@ bitflags! {
 }
 
 #[repr(C)]
-pub enum BindingType {    
+pub enum BindingType {
     UniformBuffer = 0,
     Sampler = 1,
     SampledTexture = 2,

@@ -6,9 +6,10 @@ pub use self::render::*;
 
 use hal;
 
-use {BufferId, Color, CommandBufferId, ComputePassId, Origin3d,
-    RenderPassId, TextureViewId, TextureId};
-
+use {
+    BufferId, Color, CommandBufferId, ComputePassId, Origin3d, RenderPassId, TextureId,
+    TextureViewId,
+};
 
 #[repr(C)]
 pub enum LoadOp {
@@ -72,13 +73,12 @@ pub struct CommandBufferDescriptor;
 
 #[no_mangle]
 pub extern "C" fn command_buffer_begin_render_pass(
-    command_buffer: CommandBufferId
+    command_buffer: CommandBufferId,
 ) -> RenderPassId {
     unimplemented!()
 }
 
 #[no_mangle]
-pub extern "C" fn command_buffer_begin_compute_pass(
-) -> ComputePassId {
+pub extern "C" fn command_buffer_begin_compute_pass() -> ComputePassId {
     unimplemented!()
 }

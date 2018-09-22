@@ -1,14 +1,20 @@
-#[macro_use] extern crate bitflags;
-#[macro_use] extern crate lazy_static;
+#[macro_use]
+extern crate bitflags;
+#[macro_use]
+extern crate lazy_static;
 
-#[cfg(feature = "gfx-backend-vulkan")]
-extern crate gfx_backend_vulkan as back;
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;
+#[cfg(not(any(
+    feature = "gfx-backend-vulkan",
+    feature = "gfx-backend-dx12",
+    feature = "gfx-backend-metal"
+)))]
+extern crate gfx_backend_empty as back;
 #[cfg(feature = "gfx-backend-metal")]
 extern crate gfx_backend_metal as back;
-#[cfg(not(any(feature = "gfx-backend-vulkan", feature = "gfx-backend-dx12", feature = "gfx-backend-metal")))]
-extern crate gfx_backend_empty as back;
+#[cfg(feature = "gfx-backend-vulkan")]
+extern crate gfx_backend_vulkan as back;
 
 extern crate gfx_hal as hal;
 extern crate gfx_memory as memory;
