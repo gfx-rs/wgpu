@@ -1,54 +1,51 @@
-#include <cstdint>
-#include <cstdlib>
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdbool.h>
 
-enum class PowerPreference {
+typedef enum {
   Default = 0,
   LowPower = 1,
   HighPerformance = 2,
-};
+} PowerPreference;
 
-struct ShaderModuleDescriptor;
+typedef struct ShaderModuleDescriptor ShaderModuleDescriptor;
 
-using Id = uint32_t;
+typedef uint32_t Id;
 
-using DeviceId = Id;
+typedef Id DeviceId;
 
-using AdapterId = Id;
+typedef Id AdapterId;
 
-struct Extensions {
+typedef struct {
   bool anisotropic_filtering;
-};
+} Extensions;
 
-struct DeviceDescriptor {
+typedef struct {
   Extensions extensions;
-};
+} DeviceDescriptor;
 
-using ComputePassId = Id;
+typedef Id ComputePassId;
 
-using RenderPassId = Id;
+typedef Id RenderPassId;
 
-using CommandBufferId = Id;
+typedef Id CommandBufferId;
 
-using InstanceId = Id;
+typedef Id InstanceId;
 
-using ShaderModuleId = Id;
+typedef Id ShaderModuleId;
 
-struct AdapterDescriptor {
+typedef struct {
   PowerPreference power_preference;
-};
-
-extern "C" {
+} AdapterDescriptor;
 
 DeviceId adapter_create_device(AdapterId adapter_id, DeviceDescriptor desc);
 
-ComputePassId command_buffer_begin_compute_pass();
+ComputePassId command_buffer_begin_compute_pass(void);
 
 RenderPassId command_buffer_begin_render_pass(CommandBufferId command_buffer);
 
-InstanceId create_instance();
+InstanceId create_instance(void);
 
 ShaderModuleId device_create_shader_module(DeviceId device_id, ShaderModuleDescriptor desc);
 
 AdapterId instance_get_adapter(InstanceId instance_id, AdapterDescriptor desc);
-
-} // extern "C"
