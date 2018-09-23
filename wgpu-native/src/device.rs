@@ -32,7 +32,7 @@ pub struct ShaderModule<B: hal::Backend> {
 }
 
 #[no_mangle]
-pub extern "C" fn device_create_shader_module(
+pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
     desc: pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {

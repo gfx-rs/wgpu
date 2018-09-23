@@ -9,7 +9,7 @@ publish = false
 
 [[bin]]
 name = "hello_triangle"
-path = "hello_triangle/main.rs"
+path = "hello_triangle_rust/main.rs"
 
 [features]
 default = []

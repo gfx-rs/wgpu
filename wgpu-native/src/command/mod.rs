@@ -72,13 +72,13 @@ pub struct CommandBuffer<B: hal::Backend> {
 pub struct CommandBufferDescriptor;
 
 #[no_mangle]
-pub extern "C" fn command_buffer_begin_render_pass(
+pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     command_buffer: CommandBufferId,
 ) -> RenderPassId {
     unimplemented!()
 }
 
 #[no_mangle]
-pub extern "C" fn command_buffer_begin_compute_pass() -> ComputePassId {
+pub extern "C" fn wgpu_command_buffer_begin_compute_pass() -> ComputePassId {
     unimplemented!()
 }
