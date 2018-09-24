@@ -13,9 +13,9 @@ pub(crate) type Id = u32;
 
 pub(crate) trait Registry<T> {
     fn new() -> Self;
-    fn register(&mut self, handle: T) -> Id;
+    fn register(&self, handle: T) -> Id;
     fn get(&self, id: Id) -> Option<&T>;
-    fn get_mut(&mut self, id: Id) -> Option<&mut T>;
+    fn get_mut(&self, id: Id) -> Option<&mut T>;
 }
 
 #[cfg(not(feature = "remote"))]
@@ -31,7 +31,7 @@ impl<T> Registry<T> for LocalRegistry<T> {
         }
     }
 
-    fn register(&mut self, handle: T) -> Id {
+    fn register(&self, handle: T) -> Id {
         ::std::boxed::Box::into_raw(Box::new(handle)) as *mut _ as *mut c_void
     }
 
@@ -39,62 +39,71 @@ impl<T> Registry<T> for LocalRegistry<T> {
         unsafe { (id as *const T).as_ref() }
     }
 
-    fn get_mut(&mut self, id: Id) -> Option<&mut T> {
+    fn get_mut(&self, id: Id) -> Option<&mut T> {
         unsafe { (id as *mut T).as_mut() }
     }
 }
 
 #[cfg(feature = "remote")]
-pub(crate) struct RemoteRegistry<T> {
+struct Registrations<T> {
     next_id: Id,
     tracked: FastHashMap<Id, T>,
+}
+
+#[cfg(feature = "remote")]
+impl<T> Registrations<T> {
+    fn new() -> Self {
+        Registrations {
+            next_id: 0,
+            tracked: FastHashMap::default(),
+        }
+    }
+}
+
+#[cfg(feature = "remote")]
+pub(crate) struct RemoteRegistry<T> {
+    registrations: Arc<Mutex<Registrations<T>>>,
 }
 
 #[cfg(feature = "remote")]
 impl<T> Registry<T> for RemoteRegistry<T> {
     fn new() -> Self {
         RemoteRegistry {
-            next_id: 0,
-            tracked: FastHashMap::default(),
+            registrations: Arc::new(Mutex::new(Registrations::new())),
         }
     }
 
-    fn register(&mut self, handle: T) -> Id {
-        let id = self.next_id;
-        self.tracked.insert(id, handle);
-        self.next_id += 1;
+    fn register(&self, handle: T) -> Id {
+        let mut registrations = self.registrations.lock().unwrap();
+        let id = registrations.next_id;
+        registrations.tracked.insert(id, handle);
+        registrations.next_id += 1;
         id
     }
 
     fn get(&self, id: Id) -> Option<&T> {
-        self.tracked.get(&id)
+        let registrations = self.registrations.lock().unwrap();
+        registrations.tracked.get(&id)
     }
 
-    fn get_mut(&mut self, id: Id) -> Option<&mut T> {
-        self.tracked.get_mut(&id)
+    fn get_mut(&self, id: Id) -> Option<&mut T> {
+        let registrations = self.registrations.lock().unwrap();
+        registrations.tracked.get_mut(&id)
     }
 }
 
 #[cfg(not(feature = "remote"))]
 lazy_static! {
-    pub(crate) static ref ADAPTER_REGISTRY: Mutex<LocalRegistry<AdapterHandle>> =
-        Mutex::new(LocalRegistry::new());
-    pub(crate) static ref DEVICE_REGISTRY: Mutex<LocalRegistry<DeviceHandle>> =
-        Mutex::new(LocalRegistry::new());
-    pub(crate) static ref INSTANCE_REGISTRY: Mutex<LocalRegistry<InstanceHandle>> =
-        Mutex::new(LocalRegistry::new());
-    pub(crate) static ref SHADER_MODULE_REGISTRY: Mutex<LocalRegistry<ShaderModuleHandle>> =
-        Mutex::new(LocalRegistry::new());
+    pub(crate) static ref ADAPTER_REGISTRY: LocalRegistry<AdapterHandle> = LocalRegistry::new();
+    pub(crate) static ref DEVICE_REGISTRY: LocalRegistry<DeviceHandle> = LocalRegistry::new();
+    pub(crate) static ref INSTANCE_REGISTRY: LocalRegistry<InstanceHandle> = LocalRegistry::new();
+    pub(crate) static ref SHADER_MODULE_REGISTRY: LocalRegistry<ShaderModuleHandle> = LocalRegistry::new();
 }
 
 #[cfg(feature = "remote")]
 lazy_static! {
-    pub(crate) static ref ADAPTER_REGISTRY: Arc<Mutex<RemoteRegistry<AdapterHandle>>> =
-        Arc::new(Mutex::new(RemoteRegistry::new()));
-    pub(crate) static ref DEVICE_REGISTRY: Arc<Mutex<RemoteRegistry<DeviceHandle>>> =
-        Arc::new(Mutex::new(RemoteRegistry::new()));
-    pub(crate) static ref INSTANCE_REGISTRY: Arc<Mutex<RemoteRegistry<InstanceHandle>>> =
-        Arc::new(Mutex::new(RemoteRegistry::new()));
-    pub(crate) static ref SHADER_MODULE_REGISTRY: Arc<Mutex<RemoteRegistry<ShaderModuleHandle>>> =
-        Arc::new(Mutex::new(RemoteRegistry::new()));
+    pub(crate) static ref ADAPTER_REGISTRY: RemoteRegistry<AdapterHandle> = RemoteRegistry::new();
+    pub(crate) static ref DEVICE_REGISTRY: RemoteRegistry<DeviceHandle> = RemoteRegistry::new();
+    pub(crate) static ref INSTANCE_REGISTRY: RemoteRegistry<InstanceHandle> = RemoteRegistry::new();
+    pub(crate) static ref SHADER_MODULE_REGISTRY: RemoteRegistry<ShaderModuleHandle> = RemoteRegistry::new();
 }

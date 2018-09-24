@@ -36,15 +36,11 @@ pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
     desc: pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
-    let device_registry = registry::DEVICE_REGISTRY.lock().unwrap();
-    let device = device_registry.get(device_id).unwrap();
+    let device = registry::DEVICE_REGISTRY.get(device_id).unwrap();
     let shader = device
         .device
         .create_shader_module(unsafe {
             ::std::slice::from_raw_parts(desc.code.bytes, desc.code.length)
         }).unwrap();
-    registry::SHADER_MODULE_REGISTRY
-        .lock()
-        .unwrap()
-        .register(ShaderModule { raw: shader })
+    registry::SHADER_MODULE_REGISTRY.register(ShaderModule { raw: shader })
 }
