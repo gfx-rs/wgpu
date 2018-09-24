@@ -13,6 +13,7 @@ path = "hello_triangle_rust/main.rs"
 
 [features]
 default = []
+remote = ["wgpu-native/remote"]
 metal = ["wgpu-native/metal"]
 dx12 = ["wgpu-native/dx12"]
 vulkan = ["wgpu-native/vulkan"]

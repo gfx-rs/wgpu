@@ -11,6 +11,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
+remote = []
 metal = ["gfx-backend-metal"]
 dx12 = ["gfx-backend-dx12"]
 vulkan = ["gfx-backend-vulkan"]

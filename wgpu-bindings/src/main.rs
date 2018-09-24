@@ -7,19 +7,27 @@ fn main() {
     crate_dir.push("../wgpu-native");
 
     let config = cbindgen::Config {
+        header: Some(String::from("#ifdef WGPU_REMOTE\n    typedef uint32_t WGPUId;\n#else\n    typedef void *WGPUId;\n#endif")),
         enumeration: cbindgen::EnumConfig {
             prefix_with_name: true,
             ..Default::default()
         },
+        export: cbindgen::ExportConfig {
+            prefix: Some(String::from("WGPU")),
+            exclude: vec![
+                // We manually define `Id` is with an `#ifdef`, so exclude it here
+                String::from("Id"),
+            ],
+            ..Default::default()
+        },
+        language: cbindgen::Language::C,
         ..Default::default()
     };
 
     cbindgen::Builder::new()
         .with_crate(crate_dir)
         .with_config(config)
-        .with_language(cbindgen::Language::C)
-        .with_item_prefix("WGPU")
         .generate()
-        .expect("Unable to generate bindings")
+        .unwrap()
         .write_to_file("wgpu.h");
 }

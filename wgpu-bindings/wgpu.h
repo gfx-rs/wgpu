@@ -1,3 +1,9 @@
+#ifdef WGPU_REMOTE
+    typedef uint32_t WGPUId;
+#else
+    typedef void *WGPUId;
+#endif
+
 #include <stdint.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -7,8 +13,6 @@ typedef enum {
   WGPUPowerPreference_LowPower = 1,
   WGPUPowerPreference_HighPerformance = 2,
 } WGPUPowerPreference;
-
-typedef uint32_t WGPUId;
 
 typedef WGPUId WGPUDeviceId;
 

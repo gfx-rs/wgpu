@@ -1,6 +1,6 @@
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
-use registry;
+use registry::{self, Registry};
 use {AdapterId, Device, DeviceId, InstanceId};
 
 #[repr(C)]

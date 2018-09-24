@@ -1,7 +1,7 @@
 use hal::{self, Device as _Device, QueueGroup};
 use {conv, memory, pipeline, resource};
 
-use registry;
+use registry::{self, Registry};
 use {BufferId, CommandBufferId, DeviceId, ShaderModuleId};
 
 #[repr(C)]
