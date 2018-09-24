@@ -60,6 +60,12 @@ pub struct Extent3d {
     pub depth: f32,
 }
 
+#[repr(C)]
+pub struct ByteArray {
+    pub bytes: *const u8,
+    pub length: usize,
+}
+
 pub type InstanceId = Id;
 pub(crate) type InstanceHandle = back::Instance;
 pub type AdapterId = Id;

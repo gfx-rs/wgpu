@@ -1,7 +1,7 @@
 use hal;
 use resource;
 
-use {BlendStateId, DepthStencilStateId, PipelineLayoutId};
+use {BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId};
 
 #[repr(C)]
 pub enum BlendFactor {
@@ -141,8 +141,8 @@ pub struct InputState {
 }
 
 #[repr(C)]
-pub struct ShaderModuleDescriptor<'a> {
-    pub code: &'a [u8],
+pub struct ShaderModuleDescriptor {
+    pub code: ByteArray,
 }
 
 #[repr(C)]
@@ -162,8 +162,8 @@ pub enum ShaderStage {
 }
 
 #[repr(C)]
-pub struct PipelineStageDescriptor<'a> {
-    pub module: ShaderModuleDescriptor<'a>,
+pub struct PipelineStageDescriptor {
+    pub module: ShaderModuleDescriptor,
     pub stage: ShaderStage,
     pub entry_point: *const ::std::os::raw::c_char,
 }
@@ -171,7 +171,7 @@ pub struct PipelineStageDescriptor<'a> {
 #[repr(C)]
 pub struct ComputePipelineDescriptor<'a> {
     pub layout: PipelineLayoutId,
-    pub stages: &'a [PipelineStageDescriptor<'a>],
+    pub stages: &'a [PipelineStageDescriptor],
 }
 
 pub struct ComputePipeline {
@@ -190,7 +190,7 @@ pub enum PrimitiveTopology {
 #[repr(C)]
 pub struct RenderPipelineDescriptor<'a> {
     pub layout: PipelineLayoutId,
-    pub stages: &'a [PipelineStageDescriptor<'a>],
+    pub stages: &'a [PipelineStageDescriptor],
     pub primitive_topology: PrimitiveTopology,
     pub blend_state: &'a [BlendStateId],
     pub depth_stencil_state: DepthStencilStateId,

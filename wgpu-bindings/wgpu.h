@@ -8,8 +8,6 @@ typedef enum {
   WGPUPowerPreference_HighPerformance = 2,
 } WGPUPowerPreference;
 
-typedef struct WGPUShaderModuleDescriptor WGPUShaderModuleDescriptor;
-
 typedef uint32_t WGPUId;
 
 typedef WGPUId WGPUDeviceId;
@@ -33,6 +31,15 @@ typedef WGPUId WGPUCommandBufferId;
 typedef WGPUId WGPUInstanceId;
 
 typedef WGPUId WGPUShaderModuleId;
+
+typedef struct {
+  const uint8_t *bytes;
+  uintptr_t length;
+} WGPUByteArray;
+
+typedef struct {
+  WGPUByteArray code;
+} WGPUShaderModuleDescriptor;
 
 typedef struct {
   WGPUPowerPreference power_preference;

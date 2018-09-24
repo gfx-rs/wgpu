@@ -17,16 +17,24 @@ fn main() {
             },
         },
     );
+    let vs_bytes = include_bytes!("./../data/hello_triangle.vert.spv");
     let _vs = wgpu_device_create_shader_module(
         device,
         ShaderModuleDescriptor {
-            code: include_bytes!("./../data/hello_triangle.vert.spv"),
+            code: ByteArray {
+                bytes: vs_bytes.as_ptr(),
+                length: vs_bytes.len(),
+            },
         },
     );
+    let fs_bytes = include_bytes!("./../data/hello_triangle.frag.spv");
     let _fs = wgpu_device_create_shader_module(
         device,
         ShaderModuleDescriptor {
-            code: include_bytes!("./../data/hello_triangle.frag.spv"),
+            code: ByteArray {
+                bytes: fs_bytes.as_ptr(),
+                length: fs_bytes.len(),
+            },
         },
     );
 }
