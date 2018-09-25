@@ -2,11 +2,12 @@ use hal;
 
 use resource;
 
-
-pub(crate) fn map_buffer_usage(usage: resource::BufferUsageFlags) -> (hal::buffer::Usage, hal::memory::Properties) {
-    use resource::BufferUsageFlags as W;
+pub(crate) fn map_buffer_usage(
+    usage: resource::BufferUsageFlags,
+) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
     use hal::memory::Properties as P;
+    use resource::BufferUsageFlags as W;
 
     let mut hal_memory = P::empty();
     if usage.contains(W::MAP_READ) {

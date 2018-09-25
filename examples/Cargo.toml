@@ -1,0 +1,22 @@
+[package]
+name = "examples"
+version = "0.1.0"
+authors = [
+	"Dzmitry Malyshau <kvark@mozilla.com>",
+	"Joshua Groves <josh@joshgroves.com>",
+]
+publish = false
+
+[[bin]]
+name = "hello_triangle"
+path = "hello_triangle_rust/main.rs"
+
+[features]
+default = []
+remote = ["wgpu-native/remote"]
+metal = ["wgpu-native/metal"]
+dx12 = ["wgpu-native/dx12"]
+vulkan = ["wgpu-native/vulkan"]
+
+[dependencies]
+wgpu-native = { path = "../wgpu-native" }

@@ -1,6 +1,6 @@
 use hal;
 
-use {BindGroupLayoutHandle, BufferHandle, SamplerHandle, TextureViewHandle};
+use {BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
 
 bitflags! {
     #[repr(transparent)]
@@ -13,7 +13,7 @@ bitflags! {
 }
 
 #[repr(C)]
-pub enum BindingType {    
+pub enum BindingType {
     UniformBuffer = 0,
     Sampler = 1,
     SampledTexture = 2,
@@ -38,7 +38,7 @@ pub struct BindGroupLayout {
 
 #[repr(C)]
 pub struct PipelineLayoutDescriptor<'a> {
-    pub bind_group_layouts: &'a [BindGroupLayoutHandle],
+    pub bind_group_layouts: &'a [BindGroupLayoutId],
 }
 
 pub struct PipelineLayout<B: hal::Backend> {
@@ -47,7 +47,7 @@ pub struct PipelineLayout<B: hal::Backend> {
 
 #[repr(C)]
 pub struct BufferBinding {
-    pub buffer: BufferHandle,
+    pub buffer: BufferId,
     pub offset: u32,
     pub size: u32,
 }
@@ -55,8 +55,8 @@ pub struct BufferBinding {
 #[repr(C)]
 pub enum BindingResource {
     Buffer(BufferBinding),
-    Sampler(SamplerHandle),
-    TextureView(TextureViewHandle),
+    Sampler(SamplerId),
+    TextureView(TextureViewId),
 }
 
 #[repr(C)]

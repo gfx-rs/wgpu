@@ -1,12 +1,11 @@
 use hal::{self, Device as _Device, QueueGroup};
 use {conv, memory, pipeline, resource};
 
-use {BufferHandle, CommandBufferHandle, DeviceHandle, ShaderModuleHandle};
-
+use registry::{self, Registry};
+use {BufferId, CommandBufferId, DeviceId, ShaderModuleId};
 
 #[repr(C)]
-pub struct CommandBufferDescriptor {
-}
+pub struct CommandBufferDescriptor {}
 
 pub struct Device<B: hal::Backend> {
     device: B::Device,
@@ -28,35 +27,20 @@ impl<B: hal::Backend> Device<B> {
     }
 }
 
-pub extern "C"
-fn device_create_buffer(
-    device: DeviceHandle, desc: resource::BufferDescriptor
-) -> BufferHandle {
-    let (usage, memory_properties) = conv::map_buffer_usage(desc.usage);
-    let buffer = device.device.create_buffer(desc.size as u64, usage).unwrap();
-    BufferHandle::new(resource::Buffer {
-        raw: buffer,
-        memory_properties,
-    })
-}
-
 pub struct ShaderModule<B: hal::Backend> {
     pub raw: B::ShaderModule,
 }
 
-pub extern "C"
-fn device_create_shader_module(
-    device: DeviceHandle, desc: pipeline::ShaderModuleDescriptor
-) -> ShaderModuleHandle {
-    let shader = device.device.create_shader_module(desc.code).unwrap();
-    ShaderModuleHandle::new(ShaderModule {
-        raw: shader,
-    })
-}
-
-pub extern "C"
-fn device_create_command_buffer(
-    device: DeviceHandle, desc: CommandBufferDescriptor
-) -> CommandBufferHandle {
-    unimplemented!()
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_shader_module(
+    device_id: DeviceId,
+    desc: pipeline::ShaderModuleDescriptor,
+) -> ShaderModuleId {
+    let device = registry::DEVICE_REGISTRY.get_mut(device_id);
+    let shader = device
+        .device
+        .create_shader_module(unsafe {
+            ::std::slice::from_raw_parts(desc.code.bytes, desc.code.length)
+        }).unwrap();
+    registry::SHADER_MODULE_REGISTRY.register(ShaderModule { raw: shader })
 }

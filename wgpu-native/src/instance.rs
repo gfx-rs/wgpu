@@ -1,7 +1,7 @@
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
-use {AdapterHandle, Device, DeviceHandle, InstanceHandle};
-
+use registry::{self, Registry};
+use {AdapterId, Device, DeviceId, InstanceId};
 
 #[repr(C)]
 pub enum PowerPreference {
@@ -25,23 +25,33 @@ pub struct DeviceDescriptor {
     pub extensions: Extensions,
 }
 
-pub extern "C"
-fn create_instance() -> InstanceHandle {
-    #[cfg(any(feature = "gfx-backend-vulkan", feature = "gfx-backend-dx12", feature = "gfx-backend-metal"))]
+#[no_mangle]
+pub extern "C" fn wgpu_create_instance() -> InstanceId {
+    #[cfg(any(
+        feature = "gfx-backend-vulkan",
+        feature = "gfx-backend-dx12",
+        feature = "gfx-backend-metal"
+    ))]
     {
         let inst = ::back::Instance::create("wgpu", 1);
-        InstanceHandle::new(inst)
+        registry::INSTANCE_REGISTRY.register(inst)
     }
-    #[cfg(not(any(feature = "gfx-backend-vulkan", feature = "gfx-backend-dx12", feature = "gfx-backend-metal")))]
+    #[cfg(not(any(
+        feature = "gfx-backend-vulkan",
+        feature = "gfx-backend-dx12",
+        feature = "gfx-backend-metal"
+    )))]
     {
         unimplemented!()
     }
 }
 
-pub extern "C"
-fn instance_get_adapter(
-    instance: InstanceHandle, desc: AdapterDescriptor
-) -> AdapterHandle {
+#[no_mangle]
+pub extern "C" fn wgpu_instance_get_adapter(
+    instance_id: InstanceId,
+    desc: AdapterDescriptor,
+) -> AdapterId {
+    let instance = registry::INSTANCE_REGISTRY.get_mut(instance_id);
     let (mut low, mut high, mut other) = (None, None, None);
     for adapter in instance.enumerate_adapters() {
         match adapter.info.device_type {
@@ -53,17 +63,18 @@ fn instance_get_adapter(
 
     let some = match desc.power_preference {
         PowerPreference::LowPower => low.or(high),
-        PowerPreference::HighPerformance |
-        PowerPreference::Default => high.or(low),
+        PowerPreference::HighPerformance | PowerPreference::Default => high.or(low),
     };
-    AdapterHandle::new(some.or(other).unwrap())
+    registry::ADAPTER_REGISTRY.register(some.or(other).unwrap())
 }
 
-pub extern "C"
-fn adapter_create_device(
-    mut adapter: AdapterHandle, desc: DeviceDescriptor
-) -> DeviceHandle {
+#[no_mangle]
+pub extern "C" fn wgpu_adapter_create_device(
+    adapter_id: AdapterId,
+    desc: DeviceDescriptor,
+) -> DeviceId {
+    let mut adapter = registry::ADAPTER_REGISTRY.get_mut(adapter_id);
     let (device, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    DeviceHandle::new(Device::new(device, queue_group, mem_props))
+    registry::DEVICE_REGISTRY.register(Device::new(device, queue_group, mem_props))
 }

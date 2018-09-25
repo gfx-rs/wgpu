@@ -1,4 +1,6 @@
 [workspace]
 members = [
     "wgpu-native",
+    "wgpu-bindings",
+    "examples",
 ]
