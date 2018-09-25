@@ -2,6 +2,8 @@
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
+#[cfg(feature = "remote")]
+extern crate parking_lot;
 
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;

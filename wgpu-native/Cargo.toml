@@ -11,7 +11,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-remote = []
+remote = ["parking_lot"]
 metal = ["gfx-backend-metal"]
 dx12 = ["gfx-backend-dx12"]
 vulkan = ["gfx-backend-vulkan"]
@@ -19,6 +19,7 @@ vulkan = ["gfx-backend-vulkan"]
 [dependencies]
 bitflags = "1.0"
 lazy_static = "1.1.0"
+parking_lot = { version = "0.6", optional = true }
 gfx-hal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" } # required by gfx-memory
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" }
 gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }

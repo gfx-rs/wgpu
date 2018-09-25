@@ -1,6 +1,9 @@
 use std::marker::PhantomData;
 use std::os::raw::c_void;
-use std::sync::{Arc, Mutex};
+#[cfg(feature = "remote")]
+use std::sync::Arc;
+#[cfg(feature = "remote")]
+use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
 use std::{borrow, cmp, fmt, ops, ptr};
 
 use hal::backend::FastHashMap;
@@ -11,11 +14,15 @@ pub(crate) type Id = *mut c_void;
 #[cfg(feature = "remote")]
 pub(crate) type Id = u32;
 
+#[cfg(not(feature = "remote"))]
+type RegistryItem<'a, T> = &'a mut T;
+#[cfg(feature = "remote")]
+type RegistryItem<'a, T> = MappedMutexGuard<'a, T>;
+
 pub(crate) trait Registry<T> {
     fn new() -> Self;
     fn register(&self, handle: T) -> Id;
-    fn get(&self, id: Id) -> Option<&T>;
-    fn get_mut(&self, id: Id) -> Option<&mut T>;
+    fn get_mut(&self, id: Id) -> RegistryItem<T>;
 }
 
 #[cfg(not(feature = "remote"))]
@@ -35,12 +42,8 @@ impl<T> Registry<T> for LocalRegistry<T> {
         ::std::boxed::Box::into_raw(Box::new(handle)) as *mut _ as *mut c_void
     }
 
-    fn get(&self, id: Id) -> Option<&T> {
-        unsafe { (id as *const T).as_ref() }
-    }
-
-    fn get_mut(&self, id: Id) -> Option<&mut T> {
-        unsafe { (id as *mut T).as_mut() }
+    fn get_mut(&self, id: Id) -> RegistryItem<T> {
+        unsafe { (id as *mut T).as_mut() }.unwrap()
     }
 }
 
@@ -74,36 +77,26 @@ impl<T> Registry<T> for RemoteRegistry<T> {
     }
 
     fn register(&self, handle: T) -> Id {
-        let mut registrations = self.registrations.lock().unwrap();
+        let mut registrations = self.registrations.lock();
         let id = registrations.next_id;
         registrations.tracked.insert(id, handle);
         registrations.next_id += 1;
         id
     }
 
-    fn get(&self, id: Id) -> Option<&T> {
-        let registrations = self.registrations.lock().unwrap();
-        registrations.tracked.get(&id)
-    }
-
-    fn get_mut(&self, id: Id) -> Option<&mut T> {
-        let registrations = self.registrations.lock().unwrap();
-        registrations.tracked.get_mut(&id)
+    fn get_mut(&self, id: Id) -> RegistryItem<T> {
+        MutexGuard::map(self.registrations.lock(), |r| r.tracked.get_mut(&id).unwrap())
     }
 }
 
 #[cfg(not(feature = "remote"))]
-lazy_static! {
-    pub(crate) static ref ADAPTER_REGISTRY: LocalRegistry<AdapterHandle> = LocalRegistry::new();
-    pub(crate) static ref DEVICE_REGISTRY: LocalRegistry<DeviceHandle> = LocalRegistry::new();
-    pub(crate) static ref INSTANCE_REGISTRY: LocalRegistry<InstanceHandle> = LocalRegistry::new();
-    pub(crate) static ref SHADER_MODULE_REGISTRY: LocalRegistry<ShaderModuleHandle> = LocalRegistry::new();
-}
-
+type ConcreteRegistry<T> = LocalRegistry<T>;
 #[cfg(feature = "remote")]
+type ConcreteRegistry<T> = RemoteRegistry<T>;
+
 lazy_static! {
-    pub(crate) static ref ADAPTER_REGISTRY: RemoteRegistry<AdapterHandle> = RemoteRegistry::new();
-    pub(crate) static ref DEVICE_REGISTRY: RemoteRegistry<DeviceHandle> = RemoteRegistry::new();
-    pub(crate) static ref INSTANCE_REGISTRY: RemoteRegistry<InstanceHandle> = RemoteRegistry::new();
-    pub(crate) static ref SHADER_MODULE_REGISTRY: RemoteRegistry<ShaderModuleHandle> = RemoteRegistry::new();
+    pub(crate) static ref ADAPTER_REGISTRY: ConcreteRegistry<AdapterHandle> = ConcreteRegistry::new();
+    pub(crate) static ref DEVICE_REGISTRY: ConcreteRegistry<DeviceHandle> = ConcreteRegistry::new();
+    pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> = ConcreteRegistry::new();
+    pub(crate) static ref SHADER_MODULE_REGISTRY: ConcreteRegistry<ShaderModuleHandle> = ConcreteRegistry::new();
 }
