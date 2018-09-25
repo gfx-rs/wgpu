@@ -4,9 +4,7 @@ use std::marker::PhantomData;
 use std::os::raw::c_void;
 
 #[cfg(feature = "remote")]
-use std::sync::Arc;
-#[cfg(feature = "remote")]
-use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 
 #[cfg(feature = "remote")]
 use hal::backend::FastHashMap;
@@ -104,7 +102,9 @@ impl<T> Registry<T> for RemoteRegistry<T> {
     }
 
     fn get_mut(&self, id: Id) -> RegistryItem<T> {
-        MutexGuard::map(self.registrations.lock(), |r| r.tracked.get_mut(&id).unwrap())
+        MutexGuard::map(self.registrations.lock(), |r| {
+            r.tracked.get_mut(&id).unwrap()
+        })
     }
 
     fn take(&self, id: Id) -> T {
@@ -120,7 +120,8 @@ type ConcreteRegistry<T> = LocalRegistry<T>;
 type ConcreteRegistry<T> = RemoteRegistry<T>;
 
 lazy_static! {
-    pub(crate) static ref ADAPTER_REGISTRY: ConcreteRegistry<AdapterHandle> = ConcreteRegistry::new();
+    pub(crate) static ref ADAPTER_REGISTRY: ConcreteRegistry<AdapterHandle> =
+        ConcreteRegistry::new();
     pub(crate) static ref DEVICE_REGISTRY: ConcreteRegistry<DeviceHandle> = ConcreteRegistry::new();
     pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> = ConcreteRegistry::new();
     pub(crate) static ref SHADER_MODULE_REGISTRY: ConcreteRegistry<ShaderModuleHandle> = ConcreteRegistry::new();

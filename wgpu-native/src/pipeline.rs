@@ -1,7 +1,10 @@
 use hal;
 use resource;
 
-use {BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId};
+use {
+    AttachmentStateId, BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId,
+    ShaderModuleId,
+};
 
 #[repr(C)]
 pub enum BlendFactor {
@@ -146,8 +149,9 @@ pub struct ShaderModuleDescriptor {
 }
 
 #[repr(C)]
-pub struct AttachmentStateDescriptor<'a> {
-    pub formats: &'a [resource::TextureFormat],
+pub struct AttachmentStateDescriptor {
+    pub formats: *const resource::TextureFormat,
+    pub formats_length: usize,
 }
 
 pub struct AttachmentState {
@@ -163,15 +167,15 @@ pub enum ShaderStage {
 
 #[repr(C)]
 pub struct PipelineStageDescriptor {
-    pub module: ShaderModuleDescriptor,
+    pub module: ShaderModuleId,
     pub stage: ShaderStage,
     pub entry_point: *const ::std::os::raw::c_char,
 }
 
 #[repr(C)]
-pub struct ComputePipelineDescriptor<'a> {
+pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub stages: &'a [PipelineStageDescriptor],
+    pub stages: *const PipelineStageDescriptor,
 }
 
 pub struct ComputePipeline {
@@ -188,13 +192,15 @@ pub enum PrimitiveTopology {
 }
 
 #[repr(C)]
-pub struct RenderPipelineDescriptor<'a> {
+pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub stages: &'a [PipelineStageDescriptor],
+    pub stages: *const PipelineStageDescriptor,
+    pub stages_length: usize,
     pub primitive_topology: PrimitiveTopology,
-    pub blend_state: &'a [BlendStateId],
+    pub blend_state: *const BlendStateId,
+    pub blend_state_length: usize,
     pub depth_stencil_state: DepthStencilStateId,
-    pub attachment_state: AttachmentState,
+    pub attachment_state: AttachmentStateId,
 }
 
 pub struct RenderPipeline {

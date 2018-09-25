@@ -92,4 +92,59 @@ pub extern "C" fn wgpu_queue_submit(
         }
         device.com_allocator.submit(cmd_buf);
     }
+pub extern "C" fn wgpu_device_create_render_pipeline(
+    device_id: DeviceId,
+    desc: pipeline::RenderPipelineDescriptor,
+) -> RenderPipelineId {
+    let device = registry::DEVICE_REGISTRY.get_mut(device_id);
+    // TODO: layout, primitive_topology, blend_state, depth_stencil_state, attachment_state
+    let pipeline_stages = unsafe { slice::from_raw_parts(desc.stages, desc.stages_length) };
+
+    // TODO: avoid allocation
+    let shaders_owned = pipeline_stages
+        .iter()
+        .map(|ps| registry::SHADER_MODULE_REGISTRY.get_mut(ps.module))
+        .collect::<Vec<_>>();
+    let shaders = {
+        let mut vertex = None;
+        let mut fragment = None;
+        for (i, pipeline_stage) in pipeline_stages.iter().enumerate() {
+            let entry = hal::pso::EntryPoint::<back::Backend> {
+                entry: unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
+                    .to_str()
+                    .to_owned()
+                    .unwrap(), // TODO
+                module: &shaders_owned[i].raw,
+                specialization: hal::pso::Specialization {
+                    // TODO
+                    constants: &[],
+                    data: &[],
+                },
+            };
+            match pipeline_stage.stage {
+                pipeline::ShaderStage::Vertex => {
+                    vertex = Some(entry);
+                }
+                pipeline::ShaderStage::Fragment => {
+                    fragment = Some(entry);
+                }
+                pipeline::ShaderStage::Compute => unimplemented!(), // TODO
+            }
+        }
+
+        hal::pso::GraphicsShaderSet {
+            vertex: vertex.unwrap(), // TODO
+            hull: None,
+            domain: None,
+            geometry: None,
+            fragment,
+        }
+    };
+
+    /*
+    let pipeline = device
+        .device
+        .create_graphics_pipeline(pipeline_desc);
+    */
+    unimplemented!();
 }

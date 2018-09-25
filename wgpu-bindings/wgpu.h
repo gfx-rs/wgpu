@@ -14,6 +14,20 @@ typedef enum {
   WGPUPowerPreference_HighPerformance = 2,
 } WGPUPowerPreference;
 
+typedef enum {
+  WGPUPrimitiveTopology_PointList = 0,
+  WGPUPrimitiveTopology_LineList = 1,
+  WGPUPrimitiveTopology_LineStrip = 2,
+  WGPUPrimitiveTopology_TriangleList = 3,
+  WGPUPrimitiveTopology_TriangleStrip = 4,
+} WGPUPrimitiveTopology;
+
+typedef enum {
+  WGPUShaderStage_Vertex = 0,
+  WGPUShaderStage_Fragment = 1,
+  WGPUShaderStage_Compute = 2,
+} WGPUShaderStage;
+
 typedef WGPUId WGPUDeviceId;
 
 typedef WGPUId WGPUAdapterId;
@@ -38,7 +52,32 @@ typedef struct {
 
 } WGPUCommandBufferDescriptor;
 
+typedef WGPUId WGPUPipelineLayoutId;
+
 typedef WGPUId WGPUShaderModuleId;
+
+typedef struct {
+  WGPUShaderModuleId module;
+  WGPUShaderStage stage;
+  const char *entry_point;
+} WGPUPipelineStageDescriptor;
+
+typedef WGPUId WGPUBlendStateId;
+
+typedef WGPUId WGPUDepthStencilStateId;
+
+typedef WGPUId WGPUAttachmentStateId;
+
+typedef struct {
+  WGPUPipelineLayoutId layout;
+  const WGPUPipelineStageDescriptor *stages;
+  uintptr_t stages_length;
+  WGPUPrimitiveTopology primitive_topology;
+  const WGPUBlendStateId *blend_state;
+  uintptr_t blend_state_length;
+  WGPUDepthStencilStateId depth_stencil_state;
+  WGPUAttachmentStateId attachment_state;
+} WGPURenderPipelineDescriptor;
 
 typedef struct {
   const uint8_t *bytes;
@@ -65,6 +104,9 @@ WGPUInstanceId wgpu_create_instance(void);
 
 WGPUCommandBufferId wgpu_device_create_command_buffer(WGPUDeviceId device_id,
                                                       WGPUCommandBufferDescriptor desc);
+
+WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
+                                                        WGPURenderPipelineDescriptor desc);
 
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
                                                     WGPUShaderModuleDescriptor desc);
