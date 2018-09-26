@@ -206,6 +206,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "examples"
 version = "0.1.0"
 dependencies = [
+ "wgpu 0.1.0",
  "wgpu-native 0.1.0",
 ]
 
@@ -906,6 +907,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "dlib 0.4.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "wgpu"
+version = "0.1.0"
+dependencies = [
+ "wgpu-native 0.1.0",
 ]
 
 [[package]]

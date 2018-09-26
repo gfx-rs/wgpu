@@ -1,40 +1,20 @@
-extern crate wgpu_native;
-use wgpu_native::*;
-
+extern crate wgpu;
 fn main() {
-    let instance = wgpu_create_instance();
-    let adapter = wgpu_instance_get_adapter(
-        instance,
-        AdapterDescriptor {
-            power_preference: PowerPreference::LowPower,
+    let instance = wgpu::Instance::new();
+    let adapter = instance.get_adapter(
+        wgpu::AdapterDescriptor {
+            power_preference: wgpu::PowerPreference::LowPower,
         },
     );
-    let device = wgpu_adapter_create_device(
-        adapter,
-        DeviceDescriptor {
-            extensions: Extensions {
+    let device = adapter.create_device(
+        wgpu::DeviceDescriptor {
+            extensions: wgpu::Extensions {
                 anisotropic_filtering: false,
             },
         },
     );
     let vs_bytes = include_bytes!("./../data/hello_triangle.vert.spv");
-    let _vs = wgpu_device_create_shader_module(
-        device,
-        ShaderModuleDescriptor {
-            code: ByteArray {
-                bytes: vs_bytes.as_ptr(),
-                length: vs_bytes.len(),
-            },
-        },
-    );
+    let _vs = device.create_shader_module(vs_bytes);
     let fs_bytes = include_bytes!("./../data/hello_triangle.frag.spv");
-    let _fs = wgpu_device_create_shader_module(
-        device,
-        ShaderModuleDescriptor {
-            code: ByteArray {
-                bytes: fs_bytes.as_ptr(),
-                length: fs_bytes.len(),
-            },
-        },
-    );
+    let _fs = device.create_shader_module(fs_bytes);
 }
