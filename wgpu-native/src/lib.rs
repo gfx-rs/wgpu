@@ -85,6 +85,7 @@ pub type SamplerId = Id;
 
 // Binding model
 pub type BindGroupLayoutId = Id;
+pub(crate) type BindGroupLayoutHandle = BindGroupLayout<B>;
 pub type PipelineLayoutId = Id;
 
 // Pipeline

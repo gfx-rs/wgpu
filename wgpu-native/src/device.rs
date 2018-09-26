@@ -1,10 +1,9 @@
 use hal::{self, Device as _Device};
 use hal::queue::RawCommandQueue;
-use {command, conv, memory, pipeline, resource};
+use {binding_model, command, conv, memory, pipeline, resource};
 
 use registry::{self, Registry};
-use {BufferId, CommandBufferId, DeviceId, QueueId, ShaderModuleId};
-
+use {BindGroupLayoutId, DeviceId, PipelineLayoutId, RenderPipelineId, , BufferId, CommandBufferId, DeviceId, QueueId, ShaderModuleId};
 use std::{iter, slice};
 
 
@@ -30,8 +29,40 @@ impl<B: hal::Backend> Device<B> {
     }
 }
 
-pub struct ShaderModule<B: hal::Backend> {
+pub(crate) struct ShaderModule<B: hal::Backend> {
     pub raw: B::ShaderModule,
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_bind_group_layout(
+    device_id: DeviceId,
+    desc: binding_model::BindGroupLayoutDescriptor,
+) -> BindGroupLayoutId {
+    let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
+    let device = registry::DEVICE_REGISTRY.get_mut(device_id);
+    let descriptor_set_layout = device.device.create_descriptor_set_layout(
+        bindings.iter().map(|binding| {
+            hal::pso::DescriptorSetLayoutBinding {
+                binding: binding.binding,
+                ty: conv::map_binding_type(&binding.ty),
+                count: bindings.len(),
+                stage_flags: conv::map_shader_stage_flags(binding.visibility),
+                immutable_samplers: false, // TODO
+            }
+        }),
+        &[],
+    );
+    registry::BIND_GROUP_LAYOUT_REGISTRY.register(binding_model::BindGroupLayout {
+        raw: descriptor_set_layout,
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_pipeline_layout(
+    device_id: DeviceId,
+    desc: binding_model::PipelineLayoutDescriptor,
+) -> PipelineLayoutId {
+    unimplemented!()
 }
 
 #[no_mangle]

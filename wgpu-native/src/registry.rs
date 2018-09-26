@@ -1,17 +1,17 @@
+#[cfg(feature = "remote")]
+use hal::backend::FastHashMap;
+#[cfg(feature = "remote")]
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
 #[cfg(not(feature = "remote"))]
 use std::marker::PhantomData;
 #[cfg(not(feature = "remote"))]
 use std::os::raw::c_void;
 #[cfg(feature = "remote")]
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
-#[cfg(feature = "remote")]
 use std::sync::Arc;
-
 #[cfg(feature = "remote")]
 use hal::backend::FastHashMap;
 
-use {AdapterHandle, CommandBufferHandle, DeviceHandle, InstanceHandle, ShaderModuleHandle};
-
+use {AdapterHandle, BindGroupLayoutHandle, CommandBufferHandle, DeviceHandle, InstanceHandle, ShaderModuleHandle};
 
 #[cfg(not(feature = "remote"))]
 pub(crate) type Id = *mut c_void;
@@ -122,6 +122,8 @@ type ConcreteRegistry<T> = RemoteRegistry<T>;
 
 lazy_static! {
     pub(crate) static ref ADAPTER_REGISTRY: ConcreteRegistry<AdapterHandle> =
+        ConcreteRegistry::new();
+    pub(crate) static ref BIND_GROUP_LAYOUT_REGISTRY: ConcreteRegistry<BindGroupLayoutHandle> =
         ConcreteRegistry::new();
     pub(crate) static ref DEVICE_REGISTRY: ConcreteRegistry<DeviceHandle> = ConcreteRegistry::new();
     pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> = ConcreteRegistry::new();

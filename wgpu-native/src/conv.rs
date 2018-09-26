@@ -1,6 +1,6 @@
 use hal;
 
-use resource;
+use {binding_model, resource};
 
 pub(crate) fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
@@ -38,4 +38,37 @@ pub(crate) fn map_buffer_usage(
     }
 
     (hal_usage, hal_memory)
+}
+
+pub(crate) fn map_binding_type(
+    binding_ty: &binding_model::BindingType,
+) -> hal::pso::DescriptorType {
+    use binding_model::BindingType::*;
+    use hal::pso::DescriptorType as H;
+    match binding_ty {
+        UniformBuffer => H::UniformBuffer,
+        Sampler => H::Sampler,
+        SampledTexture => H::SampledImage,
+        StorageBuffer => H::StorageBuffer,
+    }
+}
+
+pub(crate) fn map_shader_stage_flags(
+    shader_stage_flags: binding_model::ShaderStageFlags,
+) -> hal::pso::ShaderStageFlags {
+    use binding_model::{
+        ShaderStageFlags_COMPUTE, ShaderStageFlags_FRAGMENT, ShaderStageFlags_VERTEX,
+    };
+    use hal::pso::ShaderStageFlags as H;
+    let mut value = H::empty();
+    if 0 != shader_stage_flags & ShaderStageFlags_VERTEX {
+        value |= H::VERTEX;
+    }
+    if 0 != shader_stage_flags & ShaderStageFlags_FRAGMENT {
+        value |= H::FRAGMENT;
+    }
+    if 0 != shader_stage_flags & ShaderStageFlags_COMPUTE {
+        value |= H::COMPUTE;
+    }
+    value
 }
