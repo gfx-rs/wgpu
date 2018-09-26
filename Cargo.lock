@@ -206,6 +206,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 name = "examples"
 version = "0.1.0"
 dependencies = [
+ "wgpu 0.1.0",
  "wgpu-native 0.1.0",
 ]
 

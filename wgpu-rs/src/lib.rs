@@ -2,7 +2,7 @@ extern crate wgpu_native as wgn;
 
 pub use wgn::{
     Color, Origin3d, Extent3d,
-    AdapterDescriptor, Extensions, DeviceDescriptor,
+    AdapterDescriptor, Extensions, DeviceDescriptor, PowerPreference,
     ShaderModuleDescriptor,
 };
 

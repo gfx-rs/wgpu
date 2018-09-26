@@ -20,3 +20,4 @@ vulkan = ["wgpu-native/gfx-backend-vulkan"]
 
 [dependencies]
 wgpu-native = { path = "../wgpu-native" }
+wgpu = { path = "../wgpu-rs" }
