@@ -2,9 +2,10 @@
 use std::marker::PhantomData;
 #[cfg(not(feature = "remote"))]
 use std::os::raw::c_void;
-
 #[cfg(feature = "remote")]
 use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+#[cfg(feature = "remote")]
+use std::sync::Arc;
 
 #[cfg(feature = "remote")]
 use hal::backend::FastHashMap;
