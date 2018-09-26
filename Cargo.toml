@@ -2,5 +2,6 @@
 members = [
     "wgpu-native",
     "wgpu-bindings",
+    "wgpu-rs",
     "examples",
 ]

@@ -909,6 +909,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wgpu"
+version = "0.1.0"
+dependencies = [
+ "wgpu-native 0.1.0",
+]
+
+[[package]]
 name = "wgpu-bindings"
 version = "0.1.0"
 dependencies = [

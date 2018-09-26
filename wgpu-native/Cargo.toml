@@ -12,9 +12,6 @@ crate-type = ["lib", "cdylib", "staticlib"]
 [features]
 default = []
 remote = ["parking_lot"]
-metal = ["gfx-backend-metal"]
-dx12 = ["gfx-backend-dx12"]
-vulkan = ["gfx-backend-vulkan"]
 
 [dependencies]
 bitflags = "1.0"
