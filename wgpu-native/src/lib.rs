@@ -40,6 +40,7 @@ pub use self::resource::*;
 use back::Backend as B;
 use registry::Id;
 
+
 #[repr(C)]
 pub struct Color {
     pub r: f32,
@@ -69,11 +70,11 @@ pub struct ByteArray {
 }
 
 pub type InstanceId = Id;
-pub(crate) type InstanceHandle = back::Instance;
+type InstanceHandle = back::Instance;
 pub type AdapterId = Id;
-pub(crate) type AdapterHandle = hal::Adapter<B>;
+type AdapterHandle = hal::Adapter<B>;
 pub type DeviceId = Id;
-pub(crate) type DeviceHandle = Device<B>;
+type DeviceHandle = Device<B>;
 pub type BufferId = Id;
 
 // Resource
@@ -90,11 +91,12 @@ pub type BlendStateId = Id;
 pub type DepthStencilStateId = Id;
 pub type InputStateId = Id;
 pub type ShaderModuleId = Id;
-pub(crate) type ShaderModuleHandle = ShaderModule<B>;
+type ShaderModuleHandle = ShaderModule<B>;
 pub type AttachmentStateId = Id;
 pub type ComputePipelineId = Id;
 pub type RenderPipelineId = Id;
 
 pub type CommandBufferId = Id;
+type CommandBufferHandle = CommandBuffer<B>;
 pub type RenderPassId = Id;
 pub type ComputePassId = Id;

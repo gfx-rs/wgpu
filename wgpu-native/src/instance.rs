@@ -71,7 +71,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
 #[no_mangle]
 pub extern "C" fn wgpu_adapter_create_device(
     adapter_id: AdapterId,
-    desc: DeviceDescriptor,
+    _desc: DeviceDescriptor,
 ) -> DeviceId {
     let mut adapter = registry::ADAPTER_REGISTRY.get_mut(adapter_id);
     let (device, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();

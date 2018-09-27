@@ -4,10 +4,14 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 #[cfg(feature = "remote")]
 use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
+#[cfg(feature = "remote")]
 use std::{borrow, cmp, fmt, ops, ptr};
 
+#[cfg(feature = "remote")]
 use hal::backend::FastHashMap;
-use {AdapterHandle, DeviceHandle, InstanceHandle, ShaderModuleHandle};
+
+use {AdapterHandle, CommandBufferHandle, DeviceHandle, InstanceHandle, ShaderModuleHandle};
+
 
 #[cfg(not(feature = "remote"))]
 pub(crate) type Id = *mut c_void;
@@ -99,4 +103,5 @@ lazy_static! {
     pub(crate) static ref DEVICE_REGISTRY: ConcreteRegistry<DeviceHandle> = ConcreteRegistry::new();
     pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> = ConcreteRegistry::new();
     pub(crate) static ref SHADER_MODULE_REGISTRY: ConcreteRegistry<ShaderModuleHandle> = ConcreteRegistry::new();
+    pub(crate) static ref COMMAND_BUFFER_REGISTRY: ConcreteRegistry<CommandBufferHandle> = ConcreteRegistry::new();
 }

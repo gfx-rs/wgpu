@@ -1,6 +1,8 @@
+mod allocator;
 mod compute;
 mod render;
 
+pub use self::allocator::*;
 pub use self::compute::*;
 pub use self::render::*;
 
@@ -10,6 +12,9 @@ use {
     BufferId, Color, CommandBufferId, ComputePassId, Origin3d, RenderPassId, TextureId,
     TextureViewId,
 };
+
+use std::thread::ThreadId;
+
 
 #[repr(C)]
 pub enum LoadOp {
@@ -66,14 +71,16 @@ pub struct TextureCopyView {
 
 pub struct CommandBuffer<B: hal::Backend> {
     raw: B::CommandBuffer,
+    fence: B::Fence,
+    recorded_thread_id: ThreadId,
 }
 
 #[repr(C)]
-pub struct CommandBufferDescriptor;
+pub struct CommandBufferDescriptor {}
 
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_begin_render_pass(
-    command_buffer: CommandBufferId,
+    _command_buffer: CommandBufferId,
 ) -> RenderPassId {
     unimplemented!()
 }
