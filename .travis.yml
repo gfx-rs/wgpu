@@ -11,3 +11,9 @@ before_install:
   # Do not run bors builds against the nightly compiler.
   # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
   - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
+
+script:
+  - cargo test
+  - cargo build --manifest-path wgpu-native/Cargo.toml --features remote
+  - cargo build
+  - (cd examples && make)
