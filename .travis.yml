@@ -16,4 +16,4 @@ script:
   - cargo test
   - cargo build --manifest-path wgpu-native/Cargo.toml --features remote
   - cargo build
-  - (cd examples && make)
+  #- (cd examples && make) #TODO
