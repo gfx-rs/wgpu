@@ -1,11 +1,12 @@
+#[cfg(not(feature = "remote"))]
 use std::marker::PhantomData;
+#[cfg(not(feature = "remote"))]
 use std::os::raw::c_void;
+
 #[cfg(feature = "remote")]
 use std::sync::Arc;
 #[cfg(feature = "remote")]
 use parking_lot::{Mutex, MutexGuard, MappedMutexGuard};
-#[cfg(feature = "remote")]
-use std::{borrow, cmp, fmt, ops, ptr};
 
 #[cfg(feature = "remote")]
 use hal::backend::FastHashMap;
@@ -27,6 +28,7 @@ pub(crate) trait Registry<T> {
     fn new() -> Self;
     fn register(&self, handle: T) -> Id;
     fn get_mut(&self, id: Id) -> RegistryItem<T>;
+    fn take(&self, id: Id) -> T;
 }
 
 #[cfg(not(feature = "remote"))]
@@ -43,11 +45,17 @@ impl<T> Registry<T> for LocalRegistry<T> {
     }
 
     fn register(&self, handle: T) -> Id {
-        ::std::boxed::Box::into_raw(Box::new(handle)) as *mut _ as *mut c_void
+        Box::into_raw(Box::new(handle)) as *mut _ as *mut c_void
     }
 
     fn get_mut(&self, id: Id) -> RegistryItem<T> {
         unsafe { (id as *mut T).as_mut() }.unwrap()
+    }
+
+    fn take(&self, id: Id) -> T {
+        unsafe {
+            *Box::from_raw(id as *mut T)
+        }
     }
 }
 
@@ -55,6 +63,7 @@ impl<T> Registry<T> for LocalRegistry<T> {
 struct Registrations<T> {
     next_id: Id,
     tracked: FastHashMap<Id, T>,
+    free: Vec<Id>,
 }
 
 #[cfg(feature = "remote")]
@@ -63,6 +72,7 @@ impl<T> Registrations<T> {
         Registrations {
             next_id: 0,
             tracked: FastHashMap::default(),
+            free: Vec::new(),
         }
     }
 }
@@ -82,14 +92,25 @@ impl<T> Registry<T> for RemoteRegistry<T> {
 
     fn register(&self, handle: T) -> Id {
         let mut registrations = self.registrations.lock();
-        let id = registrations.next_id;
+        let id = match registrations.free.pop() {
+            Some(id) => id,
+            None => {
+                registrations.next_id += 1;
+                registrations.next_id - 1
+            }
+        };
         registrations.tracked.insert(id, handle);
-        registrations.next_id += 1;
         id
     }
 
     fn get_mut(&self, id: Id) -> RegistryItem<T> {
         MutexGuard::map(self.registrations.lock(), |r| r.tracked.get_mut(&id).unwrap())
+    }
+
+    fn take(&self, id: Id) -> T {
+        let mut registrations = self.registrations.lock();
+        registrations.free.push(id);
+        registrations.tracked.remove(&id).unwrap()
     }
 }
 

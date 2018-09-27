@@ -70,7 +70,7 @@ pub struct TextureCopyView {
 }
 
 pub struct CommandBuffer<B: hal::Backend> {
-    raw: B::CommandBuffer,
+    pub(crate) raw: B::CommandBuffer,
     fence: B::Fence,
     recorded_thread_id: ThreadId,
 }

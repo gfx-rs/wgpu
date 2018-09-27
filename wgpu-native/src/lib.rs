@@ -75,6 +75,7 @@ pub type AdapterId = Id;
 type AdapterHandle = hal::Adapter<B>;
 pub type DeviceId = Id;
 type DeviceHandle = Device<B>;
+pub type QueueId = Id;
 pub type BufferId = Id;
 
 // Resource
