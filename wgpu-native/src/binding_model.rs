@@ -14,6 +14,7 @@ pub const ShaderStageFlags_FRAGMENT: u32 = 2;
 pub const ShaderStageFlags_COMPUTE: u32 = 4;
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BindingType {
     UniformBuffer = 0,
     Sampler = 1,
@@ -44,8 +45,8 @@ pub struct PipelineLayoutDescriptor {
     pub bind_group_layouts_length: usize,
 }
 
-pub struct PipelineLayout<B: hal::Backend> {
-    raw: B::PipelineLayout,
+pub(crate) struct PipelineLayout<B: hal::Backend> {
+    pub raw: B::PipelineLayout,
 }
 
 #[repr(C)]

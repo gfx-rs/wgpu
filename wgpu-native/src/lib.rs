@@ -85,18 +85,23 @@ pub type SamplerId = Id;
 
 // Binding model
 pub type BindGroupLayoutId = Id;
-pub(crate) type BindGroupLayoutHandle = BindGroupLayout<B>;
+type BindGroupLayoutHandle = BindGroupLayout<B>;
 pub type PipelineLayoutId = Id;
+type PipelineLayoutHandle = PipelineLayout<B>;
 
 // Pipeline
 pub type BlendStateId = Id;
+type BlendStateHandle = BlendState;
 pub type DepthStencilStateId = Id;
+type DepthStencilStateHandle = DepthStencilState;
 pub type InputStateId = Id;
 pub type ShaderModuleId = Id;
 type ShaderModuleHandle = ShaderModule<B>;
 pub type AttachmentStateId = Id;
+type AttachmentStateHandle = AttachmentState;
 pub type ComputePipelineId = Id;
 pub type RenderPipelineId = Id;
+type RenderPipelineHandle = RenderPipeline<B>;
 
 pub type CommandBufferId = Id;
 type CommandBufferHandle = CommandBuffer<B>;

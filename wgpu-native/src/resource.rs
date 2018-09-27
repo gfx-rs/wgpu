@@ -34,6 +34,7 @@ pub struct TextureView {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureDimension {
     D1,
     D2,
@@ -41,6 +42,7 @@ pub enum TextureDimension {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureFormat {
     R8g8b8a8Unorm = 0,
     R8g8b8a8Uint = 1,
@@ -75,6 +77,7 @@ pub struct Texture {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum AddressMode {
     ClampToEdge = 0,
     Repeat = 1,
@@ -83,12 +86,14 @@ pub enum AddressMode {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum FilterMode {
     Nearest = 0,
     Linear = 1,
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum CompareFunction {
     Never = 0,
     Less = 1,
@@ -101,6 +106,7 @@ pub enum CompareFunction {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BorderColor {
     TransparentBlack = 0,
     OpaqueBlack = 1,

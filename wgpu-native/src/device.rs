@@ -3,8 +3,9 @@ use hal::queue::RawCommandQueue;
 use {binding_model, command, conv, memory, pipeline, resource};
 
 use registry::{self, Registry};
-use {BindGroupLayoutId, DeviceId, PipelineLayoutId, RenderPipelineId, , BufferId, CommandBufferId, DeviceId, QueueId, ShaderModuleId};
 use std::{iter, slice};
+use {binding_model, conv, memory, pipeline};
+use {AttachmentStateId, BindGroupLayoutId, BlendStateId, BufferId, CommandBufferId, DepthStencilStateId, DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId};
 
 
 pub struct Device<B: hal::Backend> {
@@ -39,8 +40,8 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
     desc: binding_model::BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
-    let device = registry::DEVICE_REGISTRY.get_mut(device_id);
-    let descriptor_set_layout = device.device.create_descriptor_set_layout(
+    let device = &mut registry::DEVICE_REGISTRY.get_mut(device_id).device;
+    let descriptor_set_layout = device.create_descriptor_set_layout(
         bindings.iter().map(|binding| {
             hal::pso::DescriptorSetLayoutBinding {
                 binding: binding.binding,
@@ -62,7 +63,34 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
     desc: binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
-    unimplemented!()
+    let bind_group_layout_ids = unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) };
+    // TODO: only lock mutex once?
+    let descriptor_set_layouts = bind_group_layout_ids.iter().map(|id| registry::BIND_GROUP_LAYOUT_REGISTRY.get_mut(*id)).collect::<Vec<_>>();
+    let device = &mut registry::DEVICE_REGISTRY.get_mut(device_id).device;
+    let pipeline_layout = device.create_pipeline_layout(descriptor_set_layouts.iter().map(|d| &d.raw), &[]); // TODO: push constants
+    registry::PIPELINE_LAYOUT_REGISTRY.register(binding_model::PipelineLayout {
+        raw: pipeline_layout,
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_blend_state(
+    _device_id: DeviceId,
+    desc: pipeline::BlendStateDescriptor
+) -> BlendStateId {
+    registry::BLEND_STATE_REGISTRY.register(pipeline::BlendState {
+        raw: conv::map_blend_state_descriptor(desc),
+    })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_depth_stencil_state(
+    device_id: DeviceId,
+    desc: pipeline::DepthStencilStateDescriptor,
+) -> DepthStencilStateId {
+    registry::DEPTH_STENCIL_STATE_REGISTRY.register(pipeline::DepthStencilState {
+        raw: conv::map_depth_stencil_state(desc)
+    })
 }
 
 #[no_mangle]
@@ -70,12 +98,10 @@ pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
     desc: pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
-    let device = registry::DEVICE_REGISTRY.get_mut(device_id);
+    let device = &mut registry::DEVICE_REGISTRY.get_mut(device_id).device;
     let shader = device
-        .device
-        .create_shader_module(unsafe {
-            slice::from_raw_parts(desc.code.bytes, desc.code.length)
-        }).unwrap();
+        .create_shader_module(unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) })
+        .unwrap();
     registry::SHADER_MODULE_REGISTRY.register(ShaderModule { raw: shader })
 }
 
@@ -123,12 +149,45 @@ pub extern "C" fn wgpu_queue_submit(
         }
         device.com_allocator.submit(cmd_buf);
     }
+pub extern "C" fn wgpu_device_create_attachment_state(
+    device_id: DeviceId,
+    desc: pipeline::AttachmentStateDescriptor,
+) -> AttachmentStateId {
+    // TODO: Either formats should be changed to a single format,
+    // or its assumed that `AttachmentStateDescriptor` contains multiple attachments.
+    // Assume the latter for now.
+    let attachments = unsafe { slice::from_raw_parts(desc.formats, desc.formats_length) }.iter().map(|format| {
+        hal::pass::Attachment {
+            // TODO: either formats should be changed to format,
+            // or return multiple attachments here
+            format: Some(conv::map_texture_format(*format)),
+            samples: 1, // TODO map
+            ops: hal::pass::AttachmentOps { // TODO map
+                load: hal::pass::AttachmentLoadOp::Clear,
+                store: hal::pass::AttachmentStoreOp::Store,
+            },
+            stencil_ops: hal::pass::AttachmentOps { // TODO map
+                load: hal::pass::AttachmentLoadOp::DontCare,
+                store: hal::pass::AttachmentStoreOp::DontCare,
+            },
+            layouts: hal::image::Layout::Undefined..hal::image::Layout::Present, // TODO map
+        }
+    }).collect();
+    registry::ATTACHMENT_STATE_REGISTRY.register(pipeline::AttachmentState { raw: attachments })
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
     desc: pipeline::RenderPipelineDescriptor,
 ) -> RenderPipelineId {
-    let device = registry::DEVICE_REGISTRY.get_mut(device_id);
-    // TODO: layout, primitive_topology, blend_state, depth_stencil_state, attachment_state
+    // TODO
+    let extent = hal::window::Extent2D { width: 100, height: 100 };
+
+    let device = &registry::DEVICE_REGISTRY.get_mut(device_id).device;
+    
+    let layout = &registry::PIPELINE_LAYOUT_REGISTRY.get_mut(desc.layout).raw;
+
     let pipeline_stages = unsafe { slice::from_raw_parts(desc.stages, desc.stages_length) };
 
     // TODO: avoid allocation
@@ -172,10 +231,111 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         }
     };
 
-    /*
-    let pipeline = device
-        .device
-        .create_graphics_pipeline(pipeline_desc);
-    */
-    unimplemented!();
+    // TODO
+    let rasterizer = hal::pso::Rasterizer {
+        depth_clamping: false,
+        polygon_mode: hal::pso::PolygonMode::Fill,
+        cull_face: hal::pso::Face::BACK,
+        front_face: hal::pso::FrontFace::Clockwise,
+        depth_bias: None,
+        conservative: false,
+    };
+
+    // TODO
+    let vertex_buffers: Vec<hal::pso::VertexBufferDesc> = Vec::new();
+
+    // TODO
+    let attributes: Vec<hal::pso::AttributeDesc> = Vec::new();
+
+    let input_assembler = hal::pso::InputAssemblerDesc {
+        primitive: conv::map_primitive_topology(desc.primitive_topology),
+        primitive_restart: hal::pso::PrimitiveRestart::Disabled, // TODO
+    };
+
+    let blender = hal::pso::BlendDesc {
+        logic_op: None, // TODO
+        targets: unsafe { slice::from_raw_parts(desc.blend_state, desc.blend_state_length) }
+            .iter()
+            .map(|id| registry::BLEND_STATE_REGISTRY.get_mut(*id).raw)
+            .collect()
+    };
+
+    let depth_stencil = registry::DEPTH_STENCIL_STATE_REGISTRY.get_mut(desc.depth_stencil_state).raw;
+
+    // TODO
+    let multisampling: Option<hal::pso::Multisampling> = None;
+
+    // TODO
+    let baked_states = hal::pso::BakedStates {
+        viewport: Some(hal::pso::Viewport {
+            rect: hal::pso::Rect {
+                x: 0,
+                y: 0,
+                w: extent.width as i16,
+                h: extent.height as i16,
+            },
+            depth: (0.0..1.0),
+        }),
+        scissor: Some(hal::pso::Rect {
+            x: 0,
+            y: 0,
+            w: extent.width as i16,
+            h: extent.height as i16,
+        }),
+        blend_color: None,
+        depth_bounds: None,
+    };
+
+    let attachments = &registry::ATTACHMENT_STATE_REGISTRY.get_mut(desc.attachment_state).raw;
+
+    // TODO
+    let subpass = hal::pass::SubpassDesc {
+        colors: &[(0, hal::image::Layout::ColorAttachmentOptimal)],
+        depth_stencil: None,
+        inputs: &[],
+        resolves: &[],
+        preserves: &[],
+    };
+
+    // TODO
+    let subpass_dependency = hal::pass::SubpassDependency {
+        passes: hal::pass::SubpassRef::External..hal::pass::SubpassRef::Pass(0),
+        stages: hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT..hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+        accesses: hal::image::Access::empty()..(hal::image::Access::COLOR_ATTACHMENT_READ | hal::image::Access::COLOR_ATTACHMENT_WRITE),
+    };
+
+    let main_pass = &device.create_render_pass(&attachments[..], &[subpass], &[subpass_dependency]);
+
+    // TODO
+    let subpass = hal::pass::Subpass {
+        index: 0,
+        main_pass,
+    };
+
+    // TODO
+    let flags = hal::pso::PipelineCreationFlags::empty();
+
+    // TODO
+    let parent = hal::pso::BasePipeline::None;
+
+    let pipeline_desc = hal::pso::GraphicsPipelineDesc {
+        shaders,
+        rasterizer,
+        vertex_buffers,
+        attributes,
+        input_assembler,
+        blender,
+        depth_stencil,
+        multisampling,
+        baked_states,
+        layout,
+        subpass,
+        flags,
+        parent,
+    };
+
+    // TODO: cache
+    let pipeline = device.create_graphics_pipeline(&pipeline_desc, None).unwrap();
+
+    registry::RENDER_PIPELINE_REGISTRY.register(pipeline::RenderPipeline { raw: pipeline })
 }

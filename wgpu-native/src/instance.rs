@@ -4,6 +4,7 @@ use registry::{self, Registry};
 use {AdapterId, Device, DeviceId, InstanceId};
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,

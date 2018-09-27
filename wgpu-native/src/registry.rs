@@ -11,7 +11,7 @@ use std::sync::Arc;
 #[cfg(feature = "remote")]
 use hal::backend::FastHashMap;
 
-use {AdapterHandle, BindGroupLayoutHandle, CommandBufferHandle, DeviceHandle, InstanceHandle, ShaderModuleHandle};
+use {AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle, PipelineLayoutHandle, RenderPipelineHandle, ShaderModuleHandle};
 
 #[cfg(not(feature = "remote"))]
 pub(crate) type Id = *mut c_void;
@@ -123,10 +123,22 @@ type ConcreteRegistry<T> = RemoteRegistry<T>;
 lazy_static! {
     pub(crate) static ref ADAPTER_REGISTRY: ConcreteRegistry<AdapterHandle> =
         ConcreteRegistry::new();
+    pub(crate) static ref ATTACHMENT_STATE_REGISTRY: ConcreteRegistry<AttachmentStateHandle> =
+        ConcreteRegistry::new();
     pub(crate) static ref BIND_GROUP_LAYOUT_REGISTRY: ConcreteRegistry<BindGroupLayoutHandle> =
         ConcreteRegistry::new();
+    pub(crate) static ref BLEND_STATE_REGISTRY: ConcreteRegistry<BlendStateHandle> =
+        ConcreteRegistry::new();
+    pub(crate) static ref DEPTH_STENCIL_STATE_REGISTRY: ConcreteRegistry<DepthStencilStateHandle> =
+        ConcreteRegistry::new();
     pub(crate) static ref DEVICE_REGISTRY: ConcreteRegistry<DeviceHandle> = ConcreteRegistry::new();
-    pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> = ConcreteRegistry::new();
-    pub(crate) static ref SHADER_MODULE_REGISTRY: ConcreteRegistry<ShaderModuleHandle> = ConcreteRegistry::new();
     pub(crate) static ref COMMAND_BUFFER_REGISTRY: ConcreteRegistry<CommandBufferHandle> = ConcreteRegistry::new();
+    pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> =
+        ConcreteRegistry::new();
+    pub(crate) static ref PIPELINE_LAYOUT_REGISTRY: ConcreteRegistry<PipelineLayoutHandle> =
+        ConcreteRegistry::new();
+    pub(crate) static ref RENDER_PIPELINE_REGISTRY: ConcreteRegistry<RenderPipelineHandle> =
+        ConcreteRegistry::new();
+    pub(crate) static ref SHADER_MODULE_REGISTRY: ConcreteRegistry<ShaderModuleHandle> =
+        ConcreteRegistry::new();
 }
