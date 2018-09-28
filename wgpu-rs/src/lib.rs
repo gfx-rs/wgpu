@@ -3,7 +3,7 @@ extern crate wgpu_native as wgn;
 pub use wgn::{
     Color, Origin3d, Extent3d,
     AdapterDescriptor, Extensions, DeviceDescriptor, PowerPreference,
-    ShaderModuleDescriptor,
+    ShaderModuleDescriptor, CommandBufferDescriptor,
 };
 
 
@@ -21,6 +21,14 @@ pub struct Device {
 
 pub struct ShaderModule {
     id: wgn::ShaderModuleId,
+}
+
+pub struct CommandBuffer {
+    id: wgn::CommandBufferId,
+}
+
+pub struct Queue {
+    id: wgn::QueueId,
 }
 
 
@@ -57,5 +65,27 @@ impl Device {
         ShaderModule {
             id: wgn::wgpu_device_create_shader_module(self.id, desc),
         }
+    }
+
+    pub fn get_queue(&self) -> Queue {
+        Queue {
+            id: wgn::wgpu_device_get_queue(self.id),
+        }
+    }
+
+    pub fn create_command_buffer(&self, desc: CommandBufferDescriptor) -> CommandBuffer {
+        CommandBuffer {
+            id: wgn::wgpu_device_create_command_buffer(self.id, desc),
+        }
+    }
+}
+
+impl Queue {
+    pub fn submit(&self, command_buffers: &[CommandBuffer]) {
+        wgn::wgpu_queue_submit(
+            self.id,
+            command_buffers.as_ptr() as *const _,
+            command_buffers.len(),
+        );
     }
 }
