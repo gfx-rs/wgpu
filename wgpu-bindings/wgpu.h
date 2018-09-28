@@ -1,13 +1,12 @@
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdbool.h>
-
-#define WGPU_REMOTE 1
 #ifdef WGPU_REMOTE
     typedef uint32_t WGPUId;
 #else
     typedef void *WGPUId;
 #endif
+
+#include <stdint.h>
+#include <stdlib.h>
+#include <stdbool.h>
 
 #define WGPUColorWriteFlags_ALL 15
 

@@ -1,6 +1,10 @@
 #include <stdio.h>
 #include "./../../wgpu-bindings/wgpu.h"
 
+#define STAGES_LENGTH       (2)
+#define BLEND_STATE_LENGTH  (1)
+#define FORMATS_LENGTH      (1)
+
 WGPUByteArray read_file(const char *name)
 {
     FILE *file = fopen(name, "rb");
@@ -63,7 +67,6 @@ int main()
         .entry_point = "main",
     };
 
-    const unsigned int STAGES_LENGTH = 2;
     WGPUPipelineStageDescriptor stages[STAGES_LENGTH] = { vertex_stage, fragment_stage };
 
     WGPUBlendDescriptor blend_alpha = {
@@ -83,7 +86,6 @@ int main()
         .write_mask = 0,
     };
     WGPUBlendStateId blend_state_0 = wgpu_device_create_blend_state(device, blend_state_0_desc);
-    const unsigned int BLEND_STATE_LENGTH = 1;
     WGPUBlendStateId blend_state[BLEND_STATE_LENGTH] = { blend_state_0 };
 
     WGPUStencilStateFaceDescriptor stencil_state_front = {
@@ -108,7 +110,6 @@ int main()
     };
     WGPUDepthStencilStateId depth_stencil_state = wgpu_device_create_depth_stencil_state(device, depth_stencil_state_desc);
 
-    const unsigned int FORMATS_LENGTH = 1;
     WGPUTextureFormat formats[FORMATS_LENGTH] = { WGPUTextureFormat_R8g8b8a8Unorm };
     WGPUAttachmentStateDescriptor attachment_state_desc = {
         .formats = formats,
@@ -132,7 +133,7 @@ int main()
     WGPUCommandBufferDescriptor cmd_buf_desc = { };
     WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, cmd_buf_desc);
     WGPUQueueId queue = wgpu_device_get_queue(device);
-    /*wgpu_queue_submit(queue, &cmd_buf, 1);*/
+    wgpu_queue_submit(queue, &cmd_buf, 1);
 
     return 0;
 }
