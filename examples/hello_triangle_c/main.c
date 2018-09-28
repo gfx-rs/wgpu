@@ -31,14 +31,12 @@ int main()
     };
     WGPUDeviceId device = wgpu_adapter_create_device(adapter, device_desc);
 
-    /*
     WGPUBindGroupLayoutDescriptor bind_group_layout_desc = {
         .bindings = NULL,
         .bindings_length = 0,
     };
     WGPUBindGroupLayoutId _bind_group_layout = wgpu_device_create_bind_group_layout(device, bind_group_layout_desc);
-    */
-
+    
     WGPUPipelineLayoutDescriptor pipeline_layout_desc = {
         .bind_group_layouts = NULL,
         .bind_group_layouts_length = 0,
@@ -66,9 +64,7 @@ int main()
     };
 
     const unsigned int STAGES_LENGTH = 2;
-    WGPUPipelineStageDescriptor *stages = malloc(STAGES_LENGTH);
-    stages[0] = vertex_stage;
-    stages[1] = fragment_stage;
+    WGPUPipelineStageDescriptor stages[STAGES_LENGTH] = { vertex_stage, fragment_stage };
 
     WGPUBlendDescriptor blend_alpha = {
         .src_factor = WGPUBlendFactor_Zero,
@@ -88,8 +84,7 @@ int main()
     };
     WGPUBlendStateId blend_state_0 = wgpu_device_create_blend_state(device, blend_state_0_desc);
     const unsigned int BLEND_STATE_LENGTH = 1;
-    WGPUBlendStateId *blend_state = malloc(BLEND_STATE_LENGTH);
-    blend_state[0] = blend_state_0;
+    WGPUBlendStateId blend_state[BLEND_STATE_LENGTH] = { blend_state_0 };
 
     WGPUStencilStateFaceDescriptor stencil_state_front = {
         .compare = WGPUCompareFunction_Never,
@@ -114,14 +109,13 @@ int main()
     WGPUDepthStencilStateId depth_stencil_state = wgpu_device_create_depth_stencil_state(device, depth_stencil_state_desc);
 
     const unsigned int FORMATS_LENGTH = 1;
-    WGPUTextureFormat *formats = malloc(FORMATS_LENGTH);
-    formats[0] = WGPUTextureFormat_R8g8b8a8Unorm;
+    WGPUTextureFormat formats[FORMATS_LENGTH] = { WGPUTextureFormat_R8g8b8a8Unorm };
     WGPUAttachmentStateDescriptor attachment_state_desc = {
         .formats = formats,
         .formats_length = FORMATS_LENGTH,
     };
     WGPUAttachmentStateId attachment_state = wgpu_device_create_attachment_state(device, attachment_state_desc);
-
+    
     WGPURenderPipelineDescriptor render_pipeline_desc = {
         .layout = layout,
         .stages = stages,

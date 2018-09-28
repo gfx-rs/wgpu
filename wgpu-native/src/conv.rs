@@ -76,8 +76,8 @@ pub(crate) fn map_shader_stage_flags(
 pub(crate) fn map_primitive_topology(
     primitive_topology: pipeline::PrimitiveTopology,
 ) -> hal::Primitive {
-    use pipeline::PrimitiveTopology::*;
     use hal::Primitive as H;
+    use pipeline::PrimitiveTopology::*;
     match primitive_topology {
         PointList => H::PointList,
         LineList => H::LineList,
@@ -102,8 +102,10 @@ pub(crate) fn map_blend_state_descriptor(
 }
 
 fn map_color_write_flags(flags: u32) -> hal::pso::ColorMask {
-    use pipeline::{ColorWriteFlags_RED, ColorWriteFlags_GREEN, ColorWriteFlags_BLUE, ColorWriteFlags_ALPHA};
     use hal::pso::ColorMask as H;
+    use pipeline::{
+        ColorWriteFlags_ALPHA, ColorWriteFlags_BLUE, ColorWriteFlags_GREEN, ColorWriteFlags_RED,
+    };
     let mut value = H::empty();
     if 0 != flags & ColorWriteFlags_RED {
         value |= H::RED;
@@ -120,25 +122,30 @@ fn map_color_write_flags(flags: u32) -> hal::pso::ColorMask {
     value
 }
 
-fn map_blend_descriptor(
-    blend_desc: pipeline::BlendDescriptor,
-) -> hal::pso::BlendOp {
-    use pipeline::BlendOperation::*;
+fn map_blend_descriptor(blend_desc: pipeline::BlendDescriptor) -> hal::pso::BlendOp {
     use hal::pso::BlendOp as H;
+    use pipeline::BlendOperation::*;
     match blend_desc.operation {
-        Add => H::Add { src: map_blend_factor(blend_desc.src_factor), dst: map_blend_factor(blend_desc.dst_factor) },
-        Subtract => H::Sub { src: map_blend_factor(blend_desc.src_factor), dst: map_blend_factor(blend_desc.dst_factor) },
-        ReverseSubtract => H::RevSub { src: map_blend_factor(blend_desc.src_factor), dst: map_blend_factor(blend_desc.dst_factor) },
+        Add => H::Add {
+            src: map_blend_factor(blend_desc.src_factor),
+            dst: map_blend_factor(blend_desc.dst_factor),
+        },
+        Subtract => H::Sub {
+            src: map_blend_factor(blend_desc.src_factor),
+            dst: map_blend_factor(blend_desc.dst_factor),
+        },
+        ReverseSubtract => H::RevSub {
+            src: map_blend_factor(blend_desc.src_factor),
+            dst: map_blend_factor(blend_desc.dst_factor),
+        },
         Min => H::Min,
         Max => H::Max,
     }
 }
 
-fn map_blend_factor(
-    blend_factor: pipeline::BlendFactor,
-) -> hal::pso::Factor {
-    use pipeline::BlendFactor::*;
+fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
     use hal::pso::Factor as H;
+    use pipeline::BlendFactor::*;
     match blend_factor {
         Zero => H::Zero,
         One => H::One,
@@ -161,7 +168,7 @@ pub(crate) fn map_depth_stencil_state(
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
         // TODO DepthTest::Off?
-        depth: hal::pso::DepthTest:: On {
+        depth: hal::pso::DepthTest::On {
             fun: map_compare_function(desc.depth_compare),
             write: desc.depth_write_enabled,
         },
@@ -190,11 +197,9 @@ fn map_stencil_face(
     }
 }
 
-fn map_compare_function(
-    compare_function: resource::CompareFunction
-) -> hal::pso::Comparison {
-    use resource::CompareFunction::*;
+fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
     use hal::pso::Comparison as H;
+    use resource::CompareFunction::*;
     match compare_function {
         Never => H::Never,
         Less => H::Less,
@@ -203,15 +208,13 @@ fn map_compare_function(
         Greater => H::Greater,
         NotEqual => H::NotEqual,
         GreaterEqual => H::GreaterEqual,
-        Always => H::Always
+        Always => H::Always,
     }
 }
 
-fn map_stencil_operation(
-    stencil_operation: pipeline::StencilOperation,
-) -> hal::pso::StencilOp {
-    use pipeline::StencilOperation::*;
+fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::pso::StencilOp {
     use hal::pso::StencilOp as H;
+    use pipeline::StencilOperation::*;
     match stencil_operation {
         Keep => H::Keep,
         Zero => H::Zero,
@@ -224,11 +227,9 @@ fn map_stencil_operation(
     }
 }
 
-pub(crate) fn map_texture_format(
-    texture_format: resource::TextureFormat,
-) -> hal::format::Format {
-    use resource::TextureFormat::*;
+pub(crate) fn map_texture_format(texture_format: resource::TextureFormat) -> hal::format::Format {
     use hal::format::Format as H;
+    use resource::TextureFormat::*;
     match texture_format {
         R8g8b8a8Unorm => H::Rgba8Unorm,
         R8g8b8a8Uint => H::Rgba8Uint,

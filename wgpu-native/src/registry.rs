@@ -1,33 +1,59 @@
 #[cfg(feature = "remote")]
 use hal::backend::FastHashMap;
 #[cfg(feature = "remote")]
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+use parking_lot::{Mutex, MutexGuard};
 #[cfg(not(feature = "remote"))]
 use std::marker::PhantomData;
 #[cfg(not(feature = "remote"))]
 use std::os::raw::c_void;
 #[cfg(feature = "remote")]
 use std::sync::Arc;
-#[cfg(feature = "remote")]
-use hal::backend::FastHashMap;
 
-use {AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle, PipelineLayoutHandle, RenderPipelineHandle, ShaderModuleHandle};
+use {
+    AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BlendStateHandle, CommandBufferHandle,
+    DepthStencilStateHandle, DeviceHandle, InstanceHandle, PipelineLayoutHandle,
+    RenderPipelineHandle, ShaderModuleHandle,
+};
 
 #[cfg(not(feature = "remote"))]
 pub(crate) type Id = *mut c_void;
 #[cfg(feature = "remote")]
 pub(crate) type Id = u32;
 
+type Item<'a, T> = &'a T;
+type ItemMut<'a, T> = &'a mut T;
+
 #[cfg(not(feature = "remote"))]
-type RegistryItem<'a, T> = &'a mut T;
+type ItemsGuard<'a, T> = LocalItems<T>;
 #[cfg(feature = "remote")]
-type RegistryItem<'a, T> = MappedMutexGuard<'a, T>;
+type ItemsGuard<'a, T> = MutexGuard<'a, RemoteItems<T>>;
 
 pub(crate) trait Registry<T> {
     fn new() -> Self;
     fn register(&self, handle: T) -> Id;
-    fn get_mut(&self, id: Id) -> RegistryItem<T>;
+    fn lock(&self) -> ItemsGuard<T>;
+}
+
+pub(crate) trait Items<T> {
+    fn get(&self, id: Id) -> Item<T>;
+    fn get_mut(&mut self, id: Id) -> ItemMut<T>;
     fn take(&self, id: Id) -> T;
+}
+
+#[cfg(not(feature = "remote"))]
+pub(crate) struct LocalItems<T> {
+    marker: PhantomData<T>,
+}
+
+#[cfg(not(feature = "remote"))]
+impl<T> Items<T> for LocalItems<T> {
+    fn get(&self, id: Id) -> Item<T> {
+        unsafe { (id as *mut T).as_ref() }.unwrap()
+    }
+
+    fn get_mut(&mut self, id: Id) -> ItemMut<T> {
+        unsafe { (id as *mut T).as_mut() }.unwrap()
+    }
 }
 
 #[cfg(not(feature = "remote"))]
@@ -47,8 +73,10 @@ impl<T> Registry<T> for LocalRegistry<T> {
         Box::into_raw(Box::new(handle)) as *mut _ as *mut c_void
     }
 
-    fn get_mut(&self, id: Id) -> RegistryItem<T> {
-        unsafe { (id as *mut T).as_mut() }.unwrap()
+    fn lock(&self) -> ItemsGuard<T> {
+        LocalItems {
+            marker: PhantomData,
+        }
     }
 
     fn take(&self, id: Id) -> T {
@@ -59,16 +87,16 @@ impl<T> Registry<T> for LocalRegistry<T> {
 }
 
 #[cfg(feature = "remote")]
-struct Registrations<T> {
+pub(crate) struct RemoteItems<T> {
     next_id: Id,
     tracked: FastHashMap<Id, T>,
     free: Vec<Id>,
 }
 
 #[cfg(feature = "remote")]
-impl<T> Registrations<T> {
+impl<T> RemoteItems<T> {
     fn new() -> Self {
-        Registrations {
+        RemoteItems {
             next_id: 0,
             tracked: FastHashMap::default(),
             free: Vec::new(),
@@ -77,35 +105,44 @@ impl<T> Registrations<T> {
 }
 
 #[cfg(feature = "remote")]
+impl<T> Items<T> for RemoteItems<T> {
+    fn get(&self, id: Id) -> Item<T> {
+        self.tracked.get(&id).unwrap()
+    }
+
+    fn get_mut(&mut self, id: Id) -> ItemMut<T> {
+        self.tracked.get_mut(&id).unwrap()
+    }
+}
+
+#[cfg(feature = "remote")]
 pub(crate) struct RemoteRegistry<T> {
-    registrations: Arc<Mutex<Registrations<T>>>,
+    items: Arc<Mutex<RemoteItems<T>>>,
 }
 
 #[cfg(feature = "remote")]
 impl<T> Registry<T> for RemoteRegistry<T> {
     fn new() -> Self {
         RemoteRegistry {
-            registrations: Arc::new(Mutex::new(Registrations::new())),
+            items: Arc::new(Mutex::new(RemoteItems::new())),
         }
     }
 
     fn register(&self, handle: T) -> Id {
-        let mut registrations = self.registrations.lock();
-        let id = match registrations.free.pop() {
+        let mut items = self.items.lock();
+        let id = match items.free.pop() {
             Some(id) => id,
             None => {
-                registrations.next_id += 1;
-                registrations.next_id - 1
+                items.next_id += 1;
+                items.next_id - 1
             }
         };
-        registrations.tracked.insert(id, handle);
+        items.tracked.insert(id, handle);
         id
     }
 
-    fn get_mut(&self, id: Id) -> RegistryItem<T> {
-        MutexGuard::map(self.registrations.lock(), |r| {
-            r.tracked.get_mut(&id).unwrap()
-        })
+    fn lock(&self) -> ItemsGuard<T> {
+        self.items.lock()
     }
 
     fn take(&self, id: Id) -> T {
