@@ -1,5 +1,3 @@
-all: hello_triangle_c
-
 CC=gcc
 CFLAGS=-I.
 DEPS=./../wgpu-bindings/wgpu.h
@@ -12,3 +10,7 @@ LINK_ARGS=-L ./../target/debug -lwgpu_native
 hello_triangle_c: hello_triangle_c/main.c
 	mkdir -p $(OUTDIR)
 	$(CC) $(LINK_ARGS) -o $(OUTDIR)/$@ $^ $(CFLAGS)
+
+.PHONY: all
+
+all: hello_triangle_c

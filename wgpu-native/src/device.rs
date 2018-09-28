@@ -56,7 +56,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
         }),
         &[],
     );
-    registry::BIND_GROUP_LAYOUT_REGISTRY.register(binding_model::BindGroupLayout {
+    registry::BIND_GROUP_LAYOUT_REGISTRY.lock().register(binding_model::BindGroupLayout {
         raw: descriptor_set_layout,
     })
 }
@@ -76,7 +76,7 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     let device = &device_guard.get(device_id).device;
     let pipeline_layout =
         device.create_pipeline_layout(descriptor_set_layouts.iter().map(|d| &d.raw), &[]); // TODO: push constants
-    registry::PIPELINE_LAYOUT_REGISTRY.register(binding_model::PipelineLayout {
+    registry::PIPELINE_LAYOUT_REGISTRY.lock().register(binding_model::PipelineLayout {
         raw: pipeline_layout,
     })
 }
@@ -86,7 +86,7 @@ pub extern "C" fn wgpu_device_create_blend_state(
     _device_id: DeviceId,
     desc: pipeline::BlendStateDescriptor,
 ) -> BlendStateId {
-    registry::BLEND_STATE_REGISTRY.register(pipeline::BlendState {
+    registry::BLEND_STATE_REGISTRY.lock().register(pipeline::BlendState {
         raw: conv::map_blend_state_descriptor(desc),
     })
 }
@@ -96,7 +96,7 @@ pub extern "C" fn wgpu_device_create_depth_stencil_state(
     device_id: DeviceId,
     desc: pipeline::DepthStencilStateDescriptor,
 ) -> DepthStencilStateId {
-    registry::DEPTH_STENCIL_STATE_REGISTRY.register(pipeline::DepthStencilState {
+    registry::DEPTH_STENCIL_STATE_REGISTRY.lock().register(pipeline::DepthStencilState {
         raw: conv::map_depth_stencil_state(desc),
     })
 }
@@ -111,7 +111,7 @@ pub extern "C" fn wgpu_device_create_shader_module(
     let shader = device
         .create_shader_module(unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) })
         .unwrap();
-    registry::SHADER_MODULE_REGISTRY.register(ShaderModule { raw: shader })
+    registry::SHADER_MODULE_REGISTRY.lock().register(ShaderModule { raw: shader })
 }
 
 #[no_mangle]
@@ -122,7 +122,7 @@ pub extern "C" fn wgpu_device_create_command_buffer(
     let mut device_guard = registry::DEVICE_REGISTRY.lock();
     let device = device_guard.get_mut(device_id);
     let cmd_buf = device.com_allocator.allocate(&device.device);
-    registry::COMMAND_BUFFER_REGISTRY.register(cmd_buf)
+    registry::COMMAND_BUFFER_REGISTRY.lock().register(cmd_buf)
 }
 
 #[no_mangle]
@@ -188,7 +188,7 @@ pub extern "C" fn wgpu_device_create_attachment_state(
                 layouts: hal::image::Layout::Undefined..hal::image::Layout::Present, // TODO map
             }
         }).collect();
-    registry::ATTACHMENT_STATE_REGISTRY.register(pipeline::AttachmentState { raw: attachments })
+    registry::ATTACHMENT_STATE_REGISTRY.lock().register(pipeline::AttachmentState { raw: attachments })
 }
 
 #[no_mangle]
@@ -364,5 +364,5 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         .create_graphics_pipeline(&pipeline_desc, None)
         .unwrap();
 
-    registry::RENDER_PIPELINE_REGISTRY.register(pipeline::RenderPipeline { raw: pipeline })
+    registry::RENDER_PIPELINE_REGISTRY.lock().register(pipeline::RenderPipeline { raw: pipeline })
 }

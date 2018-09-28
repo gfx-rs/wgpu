@@ -132,7 +132,7 @@ int main()
     WGPUCommandBufferDescriptor cmd_buf_desc = { };
     WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, cmd_buf_desc);
     WGPUQueueId queue = wgpu_device_get_queue(device);
-    wgpu_queue_submit(queue, &cmd_buf, 1);
+    /*wgpu_queue_submit(queue, &cmd_buf, 1);*/
 
     return 0;
 }

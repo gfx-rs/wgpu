@@ -30,11 +30,11 @@ type ItemsGuard<'a, T> = MutexGuard<'a, RemoteItems<T>>;
 
 pub(crate) trait Registry<T> {
     fn new() -> Self;
-    fn register(&self, handle: T) -> Id;
     fn lock(&self) -> ItemsGuard<T>;
 }
 
 pub(crate) trait Items<T> {
+    fn register(&mut self, handle: T) -> Id;
     fn get(&self, id: Id) -> Item<T>;
     fn get_mut(&mut self, id: Id) -> ItemMut<T>;
     fn take(&mut self, id: Id) -> T;
@@ -47,6 +47,10 @@ pub(crate) struct LocalItems<T> {
 
 #[cfg(not(feature = "remote"))]
 impl<T> Items<T> for LocalItems<T> {
+    fn register(&mut self, handle: T) -> Id {
+        Box::into_raw(Box::new(handle)) as *mut _ as *mut c_void
+    }
+
     fn get(&self, id: Id) -> Item<T> {
         unsafe { (id as *mut T).as_ref() }.unwrap()
     }
@@ -73,10 +77,6 @@ impl<T> Registry<T> for LocalRegistry<T> {
         LocalRegistry {
             marker: PhantomData,
         }
-    }
-
-    fn register(&self, handle: T) -> Id {
-        Box::into_raw(Box::new(handle)) as *mut _ as *mut c_void
     }
 
     fn lock(&self) -> ItemsGuard<T> {
@@ -106,6 +106,18 @@ impl<T> RemoteItems<T> {
 
 #[cfg(feature = "remote")]
 impl<T> Items<T> for RemoteItems<T> {
+    fn register(&mut self, handle: T) -> Id {
+        let id = match self.free.pop() {
+            Some(id) => id,
+            None => {
+                self.next_id += 1;
+                self.next_id - 1
+            }
+        };
+        self.tracked.insert(id, handle);
+        id
+    }
+
     fn get(&self, id: Id) -> Item<T> {
         self.tracked.get(&id).unwrap()
     }
@@ -131,19 +143,6 @@ impl<T> Registry<T> for RemoteRegistry<T> {
         RemoteRegistry {
             items: Arc::new(Mutex::new(RemoteItems::new())),
         }
-    }
-
-    fn register(&self, handle: T) -> Id {
-        let mut items = self.items.lock();
-        let id = match items.free.pop() {
-            Some(id) => id,
-            None => {
-                items.next_id += 1;
-                items.next_id - 1
-            }
-        };
-        items.tracked.insert(id, handle);
-        id
     }
 
     fn lock(&self) -> ItemsGuard<T> {
