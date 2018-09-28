@@ -2,17 +2,19 @@ use hal;
 
 use {BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
 
-bitflags! {
-    #[repr(transparent)]
-    pub struct ShaderStageFlags: u32 {
-        const NONE = 0;
-        const VERTEX = 1;
-        const FRAGMENT = 2;
-        const COMPUTE = 4;
-    }
-}
+// TODO: bitflags
+pub type ShaderStageFlags = u32;
+#[allow(non_upper_case_globals)]
+pub const ShaderStageFlags_NONE: u32 = 0;
+#[allow(non_upper_case_globals)]
+pub const ShaderStageFlags_VERTEX: u32 = 1;
+#[allow(non_upper_case_globals)]
+pub const ShaderStageFlags_FRAGMENT: u32 = 2;
+#[allow(non_upper_case_globals)]
+pub const ShaderStageFlags_COMPUTE: u32 = 4;
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BindingType {
     UniformBuffer = 0,
     Sampler = 1,
@@ -28,21 +30,23 @@ pub struct BindGroupLayoutBinding {
 }
 
 #[repr(C)]
-pub struct BindGroupLayoutDescriptor<'a> {
-    pub bindings: &'a [BindGroupLayoutBinding],
+pub struct BindGroupLayoutDescriptor {
+    pub bindings: *const BindGroupLayoutBinding,
+    pub bindings_length: usize,
 }
 
-pub struct BindGroupLayout {
-    // TODO
+pub(crate) struct BindGroupLayout<B: hal::Backend> {
+    pub raw: B::DescriptorSetLayout,
 }
 
 #[repr(C)]
-pub struct PipelineLayoutDescriptor<'a> {
-    pub bind_group_layouts: &'a [BindGroupLayoutId],
+pub struct PipelineLayoutDescriptor {
+    pub bind_group_layouts: *const BindGroupLayoutId,
+    pub bind_group_layouts_length: usize,
 }
 
-pub struct PipelineLayout<B: hal::Backend> {
-    raw: B::PipelineLayout,
+pub(crate) struct PipelineLayout<B: hal::Backend> {
+    pub raw: B::PipelineLayout,
 }
 
 #[repr(C)]
@@ -66,9 +70,10 @@ pub struct Binding {
 }
 
 #[repr(C)]
-pub struct BindGroupDescriptor<'a> {
-    pub layout: BindGroupLayout,
-    pub bindings: &'a [Binding],
+pub struct BindGroupDescriptor {
+    pub layout: BindGroupLayoutId,
+    pub bindings: *const Binding,
+    pub bindings_length: usize,
 }
 
 pub struct BindGroup {

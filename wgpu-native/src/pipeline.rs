@@ -1,9 +1,13 @@
 use hal;
 use resource;
 
-use {BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId};
+use {
+    AttachmentStateId, BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId,
+    ShaderModuleId,
+};
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BlendFactor {
     Zero = 0,
     One = 1,
@@ -21,6 +25,7 @@ pub enum BlendFactor {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BlendOperation {
     Add = 0,
     Subtract = 1,
@@ -29,17 +34,20 @@ pub enum BlendOperation {
     Max = 4,
 }
 
-bitflags! {
-    #[repr(transparent)]
-    pub struct ColorWriteFlags: u32 {
-        const NONE = 0;
-        const RED = 1;
-        const GREEN = 2;
-        const BLUE = 4;
-        const ALPHA = 8;
-        const ALL = 15;
-    }
-}
+// TODO: bitflags
+pub type ColorWriteFlags = u32;
+#[allow(non_upper_case_globals)]
+pub const ColorWriteFlags_NONE: u32 = 0;
+#[allow(non_upper_case_globals)]
+pub const ColorWriteFlags_RED: u32 = 1;
+#[allow(non_upper_case_globals)]
+pub const ColorWriteFlags_GREEN: u32 = 2;
+#[allow(non_upper_case_globals)]
+pub const ColorWriteFlags_BLUE: u32 = 4;
+#[allow(non_upper_case_globals)]
+pub const ColorWriteFlags_ALPHA: u32 = 8;
+#[allow(non_upper_case_globals)]
+pub const ColorWriteFlags_ALL: u32 = 15;
 
 #[repr(C)]
 pub struct BlendDescriptor {
@@ -56,11 +64,12 @@ pub struct BlendStateDescriptor {
     pub write_mask: ColorWriteFlags,
 }
 
-pub struct BlendState {
-    raw: hal::pso::BlendState,
+pub(crate) struct BlendState {
+    pub raw: hal::pso::ColorBlendDesc,
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum StencilOperation {
     Keep = 0,
     Zero = 1,
@@ -90,17 +99,19 @@ pub struct DepthStencilStateDescriptor {
     pub stencil_write_mask: u32,
 }
 
-pub struct DepthStencilState {
-    raw: hal::pso::DepthStencilDesc,
+pub(crate) struct DepthStencilState {
+    pub raw: hal::pso::DepthStencilDesc,
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum IndexFormat {
     Uint16 = 0,
     Uint32 = 1,
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum VertexFormat {
     FloatR32G32B32A32 = 0,
     FloatR32G32B32 = 1,
@@ -109,6 +120,7 @@ pub enum VertexFormat {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum InputStepMode {
     Vertex = 0,
     Instance = 1,
@@ -146,15 +158,17 @@ pub struct ShaderModuleDescriptor {
 }
 
 #[repr(C)]
-pub struct AttachmentStateDescriptor<'a> {
-    pub formats: &'a [resource::TextureFormat],
+pub struct AttachmentStateDescriptor {
+    pub formats: *const resource::TextureFormat,
+    pub formats_length: usize,
 }
 
-pub struct AttachmentState {
-    raw: hal::pass::Attachment,
+pub(crate) struct AttachmentState {
+    pub raw: Vec<hal::pass::Attachment>,
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum ShaderStage {
     Vertex = 0,
     Fragment = 1,
@@ -163,15 +177,15 @@ pub enum ShaderStage {
 
 #[repr(C)]
 pub struct PipelineStageDescriptor {
-    pub module: ShaderModuleDescriptor,
+    pub module: ShaderModuleId,
     pub stage: ShaderStage,
     pub entry_point: *const ::std::os::raw::c_char,
 }
 
 #[repr(C)]
-pub struct ComputePipelineDescriptor<'a> {
+pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub stages: &'a [PipelineStageDescriptor],
+    pub stages: *const PipelineStageDescriptor,
 }
 
 pub struct ComputePipeline {
@@ -179,6 +193,7 @@ pub struct ComputePipeline {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum PrimitiveTopology {
     PointList = 0,
     LineList = 1,
@@ -188,15 +203,17 @@ pub enum PrimitiveTopology {
 }
 
 #[repr(C)]
-pub struct RenderPipelineDescriptor<'a> {
+pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub stages: &'a [PipelineStageDescriptor],
+    pub stages: *const PipelineStageDescriptor,
+    pub stages_length: usize,
     pub primitive_topology: PrimitiveTopology,
-    pub blend_state: &'a [BlendStateId],
+    pub blend_state: *const BlendStateId,
+    pub blend_state_length: usize,
     pub depth_stencil_state: DepthStencilStateId,
-    pub attachment_state: AttachmentState,
+    pub attachment_state: AttachmentStateId,
 }
 
-pub struct RenderPipeline {
-    // TODO
+pub(crate) struct RenderPipeline<B: hal::Backend> {
+    pub raw: B::GraphicsPipeline,
 }

@@ -40,7 +40,6 @@ pub use self::resource::*;
 use back::Backend as B;
 use registry::Id;
 
-
 #[repr(C)]
 pub struct Color {
     pub r: f32,
@@ -85,17 +84,23 @@ pub type SamplerId = Id;
 
 // Binding model
 pub type BindGroupLayoutId = Id;
+type BindGroupLayoutHandle = BindGroupLayout<B>;
 pub type PipelineLayoutId = Id;
+type PipelineLayoutHandle = PipelineLayout<B>;
 
 // Pipeline
 pub type BlendStateId = Id;
+type BlendStateHandle = BlendState;
 pub type DepthStencilStateId = Id;
+type DepthStencilStateHandle = DepthStencilState;
 pub type InputStateId = Id;
 pub type ShaderModuleId = Id;
 type ShaderModuleHandle = ShaderModule<B>;
 pub type AttachmentStateId = Id;
+type AttachmentStateHandle = AttachmentState;
 pub type ComputePipelineId = Id;
 pub type RenderPipelineId = Id;
+type RenderPipelineHandle = RenderPipeline<B>;
 
 pub type CommandBufferId = Id;
 type CommandBufferHandle = CommandBuffer<B>;

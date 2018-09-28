@@ -1,9 +1,10 @@
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
-use registry::{self, Registry};
+use registry::{self, Items, Registry};
 use {AdapterId, Device, DeviceId, InstanceId};
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
@@ -34,7 +35,7 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     ))]
     {
         let inst = ::back::Instance::create("wgpu", 1);
-        registry::INSTANCE_REGISTRY.register(inst)
+        registry::INSTANCE_REGISTRY.lock().register(inst)
     }
     #[cfg(not(any(
         feature = "gfx-backend-vulkan",
@@ -51,7 +52,8 @@ pub extern "C" fn wgpu_instance_get_adapter(
     instance_id: InstanceId,
     desc: AdapterDescriptor,
 ) -> AdapterId {
-    let instance = registry::INSTANCE_REGISTRY.get_mut(instance_id);
+    let instance_guard = registry::INSTANCE_REGISTRY.lock();
+    let instance = instance_guard.get(instance_id);
     let (mut low, mut high, mut other) = (None, None, None);
     for adapter in instance.enumerate_adapters() {
         match adapter.info.device_type {
@@ -65,7 +67,9 @@ pub extern "C" fn wgpu_instance_get_adapter(
         PowerPreference::LowPower => low.or(high),
         PowerPreference::HighPerformance | PowerPreference::Default => high.or(low),
     };
-    registry::ADAPTER_REGISTRY.register(some.or(other).unwrap())
+    registry::ADAPTER_REGISTRY
+        .lock()
+        .register(some.or(other).unwrap())
 }
 
 #[no_mangle]
@@ -73,8 +77,11 @@ pub extern "C" fn wgpu_adapter_create_device(
     adapter_id: AdapterId,
     _desc: DeviceDescriptor,
 ) -> DeviceId {
-    let mut adapter = registry::ADAPTER_REGISTRY.get_mut(adapter_id);
+    let mut adapter_guard = registry::ADAPTER_REGISTRY.lock();
+    let adapter = adapter_guard.get_mut(adapter_id);
     let (device, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    registry::DEVICE_REGISTRY.register(Device::new(device, queue_group, mem_props))
+    registry::DEVICE_REGISTRY
+        .lock()
+        .register(Device::new(device, queue_group, mem_props))
 }
