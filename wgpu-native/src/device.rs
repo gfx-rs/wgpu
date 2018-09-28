@@ -1,11 +1,11 @@
 use hal::{self, Device as _Device};
 use hal::queue::RawCommandQueue;
-use {binding_model, command, conv, memory, pipeline, resource};
+use {back, binding_model, command, conv, memory, pipeline};
 
-use std::{iter, slice};
+use std::{ffi, iter, slice};
 use registry::{self, Items, Registry};
 use {
-    AttachmentStateId, BindGroupLayoutId, BlendStateId, BufferId, CommandBufferId, DepthStencilStateId, DeviceId,
+    AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId, DeviceId,
     PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
 };
 
@@ -119,7 +119,8 @@ pub extern "C" fn wgpu_device_create_command_buffer(
     device_id: DeviceId,
     _desc: command::CommandBufferDescriptor,
 ) -> CommandBufferId {
-    let device = registry::DEVICE_REGISTRY.get_mut(device_id);
+    let mut device_guard = registry::DEVICE_REGISTRY.lock();
+    let device = device_guard.get_mut(device_id);
     let cmd_buf = device.com_allocator.allocate(&device.device);
     registry::COMMAND_BUFFER_REGISTRY.register(cmd_buf)
 }
@@ -137,13 +138,15 @@ pub extern "C" fn wgpu_queue_submit(
     command_buffer_ptr: *const CommandBufferId,
     command_buffer_count: usize,
 ) {
-    let mut device = registry::DEVICE_REGISTRY.get_mut(queue_id);
+    let mut device_guard = registry::DEVICE_REGISTRY.lock();
+    let device = device_guard.get_mut(queue_id);
     let command_buffer_ids = unsafe {
         slice::from_raw_parts(command_buffer_ptr, command_buffer_count)
     };
     //TODO: submit at once, requires `get_all()`
+    let mut command_buffer_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
     for &cmb_id in command_buffer_ids {
-        let cmd_buf = registry::COMMAND_BUFFER_REGISTRY.take(cmb_id);
+        let cmd_buf = command_buffer_guard.take(cmb_id);
         {
             let submission = hal::queue::RawSubmission {
                 cmd_buffers: iter::once(&cmd_buf.raw),
@@ -158,6 +161,9 @@ pub extern "C" fn wgpu_queue_submit(
         }
         device.com_allocator.submit(cmd_buf);
     }
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_create_attachment_state(
     device_id: DeviceId,
     desc: pipeline::AttachmentStateDescriptor,

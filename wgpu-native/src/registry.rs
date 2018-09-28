@@ -37,7 +37,7 @@ pub(crate) trait Registry<T> {
 pub(crate) trait Items<T> {
     fn get(&self, id: Id) -> Item<T>;
     fn get_mut(&mut self, id: Id) -> ItemMut<T>;
-    fn take(&self, id: Id) -> T;
+    fn take(&mut self, id: Id) -> T;
 }
 
 #[cfg(not(feature = "remote"))]
@@ -53,6 +53,12 @@ impl<T> Items<T> for LocalItems<T> {
 
     fn get_mut(&mut self, id: Id) -> ItemMut<T> {
         unsafe { (id as *mut T).as_mut() }.unwrap()
+    }
+
+    fn take(&mut self, id: Id) -> T {
+        unsafe {
+            *Box::from_raw(id as *mut T)
+        }
     }
 }
 
@@ -76,12 +82,6 @@ impl<T> Registry<T> for LocalRegistry<T> {
     fn lock(&self) -> ItemsGuard<T> {
         LocalItems {
             marker: PhantomData,
-        }
-    }
-
-    fn take(&self, id: Id) -> T {
-        unsafe {
-            *Box::from_raw(id as *mut T)
         }
     }
 }
@@ -113,6 +113,11 @@ impl<T> Items<T> for RemoteItems<T> {
     fn get_mut(&mut self, id: Id) -> ItemMut<T> {
         self.tracked.get_mut(&id).unwrap()
     }
+
+    fn take(&mut self, id: Id) -> T {
+        self.free.push(id);
+        self.tracked.remove(&id).unwrap()
+    }
 }
 
 #[cfg(feature = "remote")]
@@ -143,12 +148,6 @@ impl<T> Registry<T> for RemoteRegistry<T> {
 
     fn lock(&self) -> ItemsGuard<T> {
         self.items.lock()
-    }
-
-    fn take(&self, id: Id) -> T {
-        let mut registrations = self.registrations.lock();
-        registrations.free.push(id);
-        registrations.tracked.remove(&id).unwrap()
     }
 }
 

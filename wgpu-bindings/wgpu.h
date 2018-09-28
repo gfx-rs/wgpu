@@ -128,9 +128,6 @@ typedef WGPUId WGPUCommandBufferId;
 
 typedef WGPUId WGPUInstanceId;
 
-typedef struct {
-
-} WGPUCommandBufferDescriptor;
 typedef WGPUId WGPUAttachmentStateId;
 
 typedef struct {
@@ -169,6 +166,10 @@ typedef struct {
   WGPUBlendDescriptor color;
   WGPUColorWriteFlags write_mask;
 } WGPUBlendStateDescriptor;
+
+typedef struct {
+
+} WGPUCommandBufferDescriptor;
 
 typedef WGPUId WGPUDepthStencilStateId;
 
@@ -239,8 +240,6 @@ WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId _comm
 
 WGPUInstanceId wgpu_create_instance(void);
 
-WGPUCommandBufferId wgpu_device_create_command_buffer(WGPUDeviceId device_id,
-                                                      WGPUCommandBufferDescriptor desc);
 WGPUAttachmentStateId wgpu_device_create_attachment_state(WGPUDeviceId device_id,
                                                           WGPUAttachmentStateDescriptor desc);
 
@@ -249,6 +248,9 @@ WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_i
 
 WGPUBlendStateId wgpu_device_create_blend_state(WGPUDeviceId _device_id,
                                                 WGPUBlendStateDescriptor desc);
+
+WGPUCommandBufferId wgpu_device_create_command_buffer(WGPUDeviceId device_id,
+                                                      WGPUCommandBufferDescriptor _desc);
 
 WGPUDepthStencilStateId wgpu_device_create_depth_stencil_state(WGPUDeviceId device_id,
                                                                WGPUDepthStencilStateDescriptor desc);
