@@ -1,3 +1,4 @@
+use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
 use hal::{self, Device as _Device};
 use {back, binding_model, command, conv, memory, pipeline};
@@ -130,7 +131,11 @@ pub extern "C" fn wgpu_device_create_command_buffer(
 ) -> CommandBufferId {
     let mut device_guard = registry::DEVICE_REGISTRY.lock();
     let device = device_guard.get_mut(device_id);
-    let cmd_buf = device.com_allocator.allocate(&device.device);
+    let mut cmd_buf = device.com_allocator.allocate(&device.device);
+    cmd_buf.raw.begin(
+        hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+        hal::command::CommandBufferInheritanceInfo::default(),
+    );
     registry::COMMAND_BUFFER_REGISTRY.lock().register(cmd_buf)
 }
 
@@ -152,7 +157,8 @@ pub extern "C" fn wgpu_queue_submit(
     //TODO: submit at once, requires `get_all()`
     let mut command_buffer_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
     for &cmb_id in command_buffer_ids {
-        let cmd_buf = command_buffer_guard.take(cmb_id);
+        let mut cmd_buf = command_buffer_guard.take(cmb_id);
+        cmd_buf.raw.finish();
         {
             let submission = hal::queue::RawSubmission {
                 cmd_buffers: iter::once(&cmd_buf.raw),
@@ -220,10 +226,6 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         let mut vertex = None;
         let mut fragment = None;
         for pipeline_stage in pipeline_stages.iter() {
-            let entry_name = unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
-                .to_str()
-                .to_owned()
-                .unwrap();
             let entry = hal::pso::EntryPoint::<back::Backend> {
                 entry: unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
                     .to_str()
