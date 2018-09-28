@@ -67,7 +67,9 @@ pub extern "C" fn wgpu_instance_get_adapter(
         PowerPreference::LowPower => low.or(high),
         PowerPreference::HighPerformance | PowerPreference::Default => high.or(low),
     };
-    registry::ADAPTER_REGISTRY.lock().register(some.or(other).unwrap())
+    registry::ADAPTER_REGISTRY
+        .lock()
+        .register(some.or(other).unwrap())
 }
 
 #[no_mangle]
@@ -79,5 +81,7 @@ pub extern "C" fn wgpu_adapter_create_device(
     let adapter = adapter_guard.get_mut(adapter_id);
     let (device, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    registry::DEVICE_REGISTRY.lock().register(Device::new(device, queue_group, mem_props))
+    registry::DEVICE_REGISTRY
+        .lock()
+        .register(Device::new(device, queue_group, mem_props))
 }

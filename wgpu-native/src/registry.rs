@@ -10,9 +10,9 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 
 use {
-    AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BlendStateHandle, CommandBufferHandle,
-    DepthStencilStateHandle, DeviceHandle, InstanceHandle, PipelineLayoutHandle,
-    RenderPipelineHandle, ShaderModuleHandle,
+    AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BlendStateHandle,
+    CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
+    PipelineLayoutHandle, RenderPipelineHandle, ShaderModuleHandle,
 };
 
 #[cfg(not(feature = "remote"))]
@@ -60,9 +60,7 @@ impl<T> Items<T> for LocalItems<T> {
     }
 
     fn take(&mut self, id: Id) -> T {
-        unsafe {
-            *Box::from_raw(id as *mut T)
-        }
+        unsafe { *Box::from_raw(id as *mut T) }
     }
 }
 
@@ -167,7 +165,8 @@ lazy_static! {
     pub(crate) static ref DEPTH_STENCIL_STATE_REGISTRY: ConcreteRegistry<DepthStencilStateHandle> =
         ConcreteRegistry::new();
     pub(crate) static ref DEVICE_REGISTRY: ConcreteRegistry<DeviceHandle> = ConcreteRegistry::new();
-    pub(crate) static ref COMMAND_BUFFER_REGISTRY: ConcreteRegistry<CommandBufferHandle> = ConcreteRegistry::new();
+    pub(crate) static ref COMMAND_BUFFER_REGISTRY: ConcreteRegistry<CommandBufferHandle> =
+        ConcreteRegistry::new();
     pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> =
         ConcreteRegistry::new();
     pub(crate) static ref PIPELINE_LAYOUT_REGISTRY: ConcreteRegistry<PipelineLayoutHandle> =

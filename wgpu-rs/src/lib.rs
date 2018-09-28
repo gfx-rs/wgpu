@@ -1,11 +1,9 @@
 extern crate wgpu_native as wgn;
 
 pub use wgn::{
-    Color, Origin3d, Extent3d,
-    AdapterDescriptor, Extensions, DeviceDescriptor, PowerPreference,
-    ShaderModuleDescriptor, CommandBufferDescriptor,
+    AdapterDescriptor, Color, CommandBufferDescriptor, DeviceDescriptor, Extensions, Extent3d,
+    Origin3d, PowerPreference, ShaderModuleDescriptor,
 };
-
 
 pub struct Instance {
     id: wgn::InstanceId,
@@ -31,7 +29,6 @@ pub struct Queue {
     id: wgn::QueueId,
 }
 
-
 impl Instance {
     pub fn new() -> Self {
         Instance {
@@ -56,7 +53,7 @@ impl Adapter {
 
 impl Device {
     pub fn create_shader_module(&self, spv: &[u8]) -> ShaderModule {
-        let desc = wgn::ShaderModuleDescriptor{
+        let desc = wgn::ShaderModuleDescriptor {
             code: wgn::ByteArray {
                 bytes: spv.as_ptr(),
                 length: spv.len(),

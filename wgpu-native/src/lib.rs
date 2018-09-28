@@ -40,7 +40,6 @@ pub use self::resource::*;
 use back::Backend as B;
 use registry::Id;
 
-
 #[repr(C)]
 pub struct Color {
     pub r: f32,
