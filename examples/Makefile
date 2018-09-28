@@ -1,4 +1,4 @@
-all: hello_world_c
+all: hello_triangle_c
 
 CC=gcc
 CFLAGS=-I.
@@ -9,6 +9,6 @@ LINK_ARGS=-L ./../target/debug -lwgpu_native
 %.o: %.c $(DEPS)
 	$(CC) $(LINK_ARGS) -c -o $(OUTDIR)/$@ $< $(CFLAGS)
 
-hello_world_c: hello_triangle_c/main.c
+hello_triangle_c: hello_triangle_c/main.c
 	mkdir -p $(OUTDIR)
 	$(CC) $(LINK_ARGS) -o $(OUTDIR)/$@ $^ $(CFLAGS)
