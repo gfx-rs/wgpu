@@ -56,12 +56,29 @@ pub struct BlendDescriptor {
     pub operation: BlendOperation,
 }
 
+impl BlendDescriptor {
+    pub const REPLACE: Self = BlendDescriptor {
+        src_factor: BlendFactor::One,
+        dst_factor: BlendFactor::Zero,
+        operation: BlendOperation::Add,
+    };
+}
+
 #[repr(C)]
 pub struct BlendStateDescriptor {
     pub blend_enabled: bool,
     pub alpha: BlendDescriptor,
     pub color: BlendDescriptor,
     pub write_mask: ColorWriteFlags,
+}
+
+impl BlendStateDescriptor {
+    pub const REPLACE: Self = BlendStateDescriptor {
+        blend_enabled: false,
+        alpha: BlendDescriptor::REPLACE,
+        color: BlendDescriptor::REPLACE,
+        write_mask: ColorWriteFlags_ALL,
+    };
 }
 
 pub(crate) struct BlendState {
@@ -89,6 +106,15 @@ pub struct StencilStateFaceDescriptor {
     pub pass_op: StencilOperation,
 }
 
+impl StencilStateFaceDescriptor {
+    pub const IGNORE: Self = StencilStateFaceDescriptor {
+        compare: resource::CompareFunction::Always,
+        stencil_fail_op: StencilOperation::Keep,
+        depth_fail_op: StencilOperation::Keep,
+        pass_op: StencilOperation::Keep,
+    };
+}
+
 #[repr(C)]
 pub struct DepthStencilStateDescriptor {
     pub depth_write_enabled: bool,
@@ -97,6 +123,17 @@ pub struct DepthStencilStateDescriptor {
     pub back: StencilStateFaceDescriptor,
     pub stencil_read_mask: u32,
     pub stencil_write_mask: u32,
+}
+
+impl DepthStencilStateDescriptor {
+    pub const IGNORE: Self = DepthStencilStateDescriptor {
+        depth_write_enabled: false,
+        depth_compare: resource::CompareFunction::Always,
+        front: StencilStateFaceDescriptor::IGNORE,
+        back: StencilStateFaceDescriptor::IGNORE,
+        stencil_read_mask: 0xFF,
+        stencil_write_mask: 0xFF,
+    };
 }
 
 pub(crate) struct DepthStencilState {
