@@ -10,9 +10,44 @@ fn main() {
         },
     });
     let vs_bytes = include_bytes!("./../data/hello_triangle.vert.spv");
-    let _vs = device.create_shader_module(vs_bytes);
+    let vs_module = device.create_shader_module(vs_bytes);
     let fs_bytes = include_bytes!("./../data/hello_triangle.frag.spv");
-    let _fs = device.create_shader_module(fs_bytes);
+    let fs_module = device.create_shader_module(fs_bytes);
+
+    let bind_group_layout = device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+        bindings: &[],
+    });
+    let pipeline_layout = device.create_pipeline_layout(wgpu::PipelineLayoutDescriptor {
+        bind_group_layouts: &[&bind_group_layout],
+    });
+
+    let blend_state0 = device.create_blend_state(wgpu::BlendStateDescriptor::REPLACE);
+    let depth_stencil_state = device.create_depth_stencil_state(wgpu::DepthStencilStateDescriptor::IGNORE);
+    let attachment_state = device.create_attachment_state(wgpu::AttachmentStateDescriptor {
+        formats: &[wgpu::TextureFormat::R8g8b8a8Unorm],
+    });
+
+    let _render_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
+        layout: &pipeline_layout,
+        stages: &[
+            wgpu::PipelineStageDescriptor {
+                module: &vs_module,
+                stage: wgpu::ShaderStage::Vertex,
+                entry_point: "main",
+            },
+            wgpu::PipelineStageDescriptor {
+                module: &fs_module,
+                stage: wgpu::ShaderStage::Fragment,
+                entry_point: "main",
+            },
+        ],
+        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+        blend_state: &[
+            &blend_state0,
+        ],
+        depth_stencil_state: &depth_stencil_state,
+        attachment_state: &attachment_state,
+    });
 
     let cmd_buf = device.create_command_buffer(wgpu::CommandBufferDescriptor {});
     let queue = device.get_queue();

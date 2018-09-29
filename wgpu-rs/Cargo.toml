@@ -16,3 +16,4 @@ vulkan = ["wgpu-native/gfx-backend-vulkan"]
 
 [dependencies]
 wgpu-native = { path = "../wgpu-native" }
+arrayvec = "0.4"
