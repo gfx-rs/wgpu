@@ -9,6 +9,7 @@ fn main() {
             anisotropic_filtering: false,
         },
     });
+
     let vs_bytes = include_bytes!("./../data/hello_triangle.vert.spv");
     let vs_module = device.create_shader_module(vs_bytes);
     let fs_bytes = include_bytes!("./../data/hello_triangle.frag.spv");
@@ -49,7 +50,25 @@ fn main() {
         attachment_state: &attachment_state,
     });
 
-    let cmd_buf = device.create_command_buffer(wgpu::CommandBufferDescriptor {});
+    let mut cmd_buf = device.create_command_buffer(wgpu::CommandBufferDescriptor {});
+
+    {
+        let color_view = unimplemented!(); //TODO!
+        let rpass = cmd_buf.begin_render_pass(wgpu::RenderPassDescriptor {
+            color_attachments: &[
+                wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &color_view,
+                    load_op: wgpu::LoadOp::Clear,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color::GREEN,
+                },
+            ],
+            depth_stencil_attachment: None,
+        });
+        rpass.end_pass();
+    }
+
+
     let queue = device.get_queue();
     queue.submit(&[cmd_buf]);
 }

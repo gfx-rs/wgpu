@@ -30,16 +30,16 @@ pub enum StoreOp {
 }
 
 #[repr(C)]
-pub struct RenderPassColorAttachmentDescriptor {
-    pub attachment: TextureViewId,
+pub struct RenderPassColorAttachmentDescriptor<T> {
+    pub attachment: T,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
 }
 
 #[repr(C)]
-pub struct RenderPassDepthStencilAttachmentDescriptor {
-    pub attachment: TextureViewId,
+pub struct RenderPassDepthStencilAttachmentDescriptor<T> {
+    pub attachment: T,
     pub depth_load_op: LoadOp,
     pub depth_store_op: StoreOp,
     pub clear_depth: f32,
@@ -49,9 +49,9 @@ pub struct RenderPassDepthStencilAttachmentDescriptor {
 }
 
 #[repr(C)]
-pub struct RenderPassDescriptor<'a> {
-    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor],
-    pub depth_stencil_attachment: RenderPassDepthStencilAttachmentDescriptor,
+pub struct RenderPassDescriptor<'a, T: 'a> {
+    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<T>],
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<T>>,
 }
 
 #[repr(C)]
@@ -83,7 +83,7 @@ pub struct CommandBufferDescriptor {}
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     command_buffer_id: CommandBufferId,
-    _descriptor: RenderPassDescriptor,
+    _descriptor: RenderPassDescriptor<TextureViewId>,
 ) -> RenderPassId {
     let raw = registry::COMMAND_BUFFER_REGISTRY
         .lock()
