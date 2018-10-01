@@ -12,6 +12,7 @@ use {
     BufferId, Color, CommandBufferId, ComputePassId, Origin3d, RenderPassId, TextureId,
     TextureViewId,
 };
+use registry::{self, Items, Registry};
 
 use std::thread::ThreadId;
 
@@ -71,7 +72,7 @@ pub struct TextureCopyView {
 }
 
 pub struct CommandBuffer<B: hal::Backend> {
-    pub(crate) raw: B::CommandBuffer,
+    pub(crate) raw: Option<B::CommandBuffer>,
     fence: B::Fence,
     recorded_thread_id: ThreadId,
 }
@@ -81,9 +82,28 @@ pub struct CommandBufferDescriptor {}
 
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_begin_render_pass(
-    _command_buffer: CommandBufferId,
+    command_buffer_id: CommandBufferId,
+    _descriptor: RenderPassDescriptor,
 ) -> RenderPassId {
-    unimplemented!()
+    let raw = registry::COMMAND_BUFFER_REGISTRY
+        .lock()
+        .get_mut(command_buffer_id)
+        .raw
+        .take()
+        .unwrap();
+
+    /*TODO:
+    raw.begin_render_pass(
+        render_pass: &B::RenderPass,
+        framebuffer: &B::Framebuffer,
+        render_area: pso::Rect,
+        clear_values: T,
+        hal::SubpassContents::Inline,
+    );*/
+
+    registry::RENDER_PASS_REGISTRY
+        .lock()
+        .register(RenderPass::new(raw, command_buffer_id))
 }
 
 #[no_mangle]

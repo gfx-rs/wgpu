@@ -11,7 +11,7 @@ use {
 };
 
 pub struct Device<B: hal::Backend> {
-    device: B::Device,
+    raw: B::Device,
     queue_group: hal::QueueGroup<B, hal::General>,
     mem_allocator: memory::SmartAllocator<B>,
     com_allocator: command::CommandAllocator<B>,
@@ -19,12 +19,12 @@ pub struct Device<B: hal::Backend> {
 
 impl<B: hal::Backend> Device<B> {
     pub(crate) fn new(
-        device: B::Device,
+        raw: B::Device,
         queue_group: hal::QueueGroup<B, hal::General>,
         mem_props: hal::MemoryProperties,
     ) -> Self {
         Device {
-            device,
+            raw,
             mem_allocator: memory::SmartAllocator::new(mem_props, 1, 1, 1, 1),
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
@@ -44,7 +44,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
     let device_guard = registry::DEVICE_REGISTRY.lock();
     let device = device_guard.get(device_id);
-    let descriptor_set_layout = device.device.create_descriptor_set_layout(
+    let descriptor_set_layout = device.raw.create_descriptor_set_layout(
         bindings.iter().map(|binding| {
             hal::pso::DescriptorSetLayoutBinding {
                 binding: binding.binding,
@@ -75,7 +75,7 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
             .map(|id| bind_group_layout_guard.get(id.clone()))
             .collect::<Vec<_>>();
     let device_guard = registry::DEVICE_REGISTRY.lock();
-    let device = &device_guard.get(device_id).device;
+    let device = &device_guard.get(device_id).raw;
     let pipeline_layout =
         device.create_pipeline_layout(descriptor_set_layouts.iter().map(|d| &d.raw), &[]); // TODO: push constants
     registry::PIPELINE_LAYOUT_REGISTRY
@@ -99,7 +99,7 @@ pub extern "C" fn wgpu_device_create_blend_state(
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_depth_stencil_state(
-    device_id: DeviceId,
+    _device_id: DeviceId,
     desc: pipeline::DepthStencilStateDescriptor,
 ) -> DepthStencilStateId {
     registry::DEPTH_STENCIL_STATE_REGISTRY
@@ -115,7 +115,7 @@ pub extern "C" fn wgpu_device_create_shader_module(
     desc: pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
     let device_guard = registry::DEVICE_REGISTRY.lock();
-    let device = &device_guard.get(device_id).device;
+    let device = &device_guard.get(device_id).raw;
     let shader = device
         .create_shader_module(unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) })
         .unwrap();
@@ -131,8 +131,8 @@ pub extern "C" fn wgpu_device_create_command_buffer(
 ) -> CommandBufferId {
     let mut device_guard = registry::DEVICE_REGISTRY.lock();
     let device = device_guard.get_mut(device_id);
-    let mut cmd_buf = device.com_allocator.allocate(&device.device);
-    cmd_buf.raw.begin(
+    let mut cmd_buf = device.com_allocator.allocate(&device.raw);
+    cmd_buf.raw.as_mut().unwrap().begin(
         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
         hal::command::CommandBufferInheritanceInfo::default(),
     );
@@ -158,10 +158,11 @@ pub extern "C" fn wgpu_queue_submit(
     let mut command_buffer_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
     for &cmb_id in command_buffer_ids {
         let mut cmd_buf = command_buffer_guard.take(cmb_id);
-        cmd_buf.raw.finish();
         {
+            let mut raw = cmd_buf.raw.as_mut().unwrap();
+            raw.finish();
             let submission = hal::queue::RawSubmission {
-                cmd_buffers: iter::once(&cmd_buf.raw),
+                cmd_buffers: iter::once(raw),
                 wait_semaphores: &[],
                 signal_semaphores: &[],
             };
@@ -180,29 +181,52 @@ pub extern "C" fn wgpu_device_create_attachment_state(
     device_id: DeviceId,
     desc: pipeline::AttachmentStateDescriptor,
 ) -> AttachmentStateId {
-    // TODO: Assume that `AttachmentStateDescriptor` contains multiple attachments.
-    let attachments = unsafe { slice::from_raw_parts(desc.formats, desc.formats_length) }
+    let device_guard = registry::DEVICE_REGISTRY.lock();
+    let device = &device_guard.get(device_id).raw;
+
+    let color_formats = unsafe {
+        slice::from_raw_parts(desc.formats, desc.formats_length)
+    };
+    let color_formats: Vec<_> = color_formats
         .iter()
-        .map(|format| {
-            hal::pass::Attachment {
-                format: Some(conv::map_texture_format(*format)),
-                samples: 1, // TODO map
-                ops: hal::pass::AttachmentOps {
-                    // TODO map
-                    load: hal::pass::AttachmentLoadOp::Clear,
-                    store: hal::pass::AttachmentStoreOp::Store,
-                },
-                stencil_ops: hal::pass::AttachmentOps {
-                    // TODO map
-                    load: hal::pass::AttachmentLoadOp::DontCare,
-                    store: hal::pass::AttachmentStoreOp::DontCare,
-                },
-                layouts: hal::image::Layout::Undefined..hal::image::Layout::Present, // TODO map
-            }
-        }).collect();
+        .cloned()
+        .map(conv::map_texture_format)
+        .collect();
+    let depth_stencil_format = None;
+
+    let base_pass = {
+        let attachments = color_formats.iter().map(|cf| hal::pass::Attachment {
+            format: Some(*cf),
+            samples: 1,
+            ops: hal::pass::AttachmentOps::DONT_CARE,
+            stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+            layouts: hal::image::Layout::General .. hal::image::Layout::General,
+        });
+
+        let subpass = hal::pass::SubpassDesc {
+            colors: &[(0, hal::image::Layout::ColorAttachmentOptimal)],
+            depth_stencil: None,
+            inputs: &[],
+            resolves: &[],
+            preserves: &[],
+        };
+
+        device.create_render_pass(
+            attachments,
+            &[subpass],
+            &[],
+        )
+    };
+
+    let at_state = pipeline::AttachmentState {
+        base_pass,
+        color_formats,
+        depth_stencil_format,
+    };
+
     registry::ATTACHMENT_STATE_REGISTRY
         .lock()
-        .register(pipeline::AttachmentState { raw: attachments })
+        .register(at_state)
 }
 
 #[no_mangle]
@@ -217,7 +241,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     };
 
     let device_guard = registry::DEVICE_REGISTRY.lock();
-    let device = &device_guard.get(device_id).device;
+    let device = &device_guard.get(device_id).raw;
     let pipeline_layout_guard = registry::PIPELINE_LAYOUT_REGISTRY.lock();
     let layout = &pipeline_layout_guard.get(desc.layout).raw;
     let pipeline_stages = unsafe { slice::from_raw_parts(desc.stages, desc.stages_length) };
@@ -318,33 +342,12 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     };
 
     let attachment_state_guard = registry::ATTACHMENT_STATE_REGISTRY.lock();
-    let attachments = &attachment_state_guard.get(desc.attachment_state).raw;
-
-    // TODO
-    let subpass = hal::pass::SubpassDesc {
-        colors: &[(0, hal::image::Layout::ColorAttachmentOptimal)],
-        depth_stencil: None,
-        inputs: &[],
-        resolves: &[],
-        preserves: &[],
-    };
-
-    // TODO
-    let subpass_dependency = hal::pass::SubpassDependency {
-        passes: hal::pass::SubpassRef::External..hal::pass::SubpassRef::Pass(0),
-        stages: hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
-            ..hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-        accesses: hal::image::Access::empty()
-            ..(hal::image::Access::COLOR_ATTACHMENT_READ
-                | hal::image::Access::COLOR_ATTACHMENT_WRITE),
-    };
-
-    let main_pass = &device.create_render_pass(&attachments[..], &[subpass], &[subpass_dependency]);
+    let attachment_state = attachment_state_guard.get(desc.attachment_state);
 
     // TODO
     let subpass = hal::pass::Subpass {
         index: 0,
-        main_pass,
+        main_pass: &attachment_state.base_pass,
     };
 
     // TODO

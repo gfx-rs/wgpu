@@ -51,9 +51,9 @@ impl<B: hal::Backend> CommandAllocator<B> {
             return cmd_buf;
         }
 
-        for raw in pool.raw.allocate(20, hal::command::RawLevel::Primary) {
+        for cmbuf in pool.raw.allocate(20, hal::command::RawLevel::Primary) {
             pool.available.push(CommandBuffer {
-                raw,
+                raw: Some(cmbuf),
                 fence: device.create_fence(false),
                 recorded_thread_id: thread_id,
             });
@@ -66,7 +66,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub fn recycle(&self, mut cmd_buf: CommandBuffer<B>) {
-        cmd_buf.raw.reset(false);
+        cmd_buf.raw.as_mut().unwrap().reset(false);
         self.inner
             .lock()
             .unwrap()
