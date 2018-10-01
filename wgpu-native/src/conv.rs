@@ -189,7 +189,7 @@ fn map_stencil_face(
     hal::pso::StencilFace {
         fun: map_compare_function(stencil_state_face_desc.compare),
         mask_read: hal::pso::State::Static(stencil_read_mask), // TODO dynamic?
-        mask_write: hal::pso::State::Static(stencil_read_mask), // TODO dynamic?
+        mask_write: hal::pso::State::Static(stencil_write_mask), // TODO dynamic?
         op_fail: map_stencil_operation(stencil_state_face_desc.stencil_fail_op),
         op_depth_fail: map_stencil_operation(stencil_state_face_desc.depth_fail_op),
         op_pass: map_stencil_operation(stencil_state_face_desc.pass_op),

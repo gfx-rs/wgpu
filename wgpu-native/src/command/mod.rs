@@ -2,16 +2,17 @@ mod allocator;
 mod compute;
 mod render;
 
-pub use self::allocator::*;
+pub use self::allocator::CommandAllocator;
 pub use self::compute::*;
 pub use self::render::*;
 
 use hal;
 
 use {
-    BufferId, Color, CommandBufferId, ComputePassId, Origin3d, RenderPassId, TextureId,
-    TextureViewId,
+    Color, Origin3d, Stored,
+    BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
+use registry::{self, Items, Registry};
 
 use std::thread::ThreadId;
 
@@ -29,16 +30,16 @@ pub enum StoreOp {
 }
 
 #[repr(C)]
-pub struct RenderPassColorAttachmentDescriptor {
-    pub attachment: TextureViewId,
+pub struct RenderPassColorAttachmentDescriptor<T> {
+    pub attachment: T,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
 }
 
 #[repr(C)]
-pub struct RenderPassDepthStencilAttachmentDescriptor {
-    pub attachment: TextureViewId,
+pub struct RenderPassDepthStencilAttachmentDescriptor<T> {
+    pub attachment: T,
     pub depth_load_op: LoadOp,
     pub depth_store_op: StoreOp,
     pub clear_depth: f32,
@@ -48,9 +49,9 @@ pub struct RenderPassDepthStencilAttachmentDescriptor {
 }
 
 #[repr(C)]
-pub struct RenderPassDescriptor<'a> {
-    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor],
-    pub depth_stencil_attachment: RenderPassDepthStencilAttachmentDescriptor,
+pub struct RenderPassDescriptor<'a, T: 'a> {
+    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<T>],
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<T>>,
 }
 
 #[repr(C)]
@@ -71,9 +72,10 @@ pub struct TextureCopyView {
 }
 
 pub struct CommandBuffer<B: hal::Backend> {
-    pub(crate) raw: B::CommandBuffer,
+    pub(crate) raw: Option<B::CommandBuffer>,
     fence: B::Fence,
     recorded_thread_id: ThreadId,
+    device_id: Stored<DeviceId>,
 }
 
 #[repr(C)]
@@ -81,9 +83,32 @@ pub struct CommandBufferDescriptor {}
 
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_begin_render_pass(
-    _command_buffer: CommandBufferId,
+    command_buffer_id: CommandBufferId,
+    _descriptor: RenderPassDescriptor<TextureViewId>,
 ) -> RenderPassId {
-    unimplemented!()
+    let mut cmb_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
+    let mut cmb = cmb_guard.get_mut(command_buffer_id);
+
+    let raw = cmb.raw.take().unwrap();
+
+    let mut device_guard = registry::DEVICE_REGISTRY.lock();
+    let device = &device_guard.get(cmb.device_id.0).raw;
+
+    //let render_pass = device.create_render_pass();
+    //let framebuffer = device.create_framebuffer();
+
+    /*TODO:
+    raw.begin_render_pass(
+        render_pass: &B::RenderPass,
+        framebuffer: &B::Framebuffer,
+        render_area: pso::Rect,
+        clear_values: T,
+        hal::SubpassContents::Inline,
+    );*/
+
+    registry::RENDER_PASS_REGISTRY
+        .lock()
+        .register(RenderPass::new(raw, command_buffer_id))
 }
 
 #[no_mangle]

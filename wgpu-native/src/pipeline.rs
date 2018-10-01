@@ -200,8 +200,10 @@ pub struct AttachmentStateDescriptor {
     pub formats_length: usize,
 }
 
-pub(crate) struct AttachmentState {
-    pub raw: Vec<hal::pass::Attachment>,
+pub(crate) struct AttachmentState<B: hal::Backend> {
+    pub base_pass: B::RenderPass,
+    pub color_formats: Vec<hal::format::Format>,
+    pub depth_stencil_format: Option<hal::format::Format>,
 }
 
 #[repr(C)]

@@ -12,6 +12,7 @@ use std::sync::Arc;
 use {
     AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BlendStateHandle,
     CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
+    RenderPassHandle,
     PipelineLayoutHandle, RenderPipelineHandle, ShaderModuleHandle,
 };
 
@@ -174,5 +175,7 @@ lazy_static! {
     pub(crate) static ref RENDER_PIPELINE_REGISTRY: ConcreteRegistry<RenderPipelineHandle> =
         ConcreteRegistry::new();
     pub(crate) static ref SHADER_MODULE_REGISTRY: ConcreteRegistry<ShaderModuleHandle> =
+        ConcreteRegistry::new();
+    pub(crate) static ref RENDER_PASS_REGISTRY: ConcreteRegistry<RenderPassHandle> =
         ConcreteRegistry::new();
 }

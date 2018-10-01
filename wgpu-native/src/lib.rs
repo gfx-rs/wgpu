@@ -40,7 +40,15 @@ pub use self::resource::*;
 use back::Backend as B;
 use registry::Id;
 
+#[derive(Debug, PartialEq)]
+struct Stored<T>(T);
+#[cfg(not(feature = "remote"))]
+unsafe impl<T> Sync for Stored<T> {}
+#[cfg(not(feature = "remote"))]
+unsafe impl<T> Send for Stored<T> {}
+
 #[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct Color {
     pub r: f32,
     pub g: f32,
@@ -48,7 +56,17 @@ pub struct Color {
     pub a: f32,
 }
 
+impl Color {
+    pub const TRANSPARENT : Self = Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
+    pub const BLACK       : Self = Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
+    pub const WHITE       : Self = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
+    pub const RED         : Self = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
+    pub const GREEN       : Self = Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 };
+    pub const BLUE        : Self = Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
+}
+
 #[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct Origin3d {
     pub x: f32,
     pub y: f32,
@@ -56,6 +74,7 @@ pub struct Origin3d {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy, Debug)]
 pub struct Extent3d {
     pub width: f32,
     pub height: f32,
@@ -97,7 +116,7 @@ pub type InputStateId = Id;
 pub type ShaderModuleId = Id;
 type ShaderModuleHandle = ShaderModule<B>;
 pub type AttachmentStateId = Id;
-type AttachmentStateHandle = AttachmentState;
+type AttachmentStateHandle = AttachmentState<B>;
 pub type ComputePipelineId = Id;
 pub type RenderPipelineId = Id;
 type RenderPipelineHandle = RenderPipeline<B>;
@@ -105,4 +124,5 @@ type RenderPipelineHandle = RenderPipeline<B>;
 pub type CommandBufferId = Id;
 type CommandBufferHandle = CommandBuffer<B>;
 pub type RenderPassId = Id;
+type RenderPassHandle = RenderPass<B>;
 pub type ComputePassId = Id;

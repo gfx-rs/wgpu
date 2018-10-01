@@ -10,6 +10,8 @@ pub use wgn::{
     Origin3d, PowerPreference, ShaderModuleDescriptor, ShaderStage,
     BindGroupLayoutBinding, TextureFormat,
     PrimitiveTopology, BlendStateDescriptor, ColorWriteFlags, DepthStencilStateDescriptor,
+    RenderPassDescriptor, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
+    LoadOp, StoreOp,
 };
 
 
@@ -23,6 +25,10 @@ pub struct Adapter {
 
 pub struct Device {
     id: wgn::DeviceId,
+}
+
+pub struct TextureView {
+    id: wgn::TextureViewId,
 }
 
 pub struct BindGroupLayout {
@@ -55,6 +61,11 @@ pub struct RenderPipeline {
 
 pub struct CommandBuffer {
     id: wgn::CommandBufferId,
+}
+
+pub struct RenderPass<'a> {
+    id: wgn::RenderPassId,
+    parent: &'a mut CommandBuffer,
 }
 
 pub struct Queue {
@@ -202,6 +213,46 @@ impl Device {
                 attachment_state: desc.attachment_state.id,
             }),
         }
+    }
+}
+
+impl CommandBuffer {
+    pub fn begin_render_pass(&mut self, desc: RenderPassDescriptor<&TextureView>) -> RenderPass {
+        let colors = desc.color_attachments
+            .iter()
+            .map(|ca| RenderPassColorAttachmentDescriptor {
+                attachment: ca.attachment.id,
+                load_op: ca.load_op,
+                store_op: ca.store_op,
+                clear_color: ca.clear_color,
+            })
+            .collect::<ArrayVec<[_; 4]>>();
+
+        let depth_stencil = desc.depth_stencil_attachment
+            .map(|dsa| RenderPassDepthStencilAttachmentDescriptor {
+                attachment: dsa.attachment.id,
+                depth_load_op: dsa.depth_load_op,
+                depth_store_op: dsa.depth_store_op,
+                clear_depth: dsa.clear_depth,
+                stencil_load_op: dsa.stencil_load_op,
+                stencil_store_op: dsa.stencil_store_op,
+                clear_stencil: dsa.clear_stencil,
+            });
+
+        RenderPass {
+            id: wgn::wgpu_command_buffer_begin_render_pass(self.id, RenderPassDescriptor {
+                color_attachments: &colors,
+                depth_stencil_attachment: depth_stencil,
+            }),
+            parent: self,
+        }
+    }
+}
+
+impl<'a> RenderPass<'a> {
+    pub fn end_pass(self) -> &'a mut CommandBuffer {
+        wgn::wgpu_render_pass_end_pass(self.id);
+        self.parent
     }
 }
 
