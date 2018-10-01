@@ -11,7 +11,7 @@ use {
 };
 
 pub struct Device<B: hal::Backend> {
-    raw: B::Device,
+    pub(crate) raw: B::Device,
     queue_group: hal::QueueGroup<B, hal::General>,
     mem_allocator: memory::SmartAllocator<B>,
     com_allocator: command::CommandAllocator<B>,
@@ -131,7 +131,7 @@ pub extern "C" fn wgpu_device_create_command_buffer(
 ) -> CommandBufferId {
     let mut device_guard = registry::DEVICE_REGISTRY.lock();
     let device = device_guard.get_mut(device_id);
-    let mut cmd_buf = device.com_allocator.allocate(&device.raw);
+    let mut cmd_buf = device.com_allocator.allocate(device_id, &device.raw);
     cmd_buf.raw.as_mut().unwrap().begin(
         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
         hal::command::CommandBufferInheritanceInfo::default(),

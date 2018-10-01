@@ -40,6 +40,13 @@ pub use self::resource::*;
 use back::Backend as B;
 use registry::Id;
 
+#[derive(Debug, PartialEq)]
+struct Stored<T>(T);
+#[cfg(not(feature = "remote"))]
+unsafe impl<T> Sync for Stored<T> {}
+#[cfg(not(feature = "remote"))]
+unsafe impl<T> Send for Stored<T> {}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Color {

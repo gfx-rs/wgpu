@@ -1,4 +1,5 @@
 use super::CommandBuffer;
+use {DeviceId, Stored};
 
 use hal::command::RawCommandBuffer;
 use hal::pool::RawCommandPool;
@@ -14,7 +15,7 @@ struct CommandPool<B: hal::Backend> {
     available: Vec<CommandBuffer<B>>,
 }
 
-pub struct Inner<B: hal::Backend> {
+struct Inner<B: hal::Backend> {
     pools: HashMap<thread::ThreadId, CommandPool<B>>,
     pending: Vec<CommandBuffer<B>>,
 }
@@ -35,7 +36,9 @@ impl<B: hal::Backend> CommandAllocator<B> {
         }
     }
 
-    pub fn allocate(&self, device: &B::Device) -> CommandBuffer<B> {
+    pub fn allocate(
+        &self, device_id: DeviceId, device: &B::Device
+    ) -> CommandBuffer<B> {
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock().unwrap();
         let pool = inner.pools.entry(thread_id).or_insert_with(|| CommandPool {
@@ -47,6 +50,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         });
 
         if let Some(cmd_buf) = pool.available.pop() {
+            assert_eq!(device_id, cmd_buf.device_id.0);
             device.reset_fence(&cmd_buf.fence);
             return cmd_buf;
         }
@@ -56,6 +60,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                 raw: Some(cmbuf),
                 fence: device.create_fence(false),
                 recorded_thread_id: thread_id,
+                device_id: Stored(device_id),
             });
         }
         pool.available.pop().unwrap()

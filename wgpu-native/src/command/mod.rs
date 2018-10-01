@@ -2,15 +2,15 @@ mod allocator;
 mod compute;
 mod render;
 
-pub use self::allocator::*;
+pub use self::allocator::CommandAllocator;
 pub use self::compute::*;
 pub use self::render::*;
 
 use hal;
 
 use {
-    BufferId, Color, CommandBufferId, ComputePassId, Origin3d, RenderPassId, TextureId,
-    TextureViewId,
+    Color, Origin3d, Stored,
+    BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
 use registry::{self, Items, Registry};
 
@@ -75,6 +75,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Option<B::CommandBuffer>,
     fence: B::Fence,
     recorded_thread_id: ThreadId,
+    device_id: Stored<DeviceId>,
 }
 
 #[repr(C)]
@@ -85,12 +86,16 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     command_buffer_id: CommandBufferId,
     _descriptor: RenderPassDescriptor<TextureViewId>,
 ) -> RenderPassId {
-    let raw = registry::COMMAND_BUFFER_REGISTRY
-        .lock()
-        .get_mut(command_buffer_id)
-        .raw
-        .take()
-        .unwrap();
+    let mut cmb_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
+    let mut cmb = cmb_guard.get_mut(command_buffer_id);
+
+    let raw = cmb.raw.take().unwrap();
+
+    let mut device_guard = registry::DEVICE_REGISTRY.lock();
+    let device = &device_guard.get(cmb.device_id.0).raw;
+
+    //let render_pass = device.create_render_pass();
+    //let framebuffer = device.create_framebuffer();
 
     /*TODO:
     raw.begin_render_pass(
