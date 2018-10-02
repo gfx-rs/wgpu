@@ -44,20 +44,24 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
     desc: binding_model::BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
-    let device_guard = HUB.devices.lock();
-    let device = device_guard.get(device_id);
-    let descriptor_set_layout = device.raw.create_descriptor_set_layout(
-        bindings.iter().map(|binding| {
-            hal::pso::DescriptorSetLayoutBinding {
-                binding: binding.binding,
-                ty: conv::map_binding_type(&binding.ty),
-                count: bindings.len(),
-                stage_flags: conv::map_shader_stage_flags(binding.visibility),
-                immutable_samplers: false, // TODO
-            }
-        }),
-        &[],
-    );
+
+    let descriptor_set_layout = HUB.devices
+        .lock()
+        .get(device_id)
+        .raw
+        .create_descriptor_set_layout(
+            bindings.iter().map(|binding| {
+                hal::pso::DescriptorSetLayoutBinding {
+                    binding: binding.binding,
+                    ty: conv::map_binding_type(&binding.ty),
+                    count: bindings.len(),
+                    stage_flags: conv::map_shader_stage_flags(binding.visibility),
+                    immutable_samplers: false, // TODO
+                }
+            }),
+            &[],
+        );
+
     HUB.bind_group_layouts
         .lock()
         .register(binding_model::BindGroupLayout {
@@ -70,16 +74,21 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
     desc: binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
+    let bind_group_layouts = unsafe {
+        slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
+    };
     let bind_group_layout_guard = HUB.bind_group_layouts.lock();
-    let descriptor_set_layouts =
-        unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) }
-            .iter()
-            .map(|id| bind_group_layout_guard.get(id.clone()))
-            .collect::<Vec<_>>();
-    let device_guard = HUB.devices.lock();
-    let device = &device_guard.get(device_id).raw;
-    let pipeline_layout =
-        device.create_pipeline_layout(descriptor_set_layouts.iter().map(|d| &d.raw), &[]); // TODO: push constants
+    let descriptor_set_layouts = bind_group_layouts
+        .iter()
+        .map(|&id| &bind_group_layout_guard.get(id).raw);
+
+    // TODO: push constants
+    let pipeline_layout = HUB.devices
+        .lock()
+        .get(device_id)
+        .raw
+        .create_pipeline_layout(descriptor_set_layouts, &[]);
+
     HUB.pipeline_layouts
         .lock()
         .register(binding_model::PipelineLayout {
@@ -116,11 +125,16 @@ pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
     desc: pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
-    let device_guard = HUB.devices.lock();
-    let device = &device_guard.get(device_id).raw;
-    let shader = device
-        .create_shader_module(unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) })
+    let spv = unsafe {
+        slice::from_raw_parts(desc.code.bytes, desc.code.length)
+    };
+    let shader = HUB.devices
+        .lock()
+        .get(device_id)
+        .raw
+        .create_shader_module(spv)
         .unwrap();
+
     HUB.shader_modules
         .lock()
         .register(ShaderModule { raw: shader })
@@ -133,6 +147,7 @@ pub extern "C" fn wgpu_device_create_command_buffer(
 ) -> CommandBufferId {
     let mut device_guard = HUB.devices.lock();
     let device = device_guard.get_mut(device_id);
+
     let mut cmd_buf = device.com_allocator.allocate(device_id, &device.raw);
     cmd_buf.raw.as_mut().unwrap().begin(
         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
