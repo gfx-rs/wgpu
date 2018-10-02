@@ -112,6 +112,15 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_begin_compute_pass() -> ComputePassId {
-    unimplemented!()
+pub extern "C" fn wgpu_command_buffer_begin_compute_pass(
+    command_buffer_id: CommandBufferId,
+) -> ComputePassId {
+    let mut cmb_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
+    let mut cmb = cmb_guard.get_mut(command_buffer_id);
+
+    let raw = cmb.raw.take().unwrap();
+
+    registry::COMPUTE_PASS_REGISTRY
+        .lock()
+        .register(ComputePass::new(raw, command_buffer_id))
 }
