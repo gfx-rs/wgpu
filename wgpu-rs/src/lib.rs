@@ -68,6 +68,11 @@ pub struct RenderPass<'a> {
     parent: &'a mut CommandBuffer,
 }
 
+pub struct ComputePass<'a> {
+    id: wgn::ComputePassId,
+    parent: &'a mut CommandBuffer,
+}
+
 pub struct Queue {
     id: wgn::QueueId,
 }
@@ -247,11 +252,25 @@ impl CommandBuffer {
             parent: self,
         }
     }
+
+    pub fn begin_compute_pass(&mut self) -> ComputePass {
+        ComputePass {
+            id: wgn::wgpu_command_buffer_begin_compute_pass(self.id),
+            parent: self,
+        }
+    }
 }
 
 impl<'a> RenderPass<'a> {
     pub fn end_pass(self) -> &'a mut CommandBuffer {
         wgn::wgpu_render_pass_end_pass(self.id);
+        self.parent
+    }
+}
+
+impl<'a> ComputePass<'a> {
+    pub fn end_pass(self) -> &'a mut CommandBuffer {
+        wgn::wgpu_compute_pass_end_pass(self.id);
         self.parent
     }
 }
