@@ -273,6 +273,9 @@ impl<'a> ComputePass<'a> {
         wgn::wgpu_compute_pass_end_pass(self.id);
         self.parent
     }
+    pub fn dispatch(&self, x: u32, y: u32, z: u32) {
+        wgn::wgpu_compute_pass_dispatch(self.id, x, y, z);
+    }
 }
 
 impl Queue {

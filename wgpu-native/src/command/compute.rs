@@ -1,10 +1,11 @@
-use hal;
-
 use registry::{HUB, Items, Registry};
 use {
     Stored,
     CommandBufferId, ComputePassId
 };
+
+use hal;
+use hal::command::RawCommandBuffer;
 
 
 pub struct ComputePass<B: hal::Backend> {
@@ -34,4 +35,14 @@ pub extern "C" fn wgpu_compute_pass_end_pass(
         .get_mut(pass.cmb_id.0)
         .raw = Some(pass.raw);
     pass.cmb_id.0
+}
+
+pub extern "C" fn wgpu_compute_pass_dispatch(
+    pass_id: ComputePassId, x: u32, y: u32, z: u32,
+) {
+    HUB.compute_passes
+        .lock()
+        .get_mut(pass_id)
+        .raw
+        .dispatch([x, y, z]);
 }
