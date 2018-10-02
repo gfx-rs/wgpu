@@ -126,3 +126,4 @@ type CommandBufferHandle = CommandBuffer<B>;
 pub type RenderPassId = Id;
 type RenderPassHandle = RenderPass<B>;
 pub type ComputePassId = Id;
+type ComputePassHandle = ComputePass<B>;

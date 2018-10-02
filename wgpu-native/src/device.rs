@@ -1,14 +1,16 @@
-use hal::command::RawCommandBuffer;
-use hal::queue::RawCommandQueue;
-use hal::{self, Device as _Device};
 use {back, binding_model, command, conv, memory, pipeline};
-
-use registry::{self, Items, Registry};
-use std::{ffi, iter, slice};
+use registry::{HUB, Items, Registry};
 use {
     AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
     DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
 };
+
+use hal::command::RawCommandBuffer;
+use hal::queue::RawCommandQueue;
+use hal::{self, Device as _Device};
+
+use std::{ffi, slice};
+
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
@@ -42,7 +44,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
     desc: binding_model::BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
-    let device_guard = registry::DEVICE_REGISTRY.lock();
+    let device_guard = HUB.devices.lock();
     let device = device_guard.get(device_id);
     let descriptor_set_layout = device.raw.create_descriptor_set_layout(
         bindings.iter().map(|binding| {
@@ -56,7 +58,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
         }),
         &[],
     );
-    registry::BIND_GROUP_LAYOUT_REGISTRY
+    HUB.bind_group_layouts
         .lock()
         .register(binding_model::BindGroupLayout {
             raw: descriptor_set_layout,
@@ -68,17 +70,17 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
     desc: binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
-    let bind_group_layout_guard = registry::BIND_GROUP_LAYOUT_REGISTRY.lock();
+    let bind_group_layout_guard = HUB.bind_group_layouts.lock();
     let descriptor_set_layouts =
         unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) }
             .iter()
             .map(|id| bind_group_layout_guard.get(id.clone()))
             .collect::<Vec<_>>();
-    let device_guard = registry::DEVICE_REGISTRY.lock();
+    let device_guard = HUB.devices.lock();
     let device = &device_guard.get(device_id).raw;
     let pipeline_layout =
         device.create_pipeline_layout(descriptor_set_layouts.iter().map(|d| &d.raw), &[]); // TODO: push constants
-    registry::PIPELINE_LAYOUT_REGISTRY
+    HUB.pipeline_layouts
         .lock()
         .register(binding_model::PipelineLayout {
             raw: pipeline_layout,
@@ -90,7 +92,7 @@ pub extern "C" fn wgpu_device_create_blend_state(
     _device_id: DeviceId,
     desc: pipeline::BlendStateDescriptor,
 ) -> BlendStateId {
-    registry::BLEND_STATE_REGISTRY
+    HUB.blend_states
         .lock()
         .register(pipeline::BlendState {
             raw: conv::map_blend_state_descriptor(desc),
@@ -102,7 +104,7 @@ pub extern "C" fn wgpu_device_create_depth_stencil_state(
     _device_id: DeviceId,
     desc: pipeline::DepthStencilStateDescriptor,
 ) -> DepthStencilStateId {
-    registry::DEPTH_STENCIL_STATE_REGISTRY
+    HUB.depth_stencil_states
         .lock()
         .register(pipeline::DepthStencilState {
             raw: conv::map_depth_stencil_state(desc),
@@ -114,12 +116,12 @@ pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
     desc: pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
-    let device_guard = registry::DEVICE_REGISTRY.lock();
+    let device_guard = HUB.devices.lock();
     let device = &device_guard.get(device_id).raw;
     let shader = device
         .create_shader_module(unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) })
         .unwrap();
-    registry::SHADER_MODULE_REGISTRY
+    HUB.shader_modules
         .lock()
         .register(ShaderModule { raw: shader })
 }
@@ -129,14 +131,14 @@ pub extern "C" fn wgpu_device_create_command_buffer(
     device_id: DeviceId,
     _desc: command::CommandBufferDescriptor,
 ) -> CommandBufferId {
-    let mut device_guard = registry::DEVICE_REGISTRY.lock();
+    let mut device_guard = HUB.devices.lock();
     let device = device_guard.get_mut(device_id);
     let mut cmd_buf = device.com_allocator.allocate(device_id, &device.raw);
     cmd_buf.raw.as_mut().unwrap().begin(
         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
         hal::command::CommandBufferInheritanceInfo::default(),
     );
-    registry::COMMAND_BUFFER_REGISTRY.lock().register(cmd_buf)
+    HUB.command_buffers.lock().register(cmd_buf)
 }
 
 #[no_mangle]
@@ -150,28 +152,48 @@ pub extern "C" fn wgpu_queue_submit(
     command_buffer_ptr: *const CommandBufferId,
     command_buffer_count: usize,
 ) {
-    let mut device_guard = registry::DEVICE_REGISTRY.lock();
+    let mut device_guard = HUB.devices.lock();
     let device = device_guard.get_mut(queue_id);
-    let command_buffer_ids =
-        unsafe { slice::from_raw_parts(command_buffer_ptr, command_buffer_count) };
-    //TODO: submit at once, requires `get_all()`
-    let mut command_buffer_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
+    let mut command_buffer_guard = HUB.command_buffers.lock();
+    let command_buffer_ids = unsafe {
+        slice::from_raw_parts(command_buffer_ptr, command_buffer_count)
+    };
+
+    // finish all the command buffers first
     for &cmb_id in command_buffer_ids {
-        let mut cmd_buf = command_buffer_guard.take(cmb_id);
-        {
-            let mut raw = cmd_buf.raw.as_mut().unwrap();
-            raw.finish();
-            let submission = hal::queue::RawSubmission {
-                cmd_buffers: iter::once(raw),
-                wait_semaphores: &[],
-                signal_semaphores: &[],
-            };
-            unsafe {
-                device.queue_group.queues[0]
-                    .as_raw_mut()
-                    .submit_raw(submission, None);
-            }
+        command_buffer_guard
+            .get_mut(cmb_id)
+            .raw
+            .as_mut()
+            .unwrap()
+            .finish();
+    }
+
+    // now prepare the GPU submission
+    {
+        let submission = hal::queue::RawSubmission {
+            cmd_buffers: command_buffer_ids
+                .iter()
+                .map(|&cmb_id| {
+                    command_buffer_guard
+                        .get(cmb_id)
+                        .raw
+                        .as_ref()
+                        .unwrap()
+                }),
+            wait_semaphores: &[],
+            signal_semaphores: &[],
+        };
+        unsafe {
+            device.queue_group.queues[0]
+                .as_raw_mut()
+                .submit_raw(submission, None);
         }
+    }
+
+    // finally, return the command buffers to the allocator
+    for &cmb_id in command_buffer_ids {
+        let cmd_buf = command_buffer_guard.take(cmb_id);
         device.com_allocator.submit(cmd_buf);
     }
 }
@@ -181,7 +203,7 @@ pub extern "C" fn wgpu_device_create_attachment_state(
     device_id: DeviceId,
     desc: pipeline::AttachmentStateDescriptor,
 ) -> AttachmentStateId {
-    let device_guard = registry::DEVICE_REGISTRY.lock();
+    let device_guard = HUB.devices.lock();
     let device = &device_guard.get(device_id).raw;
 
     let color_formats = unsafe {
@@ -224,7 +246,7 @@ pub extern "C" fn wgpu_device_create_attachment_state(
         depth_stencil_format,
     };
 
-    registry::ATTACHMENT_STATE_REGISTRY
+    HUB.attachment_states
         .lock()
         .register(at_state)
 }
@@ -240,12 +262,12 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         height: 100,
     };
 
-    let device_guard = registry::DEVICE_REGISTRY.lock();
+    let device_guard = HUB.devices.lock();
     let device = &device_guard.get(device_id).raw;
-    let pipeline_layout_guard = registry::PIPELINE_LAYOUT_REGISTRY.lock();
+    let pipeline_layout_guard = HUB.pipeline_layouts.lock();
     let layout = &pipeline_layout_guard.get(desc.layout).raw;
     let pipeline_stages = unsafe { slice::from_raw_parts(desc.stages, desc.stages_length) };
-    let shader_module_guard = registry::SHADER_MODULE_REGISTRY.lock();
+    let shader_module_guard = HUB.shader_modules.lock();
     let shaders = {
         let mut vertex = None;
         let mut fragment = None;
@@ -303,7 +325,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         primitive_restart: hal::pso::PrimitiveRestart::Disabled, // TODO
     };
 
-    let blend_state_guard = registry::BLEND_STATE_REGISTRY.lock();
+    let blend_state_guard = HUB.blend_states.lock();
     let blend_state = unsafe { slice::from_raw_parts(desc.blend_state, desc.blend_state_length) }
         .iter()
         .map(|id| blend_state_guard.get(id.clone()).raw)
@@ -314,7 +336,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         targets: blend_state,
     };
 
-    let depth_stencil_state_guard = registry::DEPTH_STENCIL_STATE_REGISTRY.lock();
+    let depth_stencil_state_guard = HUB.depth_stencil_states.lock();
     let depth_stencil = depth_stencil_state_guard.get(desc.depth_stencil_state).raw;
 
     // TODO
@@ -341,7 +363,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         depth_bounds: None,
     };
 
-    let attachment_state_guard = registry::ATTACHMENT_STATE_REGISTRY.lock();
+    let attachment_state_guard = HUB.attachment_states.lock();
     let attachment_state = attachment_state_guard.get(desc.attachment_state);
 
     // TODO
@@ -377,7 +399,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         .create_graphics_pipeline(&pipeline_desc, None)
         .unwrap();
 
-    registry::RENDER_PIPELINE_REGISTRY
+    HUB.render_pipelines
         .lock()
         .register(pipeline::RenderPipeline { raw: pipeline })
 }

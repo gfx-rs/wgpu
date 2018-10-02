@@ -12,7 +12,7 @@ use {
     Color, Origin3d, Stored,
     BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
-use registry::{self, Items, Registry};
+use registry::{HUB, Items, Registry};
 
 use std::thread::ThreadId;
 
@@ -86,13 +86,13 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     command_buffer_id: CommandBufferId,
     _descriptor: RenderPassDescriptor<TextureViewId>,
 ) -> RenderPassId {
-    let mut cmb_guard = registry::COMMAND_BUFFER_REGISTRY.lock();
-    let mut cmb = cmb_guard.get_mut(command_buffer_id);
+    let mut cmb_guard = HUB.command_buffers.lock();
+    let cmb = cmb_guard.get_mut(command_buffer_id);
 
     let raw = cmb.raw.take().unwrap();
 
-    let mut device_guard = registry::DEVICE_REGISTRY.lock();
-    let device = &device_guard.get(cmb.device_id.0).raw;
+    let device_guard = HUB.devices.lock();
+    let _device = &device_guard.get(cmb.device_id.0).raw;
 
     //let render_pass = device.create_render_pass();
     //let framebuffer = device.create_framebuffer();
@@ -106,12 +106,21 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
         hal::SubpassContents::Inline,
     );*/
 
-    registry::RENDER_PASS_REGISTRY
+    HUB.render_passes
         .lock()
         .register(RenderPass::new(raw, command_buffer_id))
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_begin_compute_pass() -> ComputePassId {
-    unimplemented!()
+pub extern "C" fn wgpu_command_buffer_begin_compute_pass(
+    command_buffer_id: CommandBufferId,
+) -> ComputePassId {
+    let mut cmb_guard = HUB.command_buffers.lock();
+    let cmb = cmb_guard.get_mut(command_buffer_id);
+
+    let raw = cmb.raw.take().unwrap();
+
+    HUB.compute_passes
+        .lock()
+        .register(ComputePass::new(raw, command_buffer_id))
 }
