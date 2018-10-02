@@ -1,7 +1,7 @@
 use hal;
 use hal::command::RawCommandBuffer;
 
-use registry::{self, Items, Registry};
+use registry::{HUB, Items, Registry};
 use {
     Stored,
     CommandBufferId, RenderPassId,
@@ -26,12 +26,12 @@ impl<B: hal::Backend> RenderPass<B> {
 pub extern "C" fn wgpu_render_pass_end_pass(
     pass_id: RenderPassId,
 ) -> CommandBufferId {
-    let mut pass = registry::RENDER_PASS_REGISTRY
+    let mut pass = HUB.render_passes
         .lock()
         .take(pass_id);
     pass.raw.end_render_pass();
 
-    registry::COMMAND_BUFFER_REGISTRY
+    HUB.command_buffers
         .lock()
         .get_mut(pass.cmb_id.0)
         .raw = Some(pass.raw);

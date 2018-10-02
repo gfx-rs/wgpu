@@ -1,6 +1,6 @@
 use hal;
 
-use registry::{self, Items, Registry};
+use registry::{HUB, Items, Registry};
 use {
     Stored,
     CommandBufferId, ComputePassId
@@ -25,11 +25,11 @@ impl<B: hal::Backend> ComputePass<B> {
 pub extern "C" fn wgpu_compute_pass_end_pass(
     pass_id: ComputePassId,
 ) -> CommandBufferId {
-    let pass = registry::COMPUTE_PASS_REGISTRY
+    let pass = HUB.compute_passes
         .lock()
         .take(pass_id);
 
-    registry::COMMAND_BUFFER_REGISTRY
+    HUB.command_buffers
         .lock()
         .get_mut(pass.cmb_id.0)
         .raw = Some(pass.raw);

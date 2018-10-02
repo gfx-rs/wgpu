@@ -17,9 +17,9 @@ use {
 };
 
 #[cfg(not(feature = "remote"))]
-pub(crate) type Id = *mut c_void;
+pub type Id = *mut c_void;
 #[cfg(feature = "remote")]
-pub(crate) type Id = u32;
+pub type Id = u32;
 
 type Item<'a, T> = &'a T;
 type ItemMut<'a, T> = &'a mut T;
@@ -29,12 +29,11 @@ type ItemsGuard<'a, T> = LocalItems<T>;
 #[cfg(feature = "remote")]
 type ItemsGuard<'a, T> = MutexGuard<'a, RemoteItems<T>>;
 
-pub(crate) trait Registry<T> {
-    fn new() -> Self;
+pub trait Registry<T>: Default {
     fn lock(&self) -> ItemsGuard<T>;
 }
 
-pub(crate) trait Items<T> {
+pub trait Items<T> {
     fn register(&mut self, handle: T) -> Id;
     fn get(&self, id: Id) -> Item<T>;
     fn get_mut(&mut self, id: Id) -> ItemMut<T>;
@@ -42,7 +41,7 @@ pub(crate) trait Items<T> {
 }
 
 #[cfg(not(feature = "remote"))]
-pub(crate) struct LocalItems<T> {
+pub struct LocalItems<T> {
     marker: PhantomData<T>,
 }
 
@@ -66,18 +65,19 @@ impl<T> Items<T> for LocalItems<T> {
 }
 
 #[cfg(not(feature = "remote"))]
-pub(crate) struct LocalRegistry<T> {
+pub struct LocalRegistry<T> {
     marker: PhantomData<T>,
 }
-
 #[cfg(not(feature = "remote"))]
-impl<T> Registry<T> for LocalRegistry<T> {
-    fn new() -> Self {
+impl<T> Default for LocalRegistry<T> {
+    fn default() -> Self {
         LocalRegistry {
             marker: PhantomData,
         }
     }
-
+}
+#[cfg(not(feature = "remote"))]
+impl<T> Registry<T> for LocalRegistry<T> {
     fn lock(&self) -> ItemsGuard<T> {
         LocalItems {
             marker: PhantomData,
@@ -86,7 +86,7 @@ impl<T> Registry<T> for LocalRegistry<T> {
 }
 
 #[cfg(feature = "remote")]
-pub(crate) struct RemoteItems<T> {
+pub struct RemoteItems<T> {
     next_id: Id,
     tracked: FastHashMap<Id, T>,
     free: Vec<Id>,
@@ -132,18 +132,19 @@ impl<T> Items<T> for RemoteItems<T> {
 }
 
 #[cfg(feature = "remote")]
-pub(crate) struct RemoteRegistry<T> {
+pub struct RemoteRegistry<T> {
     items: Arc<Mutex<RemoteItems<T>>>,
 }
-
 #[cfg(feature = "remote")]
-impl<T> Registry<T> for RemoteRegistry<T> {
-    fn new() -> Self {
+impl<T> Default for RemoteRegistry<T> {
+    fn default() -> Self {
         RemoteRegistry {
             items: Arc::new(Mutex::new(RemoteItems::new())),
         }
     }
-
+}
+#[cfg(feature = "remote")]
+impl<T> Registry<T> for RemoteRegistry<T> {
     fn lock(&self) -> ItemsGuard<T> {
         self.items.lock()
     }
@@ -154,30 +155,23 @@ type ConcreteRegistry<T> = LocalRegistry<T>;
 #[cfg(feature = "remote")]
 type ConcreteRegistry<T> = RemoteRegistry<T>;
 
+#[derive(Default)]
+pub struct Hub {
+    pub(crate) instances: ConcreteRegistry<InstanceHandle>,
+    pub(crate) adapters: ConcreteRegistry<AdapterHandle>,
+    pub(crate) devices: ConcreteRegistry<DeviceHandle>,
+    pub(crate) pipeline_layouts: ConcreteRegistry<PipelineLayoutHandle>,
+    pub(crate) bind_group_layouts: ConcreteRegistry<BindGroupLayoutHandle>,
+    pub(crate) attachment_states: ConcreteRegistry<AttachmentStateHandle>,
+    pub(crate) blend_states: ConcreteRegistry<BlendStateHandle>,
+    pub(crate) depth_stencil_states: ConcreteRegistry<DepthStencilStateHandle>,
+    pub(crate) shader_modules: ConcreteRegistry<ShaderModuleHandle>,
+    pub(crate) command_buffers: ConcreteRegistry<CommandBufferHandle>,
+    pub(crate) render_pipelines: ConcreteRegistry<RenderPipelineHandle>,
+    pub(crate) render_passes: ConcreteRegistry<RenderPassHandle>,
+    pub(crate) compute_passes: ConcreteRegistry<ComputePassHandle>,
+}
+
 lazy_static! {
-    pub(crate) static ref ADAPTER_REGISTRY: ConcreteRegistry<AdapterHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref ATTACHMENT_STATE_REGISTRY: ConcreteRegistry<AttachmentStateHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref BIND_GROUP_LAYOUT_REGISTRY: ConcreteRegistry<BindGroupLayoutHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref BLEND_STATE_REGISTRY: ConcreteRegistry<BlendStateHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref DEPTH_STENCIL_STATE_REGISTRY: ConcreteRegistry<DepthStencilStateHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref DEVICE_REGISTRY: ConcreteRegistry<DeviceHandle> = ConcreteRegistry::new();
-    pub(crate) static ref COMMAND_BUFFER_REGISTRY: ConcreteRegistry<CommandBufferHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref INSTANCE_REGISTRY: ConcreteRegistry<InstanceHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref PIPELINE_LAYOUT_REGISTRY: ConcreteRegistry<PipelineLayoutHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref RENDER_PIPELINE_REGISTRY: ConcreteRegistry<RenderPipelineHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref SHADER_MODULE_REGISTRY: ConcreteRegistry<ShaderModuleHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref RENDER_PASS_REGISTRY: ConcreteRegistry<RenderPassHandle> =
-        ConcreteRegistry::new();
-    pub(crate) static ref COMPUTE_PASS_REGISTRY: ConcreteRegistry<ComputePassHandle> =
-        ConcreteRegistry::new();
+    pub static ref HUB: Hub = Hub::default();
 }
