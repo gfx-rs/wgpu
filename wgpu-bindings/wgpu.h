@@ -108,6 +108,8 @@ typedef enum {
   WGPUTextureFormat_D32FloatS8Uint = 3,
 } WGPUTextureFormat;
 
+typedef struct WGPURenderPassDescriptor_WGPUTextureViewId WGPURenderPassDescriptor_WGPUTextureViewId;
+
 typedef WGPUId WGPUDeviceId;
 
 typedef WGPUId WGPUAdapterId;
@@ -122,9 +124,9 @@ typedef struct {
 
 typedef WGPUId WGPUComputePassId;
 
-typedef WGPUId WGPURenderPassId;
-
 typedef WGPUId WGPUCommandBufferId;
+
+typedef WGPUId WGPURenderPassId;
 
 typedef WGPUId WGPUInstanceId;
 
@@ -234,9 +236,12 @@ typedef struct {
 
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, WGPUDeviceDescriptor _desc);
 
-WGPUComputePassId wgpu_command_buffer_begin_compute_pass(void);
+WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId command_buffer_id);
 
-WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId _command_buffer);
+WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
+                                                       WGPURenderPassDescriptor_WGPUTextureViewId _descriptor);
+
+WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
 WGPUInstanceId wgpu_create_instance(void);
 
@@ -252,7 +257,7 @@ WGPUBlendStateId wgpu_device_create_blend_state(WGPUDeviceId _device_id,
 WGPUCommandBufferId wgpu_device_create_command_buffer(WGPUDeviceId device_id,
                                                       WGPUCommandBufferDescriptor _desc);
 
-WGPUDepthStencilStateId wgpu_device_create_depth_stencil_state(WGPUDeviceId device_id,
+WGPUDepthStencilStateId wgpu_device_create_depth_stencil_state(WGPUDeviceId _device_id,
                                                                WGPUDepthStencilStateDescriptor desc);
 
 WGPUPipelineLayoutId wgpu_device_create_pipeline_layout(WGPUDeviceId device_id,
@@ -271,3 +276,5 @@ WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id, WGPUAdapterD
 void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffer_ptr,
                        uintptr_t command_buffer_count);
+
+WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);

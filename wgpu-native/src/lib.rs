@@ -106,6 +106,8 @@ pub type BindGroupLayoutId = Id;
 type BindGroupLayoutHandle = BindGroupLayout<B>;
 pub type PipelineLayoutId = Id;
 type PipelineLayoutHandle = PipelineLayout<B>;
+pub type BindGroupId = Id;
+type BindGroupHandle = BindGroup<B>;
 
 // Pipeline
 pub type BlendStateId = Id;
@@ -117,9 +119,10 @@ pub type ShaderModuleId = Id;
 type ShaderModuleHandle = ShaderModule<B>;
 pub type AttachmentStateId = Id;
 type AttachmentStateHandle = AttachmentState<B>;
-pub type ComputePipelineId = Id;
 pub type RenderPipelineId = Id;
 type RenderPipelineHandle = RenderPipeline<B>;
+pub type ComputePipelineId = Id;
+type ComputePipelineHandle = ComputePipeline<B>;
 
 pub type CommandBufferId = Id;
 type CommandBufferHandle = CommandBuffer<B>;

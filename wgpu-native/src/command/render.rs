@@ -1,11 +1,11 @@
-use hal;
-use hal::command::RawCommandBuffer;
-
 use registry::{HUB, Items, Registry};
 use {
     Stored,
     CommandBufferId, RenderPassId,
 };
+
+use hal;
+use hal::command::RawCommandBuffer;
 
 
 pub struct RenderPass<B: hal::Backend> {

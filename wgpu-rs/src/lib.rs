@@ -35,6 +35,10 @@ pub struct BindGroupLayout {
     id: wgn::BindGroupLayoutId,
 }
 
+pub struct BindGroup {
+    id: wgn::BindGroupId,
+}
+
 pub struct ShaderModule {
     id: wgn::ShaderModuleId,
 }
@@ -57,6 +61,10 @@ pub struct AttachmentState {
 
 pub struct RenderPipeline {
     id: wgn::RenderPipelineId,
+}
+
+pub struct ComputePipeline {
+    id: wgn::ComputePipelineId,
 }
 
 pub struct CommandBuffer {
@@ -272,6 +280,18 @@ impl<'a> ComputePass<'a> {
     pub fn end_pass(self) -> &'a mut CommandBuffer {
         wgn::wgpu_compute_pass_end_pass(self.id);
         self.parent
+    }
+
+    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
+        wgn::wgpu_compute_pass_set_bind_group(self.id, index, bind_group.id);
+    }
+
+    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
+        wgn::wgpu_compute_pass_set_pipeline(self.id, pipeline.id);
+    }
+
+    pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
+        wgn::wgpu_compute_pass_dispatch(self.id, x, y, z);
     }
 }
 

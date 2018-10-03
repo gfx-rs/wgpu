@@ -76,6 +76,6 @@ pub struct BindGroupDescriptor {
     pub bindings_length: usize,
 }
 
-pub struct BindGroup {
-    // TODO
+pub(crate) struct BindGroup<B: hal::Backend> {
+    pub raw: B::DescriptorSet,
 }
