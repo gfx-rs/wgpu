@@ -227,8 +227,8 @@ pub struct ComputePipelineDescriptor {
     pub stages: *const PipelineStageDescriptor,
 }
 
-pub struct ComputePipeline {
-    // TODO
+pub(crate) struct ComputePipeline<B: hal::Backend> {
+    pub raw: B::ComputePipeline,
 }
 
 #[repr(C)]

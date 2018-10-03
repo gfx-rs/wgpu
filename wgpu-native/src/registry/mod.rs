@@ -9,10 +9,10 @@ pub use self::local::{Id, ItemsGuard, Registry as ConcreteRegistry};
 pub use self::remote::{Id, ItemsGuard, Registry as ConcreteRegistry};
 
 use {
-    AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BlendStateHandle,
-    CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
+    AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BindGroupHandle,
+    BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
     RenderPassHandle, ComputePassHandle,
-    PipelineLayoutHandle, RenderPipelineHandle, ShaderModuleHandle,
+    PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
 };
 
 
@@ -37,12 +37,14 @@ pub struct Hub {
     pub(crate) devices: ConcreteRegistry<DeviceHandle>,
     pub(crate) pipeline_layouts: ConcreteRegistry<PipelineLayoutHandle>,
     pub(crate) bind_group_layouts: ConcreteRegistry<BindGroupLayoutHandle>,
+    pub(crate) bind_groups: ConcreteRegistry<BindGroupHandle>,
     pub(crate) attachment_states: ConcreteRegistry<AttachmentStateHandle>,
     pub(crate) blend_states: ConcreteRegistry<BlendStateHandle>,
     pub(crate) depth_stencil_states: ConcreteRegistry<DepthStencilStateHandle>,
     pub(crate) shader_modules: ConcreteRegistry<ShaderModuleHandle>,
     pub(crate) command_buffers: ConcreteRegistry<CommandBufferHandle>,
     pub(crate) render_pipelines: ConcreteRegistry<RenderPipelineHandle>,
+    pub(crate) compute_pipelines: ConcreteRegistry<ComputePipelineHandle>,
     pub(crate) render_passes: ConcreteRegistry<RenderPassHandle>,
     pub(crate) compute_passes: ConcreteRegistry<ComputePassHandle>,
 }
