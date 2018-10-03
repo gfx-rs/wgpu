@@ -50,18 +50,22 @@ pub enum TextureFormat {
     D32FloatS8Uint = 3,
 }
 
-bitflags! {
-    #[repr(transparent)]
-    pub struct TextureUsageFlags: u32 {
-        const NONE = 0;
-        const TRANSFER_SRC = 1;
-        const TRANSFER_DST = 2;
-        const SAMPLED = 4;
-        const STORAGE = 8;
-        const OUTPUT_ATTACHMENT = 16;
-        const PRESENT = 32;
-    }
-}
+// TODO: bitflags
+pub type TextureUsageFlags = u32;
+#[allow(non_upper_case_globals)]
+pub const TextureUsageFlags_NONE: u32 = 0;
+#[allow(non_upper_case_globals)]
+pub const TextureUsageFlags_TRANSFER_SRC: u32 = 1;
+#[allow(non_upper_case_globals)]
+pub const TextureUsageFlags_TRANSFER_DST: u32 = 2;
+#[allow(non_upper_case_globals)]
+pub const TextureUsageFlags_SAMPLED: u32 = 4;
+#[allow(non_upper_case_globals)]
+pub const TextureUsageFlags_STORAGE: u32 = 8;
+#[allow(non_upper_case_globals)]
+pub const TextureUsageFlags_OUTPUT_ATTACHMENT: u32 = 16;
+#[allow(non_upper_case_globals)]
+pub const TextureUsageFlags_PRESENT: u32 = 32;
 
 #[repr(C)]
 pub struct TextureDescriptor {

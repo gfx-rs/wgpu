@@ -256,3 +256,34 @@ pub(crate) fn map_texture_dimension_size(dimension: resource::TextureDimension, 
         D3 => H::D3(width, height, depth),
     }
 }
+
+pub(crate) fn map_texture_usage_flags(flags: u32, format: hal::format::Format) -> hal::image::Usage {
+    use hal::image::Usage as H;
+    use resource::{
+        TextureUsageFlags_TRANSFER_SRC, TextureUsageFlags_TRANSFER_DST, TextureUsageFlags_SAMPLED,
+        TextureUsageFlags_STORAGE, TextureUsageFlags_OUTPUT_ATTACHMENT,
+    };
+    let mut value = H::empty();
+    if 0 != flags & TextureUsageFlags_TRANSFER_SRC {
+        value |= H::TRANSFER_SRC;
+    }
+    if 0 != flags & TextureUsageFlags_TRANSFER_DST {
+        value |= H::TRANSFER_DST;
+    }
+    if 0 != flags & TextureUsageFlags_SAMPLED {
+        value |= H::SAMPLED;
+    }
+    if 0 != flags & TextureUsageFlags_STORAGE {
+        value |= H::STORAGE;
+    }
+    if 0 != flags & TextureUsageFlags_OUTPUT_ATTACHMENT {
+        if format.surface_desc().aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
+            value |= H::DEPTH_STENCIL_ATTACHMENT;
+        } else {
+            value |= H::COLOR_ATTACHMENT;
+        }
+    }
+    // Note: TextureUsageFlags::Present does not need to be handled explicitly
+    // TODO: HAL Transient Attachment, HAL Input Attachment
+    value
+}
