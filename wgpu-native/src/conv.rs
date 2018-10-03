@@ -1,6 +1,6 @@
 use hal;
 
-use {binding_model, pipeline, resource};
+use {Extent3d, binding_model, pipeline, resource};
 
 pub(crate) fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
@@ -235,5 +235,24 @@ pub(crate) fn map_texture_format(texture_format: resource::TextureFormat) -> hal
         R8g8b8a8Uint => H::Rgba8Uint,
         B8g8r8a8Unorm => H::Bgra8Unorm,
         D32FloatS8Uint => H::D32FloatS8Uint,
+    }
+}
+
+fn checked_u32_as_u16(value: u32) -> u16 {
+    assert!(value <= ::std::u16::MAX as u32);
+    value as u16
+}
+
+pub(crate) fn map_texture_dimension_size(dimension: resource::TextureDimension, size: Extent3d) -> hal::image::Kind {
+    use hal::image::Kind as H;
+    use resource::TextureDimension::*;
+    let Extent3d { width, height, depth } = size;
+    match dimension {
+        D1 => {
+            assert_eq!(height, 1);
+            H::D1(width, checked_u32_as_u16(depth))
+        }
+        D2 => H::D2(width, height, checked_u32_as_u16(depth), 1), // TODO: Samples
+        D3 => H::D3(width, height, depth),
     }
 }

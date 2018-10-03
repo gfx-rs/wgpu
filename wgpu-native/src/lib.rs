@@ -76,9 +76,9 @@ pub struct Origin3d {
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Extent3d {
-    pub width: f32,
-    pub height: f32,
-    pub depth: f32,
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
 }
 
 #[repr(C)]
