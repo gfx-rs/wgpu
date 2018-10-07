@@ -135,5 +135,27 @@ int main()
     WGPUQueueId queue = wgpu_device_get_queue(device);
     wgpu_queue_submit(queue, &cmd_buf, 1);
 
+    const uint32_t TEXTURE_WIDTH = 800;
+    const uint32_t TEXTURE_HEIGHT = 600;
+
+    WGPUExtent3d texture_size = {
+        .width = TEXTURE_WIDTH,
+        .height = TEXTURE_HEIGHT,
+        .depth = 1,
+    };
+
+    const WGPUTextureFormat texture_format = WGPUTextureFormat_R8g8b8a8Unorm;
+    const WGPUTextureUsageFlags texture_usage = WGPUTextureUsageFlags_TRANSFER_DST | WGPUTextureUsageFlags_SAMPLED;
+
+    WGPUTextureDescriptor texture_desc = {
+        .size = texture_size,
+        .array_size = 1,
+        .dimension = WGPUTextureDimension_D2,
+        .format = texture_format,
+        .usage = texture_usage,
+    };
+
+    WGPUTextureId texture = wgpu_device_create_texture(device, texture_desc);
+
     return 0;
 }
