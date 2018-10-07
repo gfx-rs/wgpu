@@ -19,7 +19,7 @@ extern crate gfx_backend_metal as back;
 extern crate gfx_backend_vulkan as back;
 
 extern crate gfx_hal as hal;
-extern crate gfx_memory as memory;
+extern crate rendy_memory;
 
 mod binding_model;
 mod command;
@@ -99,6 +99,7 @@ pub type BufferId = Id;
 // Resource
 pub type TextureViewId = Id;
 pub type TextureId = Id;
+type TextureHandle = Texture<B>;
 pub type SamplerId = Id;
 
 // Binding model

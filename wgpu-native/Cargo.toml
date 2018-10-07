@@ -17,9 +17,9 @@ remote = ["parking_lot"]
 bitflags = "1.0"
 lazy_static = "1.1.0"
 parking_lot = { version = "0.6", optional = true }
-gfx-hal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" } # required by gfx-memory
-gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
-gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
-gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "a435a05", optional = true }
-gfx-memory = { git = "https://github.com/gfx-rs/gfx-memory", rev = "483d64d" }
+gfx-hal = { git = "https://github.com/gfx-rs/gfx" } # required by gfx-memory
+gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", optional = true }
+gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", optional = true }
+gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", optional = true }
+rendy-memory = { git = "https://github.com/rustgd/rendy", rev = "ce7dd7f", features = ["gfx-hal"] }

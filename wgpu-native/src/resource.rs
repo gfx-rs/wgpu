@@ -76,8 +76,8 @@ pub struct TextureDescriptor {
     pub usage: TextureUsageFlags,
 }
 
-pub struct Texture {
-    // TODO: create_texture_view()
+pub struct Texture<B: hal::Backend> {
+    pub(crate) raw: B::Image,
 }
 
 #[repr(C)]
