@@ -13,6 +13,7 @@ use {
     BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
     RenderPassHandle, ComputePassHandle,
     PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
+    TextureHandle,
 };
 
 
@@ -47,6 +48,7 @@ pub struct Hub {
     pub(crate) compute_pipelines: ConcreteRegistry<ComputePipelineHandle>,
     pub(crate) render_passes: ConcreteRegistry<RenderPassHandle>,
     pub(crate) compute_passes: ConcreteRegistry<ComputePassHandle>,
+    pub(crate) textures: ConcreteRegistry<TextureHandle>,
 }
 
 lazy_static! {

@@ -1,8 +1,8 @@
-use {back, binding_model, command, conv, memory, pipeline};
+use {back, binding_model, command, conv, pipeline, resource};
 use registry::{HUB, Items, Registry};
 use {
     AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
-    DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
+    DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId, TextureId,
 };
 
 use hal::command::RawCommandBuffer;
@@ -10,13 +10,15 @@ use hal::queue::RawCommandQueue;
 use hal::{self, Device as _Device};
 
 use std::{ffi, slice};
+use rendy_memory::{allocator, Config, Heaps};
 
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     queue_group: hal::QueueGroup<B, hal::General>,
-    mem_allocator: memory::SmartAllocator<B>,
+    mem_allocator: Heaps<B::Memory>,
     com_allocator: command::CommandAllocator<B>,
+    mem_props: hal::MemoryProperties,
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -25,17 +27,85 @@ impl<B: hal::Backend> Device<B> {
         queue_group: hal::QueueGroup<B, hal::General>,
         mem_props: hal::MemoryProperties,
     ) -> Self {
+        // TODO: These values are just taken from rendy's test
+        // Need to set reasonable values per memory type instead
+        let arena = Some(allocator::ArenaConfig {
+            arena_size: 32 * 1024,
+        });
+        let dynamic = Some(allocator::DynamicConfig {
+            blocks_per_chunk: 64,
+            block_size_granularity: 256,
+            max_block_size: 32 * 1024,
+        });
+        let config = Config { arena, dynamic };
+        let mem_allocator = unsafe {
+            Heaps::new(
+                mem_props
+                    .memory_types
+                    .iter()
+                    .map(|mt| (mt.properties.into(), mt.heap_index as u32, config)),
+                mem_props.memory_heaps.clone(),
+            )
+        };
+
         Device {
             raw,
-            mem_allocator: memory::SmartAllocator::new(mem_props, 1, 1, 1, 1),
+            mem_allocator,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
+            mem_props,
         }
     }
 }
 
 pub(crate) struct ShaderModule<B: hal::Backend> {
     pub raw: B::ShaderModule,
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_texture(
+    device_id: DeviceId,
+    desc: resource::TextureDescriptor,
+) -> TextureId {
+    let kind = conv::map_texture_dimension_size(desc.dimension, desc.size);
+    let format = conv::map_texture_format(desc.format);
+    let usage = conv::map_texture_usage_flags(desc.usage, format);
+    let device_guard = HUB.devices.lock();
+    let device = &device_guard.get(device_id);
+    let image_unbound = device
+        .raw
+        .create_image(
+            kind,
+            1, // TODO: mips
+            format,
+            hal::image::Tiling::Optimal, // TODO: linear
+            usage,
+            hal::image::ViewCapabilities::empty(), // TODO: format, 2d array, cube
+        )
+        .unwrap();
+    let image_req = device.raw.get_image_requirements(&image_unbound);
+    let device_type = device
+        .mem_props
+        .memory_types
+        .iter()
+        .enumerate()
+        .position(|(id, memory_type)| { // TODO
+            image_req.type_mask & (1 << id) != 0
+                && memory_type.properties.contains(hal::memory::Properties::DEVICE_LOCAL)
+        })
+        .unwrap()
+        .into();
+    // TODO: allocate with rendy
+    let image_memory = device.raw.allocate_memory(device_type, image_req.size).unwrap();
+    let bound_image = device
+        .raw
+        .bind_image_memory(&image_memory, 0, image_unbound)
+        .unwrap();
+    HUB.textures
+        .lock()
+        .register(resource::Texture {
+            raw: bound_image,
+        })
 }
 
 #[no_mangle]

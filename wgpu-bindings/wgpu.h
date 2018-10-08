@@ -28,6 +28,20 @@
 
 #define WGPUShaderStageFlags_VERTEX 1
 
+#define WGPUTextureUsageFlags_NONE 0
+
+#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT 16
+
+#define WGPUTextureUsageFlags_PRESENT 32
+
+#define WGPUTextureUsageFlags_SAMPLED 4
+
+#define WGPUTextureUsageFlags_STORAGE 8
+
+#define WGPUTextureUsageFlags_TRANSFER_DST 2
+
+#define WGPUTextureUsageFlags_TRANSFER_SRC 1
+
 typedef enum {
   WGPUBindingType_UniformBuffer = 0,
   WGPUBindingType_Sampler = 1,
@@ -100,6 +114,12 @@ typedef enum {
   WGPUStencilOperation_IncrementWrap = 6,
   WGPUStencilOperation_DecrementWrap = 7,
 } WGPUStencilOperation;
+
+typedef enum {
+  WGPUTextureDimension_D1,
+  WGPUTextureDimension_D2,
+  WGPUTextureDimension_D3,
+} WGPUTextureDimension;
 
 typedef enum {
   WGPUTextureFormat_R8g8b8a8Unorm = 0,
@@ -228,11 +248,41 @@ typedef struct {
   WGPUByteArray code;
 } WGPUShaderModuleDescriptor;
 
+typedef WGPUId WGPUTextureId;
+
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  uint32_t depth;
+} WGPUExtent3d;
+
+typedef uint32_t WGPUTextureUsageFlags;
+
+typedef struct {
+  WGPUExtent3d size;
+  uint32_t array_size;
+  WGPUTextureDimension dimension;
+  WGPUTextureFormat format;
+  WGPUTextureUsageFlags usage;
+} WGPUTextureDescriptor;
+
 typedef WGPUId WGPUQueueId;
 
 typedef struct {
   WGPUPowerPreference power_preference;
 } WGPUAdapterDescriptor;
+
+#define WGPUBLACK (Color){ .r = 0, .g = 0, .b = 0, .a = 1 }
+
+#define WGPUBLUE (Color){ .r = 0, .g = 0, .b = 1, .a = 1 }
+
+#define WGPUGREEN (Color){ .r = 0, .g = 1, .b = 0, .a = 1 }
+
+#define WGPURED (Color){ .r = 1, .g = 0, .b = 0, .a = 1 }
+
+#define WGPUTRANSPARENT (Color){ .r = 0, .g = 0, .b = 0, .a = 0 }
+
+#define WGPUWHITE (Color){ .r = 1, .g = 1, .b = 1, .a = 1 }
 
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, WGPUDeviceDescriptor _desc);
 
@@ -268,6 +318,8 @@ WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
 
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
                                                     WGPUShaderModuleDescriptor desc);
+
+WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, WGPUTextureDescriptor desc);
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
