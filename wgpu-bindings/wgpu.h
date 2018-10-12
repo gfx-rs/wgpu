@@ -284,7 +284,8 @@ typedef struct {
 
 #define WGPUWHITE (Color){ .r = 1, .g = 1, .b = 1, .a = 1 }
 
-WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, WGPUDeviceDescriptor _desc);
+WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
+                                        const WGPUDeviceDescriptor *_desc);
 
 WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId command_buffer_id);
 
@@ -296,34 +297,35 @@ WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 WGPUInstanceId wgpu_create_instance(void);
 
 WGPUAttachmentStateId wgpu_device_create_attachment_state(WGPUDeviceId device_id,
-                                                          WGPUAttachmentStateDescriptor desc);
+                                                          const WGPUAttachmentStateDescriptor *desc);
 
 WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_id,
-                                                           WGPUBindGroupLayoutDescriptor desc);
+                                                           const WGPUBindGroupLayoutDescriptor *desc);
 
 WGPUBlendStateId wgpu_device_create_blend_state(WGPUDeviceId _device_id,
-                                                WGPUBlendStateDescriptor desc);
+                                                const WGPUBlendStateDescriptor *desc);
 
 WGPUCommandBufferId wgpu_device_create_command_buffer(WGPUDeviceId device_id,
-                                                      WGPUCommandBufferDescriptor _desc);
+                                                      const WGPUCommandBufferDescriptor *_desc);
 
 WGPUDepthStencilStateId wgpu_device_create_depth_stencil_state(WGPUDeviceId _device_id,
-                                                               WGPUDepthStencilStateDescriptor desc);
+                                                               const WGPUDepthStencilStateDescriptor *desc);
 
 WGPUPipelineLayoutId wgpu_device_create_pipeline_layout(WGPUDeviceId device_id,
-                                                        WGPUPipelineLayoutDescriptor desc);
+                                                        const WGPUPipelineLayoutDescriptor *desc);
 
 WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
-                                                        WGPURenderPipelineDescriptor desc);
+                                                        const WGPURenderPipelineDescriptor *desc);
 
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
-                                                    WGPUShaderModuleDescriptor desc);
+                                                    const WGPUShaderModuleDescriptor *desc);
 
-WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, WGPUTextureDescriptor desc);
+WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
-WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id, WGPUAdapterDescriptor desc);
+WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id,
+                                        const WGPUAdapterDescriptor *desc);
 
 void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffer_ptr,

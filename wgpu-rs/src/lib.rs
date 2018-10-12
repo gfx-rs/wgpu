@@ -120,7 +120,7 @@ impl Instance {
         }
     }
 
-    pub fn get_adapter(&self, desc: AdapterDescriptor) -> Adapter {
+    pub fn get_adapter(&self, desc: &AdapterDescriptor) -> Adapter {
         Adapter {
             id: wgn::wgpu_instance_get_adapter(self.id, desc),
         }
@@ -128,7 +128,7 @@ impl Instance {
 }
 
 impl Adapter {
-    pub fn create_device(&self, desc: DeviceDescriptor) -> Device {
+    pub fn create_device(&self, desc: &DeviceDescriptor) -> Device {
         Device {
             id: wgn::wgpu_adapter_create_device(self.id, desc),
         }
@@ -154,13 +154,13 @@ impl Device {
         }
     }
 
-    pub fn create_command_buffer(&self, desc: CommandBufferDescriptor) -> CommandBuffer {
+    pub fn create_command_buffer(&self, desc: &CommandBufferDescriptor) -> CommandBuffer {
         CommandBuffer {
             id: wgn::wgpu_device_create_command_buffer(self.id, desc),
         }
     }
 
-    pub fn create_bind_group_layout(&self, desc: BindGroupLayoutDescriptor) -> BindGroupLayout {
+    pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
         BindGroupLayout {
             id: wgn::wgpu_device_create_bind_group_layout(self.id, wgn::BindGroupLayoutDescriptor {
                 bindings: desc.bindings.as_ptr(),
@@ -169,7 +169,7 @@ impl Device {
         }
     }
 
-    pub fn create_pipeline_layout(&self, desc: PipelineLayoutDescriptor) -> PipelineLayout {
+    pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
         PipelineLayout {
             id: wgn::wgpu_device_create_pipeline_layout(self.id, wgn::PipelineLayoutDescriptor {
                 bind_group_layouts: desc.bind_group_layouts.as_ptr() as *const _,
@@ -178,19 +178,19 @@ impl Device {
         }
     }
 
-    pub fn create_blend_state(&self, desc: BlendStateDescriptor) -> BlendState {
+    pub fn create_blend_state(&self, desc: &BlendStateDescriptor) -> BlendState {
         BlendState {
             id: wgn::wgpu_device_create_blend_state(self.id, desc),
         }
     }
 
-    pub fn create_depth_stencil_state(&self, desc: DepthStencilStateDescriptor) -> DepthStencilState {
+    pub fn create_depth_stencil_state(&self, desc: &DepthStencilStateDescriptor) -> DepthStencilState {
         DepthStencilState {
             id: wgn::wgpu_device_create_depth_stencil_state(self.id, desc),
         }
     }
 
-    pub fn create_attachment_state(&self, desc: AttachmentStateDescriptor) -> AttachmentState {
+    pub fn create_attachment_state(&self, desc: &AttachmentStateDescriptor) -> AttachmentState {
         AttachmentState {
             id: wgn::wgpu_device_create_attachment_state(self.id, wgn::AttachmentStateDescriptor {
                 formats: desc.formats.as_ptr(),
@@ -199,7 +199,7 @@ impl Device {
         }
     }
 
-    pub fn create_render_pipeline(&self, desc: RenderPipelineDescriptor) -> RenderPipeline {
+    pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
         let entry_points = desc.stages
             .iter()
             .map(|ps| CString::new(ps.entry_point).unwrap())
@@ -230,7 +230,7 @@ impl Device {
 }
 
 impl CommandBuffer {
-    pub fn begin_render_pass(&mut self, desc: RenderPassDescriptor<&TextureView>) -> RenderPass {
+    pub fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<&TextureView>) -> RenderPass {
         let colors = desc.color_attachments
             .iter()
             .map(|ca| RenderPassColorAttachmentDescriptor {

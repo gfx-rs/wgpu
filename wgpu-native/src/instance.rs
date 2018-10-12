@@ -50,7 +50,7 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
 #[no_mangle]
 pub extern "C" fn wgpu_instance_get_adapter(
     instance_id: InstanceId,
-    desc: AdapterDescriptor,
+    desc: &AdapterDescriptor,
 ) -> AdapterId {
     let instance_guard = HUB.instances.lock();
     let instance = instance_guard.get(instance_id);
@@ -75,7 +75,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
 #[no_mangle]
 pub extern "C" fn wgpu_adapter_create_device(
     adapter_id: AdapterId,
-    _desc: DeviceDescriptor,
+    _desc: &DeviceDescriptor,
 ) -> DeviceId {
     let mut adapter_guard = HUB.adapters.lock();
     let adapter = adapter_guard.get_mut(adapter_id);

@@ -88,13 +88,13 @@ pub(crate) fn map_primitive_topology(
 }
 
 pub(crate) fn map_blend_state_descriptor(
-    desc: pipeline::BlendStateDescriptor,
+    desc: &pipeline::BlendStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
     let blend_state = match desc.blend_enabled {
         true => hal::pso::BlendState::On {
-            color: map_blend_descriptor(desc.color),
-            alpha: map_blend_descriptor(desc.alpha),
+            color: map_blend_descriptor(&desc.color),
+            alpha: map_blend_descriptor(&desc.alpha),
         },
         false => hal::pso::BlendState::Off,
     };
@@ -122,7 +122,7 @@ fn map_color_write_flags(flags: u32) -> hal::pso::ColorMask {
     value
 }
 
-fn map_blend_descriptor(blend_desc: pipeline::BlendDescriptor) -> hal::pso::BlendOp {
+fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::BlendOp {
     use hal::pso::BlendOp as H;
     use pipeline::BlendOperation::*;
     match blend_desc.operation {
@@ -164,7 +164,7 @@ fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
 }
 
 pub(crate) fn map_depth_stencil_state(
-    desc: pipeline::DepthStencilStateDescriptor,
+    desc: &pipeline::DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
         // TODO DepthTest::Off?
@@ -175,14 +175,14 @@ pub(crate) fn map_depth_stencil_state(
         depth_bounds: false, // TODO
         // TODO StencilTest::Off?
         stencil: hal::pso::StencilTest::On {
-            front: map_stencil_face(desc.front, desc.stencil_read_mask, desc.stencil_write_mask),
-            back: map_stencil_face(desc.back, desc.stencil_read_mask, desc.stencil_write_mask),
+            front: map_stencil_face(&desc.front, desc.stencil_read_mask, desc.stencil_write_mask),
+            back: map_stencil_face(&desc.back, desc.stencil_read_mask, desc.stencil_write_mask),
         },
     }
 }
 
 fn map_stencil_face(
-    stencil_state_face_desc: pipeline::StencilStateFaceDescriptor,
+    stencil_state_face_desc: &pipeline::StencilStateFaceDescriptor,
     stencil_read_mask: u32,
     stencil_write_mask: u32,
 ) -> hal::pso::StencilFace {

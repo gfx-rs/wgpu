@@ -65,7 +65,7 @@ pub(crate) struct ShaderModule<B: hal::Backend> {
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
-    desc: resource::TextureDescriptor,
+    desc: &resource::TextureDescriptor,
 ) -> TextureId {
     let kind = conv::map_texture_dimension_size(desc.dimension, desc.size);
     let format = conv::map_texture_format(desc.format);
@@ -111,7 +111,7 @@ pub extern "C" fn wgpu_device_create_texture(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group_layout(
     device_id: DeviceId,
-    desc: binding_model::BindGroupLayoutDescriptor,
+    desc: &binding_model::BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
 
@@ -142,7 +142,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
-    desc: binding_model::PipelineLayoutDescriptor,
+    desc: &binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
     let bind_group_layouts = unsafe {
         slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
@@ -169,7 +169,7 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_blend_state(
     _device_id: DeviceId,
-    desc: pipeline::BlendStateDescriptor,
+    desc: &pipeline::BlendStateDescriptor,
 ) -> BlendStateId {
     HUB.blend_states
         .lock()
@@ -181,7 +181,7 @@ pub extern "C" fn wgpu_device_create_blend_state(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_depth_stencil_state(
     _device_id: DeviceId,
-    desc: pipeline::DepthStencilStateDescriptor,
+    desc: &pipeline::DepthStencilStateDescriptor,
 ) -> DepthStencilStateId {
     HUB.depth_stencil_states
         .lock()
@@ -193,7 +193,7 @@ pub extern "C" fn wgpu_device_create_depth_stencil_state(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
-    desc: pipeline::ShaderModuleDescriptor,
+    desc: &pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
     let spv = unsafe {
         slice::from_raw_parts(desc.code.bytes, desc.code.length)
@@ -213,7 +213,7 @@ pub extern "C" fn wgpu_device_create_shader_module(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_command_buffer(
     device_id: DeviceId,
-    _desc: command::CommandBufferDescriptor,
+    _desc: &command::CommandBufferDescriptor,
 ) -> CommandBufferId {
     let mut device_guard = HUB.devices.lock();
     let device = device_guard.get_mut(device_id);
@@ -286,7 +286,7 @@ pub extern "C" fn wgpu_queue_submit(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_attachment_state(
     device_id: DeviceId,
-    desc: pipeline::AttachmentStateDescriptor,
+    desc: &pipeline::AttachmentStateDescriptor,
 ) -> AttachmentStateId {
     let device_guard = HUB.devices.lock();
     let device = &device_guard.get(device_id).raw;
@@ -339,7 +339,7 @@ pub extern "C" fn wgpu_device_create_attachment_state(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
-    desc: pipeline::RenderPipelineDescriptor,
+    desc: &pipeline::RenderPipelineDescriptor,
 ) -> RenderPipelineId {
     // TODO
     let extent = hal::window::Extent2D {
