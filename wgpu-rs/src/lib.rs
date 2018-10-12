@@ -144,7 +144,7 @@ impl Device {
             },
         };
         ShaderModule {
-            id: wgn::wgpu_device_create_shader_module(self.id, desc),
+            id: wgn::wgpu_device_create_shader_module(self.id, &desc),
         }
     }
 
@@ -162,7 +162,7 @@ impl Device {
 
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
         BindGroupLayout {
-            id: wgn::wgpu_device_create_bind_group_layout(self.id, wgn::BindGroupLayoutDescriptor {
+            id: wgn::wgpu_device_create_bind_group_layout(self.id, &wgn::BindGroupLayoutDescriptor {
                 bindings: desc.bindings.as_ptr(),
                 bindings_length: desc.bindings.len(),
             }),
@@ -171,7 +171,7 @@ impl Device {
 
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
         PipelineLayout {
-            id: wgn::wgpu_device_create_pipeline_layout(self.id, wgn::PipelineLayoutDescriptor {
+            id: wgn::wgpu_device_create_pipeline_layout(self.id, &wgn::PipelineLayoutDescriptor {
                 bind_group_layouts: desc.bind_group_layouts.as_ptr() as *const _,
                 bind_group_layouts_length: desc.bind_group_layouts.len(),
             }),
@@ -192,7 +192,7 @@ impl Device {
 
     pub fn create_attachment_state(&self, desc: &AttachmentStateDescriptor) -> AttachmentState {
         AttachmentState {
-            id: wgn::wgpu_device_create_attachment_state(self.id, wgn::AttachmentStateDescriptor {
+            id: wgn::wgpu_device_create_attachment_state(self.id, &wgn::AttachmentStateDescriptor {
                 formats: desc.formats.as_ptr(),
                 formats_length: desc.formats.len(),
             }),
@@ -215,7 +215,7 @@ impl Device {
             .collect::<ArrayVec<[_; 2]>>();
 
         RenderPipeline {
-            id: wgn::wgpu_device_create_render_pipeline(self.id, wgn::RenderPipelineDescriptor {
+            id: wgn::wgpu_device_create_render_pipeline(self.id, &wgn::RenderPipelineDescriptor {
                 layout: desc.layout.id,
                 stages: stages.as_ptr(),
                 stages_length: stages.len(),
@@ -242,6 +242,7 @@ impl CommandBuffer {
             .collect::<ArrayVec<[_; 4]>>();
 
         let depth_stencil = desc.depth_stencil_attachment
+            .as_ref()
             .map(|dsa| RenderPassDepthStencilAttachmentDescriptor {
                 attachment: dsa.attachment.id,
                 depth_load_op: dsa.depth_load_op,
