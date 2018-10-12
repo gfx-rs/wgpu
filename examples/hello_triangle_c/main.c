@@ -27,30 +27,30 @@ int main()
     WGPUAdapterDescriptor adapter_desc = {
         .power_preference = WGPUPowerPreference_LowPower,
     };
-    WGPUAdapterId adapter = wgpu_instance_get_adapter(instance, adapter_desc);
+    WGPUAdapterId adapter = wgpu_instance_get_adapter(instance, &adapter_desc);
     WGPUDeviceDescriptor device_desc = {
         .extensions = {
             .anisotropic_filtering = false,
         },
     };
-    WGPUDeviceId device = wgpu_adapter_create_device(adapter, device_desc);
+    WGPUDeviceId device = wgpu_adapter_create_device(adapter, &device_desc);
 
     WGPUBindGroupLayoutDescriptor bind_group_layout_desc = {
         .bindings = NULL,
         .bindings_length = 0,
     };
-    WGPUBindGroupLayoutId _bind_group_layout = wgpu_device_create_bind_group_layout(device, bind_group_layout_desc);
+    WGPUBindGroupLayoutId _bind_group_layout = wgpu_device_create_bind_group_layout(device, &bind_group_layout_desc);
     
     WGPUPipelineLayoutDescriptor pipeline_layout_desc = {
         .bind_group_layouts = NULL,
         .bind_group_layouts_length = 0,
     };
-    WGPUPipelineLayoutId layout = wgpu_device_create_pipeline_layout(device, pipeline_layout_desc);
+    WGPUPipelineLayoutId layout = wgpu_device_create_pipeline_layout(device, &pipeline_layout_desc);
 
     WGPUShaderModuleDescriptor vertex_shader_desc = {
         .code = read_file("./../data/hello_triangle.vert.spv"),
     };
-    WGPUShaderModuleId vertex_shader = wgpu_device_create_shader_module(device, vertex_shader_desc);
+    WGPUShaderModuleId vertex_shader = wgpu_device_create_shader_module(device, &vertex_shader_desc);
     WGPUPipelineStageDescriptor vertex_stage = {
         .module = vertex_shader,
         .stage = WGPUShaderStage_Vertex,
@@ -60,7 +60,7 @@ int main()
     WGPUShaderModuleDescriptor fragment_shader_desc = {
         .code = read_file("./../data/hello_triangle.frag.spv"),
     };
-    WGPUShaderModuleId fragment_shader = wgpu_device_create_shader_module(device, fragment_shader_desc);
+    WGPUShaderModuleId fragment_shader = wgpu_device_create_shader_module(device, &fragment_shader_desc);
     WGPUPipelineStageDescriptor fragment_stage = {
         .module = fragment_shader,
         .stage = WGPUShaderStage_Fragment,
@@ -85,7 +85,7 @@ int main()
         .color = blend_color,
         .write_mask = 0,
     };
-    WGPUBlendStateId blend_state_0 = wgpu_device_create_blend_state(device, blend_state_0_desc);
+    WGPUBlendStateId blend_state_0 = wgpu_device_create_blend_state(device, &blend_state_0_desc);
     WGPUBlendStateId blend_state[BLEND_STATE_LENGTH] = { blend_state_0 };
 
     WGPUStencilStateFaceDescriptor stencil_state_front = {
@@ -108,14 +108,14 @@ int main()
         .stencil_read_mask = 0,
         .stencil_write_mask = 0,
     };
-    WGPUDepthStencilStateId depth_stencil_state = wgpu_device_create_depth_stencil_state(device, depth_stencil_state_desc);
+    WGPUDepthStencilStateId depth_stencil_state = wgpu_device_create_depth_stencil_state(device, &depth_stencil_state_desc);
 
     WGPUTextureFormat formats[FORMATS_LENGTH] = { WGPUTextureFormat_R8g8b8a8Unorm };
     WGPUAttachmentStateDescriptor attachment_state_desc = {
         .formats = formats,
         .formats_length = FORMATS_LENGTH,
     };
-    WGPUAttachmentStateId attachment_state = wgpu_device_create_attachment_state(device, attachment_state_desc);
+    WGPUAttachmentStateId attachment_state = wgpu_device_create_attachment_state(device, &attachment_state_desc);
     
     WGPURenderPipelineDescriptor render_pipeline_desc = {
         .layout = layout,
@@ -128,10 +128,10 @@ int main()
         .attachment_state = attachment_state,
     };
 
-    WGPURenderPipelineId render_pipeline = wgpu_device_create_render_pipeline(device, render_pipeline_desc);
+    WGPURenderPipelineId render_pipeline = wgpu_device_create_render_pipeline(device, &render_pipeline_desc);
 
     WGPUCommandBufferDescriptor cmd_buf_desc = { };
-    WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, cmd_buf_desc);
+    WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, &cmd_buf_desc);
     WGPUQueueId queue = wgpu_device_get_queue(device);
     wgpu_queue_submit(queue, &cmd_buf, 1);
 
@@ -155,7 +155,7 @@ int main()
         .usage = texture_usage,
     };
 
-    WGPUTextureId texture = wgpu_device_create_texture(device, texture_desc);
+    WGPUTextureId texture = wgpu_device_create_texture(device, &texture_desc);
 
     return 0;
 }
