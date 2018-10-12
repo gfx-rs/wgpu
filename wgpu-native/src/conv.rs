@@ -41,7 +41,7 @@ pub(crate) fn map_buffer_usage(
 }
 
 pub(crate) fn map_binding_type(
-    binding_ty: &binding_model::BindingType,
+    binding_ty: binding_model::BindingType,
 ) -> hal::pso::DescriptorType {
     use binding_model::BindingType::*;
     use hal::pso::DescriptorType as H;
@@ -91,12 +91,13 @@ pub(crate) fn map_blend_state_descriptor(
     desc: &pipeline::BlendStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = match desc.blend_enabled {
-        true => hal::pso::BlendState::On {
+    let blend_state = if desc.blend_enabled {
+        hal::pso::BlendState::On {
             color: map_blend_descriptor(&desc.color),
             alpha: map_blend_descriptor(&desc.alpha),
-        },
-        false => hal::pso::BlendState::Off,
+        }
+    } else {
+        hal::pso::BlendState::Off
     };
     hal::pso::ColorBlendDesc(map_color_write_flags(color_mask), blend_state)
 }

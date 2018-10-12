@@ -123,7 +123,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
             bindings.iter().map(|binding| {
                 hal::pso::DescriptorSetLayoutBinding {
                     binding: binding.binding,
-                    ty: conv::map_binding_type(&binding.ty),
+                    ty: conv::map_binding_type(binding.ty),
                     count: bindings.len(),
                     stage_flags: conv::map_shader_stage_flags(binding.visibility),
                     immutable_samplers: false, // TODO
