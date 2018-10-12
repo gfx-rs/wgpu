@@ -1,10 +1,10 @@
 extern crate wgpu;
 fn main() {
     let instance = wgpu::Instance::new();
-    let adapter = instance.get_adapter(wgpu::AdapterDescriptor {
+    let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
     });
-    let device = adapter.create_device(wgpu::DeviceDescriptor {
+    let device = adapter.create_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
@@ -15,20 +15,20 @@ fn main() {
     let fs_bytes = include_bytes!("./../data/hello_triangle.frag.spv");
     let fs_module = device.create_shader_module(fs_bytes);
 
-    let bind_group_layout = device.create_bind_group_layout(wgpu::BindGroupLayoutDescriptor {
+    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[],
     });
-    let pipeline_layout = device.create_pipeline_layout(wgpu::PipelineLayoutDescriptor {
+    let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[&bind_group_layout],
     });
 
-    let blend_state0 = device.create_blend_state(wgpu::BlendStateDescriptor::REPLACE);
-    let depth_stencil_state = device.create_depth_stencil_state(wgpu::DepthStencilStateDescriptor::IGNORE);
-    let attachment_state = device.create_attachment_state(wgpu::AttachmentStateDescriptor {
+    let blend_state0 = device.create_blend_state(&wgpu::BlendStateDescriptor::REPLACE);
+    let depth_stencil_state = device.create_depth_stencil_state(&wgpu::DepthStencilStateDescriptor::IGNORE);
+    let attachment_state = device.create_attachment_state(&wgpu::AttachmentStateDescriptor {
         formats: &[wgpu::TextureFormat::R8g8b8a8Unorm],
     });
 
-    let _render_pipeline = device.create_render_pipeline(wgpu::RenderPipelineDescriptor {
+    let _render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
         stages: &[
             wgpu::PipelineStageDescriptor {
@@ -50,11 +50,11 @@ fn main() {
         attachment_state: &attachment_state,
     });
 
-    let mut cmd_buf = device.create_command_buffer(wgpu::CommandBufferDescriptor {});
+    let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
 
     {
         let color_view = unimplemented!(); //TODO!
-        let rpass = cmd_buf.begin_render_pass(wgpu::RenderPassDescriptor {
+        let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[
                 wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &color_view,
