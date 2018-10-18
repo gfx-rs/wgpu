@@ -72,7 +72,7 @@ pub struct TextureCopyView {
 }
 
 pub struct CommandBuffer<B: hal::Backend> {
-    pub(crate) raw: Option<B::CommandBuffer>,
+    pub(crate) raw: Vec<B::CommandBuffer>,
     fence: B::Fence,
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
@@ -89,10 +89,11 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     let mut cmb_guard = HUB.command_buffers.lock();
     let cmb = cmb_guard.get_mut(command_buffer_id);
 
-    let raw = cmb.raw.take().unwrap();
-
     let device_guard = HUB.devices.lock();
-    let _device = &device_guard.get(cmb.device_id.0).raw;
+    let device = device_guard.get(cmb.device_id.0);
+
+    let transit_comb = cmb.raw.pop().unwrap();
+    let current_comb = device.com_allocator.extend(cmb);
 
     //let render_pass = device.create_render_pass();
     //let framebuffer = device.create_framebuffer();
@@ -108,7 +109,11 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 
     HUB.render_passes
         .lock()
-        .register(RenderPass::new(raw, command_buffer_id))
+        .register(RenderPass::new(
+            current_comb,
+            transit_comb,
+            command_buffer_id,
+        ))
 }
 
 #[no_mangle]
@@ -118,7 +123,7 @@ pub extern "C" fn wgpu_command_buffer_begin_compute_pass(
     let mut cmb_guard = HUB.command_buffers.lock();
     let cmb = cmb_guard.get_mut(command_buffer_id);
 
-    let raw = cmb.raw.take().unwrap();
+    let raw = cmb.raw.pop().unwrap();
 
     HUB.compute_passes
         .lock()

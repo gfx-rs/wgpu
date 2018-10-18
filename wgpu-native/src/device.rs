@@ -17,7 +17,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     queue_group: hal::QueueGroup<B, hal::General>,
     mem_allocator: Heaps<B::Memory>,
-    com_allocator: command::CommandAllocator<B>,
+    pub(crate) com_allocator: command::CommandAllocator<B>,
     mem_props: hal::MemoryProperties,
 }
 
@@ -219,7 +219,7 @@ pub extern "C" fn wgpu_device_create_command_buffer(
     let device = device_guard.get_mut(device_id);
 
     let mut cmd_buf = device.com_allocator.allocate(device_id, &device.raw);
-    cmd_buf.raw.as_mut().unwrap().begin(
+    cmd_buf.raw.last_mut().unwrap().begin(
         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
         hal::command::CommandBufferInheritanceInfo::default(),
     );
@@ -249,7 +249,7 @@ pub extern "C" fn wgpu_queue_submit(
         command_buffer_guard
             .get_mut(cmb_id)
             .raw
-            .as_mut()
+            .last_mut()
             .unwrap()
             .finish();
     }
@@ -259,12 +259,8 @@ pub extern "C" fn wgpu_queue_submit(
         let submission = hal::queue::RawSubmission {
             cmd_buffers: command_buffer_ids
                 .iter()
-                .map(|&cmb_id| {
-                    command_buffer_guard
-                        .get(cmb_id)
-                        .raw
-                        .as_ref()
-                        .unwrap()
+                .flat_map(|&cmb_id| {
+                    &command_buffer_guard.get(cmb_id).raw
                 }),
             wait_semaphores: &[],
             signal_semaphores: &[],

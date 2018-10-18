@@ -35,7 +35,8 @@ pub extern "C" fn wgpu_compute_pass_end_pass(
     HUB.command_buffers
         .lock()
         .get_mut(pass.cmb_id.0)
-        .raw = Some(pass.raw);
+        .raw
+        .push(pass.raw);
     pass.cmb_id.0
 }
 
