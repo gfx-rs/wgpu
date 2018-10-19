@@ -75,7 +75,8 @@ pub extern "C" fn wgpu_device_create_texture(
 ) -> TextureId {
     let kind = conv::map_texture_dimension_size(desc.dimension, desc.size);
     let format = conv::map_texture_format(desc.format);
-    let usage = conv::map_texture_usage(desc.usage, format);
+    let aspects = format.surface_desc().aspects;
+    let usage = conv::map_texture_usage(desc.usage, aspects);
     let device_guard = HUB.devices.lock();
     let device = &device_guard.get(device_id);
     let image_unbound = device
@@ -112,6 +113,7 @@ pub extern "C" fn wgpu_device_create_texture(
         .lock()
         .register(resource::Texture {
             raw: bound_image,
+            aspects,
         });
     device.texture_tracker
         .lock()

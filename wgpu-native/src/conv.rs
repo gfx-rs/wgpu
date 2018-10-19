@@ -41,6 +41,37 @@ pub fn map_buffer_usage(
     (hal_usage, hal_memory)
 }
 
+pub fn map_texture_usage(
+    usage: resource::TextureUsageFlags, aspects: hal::format::Aspects
+) -> hal::image::Usage {
+    use hal::image::Usage as U;
+    use resource::TextureUsageFlags as W;
+
+    let mut value = U::empty();
+    if usage.contains(W::TRANSFER_SRC) {
+        value |= U::TRANSFER_SRC;
+    }
+    if usage.contains(W::TRANSFER_DST) {
+        value |= U::TRANSFER_DST;
+    }
+    if usage.contains(W::SAMPLED) {
+        value |= U::SAMPLED;
+    }
+    if usage.contains(W::STORAGE) {
+        value |= U::STORAGE;
+    }
+    if usage.contains(W::OUTPUT_ATTACHMENT) {
+        if aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
+            value |= U::DEPTH_STENCIL_ATTACHMENT;
+        } else {
+            value |= U::COLOR_ATTACHMENT;
+        }
+    }
+    // Note: TextureUsageFlags::Present does not need to be handled explicitly
+    // TODO: HAL Transient Attachment, HAL Input Attachment
+    value
+}
+
 pub fn map_binding_type(
     binding_ty: binding_model::BindingType,
 ) -> hal::pso::DescriptorType {
@@ -261,37 +292,6 @@ pub fn map_texture_dimension_size(
     }
 }
 
-pub fn map_texture_usage(
-    flags: resource::TextureUsageFlags, format: hal::format::Format
-) -> hal::image::Usage {
-    use hal::image::Usage as U;
-    use resource::TextureUsageFlags as W;
-
-    let mut value = U::empty();
-    if flags.contains(W::TRANSFER_SRC) {
-        value |= U::TRANSFER_SRC;
-    }
-    if flags.contains(W::TRANSFER_DST) {
-        value |= U::TRANSFER_DST;
-    }
-    if flags.contains(W::SAMPLED) {
-        value |= U::SAMPLED;
-    }
-    if flags.contains(W::STORAGE) {
-        value |= U::STORAGE;
-    }
-    if flags.contains(W::OUTPUT_ATTACHMENT) {
-        if format.surface_desc().aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
-            value |= U::DEPTH_STENCIL_ATTACHMENT;
-        } else {
-            value |= U::COLOR_ATTACHMENT;
-        }
-    }
-    // Note: TextureUsageFlags::Present does not need to be handled explicitly
-    // TODO: HAL Transient Attachment, HAL Input Attachment
-    value
-}
-
 pub fn map_buffer_state(
     usage: resource::BufferUsageFlags,
 ) -> hal::buffer::State {
@@ -319,4 +319,42 @@ pub fn map_buffer_state(
     }
 
     access
+}
+
+pub fn map_texture_state(
+    usage: resource::TextureUsageFlags,
+    aspects: hal::format::Aspects,
+) -> hal::image::State {
+    use hal::image::{Access as A, Layout as L};
+    use resource::TextureUsageFlags as W;
+
+    let is_color = aspects.contains(hal::format::Aspects::COLOR);
+    let layout = match usage {
+        W::TRANSFER_SRC => L::TransferSrcOptimal,
+        W::TRANSFER_DST => L::TransferDstOptimal,
+        W::SAMPLED => L::ShaderReadOnlyOptimal,
+        W::OUTPUT_ATTACHMENT if is_color => L::ColorAttachmentOptimal,
+        W::OUTPUT_ATTACHMENT => L::DepthStencilAttachmentOptimal, //TODO: read-only depth/stencil
+        _ => L::General,
+    };
+
+    let mut access = A::empty();
+    if usage.contains(W::TRANSFER_SRC) {
+        access |= A::TRANSFER_READ;
+    }
+    if usage.contains(W::TRANSFER_DST) {
+        access |= A::TRANSFER_WRITE;
+    }
+    if usage.contains(W::SAMPLED) {
+        access |= A::SHADER_READ;
+    }
+    if usage.contains(W::STORAGE) {
+        access |= A::SHADER_WRITE;
+    }
+    if usage.contains(W::OUTPUT_ATTACHMENT) {
+        //TODO: read-only attachments
+        access |= if is_color { A::COLOR_ATTACHMENT_WRITE } else { A::DEPTH_STENCIL_ATTACHMENT_WRITE };
+    }
+
+    (access, layout)
 }

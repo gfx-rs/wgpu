@@ -3,7 +3,7 @@ use resource::{BufferUsageFlags, TextureUsageFlags};
 
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;
-use std::ops::BitOr;
+use std::ops::{BitOr, Range};
 
 
 #[derive(Clone, Debug, PartialEq)]
@@ -44,7 +44,7 @@ pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
 
 impl<
-    I: Hash + Eq,
+    I: Clone + Hash + Eq,
     U: Copy + GenericUsage + BitOr<Output = U> + PartialEq,
 > Tracker<I, U> {
     pub fn new() -> Self {
@@ -74,7 +74,15 @@ impl<
         }
     }
 
-    pub(crate) fn finish(self) -> HashMap<Stored<I>, U> {
-        self.map
+    pub(crate) fn consume<'a>(&'a mut self, other: Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+        other.map
+            .into_iter()
+            .flat_map(move |(id, new)| match self.track(id.0.clone(), new, TrackPermit::REPLACE) {
+                Ok(Tracktion::Init) |
+                Ok(Tracktion::Keep) => None,
+                Ok(Tracktion::Replace { old }) => Some((id.0, old .. new)),
+                Ok(Tracktion::Extend { .. }) |
+                Err(_) => panic!("Unable to consume a resource transition!"),
+            })
     }
 }

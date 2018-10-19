@@ -77,6 +77,7 @@ pub struct TextureDescriptor {
 
 pub(crate) struct Texture<B: hal::Backend> {
     pub raw: B::Image,
+    pub aspects: hal::format::Aspects,
 }
 
 #[repr(C)]
