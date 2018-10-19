@@ -29,6 +29,7 @@ mod instance;
 mod pipeline;
 mod registry;
 mod resource;
+mod track;
 
 pub use self::binding_model::*;
 pub use self::command::*;
@@ -40,7 +41,7 @@ pub use self::resource::*;
 use back::Backend as B;
 use registry::Id;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Hash, PartialEq, Eq)]
 struct Stored<T>(T);
 #[cfg(not(feature = "remote"))]
 unsafe impl<T> Sync for Stored<T> {}

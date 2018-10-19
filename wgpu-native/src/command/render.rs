@@ -1,4 +1,5 @@
 use registry::{HUB, Items, Registry};
+use track::{Tracker};
 use {
     Stored,
     CommandBufferId, RenderPassId,
@@ -14,6 +15,7 @@ pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     parent: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
+    tracker: Tracker,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
@@ -26,6 +28,7 @@ impl<B: hal::Backend> RenderPass<B> {
             raw,
             parent,
             cmb_id: Stored(cmb_id),
+            tracker: Tracker::default(),
         }
     }
 }
