@@ -1,8 +1,7 @@
 use {back, binding_model, command, conv, pipeline, resource};
 use registry::{HUB, Items, Registry};
-use track::{Tracker, UsePermit};
+use track::{BufferTracker, TextureTracker, TrackPermit};
 use {
-    Stored,
     AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
     DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId, TextureId,
 };
@@ -10,9 +9,10 @@ use {
 use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
 use hal::{self, Device as _Device};
+use rendy_memory::{allocator, Config, Heaps};
 
 use std::{ffi, slice};
-use rendy_memory::{allocator, Config, Heaps};
+use std::sync::Mutex;
 
 
 pub struct Device<B: hal::Backend> {
@@ -20,7 +20,8 @@ pub struct Device<B: hal::Backend> {
     queue_group: hal::QueueGroup<B, hal::General>,
     mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
-    tracker: Tracker,
+    buffer_tracker: Mutex<BufferTracker>,
+    texture_tracker: Mutex<TextureTracker>,
     mem_props: hal::MemoryProperties,
 }
 
@@ -56,7 +57,8 @@ impl<B: hal::Backend> Device<B> {
             mem_allocator,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
-            tracker: Tracker::default(),
+            buffer_tracker: Mutex::new(BufferTracker::new()),
+            texture_tracker: Mutex::new(TextureTracker::new()),
             mem_props,
         }
     }
@@ -73,7 +75,7 @@ pub extern "C" fn wgpu_device_create_texture(
 ) -> TextureId {
     let kind = conv::map_texture_dimension_size(desc.dimension, desc.size);
     let format = conv::map_texture_format(desc.format);
-    let usage = conv::map_texture_usage_flags(desc.usage, format);
+    let usage = conv::map_texture_usage(desc.usage, format);
     let device_guard = HUB.devices.lock();
     let device = &device_guard.get(device_id);
     let image_unbound = device
@@ -111,7 +113,10 @@ pub extern "C" fn wgpu_device_create_texture(
         .register(resource::Texture {
             raw: bound_image,
         });
-    device.tracker.use_texture(Stored(id), resource::TextureUsageFlags::empty(), UsePermit::empty())
+    device.texture_tracker
+        .lock()
+        .unwrap()
+        .track(id, resource::TextureUsageFlags::empty(), TrackPermit::empty())
         .expect("Resource somehow is already registered");
 
     id
@@ -224,7 +229,7 @@ pub extern "C" fn wgpu_device_create_command_buffer(
     device_id: DeviceId,
     _desc: &command::CommandBufferDescriptor,
 ) -> CommandBufferId {
-    let mut device_guard = HUB.devices.lock();
+    let device_guard = HUB.devices.lock();
     let device = device_guard.get(device_id);
 
     let mut cmd_buf = device.com_allocator.allocate(device_id, &device.raw);

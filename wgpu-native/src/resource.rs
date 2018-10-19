@@ -25,9 +25,9 @@ pub struct BufferDescriptor {
     pub usage: BufferUsageFlags,
 }
 
-pub struct Buffer<B: hal::Backend> {
-    pub(crate) raw: B::UnboundBuffer,
-    pub(crate) memory_properties: hal::memory::Properties,
+pub(crate) struct Buffer<B: hal::Backend> {
+    pub raw: B::UnboundBuffer,
+    pub memory_properties: hal::memory::Properties,
     // TODO: mapping, unmap()
 }
 
@@ -75,8 +75,8 @@ pub struct TextureDescriptor {
     pub usage: TextureUsageFlags,
 }
 
-pub struct Texture<B: hal::Backend> {
-    pub(crate) raw: B::Image,
+pub(crate) struct Texture<B: hal::Backend> {
+    pub raw: B::Image,
 }
 
 #[repr(C)]

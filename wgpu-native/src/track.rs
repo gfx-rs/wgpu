@@ -4,11 +4,10 @@ use resource::{BufferUsageFlags, TextureUsageFlags};
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;
 use std::ops::BitOr;
-use std::sync::Mutex;
 
 
 #[derive(Clone, Debug, PartialEq)]
-pub enum UseAction<T> {
+pub enum Tracktion<T> {
     Init,
     Keep,
     Extend { old: T },
@@ -16,14 +15,14 @@ pub enum UseAction<T> {
 }
 
 bitflags! {
-    pub struct UsePermit: u32 {
+    pub struct TrackPermit: u32 {
         const EXTEND = 1;
         const REPLACE = 2;
     }
 }
 
 
-trait GenericUsage {
+pub trait GenericUsage {
     fn is_exclusive(&self) -> bool;
 }
 impl GenericUsage for BufferUsageFlags {
@@ -37,33 +36,37 @@ impl GenericUsage for TextureUsageFlags {
     }
 }
 
-#[derive(Default)]
-pub struct Tracker {
-    buffers: Mutex<HashMap<Stored<BufferId>, BufferUsageFlags>>,
-    textures: Mutex<HashMap<Stored<TextureId>, TextureUsageFlags>>,
-}
 
-impl Tracker {
-    fn use_impl<I, U>(
-        map: &mut HashMap<I, U>, id: I, usage: U, permit: UsePermit
-    ) -> Result<UseAction<U>, U>
-    where
-        I: Hash + Eq,
-        U: Copy + GenericUsage + BitOr<Output = U> + PartialEq,
-    {
-        match map.entry(id) {
+pub struct Tracker<I, U> {
+    map: HashMap<Stored<I>, U>,
+}
+pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
+pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
+
+impl<
+    I: Hash + Eq,
+    U: Copy + GenericUsage + BitOr<Output = U> + PartialEq,
+> Tracker<I, U> {
+    pub fn new() -> Self {
+        Tracker {
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn track(&mut self, id: I, usage: U, permit: TrackPermit) -> Result<Tracktion<U>, U> {
+        match self.map.entry(Stored(id)) {
             Entry::Vacant(e) => {
                 e.insert(usage);
-                Ok(UseAction::Init)
+                Ok(Tracktion::Init)
             }
             Entry::Occupied(mut e) => {
                 let old = *e.get();
                 if usage == old {
-                    Ok(UseAction::Keep)
-                } else if permit.contains(UsePermit::EXTEND) && !(old | usage).is_exclusive() {
-                    Ok(UseAction::Extend { old: e.insert(old | usage) })
-                } else if permit.contains(UsePermit::REPLACE) {
-                    Ok(UseAction::Replace { old: e.insert(usage) })
+                    Ok(Tracktion::Keep)
+                } else if permit.contains(TrackPermit::EXTEND) && !(old | usage).is_exclusive() {
+                    Ok(Tracktion::Extend { old: e.insert(old | usage) })
+                } else if permit.contains(TrackPermit::REPLACE) {
+                    Ok(Tracktion::Replace { old: e.insert(usage) })
                 } else {
                     Err(old)
                 }
@@ -71,15 +74,7 @@ impl Tracker {
         }
     }
 
-    pub(crate) fn use_buffer(
-        &self, id: Stored<BufferId>, usage: BufferUsageFlags, permit: UsePermit,
-    ) -> Result<UseAction<BufferUsageFlags>, BufferUsageFlags> {
-        Self::use_impl(&mut *self.buffers.lock().unwrap(), id, usage, permit)
-    }
-
-    pub(crate) fn use_texture(
-        &self, id: Stored<TextureId>, usage: TextureUsageFlags, permit: UsePermit,
-    ) -> Result<UseAction<TextureUsageFlags>, TextureUsageFlags> {
-        Self::use_impl(&mut *self.textures.lock().unwrap(), id, usage, permit)
+    pub(crate) fn finish(self) -> HashMap<Stored<I>, U> {
+        self.map
     }
 }

@@ -1,5 +1,6 @@
 use super::CommandBuffer;
 use {DeviceId, Stored};
+use track::{Tracker};
 
 use hal::command::RawCommandBuffer;
 use hal::pool::RawCommandPool;
@@ -90,6 +91,8 @@ impl<B: hal::Backend> CommandAllocator<B> {
             fence,
             recorded_thread_id: thread_id,
             device_id: Stored(device_id),
+            buffer_tracker: Tracker::new(),
+            texture_tracker: Tracker::new(),
         }
     }
 

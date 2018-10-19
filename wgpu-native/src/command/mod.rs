@@ -13,8 +13,10 @@ use {
     BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
 use registry::{HUB, Items, Registry};
+use track::{BufferTracker, TextureTracker};
 
 use std::thread::ThreadId;
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -76,6 +78,8 @@ pub struct CommandBuffer<B: hal::Backend> {
     fence: B::Fence,
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
+    buffer_tracker: BufferTracker,
+    texture_tracker: TextureTracker,
 }
 
 #[repr(C)]

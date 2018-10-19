@@ -96,6 +96,7 @@ pub type DeviceId = Id;
 type DeviceHandle = Device<B>;
 pub type QueueId = Id;
 pub type BufferId = Id;
+type BufferHandle = Buffer<B>;
 
 // Resource
 pub type TextureViewId = Id;
