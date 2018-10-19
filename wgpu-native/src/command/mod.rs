@@ -92,7 +92,6 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     let device_guard = HUB.devices.lock();
     let device = device_guard.get(cmb.device_id.0);
 
-    let transit_comb = cmb.raw.pop().unwrap();
     let current_comb = device.com_allocator.extend(cmb);
 
     //let render_pass = device.create_render_pass();
@@ -111,7 +110,6 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
         .lock()
         .register(RenderPass::new(
             current_comb,
-            transit_comb,
             command_buffer_id,
         ))
 }
