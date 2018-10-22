@@ -40,7 +40,7 @@ int main()
         .bindings_length = 0,
     };
     WGPUBindGroupLayoutId _bind_group_layout = wgpu_device_create_bind_group_layout(device, &bind_group_layout_desc);
-    
+
     WGPUPipelineLayoutDescriptor pipeline_layout_desc = {
         .bind_group_layouts = NULL,
         .bind_group_layouts_length = 0,
@@ -116,7 +116,7 @@ int main()
         .formats_length = FORMATS_LENGTH,
     };
     WGPUAttachmentStateId attachment_state = wgpu_device_create_attachment_state(device, &attachment_state_desc);
-    
+
     WGPURenderPipelineDescriptor render_pipeline_desc = {
         .layout = layout,
         .stages = stages,

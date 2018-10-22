@@ -10,4 +10,4 @@ authors = [
 default = []
 
 [dependencies]
-cbindgen = "0.6.3"
+cbindgen = "0.6.6"

@@ -26,7 +26,8 @@ pub struct BufferDescriptor {
 }
 
 pub(crate) struct Buffer<B: hal::Backend> {
-    pub raw: B::UnboundBuffer,
+    //pub raw: B::UnboundBuffer,
+    pub raw: B::Buffer,
     pub memory_properties: hal::memory::Properties,
     // TODO: mapping, unmap()
 }
