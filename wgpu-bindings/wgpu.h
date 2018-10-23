@@ -28,20 +28,6 @@
 
 #define WGPUShaderStageFlags_VERTEX 1
 
-#define WGPUTextureUsageFlags_NONE 0
-
-#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT 16
-
-#define WGPUTextureUsageFlags_PRESENT 32
-
-#define WGPUTextureUsageFlags_SAMPLED 4
-
-#define WGPUTextureUsageFlags_STORAGE 8
-
-#define WGPUTextureUsageFlags_TRANSFER_DST 2
-
-#define WGPUTextureUsageFlags_TRANSFER_SRC 1
-
 typedef enum {
   WGPUBindingType_UniformBuffer = 0,
   WGPUBindingType_Sampler = 1,
@@ -276,11 +262,39 @@ typedef struct {
 
 #define WGPUBLUE (Color){ .r = 0, .g = 0, .b = 1, .a = 1 }
 
+#define WGPUEXTEND (TrackPermit){ .bits = 1 }
+
 #define WGPUGREEN (Color){ .r = 0, .g = 1, .b = 0, .a = 1 }
+
+#define WGPUINDEX (BufferUsageFlags){ .bits = 16 }
+
+#define WGPUMAP_READ (BufferUsageFlags){ .bits = 1 }
+
+#define WGPUMAP_WRITE (BufferUsageFlags){ .bits = 2 }
+
+#define WGPUNONE (BufferUsageFlags){ .bits = 0 }
+
+#define WGPUOUTPUT_ATTACHMENT (TextureUsageFlags){ .bits = 16 }
+
+#define WGPUPRESENT (TextureUsageFlags){ .bits = 32 }
 
 #define WGPURED (Color){ .r = 1, .g = 0, .b = 0, .a = 1 }
 
+#define WGPUREPLACE (TrackPermit){ .bits = 2 }
+
+#define WGPUSAMPLED (TextureUsageFlags){ .bits = 4 }
+
+#define WGPUSTORAGE (BufferUsageFlags){ .bits = 128 }
+
+#define WGPUTRANSFER_DST (BufferUsageFlags){ .bits = 8 }
+
+#define WGPUTRANSFER_SRC (BufferUsageFlags){ .bits = 4 }
+
 #define WGPUTRANSPARENT (Color){ .r = 0, .g = 0, .b = 0, .a = 0 }
+
+#define WGPUUNIFORM (BufferUsageFlags){ .bits = 64 }
+
+#define WGPUVERTEX (BufferUsageFlags){ .bits = 32 }
 
 #define WGPUWHITE (Color){ .r = 1, .g = 1, .b = 1, .a = 1 }
 

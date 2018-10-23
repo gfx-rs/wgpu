@@ -11,8 +11,8 @@ const HEADER: &str = "
 ";
 
 fn main() {
-    let mut crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    crate_dir.push("../wgpu-native");
+    let crate_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let source_dir = crate_dir.parent().unwrap().join("wgpu-native");
 
     let config = cbindgen::Config {
         header: Some(String::from(HEADER.trim())),
@@ -33,9 +33,10 @@ fn main() {
     };
 
     cbindgen::Builder::new()
-        .with_crate(crate_dir)
+        .with_crate(source_dir)
         .with_config(config)
+        .with_parse_expand(&["wgpu-native"])
         .generate()
         .unwrap()
-        .write_to_file("wgpu.h");
+        .write_to_file(crate_dir.join("wgpu.h"));
 }

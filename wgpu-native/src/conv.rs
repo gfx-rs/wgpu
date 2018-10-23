@@ -2,7 +2,8 @@ use hal;
 
 use {Extent3d, binding_model, pipeline, resource};
 
-pub(crate) fn map_buffer_usage(
+
+pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
 ) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
@@ -40,7 +41,38 @@ pub(crate) fn map_buffer_usage(
     (hal_usage, hal_memory)
 }
 
-pub(crate) fn map_binding_type(
+pub fn map_texture_usage(
+    usage: resource::TextureUsageFlags, aspects: hal::format::Aspects
+) -> hal::image::Usage {
+    use hal::image::Usage as U;
+    use resource::TextureUsageFlags as W;
+
+    let mut value = U::empty();
+    if usage.contains(W::TRANSFER_SRC) {
+        value |= U::TRANSFER_SRC;
+    }
+    if usage.contains(W::TRANSFER_DST) {
+        value |= U::TRANSFER_DST;
+    }
+    if usage.contains(W::SAMPLED) {
+        value |= U::SAMPLED;
+    }
+    if usage.contains(W::STORAGE) {
+        value |= U::STORAGE;
+    }
+    if usage.contains(W::OUTPUT_ATTACHMENT) {
+        if aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
+            value |= U::DEPTH_STENCIL_ATTACHMENT;
+        } else {
+            value |= U::COLOR_ATTACHMENT;
+        }
+    }
+    // Note: TextureUsageFlags::Present does not need to be handled explicitly
+    // TODO: HAL Transient Attachment, HAL Input Attachment
+    value
+}
+
+pub fn map_binding_type(
     binding_ty: binding_model::BindingType,
 ) -> hal::pso::DescriptorType {
     use binding_model::BindingType::*;
@@ -53,7 +85,7 @@ pub(crate) fn map_binding_type(
     }
 }
 
-pub(crate) fn map_shader_stage_flags(
+pub fn map_shader_stage_flags(
     shader_stage_flags: binding_model::ShaderStageFlags,
 ) -> hal::pso::ShaderStageFlags {
     use binding_model::{
@@ -73,7 +105,7 @@ pub(crate) fn map_shader_stage_flags(
     value
 }
 
-pub(crate) fn map_primitive_topology(
+pub fn map_primitive_topology(
     primitive_topology: pipeline::PrimitiveTopology,
 ) -> hal::Primitive {
     use hal::Primitive as H;
@@ -87,7 +119,7 @@ pub(crate) fn map_primitive_topology(
     }
 }
 
-pub(crate) fn map_blend_state_descriptor(
+pub fn map_blend_state_descriptor(
     desc: &pipeline::BlendStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
@@ -164,7 +196,7 @@ fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
     }
 }
 
-pub(crate) fn map_depth_stencil_state(
+pub fn map_depth_stencil_state(
     desc: &pipeline::DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
@@ -228,7 +260,7 @@ fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::
     }
 }
 
-pub(crate) fn map_texture_format(texture_format: resource::TextureFormat) -> hal::format::Format {
+pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::format::Format {
     use hal::format::Format as H;
     use resource::TextureFormat::*;
     match texture_format {
@@ -244,7 +276,9 @@ fn checked_u32_as_u16(value: u32) -> u16 {
     value as u16
 }
 
-pub(crate) fn map_texture_dimension_size(dimension: resource::TextureDimension, size: Extent3d) -> hal::image::Kind {
+pub fn map_texture_dimension_size(
+    dimension: resource::TextureDimension, size: Extent3d
+) -> hal::image::Kind {
     use hal::image::Kind as H;
     use resource::TextureDimension::*;
     let Extent3d { width, height, depth } = size;
@@ -258,33 +292,69 @@ pub(crate) fn map_texture_dimension_size(dimension: resource::TextureDimension, 
     }
 }
 
-pub(crate) fn map_texture_usage_flags(flags: u32, format: hal::format::Format) -> hal::image::Usage {
-    use hal::image::Usage as H;
-    use resource::{
-        TextureUsageFlags_TRANSFER_SRC, TextureUsageFlags_TRANSFER_DST, TextureUsageFlags_SAMPLED,
-        TextureUsageFlags_STORAGE, TextureUsageFlags_OUTPUT_ATTACHMENT,
+pub fn map_buffer_state(
+    usage: resource::BufferUsageFlags,
+) -> hal::buffer::State {
+    use hal::buffer::Access as A;
+    use resource::BufferUsageFlags as W;
+
+    let mut access = A::empty();
+    if usage.contains(W::TRANSFER_SRC) {
+        access |= A::TRANSFER_READ;
+    }
+    if usage.contains(W::TRANSFER_DST) {
+        access |= A::TRANSFER_WRITE;
+    }
+    if usage.contains(W::INDEX) {
+        access |= A::INDEX_BUFFER_READ;
+    }
+    if usage.contains(W::VERTEX) {
+        access |= A::VERTEX_BUFFER_READ;
+    }
+    if usage.contains(W::UNIFORM) {
+        access |= A::CONSTANT_BUFFER_READ | A::SHADER_READ;
+    }
+    if usage.contains(W::STORAGE) {
+        access |= A::SHADER_WRITE;
+    }
+
+    access
+}
+
+pub fn map_texture_state(
+    usage: resource::TextureUsageFlags,
+    aspects: hal::format::Aspects,
+) -> hal::image::State {
+    use hal::image::{Access as A, Layout as L};
+    use resource::TextureUsageFlags as W;
+
+    let is_color = aspects.contains(hal::format::Aspects::COLOR);
+    let layout = match usage {
+        W::TRANSFER_SRC => L::TransferSrcOptimal,
+        W::TRANSFER_DST => L::TransferDstOptimal,
+        W::SAMPLED => L::ShaderReadOnlyOptimal,
+        W::OUTPUT_ATTACHMENT if is_color => L::ColorAttachmentOptimal,
+        W::OUTPUT_ATTACHMENT => L::DepthStencilAttachmentOptimal, //TODO: read-only depth/stencil
+        _ => L::General,
     };
-    let mut value = H::empty();
-    if 0 != flags & TextureUsageFlags_TRANSFER_SRC {
-        value |= H::TRANSFER_SRC;
+
+    let mut access = A::empty();
+    if usage.contains(W::TRANSFER_SRC) {
+        access |= A::TRANSFER_READ;
     }
-    if 0 != flags & TextureUsageFlags_TRANSFER_DST {
-        value |= H::TRANSFER_DST;
+    if usage.contains(W::TRANSFER_DST) {
+        access |= A::TRANSFER_WRITE;
     }
-    if 0 != flags & TextureUsageFlags_SAMPLED {
-        value |= H::SAMPLED;
+    if usage.contains(W::SAMPLED) {
+        access |= A::SHADER_READ;
     }
-    if 0 != flags & TextureUsageFlags_STORAGE {
-        value |= H::STORAGE;
+    if usage.contains(W::STORAGE) {
+        access |= A::SHADER_WRITE;
     }
-    if 0 != flags & TextureUsageFlags_OUTPUT_ATTACHMENT {
-        if format.surface_desc().aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
-            value |= H::DEPTH_STENCIL_ATTACHMENT;
-        } else {
-            value |= H::COLOR_ATTACHMENT;
-        }
+    if usage.contains(W::OUTPUT_ATTACHMENT) {
+        //TODO: read-only attachments
+        access |= if is_color { A::COLOR_ATTACHMENT_WRITE } else { A::DEPTH_STENCIL_ATTACHMENT_WRITE };
     }
-    // Note: TextureUsageFlags::Present does not need to be handled explicitly
-    // TODO: HAL Transient Attachment, HAL Input Attachment
-    value
+
+    (access, layout)
 }
