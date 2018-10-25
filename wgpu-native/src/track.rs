@@ -14,6 +14,12 @@ pub enum Tracktion<T> {
     Replace { old: T },
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Query<T> {
+    pub usage: T,
+    pub initialized: bool,
+}
+
 bitflags! {
     pub struct TrackPermit: u32 {
         const EXTEND = 1;
@@ -23,14 +29,21 @@ bitflags! {
 
 
 pub trait GenericUsage {
+    fn default() -> Self;
     fn is_exclusive(&self) -> bool;
 }
 impl GenericUsage for BufferUsageFlags {
+    fn default() -> Self {
+        BufferUsageFlags::empty()
+    }
     fn is_exclusive(&self) -> bool {
         BufferUsageFlags::WRITE_ALL.intersects(*self)
     }
 }
 impl GenericUsage for TextureUsageFlags {
+    fn default() -> Self {
+        TextureUsageFlags::empty()
+    }
     fn is_exclusive(&self) -> bool {
         TextureUsageFlags::WRITE_ALL.intersects(*self)
     }
@@ -53,7 +66,26 @@ impl<
         }
     }
 
-    pub fn track(&mut self, id: I, usage: U, permit: TrackPermit) -> Result<Tracktion<U>, U> {
+    pub fn query(&mut self, id: I) -> Query<U> {
+        match self.map.entry(Stored(id)) {
+            Entry::Vacant(e) => {
+                let usage = U::default();
+                e.insert(usage);
+                Query {
+                    usage,
+                    initialized: true,
+                }
+            }
+            Entry::Occupied(e) => {
+                Query {
+                    usage: *e.get(),
+                    initialized: false,
+                }
+            }
+        }
+    }
+
+    pub fn transit(&mut self, id: I, usage: U, permit: TrackPermit) -> Result<Tracktion<U>, U> {
         match self.map.entry(Stored(id)) {
             Entry::Vacant(e) => {
                 e.insert(usage);
@@ -77,7 +109,7 @@ impl<
     pub(crate) fn consume<'a>(&'a mut self, other: Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map
             .into_iter()
-            .flat_map(move |(id, new)| match self.track(id.0.clone(), new, TrackPermit::REPLACE) {
+            .flat_map(move |(id, new)| match self.transit(id.0.clone(), new, TrackPermit::REPLACE) {
                 Ok(Tracktion::Init) |
                 Ok(Tracktion::Keep) => None,
                 Ok(Tracktion::Replace { old }) => Some((id.0, old .. new)),

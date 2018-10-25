@@ -1,4 +1,4 @@
-use {Extent3d};
+use {Extent3d, Stored, TextureId};
 
 use hal;
 
@@ -32,9 +32,6 @@ pub(crate) struct Buffer<B: hal::Backend> {
     // TODO: mapping, unmap()
 }
 
-pub struct TextureView {
-    // TODO
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -79,6 +76,13 @@ pub struct TextureDescriptor {
 pub(crate) struct Texture<B: hal::Backend> {
     pub raw: B::Image,
     pub aspects: hal::format::Aspects,
+}
+
+pub(crate) struct TextureView<B: hal::Backend> {
+    pub raw: B::ImageView,
+    pub source_id: Stored<TextureId>,
+    pub format: TextureFormat,
+    pub samples: hal::image::NumSamples,
 }
 
 #[repr(C)]

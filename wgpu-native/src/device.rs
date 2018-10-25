@@ -1,6 +1,6 @@
 use {back, binding_model, command, conv, pipeline, resource};
 use registry::{HUB, Items, Registry};
-use track::{BufferTracker, TextureTracker, TrackPermit};
+use track::{BufferTracker, TextureTracker};
 use {
     AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
     DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId, TextureId,
@@ -115,11 +115,11 @@ pub extern "C" fn wgpu_device_create_texture(
             raw: bound_image,
             aspects,
         });
-    device.texture_tracker
+    let query = device.texture_tracker
         .lock()
         .unwrap()
-        .track(id, resource::TextureUsageFlags::empty(), TrackPermit::empty())
-        .expect("Resource somehow is already registered");
+        .query(id);
+    assert!(query.initialized);
 
     id
 }

@@ -1,6 +1,6 @@
 use hal;
 
-use {Extent3d, binding_model, pipeline, resource};
+use {Extent3d, binding_model, command, pipeline, resource};
 
 
 pub fn map_buffer_usage(
@@ -357,4 +357,16 @@ pub fn map_texture_state(
     }
 
     (access, layout)
+}
+
+pub fn map_load_store_ops(load: command::LoadOp, store: command::StoreOp) -> hal::pass::AttachmentOps {
+    hal::pass::AttachmentOps {
+        load: match load {
+            command::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
+            command::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
+        },
+        store: match store {
+            command::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
+        },
+    }
 }
