@@ -8,7 +8,8 @@ use std::ffi::CString;
 pub use wgn::{
     AdapterDescriptor, Color, CommandBufferDescriptor, DeviceDescriptor, Extensions, Extent3d,
     Origin3d, PowerPreference, ShaderModuleDescriptor, ShaderStage,
-    BindGroupLayoutBinding, BindingType, TextureDimension, TextureDescriptor, TextureFormat, TextureUsageFlags,
+    BindGroupLayoutBinding, BindingType, TextureDimension, TextureDescriptor, TextureFormat,
+    TextureUsageFlags, TextureViewDescriptor,
     PrimitiveTopology, BlendStateDescriptor, ColorWriteFlags, DepthStencilStateDescriptor,
     RenderPassDescriptor, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     LoadOp, StoreOp,
@@ -243,9 +244,23 @@ impl Device {
         }
     }
 
-    pub fn create_texture(&self, desc: TextureDescriptor) -> Texture {
+    pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
             id: wgn::wgpu_device_create_texture(self.id, &desc),
+        }
+    }
+}
+
+impl Texture {
+    pub fn create_texture_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+        TextureView {
+            id: wgn::wgpu_texture_create_texture_view(self.id, &desc),
+        }
+    }
+
+    pub fn create_default_texture_view(&self) -> TextureView {
+        TextureView {
+            id: wgn::wgpu_texture_create_default_texture_view(self.id),
         }
     }
 }

@@ -100,6 +100,10 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     let view_guard = HUB.texture_views.lock();
 
     let mut current_comb = device.com_allocator.extend(cmb);
+    current_comb.begin(
+        hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+        hal::command::CommandBufferInheritanceInfo::default(),
+    );
     let mut extent = None;
 
     let render_pass = {
