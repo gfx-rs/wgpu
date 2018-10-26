@@ -2,8 +2,10 @@ use {back, binding_model, command, conv, pipeline, resource};
 use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 use {
+    Stored,
     AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
-    DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId, TextureId,
+    DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
+    TextureId, TextureViewId,
 };
 
 use hal::command::RawCommandBuffer;
@@ -68,6 +70,7 @@ pub(crate) struct ShaderModule<B: hal::Backend> {
     pub raw: B::ShaderModule,
 }
 
+
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
@@ -109,11 +112,20 @@ pub extern "C" fn wgpu_device_create_texture(
         .bind_image_memory(&image_memory, 0, image_unbound)
         .unwrap();
 
+    let full_range = hal::image::SubresourceRange {
+        aspects,
+        levels: 0 .. 1, //TODO: mips
+        layers: 0 .. 1, //TODO
+    };
+
     let id = HUB.textures
         .lock()
         .register(resource::Texture {
             raw: bound_image,
-            aspects,
+            device_id: Stored(device_id),
+            kind,
+            format: desc.format,
+            full_range,
         });
     let query = device.texture_tracker
         .lock()
@@ -123,6 +135,80 @@ pub extern "C" fn wgpu_device_create_texture(
 
     id
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_texture_create_texture_view(
+    texture_id: TextureId,
+    desc: &resource::TextureViewDescriptor,
+) -> TextureViewId {
+    let texture_guard = HUB.textures.lock();
+    let texture = texture_guard.get(texture_id);
+
+    let raw = HUB.devices
+        .lock()
+        .get(texture.device_id.0)
+        .raw
+        .create_image_view(
+            &texture.raw,
+            conv::map_texture_view_dimension(desc.dimension),
+            conv::map_texture_format(desc.format),
+            hal::format::Swizzle::NO,
+            hal::image::SubresourceRange {
+                aspects: conv::map_texture_aspect_flags(desc.aspect),
+                levels: desc.base_mip_level as u8 .. (desc.base_mip_level + desc.level_count) as u8,
+                layers: desc.base_array_layer as u16 .. (desc.base_array_layer + desc.array_count) as u16,
+            },
+        )
+        .unwrap();
+
+    HUB.texture_views
+        .lock()
+        .register(resource::TextureView {
+            raw,
+            texture_id: Stored(texture_id),
+            format: texture.format,
+            extent: texture.kind.extent(),
+            samples: texture.kind.num_samples(),
+        })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_texture_create_default_texture_view(
+    texture_id: TextureId,
+) -> TextureViewId {
+    let texture_guard = HUB.textures.lock();
+    let texture = texture_guard.get(texture_id);
+
+    let view_kind = match texture.kind {
+        hal::image::Kind::D1(..) => hal::image::ViewKind::D1,
+        hal::image::Kind::D2(..) => hal::image::ViewKind::D2, //TODO: array
+        hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
+    };
+
+    let raw = HUB.devices
+        .lock()
+        .get(texture.device_id.0)
+        .raw
+        .create_image_view(
+            &texture.raw,
+            view_kind,
+            conv::map_texture_format(texture.format),
+            hal::format::Swizzle::NO,
+            texture.full_range.clone(),
+        )
+        .unwrap();
+
+    HUB.texture_views
+        .lock()
+        .register(resource::TextureView {
+            raw,
+            texture_id: Stored(texture_id),
+            format: texture.format,
+            extent: texture.kind.extent(),
+            samples: texture.kind.num_samples(),
+        })
+}
+
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group_layout(

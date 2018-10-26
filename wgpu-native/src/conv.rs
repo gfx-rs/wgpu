@@ -277,11 +277,11 @@ fn checked_u32_as_u16(value: u32) -> u16 {
 }
 
 pub fn map_texture_dimension_size(
-    dimension: resource::TextureDimension, size: Extent3d
+    dimension: resource::TextureDimension,
+    Extent3d { width, height, depth }: Extent3d,
 ) -> hal::image::Kind {
     use hal::image::Kind as H;
     use resource::TextureDimension::*;
-    let Extent3d { width, height, depth } = size;
     match dimension {
         D1 => {
             assert_eq!(height, 1);
@@ -290,6 +290,40 @@ pub fn map_texture_dimension_size(
         D2 => H::D2(width, height, checked_u32_as_u16(depth), 1), // TODO: Samples
         D3 => H::D3(width, height, depth),
     }
+}
+
+pub fn map_texture_view_dimension(
+    dimension: resource::TextureViewDimension,
+) -> hal::image::ViewKind {
+    use hal::image::ViewKind as H;
+    use resource::TextureViewDimension::*;
+    match dimension {
+        D1 => H::D1,
+        D2 => H::D2,
+        D2Array => H::D2Array,
+        Cube => H::Cube,
+        CubeArray => H::CubeArray,
+        D3 => H::D3,
+    }
+}
+
+pub fn map_texture_aspect_flags(
+    aspect: resource::TextureAspectFlags
+) -> hal::format::Aspects {
+    use resource::TextureAspectFlags as Taf;
+    use hal::format::Aspects;
+
+    let mut flags = Aspects::empty();
+    if aspect.contains(Taf::COLOR) {
+        flags |= Aspects::COLOR;
+    }
+    if aspect.contains(Taf::DEPTH) {
+        flags |= Aspects::DEPTH;
+    }
+    if aspect.contains(Taf::STENCIL) {
+        flags |= Aspects::STENCIL;
+    }
+    flags
 }
 
 pub fn map_buffer_state(

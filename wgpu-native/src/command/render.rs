@@ -59,15 +59,12 @@ pub extern "C" fn wgpu_render_pass_end_pass(
         .consume(pass.texture_tracker)
         .map(|(id, transit)| {
             let t = texture_guard.get(id);
+            let aspects = t.full_range.aspects;
             hal::memory::Barrier::Image {
-                states: conv::map_texture_state(transit.start, t.aspects) ..
-                    conv::map_texture_state(transit.end, t.aspects),
+                states: conv::map_texture_state(transit.start, aspects) ..
+                    conv::map_texture_state(transit.end, aspects),
                 target: &t.raw,
-                range: hal::image::SubresourceRange { //TODO!
-                    aspects: t.aspects,
-                    levels: 0 .. 1,
-                    layers: 0 .. 1,
-                },
+                range: t.full_range.clone(), //TODO?
             }
         });
 

@@ -113,7 +113,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 } else {
                     extent = Some(view.extent);
                 }
-                let query = tracker.query(view.source_id.0);
+                let query = tracker.query(view.texture_id.0);
                 let (_, layout) = conv::map_texture_state(
                     query.usage,
                     hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
@@ -137,7 +137,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 } else {
                     extent = Some(view.extent);
                 }
-                let query = tracker.query(view.source_id.0);
+                let query = tracker.query(view.texture_id.0);
                 let (_, layout) = conv::map_texture_state(query.usage, hal::format::Aspects::COLOR);
                 hal::pass::Attachment {
                     format: Some(conv::map_texture_format(view.format)),

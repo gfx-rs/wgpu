@@ -1,4 +1,7 @@
-use {Extent3d, Stored, TextureId};
+use {
+    Extent3d, Stored,
+    DeviceId, TextureId,
+};
 
 use hal;
 
@@ -75,16 +78,52 @@ pub struct TextureDescriptor {
 
 pub(crate) struct Texture<B: hal::Backend> {
     pub raw: B::Image,
-    pub aspects: hal::format::Aspects,
+    pub device_id: Stored<DeviceId>,
+    pub kind: hal::image::Kind,
+    pub format: TextureFormat,
+    pub full_range: hal::image::SubresourceRange,
+}
+
+
+bitflags! {
+    #[repr(transparent)]
+    pub struct TextureAspectFlags: u32 {
+        const COLOR = 1;
+        const DEPTH = 2;
+        const STENCIL = 4;
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum TextureViewDimension {
+    D1,
+    D2,
+    D2Array,
+    Cube,
+    CubeArray,
+    D3,
+}
+
+#[repr(C)]
+pub struct TextureViewDescriptor {
+    pub format: TextureFormat,
+    pub dimension: TextureViewDimension,
+    pub aspect: TextureAspectFlags,
+    pub base_mip_level: u32,
+    pub level_count: u32,
+    pub base_array_layer: u32,
+    pub array_count: u32,
 }
 
 pub(crate) struct TextureView<B: hal::Backend> {
     pub raw: B::ImageView,
-    pub source_id: Stored<TextureId>,
+    pub texture_id: Stored<TextureId>,
     pub format: TextureFormat,
     pub extent: hal::image::Extent,
     pub samples: hal::image::NumSamples,
 }
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
