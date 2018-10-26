@@ -8,10 +8,11 @@ use std::ffi::CString;
 pub use wgn::{
     AdapterDescriptor, Color, CommandBufferDescriptor, DeviceDescriptor, Extensions, Extent3d,
     Origin3d, PowerPreference, ShaderModuleDescriptor, ShaderStage,
-    BindGroupLayoutBinding, TextureFormat,
+    BindGroupLayoutBinding, BindingType, TextureFormat,
     PrimitiveTopology, BlendStateDescriptor, ColorWriteFlags, DepthStencilStateDescriptor,
     RenderPassDescriptor, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     LoadOp, StoreOp,
+    ShaderStageFlags_NONE, ShaderStageFlags_VERTEX, ShaderStageFlags_FRAGMENT, ShaderStageFlags_COMPUTE
 };
 
 
@@ -107,7 +108,7 @@ pub struct RenderPipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
     pub stages: &'a [PipelineStageDescriptor<'a>],
     pub primitive_topology: PrimitiveTopology,
-    pub blend_state: &'a [&'a BlendState],
+    pub blend_states: &'a [&'a BlendState],
     pub depth_stencil_state: &'a DepthStencilState,
     pub attachment_state: &'a AttachmentState,
 }
@@ -170,10 +171,15 @@ impl Device {
     }
 
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
+        //TODO: avoid allocation here
+        let temp_layouts = desc.bind_group_layouts
+            .iter()
+            .map(|bgl| bgl.id)
+            .collect::<Vec<_>>();
         PipelineLayout {
             id: wgn::wgpu_device_create_pipeline_layout(self.id, &wgn::PipelineLayoutDescriptor {
-                bind_group_layouts: desc.bind_group_layouts.as_ptr() as *const _,
-                bind_group_layouts_length: desc.bind_group_layouts.len(),
+                bind_group_layouts: temp_layouts.as_ptr(),
+                bind_group_layouts_length: temp_layouts.len(),
             }),
         }
     }
@@ -214,14 +220,19 @@ impl Device {
             })
             .collect::<ArrayVec<[_; 2]>>();
 
+        let temp_blend_states = desc.blend_states
+            .iter()
+            .map(|bs| bs.id)
+            .collect::<Vec<_>>();
+
         RenderPipeline {
             id: wgn::wgpu_device_create_render_pipeline(self.id, &wgn::RenderPipelineDescriptor {
                 layout: desc.layout.id,
                 stages: stages.as_ptr(),
                 stages_length: stages.len(),
                 primitive_topology: desc.primitive_topology,
-                blend_state: desc.blend_state.as_ptr() as *const _,
-                blend_state_length: desc.blend_state.len(),
+                blend_states: temp_blend_states.as_ptr(),
+                blend_states_length: temp_blend_states.len(),
                 depth_stencil_state: desc.depth_stencil_state.id,
                 attachment_state: desc.attachment_state.id,
             }),

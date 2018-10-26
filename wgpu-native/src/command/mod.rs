@@ -7,6 +7,7 @@ pub use self::compute::*;
 pub use self::render::*;
 
 use hal::{self, Device};
+use hal::command::RawCommandBuffer;
 
 use {
     Color, Origin3d, Stored,
@@ -96,16 +97,22 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     let cmb = cmb_guard.get_mut(command_buffer_id);
     let device_guard = HUB.devices.lock();
     let device = device_guard.get(cmb.device_id.0);
+    let view_guard = HUB.texture_views.lock();
 
-    let current_comb = device.com_allocator.extend(cmb);
+    let mut current_comb = device.com_allocator.extend(cmb);
+    let mut extent = None;
 
     let render_pass = {
         let tracker = &mut cmb.texture_tracker;
-        let view_guard = HUB.texture_views.lock();
 
         let depth_stencil_attachment = match desc.depth_stencil_attachment {
             Some(ref at) => {
                 let view = view_guard.get(at.attachment);
+                if let Some(ex) = extent {
+                    assert_eq!(ex, view.extent);
+                } else {
+                    extent = Some(view.extent);
+                }
                 let query = tracker.query(view.source_id.0);
                 let (_, layout) = conv::map_texture_state(
                     query.usage,
@@ -125,6 +132,11 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
             .iter()
             .map(|at| {
                 let view = view_guard.get(at.attachment);
+                if let Some(ex) = extent {
+                    assert_eq!(ex, view.extent);
+                } else {
+                    extent = Some(view.extent);
+                }
                 let query = tracker.query(view.source_id.0);
                 let (_, layout) = conv::map_texture_state(query.usage, hal::format::Aspects::COLOR);
                 hal::pass::Attachment {
@@ -156,16 +168,45 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 
         device.raw.create_render_pass(attachments, iter::once(subpass), &[])
     };
-    //let framebuffer = device.create_framebuffer();
 
-    /*TODO:
-    raw.begin_render_pass(
-        render_pass: &B::RenderPass,
-        framebuffer: &B::Framebuffer,
-        render_area: pso::Rect,
-        clear_values: T,
-        hal::SubpassContents::Inline,
-    );*/
+    let framebuffer = {
+        let attachments = desc.color_attachments
+            .iter()
+            .map(|at| at.attachment)
+            .chain(desc.depth_stencil_attachment.as_ref().map(|at| at.attachment))
+            .map(|id| &view_guard.get(id).raw);
+        device.raw
+            .create_framebuffer(&render_pass, attachments, extent.unwrap())
+            .unwrap()
+    };
+
+    let rect = {
+        let ex = extent.unwrap();
+        hal::pso::Rect {
+            x: 0,
+            y: 0,
+            w: ex.width as _,
+            h: ex.height as _,
+        }
+    };
+    let clear_values = desc.color_attachments
+        .iter()
+        .map(|at| {
+            //TODO: integer types?
+            let value = hal::command::ClearColor::Float(conv::map_color(at.clear_color));
+            hal::command::ClearValueRaw::from(hal::command::ClearValue::Color(value))
+        })
+        .chain(desc.depth_stencil_attachment.map(|at| {
+            let value = hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
+            hal::command::ClearValueRaw::from(hal::command::ClearValue::DepthStencil(value))
+        }));
+    current_comb.begin_render_pass(
+        &render_pass,
+        &framebuffer,
+        rect,
+        clear_values,
+        hal::command::SubpassContents::Inline,
+    );
 
     HUB.render_passes
         .lock()

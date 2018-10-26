@@ -43,7 +43,7 @@ fn main() {
             },
         ],
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        blend_state: &[
+        blend_states: &[
             &blend_state0,
         ],
         depth_stencil_state: &depth_stencil_state,

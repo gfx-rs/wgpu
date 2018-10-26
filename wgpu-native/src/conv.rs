@@ -1,6 +1,6 @@
 use hal;
 
-use {Extent3d, binding_model, command, pipeline, resource};
+use {Color, Extent3d, binding_model, command, pipeline, resource};
 
 
 pub fn map_buffer_usage(
@@ -369,4 +369,8 @@ pub fn map_load_store_ops(load: command::LoadOp, store: command::StoreOp) -> hal
             command::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
         },
     }
+}
+
+pub fn map_color(color: Color) -> hal::pso::ColorValue {
+    [color.r, color.g, color.b, color.a]
 }

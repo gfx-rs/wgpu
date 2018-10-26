@@ -122,8 +122,8 @@ int main()
         .stages = stages,
         .stages_length = STAGES_LENGTH,
         .primitive_topology = WGPUPrimitiveTopology_TriangleList,
-        .blend_state = blend_state,
-        .blend_state_length = BLEND_STATE_LENGTH,
+        .blend_states = blend_state,
+        .blend_states_length = BLEND_STATE_LENGTH,
         .depth_stencil_state = depth_stencil_state,
         .attachment_state = attachment_state,
     };

@@ -423,14 +423,14 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     };
 
     let blend_state_guard = HUB.blend_states.lock();
-    let blend_state = unsafe { slice::from_raw_parts(desc.blend_state, desc.blend_state_length) }
+    let blend_states = unsafe { slice::from_raw_parts(desc.blend_states, desc.blend_states_length) }
         .iter()
         .map(|id| blend_state_guard.get(id.clone()).raw)
         .collect();
 
     let blender = hal::pso::BlendDesc {
         logic_op: None, // TODO
-        targets: blend_state,
+        targets: blend_states,
     };
 
     let depth_stencil_state_guard = HUB.depth_stencil_states.lock();

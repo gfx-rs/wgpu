@@ -82,6 +82,7 @@ pub(crate) struct TextureView<B: hal::Backend> {
     pub raw: B::ImageView,
     pub source_id: Stored<TextureId>,
     pub format: TextureFormat,
+    pub extent: hal::image::Extent,
     pub samples: hal::image::NumSamples,
 }
 
