@@ -2,7 +2,7 @@ use {back, binding_model, command, conv, pipeline, resource};
 use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 use {
-    Stored,
+    CommandBuffer, Stored, TextureUsageFlags,
     AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
     DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
     TextureId, TextureViewId,
@@ -130,7 +130,7 @@ pub extern "C" fn wgpu_device_create_texture(
     let query = device.texture_tracker
         .lock()
         .unwrap()
-        .query(id);
+        .query(id, TextureUsageFlags::WRITE_ALL);
     assert!(query.initialized);
 
     id
@@ -341,16 +341,34 @@ pub extern "C" fn wgpu_queue_submit(
 ) {
     let mut device_guard = HUB.devices.lock();
     let device = device_guard.get_mut(queue_id);
+    let mut buffer_tracker = device.buffer_tracker.lock().unwrap();
+    let mut texture_tracker = device.texture_tracker.lock().unwrap();
+
     let mut command_buffer_guard = HUB.command_buffers.lock();
     let command_buffer_ids = unsafe {
         slice::from_raw_parts(command_buffer_ptr, command_buffer_count)
     };
 
+    //TODO: if multiple command buffers are submitted, we can re-use the last
+    // native command buffer of the previous chain instead of always creating
+    // a temporary one, since the chains are not finished.
+
     // finish all the command buffers first
     for &cmb_id in command_buffer_ids {
-        command_buffer_guard
-            .get_mut(cmb_id)
-            .raw
+        let comb = command_buffer_guard.get_mut(cmb_id);
+        let mut transit = device.com_allocator.extend(comb);
+        transit.begin(
+            hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+            hal::command::CommandBufferInheritanceInfo::default(),
+        );
+        CommandBuffer::insert_barriers(
+            &mut transit,
+            buffer_tracker.consume(&comb.buffer_tracker),
+            texture_tracker.consume(&comb.texture_tracker),
+        );
+        transit.finish();
+        comb.raw.insert(0, transit);
+        comb.raw
             .last_mut()
             .unwrap()
             .finish();

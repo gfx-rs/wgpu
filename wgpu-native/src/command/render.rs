@@ -1,8 +1,7 @@
-use conv;
 use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 use {
-    Stored,
+    CommandBuffer, Stored,
     CommandBufferId, RenderPassId,
 };
 
@@ -44,36 +43,10 @@ pub extern "C" fn wgpu_render_pass_end_pass(
     let cmb = cmb_guard.get_mut(pass.cmb_id.0);
 
     if let Some(ref mut last) = cmb.raw.last_mut() {
-        let buffer_guard = HUB.buffers.lock();
-        let texture_guard = HUB.textures.lock();
-
-        let buffer_barriers = cmb.buffer_tracker
-            .consume(pass.buffer_tracker)
-            .map(|(id, transit)| {
-                let b = buffer_guard.get(id);
-                hal::memory::Barrier::Buffer {
-                    states: conv::map_buffer_state(transit.start) ..
-                        conv::map_buffer_state(transit.end),
-                    target: &b.raw,
-                }
-            });
-        let texture_barriers = cmb.texture_tracker
-            .consume(pass.texture_tracker)
-            .map(|(id, transit)| {
-                let t = texture_guard.get(id);
-                let aspects = t.full_range.aspects;
-                hal::memory::Barrier::Image {
-                    states: conv::map_texture_state(transit.start, aspects) ..
-                        conv::map_texture_state(transit.end, aspects),
-                    target: &t.raw,
-                    range: t.full_range.clone(), //TODO?
-                }
-            });
-
-        last.pipeline_barrier(
-            hal::pso::PipelineStage::TOP_OF_PIPE .. hal::pso::PipelineStage::BOTTOM_OF_PIPE,
-            hal::memory::Dependencies::empty(),
-            buffer_barriers.chain(texture_barriers),
+        CommandBuffer::insert_barriers(
+            last,
+            cmb.buffer_tracker.consume(&pass.buffer_tracker),
+            cmb.texture_tracker.consume(&pass.texture_tracker),
         );
         last.finish();
     }

@@ -16,6 +16,7 @@ remote = ["parking_lot"]
 [dependencies]
 bitflags = "1.0"
 lazy_static = "1.1.0"
+log = "0.4"
 parking_lot = { version = "0.6", optional = true }
 gfx-hal = { git = "https://github.com/gfx-rs/gfx" } # required by gfx-memory
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx" }

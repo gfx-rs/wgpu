@@ -2,6 +2,8 @@
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
 #[cfg(feature = "remote")]
 extern crate parking_lot;
 

@@ -29,29 +29,23 @@ bitflags! {
 
 
 pub trait GenericUsage {
-    fn default() -> Self;
     fn is_exclusive(&self) -> bool;
 }
 impl GenericUsage for BufferUsageFlags {
-    fn default() -> Self {
-        BufferUsageFlags::empty()
-    }
     fn is_exclusive(&self) -> bool {
         BufferUsageFlags::WRITE_ALL.intersects(*self)
     }
 }
 impl GenericUsage for TextureUsageFlags {
-    fn default() -> Self {
-        TextureUsageFlags::empty()
-    }
     fn is_exclusive(&self) -> bool {
         TextureUsageFlags::WRITE_ALL.intersects(*self)
     }
 }
 
 
+//TODO: consider having `I` as an associated type of `U`?
 pub struct Tracker<I, U> {
-    map: HashMap<Stored<I>, U>,
+    map: HashMap<Stored<I>, Range<U>>,
 }
 pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
@@ -66,19 +60,18 @@ impl<
         }
     }
 
-    pub fn query(&mut self, id: I) -> Query<U> {
+    pub fn query(&mut self, id: I, default: U) -> Query<U> {
         match self.map.entry(Stored(id)) {
             Entry::Vacant(e) => {
-                let usage = U::default();
-                e.insert(usage);
+                e.insert(default .. default);
                 Query {
-                    usage,
+                    usage: default,
                     initialized: true,
                 }
             }
             Entry::Occupied(e) => {
                 Query {
-                    usage: *e.get(),
+                    usage: e.get().end,
                     initialized: false,
                 }
             }
@@ -88,17 +81,19 @@ impl<
     pub fn transit(&mut self, id: I, usage: U, permit: TrackPermit) -> Result<Tracktion<U>, U> {
         match self.map.entry(Stored(id)) {
             Entry::Vacant(e) => {
-                e.insert(usage);
+                e.insert(usage .. usage);
                 Ok(Tracktion::Init)
             }
             Entry::Occupied(mut e) => {
-                let old = *e.get();
+                let old = e.get().end;
                 if usage == old {
                     Ok(Tracktion::Keep)
                 } else if permit.contains(TrackPermit::EXTEND) && !(old | usage).is_exclusive() {
-                    Ok(Tracktion::Extend { old: e.insert(old | usage) })
+                    e.get_mut().end = old | usage;
+                    Ok(Tracktion::Extend { old })
                 } else if permit.contains(TrackPermit::REPLACE) {
-                    Ok(Tracktion::Replace { old: e.insert(usage) })
+                    e.get_mut().end = usage;
+                    Ok(Tracktion::Replace { old })
                 } else {
                     Err(old)
                 }
@@ -106,13 +101,13 @@ impl<
         }
     }
 
-    pub(crate) fn consume<'a>(&'a mut self, other: Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+    pub fn consume<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map
-            .into_iter()
-            .flat_map(move |(id, new)| match self.transit(id.0.clone(), new, TrackPermit::REPLACE) {
+            .iter()
+            .flat_map(move |(id, new)| match self.transit(id.0.clone(), new.end, TrackPermit::REPLACE) {
                 Ok(Tracktion::Init) |
                 Ok(Tracktion::Keep) => None,
-                Ok(Tracktion::Replace { old }) => Some((id.0, old .. new)),
+                Ok(Tracktion::Replace { old }) => Some((id.0.clone(), old .. new.end)),
                 Ok(Tracktion::Extend { .. }) |
                 Err(_) => panic!("Unable to consume a resource transition!"),
             })

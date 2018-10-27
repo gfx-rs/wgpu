@@ -364,6 +364,7 @@ pub fn map_texture_state(
 
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
     let layout = match usage {
+        W::WRITE_ALL => return (A::empty(), L::Undefined), // special value
         W::TRANSFER_SRC => L::TransferSrcOptimal,
         W::TRANSFER_DST => L::TransferDstOptimal,
         W::SAMPLED => L::ShaderReadOnlyOptimal,

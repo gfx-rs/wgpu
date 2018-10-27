@@ -1047,6 +1047,7 @@ dependencies = [
  "gfx-backend-vulkan 0.1.0 (git+https://github.com/gfx-rs/gfx)",
  "gfx-hal 0.1.0 (git+https://github.com/gfx-rs/gfx.git)",
  "lazy_static 1.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.5 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.6.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "rendy-memory 0.1.0 (git+https://github.com/rustgd/rendy?rev=ce7dd7f)",
 ]

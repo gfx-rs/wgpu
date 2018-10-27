@@ -10,7 +10,7 @@ use hal::{self, Device};
 use hal::command::RawCommandBuffer;
 
 use {
-    Color, Origin3d, Stored,
+    B, Color, Origin3d, Stored, BufferUsageFlags, TextureUsageFlags,
     BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
 use conv;
@@ -18,6 +18,7 @@ use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 
 use std::iter;
+use std::ops::Range;
 use std::thread::ThreadId;
 
 
@@ -81,8 +82,49 @@ pub struct CommandBuffer<B: hal::Backend> {
     fence: B::Fence,
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
-    buffer_tracker: BufferTracker,
-    texture_tracker: TextureTracker,
+    pub(crate) buffer_tracker: BufferTracker,
+    pub(crate) texture_tracker: TextureTracker,
+}
+
+impl CommandBuffer<B> {
+    pub(crate) fn insert_barriers<I, J>(
+        raw: &mut <B as hal::Backend>::CommandBuffer,
+        buffer_iter: I,
+        texture_iter: J,
+    ) where
+        I: Iterator<Item = (BufferId, Range<BufferUsageFlags>)>,
+        J: Iterator<Item = (TextureId, Range<TextureUsageFlags>)>,
+    {
+        let buffer_guard = HUB.buffers.lock();
+        let texture_guard = HUB.textures.lock();
+
+        let buffer_barriers = buffer_iter.map(|(id, transit)| {
+            let b = buffer_guard.get(id);
+            trace!("transit {:?} {:?}", id, transit);
+            hal::memory::Barrier::Buffer {
+                states: conv::map_buffer_state(transit.start) ..
+                    conv::map_buffer_state(transit.end),
+                target: &b.raw,
+            }
+        });
+        let texture_barriers = texture_iter.map(|(id, transit)| {
+            let t = texture_guard.get(id);
+            trace!("transit {:?} {:?}", id, transit);
+            let aspects = t.full_range.aspects;
+            hal::memory::Barrier::Image {
+                states: conv::map_texture_state(transit.start, aspects) ..
+                    conv::map_texture_state(transit.end, aspects),
+                target: &t.raw,
+                range: t.full_range.clone(), //TODO?
+            }
+        });
+
+        raw.pipeline_barrier(
+            hal::pso::PipelineStage::TOP_OF_PIPE .. hal::pso::PipelineStage::BOTTOM_OF_PIPE,
+            hal::memory::Dependencies::empty(),
+            buffer_barriers.chain(texture_barriers),
+        );
+    }
 }
 
 #[repr(C)]
@@ -117,7 +159,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 } else {
                     extent = Some(view.extent);
                 }
-                let query = tracker.query(view.texture_id.0);
+                let query = tracker.query(view.texture_id.0, TextureUsageFlags::empty());
                 let (_, layout) = conv::map_texture_state(
                     query.usage,
                     hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
@@ -141,7 +183,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 } else {
                     extent = Some(view.extent);
                 }
-                let query = tracker.query(view.texture_id.0);
+                let query = tracker.query(view.texture_id.0, TextureUsageFlags::empty());
                 let (_, layout) = conv::map_texture_state(query.usage, hal::format::Aspects::COLOR);
                 hal::pass::Attachment {
                     format: Some(conv::map_texture_format(view.format)),
