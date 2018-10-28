@@ -219,8 +219,8 @@ typedef struct {
   const WGPUPipelineStageDescriptor *stages;
   uintptr_t stages_length;
   WGPUPrimitiveTopology primitive_topology;
-  const WGPUBlendStateId *blend_state;
-  uintptr_t blend_state_length;
+  const WGPUBlendStateId *blend_states;
+  uintptr_t blend_states_length;
   WGPUDepthStencilStateId depth_stencil_state;
   WGPUAttachmentStateId attachment_state;
 } WGPURenderPipelineDescriptor;
@@ -304,7 +304,7 @@ WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
 WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId command_buffer_id);
 
 WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
-                                                       WGPURenderPassDescriptor_WGPUTextureViewId _descriptor);
+                                                       WGPURenderPassDescriptor_WGPUTextureViewId desc);
 
 WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 

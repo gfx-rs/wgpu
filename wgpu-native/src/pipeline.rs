@@ -247,8 +247,8 @@ pub struct RenderPipelineDescriptor {
     pub stages: *const PipelineStageDescriptor,
     pub stages_length: usize,
     pub primitive_topology: PrimitiveTopology,
-    pub blend_state: *const BlendStateId,
-    pub blend_state_length: usize,
+    pub blend_states: *const BlendStateId,
+    pub blend_states_length: usize,
     pub depth_stencil_state: DepthStencilStateId,
     pub attachment_state: AttachmentStateId,
 }

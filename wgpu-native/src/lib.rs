@@ -2,6 +2,8 @@
 extern crate bitflags;
 #[macro_use]
 extern crate lazy_static;
+#[macro_use]
+extern crate log;
 #[cfg(feature = "remote")]
 extern crate parking_lot;
 
@@ -100,6 +102,7 @@ type BufferHandle = Buffer<B>;
 
 // Resource
 pub type TextureViewId = Id;
+type TextureViewHandle = TextureView<B>;
 pub type TextureId = Id;
 type TextureHandle = Texture<B>;
 pub type SamplerId = Id;

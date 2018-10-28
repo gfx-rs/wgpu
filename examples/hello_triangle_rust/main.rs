@@ -10,6 +10,19 @@ fn main() {
         },
     });
 
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        size: wgpu::Extent3d {
+            width: 256,
+            height: 256,
+            depth: 1,
+        },
+        array_size: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8g8b8a8Unorm,
+        usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+    });
+    let color_view = texture.create_default_texture_view();
+
     let vs_bytes = include_bytes!("./../data/hello_triangle.vert.spv");
     let vs_module = device.create_shader_module(vs_bytes);
     let fs_bytes = include_bytes!("./../data/hello_triangle.frag.spv");
@@ -43,7 +56,7 @@ fn main() {
             },
         ],
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        blend_state: &[
+        blend_states: &[
             &blend_state0,
         ],
         depth_stencil_state: &depth_stencil_state,
@@ -53,7 +66,6 @@ fn main() {
     let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
 
     {
-        let color_view = unimplemented!(); //TODO!
         let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[
                 wgpu::RenderPassColorAttachmentDescriptor {

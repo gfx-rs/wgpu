@@ -1,9 +1,11 @@
 use {back, binding_model, command, conv, pipeline, resource};
 use registry::{HUB, Items, Registry};
-use track::{BufferTracker, TextureTracker, TrackPermit};
+use track::{BufferTracker, TextureTracker};
 use {
+    CommandBuffer, Stored, TextureUsageFlags,
     AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
-    DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId, TextureId,
+    DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
+    TextureId, TextureViewId,
 };
 
 use hal::command::RawCommandBuffer;
@@ -68,6 +70,7 @@ pub(crate) struct ShaderModule<B: hal::Backend> {
     pub raw: B::ShaderModule,
 }
 
+
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
@@ -109,20 +112,103 @@ pub extern "C" fn wgpu_device_create_texture(
         .bind_image_memory(&image_memory, 0, image_unbound)
         .unwrap();
 
+    let full_range = hal::image::SubresourceRange {
+        aspects,
+        levels: 0 .. 1, //TODO: mips
+        layers: 0 .. 1, //TODO
+    };
+
     let id = HUB.textures
         .lock()
         .register(resource::Texture {
             raw: bound_image,
-            aspects,
+            device_id: Stored(device_id),
+            kind,
+            format: desc.format,
+            full_range,
         });
-    device.texture_tracker
+    let query = device.texture_tracker
         .lock()
         .unwrap()
-        .track(id, resource::TextureUsageFlags::empty(), TrackPermit::empty())
-        .expect("Resource somehow is already registered");
+        .query(id, TextureUsageFlags::WRITE_ALL);
+    assert!(query.initialized);
 
     id
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_texture_create_texture_view(
+    texture_id: TextureId,
+    desc: &resource::TextureViewDescriptor,
+) -> TextureViewId {
+    let texture_guard = HUB.textures.lock();
+    let texture = texture_guard.get(texture_id);
+
+    let raw = HUB.devices
+        .lock()
+        .get(texture.device_id.0)
+        .raw
+        .create_image_view(
+            &texture.raw,
+            conv::map_texture_view_dimension(desc.dimension),
+            conv::map_texture_format(desc.format),
+            hal::format::Swizzle::NO,
+            hal::image::SubresourceRange {
+                aspects: conv::map_texture_aspect_flags(desc.aspect),
+                levels: desc.base_mip_level as u8 .. (desc.base_mip_level + desc.level_count) as u8,
+                layers: desc.base_array_layer as u16 .. (desc.base_array_layer + desc.array_count) as u16,
+            },
+        )
+        .unwrap();
+
+    HUB.texture_views
+        .lock()
+        .register(resource::TextureView {
+            raw,
+            texture_id: Stored(texture_id),
+            format: texture.format,
+            extent: texture.kind.extent(),
+            samples: texture.kind.num_samples(),
+        })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_texture_create_default_texture_view(
+    texture_id: TextureId,
+) -> TextureViewId {
+    let texture_guard = HUB.textures.lock();
+    let texture = texture_guard.get(texture_id);
+
+    let view_kind = match texture.kind {
+        hal::image::Kind::D1(..) => hal::image::ViewKind::D1,
+        hal::image::Kind::D2(..) => hal::image::ViewKind::D2, //TODO: array
+        hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
+    };
+
+    let raw = HUB.devices
+        .lock()
+        .get(texture.device_id.0)
+        .raw
+        .create_image_view(
+            &texture.raw,
+            view_kind,
+            conv::map_texture_format(texture.format),
+            hal::format::Swizzle::NO,
+            texture.full_range.clone(),
+        )
+        .unwrap();
+
+    HUB.texture_views
+        .lock()
+        .register(resource::TextureView {
+            raw,
+            texture_id: Stored(texture_id),
+            format: texture.format,
+            extent: texture.kind.extent(),
+            samples: texture.kind.num_samples(),
+        })
+}
+
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group_layout(
@@ -255,16 +341,34 @@ pub extern "C" fn wgpu_queue_submit(
 ) {
     let mut device_guard = HUB.devices.lock();
     let device = device_guard.get_mut(queue_id);
+    let mut buffer_tracker = device.buffer_tracker.lock().unwrap();
+    let mut texture_tracker = device.texture_tracker.lock().unwrap();
+
     let mut command_buffer_guard = HUB.command_buffers.lock();
     let command_buffer_ids = unsafe {
         slice::from_raw_parts(command_buffer_ptr, command_buffer_count)
     };
 
+    //TODO: if multiple command buffers are submitted, we can re-use the last
+    // native command buffer of the previous chain instead of always creating
+    // a temporary one, since the chains are not finished.
+
     // finish all the command buffers first
     for &cmb_id in command_buffer_ids {
-        command_buffer_guard
-            .get_mut(cmb_id)
-            .raw
+        let comb = command_buffer_guard.get_mut(cmb_id);
+        let mut transit = device.com_allocator.extend(comb);
+        transit.begin(
+            hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+            hal::command::CommandBufferInheritanceInfo::default(),
+        );
+        CommandBuffer::insert_barriers(
+            &mut transit,
+            buffer_tracker.consume(&comb.buffer_tracker),
+            texture_tracker.consume(&comb.texture_tracker),
+        );
+        transit.finish();
+        comb.raw.insert(0, transit);
+        comb.raw
             .last_mut()
             .unwrap()
             .finish();
@@ -423,14 +527,14 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     };
 
     let blend_state_guard = HUB.blend_states.lock();
-    let blend_state = unsafe { slice::from_raw_parts(desc.blend_state, desc.blend_state_length) }
+    let blend_states = unsafe { slice::from_raw_parts(desc.blend_states, desc.blend_states_length) }
         .iter()
         .map(|id| blend_state_guard.get(id.clone()).raw)
         .collect();
 
     let blender = hal::pso::BlendDesc {
         logic_op: None, // TODO
-        targets: blend_state,
+        targets: blend_states,
     };
 
     let depth_stencil_state_guard = HUB.depth_stencil_states.lock();
