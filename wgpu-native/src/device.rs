@@ -33,7 +33,7 @@ pub struct Device<B: hal::Backend> {
     buffer_tracker: Mutex<BufferTracker>,
     texture_tracker: Mutex<TextureTracker>,
     mem_props: hal::MemoryProperties,
-    render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
+    pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
 }
 
 impl<B: hal::Backend> Device<B> {

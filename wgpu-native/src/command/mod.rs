@@ -14,10 +14,11 @@ use {
     BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
 use conv;
+use device::RenderPassKey;
 use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 
-use std::iter;
+use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::thread::ThreadId;
 
@@ -148,10 +149,10 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     );
     let mut extent = None;
 
-    let render_pass = {
+    let rp_key = {
         let tracker = &mut cmb.texture_tracker;
 
-        let depth_stencil_attachment = match desc.depth_stencil_attachment {
+        let depth_stencil_key = match desc.depth_stencil_attachment {
             Some(ref at) => {
                 let view = view_guard.get(at.attachment);
                 if let Some(ex) = extent {
@@ -174,7 +175,8 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
             }
             None => None,
         };
-        let color_attachments = desc.color_attachments
+
+        let color_keys = desc.color_attachments
             .iter()
             .map(|at| {
                 let view = view_guard.get(at.attachment);
@@ -193,26 +195,39 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                     layouts: layout .. layout,
                 }
             });
-        let attachments = color_attachments.chain(depth_stencil_attachment);
 
-        //TODO: retain the storage
-        let color_refs = (0 .. desc.color_attachments.len())
-            .map(|i| {
-                (i, hal::image::Layout::ColorAttachmentOptimal)
-            })
-            .collect::<Vec<_>>();
-        let ds_ref = desc.depth_stencil_attachment.as_ref().map(|_| {
-            (desc.color_attachments.len(), hal::image::Layout::DepthStencilAttachmentOptimal)
-        });
-        let subpass = hal::pass::SubpassDesc {
-            colors: &color_refs,
-            depth_stencil: ds_ref.as_ref(),
-            inputs: &[],
-            resolves: &[],
-            preserves: &[],
-        };
+        RenderPassKey {
+            attachments: color_keys.chain(depth_stencil_key).collect(),
+        }
+    };
 
-        device.raw.create_render_pass(attachments, iter::once(subpass), &[])
+    let mut render_pass_cache = device.render_passes.lock().unwrap();
+    let render_pass = match render_pass_cache.entry(rp_key) {
+        Entry::Occupied(e) => e.into_mut(),
+        Entry::Vacant(e) => {
+            let color_ids = [
+                (0, hal::image::Layout::ColorAttachmentOptimal),
+                (1, hal::image::Layout::ColorAttachmentOptimal),
+                (2, hal::image::Layout::ColorAttachmentOptimal),
+                (3, hal::image::Layout::ColorAttachmentOptimal),
+            ];
+            let depth_id = (desc.color_attachments.len(), hal::image::Layout::DepthStencilAttachmentOptimal);
+
+            let subpass = hal::pass::SubpassDesc {
+                colors: &color_ids[.. desc.color_attachments.len()],
+                depth_stencil: desc.depth_stencil_attachment.as_ref().map(|_| &depth_id),
+                inputs: &[],
+                resolves: &[],
+                preserves: &[],
+            };
+
+            let pass = device.raw.create_render_pass(
+                &e.key().attachments,
+                &[subpass],
+                &[],
+            );
+            e.insert(pass)
+        }
     };
 
     let framebuffer = {
@@ -246,6 +261,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
             let value = hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
             hal::command::ClearValueRaw::from(hal::command::ClearValue::DepthStencil(value))
         }));
+
     current_comb.begin_render_pass(
         &render_pass,
         &framebuffer,
