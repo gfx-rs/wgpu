@@ -37,9 +37,6 @@ fn main() {
 
     let blend_state0 = device.create_blend_state(&wgpu::BlendStateDescriptor::REPLACE);
     let depth_stencil_state = device.create_depth_stencil_state(&wgpu::DepthStencilStateDescriptor::IGNORE);
-    let attachment_state = device.create_attachment_state(&wgpu::AttachmentStateDescriptor {
-        formats: &[wgpu::TextureFormat::R8g8b8a8Unorm],
-    });
 
     let _render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
@@ -56,11 +53,19 @@ fn main() {
             },
         ],
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+        attachments_state: wgpu::AttachmentsState {
+            color_attachments: &[
+                wgpu::Attachment {
+                    format: wgpu::TextureFormat::R8g8b8a8Unorm,
+                    samples: 1,
+                },
+            ],
+            depth_stencil_attachment: None,
+        },
         blend_states: &[
             &blend_state0,
         ],
         depth_stencil_state: &depth_stencil_state,
-        attachment_state: &attachment_state,
     });
 
     let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});

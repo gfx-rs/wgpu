@@ -4,6 +4,7 @@ extern crate arrayvec;
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
+use std::ptr;
 
 pub use wgn::{
     AdapterDescriptor, Color, CommandBufferDescriptor, DeviceDescriptor, Extensions, Extent3d,
@@ -12,7 +13,7 @@ pub use wgn::{
     TextureUsageFlags, TextureViewDescriptor,
     PrimitiveTopology, BlendStateDescriptor, ColorWriteFlags, DepthStencilStateDescriptor,
     RenderPassDescriptor, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
-    LoadOp, StoreOp,
+    Attachment, LoadOp, StoreOp,
     ShaderStageFlags_NONE, ShaderStageFlags_VERTEX, ShaderStageFlags_FRAGMENT, ShaderStageFlags_COMPUTE
 };
 
@@ -61,10 +62,6 @@ pub struct DepthStencilState {
     id: wgn::DepthStencilStateId,
 }
 
-pub struct AttachmentState {
-    id: wgn::AttachmentStateId,
-}
-
 pub struct RenderPipeline {
     id: wgn::RenderPipelineId,
 }
@@ -105,17 +102,18 @@ pub struct PipelineStageDescriptor<'a> {
     pub entry_point: &'a str,
 }
 
-pub struct AttachmentStateDescriptor<'a> {
-    pub formats: &'a [TextureFormat],
+pub struct AttachmentsState<'a> {
+    pub color_attachments: &'a [Attachment],
+    pub depth_stencil_attachment: Option<Attachment>,
 }
 
 pub struct RenderPipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
     pub stages: &'a [PipelineStageDescriptor<'a>],
     pub primitive_topology: PrimitiveTopology,
+    pub attachments_state: AttachmentsState<'a>,
     pub blend_states: &'a [&'a BlendState],
     pub depth_stencil_state: &'a DepthStencilState,
-    pub attachment_state: &'a AttachmentState,
 }
 
 
@@ -201,15 +199,6 @@ impl Device {
         }
     }
 
-    pub fn create_attachment_state(&self, desc: &AttachmentStateDescriptor) -> AttachmentState {
-        AttachmentState {
-            id: wgn::wgpu_device_create_attachment_state(self.id, &wgn::AttachmentStateDescriptor {
-                formats: desc.formats.as_ptr(),
-                formats_length: desc.formats.len(),
-            }),
-        }
-    }
-
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
         let entry_points = desc.stages
             .iter()
@@ -236,10 +225,14 @@ impl Device {
                 stages: stages.as_ptr(),
                 stages_length: stages.len(),
                 primitive_topology: desc.primitive_topology,
+                attachments_state: wgn::AttachmentsState {
+                    color_attachments: desc.attachments_state.color_attachments.as_ptr(),
+                    color_attachments_length: desc.attachments_state.color_attachments.len(),
+                    depth_stencil_attachment: desc.attachments_state.depth_stencil_attachment.as_ref().map(|at| at as *const _).unwrap_or(ptr::null()),
+                },
                 blend_states: temp_blend_states.as_ptr(),
                 blend_states_length: temp_blend_states.len(),
                 depth_stencil_state: desc.depth_stencil_state.id,
-                attachment_state: desc.attachment_state.id,
             }),
         }
     }

@@ -3,7 +3,7 @@ use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 use {
     CommandBuffer, Stored, TextureUsageFlags,
-    AttachmentStateId, BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
+    BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
     DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
     TextureId, TextureViewId,
 };
@@ -14,7 +14,15 @@ use hal::{self, Device as _Device};
 use rendy_memory::{allocator, Config, Heaps};
 
 use std::{ffi, slice};
+use std::collections::hash_map::{Entry, HashMap};
 use std::sync::Mutex;
+
+
+#[derive(Hash, PartialEq)]
+pub(crate) struct RenderPassKey {
+    pub attachments: Vec<hal::pass::Attachment>,
+}
+impl Eq for RenderPassKey {}
 
 
 pub struct Device<B: hal::Backend> {
@@ -25,6 +33,7 @@ pub struct Device<B: hal::Backend> {
     buffer_tracker: Mutex<BufferTracker>,
     texture_tracker: Mutex<TextureTracker>,
     mem_props: hal::MemoryProperties,
+    render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -62,6 +71,7 @@ impl<B: hal::Backend> Device<B> {
             buffer_tracker: Mutex::new(BufferTracker::new()),
             texture_tracker: Mutex::new(TextureTracker::new()),
             mem_props,
+            render_passes: Mutex::new(HashMap::new()),
         }
     }
 }
@@ -400,59 +410,6 @@ pub extern "C" fn wgpu_queue_submit(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_device_create_attachment_state(
-    device_id: DeviceId,
-    desc: &pipeline::AttachmentStateDescriptor,
-) -> AttachmentStateId {
-    let device_guard = HUB.devices.lock();
-    let device = &device_guard.get(device_id).raw;
-
-    let color_formats = unsafe {
-        slice::from_raw_parts(desc.formats, desc.formats_length)
-    };
-    let color_formats: Vec<_> = color_formats
-        .iter()
-        .cloned()
-        .map(conv::map_texture_format)
-        .collect();
-    let depth_stencil_format = None;
-
-    let base_pass = {
-        let attachments = color_formats.iter().map(|cf| hal::pass::Attachment {
-            format: Some(*cf),
-            samples: 1,
-            ops: hal::pass::AttachmentOps::DONT_CARE,
-            stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-            layouts: hal::image::Layout::General .. hal::image::Layout::General,
-        });
-
-        let subpass = hal::pass::SubpassDesc {
-            colors: &[(0, hal::image::Layout::ColorAttachmentOptimal)],
-            depth_stencil: None,
-            inputs: &[],
-            resolves: &[],
-            preserves: &[],
-        };
-
-        device.create_render_pass(
-            attachments,
-            &[subpass],
-            &[],
-        )
-    };
-
-    let at_state = pipeline::AttachmentState {
-        base_pass,
-        color_formats,
-        depth_stencil_format,
-    };
-
-    HUB.attachment_states
-        .lock()
-        .register(at_state)
-}
-
-#[no_mangle]
 pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
@@ -464,11 +421,78 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     };
 
     let device_guard = HUB.devices.lock();
-    let device = &device_guard.get(device_id).raw;
+    let device = device_guard.get(device_id);
     let pipeline_layout_guard = HUB.pipeline_layouts.lock();
     let layout = &pipeline_layout_guard.get(desc.layout).raw;
     let pipeline_stages = unsafe { slice::from_raw_parts(desc.stages, desc.stages_length) };
     let shader_module_guard = HUB.shader_modules.lock();
+
+    let rp_key = {
+        let op_keep = hal::pass::AttachmentOps {
+            load: hal::pass::AttachmentLoadOp::Load,
+            store: hal::pass::AttachmentStoreOp::Store,
+        };
+        let color_attachments = unsafe {
+            slice::from_raw_parts(
+                desc.attachments_state.color_attachments,
+                desc.attachments_state.color_attachments_length,
+            )
+        };
+        let depth_stencil_attachment = unsafe {
+            desc.attachments_state.depth_stencil_attachment.as_ref()
+        };
+        let color_keys = color_attachments.iter().map(|at| hal::pass::Attachment {
+            format: Some(conv::map_texture_format(at.format)),
+            samples: at.samples as u8,
+            ops: op_keep,
+            stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+            layouts: hal::image::Layout::General .. hal::image::Layout::General,
+        });
+        let depth_stencil_key = depth_stencil_attachment.map(|at| hal::pass::Attachment {
+            format: Some(conv::map_texture_format(at.format)),
+            samples: at.samples as u8,
+            ops: op_keep,
+            stencil_ops: op_keep,
+            layouts: hal::image::Layout::General .. hal::image::Layout::General,
+        });
+        RenderPassKey {
+            attachments: color_keys.chain(depth_stencil_key).collect(),
+        }
+    };
+
+    let mut render_pass_cache = device.render_passes.lock().unwrap();
+    let main_pass = match render_pass_cache.entry(rp_key) {
+        Entry::Occupied(e) => e.into_mut(),
+        Entry::Vacant(e) => {
+            let color_ids = [
+                (0, hal::image::Layout::ColorAttachmentOptimal),
+                (1, hal::image::Layout::ColorAttachmentOptimal),
+                (2, hal::image::Layout::ColorAttachmentOptimal),
+                (3, hal::image::Layout::ColorAttachmentOptimal),
+            ];
+            let depth_id = (desc.attachments_state.color_attachments_length, hal::image::Layout::DepthStencilAttachmentOptimal);
+
+            let subpass = hal::pass::SubpassDesc {
+                colors: &color_ids[.. desc.attachments_state.color_attachments_length],
+                depth_stencil: if desc.attachments_state.depth_stencil_attachment.is_null() {
+                    None
+                } else {
+                    Some(&depth_id)
+                },
+                inputs: &[],
+                resolves: &[],
+                preserves: &[],
+            };
+
+            let pass = device.raw.create_render_pass(
+                &e.key().attachments,
+                &[subpass],
+                &[],
+            );
+            e.insert(pass)
+        }
+    };
+
     let shaders = {
         let mut vertex = None;
         let mut fragment = None;
@@ -564,18 +588,13 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         depth_bounds: None,
     };
 
-    let attachment_state_guard = HUB.attachment_states.lock();
-    let attachment_state = attachment_state_guard.get(desc.attachment_state);
-
-    // TODO
     let subpass = hal::pass::Subpass {
         index: 0,
-        main_pass: &attachment_state.base_pass,
+        main_pass,
     };
 
     // TODO
     let flags = hal::pso::PipelineCreationFlags::empty();
-
     // TODO
     let parent = hal::pso::BasePipeline::None;
 
@@ -596,7 +615,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     };
 
     // TODO: cache
-    let pipeline = device
+    let pipeline = device.raw
         .create_graphics_pipeline(&pipeline_desc, None)
         .unwrap();
 
