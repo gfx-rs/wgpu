@@ -8,13 +8,12 @@ use std::ptr;
 
 pub use wgn::{
     AdapterDescriptor, Color, CommandBufferDescriptor, DeviceDescriptor, Extensions, Extent3d,
-    Origin3d, PowerPreference, ShaderModuleDescriptor, ShaderStage,
+    Origin3d, PowerPreference, ShaderModuleDescriptor, ShaderStage, ShaderStageFlags,
     BindGroupLayoutBinding, BindingType, TextureDimension, TextureDescriptor, TextureFormat,
     TextureUsageFlags, TextureViewDescriptor,
     PrimitiveTopology, BlendStateDescriptor, ColorWriteFlags, DepthStencilStateDescriptor,
     RenderPassDescriptor, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     Attachment, LoadOp, StoreOp,
-    ShaderStageFlags_NONE, ShaderStageFlags_VERTEX, ShaderStageFlags_FRAGMENT, ShaderStageFlags_COMPUTE
 };
 
 

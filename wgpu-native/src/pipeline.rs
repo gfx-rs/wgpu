@@ -34,20 +34,17 @@ pub enum BlendOperation {
     Max = 4,
 }
 
-// TODO: bitflags
-pub type ColorWriteFlags = u32;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_NONE: u32 = 0;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_RED: u32 = 1;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_GREEN: u32 = 2;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_BLUE: u32 = 4;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_ALPHA: u32 = 8;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_ALL: u32 = 15;
+bitflags! {
+    #[repr(transparent)]
+    pub struct ColorWriteFlags: u32 {
+        const RED = 1;
+        const GREEN = 2;
+        const BLUE = 4;
+        const ALPHA = 8;
+        const COLOR = 7;
+        const ALL = 15;
+    }
+}
 
 #[repr(C)]
 pub struct BlendDescriptor {
@@ -77,7 +74,7 @@ impl BlendStateDescriptor {
         blend_enabled: false,
         alpha: BlendDescriptor::REPLACE,
         color: BlendDescriptor::REPLACE,
-        write_mask: ColorWriteFlags_ALL,
+        write_mask: ColorWriteFlags::ALL,
     };
 }
 

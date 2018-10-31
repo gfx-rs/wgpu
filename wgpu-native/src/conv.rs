@@ -88,18 +88,17 @@ pub fn map_binding_type(
 pub fn map_shader_stage_flags(
     shader_stage_flags: binding_model::ShaderStageFlags,
 ) -> hal::pso::ShaderStageFlags {
-    use binding_model::{
-        ShaderStageFlags_COMPUTE, ShaderStageFlags_FRAGMENT, ShaderStageFlags_VERTEX,
-    };
+    use binding_model::ShaderStageFlags as F;
     use hal::pso::ShaderStageFlags as H;
+
     let mut value = H::empty();
-    if 0 != shader_stage_flags & ShaderStageFlags_VERTEX {
+    if shader_stage_flags.contains(F::VERTEX) {
         value |= H::VERTEX;
     }
-    if 0 != shader_stage_flags & ShaderStageFlags_FRAGMENT {
+    if shader_stage_flags.contains(F::FRAGMENT) {
         value |= H::FRAGMENT;
     }
-    if 0 != shader_stage_flags & ShaderStageFlags_COMPUTE {
+    if shader_stage_flags.contains(F::COMPUTE) {
         value |= H::COMPUTE;
     }
     value
@@ -134,22 +133,21 @@ pub fn map_blend_state_descriptor(
     hal::pso::ColorBlendDesc(map_color_write_flags(color_mask), blend_state)
 }
 
-fn map_color_write_flags(flags: u32) -> hal::pso::ColorMask {
+fn map_color_write_flags(flags: pipeline::ColorWriteFlags) -> hal::pso::ColorMask {
+    use pipeline::ColorWriteFlags as F;
     use hal::pso::ColorMask as H;
-    use pipeline::{
-        ColorWriteFlags_ALPHA, ColorWriteFlags_BLUE, ColorWriteFlags_GREEN, ColorWriteFlags_RED,
-    };
+
     let mut value = H::empty();
-    if 0 != flags & ColorWriteFlags_RED {
+    if flags.contains(F::RED) {
         value |= H::RED;
     }
-    if 0 != flags & ColorWriteFlags_GREEN {
+    if flags.contains(F::GREEN) {
         value |= H::GREEN;
     }
-    if 0 != flags & ColorWriteFlags_BLUE {
+    if flags.contains(F::BLUE) {
         value |= H::BLUE;
     }
-    if 0 != flags & ColorWriteFlags_ALPHA {
+    if flags.contains(F::ALPHA) {
         value |= H::ALPHA;
     }
     value
