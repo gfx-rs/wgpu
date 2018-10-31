@@ -1,9 +1,9 @@
 #include <stdio.h>
 #include "./../../wgpu-bindings/wgpu.h"
 
-#define STAGES_LENGTH       (2)
-#define BLEND_STATE_LENGTH  (1)
-#define FORMATS_LENGTH      (1)
+#define STAGES_LENGTH        (2)
+#define BLEND_STATES_LENGTH  (1)
+#define ATTACHMENTS_LENGTH   (1)
 
 WGPUByteArray read_file(const char *name)
 {
@@ -86,7 +86,7 @@ int main()
         .write_mask = 0,
     };
     WGPUBlendStateId blend_state_0 = wgpu_device_create_blend_state(device, &blend_state_0_desc);
-    WGPUBlendStateId blend_state[BLEND_STATE_LENGTH] = { blend_state_0 };
+    WGPUBlendStateId blend_state[BLEND_STATES_LENGTH] = { blend_state_0 };
 
     WGPUStencilStateFaceDescriptor stencil_state_front = {
         .compare = WGPUCompareFunction_Never,
@@ -110,22 +110,27 @@ int main()
     };
     WGPUDepthStencilStateId depth_stencil_state = wgpu_device_create_depth_stencil_state(device, &depth_stencil_state_desc);
 
-    WGPUTextureFormat formats[FORMATS_LENGTH] = { WGPUTextureFormat_R8g8b8a8Unorm };
-    WGPUAttachmentStateDescriptor attachment_state_desc = {
-        .formats = formats,
-        .formats_length = FORMATS_LENGTH,
+    WGPUAttachment attachments[ATTACHMENTS_LENGTH] = {
+        {
+            .format = WGPUTextureFormat_R8g8b8a8Unorm,
+            .samples = 1,
+        },
     };
-    WGPUAttachmentStateId attachment_state = wgpu_device_create_attachment_state(device, &attachment_state_desc);
+    WGPUAttachmentsState attachment_state = {
+        .color_attachments = attachments,
+        .color_attachments_length = ATTACHMENTS_LENGTH,
+        .depth_stencil_attachment = NULL,
+    };
 
     WGPURenderPipelineDescriptor render_pipeline_desc = {
         .layout = layout,
         .stages = stages,
         .stages_length = STAGES_LENGTH,
         .primitive_topology = WGPUPrimitiveTopology_TriangleList,
+        .attachments_state = attachment_state,
         .blend_states = blend_state,
-        .blend_states_length = BLEND_STATE_LENGTH,
+        .blend_states_length = BLEND_STATES_LENGTH,
         .depth_stencil_state = depth_stencil_state,
-        .attachment_state = attachment_state,
     };
 
     WGPURenderPipelineId render_pipeline = wgpu_device_create_render_pipeline(device, &render_pipeline_desc);
