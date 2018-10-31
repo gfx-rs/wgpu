@@ -2,7 +2,7 @@ use hal;
 use resource;
 
 use {
-    AttachmentStateId, BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId,
+    BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId,
     ShaderModuleId,
 };
 
@@ -34,20 +34,17 @@ pub enum BlendOperation {
     Max = 4,
 }
 
-// TODO: bitflags
-pub type ColorWriteFlags = u32;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_NONE: u32 = 0;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_RED: u32 = 1;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_GREEN: u32 = 2;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_BLUE: u32 = 4;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_ALPHA: u32 = 8;
-#[allow(non_upper_case_globals)]
-pub const ColorWriteFlags_ALL: u32 = 15;
+bitflags! {
+    #[repr(transparent)]
+    pub struct ColorWriteFlags: u32 {
+        const RED = 1;
+        const GREEN = 2;
+        const BLUE = 4;
+        const ALPHA = 8;
+        const COLOR = 7;
+        const ALL = 15;
+    }
+}
 
 #[repr(C)]
 pub struct BlendDescriptor {
@@ -77,7 +74,7 @@ impl BlendStateDescriptor {
         blend_enabled: false,
         alpha: BlendDescriptor::REPLACE,
         color: BlendDescriptor::REPLACE,
-        write_mask: ColorWriteFlags_ALL,
+        write_mask: ColorWriteFlags::ALL,
     };
 }
 
@@ -195,18 +192,6 @@ pub struct ShaderModuleDescriptor {
 }
 
 #[repr(C)]
-pub struct AttachmentStateDescriptor {
-    pub formats: *const resource::TextureFormat,
-    pub formats_length: usize,
-}
-
-pub(crate) struct AttachmentState<B: hal::Backend> {
-    pub base_pass: B::RenderPass,
-    pub color_formats: Vec<hal::format::Format>,
-    pub depth_stencil_format: Option<hal::format::Format>,
-}
-
-#[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum ShaderStage {
     Vertex = 0,
@@ -242,15 +227,28 @@ pub enum PrimitiveTopology {
 }
 
 #[repr(C)]
+pub struct Attachment {
+    pub format: resource::TextureFormat,
+    pub samples: u32,
+}
+
+#[repr(C)]
+pub struct AttachmentsState {
+    pub color_attachments: *const Attachment,
+    pub color_attachments_length: usize,
+    pub depth_stencil_attachment: *const Attachment,
+}
+
+#[repr(C)]
 pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
     pub stages: *const PipelineStageDescriptor,
     pub stages_length: usize,
     pub primitive_topology: PrimitiveTopology,
+    pub attachments_state: AttachmentsState,
     pub blend_states: *const BlendStateId,
     pub blend_states_length: usize,
     pub depth_stencil_state: DepthStencilStateId,
-    pub attachment_state: AttachmentStateId,
 }
 
 pub(crate) struct RenderPipeline<B: hal::Backend> {

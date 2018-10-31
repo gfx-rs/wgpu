@@ -9,7 +9,7 @@ pub use self::local::{Id, ItemsGuard, Registry as ConcreteRegistry};
 pub use self::remote::{Id, ItemsGuard, Registry as ConcreteRegistry};
 
 use {
-    AdapterHandle, AttachmentStateHandle, BindGroupLayoutHandle, BindGroupHandle,
+    AdapterHandle, BindGroupLayoutHandle, BindGroupHandle,
     BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
     RenderPassHandle, ComputePassHandle,
     PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
@@ -39,7 +39,6 @@ pub struct Hub {
     pub(crate) pipeline_layouts: ConcreteRegistry<PipelineLayoutHandle>,
     pub(crate) bind_group_layouts: ConcreteRegistry<BindGroupLayoutHandle>,
     pub(crate) bind_groups: ConcreteRegistry<BindGroupHandle>,
-    pub(crate) attachment_states: ConcreteRegistry<AttachmentStateHandle>,
     pub(crate) blend_states: ConcreteRegistry<BlendStateHandle>,
     pub(crate) depth_stencil_states: ConcreteRegistry<DepthStencilStateHandle>,
     pub(crate) shader_modules: ConcreteRegistry<ShaderModuleHandle>,

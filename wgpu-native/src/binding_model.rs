@@ -2,16 +2,15 @@ use hal;
 
 use {BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
 
-// TODO: bitflags
-pub type ShaderStageFlags = u32;
-#[allow(non_upper_case_globals)]
-pub const ShaderStageFlags_NONE: u32 = 0;
-#[allow(non_upper_case_globals)]
-pub const ShaderStageFlags_VERTEX: u32 = 1;
-#[allow(non_upper_case_globals)]
-pub const ShaderStageFlags_FRAGMENT: u32 = 2;
-#[allow(non_upper_case_globals)]
-pub const ShaderStageFlags_COMPUTE: u32 = 4;
+
+bitflags! {
+    #[repr(transparent)]
+    pub struct ShaderStageFlags: u32 {
+        const VERTEX = 1;
+        const FRAGMENT = 2;
+        const COMPUTE = 4;
+    }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

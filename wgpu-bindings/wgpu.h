@@ -8,26 +8,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
-#define WGPUColorWriteFlags_ALL 15
-
-#define WGPUColorWriteFlags_ALPHA 8
-
-#define WGPUColorWriteFlags_BLUE 4
-
-#define WGPUColorWriteFlags_GREEN 2
-
-#define WGPUColorWriteFlags_NONE 0
-
-#define WGPUColorWriteFlags_RED 1
-
-#define WGPUShaderStageFlags_COMPUTE 4
-
-#define WGPUShaderStageFlags_FRAGMENT 2
-
-#define WGPUShaderStageFlags_NONE 0
-
-#define WGPUShaderStageFlags_VERTEX 1
-
 typedef enum {
   WGPUBindingType_UniformBuffer = 0,
   WGPUBindingType_Sampler = 1,
@@ -114,7 +94,16 @@ typedef enum {
   WGPUTextureFormat_D32FloatS8Uint = 3,
 } WGPUTextureFormat;
 
-typedef struct WGPURenderPassDescriptor_WGPUTextureViewId WGPURenderPassDescriptor_WGPUTextureViewId;
+typedef enum {
+  WGPUTextureViewDimension_D1,
+  WGPUTextureViewDimension_D2,
+  WGPUTextureViewDimension_D2Array,
+  WGPUTextureViewDimension_Cube,
+  WGPUTextureViewDimension_CubeArray,
+  WGPUTextureViewDimension_D3,
+} WGPUTextureViewDimension;
+
+typedef struct WGPURenderPassDescriptor_TextureViewId WGPURenderPassDescriptor_TextureViewId;
 
 typedef WGPUId WGPUDeviceId;
 
@@ -135,13 +124,6 @@ typedef WGPUId WGPUCommandBufferId;
 typedef WGPUId WGPURenderPassId;
 
 typedef WGPUId WGPUInstanceId;
-
-typedef WGPUId WGPUAttachmentStateId;
-
-typedef struct {
-  const WGPUTextureFormat *formats;
-  uintptr_t formats_length;
-} WGPUAttachmentStateDescriptor;
 
 typedef WGPUId WGPUBindGroupLayoutId;
 
@@ -215,14 +197,25 @@ typedef struct {
 } WGPUPipelineStageDescriptor;
 
 typedef struct {
+  WGPUTextureFormat format;
+  uint32_t samples;
+} WGPUAttachment;
+
+typedef struct {
+  const WGPUAttachment *color_attachments;
+  uintptr_t color_attachments_length;
+  const WGPUAttachment *depth_stencil_attachment;
+} WGPUAttachmentsState;
+
+typedef struct {
   WGPUPipelineLayoutId layout;
   const WGPUPipelineStageDescriptor *stages;
   uintptr_t stages_length;
   WGPUPrimitiveTopology primitive_topology;
+  WGPUAttachmentsState attachments_state;
   const WGPUBlendStateId *blend_states;
   uintptr_t blend_states_length;
   WGPUDepthStencilStateId depth_stencil_state;
-  WGPUAttachmentStateId attachment_state;
 } WGPURenderPipelineDescriptor;
 
 typedef struct {
@@ -258,45 +251,91 @@ typedef struct {
   WGPUPowerPreference power_preference;
 } WGPUAdapterDescriptor;
 
-#define WGPUBLACK (Color){ .r = 0, .g = 0, .b = 0, .a = 1 }
+typedef WGPUId WGPUTextureViewId;
 
-#define WGPUBLUE (Color){ .r = 0, .g = 0, .b = 1, .a = 1 }
+typedef uint32_t WGPUTextureAspectFlags;
 
-#define WGPUEXTEND (TrackPermit){ .bits = 1 }
+typedef struct {
+  WGPUTextureFormat format;
+  WGPUTextureViewDimension dimension;
+  WGPUTextureAspectFlags aspect;
+  uint32_t base_mip_level;
+  uint32_t level_count;
+  uint32_t base_array_layer;
+  uint32_t array_count;
+} WGPUTextureViewDescriptor;
 
-#define WGPUGREEN (Color){ .r = 0, .g = 1, .b = 0, .a = 1 }
+#define WGPUBufferUsageFlags_INDEX (BufferUsageFlags){ .bits = 16 }
 
-#define WGPUINDEX (BufferUsageFlags){ .bits = 16 }
+#define WGPUBufferUsageFlags_MAP_READ (BufferUsageFlags){ .bits = 1 }
 
-#define WGPUMAP_READ (BufferUsageFlags){ .bits = 1 }
+#define WGPUBufferUsageFlags_MAP_WRITE (BufferUsageFlags){ .bits = 2 }
 
-#define WGPUMAP_WRITE (BufferUsageFlags){ .bits = 2 }
+#define WGPUBufferUsageFlags_NONE (BufferUsageFlags){ .bits = 0 }
 
-#define WGPUNONE (BufferUsageFlags){ .bits = 0 }
+#define WGPUBufferUsageFlags_STORAGE (BufferUsageFlags){ .bits = 128 }
 
-#define WGPUOUTPUT_ATTACHMENT (TextureUsageFlags){ .bits = 16 }
+#define WGPUBufferUsageFlags_TRANSFER_DST (BufferUsageFlags){ .bits = 8 }
 
-#define WGPUPRESENT (TextureUsageFlags){ .bits = 32 }
+#define WGPUBufferUsageFlags_TRANSFER_SRC (BufferUsageFlags){ .bits = 4 }
 
-#define WGPURED (Color){ .r = 1, .g = 0, .b = 0, .a = 1 }
+#define WGPUBufferUsageFlags_UNIFORM (BufferUsageFlags){ .bits = 64 }
 
-#define WGPUREPLACE (TrackPermit){ .bits = 2 }
+#define WGPUBufferUsageFlags_VERTEX (BufferUsageFlags){ .bits = 32 }
 
-#define WGPUSAMPLED (TextureUsageFlags){ .bits = 4 }
+#define WGPUColorWriteFlags_ALL (ColorWriteFlags){ .bits = 15 }
 
-#define WGPUSTORAGE (BufferUsageFlags){ .bits = 128 }
+#define WGPUColorWriteFlags_ALPHA (ColorWriteFlags){ .bits = 8 }
 
-#define WGPUTRANSFER_DST (BufferUsageFlags){ .bits = 8 }
+#define WGPUColorWriteFlags_BLUE (ColorWriteFlags){ .bits = 4 }
 
-#define WGPUTRANSFER_SRC (BufferUsageFlags){ .bits = 4 }
+#define WGPUColorWriteFlags_COLOR (ColorWriteFlags){ .bits = 7 }
 
-#define WGPUTRANSPARENT (Color){ .r = 0, .g = 0, .b = 0, .a = 0 }
+#define WGPUColorWriteFlags_GREEN (ColorWriteFlags){ .bits = 2 }
 
-#define WGPUUNIFORM (BufferUsageFlags){ .bits = 64 }
+#define WGPUColorWriteFlags_RED (ColorWriteFlags){ .bits = 1 }
 
-#define WGPUVERTEX (BufferUsageFlags){ .bits = 32 }
+#define WGPUColor_BLACK (Color){ .r = 0, .g = 0, .b = 0, .a = 1 }
 
-#define WGPUWHITE (Color){ .r = 1, .g = 1, .b = 1, .a = 1 }
+#define WGPUColor_BLUE (Color){ .r = 0, .g = 0, .b = 1, .a = 1 }
+
+#define WGPUColor_GREEN (Color){ .r = 0, .g = 1, .b = 0, .a = 1 }
+
+#define WGPUColor_RED (Color){ .r = 1, .g = 0, .b = 0, .a = 1 }
+
+#define WGPUColor_TRANSPARENT (Color){ .r = 0, .g = 0, .b = 0, .a = 0 }
+
+#define WGPUColor_WHITE (Color){ .r = 1, .g = 1, .b = 1, .a = 1 }
+
+#define WGPUShaderStageFlags_COMPUTE (ShaderStageFlags){ .bits = 4 }
+
+#define WGPUShaderStageFlags_FRAGMENT (ShaderStageFlags){ .bits = 2 }
+
+#define WGPUShaderStageFlags_VERTEX (ShaderStageFlags){ .bits = 1 }
+
+#define WGPUTextureAspectFlags_COLOR (TextureAspectFlags){ .bits = 1 }
+
+#define WGPUTextureAspectFlags_DEPTH (TextureAspectFlags){ .bits = 2 }
+
+#define WGPUTextureAspectFlags_STENCIL (TextureAspectFlags){ .bits = 4 }
+
+#define WGPUTextureUsageFlags_NONE (TextureUsageFlags){ .bits = 0 }
+
+#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT (TextureUsageFlags){ .bits = 16 }
+
+#define WGPUTextureUsageFlags_PRESENT (TextureUsageFlags){ .bits = 32 }
+
+#define WGPUTextureUsageFlags_SAMPLED (TextureUsageFlags){ .bits = 4 }
+
+#define WGPUTextureUsageFlags_STORAGE (TextureUsageFlags){ .bits = 8 }
+
+#define WGPUTextureUsageFlags_TRANSFER_DST (TextureUsageFlags){ .bits = 2 }
+
+#define WGPUTextureUsageFlags_TRANSFER_SRC (TextureUsageFlags){ .bits = 1 }
+
+#define WGPUTrackPermit_EXTEND (TrackPermit){ .bits = 1 }
+
+#define WGPUTrackPermit_REPLACE (TrackPermit){ .bits = 2 }
 
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
                                         const WGPUDeviceDescriptor *_desc);
@@ -304,14 +343,11 @@ WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
 WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId command_buffer_id);
 
 WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
-                                                       WGPURenderPassDescriptor_WGPUTextureViewId desc);
+                                                       WGPURenderPassDescriptor_TextureViewId desc);
 
 WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
 WGPUInstanceId wgpu_create_instance(void);
-
-WGPUAttachmentStateId wgpu_device_create_attachment_state(WGPUDeviceId device_id,
-                                                          const WGPUAttachmentStateDescriptor *desc);
 
 WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_id,
                                                            const WGPUBindGroupLayoutDescriptor *desc);
@@ -346,3 +382,8 @@ void wgpu_queue_submit(WGPUQueueId queue_id,
                        uintptr_t command_buffer_count);
 
 WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
+
+WGPUTextureViewId wgpu_texture_create_default_texture_view(WGPUTextureId texture_id);
+
+WGPUTextureViewId wgpu_texture_create_texture_view(WGPUTextureId texture_id,
+                                                   const WGPUTextureViewDescriptor *desc);
