@@ -14,7 +14,7 @@ use {
     BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
 use conv;
-use device::RenderPassKey;
+use device::{FramebufferKey, RenderPassKey};
 use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 
@@ -230,15 +230,30 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
         }
     };
 
-    let framebuffer = {
-        let attachments = desc.color_attachments
+    let mut framebuffer_cache = device.framebuffers.lock().unwrap();
+    let fb_key = FramebufferKey {
+        attachments: desc.color_attachments
             .iter()
-            .map(|at| at.attachment)
-            .chain(desc.depth_stencil_attachment.as_ref().map(|at| at.attachment))
-            .map(|id| &view_guard.get(id).raw);
-        device.raw
-            .create_framebuffer(&render_pass, attachments, extent.unwrap())
-            .unwrap()
+            .map(|at| Stored(at.attachment))
+            .chain(desc.depth_stencil_attachment.as_ref().map(|at| Stored(at.attachment)))
+            .collect(),
+    };
+    let framebuffer = match framebuffer_cache.entry(fb_key) {
+        Entry::Occupied(e) => e.into_mut(),
+        Entry::Vacant(e) => {
+            let fb = {
+                let attachments = e
+                    .key()
+                    .attachments
+                    .iter()
+                    .map(|&Stored(id)| &view_guard.get(id).raw);
+
+                device.raw
+                    .create_framebuffer(&render_pass, attachments, extent.unwrap())
+                    .unwrap()
+            };
+            e.insert(fb)
+        }
     };
 
     let rect = {
@@ -263,8 +278,8 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
         }));
 
     current_comb.begin_render_pass(
-        &render_pass,
-        &framebuffer,
+        render_pass,
+        framebuffer,
         rect,
         clear_values,
         hal::command::SubpassContents::Inline,

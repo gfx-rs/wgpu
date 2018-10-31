@@ -24,6 +24,12 @@ pub(crate) struct RenderPassKey {
 }
 impl Eq for RenderPassKey {}
 
+#[derive(Hash, PartialEq)]
+pub(crate) struct FramebufferKey {
+    pub attachments: Vec<Stored<TextureViewId>>,
+}
+impl Eq for FramebufferKey {}
+
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
@@ -34,6 +40,7 @@ pub struct Device<B: hal::Backend> {
     texture_tracker: Mutex<TextureTracker>,
     mem_props: hal::MemoryProperties,
     pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
+    pub(crate) framebuffers: Mutex<HashMap<FramebufferKey, B::Framebuffer>>,
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -72,6 +79,7 @@ impl<B: hal::Backend> Device<B> {
             texture_tracker: Mutex::new(TextureTracker::new()),
             mem_props,
             render_passes: Mutex::new(HashMap::new()),
+            framebuffers: Mutex::new(HashMap::new()),
         }
     }
 }
