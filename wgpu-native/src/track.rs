@@ -1,4 +1,4 @@
-use {Stored, BufferId, TextureId};
+use {RefCount, Stored, WeaklyStored, BufferId, TextureId};
 use resource::{BufferUsageFlags, TextureUsageFlags};
 
 use std::collections::hash_map::{Entry, HashMap};
@@ -42,10 +42,18 @@ impl GenericUsage for TextureUsageFlags {
     }
 }
 
+struct Track<U> {
+    ref_count: RefCount,
+    init: U,
+    last: U,
+}
+
+unsafe impl<U> Send for Track<U> {}
+unsafe impl<U> Sync for Track<U> {}
 
 //TODO: consider having `I` as an associated type of `U`?
 pub struct Tracker<I, U> {
-    map: HashMap<Stored<I>, Range<U>>,
+    map: HashMap<WeaklyStored<I>, Track<U>>,
 }
 pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
@@ -54,16 +62,22 @@ impl<
     I: Clone + Hash + Eq,
     U: Copy + GenericUsage + BitOr<Output = U> + PartialEq,
 > Tracker<I, U> {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Tracker {
             map: HashMap::new(),
         }
     }
 
-    pub fn query(&mut self, id: I, default: U) -> Query<U> {
-        match self.map.entry(Stored(id)) {
+    pub(crate) fn query(
+        &mut self, stored: &Stored<I>, default: U
+    ) -> Query<U> {
+        match self.map.entry(WeaklyStored(stored.value.clone())) {
             Entry::Vacant(e) => {
-                e.insert(default .. default);
+                e.insert(Track {
+                    ref_count: stored.ref_count.clone(),
+                    init: default,
+                    last: default,
+                });
                 Query {
                     usage: default,
                     initialized: true,
@@ -71,28 +85,34 @@ impl<
             }
             Entry::Occupied(e) => {
                 Query {
-                    usage: e.get().end,
+                    usage: e.get().last,
                     initialized: false,
                 }
             }
         }
     }
 
-    pub fn transit(&mut self, id: I, usage: U, permit: TrackPermit) -> Result<Tracktion<U>, U> {
-        match self.map.entry(Stored(id)) {
+    pub(crate) fn transit(
+        &mut self, id: I, ref_count: &RefCount, usage: U, permit: TrackPermit
+    ) -> Result<Tracktion<U>, U> {
+        match self.map.entry(WeaklyStored(id)) {
             Entry::Vacant(e) => {
-                e.insert(usage .. usage);
+                e.insert(Track {
+                    ref_count: ref_count.clone(),
+                    init: usage,
+                    last: usage,
+                });
                 Ok(Tracktion::Init)
             }
             Entry::Occupied(mut e) => {
-                let old = e.get().end;
+                let old = e.get().last;
                 if usage == old {
                     Ok(Tracktion::Keep)
                 } else if permit.contains(TrackPermit::EXTEND) && !(old | usage).is_exclusive() {
-                    e.get_mut().end = old | usage;
+                    e.get_mut().last = old | usage;
                     Ok(Tracktion::Extend { old })
                 } else if permit.contains(TrackPermit::REPLACE) {
-                    e.get_mut().end = usage;
+                    e.get_mut().last = usage;
                     Ok(Tracktion::Replace { old })
                 } else {
                     Err(old)
@@ -101,13 +121,15 @@ impl<
         }
     }
 
-    pub fn consume<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+    pub fn consume<'a>(
+        &'a mut self, other: &'a Self
+    ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map
             .iter()
-            .flat_map(move |(id, new)| match self.transit(id.0.clone(), new.end, TrackPermit::REPLACE) {
+            .flat_map(move |(id, new)| match self.transit(id.0.clone(), &new.ref_count, new.last, TrackPermit::REPLACE) {
                 Ok(Tracktion::Init) |
                 Ok(Tracktion::Keep) => None,
-                Ok(Tracktion::Replace { old }) => Some((id.0.clone(), old .. new.end)),
+                Ok(Tracktion::Replace { old }) => Some((id.0.clone(), old .. new.last)),
                 Ok(Tracktion::Extend { .. }) |
                 Err(_) => panic!("Unable to consume a resource transition!"),
             })

@@ -16,10 +16,10 @@ pub struct ComputePass<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> ComputePass<B> {
-    pub fn new(raw: B::CommandBuffer, cmb_id: CommandBufferId) -> Self {
+    pub(crate) fn new(raw: B::CommandBuffer, cmb_id: Stored<CommandBufferId>) -> Self {
         ComputePass {
             raw,
-            cmb_id: Stored(cmb_id),
+            cmb_id,
         }
     }
 }
@@ -34,10 +34,10 @@ pub extern "C" fn wgpu_compute_pass_end_pass(
 
     HUB.command_buffers
         .lock()
-        .get_mut(pass.cmb_id.0)
+        .get_mut(pass.cmb_id.value)
         .raw
         .push(pass.raw);
-    pass.cmb_id.0
+    pass.cmb_id.value
 }
 
 pub extern "C" fn wgpu_compute_pass_set_bind_group(

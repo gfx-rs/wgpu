@@ -2,8 +2,9 @@ use {back, binding_model, command, conv, pipeline, resource};
 use registry::{HUB, Items, Registry};
 use track::{BufferTracker, TextureTracker};
 use {
-    CommandBuffer, Stored, TextureUsageFlags,
-    BindGroupLayoutId, BlendStateId, CommandBufferId, DepthStencilStateId,
+    CommandBuffer, LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
+    TextureUsageFlags,
+    BindGroupLayoutId, BlendStateId, BufferId, CommandBufferId, DepthStencilStateId,
     DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
     TextureId, TextureViewId,
 };
@@ -16,6 +17,7 @@ use rendy_memory::{allocator, Config, Heaps};
 use std::{ffi, slice};
 use std::collections::hash_map::{Entry, HashMap};
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 
 
 #[derive(Hash, PartialEq)]
@@ -26,21 +28,67 @@ impl Eq for RenderPassKey {}
 
 #[derive(Hash, PartialEq)]
 pub(crate) struct FramebufferKey {
-    pub attachments: Vec<Stored<TextureViewId>>,
+    pub attachments: Vec<WeaklyStored<TextureViewId>>,
 }
 impl Eq for FramebufferKey {}
 
+enum Resource {
+    Buffer(BufferId),
+    Texture(TextureId),
+}
+
+struct ActiveFrame<B: hal::Backend> {
+    submission_index: SubmissionIndex,
+    fence: B::Fence,
+    resources: Vec<Resource>,
+}
+
+struct DestroyedResources<B: hal::Backend> {
+    /// Resources that are destroyed by the user but still referenced by
+    /// other objects or command buffers.
+    referenced: Vec<(Resource, RefCount)>,
+    /// Resources that are not referenced any more but still used by GPU.
+    /// Grouped by frames associated with a fence and a submission index.
+    active: Vec<ActiveFrame<B>>,
+    /// Resources that are neither referenced or used, just pending
+    /// actual deletion.
+    free: Vec<Resource>,
+}
+
+unsafe impl<B: hal::Backend> Send for DestroyedResources<B> {}
+unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
+
+impl<B: hal::Backend> DestroyedResources<B> {
+    fn add(&mut self, resource: Resource, life_guard: &LifeGuard) {
+        if life_guard.ref_count.load() == 1 {
+            let sub_index = life_guard.submission_index.load(Ordering::Acquire);
+            match self.active.iter_mut().find(|af| af.submission_index == sub_index) {
+                Some(frame) => {
+                    frame.resources.push(resource);
+                }
+                None => {
+                    self.free.push(resource);
+                }
+            }
+        } else {
+            self.referenced.push((resource, life_guard.ref_count.clone()));
+        }
+    }
+}
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     queue_group: hal::QueueGroup<B, hal::General>,
     mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
+    life_guard: LifeGuard,
     buffer_tracker: Mutex<BufferTracker>,
     texture_tracker: Mutex<TextureTracker>,
     mem_props: hal::MemoryProperties,
     pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<HashMap<FramebufferKey, B::Framebuffer>>,
+    last_submission_index: SubmissionIndex,
+    destroyed: Mutex<DestroyedResources<B>>,
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -75,11 +123,18 @@ impl<B: hal::Backend> Device<B> {
             mem_allocator,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
+            life_guard: LifeGuard::new(),
             buffer_tracker: Mutex::new(BufferTracker::new()),
             texture_tracker: Mutex::new(TextureTracker::new()),
             mem_props,
             render_passes: Mutex::new(HashMap::new()),
             framebuffers: Mutex::new(HashMap::new()),
+            last_submission_index: 0,
+            destroyed: Mutex::new(DestroyedResources {
+                referenced: Vec::new(),
+                active: Vec::new(),
+                free: Vec::new(),
+            }),
         }
     }
 }
@@ -136,19 +191,28 @@ pub extern "C" fn wgpu_device_create_texture(
         layers: 0 .. 1, //TODO
     };
 
+    let life_guard = LifeGuard::new();
+    let ref_count = life_guard.ref_count.clone();
     let id = HUB.textures
         .lock()
         .register(resource::Texture {
             raw: bound_image,
-            device_id: Stored(device_id),
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.ref_count.clone(),
+            },
             kind,
             format: desc.format,
             full_range,
+            life_guard,
         });
     let query = device.texture_tracker
         .lock()
         .unwrap()
-        .query(id, TextureUsageFlags::WRITE_ALL);
+        .query(
+            &Stored { value: id, ref_count },
+            TextureUsageFlags::WRITE_ALL,
+        );
     assert!(query.initialized);
 
     id
@@ -164,7 +228,7 @@ pub extern "C" fn wgpu_texture_create_texture_view(
 
     let raw = HUB.devices
         .lock()
-        .get(texture.device_id.0)
+        .get(texture.device_id.value)
         .raw
         .create_image_view(
             &texture.raw,
@@ -183,10 +247,14 @@ pub extern "C" fn wgpu_texture_create_texture_view(
         .lock()
         .register(resource::TextureView {
             raw,
-            texture_id: Stored(texture_id),
+            texture_id: Stored {
+                value: texture_id,
+                ref_count: texture.life_guard.ref_count.clone(),
+            },
             format: texture.format,
             extent: texture.kind.extent(),
             samples: texture.kind.num_samples(),
+            life_guard: LifeGuard::new(),
         })
 }
 
@@ -205,7 +273,7 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
 
     let raw = HUB.devices
         .lock()
-        .get(texture.device_id.0)
+        .get(texture.device_id.value)
         .raw
         .create_image_view(
             &texture.raw,
@@ -220,13 +288,38 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
         .lock()
         .register(resource::TextureView {
             raw,
-            texture_id: Stored(texture_id),
+            texture_id: Stored {
+                value: texture_id,
+                ref_count: texture.life_guard.ref_count.clone(),
+            },
             format: texture.format,
             extent: texture.kind.extent(),
             samples: texture.kind.num_samples(),
+            life_guard: LifeGuard::new(),
         })
 }
 
+#[no_mangle]
+pub extern "C" fn wgpu_texture_destroy(
+    texture_id: DeviceId,
+) {
+    let texture_guard = HUB.textures.lock();
+    let texture = texture_guard.get(texture_id);
+    let device_guard = HUB.devices.lock();
+    device_guard
+        .get(texture.device_id.value)
+        .destroyed
+        .lock()
+        .unwrap()
+        .add(Resource::Texture(texture_id), &texture.life_guard);
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_texture_view_destroy(
+    _texture_view_id: TextureViewId,
+) {
+    unimplemented!()
+}
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group_layout(
@@ -338,7 +431,11 @@ pub extern "C" fn wgpu_device_create_command_buffer(
     let device_guard = HUB.devices.lock();
     let device = device_guard.get(device_id);
 
-    let mut cmd_buf = device.com_allocator.allocate(device_id, &device.raw);
+    let dev_stored = Stored {
+        value: device_id,
+        ref_count: device.life_guard.ref_count.clone(),
+    };
+    let mut cmd_buf = device.com_allocator.allocate(dev_stored, &device.raw);
     cmd_buf.raw.last_mut().unwrap().begin(
         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
         hal::command::CommandBufferInheritanceInfo::default(),
