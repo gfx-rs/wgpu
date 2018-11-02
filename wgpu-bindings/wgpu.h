@@ -387,3 +387,7 @@ WGPUTextureViewId wgpu_texture_create_default_texture_view(WGPUTextureId texture
 
 WGPUTextureViewId wgpu_texture_create_texture_view(WGPUTextureId texture_id,
                                                    const WGPUTextureViewDescriptor *desc);
+
+void wgpu_texture_destroy(WGPUDeviceId texture_id);
+
+void wgpu_texture_view_destroy(WGPUTextureViewId _texture_view_id);

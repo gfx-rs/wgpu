@@ -1,5 +1,5 @@
 use {back, binding_model, command, conv, pipeline, resource};
-use registry::{HUB, Items, Registry};
+use registry::{HUB, Items, ItemsGuard, Registry};
 use track::{BufferTracker, TextureTracker};
 use {
     CommandBuffer, LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
@@ -32,46 +32,94 @@ pub(crate) struct FramebufferKey {
 }
 impl Eq for FramebufferKey {}
 
-enum Resource {
+enum ResourceId {
     Buffer(BufferId),
     Texture(TextureId),
+}
+
+enum Resource<B: hal::Backend> {
+    Buffer(resource::Buffer<B>),
+    Texture(resource::Texture<B>),
 }
 
 struct ActiveFrame<B: hal::Backend> {
     submission_index: SubmissionIndex,
     fence: B::Fence,
-    resources: Vec<Resource>,
+    resources: Vec<Resource<B>>,
 }
 
 struct DestroyedResources<B: hal::Backend> {
     /// Resources that are destroyed by the user but still referenced by
     /// other objects or command buffers.
-    referenced: Vec<(Resource, RefCount)>,
+    referenced: Vec<(ResourceId, RefCount)>,
     /// Resources that are not referenced any more but still used by GPU.
     /// Grouped by frames associated with a fence and a submission index.
     active: Vec<ActiveFrame<B>>,
     /// Resources that are neither referenced or used, just pending
     /// actual deletion.
-    free: Vec<Resource>,
+    free: Vec<Resource<B>>,
 }
 
 unsafe impl<B: hal::Backend> Send for DestroyedResources<B> {}
 unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
 
 impl<B: hal::Backend> DestroyedResources<B> {
-    fn add(&mut self, resource: Resource, life_guard: &LifeGuard) {
-        if life_guard.ref_count.load() == 1 {
-            let sub_index = life_guard.submission_index.load(Ordering::Acquire);
-            match self.active.iter_mut().find(|af| af.submission_index == sub_index) {
-                Some(frame) => {
-                    frame.resources.push(resource);
-                }
-                None => {
-                    self.free.push(resource);
+    fn add(&mut self, resource_id: ResourceId, life_guard: &LifeGuard) {
+        self.referenced.push((resource_id, life_guard.ref_count.clone()));
+    }
+
+    fn triage_referenced(
+        &mut self,
+        buffer_guard: &mut ItemsGuard<resource::Buffer<B>>,
+        texture_guard: &mut ItemsGuard<resource::Texture<B>>,
+    ) {
+        for i in (0 .. self.referenced.len()).rev() {
+            // one in resource itself, and one here in this list
+            let num_refs = self.referenced[i].1.load();
+            if num_refs <= 2 {
+                assert_eq!(num_refs, 2);
+                let resource_id = self.referenced.swap_remove(i).0;
+                let (submit_index, resource) = match resource_id {
+                    ResourceId::Buffer(id) => {
+                        let buf = buffer_guard.take(id);
+                        let si = buf.life_guard.submission_index.load(Ordering::Acquire);
+                        (si, Resource::Buffer(buf))
+                    }
+                    ResourceId::Texture(id) => {
+                        let tex = texture_guard.take(id);
+                        let si = tex.life_guard.submission_index.load(Ordering::Acquire);
+                        (si, Resource::Texture(tex))
+                    }
+                };
+                match self.active
+                    .iter_mut()
+                    .find(|af| af.submission_index == submit_index)
+                {
+                    Some(af) => af.resources.push(resource),
+                    None => self.free.push(resource),
                 }
             }
-        } else {
-            self.referenced.push((resource, life_guard.ref_count.clone()));
+        }
+    }
+
+    fn cleanup(&mut self, raw: &B::Device) {
+        for i in (0 .. self.active.len()).rev() {
+            if raw.get_fence_status(&self.active[i].fence) {
+                let af = self.active.swap_remove(i);
+                self.free.extend(af.resources);
+                raw.destroy_fence(af.fence);
+            }
+        }
+
+        for resource in self.free.drain(..) {
+            match resource {
+                Resource::Buffer(buf) => {
+                    raw.destroy_buffer(buf.raw);
+                }
+                Resource::Texture(tex) => {
+                    raw.destroy_image(tex.raw);
+                }
+            }
         }
     }
 }
@@ -311,7 +359,7 @@ pub extern "C" fn wgpu_texture_destroy(
         .destroyed
         .lock()
         .unwrap()
-        .add(Resource::Texture(texture_id), &texture.life_guard);
+        .add(ResourceId::Texture(texture_id), &texture.life_guard);
 }
 
 #[no_mangle]
@@ -468,6 +516,9 @@ pub extern "C" fn wgpu_queue_submit(
     // native command buffer of the previous chain instead of always creating
     // a temporary one, since the chains are not finished.
 
+    //TODO: add used resources to the active frame
+    let mut resources = Vec::new();
+
     // finish all the command buffers first
     for &cmb_id in command_buffer_ids {
         let comb = command_buffer_guard.get_mut(cmb_id);
@@ -476,6 +527,7 @@ pub extern "C" fn wgpu_queue_submit(
             hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
             hal::command::CommandBufferInheritanceInfo::default(),
         );
+        //TODO: fix the consume
         CommandBuffer::insert_barriers(
             &mut transit,
             buffer_tracker.consume(&comb.buffer_tracker),
@@ -490,6 +542,7 @@ pub extern "C" fn wgpu_queue_submit(
     }
 
     // now prepare the GPU submission
+    let fence = device.raw.create_fence(false);
     {
         let submission = hal::queue::RawSubmission {
             cmd_buffers: command_buffer_ids
@@ -503,8 +556,24 @@ pub extern "C" fn wgpu_queue_submit(
         unsafe {
             device.queue_group.queues[0]
                 .as_raw_mut()
-                .submit_raw(submission, None);
+                .submit_raw(submission, Some(&fence));
         }
+    }
+
+    let old_submit_index = device.life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
+
+    if let Ok(mut destroyed) = device.destroyed.lock() {
+        let mut buffer_guard = HUB.buffers.lock();
+        let mut texture_guard = HUB.textures.lock();
+
+        destroyed.triage_referenced(&mut buffer_guard, &mut texture_guard);
+        destroyed.cleanup(&device.raw);
+
+        destroyed.active.push(ActiveFrame {
+            submission_index: old_submit_index + 1,
+            fence,
+            resources,
+        });
     }
 
     // finally, return the command buffers to the allocator
