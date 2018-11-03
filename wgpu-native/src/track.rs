@@ -3,6 +3,7 @@ use resource::{BufferUsageFlags, TextureUsageFlags};
 
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;
+use std::mem;
 use std::ops::{BitOr, Range};
 
 
@@ -42,6 +43,7 @@ impl GenericUsage for TextureUsageFlags {
     }
 }
 
+#[derive(Clone)]
 struct Track<U> {
     ref_count: RefCount,
     init: U,
@@ -126,12 +128,19 @@ impl<
     ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map
             .iter()
-            .flat_map(move |(id, new)| match self.transit(id.0.clone(), &new.ref_count, new.last, TrackPermit::REPLACE) {
-                Ok(Tracktion::Init) |
-                Ok(Tracktion::Keep) => None,
-                Ok(Tracktion::Replace { old }) => Some((id.0.clone(), old .. new.last)),
-                Ok(Tracktion::Extend { .. }) |
-                Err(_) => panic!("Unable to consume a resource transition!"),
+            .flat_map(move |(id, new)| match self.map.entry(WeaklyStored(id.0.clone())) {
+                Entry::Vacant(e) => {
+                    e.insert(new.clone());
+                    None
+                }
+                Entry::Occupied(mut e) => {
+                    let old = mem::replace(&mut e.get_mut().last, new.last);
+                    if old == new.init {
+                        None
+                    } else {
+                        Some((id.0.clone(), old .. new.last))
+                    }
+                }
             })
     }
 }
