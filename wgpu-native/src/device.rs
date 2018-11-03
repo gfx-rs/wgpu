@@ -512,16 +512,26 @@ pub extern "C" fn wgpu_queue_submit(
         slice::from_raw_parts(command_buffer_ptr, command_buffer_count)
     };
 
+    let mut buffer_guard = HUB.buffers.lock();
+    let mut texture_guard = HUB.textures.lock();
+    let old_submit_index = device.life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
+
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
     // a temporary one, since the chains are not finished.
 
-    //TODO: add used resources to the active frame
-    let mut resources = Vec::new();
-
     // finish all the command buffers first
     for &cmb_id in command_buffer_ids {
         let comb = command_buffer_guard.get_mut(cmb_id);
+        // update submission IDs
+        for id in comb.buffer_tracker.used() {
+            buffer_guard.get(id).life_guard.submission_index.store(old_submit_index, Ordering::Release);
+        }
+        for id in comb.texture_tracker.used() {
+            texture_guard.get(id).life_guard.submission_index.store(old_submit_index, Ordering::Release);
+        }
+
+        // execute resource transitions
         let mut transit = device.com_allocator.extend(comb);
         transit.begin(
             hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
@@ -560,19 +570,14 @@ pub extern "C" fn wgpu_queue_submit(
         }
     }
 
-    let old_submit_index = device.life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
-
     if let Ok(mut destroyed) = device.destroyed.lock() {
-        let mut buffer_guard = HUB.buffers.lock();
-        let mut texture_guard = HUB.textures.lock();
-
         destroyed.triage_referenced(&mut buffer_guard, &mut texture_guard);
         destroyed.cleanup(&device.raw);
 
         destroyed.active.push(ActiveFrame {
             submission_index: old_submit_index + 1,
             fence,
-            resources,
+            resources: Vec::new(),
         });
     }
 

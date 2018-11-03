@@ -70,6 +70,7 @@ impl<
         }
     }
 
+    /// Get the last usage on a resource.
     pub(crate) fn query(
         &mut self, stored: &Stored<I>, default: U
     ) -> Query<U> {
@@ -94,6 +95,7 @@ impl<
         }
     }
 
+    /// Transit a specified resource into a different usage.
     pub(crate) fn transit(
         &mut self, id: I, ref_count: &RefCount, usage: U, permit: TrackPermit
     ) -> Result<Tracktion<U>, U> {
@@ -123,6 +125,7 @@ impl<
         }
     }
 
+    /// Consume another tacker, adding it's transitions to `self`.
     pub fn consume<'a>(
         &'a mut self, other: &'a Self
     ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
@@ -142,5 +145,10 @@ impl<
                     }
                 }
             })
+    }
+
+    /// Return an iterator over used resources keys.
+    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
+        self.map.keys().map(|&WeaklyStored(ref id)| id.clone())
     }
 }
