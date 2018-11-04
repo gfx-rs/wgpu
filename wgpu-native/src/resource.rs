@@ -1,5 +1,5 @@
 use {
-    Extent3d, Stored,
+    Extent3d, LifeGuard, Stored,
     DeviceId, TextureId,
 };
 
@@ -32,6 +32,7 @@ pub(crate) struct Buffer<B: hal::Backend> {
     //pub raw: B::UnboundBuffer,
     pub raw: B::Buffer,
     pub memory_properties: hal::memory::Properties,
+    pub life_guard: LifeGuard,
     // TODO: mapping, unmap()
 }
 
@@ -82,6 +83,7 @@ pub(crate) struct Texture<B: hal::Backend> {
     pub kind: hal::image::Kind,
     pub format: TextureFormat,
     pub full_range: hal::image::SubresourceRange,
+    pub life_guard: LifeGuard,
 }
 
 
@@ -122,6 +124,7 @@ pub(crate) struct TextureView<B: hal::Backend> {
     pub format: TextureFormat,
     pub extent: hal::image::Extent,
     pub samples: hal::image::NumSamples,
+    pub life_guard: LifeGuard,
 }
 
 

@@ -2,7 +2,7 @@ mod allocator;
 mod compute;
 mod render;
 
-pub use self::allocator::CommandAllocator;
+pub(crate) use self::allocator::CommandAllocator;
 pub use self::compute::*;
 pub use self::render::*;
 
@@ -10,7 +10,7 @@ use hal::{self, Device};
 use hal::command::RawCommandBuffer;
 
 use {
-    B, Color, Origin3d, Stored, BufferUsageFlags, TextureUsageFlags,
+    B, Color, LifeGuard, Origin3d, Stored, BufferUsageFlags, TextureUsageFlags, WeaklyStored,
     BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
 use conv;
@@ -83,6 +83,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     fence: B::Fence,
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
+    life_guard: LifeGuard,
     pub(crate) buffer_tracker: BufferTracker,
     pub(crate) texture_tracker: TextureTracker,
 }
@@ -139,7 +140,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     let mut cmb_guard = HUB.command_buffers.lock();
     let cmb = cmb_guard.get_mut(command_buffer_id);
     let device_guard = HUB.devices.lock();
-    let device = device_guard.get(cmb.device_id.0);
+    let device = device_guard.get(cmb.device_id.value);
     let view_guard = HUB.texture_views.lock();
 
     let mut current_comb = device.com_allocator.extend(cmb);
@@ -160,7 +161,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 } else {
                     extent = Some(view.extent);
                 }
-                let query = tracker.query(view.texture_id.0, TextureUsageFlags::empty());
+                let query = tracker.query(&view.texture_id, TextureUsageFlags::empty());
                 let (_, layout) = conv::map_texture_state(
                     query.usage,
                     hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
@@ -185,7 +186,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 } else {
                     extent = Some(view.extent);
                 }
-                let query = tracker.query(view.texture_id.0, TextureUsageFlags::empty());
+                let query = tracker.query(&view.texture_id, TextureUsageFlags::empty());
                 let (_, layout) = conv::map_texture_state(query.usage, hal::format::Aspects::COLOR);
                 hal::pass::Attachment {
                     format: Some(conv::map_texture_format(view.format)),
@@ -234,8 +235,8 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     let fb_key = FramebufferKey {
         attachments: desc.color_attachments
             .iter()
-            .map(|at| Stored(at.attachment))
-            .chain(desc.depth_stencil_attachment.as_ref().map(|at| Stored(at.attachment)))
+            .map(|at| WeaklyStored(at.attachment))
+            .chain(desc.depth_stencil_attachment.as_ref().map(|at| WeaklyStored(at.attachment)))
             .collect(),
     };
     let framebuffer = match framebuffer_cache.entry(fb_key) {
@@ -246,7 +247,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                     .key()
                     .attachments
                     .iter()
-                    .map(|&Stored(id)| &view_guard.get(id).raw);
+                    .map(|&WeaklyStored(id)| &view_guard.get(id).raw);
 
                 device.raw
                     .create_framebuffer(&render_pass, attachments, extent.unwrap())
@@ -289,7 +290,10 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
         .lock()
         .register(RenderPass::new(
             current_comb,
-            command_buffer_id,
+            Stored {
+                value: command_buffer_id,
+                ref_count: cmb.life_guard.ref_count.clone(),
+            },
         ))
 }
 
@@ -301,8 +305,12 @@ pub extern "C" fn wgpu_command_buffer_begin_compute_pass(
     let cmb = cmb_guard.get_mut(command_buffer_id);
 
     let raw = cmb.raw.pop().unwrap();
+    let stored = Stored {
+        value: command_buffer_id,
+        ref_count: cmb.life_guard.ref_count.clone(),
+    };
 
     HUB.compute_passes
         .lock()
-        .register(ComputePass::new(raw, command_buffer_id))
+        .register(ComputePass::new(raw, stored))
 }

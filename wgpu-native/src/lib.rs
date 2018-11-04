@@ -43,12 +43,78 @@ pub use self::resource::*;
 use back::Backend as B;
 use registry::Id;
 
-#[derive(Debug, Hash, PartialEq, Eq)]
-struct Stored<T>(T);
-#[cfg(not(feature = "remote"))]
-unsafe impl<T> Sync for Stored<T> {}
-#[cfg(not(feature = "remote"))]
+use std::ptr;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+
+//#[cfg(not(feature = "remote"))]
+//unsafe impl<T> Sync for Stored<T> {}
+//#[cfg(not(feature = "remote"))]
+//unsafe impl<T> Send for Stored<T> {}
+
+type SubmissionIndex = usize;
+
+#[derive(Debug)]
+struct RefCount(ptr::NonNull<AtomicUsize>);
+
+impl RefCount {
+    const MAX: usize = 1 << 24;
+
+    fn load(&self) -> usize {
+        unsafe { self.0.as_ref() }.load(Ordering::Acquire)
+    }
+}
+
+impl Clone for RefCount {
+    fn clone(&self) -> Self {
+        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Relaxed);
+        assert!(old_size < Self::MAX);
+        RefCount(self.0)
+    }
+}
+
+impl Drop for RefCount {
+    fn drop(&mut self) {
+        if unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::Relaxed) == 1 {
+            let _ = unsafe { Box::from_raw(self.0.as_ptr()) };
+        }
+    }
+}
+
+struct LifeGuard {
+    ref_count: RefCount,
+    submission_index: AtomicUsize,
+}
+
+//TODO: reconsider this
+unsafe impl Send for LifeGuard {}
+unsafe impl Sync for LifeGuard {}
+
+impl LifeGuard {
+    fn new() -> Self {
+        let bx = Box::new(AtomicUsize::new(1));
+        LifeGuard {
+            ref_count: RefCount(ptr::NonNull::new(Box::into_raw(bx)).unwrap()),
+            submission_index: AtomicUsize::new(0),
+        }
+    }
+}
+
+#[derive(Debug)]
+struct Stored<T> {
+    value: T,
+    ref_count: RefCount,
+}
+
 unsafe impl<T> Send for Stored<T> {}
+unsafe impl<T> Sync for Stored<T> {}
+
+#[derive(Debug, Hash, PartialEq, Eq)]
+struct WeaklyStored<T>(T);
+
+unsafe impl<T> Send for WeaklyStored<T> {}
+unsafe impl<T> Sync for WeaklyStored<T> {}
+
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]

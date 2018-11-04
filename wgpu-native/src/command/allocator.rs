@@ -1,5 +1,5 @@
 use super::CommandBuffer;
-use {DeviceId, Stored};
+use {DeviceId, LifeGuard, Stored};
 use track::{Tracker};
 
 use hal::command::RawCommandBuffer;
@@ -61,8 +61,8 @@ impl<B: hal::Backend> CommandAllocator<B> {
         }
     }
 
-    pub fn allocate(
-        &self, device_id: DeviceId, device: &B::Device
+    pub(crate) fn allocate(
+        &self, device_id: Stored<DeviceId>, device: &B::Device
     ) -> CommandBuffer<B> {
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock().unwrap();
@@ -90,7 +90,8 @@ impl<B: hal::Backend> CommandAllocator<B> {
             raw: vec![init],
             fence,
             recorded_thread_id: thread_id,
-            device_id: Stored(device_id),
+            device_id,
+            life_guard: LifeGuard::new(),
             buffer_tracker: Tracker::new(),
             texture_tracker: Tracker::new(),
         }

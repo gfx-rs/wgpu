@@ -17,13 +17,13 @@ pub struct RenderPass<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> RenderPass<B> {
-    pub fn new(
+    pub(crate) fn new(
         raw: B::CommandBuffer,
-        cmb_id: CommandBufferId,
+        cmb_id: Stored<CommandBufferId>,
     ) -> Self {
         RenderPass {
             raw,
-            cmb_id: Stored(cmb_id),
+            cmb_id,
             buffer_tracker: BufferTracker::new(),
             texture_tracker: TextureTracker::new(),
         }
@@ -40,7 +40,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(
     pass.raw.end_render_pass();
 
     let mut cmb_guard = HUB.command_buffers.lock();
-    let cmb = cmb_guard.get_mut(pass.cmb_id.0);
+    let cmb = cmb_guard.get_mut(pass.cmb_id.value);
 
     if let Some(ref mut last) = cmb.raw.last_mut() {
         CommandBuffer::insert_barriers(
@@ -52,5 +52,5 @@ pub extern "C" fn wgpu_render_pass_end_pass(
     }
 
     cmb.raw.push(pass.raw);
-    pass.cmb_id.0
+    pass.cmb_id.value
 }
