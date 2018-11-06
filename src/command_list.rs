@@ -2,7 +2,7 @@
 
 use com::WeakPtr;
 use resource::DiscardRegion;
-use std::mem;
+use std::{mem, ptr};
 use winapi::um::d3d12;
 use {
     CommandAllocator, CpuDescriptor, DescriptorHeap, Format, GpuAddress, GpuDescriptor, IndexCount,
@@ -96,21 +96,33 @@ impl GraphicsCommandList {
         stencil: u8,
         rects: &[Rect],
     ) {
+        let num_rects = rects.len() as _;
+        let rects = if num_rects > 0 {
+            rects.as_ptr()
+        } else {
+            ptr::null()
+        };
         unsafe {
             self.ClearDepthStencilView(
                 dsv,
                 flags.bits(),
                 depth,
                 stencil,
-                rects.len() as _,
-                rects.as_ptr(),
+                num_rects,
+                rects,
             );
         }
     }
 
     pub fn clear_render_target_view(&self, rtv: CpuDescriptor, color: [f32; 4], rects: &[Rect]) {
+        let num_rects = rects.len() as _;
+        let rects = if num_rects > 0 {
+            rects.as_ptr()
+        } else {
+            ptr::null()
+        };
         unsafe {
-            self.ClearRenderTargetView(rtv, &color, rects.len() as _, rects.as_ptr());
+            self.ClearRenderTargetView(rtv, &color, num_rects, rects);
         }
     }
 
