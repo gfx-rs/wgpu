@@ -29,7 +29,7 @@ pub use self::pso::{CachedPSO, PipelineState, Shader};
 pub use self::query::QueryHeap;
 pub use self::queue::CommandQueue;
 pub use self::resource::{Heap, Resource};
-pub use self::sync::Fence;
+pub use self::sync::{Event, Fence};
 
 pub use winapi::shared::winerror::HRESULT;
 
