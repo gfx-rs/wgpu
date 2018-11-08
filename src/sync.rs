@@ -6,7 +6,7 @@ use HRESULT;
 
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-pub struct Event(winnt::HANDLE);
+pub struct Event(pub winnt::HANDLE);
 impl Event {
     pub fn create(manual_reset: bool, initial_state: bool) -> Self {
         Event(unsafe {
