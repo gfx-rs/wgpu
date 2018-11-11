@@ -12,7 +12,7 @@ use {
 use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
 use hal::{self, Device as _Device};
-use rendy_memory::{allocator, Config, Heaps};
+//use rendy_memory::{allocator, Config, Heaps};
 
 use std::{ffi, slice};
 use std::collections::hash_map::{Entry, HashMap};
@@ -127,7 +127,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     queue_group: hal::QueueGroup<B, hal::General>,
-    mem_allocator: Heaps<B::Memory>,
+    //mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     life_guard: LifeGuard,
     buffer_tracker: Mutex<BufferTracker>,
@@ -147,7 +147,7 @@ impl<B: hal::Backend> Device<B> {
     ) -> Self {
         // TODO: These values are just taken from rendy's test
         // Need to set reasonable values per memory type instead
-        let arena = Some(allocator::ArenaConfig {
+        /*let arena = Some(allocator::ArenaConfig {
             arena_size: 32 * 1024,
         });
         let dynamic = Some(allocator::DynamicConfig {
@@ -164,11 +164,11 @@ impl<B: hal::Backend> Device<B> {
                     .map(|mt| (mt.properties.into(), mt.heap_index as u32, config)),
                 mem_props.memory_heaps.clone(),
             )
-        };
+        };*/
 
         Device {
             raw,
-            mem_allocator,
+            //mem_allocator,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
             life_guard: LifeGuard::new(),
