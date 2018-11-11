@@ -265,77 +265,77 @@ typedef struct {
   uint32_t array_count;
 } WGPUTextureViewDescriptor;
 
-#define WGPUBufferUsageFlags_INDEX (BufferUsageFlags){ .bits = 16 }
+#define WGPUBufferUsageFlags_INDEX (WGPUBufferUsageFlags){ .bits = 16 }
 
-#define WGPUBufferUsageFlags_MAP_READ (BufferUsageFlags){ .bits = 1 }
+#define WGPUBufferUsageFlags_MAP_READ (WGPUBufferUsageFlags){ .bits = 1 }
 
-#define WGPUBufferUsageFlags_MAP_WRITE (BufferUsageFlags){ .bits = 2 }
+#define WGPUBufferUsageFlags_MAP_WRITE (WGPUBufferUsageFlags){ .bits = 2 }
 
-#define WGPUBufferUsageFlags_NONE (BufferUsageFlags){ .bits = 0 }
+#define WGPUBufferUsageFlags_NONE (WGPUBufferUsageFlags){ .bits = 0 }
 
-#define WGPUBufferUsageFlags_STORAGE (BufferUsageFlags){ .bits = 128 }
+#define WGPUBufferUsageFlags_STORAGE (WGPUBufferUsageFlags){ .bits = 128 }
 
-#define WGPUBufferUsageFlags_TRANSFER_DST (BufferUsageFlags){ .bits = 8 }
+#define WGPUBufferUsageFlags_TRANSFER_DST (WGPUBufferUsageFlags){ .bits = 8 }
 
-#define WGPUBufferUsageFlags_TRANSFER_SRC (BufferUsageFlags){ .bits = 4 }
+#define WGPUBufferUsageFlags_TRANSFER_SRC (WGPUBufferUsageFlags){ .bits = 4 }
 
-#define WGPUBufferUsageFlags_UNIFORM (BufferUsageFlags){ .bits = 64 }
+#define WGPUBufferUsageFlags_UNIFORM (WGPUBufferUsageFlags){ .bits = 64 }
 
-#define WGPUBufferUsageFlags_VERTEX (BufferUsageFlags){ .bits = 32 }
+#define WGPUBufferUsageFlags_VERTEX (WGPUBufferUsageFlags){ .bits = 32 }
 
-#define WGPUColorWriteFlags_ALL (ColorWriteFlags){ .bits = 15 }
+#define WGPUColorWriteFlags_ALL (WGPUColorWriteFlags){ .bits = 15 }
 
-#define WGPUColorWriteFlags_ALPHA (ColorWriteFlags){ .bits = 8 }
+#define WGPUColorWriteFlags_ALPHA (WGPUColorWriteFlags){ .bits = 8 }
 
-#define WGPUColorWriteFlags_BLUE (ColorWriteFlags){ .bits = 4 }
+#define WGPUColorWriteFlags_BLUE (WGPUColorWriteFlags){ .bits = 4 }
 
-#define WGPUColorWriteFlags_COLOR (ColorWriteFlags){ .bits = 7 }
+#define WGPUColorWriteFlags_COLOR (WGPUColorWriteFlags){ .bits = 7 }
 
-#define WGPUColorWriteFlags_GREEN (ColorWriteFlags){ .bits = 2 }
+#define WGPUColorWriteFlags_GREEN (WGPUColorWriteFlags){ .bits = 2 }
 
-#define WGPUColorWriteFlags_RED (ColorWriteFlags){ .bits = 1 }
+#define WGPUColorWriteFlags_RED (WGPUColorWriteFlags){ .bits = 1 }
 
-#define WGPUColor_BLACK (Color){ .r = 0, .g = 0, .b = 0, .a = 1 }
+#define WGPUColor_BLACK (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 1 }
 
-#define WGPUColor_BLUE (Color){ .r = 0, .g = 0, .b = 1, .a = 1 }
+#define WGPUColor_BLUE (WGPUColor){ .r = 0, .g = 0, .b = 1, .a = 1 }
 
-#define WGPUColor_GREEN (Color){ .r = 0, .g = 1, .b = 0, .a = 1 }
+#define WGPUColor_GREEN (WGPUColor){ .r = 0, .g = 1, .b = 0, .a = 1 }
 
-#define WGPUColor_RED (Color){ .r = 1, .g = 0, .b = 0, .a = 1 }
+#define WGPUColor_RED (WGPUColor){ .r = 1, .g = 0, .b = 0, .a = 1 }
 
-#define WGPUColor_TRANSPARENT (Color){ .r = 0, .g = 0, .b = 0, .a = 0 }
+#define WGPUColor_TRANSPARENT (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 0 }
 
-#define WGPUColor_WHITE (Color){ .r = 1, .g = 1, .b = 1, .a = 1 }
+#define WGPUColor_WHITE (WGPUColor){ .r = 1, .g = 1, .b = 1, .a = 1 }
 
-#define WGPUShaderStageFlags_COMPUTE (ShaderStageFlags){ .bits = 4 }
+#define WGPUShaderStageFlags_COMPUTE (WGPUShaderStageFlags){ .bits = 4 }
 
-#define WGPUShaderStageFlags_FRAGMENT (ShaderStageFlags){ .bits = 2 }
+#define WGPUShaderStageFlags_FRAGMENT (WGPUShaderStageFlags){ .bits = 2 }
 
-#define WGPUShaderStageFlags_VERTEX (ShaderStageFlags){ .bits = 1 }
+#define WGPUShaderStageFlags_VERTEX (WGPUShaderStageFlags){ .bits = 1 }
 
-#define WGPUTextureAspectFlags_COLOR (TextureAspectFlags){ .bits = 1 }
+#define WGPUTextureAspectFlags_COLOR (WGPUTextureAspectFlags){ .bits = 1 }
 
-#define WGPUTextureAspectFlags_DEPTH (TextureAspectFlags){ .bits = 2 }
+#define WGPUTextureAspectFlags_DEPTH (WGPUTextureAspectFlags){ .bits = 2 }
 
-#define WGPUTextureAspectFlags_STENCIL (TextureAspectFlags){ .bits = 4 }
+#define WGPUTextureAspectFlags_STENCIL (WGPUTextureAspectFlags){ .bits = 4 }
 
-#define WGPUTextureUsageFlags_NONE (TextureUsageFlags){ .bits = 0 }
+#define WGPUTextureUsageFlags_NONE (WGPUTextureUsageFlags){ .bits = 0 }
 
-#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT (TextureUsageFlags){ .bits = 16 }
+#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT (WGPUTextureUsageFlags){ .bits = 16 }
 
-#define WGPUTextureUsageFlags_PRESENT (TextureUsageFlags){ .bits = 32 }
+#define WGPUTextureUsageFlags_PRESENT (WGPUTextureUsageFlags){ .bits = 32 }
 
-#define WGPUTextureUsageFlags_SAMPLED (TextureUsageFlags){ .bits = 4 }
+#define WGPUTextureUsageFlags_SAMPLED (WGPUTextureUsageFlags){ .bits = 4 }
 
-#define WGPUTextureUsageFlags_STORAGE (TextureUsageFlags){ .bits = 8 }
+#define WGPUTextureUsageFlags_STORAGE (WGPUTextureUsageFlags){ .bits = 8 }
 
-#define WGPUTextureUsageFlags_TRANSFER_DST (TextureUsageFlags){ .bits = 2 }
+#define WGPUTextureUsageFlags_TRANSFER_DST (WGPUTextureUsageFlags){ .bits = 2 }
 
-#define WGPUTextureUsageFlags_TRANSFER_SRC (TextureUsageFlags){ .bits = 1 }
+#define WGPUTextureUsageFlags_TRANSFER_SRC (WGPUTextureUsageFlags){ .bits = 1 }
 
-#define WGPUTrackPermit_EXTEND (TrackPermit){ .bits = 1 }
+#define WGPUTrackPermit_EXTEND (WGPUTrackPermit){ .bits = 1 }
 
-#define WGPUTrackPermit_REPLACE (TrackPermit){ .bits = 2 }
+#define WGPUTrackPermit_REPLACE (WGPUTrackPermit){ .bits = 2 }
 
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
                                         const WGPUDeviceDescriptor *_desc);
