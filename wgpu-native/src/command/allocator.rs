@@ -69,11 +69,11 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
         let fence = match inner.fences.pop() {
             Some(fence) => {
-                device.reset_fence(&fence);
+                device.reset_fence(&fence).unwrap();
                 fence
             }
             None => {
-                device.create_fence(false)
+                device.create_fence(false).unwrap()
             }
         };
 
@@ -81,7 +81,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             raw: device.create_command_pool(
                 self.queue_family,
                 hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-            ),
+            ).unwrap(),
             available: Vec::new(),
         });
         let init = pool.allocate();
@@ -120,7 +120,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     pub fn maintain(&self, device: &B::Device) {
         let mut inner = self.inner.lock().unwrap();
         for i in (0..inner.pending.len()).rev() {
-            if device.get_fence_status(&inner.pending[i].fence) {
+            if device.get_fence_status(&inner.pending[i].fence).unwrap() {
                 let cmd_buf = inner.pending.swap_remove(i);
                 inner.recycle(cmd_buf);
             }

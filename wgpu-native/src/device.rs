@@ -12,7 +12,7 @@ use {
 use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
 use hal::{self, Device as _Device};
-use rendy_memory::{allocator, Config, Heaps};
+//use rendy_memory::{allocator, Config, Heaps};
 
 use std::{ffi, slice};
 use std::collections::hash_map::{Entry, HashMap};
@@ -104,7 +104,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
 
     fn cleanup(&mut self, raw: &B::Device) {
         for i in (0 .. self.active.len()).rev() {
-            if raw.get_fence_status(&self.active[i].fence) {
+            if raw.get_fence_status(&self.active[i].fence).unwrap() {
                 let af = self.active.swap_remove(i);
                 self.free.extend(af.resources);
                 raw.destroy_fence(af.fence);
@@ -127,7 +127,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     queue_group: hal::QueueGroup<B, hal::General>,
-    mem_allocator: Heaps<B::Memory>,
+    //mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     life_guard: LifeGuard,
     buffer_tracker: Mutex<BufferTracker>,
@@ -147,7 +147,7 @@ impl<B: hal::Backend> Device<B> {
     ) -> Self {
         // TODO: These values are just taken from rendy's test
         // Need to set reasonable values per memory type instead
-        let arena = Some(allocator::ArenaConfig {
+        /*let arena = Some(allocator::ArenaConfig {
             arena_size: 32 * 1024,
         });
         let dynamic = Some(allocator::DynamicConfig {
@@ -164,11 +164,11 @@ impl<B: hal::Backend> Device<B> {
                     .map(|mt| (mt.properties.into(), mt.heap_index as u32, config)),
                 mem_props.memory_heaps.clone(),
             )
-        };
+        };*/
 
         Device {
             raw,
-            mem_allocator,
+            //mem_allocator,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
             life_guard: LifeGuard::new(),
@@ -391,7 +391,8 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
                 }
             }),
             &[],
-        );
+        )
+        .unwrap();
 
     HUB.bind_group_layouts
         .lock()
@@ -418,7 +419,8 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
         .lock()
         .get(device_id)
         .raw
-        .create_pipeline_layout(descriptor_set_layouts, &[]);
+        .create_pipeline_layout(descriptor_set_layouts, &[])
+        .unwrap();
 
     HUB.pipeline_layouts
         .lock()
@@ -552,7 +554,7 @@ pub extern "C" fn wgpu_queue_submit(
     }
 
     // now prepare the GPU submission
-    let fence = device.raw.create_fence(false);
+    let fence = device.raw.create_fence(false).unwrap();
     {
         let submission = hal::queue::RawSubmission {
             cmd_buffers: command_buffer_ids
@@ -667,7 +669,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
                 &e.key().attachments,
                 &[subpass],
                 &[],
-            );
+            ).unwrap();
             e.insert(pass)
         }
     };
