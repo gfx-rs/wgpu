@@ -226,7 +226,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 &e.key().attachments,
                 &[subpass],
                 &[],
-            );
+            ).unwrap();
             e.insert(pass)
         }
     };

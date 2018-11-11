@@ -104,7 +104,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
 
     fn cleanup(&mut self, raw: &B::Device) {
         for i in (0 .. self.active.len()).rev() {
-            if raw.get_fence_status(&self.active[i].fence) {
+            if raw.get_fence_status(&self.active[i].fence).unwrap() {
                 let af = self.active.swap_remove(i);
                 self.free.extend(af.resources);
                 raw.destroy_fence(af.fence);
@@ -391,7 +391,8 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
                 }
             }),
             &[],
-        );
+        )
+        .unwrap();
 
     HUB.bind_group_layouts
         .lock()
@@ -418,7 +419,8 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
         .lock()
         .get(device_id)
         .raw
-        .create_pipeline_layout(descriptor_set_layouts, &[]);
+        .create_pipeline_layout(descriptor_set_layouts, &[])
+        .unwrap();
 
     HUB.pipeline_layouts
         .lock()
@@ -552,7 +554,7 @@ pub extern "C" fn wgpu_queue_submit(
     }
 
     // now prepare the GPU submission
-    let fence = device.raw.create_fence(false);
+    let fence = device.raw.create_fence(false).unwrap();
     {
         let submission = hal::queue::RawSubmission {
             cmd_buffers: command_buffer_ids
@@ -667,7 +669,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
                 &e.key().attachments,
                 &[subpass],
                 &[],
-            );
+            ).unwrap();
             e.insert(pass)
         }
     };
