@@ -349,7 +349,7 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
 
 #[no_mangle]
 pub extern "C" fn wgpu_texture_destroy(
-    texture_id: DeviceId,
+    texture_id: TextureId,
 ) {
     let texture_guard = HUB.textures.lock();
     let texture = texture_guard.get(texture_id);
