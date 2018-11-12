@@ -40,6 +40,7 @@ pub extern "C" fn wgpu_compute_pass_end_pass(
     pass.cmb_id.value
 }
 
+#[no_mangle]
 pub extern "C" fn wgpu_compute_pass_set_bind_group(
     pass_id: ComputePassId, index: u32, bind_group_id: BindGroupId,
 ) {
@@ -55,6 +56,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
         .bind_compute_descriptor_sets(layout, index as usize, iter::once(set), &[]);
 }
 
+#[no_mangle]
 pub extern "C" fn wgpu_compute_pass_set_pipeline(
     pass_id: ComputePassId, pipeline_id: ComputePipelineId,
 ) {
@@ -68,6 +70,7 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
         .bind_compute_pipeline(pipeline);
 }
 
+#[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch(
     pass_id: ComputePassId, x: u32, y: u32, z: u32,
 ) {
