@@ -1,4 +1,4 @@
-use registry::{HUB, Items, Registry};
+use registry::{HUB, Items};
 use track::{BufferTracker, TextureTracker};
 use {
     CommandBuffer, Stored,
@@ -35,11 +35,11 @@ pub extern "C" fn wgpu_render_pass_end_pass(
     pass_id: RenderPassId,
 ) -> CommandBufferId {
     let mut pass = HUB.render_passes
-        .lock()
+        .write()
         .take(pass_id);
     pass.raw.end_render_pass();
 
-    let mut cmb_guard = HUB.command_buffers.lock();
+    let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(pass.cmb_id.value);
 
     if let Some(ref mut last) = cmb.raw.last_mut() {

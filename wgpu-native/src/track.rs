@@ -8,6 +8,7 @@ use std::ops::{BitOr, Range};
 
 
 #[derive(Clone, Debug, PartialEq)]
+#[allow(unused)]
 pub enum Tracktion<T> {
     Init,
     Keep,

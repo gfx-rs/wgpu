@@ -1,5 +1,5 @@
 use {back, binding_model, command, conv, pipeline, resource};
-use registry::{HUB, Items, ItemsGuard, Registry};
+use registry::{HUB, Items};
 use track::{BufferTracker, TextureTracker};
 use {
     CommandBuffer, LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
@@ -16,7 +16,8 @@ use hal::{self, Device as _Device};
 
 use std::{ffi, slice};
 use std::collections::hash_map::{Entry, HashMap};
-use std::sync::Mutex;
+
+use parking_lot::Mutex;
 use std::sync::atomic::Ordering;
 
 
@@ -68,11 +69,12 @@ impl<B: hal::Backend> DestroyedResources<B> {
         self.referenced.push((resource_id, life_guard.ref_count.clone()));
     }
 
-    fn triage_referenced(
-        &mut self,
-        buffer_guard: &mut ItemsGuard<resource::Buffer<B>>,
-        texture_guard: &mut ItemsGuard<resource::Texture<B>>,
-    ) {
+    fn triage_referenced<Gb, Gt>(
+        &mut self, buffer_guard: &mut Gb, texture_guard: &mut Gt,
+    ) where
+        Gb: Items<resource::Buffer<B>>,
+        Gt: Items<resource::Texture<B>>,
+    {
         for i in (0 .. self.referenced.len()).rev() {
             // one in resource itself, and one here in this list
             let num_refs = self.referenced[i].1.load();
@@ -201,7 +203,7 @@ pub extern "C" fn wgpu_device_create_texture(
     let format = conv::map_texture_format(desc.format);
     let aspects = format.surface_desc().aspects;
     let usage = conv::map_texture_usage(desc.usage, aspects);
-    let device_guard = HUB.devices.lock();
+    let device_guard = HUB.devices.read();
     let device = &device_guard.get(device_id);
     let image_unbound = device
         .raw
@@ -242,7 +244,7 @@ pub extern "C" fn wgpu_device_create_texture(
     let life_guard = LifeGuard::new();
     let ref_count = life_guard.ref_count.clone();
     let id = HUB.textures
-        .lock()
+        .write()
         .register(resource::Texture {
             raw: bound_image,
             device_id: Stored {
@@ -256,7 +258,6 @@ pub extern "C" fn wgpu_device_create_texture(
         });
     let query = device.texture_tracker
         .lock()
-        .unwrap()
         .query(
             &Stored { value: id, ref_count },
             TextureUsageFlags::WRITE_ALL,
@@ -271,11 +272,11 @@ pub extern "C" fn wgpu_texture_create_texture_view(
     texture_id: TextureId,
     desc: &resource::TextureViewDescriptor,
 ) -> TextureViewId {
-    let texture_guard = HUB.textures.lock();
+    let texture_guard = HUB.textures.read();
     let texture = texture_guard.get(texture_id);
 
     let raw = HUB.devices
-        .lock()
+        .read()
         .get(texture.device_id.value)
         .raw
         .create_image_view(
@@ -292,7 +293,7 @@ pub extern "C" fn wgpu_texture_create_texture_view(
         .unwrap();
 
     HUB.texture_views
-        .lock()
+        .write()
         .register(resource::TextureView {
             raw,
             texture_id: Stored {
@@ -310,7 +311,7 @@ pub extern "C" fn wgpu_texture_create_texture_view(
 pub extern "C" fn wgpu_texture_create_default_texture_view(
     texture_id: TextureId,
 ) -> TextureViewId {
-    let texture_guard = HUB.textures.lock();
+    let texture_guard = HUB.textures.read();
     let texture = texture_guard.get(texture_id);
 
     let view_kind = match texture.kind {
@@ -320,7 +321,7 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
     };
 
     let raw = HUB.devices
-        .lock()
+        .read()
         .get(texture.device_id.value)
         .raw
         .create_image_view(
@@ -333,7 +334,7 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
         .unwrap();
 
     HUB.texture_views
-        .lock()
+        .write()
         .register(resource::TextureView {
             raw,
             texture_id: Stored {
@@ -351,14 +352,13 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
 pub extern "C" fn wgpu_texture_destroy(
     texture_id: TextureId,
 ) {
-    let texture_guard = HUB.textures.lock();
+    let texture_guard = HUB.textures.read();
     let texture = texture_guard.get(texture_id);
-    let device_guard = HUB.devices.lock();
+    let device_guard = HUB.devices.write();
     device_guard
         .get(texture.device_id.value)
         .destroyed
         .lock()
-        .unwrap()
         .add(ResourceId::Texture(texture_id), &texture.life_guard);
 }
 
@@ -377,7 +377,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
 
     let descriptor_set_layout = HUB.devices
-        .lock()
+        .read()
         .get(device_id)
         .raw
         .create_descriptor_set_layout(
@@ -395,7 +395,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
         .unwrap();
 
     HUB.bind_group_layouts
-        .lock()
+        .write()
         .register(binding_model::BindGroupLayout {
             raw: descriptor_set_layout,
         })
@@ -409,21 +409,21 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     let bind_group_layouts = unsafe {
         slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
     };
-    let bind_group_layout_guard = HUB.bind_group_layouts.lock();
+    let bind_group_layout_guard = HUB.bind_group_layouts.read();
     let descriptor_set_layouts = bind_group_layouts
         .iter()
         .map(|&id| &bind_group_layout_guard.get(id).raw);
 
     // TODO: push constants
     let pipeline_layout = HUB.devices
-        .lock()
+        .read()
         .get(device_id)
         .raw
         .create_pipeline_layout(descriptor_set_layouts, &[])
         .unwrap();
 
     HUB.pipeline_layouts
-        .lock()
+        .write()
         .register(binding_model::PipelineLayout {
             raw: pipeline_layout,
         })
@@ -435,7 +435,7 @@ pub extern "C" fn wgpu_device_create_blend_state(
     desc: &pipeline::BlendStateDescriptor,
 ) -> BlendStateId {
     HUB.blend_states
-        .lock()
+        .write()
         .register(pipeline::BlendState {
             raw: conv::map_blend_state_descriptor(desc),
         })
@@ -447,7 +447,7 @@ pub extern "C" fn wgpu_device_create_depth_stencil_state(
     desc: &pipeline::DepthStencilStateDescriptor,
 ) -> DepthStencilStateId {
     HUB.depth_stencil_states
-        .lock()
+        .write()
         .register(pipeline::DepthStencilState {
             raw: conv::map_depth_stencil_state(desc),
         })
@@ -462,14 +462,14 @@ pub extern "C" fn wgpu_device_create_shader_module(
         slice::from_raw_parts(desc.code.bytes, desc.code.length)
     };
     let shader = HUB.devices
-        .lock()
+        .read()
         .get(device_id)
         .raw
         .create_shader_module(spv)
         .unwrap();
 
     HUB.shader_modules
-        .lock()
+        .write()
         .register(ShaderModule { raw: shader })
 }
 
@@ -478,7 +478,7 @@ pub extern "C" fn wgpu_device_create_command_buffer(
     device_id: DeviceId,
     _desc: &command::CommandBufferDescriptor,
 ) -> CommandBufferId {
-    let device_guard = HUB.devices.lock();
+    let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
 
     let dev_stored = Stored {
@@ -490,7 +490,7 @@ pub extern "C" fn wgpu_device_create_command_buffer(
         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
         hal::command::CommandBufferInheritanceInfo::default(),
     );
-    HUB.command_buffers.lock().register(cmd_buf)
+    HUB.command_buffers.write().register(cmd_buf)
 }
 
 #[no_mangle]
@@ -504,18 +504,18 @@ pub extern "C" fn wgpu_queue_submit(
     command_buffer_ptr: *const CommandBufferId,
     command_buffer_count: usize,
 ) {
-    let mut device_guard = HUB.devices.lock();
+    let mut device_guard = HUB.devices.write();
     let device = device_guard.get_mut(queue_id);
-    let mut buffer_tracker = device.buffer_tracker.lock().unwrap();
-    let mut texture_tracker = device.texture_tracker.lock().unwrap();
+    let mut buffer_tracker = device.buffer_tracker.lock();
+    let mut texture_tracker = device.texture_tracker.lock();
 
-    let mut command_buffer_guard = HUB.command_buffers.lock();
+    let mut command_buffer_guard = HUB.command_buffers.write();
     let command_buffer_ids = unsafe {
         slice::from_raw_parts(command_buffer_ptr, command_buffer_count)
     };
 
-    let mut buffer_guard = HUB.buffers.lock();
-    let mut texture_guard = HUB.textures.lock();
+    let mut buffer_guard = HUB.buffers.write();
+    let mut texture_guard = HUB.textures.write();
     let old_submit_index = device.life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
 
     //TODO: if multiple command buffers are submitted, we can re-use the last
@@ -572,8 +572,9 @@ pub extern "C" fn wgpu_queue_submit(
         }
     }
 
-    if let Ok(mut destroyed) = device.destroyed.lock() {
-        destroyed.triage_referenced(&mut buffer_guard, &mut texture_guard);
+    {
+        let mut destroyed = device.destroyed.lock();
+        destroyed.triage_referenced(&mut *buffer_guard, &mut *texture_guard);
         destroyed.cleanup(&device.raw);
 
         destroyed.active.push(ActiveFrame {
@@ -601,12 +602,12 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         height: 100,
     };
 
-    let device_guard = HUB.devices.lock();
+    let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
-    let pipeline_layout_guard = HUB.pipeline_layouts.lock();
+    let pipeline_layout_guard = HUB.pipeline_layouts.read();
     let layout = &pipeline_layout_guard.get(desc.layout).raw;
     let pipeline_stages = unsafe { slice::from_raw_parts(desc.stages, desc.stages_length) };
-    let shader_module_guard = HUB.shader_modules.lock();
+    let shader_module_guard = HUB.shader_modules.read();
 
     let rp_key = {
         let op_keep = hal::pass::AttachmentOps {
@@ -641,7 +642,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         }
     };
 
-    let mut render_pass_cache = device.render_passes.lock().unwrap();
+    let mut render_pass_cache = device.render_passes.lock();
     let main_pass = match render_pass_cache.entry(rp_key) {
         Entry::Occupied(e) => e.into_mut(),
         Entry::Vacant(e) => {
@@ -731,7 +732,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         primitive_restart: hal::pso::PrimitiveRestart::Disabled, // TODO
     };
 
-    let blend_state_guard = HUB.blend_states.lock();
+    let blend_state_guard = HUB.blend_states.read();
     let blend_states = unsafe { slice::from_raw_parts(desc.blend_states, desc.blend_states_length) }
         .iter()
         .map(|id| blend_state_guard.get(id.clone()).raw)
@@ -742,7 +743,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         targets: blend_states,
     };
 
-    let depth_stencil_state_guard = HUB.depth_stencil_states.lock();
+    let depth_stencil_state_guard = HUB.depth_stencil_states.read();
     let depth_stencil = depth_stencil_state_guard.get(desc.depth_stencil_state).raw;
 
     // TODO
@@ -801,6 +802,6 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         .unwrap();
 
     HUB.render_pipelines
-        .lock()
+        .write()
         .register(pipeline::RenderPipeline { raw: pipeline })
 }

@@ -7,7 +7,6 @@ use hal;
 
 
 bitflags! {
-    #[repr(transparent)]
     pub struct BufferUsageFlags: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
@@ -55,7 +54,6 @@ pub enum TextureFormat {
 }
 
 bitflags! {
-    #[repr(transparent)]
     pub struct TextureUsageFlags: u32 {
         const TRANSFER_SRC = 1;
         const TRANSFER_DST = 2;

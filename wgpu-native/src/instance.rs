@@ -1,6 +1,6 @@
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
-use registry::{HUB, Items, Registry};
+use registry::{HUB, Items};
 use {AdapterId, Device, DeviceId, InstanceId};
 
 #[repr(C)]
@@ -35,7 +35,7 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     ))]
     {
         let inst = ::back::Instance::create("wgpu", 1);
-        HUB.instances.lock().register(inst)
+        HUB.instances.write().register(inst)
     }
     #[cfg(not(any(
         feature = "gfx-backend-vulkan",
@@ -52,7 +52,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
     instance_id: InstanceId,
     desc: &AdapterDescriptor,
 ) -> AdapterId {
-    let instance_guard = HUB.instances.lock();
+    let instance_guard = HUB.instances.read();
     let instance = instance_guard.get(instance_id);
     let (mut low, mut high, mut other) = (None, None, None);
     for adapter in instance.enumerate_adapters() {
@@ -68,7 +68,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
         PowerPreference::HighPerformance | PowerPreference::Default => high.or(low),
     };
     HUB.adapters
-        .lock()
+        .write()
         .register(some.or(other).unwrap())
 }
 
@@ -77,11 +77,11 @@ pub extern "C" fn wgpu_adapter_create_device(
     adapter_id: AdapterId,
     _desc: &DeviceDescriptor,
 ) -> DeviceId {
-    let mut adapter_guard = HUB.adapters.lock();
+    let mut adapter_guard = HUB.adapters.write();
     let adapter = adapter_guard.get_mut(adapter_id);
     let (device, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
     HUB.devices
-        .lock()
+        .write()
         .register(Device::new(device, queue_group, mem_props))
 }

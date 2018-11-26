@@ -4,7 +4,6 @@ extern crate bitflags;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-#[cfg(feature = "remote")]
 extern crate parking_lot;
 
 #[cfg(feature = "gfx-backend-dx12")]
@@ -41,16 +40,11 @@ pub use self::pipeline::*;
 pub use self::resource::*;
 
 use back::Backend as B;
-use registry::Id;
+pub use registry::Id;
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-
-//#[cfg(not(feature = "remote"))]
-//unsafe impl<T> Sync for Stored<T> {}
-//#[cfg(not(feature = "remote"))]
-//unsafe impl<T> Send for Stored<T> {}
 
 type SubmissionIndex = usize;
 

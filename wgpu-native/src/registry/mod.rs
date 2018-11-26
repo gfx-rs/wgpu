@@ -1,12 +1,6 @@
-#[cfg(not(feature = "remote"))]
-mod local;
-#[cfg(feature = "remote")]
-mod remote;
+use std::sync::Arc;
 
-#[cfg(not(feature = "remote"))]
-pub use self::local::{Id, ItemsGuard, Registry as ConcreteRegistry};
-#[cfg(feature = "remote")]
-pub use self::remote::{Id, ItemsGuard, Registry as ConcreteRegistry};
+use parking_lot::RwLock;
 
 use {
     AdapterHandle, BindGroupLayoutHandle, BindGroupHandle,
@@ -17,19 +11,25 @@ use {
 };
 
 
-type Item<'a, T> = &'a T;
-type ItemMut<'a, T> = &'a mut T;
+#[cfg(not(feature = "remote"))]
+mod local;
+#[cfg(feature = "remote")]
+mod remote;
 
-pub trait Registry<T>: Default {
-    fn lock(&self) -> ItemsGuard<T>;
-}
+#[cfg(not(feature = "remote"))]
+pub use self::local::{Id, Items as ConcreteItems};
+#[cfg(feature = "remote")]
+pub use self::remote::{Id, Items as ConcreteItems};
 
-pub trait Items<T> {
+
+pub trait Items<T>: Default {
     fn register(&mut self, handle: T) -> Id;
-    fn get(&self, id: Id) -> Item<T>;
-    fn get_mut(&mut self, id: Id) -> ItemMut<T>;
+    fn get(&self, id: Id) -> &T;
+    fn get_mut(&mut self, id: Id) -> &mut T;
     fn take(&mut self, id: Id) -> T;
 }
+
+pub type ConcreteRegistry<T> = Arc<RwLock<ConcreteItems<T>>>;
 
 #[derive(Default)]
 pub struct Hub {

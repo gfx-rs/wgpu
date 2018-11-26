@@ -105,6 +105,8 @@ typedef enum {
 
 typedef struct WGPURenderPassDescriptor_TextureViewId WGPURenderPassDescriptor_TextureViewId;
 
+typedef struct WGPUTextureUsageFlags WGPUTextureUsageFlags;
+
 typedef WGPUId WGPUDeviceId;
 
 typedef WGPUId WGPUAdapterId;
@@ -234,8 +236,6 @@ typedef struct {
   uint32_t height;
   uint32_t depth;
 } WGPUExtent3d;
-
-typedef uint32_t WGPUTextureUsageFlags;
 
 typedef struct {
   WGPUExtent3d size;

@@ -15,7 +15,7 @@ use {
 };
 use conv;
 use device::{FramebufferKey, RenderPassKey};
-use registry::{HUB, Items, Registry};
+use registry::{HUB, Items};
 use track::{BufferTracker, TextureTracker};
 
 use std::collections::hash_map::Entry;
@@ -97,8 +97,8 @@ impl CommandBuffer<B> {
         I: Iterator<Item = (BufferId, Range<BufferUsageFlags>)>,
         J: Iterator<Item = (TextureId, Range<TextureUsageFlags>)>,
     {
-        let buffer_guard = HUB.buffers.lock();
-        let texture_guard = HUB.textures.lock();
+        let buffer_guard = HUB.buffers.read();
+        let texture_guard = HUB.textures.read();
 
         let buffer_barriers = buffer_iter.map(|(id, transit)| {
             let b = buffer_guard.get(id);
@@ -137,11 +137,11 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     command_buffer_id: CommandBufferId,
     desc: RenderPassDescriptor<TextureViewId>,
 ) -> RenderPassId {
-    let mut cmb_guard = HUB.command_buffers.lock();
+    let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(command_buffer_id);
-    let device_guard = HUB.devices.lock();
+    let device_guard = HUB.devices.read();
     let device = device_guard.get(cmb.device_id.value);
-    let view_guard = HUB.texture_views.lock();
+    let view_guard = HUB.texture_views.read();
 
     let mut current_comb = device.com_allocator.extend(cmb);
     current_comb.begin(
@@ -202,7 +202,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
         }
     };
 
-    let mut render_pass_cache = device.render_passes.lock().unwrap();
+    let mut render_pass_cache = device.render_passes.lock();
     let render_pass = match render_pass_cache.entry(rp_key) {
         Entry::Occupied(e) => e.into_mut(),
         Entry::Vacant(e) => {
@@ -231,7 +231,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
         }
     };
 
-    let mut framebuffer_cache = device.framebuffers.lock().unwrap();
+    let mut framebuffer_cache = device.framebuffers.lock();
     let fb_key = FramebufferKey {
         attachments: desc.color_attachments
             .iter()
@@ -287,7 +287,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     );
 
     HUB.render_passes
-        .lock()
+        .write()
         .register(RenderPass::new(
             current_comb,
             Stored {
@@ -301,7 +301,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 pub extern "C" fn wgpu_command_buffer_begin_compute_pass(
     command_buffer_id: CommandBufferId,
 ) -> ComputePassId {
-    let mut cmb_guard = HUB.command_buffers.lock();
+    let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(command_buffer_id);
 
     let raw = cmb.raw.pop().unwrap();
@@ -311,6 +311,6 @@ pub extern "C" fn wgpu_command_buffer_begin_compute_pass(
     };
 
     HUB.compute_passes
-        .lock()
+        .write()
         .register(ComputePass::new(raw, stored))
 }
