@@ -13,7 +13,7 @@ use {
     B, Color, LifeGuard, Origin3d, Stored, BufferUsageFlags, TextureUsageFlags, WeaklyStored,
     BufferId, CommandBufferId, ComputePassId, DeviceId, RenderPassId, TextureId, TextureViewId,
 };
-use conv;
+use {conv, resource};
 use device::{FramebufferKey, RenderPassKey};
 use registry::{HUB, Items};
 use track::{BufferTracker, TextureTracker};
@@ -89,17 +89,18 @@ pub struct CommandBuffer<B: hal::Backend> {
 }
 
 impl CommandBuffer<B> {
-    pub(crate) fn insert_barriers<I, J>(
+    pub(crate) fn insert_barriers<I, J, Gb, Gt>(
         raw: &mut <B as hal::Backend>::CommandBuffer,
         buffer_iter: I,
         texture_iter: J,
+        buffer_guard: &Gb,
+        texture_guard: &Gt,
     ) where
         I: Iterator<Item = (BufferId, Range<BufferUsageFlags>)>,
         J: Iterator<Item = (TextureId, Range<TextureUsageFlags>)>,
+        Gb: Items<resource::Buffer<B>>,
+        Gt: Items<resource::Texture<B>>,
     {
-        let buffer_guard = HUB.buffers.read();
-        let texture_guard = HUB.textures.read();
-
         let buffer_barriers = buffer_iter.map(|(id, transit)| {
             let b = buffer_guard.get(id);
             trace!("transit {:?} {:?}", id, transit);

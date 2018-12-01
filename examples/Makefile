@@ -1,8 +1,8 @@
 CC=gcc
 CFLAGS=-I.
-DEPS=./../wgpu-bindings/wgpu.h
+DEPS=./wgpu-bindings/wgpu.h
 OUTDIR=./build
-LINK_ARGS=-L ./../target/debug -lwgpu_native
+LINK_ARGS=-L ../target/debug -lwgpu_native
 
 %.o: %.c $(DEPS)
 	$(CC) $(LINK_ARGS) -c -o $(OUTDIR)/$@ $< $(CFLAGS)

@@ -4,7 +4,7 @@ use hal::backend::FastHashMap;
 pub type Id = u32;
 
 pub struct Items<T> {
-    next_id: u32,
+    next_id: Id,
     tracked: FastHashMap<Id, T>,
     free: Vec<Id>,
 }
@@ -32,7 +32,7 @@ impl<T> super::Items<T> for Items<T> {
         id
     }
 
-    fn get(&self, id: Id) -> & T {
+    fn get(&self, id: Id) -> &T {
         self.tracked.get(&id).unwrap()
     }
 

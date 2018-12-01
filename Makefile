@@ -56,8 +56,8 @@ lib-rust: Cargo.lock wgpu-rs/Cargo.toml $(wildcard wgpu-rs/**/*.rs)
 wgpu-bindings/wgpu.h: Cargo.lock wgpu-bindings/src/*.rs lib-native
 	cargo +nightly run --manifest-path wgpu-bindings/Cargo.toml
 
-#examples-native: lib-native wgpu-bindings/wgpu.h $(wildcard wgpu-native/**/*.c)
-#	$(MAKE) -C examples
+examples-native: lib-native wgpu-bindings/wgpu.h $(wildcard wgpu-native/**/*.c)
+	$(MAKE) -C examples
 
 examples-rust: lib-rust examples/Cargo.toml $(wildcard wgpu-native/**/*.rs)
 	cargo build --manifest-path examples/Cargo.toml --bin hello_triangle --features $(FEATURE_RUST)

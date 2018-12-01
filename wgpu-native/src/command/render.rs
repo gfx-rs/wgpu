@@ -47,6 +47,8 @@ pub extern "C" fn wgpu_render_pass_end_pass(
             last,
             cmb.buffer_tracker.consume(&pass.buffer_tracker),
             cmb.texture_tracker.consume(&pass.texture_tracker),
+            &*HUB.buffers.read(),
+            &*HUB.textures.read(),
         );
         last.finish();
     }

@@ -54,6 +54,7 @@ pub enum TextureFormat {
 }
 
 bitflags! {
+    #[repr(transparent)]
     pub struct TextureUsageFlags: u32 {
         const TRANSFER_SRC = 1;
         const TRANSFER_DST = 2;

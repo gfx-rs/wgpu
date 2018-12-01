@@ -544,6 +544,8 @@ pub extern "C" fn wgpu_queue_submit(
             &mut transit,
             buffer_tracker.consume(&comb.buffer_tracker),
             texture_tracker.consume(&comb.texture_tracker),
+            &*buffer_guard,
+            &*texture_guard,
         );
         transit.finish();
         comb.raw.insert(0, transit);
