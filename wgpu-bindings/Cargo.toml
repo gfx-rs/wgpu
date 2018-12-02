@@ -10,4 +10,5 @@ authors = [
 default = []
 
 [dependencies]
-cbindgen = { git = "https://github.com/eqrion/cbindgen.git" }
+#cbindgen = "0.6.7"
+cbindgen = { git = "https://github.com/grovesNL/cbindgen", branch = "associated-constants"}

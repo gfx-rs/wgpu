@@ -11,13 +11,13 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-remote = ["parking_lot"]
+remote = []
 
 [dependencies]
 bitflags = "1.0"
 lazy_static = "1.1.0"
 log = "0.4"
-parking_lot = { version = "0.6", optional = true }
+parking_lot = { version = "0.6" }
 gfx-hal = { git = "https://github.com/gfx-rs/gfx" } # required by gfx-memory
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx" }
 gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", optional = true }
