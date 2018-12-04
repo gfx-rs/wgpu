@@ -269,6 +269,24 @@ typedef struct {
   uint32_t array_count;
 } WGPUTextureViewDescriptor;
 
+#define WGPUBufferUsageFlags_INDEX 16
+
+#define WGPUBufferUsageFlags_MAP_READ 1
+
+#define WGPUBufferUsageFlags_MAP_WRITE 2
+
+#define WGPUBufferUsageFlags_NONE 0
+
+#define WGPUBufferUsageFlags_STORAGE 128
+
+#define WGPUBufferUsageFlags_TRANSFER_DST 8
+
+#define WGPUBufferUsageFlags_TRANSFER_SRC 4
+
+#define WGPUBufferUsageFlags_UNIFORM 64
+
+#define WGPUBufferUsageFlags_VERTEX 32
+
 #define WGPUColorWriteFlags_ALL 15
 
 #define WGPUColorWriteFlags_ALPHA 8
