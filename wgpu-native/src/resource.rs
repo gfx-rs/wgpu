@@ -7,6 +7,7 @@ use hal;
 
 
 bitflags! {
+    #[repr(transparent)]
     pub struct BufferUsageFlags: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
