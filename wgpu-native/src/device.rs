@@ -43,8 +43,8 @@ enum Resource<B: hal::Backend> {
     Texture(resource::Texture<B>),
 }
 
-struct ActiveFrame<B: hal::Backend> {
-    submission_index: SubmissionIndex,
+struct ActiveSubmission<B: hal::Backend> {
+    index: SubmissionIndex,
     fence: B::Fence,
     resources: Vec<Resource<B>>,
 }
@@ -54,8 +54,8 @@ struct DestroyedResources<B: hal::Backend> {
     /// other objects or command buffers.
     referenced: Vec<(ResourceId, RefCount)>,
     /// Resources that are not referenced any more but still used by GPU.
-    /// Grouped by frames associated with a fence and a submission index.
-    active: Vec<ActiveFrame<B>>,
+    /// Grouped by submissions associated with a fence and a submission index.
+    active: Vec<ActiveSubmission<B>>,
     /// Resources that are neither referenced or used, just pending
     /// actual deletion.
     free: Vec<Resource<B>>,
@@ -96,9 +96,9 @@ impl<B: hal::Backend> DestroyedResources<B> {
                 match self
                     .active
                     .iter_mut()
-                    .find(|af| af.submission_index == submit_index)
+                    .find(|a| a.index == submit_index)
                 {
-                    Some(af) => af.resources.push(resource),
+                    Some(a) => a.resources.push(resource),
                     None => self.free.push(resource),
                 }
             }
@@ -107,10 +107,14 @@ impl<B: hal::Backend> DestroyedResources<B> {
 
     fn cleanup(&mut self, raw: &B::Device) {
         for i in (0..self.active.len()).rev() {
-            if unsafe { raw.get_fence_status(&self.active[i].fence) }.unwrap() {
-                let af = self.active.swap_remove(i);
-                self.free.extend(af.resources);
-                unsafe { raw.destroy_fence(af.fence) };
+            if unsafe {
+                raw.get_fence_status(&self.active[i].fence).unwrap()
+            } {
+                let a = self.active.swap_remove(i);
+                self.free.extend(a.resources);
+                unsafe {
+                    raw.destroy_fence(a.fence);
+                }
             }
         }
 
@@ -600,8 +604,8 @@ pub extern "C" fn wgpu_queue_submit(
         destroyed.triage_referenced(&mut *buffer_guard, &mut *texture_guard);
         destroyed.cleanup(&device.raw);
 
-        destroyed.active.push(ActiveFrame {
-            submission_index: old_submit_index + 1,
+        destroyed.active.push(ActiveSubmission {
+            index: old_submit_index + 1,
             fence,
             resources: Vec::new(),
         });
@@ -843,21 +847,22 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     let physical_device = &adapter_guard.get(device.adapter_id.0).physical_device;
     let mut surface_guard = HUB.surfaces.write();
     let surface = surface_guard.get_mut(surface_id);
+    let mut texture_guard = HUB.textures.write();
 
     let (caps, formats, _present_modes, _composite_alphas) = surface.raw.compatibility(physical_device);
-    let config = hal::SwapchainConfig::from_caps(
-        &caps,
+    let config = hal::SwapchainConfig::new(
+        desc.width,
+        desc.height,
         conv::map_texture_format(desc.format),
-        hal::window::Extent2D {
-            width: desc.width,
-            height: desc.height,
-        },
+        caps.image_count.start, //TODO: configure?
     );
 
     let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
     if let Some(formats) = formats {
         assert!(formats.contains(&config.format));
     }
+    assert!(desc.width >= caps.extents.start.width && desc.width < caps.extents.end.width);
+    assert!(desc.height >= caps.extents.start.height && desc.width < caps.extents.end.height);
 
     let (raw, backbuffer) = unsafe {
         device.raw
@@ -869,8 +874,33 @@ pub extern "C" fn wgpu_device_create_swap_chain(
             .unwrap()
     };
 
-    let images = match backbuffer {
-        hal::Backbuffer::Images(images) => images,
+    let frames = match backbuffer {
+        hal::Backbuffer::Images(images) => images
+            .into_iter()
+            .map(|image| {
+                let texture = resource::Texture {
+                    raw: image,
+                    device_id: Stored {
+                        value: device_id,
+                        ref_count: device.life_guard.ref_count.clone(),
+                    },
+                    kind: hal::image::Kind::D2(desc.width, desc.height, 1, 1),
+                    format: desc.format,
+                    full_range: hal::image::SubresourceRange {
+                        aspects: hal::format::Aspects::COLOR,
+                        levels: 0 .. 1,
+                        layers: 0 .. 1,
+                    },
+                    life_guard: LifeGuard::new(),
+                };
+                swap_chain::Frame {
+                    texture: Stored {
+                        ref_count: texture.life_guard.ref_count.clone(),
+                        value: texture_guard.register(texture),
+                    },
+                }
+            })
+            .collect(),
         hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
     };
 
@@ -878,6 +908,7 @@ pub extern "C" fn wgpu_device_create_swap_chain(
         .write()
         .register(swap_chain::SwapChain {
             raw,
-            images,
+            frames,
+            next_frame_index: 0,
         })
 }
