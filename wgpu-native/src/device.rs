@@ -1,15 +1,18 @@
-use crate::registry::{Items, HUB};
+use crate::{back, binding_model, command, conv, pipeline, resource, swap_chain};
+use crate::registry::{HUB, Items};
 use crate::track::{BufferTracker, TextureTracker};
-use crate::{back, binding_model, command, conv, pipeline, resource};
 use crate::{
-    BindGroupLayoutId, BlendStateId, BufferId, CommandBuffer, CommandBufferId, DepthStencilStateId,
-    DeviceId, LifeGuard, PipelineLayoutId, QueueId, RefCount, RenderPipelineId, ShaderModuleId,
-    Stored, SubmissionIndex, TextureId, TextureUsageFlags, TextureViewId, WeaklyStored,
+    CommandBuffer, LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
+    TextureUsageFlags,
+    BindGroupLayoutId, BlendStateId, BufferId, CommandBufferId, DepthStencilStateId,
+    AdapterId, DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
+    TextureId, TextureViewId,
+    SurfaceId, SwapChainId,
 };
 
 use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
-use hal::{self, Device as _Device};
+use hal::{self, Device as _Device, Surface as _Surface};
 //use rendy_memory::{allocator, Config, Heaps};
 
 use std::collections::hash_map::{Entry, HashMap};
@@ -124,8 +127,10 @@ impl<B: hal::Backend> DestroyedResources<B> {
     }
 }
 
+
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
+    adapter_id: WeaklyStored<AdapterId>,
     queue_group: hal::QueueGroup<B, hal::General>,
     //mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
@@ -142,6 +147,7 @@ pub struct Device<B: hal::Backend> {
 impl<B: hal::Backend> Device<B> {
     pub(crate) fn new(
         raw: B::Device,
+        adapter_id: WeaklyStored<AdapterId>,
         queue_group: hal::QueueGroup<B, hal::General>,
         mem_props: hal::MemoryProperties,
     ) -> Self {
@@ -168,6 +174,7 @@ impl<B: hal::Backend> Device<B> {
 
         Device {
             raw,
+            adapter_id,
             //mem_allocator,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
@@ -822,4 +829,55 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     HUB.render_pipelines
         .write()
         .register(pipeline::RenderPipeline { raw: pipeline })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_swap_chain(
+    device_id: DeviceId,
+    surface_id: SurfaceId,
+    desc: &swap_chain::SwapChainDescriptor,
+) -> SwapChainId {
+    let device_guard = HUB.devices.read();
+    let device = device_guard.get(device_id);
+    let adapter_guard = HUB.adapters.read();
+    let physical_device = &adapter_guard.get(device.adapter_id.0).physical_device;
+    let mut surface_guard = HUB.surfaces.write();
+    let surface = surface_guard.get_mut(surface_id);
+
+    let (caps, formats, _present_modes, _composite_alphas) = surface.raw.compatibility(physical_device);
+    let config = hal::SwapchainConfig::from_caps(
+        &caps,
+        conv::map_texture_format(desc.format),
+        hal::window::Extent2D {
+            width: desc.width,
+            height: desc.height,
+        },
+    );
+
+    let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
+    if let Some(formats) = formats {
+        assert!(formats.contains(&config.format));
+    }
+
+    let (raw, backbuffer) = unsafe {
+        device.raw
+            .create_swapchain(
+                &mut surface.raw,
+                config.with_image_usage(usage),
+                None,
+            )
+            .unwrap()
+    };
+
+    let images = match backbuffer {
+        hal::Backbuffer::Images(images) => images,
+        hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
+    };
+
+    HUB.swap_chains
+        .write()
+        .register(swap_chain::SwapChain {
+            raw,
+            images,
+        })
 }

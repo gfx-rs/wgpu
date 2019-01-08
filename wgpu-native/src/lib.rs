@@ -1,3 +1,6 @@
+#[cfg(not(feature = "remote"))]
+extern crate winit;
+
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(not(any(
@@ -22,6 +25,7 @@ mod instance;
 mod pipeline;
 mod registry;
 mod resource;
+mod swap_chain;
 mod track;
 
 pub use self::binding_model::*;
@@ -30,6 +34,7 @@ pub use self::device::*;
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
+pub use self::swap_chain::*;
 
 use back::Backend as B;
 pub use crate::registry::Id;
@@ -214,3 +219,9 @@ pub type RenderPassId = Id;
 type RenderPassHandle = RenderPass<B>;
 pub type ComputePassId = Id;
 type ComputePassHandle = ComputePass<B>;
+
+
+pub type SurfaceId = Id;
+type SurfaceHandle = Surface<B>;
+pub type SwapChainId = Id;
+type SwapChainHandle = SwapChain<B>;
