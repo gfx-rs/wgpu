@@ -14,11 +14,10 @@ use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
 use hal::{self, Device as _Device, Surface as _Surface};
 //use rendy_memory::{allocator, Config, Heaps};
+use parking_lot::{Mutex, RwLock};
 
-use std::collections::hash_map::{Entry, HashMap};
 use std::{ffi, slice};
-
-use parking_lot::Mutex;
+use std::collections::hash_map::{Entry, HashMap};
 use std::sync::atomic::Ordering;
 
 #[derive(Hash, PartialEq)]
@@ -257,24 +256,26 @@ pub extern "C" fn wgpu_device_create_texture(
 
     let life_guard = LifeGuard::new();
     let ref_count = life_guard.ref_count.clone();
-    let id = HUB.textures.write().register(resource::Texture {
-        raw: bound_image,
-        device_id: Stored {
-            value: device_id,
-            ref_count: device.life_guard.ref_count.clone(),
-        },
-        kind,
-        format: desc.format,
-        full_range,
-        life_guard,
-    });
-    let query = device.texture_tracker.lock().query(
-        &Stored {
-            value: id,
-            ref_count,
-        },
-        TextureUsageFlags::WRITE_ALL,
-    );
+    let id = HUB.textures
+        .write()
+        .register(resource::Texture {
+            raw: bound_image,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.ref_count.clone(),
+            },
+            kind,
+            format: desc.format,
+            full_range,
+            swap_chain_link: RwLock::new(None),
+            life_guard,
+        });
+    let query = device.texture_tracker
+        .lock()
+        .query(
+            &Stored { value: id, ref_count },
+            TextureUsageFlags::WRITE_ALL,
+        );
     assert!(query.initialized);
 
     id
@@ -891,6 +892,7 @@ pub extern "C" fn wgpu_device_create_swap_chain(
                         levels: 0 .. 1,
                         layers: 0 .. 1,
                     },
+                    swap_chain_link: RwLock::new(None),
                     life_guard: LifeGuard::new(),
                 };
                 swap_chain::Frame {
@@ -898,6 +900,9 @@ pub extern "C" fn wgpu_device_create_swap_chain(
                         ref_count: texture.life_guard.ref_count.clone(),
                         value: texture_guard.register(texture),
                     },
+                    fence: device.raw.create_fence(true).unwrap(),
+                    sem_available: device.raw.create_semaphore().unwrap(),
+                    sem_present: device.raw.create_semaphore().unwrap(),
                 }
             })
             .collect(),
@@ -908,7 +913,12 @@ pub extern "C" fn wgpu_device_create_swap_chain(
         .write()
         .register(swap_chain::SwapChain {
             raw,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.ref_count.clone(),
+            },
             frames,
-            next_frame_index: 0,
+            sem_available: device.raw.create_semaphore().unwrap(),
+            epoch: 1,
         })
 }

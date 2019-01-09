@@ -1,6 +1,14 @@
-use crate::{DeviceId, Extent3d, LifeGuard, Stored, TextureId};
-
 use bitflags::bitflags;
+use parking_lot::RwLock;
+
+use hal;
+
+use crate::{
+    Extent3d, LifeGuard, Stored,
+    DeviceId, TextureId,
+};
+use crate::swap_chain::SwapChainLink;
+
 
 bitflags! {
     #[repr(transparent)]
@@ -78,6 +86,7 @@ pub(crate) struct Texture<B: hal::Backend> {
     pub kind: hal::image::Kind,
     pub format: TextureFormat,
     pub full_range: hal::image::SubresourceRange,
+    pub swap_chain_link: RwLock<Option<SwapChainLink>>,
     pub life_guard: LifeGuard,
 }
 
