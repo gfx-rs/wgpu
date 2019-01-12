@@ -1,7 +1,3 @@
-extern crate bitflags;
-extern crate lazy_static;
-extern crate log;
-
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(not(any(
