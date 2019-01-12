@@ -1,5 +1,7 @@
 use crate::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
 
+use bitflags::bitflags;
+
 bitflags! {
     #[repr(transparent)]
     pub struct ShaderStageFlags: u32 {

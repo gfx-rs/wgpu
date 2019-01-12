@@ -2,6 +2,8 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 
+use lazy_static::lazy_static;
+
 use crate::{
     AdapterHandle, BindGroupHandle, BindGroupLayoutHandle, BlendStateHandle, BufferHandle,
     CommandBufferHandle, ComputePassHandle, ComputePipelineHandle, DepthStencilStateHandle,

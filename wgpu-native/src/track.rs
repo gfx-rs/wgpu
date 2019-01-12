@@ -6,6 +6,8 @@ use std::hash::Hash;
 use std::mem;
 use std::ops::{BitOr, Range};
 
+use bitflags::bitflags;
+
 #[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
 pub enum Tracktion<T> {

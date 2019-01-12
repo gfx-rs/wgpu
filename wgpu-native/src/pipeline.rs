@@ -2,6 +2,8 @@ use crate::resource;
 
 use crate::{BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId};
 
+use bitflags::bitflags;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BlendFactor {

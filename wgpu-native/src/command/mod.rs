@@ -22,6 +22,8 @@ use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::thread::ThreadId;
 
+use log::trace;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum LoadOp {

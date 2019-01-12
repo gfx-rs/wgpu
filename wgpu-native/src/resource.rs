@@ -1,5 +1,7 @@
 use crate::{DeviceId, Extent3d, LifeGuard, Stored, TextureId};
 
+use bitflags::bitflags;
+
 bitflags! {
     #[repr(transparent)]
     pub struct BufferUsageFlags: u32 {
