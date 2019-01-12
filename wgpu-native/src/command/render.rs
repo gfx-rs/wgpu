@@ -37,7 +37,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(
     let mut pass = HUB.render_passes
         .write()
         .take(pass_id);
-    pass.raw.end_render_pass();
+    unsafe {pass.raw.end_render_pass(); }
 
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(pass.cmb_id.value);
@@ -50,7 +50,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(
             &*HUB.buffers.read(),
             &*HUB.textures.read(),
         );
-        last.finish();
+        unsafe { last.finish() };
     }
 
     cmb.raw.push(pass.raw);

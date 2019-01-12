@@ -106,20 +106,20 @@ impl<B: hal::Backend> DestroyedResources<B> {
 
     fn cleanup(&mut self, raw: &B::Device) {
         for i in (0 .. self.active.len()).rev() {
-            if raw.get_fence_status(&self.active[i].fence).unwrap() {
+            if unsafe { raw.get_fence_status(&self.active[i].fence) }.unwrap() {
                 let af = self.active.swap_remove(i);
                 self.free.extend(af.resources);
-                raw.destroy_fence(af.fence);
+                unsafe { raw.destroy_fence(af.fence) };
             }
         }
 
         for resource in self.free.drain(..) {
             match resource {
                 Resource::Buffer(buf) => {
-                    raw.destroy_buffer(buf.raw);
+                    unsafe { raw.destroy_buffer(buf.raw) };
                 }
                 Resource::Texture(tex) => {
-                    raw.destroy_image(tex.raw);
+                    unsafe { raw.destroy_image(tex.raw) };
                 }
             }
         }
@@ -205,7 +205,7 @@ pub extern "C" fn wgpu_device_create_texture(
     let usage = conv::map_texture_usage(desc.usage, aspects);
     let device_guard = HUB.devices.read();
     let device = &device_guard.get(device_id);
-    let image_unbound = device
+    let mut image_unbound = unsafe { device
         .raw
         .create_image(
             kind,
@@ -215,8 +215,8 @@ pub extern "C" fn wgpu_device_create_texture(
             usage,
             hal::image::ViewCapabilities::empty(), // TODO: format, 2d array, cube
         )
-        .unwrap();
-    let image_req = device.raw.get_image_requirements(&image_unbound);
+    }.unwrap();
+    let image_req = unsafe { device.raw.get_image_requirements(&image_unbound) };
     let device_type = device
         .mem_props
         .memory_types
@@ -229,11 +229,15 @@ pub extern "C" fn wgpu_device_create_texture(
         .unwrap()
         .into();
     // TODO: allocate with rendy
-    let image_memory = device.raw.allocate_memory(device_type, image_req.size).unwrap();
-    let bound_image = device
-        .raw
-        .bind_image_memory(&image_memory, 0, image_unbound)
-        .unwrap();
+    let image_memory = unsafe{
+        device.raw.allocate_memory(device_type, image_req.size)
+    }.unwrap();
+    unsafe {
+        device
+            .raw
+            .bind_image_memory(&image_memory, 0, &mut image_unbound)
+    }.unwrap();
+    let bound_image = image_unbound; //TODO: Maybe call this image the same way in the first place
 
     let full_range = hal::image::SubresourceRange {
         aspects,
@@ -275,7 +279,7 @@ pub extern "C" fn wgpu_texture_create_texture_view(
     let texture_guard = HUB.textures.read();
     let texture = texture_guard.get(texture_id);
 
-    let raw = HUB.devices
+    let raw = unsafe { HUB.devices
         .read()
         .get(texture.device_id.value)
         .raw
@@ -290,7 +294,7 @@ pub extern "C" fn wgpu_texture_create_texture_view(
                 layers: desc.base_array_layer as u16 .. (desc.base_array_layer + desc.array_count) as u16,
             },
         )
-        .unwrap();
+    }.unwrap();
 
     HUB.texture_views
         .write()
@@ -320,7 +324,7 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
         hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
     };
 
-    let raw = HUB.devices
+    let raw = unsafe { HUB.devices
         .read()
         .get(texture.device_id.value)
         .raw
@@ -331,7 +335,7 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(
             hal::format::Swizzle::NO,
             texture.full_range.clone(),
         )
-        .unwrap();
+    }.unwrap();
 
     HUB.texture_views
         .write()
@@ -376,7 +380,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
 ) -> BindGroupLayoutId {
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
 
-    let descriptor_set_layout = HUB.devices
+    let descriptor_set_layout = unsafe { HUB.devices
         .read()
         .get(device_id)
         .raw
@@ -392,7 +396,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
             }),
             &[],
         )
-        .unwrap();
+    }.unwrap();
 
     HUB.bind_group_layouts
         .write()
@@ -415,12 +419,12 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
         .map(|&id| &bind_group_layout_guard.get(id).raw);
 
     // TODO: push constants
-    let pipeline_layout = HUB.devices
+    let pipeline_layout = unsafe { HUB.devices
         .read()
         .get(device_id)
         .raw
         .create_pipeline_layout(descriptor_set_layouts, &[])
-        .unwrap();
+    }.unwrap();
 
     HUB.pipeline_layouts
         .write()
@@ -461,12 +465,12 @@ pub extern "C" fn wgpu_device_create_shader_module(
     let spv = unsafe {
         slice::from_raw_parts(desc.code.bytes, desc.code.length)
     };
-    let shader = HUB.devices
+    let shader = unsafe { HUB.devices
         .read()
         .get(device_id)
         .raw
         .create_shader_module(spv)
-        .unwrap();
+    }.unwrap();
 
     HUB.shader_modules
         .write()
@@ -486,10 +490,12 @@ pub extern "C" fn wgpu_device_create_command_buffer(
         ref_count: device.life_guard.ref_count.clone(),
     };
     let mut cmd_buf = device.com_allocator.allocate(dev_stored, &device.raw);
-    cmd_buf.raw.last_mut().unwrap().begin(
-        hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-        hal::command::CommandBufferInheritanceInfo::default(),
-    );
+    unsafe {
+        cmd_buf.raw.last_mut().unwrap().begin(
+            hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+            hal::command::CommandBufferInheritanceInfo::default(),
+        );
+    }
     HUB.command_buffers.write().register(cmd_buf)
 }
 
@@ -535,10 +541,12 @@ pub extern "C" fn wgpu_queue_submit(
 
         // execute resource transitions
         let mut transit = device.com_allocator.extend(comb);
-        transit.begin(
-            hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-            hal::command::CommandBufferInheritanceInfo::default(),
-        );
+        unsafe {
+            transit.begin(
+                hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+                hal::command::CommandBufferInheritanceInfo::default(),
+            );
+        }
         //TODO: fix the consume
         CommandBuffer::insert_barriers(
             &mut transit,
@@ -547,30 +555,32 @@ pub extern "C" fn wgpu_queue_submit(
             &*buffer_guard,
             &*texture_guard,
         );
-        transit.finish();
+        unsafe { transit.finish(); }
         comb.raw.insert(0, transit);
-        comb.raw
-            .last_mut()
-            .unwrap()
-            .finish();
+        unsafe {
+            comb.raw
+                .last_mut()
+                .unwrap()
+                .finish();
+        }
     }
 
     // now prepare the GPU submission
     let fence = device.raw.create_fence(false).unwrap();
     {
-        let submission = hal::queue::RawSubmission {
-            cmd_buffers: command_buffer_ids
+        let submission = hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> { //TODO: may `OneShot` be enough?
+            command_buffers: command_buffer_ids
                 .iter()
                 .flat_map(|&cmb_id| {
                     &command_buffer_guard.get(cmb_id).raw
                 }),
-            wait_semaphores: &[],
+            wait_semaphores: Vec::new(),
             signal_semaphores: &[],
         };
         unsafe {
             device.queue_group.queues[0]
                 .as_raw_mut()
-                .submit_raw(submission, Some(&fence));
+                .submit(submission, Some(&fence));
         }
     }
 
@@ -668,11 +678,11 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
                 preserves: &[],
             };
 
-            let pass = device.raw.create_render_pass(
+            let pass = unsafe { device.raw.create_render_pass(
                 &e.key().attachments,
                 &[subpass],
                 &[],
-            ).unwrap();
+            )}.unwrap();
             e.insert(pass)
         }
     };
@@ -799,9 +809,9 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     };
 
     // TODO: cache
-    let pipeline = device.raw
+    let pipeline = unsafe { device.raw
         .create_graphics_pipeline(&pipeline_desc, None)
-        .unwrap();
+    }.unwrap();
 
     HUB.render_pipelines
         .write()

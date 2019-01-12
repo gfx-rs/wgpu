@@ -49,11 +49,13 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     let layout = unimplemented!();
     // see https://github.com/gpuweb/gpuweb/pull/93
 
-    HUB.compute_passes
-        .write()
-        .get_mut(pass_id)
-        .raw
-        .bind_compute_descriptor_sets(layout, index as usize, iter::once(set), &[]);
+    unsafe {
+        HUB.compute_passes
+            .write()
+            .get_mut(pass_id)
+            .raw
+            .bind_compute_descriptor_sets(layout, index as usize, iter::once(set), &[]);
+    }
 }
 
 #[no_mangle]
@@ -62,21 +64,25 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
 ) {
     let pipeline_guard = HUB.compute_pipelines.read();
     let pipeline = &pipeline_guard.get(pipeline_id).raw;
-
-    HUB.compute_passes
-        .write()
-        .get_mut(pass_id)
-        .raw
-        .bind_compute_pipeline(pipeline);
+    
+    unsafe {
+        HUB.compute_passes
+            .write()
+            .get_mut(pass_id)
+            .raw
+            .bind_compute_pipeline(pipeline);
+    }
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch(
     pass_id: ComputePassId, x: u32, y: u32, z: u32,
 ) {
-    HUB.compute_passes
-        .write()
-        .get_mut(pass_id)
-        .raw
-        .dispatch([x, y, z]);
+    unsafe {
+        HUB.compute_passes
+            .write()
+            .get_mut(pass_id)
+            .raw
+            .dispatch([x, y, z]);
+    }
 }

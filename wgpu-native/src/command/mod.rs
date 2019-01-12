@@ -108,6 +108,8 @@ impl CommandBuffer<B> {
                 states: conv::map_buffer_state(transit.start) ..
                     conv::map_buffer_state(transit.end),
                 target: &b.raw,
+                range: Range { start: None, end: None},
+                families: None,
             }
         });
         let texture_barriers = texture_iter.map(|(id, transit)| {
@@ -119,14 +121,16 @@ impl CommandBuffer<B> {
                     conv::map_texture_state(transit.end, aspects),
                 target: &t.raw,
                 range: t.full_range.clone(), //TODO?
+                families: None,
             }
         });
-
-        raw.pipeline_barrier(
-            hal::pso::PipelineStage::TOP_OF_PIPE .. hal::pso::PipelineStage::BOTTOM_OF_PIPE,
-            hal::memory::Dependencies::empty(),
-            buffer_barriers.chain(texture_barriers),
-        );
+        unsafe {
+            raw.pipeline_barrier(
+                hal::pso::PipelineStage::TOP_OF_PIPE .. hal::pso::PipelineStage::BOTTOM_OF_PIPE,
+                hal::memory::Dependencies::empty(),
+                buffer_barriers.chain(texture_barriers),
+            );
+        }
     }
 }
 
@@ -145,10 +149,12 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     let view_guard = HUB.texture_views.read();
 
     let mut current_comb = device.com_allocator.extend(cmb);
-    current_comb.begin(
-        hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-        hal::command::CommandBufferInheritanceInfo::default(),
-    );
+    unsafe {
+        current_comb.begin(
+            hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+            hal::command::CommandBufferInheritanceInfo::default(),
+        );
+    }
     let mut extent = None;
 
     let rp_key = {
@@ -223,11 +229,11 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 preserves: &[],
             };
 
-            let pass = device.raw.create_render_pass(
+            let pass = unsafe { device.raw.create_render_pass(
                 &e.key().attachments,
                 &[subpass],
                 &[],
-            ).unwrap();
+            )}.unwrap();
             e.insert(pass)
         }
     };
@@ -250,9 +256,9 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                     .iter()
                     .map(|&WeaklyStored(id)| &view_guard.get(id).raw);
 
-                device.raw
+                unsafe { device.raw
                     .create_framebuffer(&render_pass, attachments, extent.unwrap())
-                    .unwrap()
+                }.unwrap()
             };
             e.insert(fb)
         }
@@ -278,14 +284,16 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
             let value = hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
             hal::command::ClearValueRaw::from(hal::command::ClearValue::DepthStencil(value))
         }));
-
-    current_comb.begin_render_pass(
-        render_pass,
-        framebuffer,
-        rect,
-        clear_values,
-        hal::command::SubpassContents::Inline,
-    );
+    
+    unsafe {
+        current_comb.begin_render_pass(
+            render_pass,
+            framebuffer,
+            rect,
+            clear_values,
+            hal::command::SubpassContents::Inline,
+        );
+    }
 
     HUB.render_passes
         .write()
