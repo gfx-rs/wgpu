@@ -1,6 +1,6 @@
 use super::CommandBuffer;
+use track::Tracker;
 use {DeviceId, LifeGuard, Stored};
-use track::{Tracker};
 
 use hal::command::RawCommandBuffer;
 use hal::pool::RawCommandPool;
@@ -37,7 +37,9 @@ impl<B: hal::Backend> Inner<B> {
     fn recycle(&mut self, cmd_buf: CommandBuffer<B>) {
         let pool = self.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
         for mut raw in cmd_buf.raw {
-            unsafe { raw.reset(false); }
+            unsafe {
+                raw.reset(false);
+            }
             pool.available.push(raw);
         }
         self.fences.push(cmd_buf.fence);
@@ -62,7 +64,9 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub(crate) fn allocate(
-        &self, device_id: Stored<DeviceId>, device: &B::Device
+        &self,
+        device_id: Stored<DeviceId>,
+        device: &B::Device,
     ) -> CommandBuffer<B> {
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock().unwrap();
@@ -72,16 +76,17 @@ impl<B: hal::Backend> CommandAllocator<B> {
                 unsafe { device.reset_fence(&fence).unwrap() };
                 fence
             }
-            None => {
-                device.create_fence(false).unwrap()
-            }
+            None => device.create_fence(false).unwrap(),
         };
 
         let pool = inner.pools.entry(thread_id).or_insert_with(|| CommandPool {
-            raw: unsafe { device.create_command_pool(
-                self.queue_family,
-                hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-            )}.unwrap(),
+            raw: unsafe {
+                device.create_command_pool(
+                    self.queue_family,
+                    hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                )
+            }
+            .unwrap(),
             available: Vec::new(),
         });
         let init = pool.allocate();

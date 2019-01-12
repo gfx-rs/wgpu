@@ -1,13 +1,9 @@
-use registry::{HUB, Items};
+use registry::{Items, HUB};
 use track::{BufferTracker, TextureTracker};
-use {
-    CommandBuffer, Stored,
-    CommandBufferId, RenderPassId,
-};
+use {CommandBuffer, CommandBufferId, RenderPassId, Stored};
 
 use hal;
 use hal::command::RawCommandBuffer;
-
 
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
@@ -17,10 +13,7 @@ pub struct RenderPass<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> RenderPass<B> {
-    pub(crate) fn new(
-        raw: B::CommandBuffer,
-        cmb_id: Stored<CommandBufferId>,
-    ) -> Self {
+    pub(crate) fn new(raw: B::CommandBuffer, cmb_id: Stored<CommandBufferId>) -> Self {
         RenderPass {
             raw,
             cmb_id,
@@ -31,13 +24,11 @@ impl<B: hal::Backend> RenderPass<B> {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_end_pass(
-    pass_id: RenderPassId,
-) -> CommandBufferId {
-    let mut pass = HUB.render_passes
-        .write()
-        .take(pass_id);
-    unsafe {pass.raw.end_render_pass(); }
+pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBufferId {
+    let mut pass = HUB.render_passes.write().take(pass_id);
+    unsafe {
+        pass.raw.end_render_pass();
+    }
 
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(pass.cmb_id.value);

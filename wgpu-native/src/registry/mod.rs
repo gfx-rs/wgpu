@@ -3,13 +3,11 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 
 use {
-    AdapterHandle, BindGroupLayoutHandle, BindGroupHandle,
-    BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
-    RenderPassHandle, ComputePassHandle,
-    PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
-    BufferHandle, TextureHandle, TextureViewHandle,
+    AdapterHandle, BindGroupHandle, BindGroupLayoutHandle, BlendStateHandle, BufferHandle,
+    CommandBufferHandle, ComputePassHandle, ComputePipelineHandle, DepthStencilStateHandle,
+    DeviceHandle, InstanceHandle, PipelineLayoutHandle, RenderPassHandle, RenderPipelineHandle,
+    ShaderModuleHandle, TextureHandle, TextureViewHandle,
 };
-
 
 #[cfg(not(feature = "remote"))]
 mod local;
@@ -20,7 +18,6 @@ mod remote;
 pub use self::local::{Id, Items as ConcreteItems};
 #[cfg(feature = "remote")]
 pub use self::remote::{Id, Items as ConcreteItems};
-
 
 pub trait Items<T>: Default {
     fn register(&mut self, handle: T) -> Id;

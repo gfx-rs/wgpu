@@ -1,10 +1,7 @@
 use hal;
 use resource;
 
-use {
-    BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId,
-    ShaderModuleId,
-};
+use {BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

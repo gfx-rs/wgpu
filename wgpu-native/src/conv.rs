@@ -1,7 +1,6 @@
 use hal;
 
-use {Color, Extent3d, binding_model, command, pipeline, resource};
-
+use {binding_model, command, pipeline, resource, Color, Extent3d};
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
@@ -42,7 +41,8 @@ pub fn map_buffer_usage(
 }
 
 pub fn map_texture_usage(
-    usage: resource::TextureUsageFlags, aspects: hal::format::Aspects
+    usage: resource::TextureUsageFlags,
+    aspects: hal::format::Aspects,
 ) -> hal::image::Usage {
     use hal::image::Usage as U;
     use resource::TextureUsageFlags as W;
@@ -72,9 +72,7 @@ pub fn map_texture_usage(
     value
 }
 
-pub fn map_binding_type(
-    binding_ty: binding_model::BindingType,
-) -> hal::pso::DescriptorType {
+pub fn map_binding_type(binding_ty: binding_model::BindingType) -> hal::pso::DescriptorType {
     use binding_model::BindingType::*;
     use hal::pso::DescriptorType as H;
     match binding_ty {
@@ -104,9 +102,7 @@ pub fn map_shader_stage_flags(
     value
 }
 
-pub fn map_primitive_topology(
-    primitive_topology: pipeline::PrimitiveTopology,
-) -> hal::Primitive {
+pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::Primitive {
     use hal::Primitive as H;
     use pipeline::PrimitiveTopology::*;
     match primitive_topology {
@@ -134,8 +130,8 @@ pub fn map_blend_state_descriptor(
 }
 
 fn map_color_write_flags(flags: pipeline::ColorWriteFlags) -> hal::pso::ColorMask {
-    use pipeline::ColorWriteFlags as F;
     use hal::pso::ColorMask as H;
+    use pipeline::ColorWriteFlags as F;
 
     let mut value = H::empty();
     if flags.contains(F::RED) {
@@ -276,7 +272,11 @@ fn checked_u32_as_u16(value: u32) -> u16 {
 
 pub fn map_texture_dimension_size(
     dimension: resource::TextureDimension,
-    Extent3d { width, height, depth }: Extent3d,
+    Extent3d {
+        width,
+        height,
+        depth,
+    }: Extent3d,
 ) -> hal::image::Kind {
     use hal::image::Kind as H;
     use resource::TextureDimension::*;
@@ -305,11 +305,9 @@ pub fn map_texture_view_dimension(
     }
 }
 
-pub fn map_texture_aspect_flags(
-    aspect: resource::TextureAspectFlags
-) -> hal::format::Aspects {
-    use resource::TextureAspectFlags as Taf;
+pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::format::Aspects {
     use hal::format::Aspects;
+    use resource::TextureAspectFlags as Taf;
 
     let mut flags = Aspects::empty();
     if aspect.contains(Taf::COLOR) {
@@ -324,9 +322,7 @@ pub fn map_texture_aspect_flags(
     flags
 }
 
-pub fn map_buffer_state(
-    usage: resource::BufferUsageFlags,
-) -> hal::buffer::State {
+pub fn map_buffer_state(usage: resource::BufferUsageFlags) -> hal::buffer::State {
     use hal::buffer::Access as A;
     use resource::BufferUsageFlags as W;
 
@@ -386,13 +382,20 @@ pub fn map_texture_state(
     }
     if usage.contains(W::OUTPUT_ATTACHMENT) {
         //TODO: read-only attachments
-        access |= if is_color { A::COLOR_ATTACHMENT_WRITE } else { A::DEPTH_STENCIL_ATTACHMENT_WRITE };
+        access |= if is_color {
+            A::COLOR_ATTACHMENT_WRITE
+        } else {
+            A::DEPTH_STENCIL_ATTACHMENT_WRITE
+        };
     }
 
     (access, layout)
 }
 
-pub fn map_load_store_ops(load: command::LoadOp, store: command::StoreOp) -> hal::pass::AttachmentOps {
+pub fn map_load_store_ops(
+    load: command::LoadOp,
+    store: command::StoreOp,
+) -> hal::pass::AttachmentOps {
     hal::pass::AttachmentOps {
         load: match load {
             command::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,

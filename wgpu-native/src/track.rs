@@ -1,11 +1,10 @@
-use {RefCount, Stored, WeaklyStored, BufferId, TextureId};
 use resource::{BufferUsageFlags, TextureUsageFlags};
+use {BufferId, RefCount, Stored, TextureId, WeaklyStored};
 
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;
 use std::mem;
 use std::ops::{BitOr, Range};
-
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
@@ -28,7 +27,6 @@ bitflags! {
         const REPLACE = 2;
     }
 }
-
 
 pub trait GenericUsage {
     fn is_exclusive(&self) -> bool;
@@ -61,10 +59,7 @@ pub struct Tracker<I, U> {
 pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
 
-impl<
-    I: Clone + Hash + Eq,
-    U: Copy + GenericUsage + BitOr<Output = U> + PartialEq,
-> Tracker<I, U> {
+impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     pub(crate) fn new() -> Self {
         Tracker {
             map: HashMap::new(),
@@ -72,9 +67,7 @@ impl<
     }
 
     /// Get the last usage on a resource.
-    pub(crate) fn query(
-        &mut self, stored: &Stored<I>, default: U
-    ) -> Query<U> {
+    pub(crate) fn query(&mut self, stored: &Stored<I>, default: U) -> Query<U> {
         match self.map.entry(WeaklyStored(stored.value.clone())) {
             Entry::Vacant(e) => {
                 e.insert(Track {
@@ -87,18 +80,20 @@ impl<
                     initialized: true,
                 }
             }
-            Entry::Occupied(e) => {
-                Query {
-                    usage: e.get().last,
-                    initialized: false,
-                }
-            }
+            Entry::Occupied(e) => Query {
+                usage: e.get().last,
+                initialized: false,
+            },
         }
     }
 
     /// Transit a specified resource into a different usage.
     pub(crate) fn transit(
-        &mut self, id: I, ref_count: &RefCount, usage: U, permit: TrackPermit
+        &mut self,
+        id: I,
+        ref_count: &RefCount,
+        usage: U,
+        permit: TrackPermit,
     ) -> Result<Tracktion<U>, U> {
         match self.map.entry(WeaklyStored(id)) {
             Entry::Vacant(e) => {
@@ -127,12 +122,9 @@ impl<
     }
 
     /// Consume another tacker, adding it's transitions to `self`.
-    pub fn consume<'a>(
-        &'a mut self, other: &'a Self
-    ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
-        other.map
-            .iter()
-            .flat_map(move |(id, new)| match self.map.entry(WeaklyStored(id.0.clone())) {
+    pub fn consume<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+        other.map.iter().flat_map(move |(id, new)| {
+            match self.map.entry(WeaklyStored(id.0.clone())) {
                 Entry::Vacant(e) => {
                     e.insert(new.clone());
                     None
@@ -142,10 +134,11 @@ impl<
                     if old == new.init {
                         None
                     } else {
-                        Some((id.0.clone(), old .. new.last))
+                        Some((id.0.clone(), old..new.last))
                     }
                 }
-            })
+            }
+        })
     }
 
     /// Return an iterator over used resources keys.

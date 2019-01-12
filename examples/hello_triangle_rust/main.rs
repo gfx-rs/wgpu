@@ -28,15 +28,15 @@ fn main() {
     let fs_bytes = include_bytes!("./../data/hello_triangle.frag.spv");
     let fs_module = device.create_shader_module(fs_bytes);
 
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        bindings: &[],
-    });
+    let bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { bindings: &[] });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[&bind_group_layout],
     });
 
     let blend_state0 = device.create_blend_state(&wgpu::BlendStateDescriptor::REPLACE);
-    let depth_stencil_state = device.create_depth_stencil_state(&wgpu::DepthStencilStateDescriptor::IGNORE);
+    let depth_stencil_state =
+        device.create_depth_stencil_state(&wgpu::DepthStencilStateDescriptor::IGNORE);
 
     let _render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
@@ -54,17 +54,13 @@ fn main() {
         ],
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         attachments_state: wgpu::AttachmentsState {
-            color_attachments: &[
-                wgpu::Attachment {
-                    format: wgpu::TextureFormat::R8g8b8a8Unorm,
-                    samples: 1,
-                },
-            ],
+            color_attachments: &[wgpu::Attachment {
+                format: wgpu::TextureFormat::R8g8b8a8Unorm,
+                samples: 1,
+            }],
             depth_stencil_attachment: None,
         },
-        blend_states: &[
-            &blend_state0,
-        ],
+        blend_states: &[&blend_state0],
         depth_stencil_state: &depth_stencil_state,
     });
 
@@ -72,19 +68,16 @@ fn main() {
 
     {
         let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[
-                wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &color_view,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color::GREEN,
-                },
-            ],
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                attachment: &color_view,
+                load_op: wgpu::LoadOp::Clear,
+                store_op: wgpu::StoreOp::Store,
+                clear_color: wgpu::Color::GREEN,
+            }],
             depth_stencil_attachment: None,
         });
         rpass.end_pass();
     }
-
 
     let queue = device.get_queue();
     queue.submit(&[cmd_buf]);

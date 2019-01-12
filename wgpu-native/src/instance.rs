@@ -1,6 +1,6 @@
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
-use registry::{HUB, Items};
+use registry::{Items, HUB};
 use {AdapterId, Device, DeviceId, InstanceId};
 
 #[repr(C)]
@@ -67,9 +67,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
         PowerPreference::LowPower => low.or(high),
         PowerPreference::HighPerformance | PowerPreference::Default => high.or(low),
     };
-    HUB.adapters
-        .write()
-        .register(some.or(other).unwrap())
+    HUB.adapters.write().register(some.or(other).unwrap())
 }
 
 #[no_mangle]

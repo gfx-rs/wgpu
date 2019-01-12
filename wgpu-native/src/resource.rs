@@ -1,10 +1,6 @@
-use {
-    Extent3d, LifeGuard, Stored,
-    DeviceId, TextureId,
-};
+use {DeviceId, Extent3d, LifeGuard, Stored, TextureId};
 
 use hal;
-
 
 bitflags! {
     #[repr(transparent)]
@@ -35,7 +31,6 @@ pub(crate) struct Buffer<B: hal::Backend> {
     pub life_guard: LifeGuard,
     // TODO: mapping, unmap()
 }
-
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -86,7 +81,6 @@ pub(crate) struct Texture<B: hal::Backend> {
     pub life_guard: LifeGuard,
 }
 
-
 bitflags! {
     #[repr(transparent)]
     pub struct TextureAspectFlags: u32 {
@@ -126,7 +120,6 @@ pub(crate) struct TextureView<B: hal::Backend> {
     pub samples: hal::image::NumSamples,
     pub life_guard: LifeGuard,
 }
-
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

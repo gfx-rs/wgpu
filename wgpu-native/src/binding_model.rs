@@ -2,7 +2,6 @@ use hal;
 
 use {BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
 
-
 bitflags! {
     #[repr(transparent)]
     pub struct ShaderStageFlags: u32 {
