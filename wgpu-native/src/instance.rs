@@ -1,4 +1,4 @@
-use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
+use hal::{Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
 use crate::registry::{Items, HUB};
 use crate::{AdapterId, Device, DeviceId, InstanceId};

@@ -4,7 +4,7 @@ use crate::{DeviceId, LifeGuard, Stored};
 
 use hal::command::RawCommandBuffer;
 use hal::pool::RawCommandPool;
-use hal::{self, Device};
+use hal::Device;
 
 use std::collections::HashMap;
 //TODO: use `parking_lot::Mutex`?

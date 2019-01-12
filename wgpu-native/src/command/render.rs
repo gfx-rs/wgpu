@@ -2,7 +2,6 @@ use crate::registry::{Items, HUB};
 use crate::track::{BufferTracker, TextureTracker};
 use crate::{CommandBuffer, CommandBufferId, RenderPassId, Stored};
 
-use hal;
 use hal::command::RawCommandBuffer;
 
 pub struct RenderPass<B: hal::Backend> {

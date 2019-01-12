@@ -4,7 +4,6 @@ extern crate bitflags;
 extern crate lazy_static;
 #[macro_use]
 extern crate log;
-extern crate parking_lot;
 
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;

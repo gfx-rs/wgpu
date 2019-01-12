@@ -1,5 +1,3 @@
-use hal;
-
 use crate::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
 
 bitflags! {

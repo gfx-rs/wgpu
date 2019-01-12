@@ -7,7 +7,7 @@ pub use self::compute::*;
 pub use self::render::*;
 
 use hal::command::RawCommandBuffer;
-use hal::{self, Device};
+use hal::Device;
 
 use crate::device::{FramebufferKey, RenderPassKey};
 use crate::registry::{Items, HUB};

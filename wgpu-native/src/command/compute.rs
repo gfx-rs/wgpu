@@ -1,7 +1,6 @@
 use crate::registry::{Items, HUB};
 use crate::{BindGroupId, CommandBufferId, ComputePassId, ComputePipelineId, Stored};
 
-use hal;
 use hal::command::RawCommandBuffer;
 
 use std::iter;

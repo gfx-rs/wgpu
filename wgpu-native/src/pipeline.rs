@@ -1,4 +1,3 @@
-use hal;
 use crate::resource;
 
 use crate::{BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId};
