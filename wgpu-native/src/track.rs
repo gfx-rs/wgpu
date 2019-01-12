@@ -1,5 +1,5 @@
-use resource::{BufferUsageFlags, TextureUsageFlags};
-use {BufferId, RefCount, Stored, TextureId, WeaklyStored};
+use crate::resource::{BufferUsageFlags, TextureUsageFlags};
+use crate::{BufferId, RefCount, Stored, TextureId, WeaklyStored};
 
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;

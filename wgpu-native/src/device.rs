@@ -1,7 +1,7 @@
-use registry::{Items, HUB};
-use track::{BufferTracker, TextureTracker};
-use {back, binding_model, command, conv, pipeline, resource};
-use {
+use crate::registry::{Items, HUB};
+use crate::track::{BufferTracker, TextureTracker};
+use crate::{back, binding_model, command, conv, pipeline, resource};
+use crate::{
     BindGroupLayoutId, BlendStateId, BufferId, CommandBuffer, CommandBufferId, DepthStencilStateId,
     DeviceId, LifeGuard, PipelineLayoutId, QueueId, RefCount, RenderPipelineId, ShaderModuleId,
     Stored, SubmissionIndex, TextureId, TextureUsageFlags, TextureViewId, WeaklyStored,

@@ -40,7 +40,7 @@ pub use self::pipeline::*;
 pub use self::resource::*;
 
 use back::Backend as B;
-pub use registry::Id;
+pub use crate::registry::Id;
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};

@@ -1,6 +1,6 @@
-use registry::{Items, HUB};
-use track::{BufferTracker, TextureTracker};
-use {CommandBuffer, CommandBufferId, RenderPassId, Stored};
+use crate::registry::{Items, HUB};
+use crate::track::{BufferTracker, TextureTracker};
+use crate::{CommandBuffer, CommandBufferId, RenderPassId, Stored};
 
 use hal;
 use hal::command::RawCommandBuffer;

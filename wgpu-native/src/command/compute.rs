@@ -1,5 +1,5 @@
-use registry::{Items, HUB};
-use {BindGroupId, CommandBufferId, ComputePassId, ComputePipelineId, Stored};
+use crate::registry::{Items, HUB};
+use crate::{BindGroupId, CommandBufferId, ComputePassId, ComputePipelineId, Stored};
 
 use hal;
 use hal::command::RawCommandBuffer;

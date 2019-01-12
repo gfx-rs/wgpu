@@ -1,7 +1,7 @@
 use hal;
-use resource;
+use crate::resource;
 
-use {BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId};
+use crate::{BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

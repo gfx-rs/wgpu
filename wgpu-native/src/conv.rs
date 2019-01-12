@@ -1,13 +1,13 @@
 use hal;
 
-use {binding_model, command, pipeline, resource, Color, Extent3d};
+use crate::{binding_model, command, pipeline, resource, Color, Extent3d};
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
 ) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
     use hal::memory::Properties as P;
-    use resource::BufferUsageFlags as W;
+    use crate::resource::BufferUsageFlags as W;
 
     let mut hal_memory = P::empty();
     if usage.contains(W::MAP_READ) {
@@ -45,7 +45,7 @@ pub fn map_texture_usage(
     aspects: hal::format::Aspects,
 ) -> hal::image::Usage {
     use hal::image::Usage as U;
-    use resource::TextureUsageFlags as W;
+    use crate::resource::TextureUsageFlags as W;
 
     let mut value = U::empty();
     if usage.contains(W::TRANSFER_SRC) {
@@ -73,7 +73,7 @@ pub fn map_texture_usage(
 }
 
 pub fn map_binding_type(binding_ty: binding_model::BindingType) -> hal::pso::DescriptorType {
-    use binding_model::BindingType::*;
+    use crate::binding_model::BindingType::*;
     use hal::pso::DescriptorType as H;
     match binding_ty {
         UniformBuffer => H::UniformBuffer,
@@ -86,7 +86,7 @@ pub fn map_binding_type(binding_ty: binding_model::BindingType) -> hal::pso::Des
 pub fn map_shader_stage_flags(
     shader_stage_flags: binding_model::ShaderStageFlags,
 ) -> hal::pso::ShaderStageFlags {
-    use binding_model::ShaderStageFlags as F;
+    use crate::binding_model::ShaderStageFlags as F;
     use hal::pso::ShaderStageFlags as H;
 
     let mut value = H::empty();
@@ -104,7 +104,7 @@ pub fn map_shader_stage_flags(
 
 pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::Primitive {
     use hal::Primitive as H;
-    use pipeline::PrimitiveTopology::*;
+    use crate::pipeline::PrimitiveTopology::*;
     match primitive_topology {
         PointList => H::PointList,
         LineList => H::LineList,
@@ -131,7 +131,7 @@ pub fn map_blend_state_descriptor(
 
 fn map_color_write_flags(flags: pipeline::ColorWriteFlags) -> hal::pso::ColorMask {
     use hal::pso::ColorMask as H;
-    use pipeline::ColorWriteFlags as F;
+    use crate::pipeline::ColorWriteFlags as F;
 
     let mut value = H::empty();
     if flags.contains(F::RED) {
@@ -151,7 +151,7 @@ fn map_color_write_flags(flags: pipeline::ColorWriteFlags) -> hal::pso::ColorMas
 
 fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::BlendOp {
     use hal::pso::BlendOp as H;
-    use pipeline::BlendOperation::*;
+    use crate::pipeline::BlendOperation::*;
     match blend_desc.operation {
         Add => H::Add {
             src: map_blend_factor(blend_desc.src_factor),
@@ -172,7 +172,7 @@ fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::Ble
 
 fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
     use hal::pso::Factor as H;
-    use pipeline::BlendFactor::*;
+    use crate::pipeline::BlendFactor::*;
     match blend_factor {
         Zero => H::Zero,
         One => H::One,
@@ -226,7 +226,7 @@ fn map_stencil_face(
 
 fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
     use hal::pso::Comparison as H;
-    use resource::CompareFunction::*;
+    use crate::resource::CompareFunction::*;
     match compare_function {
         Never => H::Never,
         Less => H::Less,
@@ -241,7 +241,7 @@ fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso
 
 fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::pso::StencilOp {
     use hal::pso::StencilOp as H;
-    use pipeline::StencilOperation::*;
+    use crate::pipeline::StencilOperation::*;
     match stencil_operation {
         Keep => H::Keep,
         Zero => H::Zero,
@@ -256,7 +256,7 @@ fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::
 
 pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::format::Format {
     use hal::format::Format as H;
-    use resource::TextureFormat::*;
+    use crate::resource::TextureFormat::*;
     match texture_format {
         R8g8b8a8Unorm => H::Rgba8Unorm,
         R8g8b8a8Uint => H::Rgba8Uint,
@@ -279,7 +279,7 @@ pub fn map_texture_dimension_size(
     }: Extent3d,
 ) -> hal::image::Kind {
     use hal::image::Kind as H;
-    use resource::TextureDimension::*;
+    use crate::resource::TextureDimension::*;
     match dimension {
         D1 => {
             assert_eq!(height, 1);
@@ -294,7 +294,7 @@ pub fn map_texture_view_dimension(
     dimension: resource::TextureViewDimension,
 ) -> hal::image::ViewKind {
     use hal::image::ViewKind as H;
-    use resource::TextureViewDimension::*;
+    use crate::resource::TextureViewDimension::*;
     match dimension {
         D1 => H::D1,
         D2 => H::D2,
@@ -307,7 +307,7 @@ pub fn map_texture_view_dimension(
 
 pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::format::Aspects {
     use hal::format::Aspects;
-    use resource::TextureAspectFlags as Taf;
+    use crate::resource::TextureAspectFlags as Taf;
 
     let mut flags = Aspects::empty();
     if aspect.contains(Taf::COLOR) {
@@ -324,7 +324,7 @@ pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::fo
 
 pub fn map_buffer_state(usage: resource::BufferUsageFlags) -> hal::buffer::State {
     use hal::buffer::Access as A;
-    use resource::BufferUsageFlags as W;
+    use crate::resource::BufferUsageFlags as W;
 
     let mut access = A::empty();
     if usage.contains(W::TRANSFER_SRC) {
@@ -354,7 +354,7 @@ pub fn map_texture_state(
     aspects: hal::format::Aspects,
 ) -> hal::image::State {
     use hal::image::{Access as A, Layout as L};
-    use resource::TextureUsageFlags as W;
+    use crate::resource::TextureUsageFlags as W;
 
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
     let layout = match usage {

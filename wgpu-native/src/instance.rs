@@ -1,7 +1,7 @@
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
-use registry::{Items, HUB};
-use {AdapterId, Device, DeviceId, InstanceId};
+use crate::registry::{Items, HUB};
+use crate::{AdapterId, Device, DeviceId, InstanceId};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

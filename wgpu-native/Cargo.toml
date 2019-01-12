@@ -5,6 +5,7 @@ authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",
 ]
+edition = "2018"
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]

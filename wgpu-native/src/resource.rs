@@ -1,4 +1,4 @@
-use {DeviceId, Extent3d, LifeGuard, Stored, TextureId};
+use crate::{DeviceId, Extent3d, LifeGuard, Stored, TextureId};
 
 use hal;
 

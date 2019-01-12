@@ -1,6 +1,6 @@
 use hal;
 
-use {BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
+use crate::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
 
 bitflags! {
     #[repr(transparent)]

@@ -9,11 +9,11 @@ pub use self::render::*;
 use hal::command::RawCommandBuffer;
 use hal::{self, Device};
 
-use device::{FramebufferKey, RenderPassKey};
-use registry::{Items, HUB};
-use track::{BufferTracker, TextureTracker};
-use {conv, resource};
-use {
+use crate::device::{FramebufferKey, RenderPassKey};
+use crate::registry::{Items, HUB};
+use crate::track::{BufferTracker, TextureTracker};
+use crate::{conv, resource};
+use crate::{
     BufferId, BufferUsageFlags, Color, CommandBufferId, ComputePassId, DeviceId, LifeGuard,
     Origin3d, RenderPassId, Stored, TextureId, TextureUsageFlags, TextureViewId, WeaklyStored, B,
 };
