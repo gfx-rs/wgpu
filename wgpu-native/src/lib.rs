@@ -1,11 +1,3 @@
-#[macro_use]
-extern crate bitflags;
-#[macro_use]
-extern crate lazy_static;
-#[macro_use]
-extern crate log;
-extern crate parking_lot;
-
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(not(any(
@@ -40,11 +32,10 @@ pub use self::pipeline::*;
 pub use self::resource::*;
 
 use back::Backend as B;
-pub use registry::Id;
+pub use crate::registry::Id;
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
-
 
 type SubmissionIndex = usize;
 
@@ -109,7 +100,6 @@ struct WeaklyStored<T>(T);
 unsafe impl<T> Send for WeaklyStored<T> {}
 unsafe impl<T> Sync for WeaklyStored<T> {}
 
-
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Color {
@@ -120,12 +110,42 @@ pub struct Color {
 }
 
 impl Color {
-    pub const TRANSPARENT : Self = Color { r: 0.0, g: 0.0, b: 0.0, a: 0.0 };
-    pub const BLACK       : Self = Color { r: 0.0, g: 0.0, b: 0.0, a: 1.0 };
-    pub const WHITE       : Self = Color { r: 1.0, g: 1.0, b: 1.0, a: 1.0 };
-    pub const RED         : Self = Color { r: 1.0, g: 0.0, b: 0.0, a: 1.0 };
-    pub const GREEN       : Self = Color { r: 0.0, g: 1.0, b: 0.0, a: 1.0 };
-    pub const BLUE        : Self = Color { r: 0.0, g: 0.0, b: 1.0, a: 1.0 };
+    pub const TRANSPARENT: Self = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
+    pub const BLACK: Self = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const WHITE: Self = Color {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const RED: Self = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const GREEN: Self = Color {
+        r: 0.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const BLUE: Self = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
 }
 
 #[repr(C)]

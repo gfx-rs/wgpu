@@ -1,5 +1,5 @@
-extern crate wgpu_native as wgn;
 extern crate arrayvec;
+extern crate wgpu_native as wgn;
 
 use arrayvec::ArrayVec;
 
@@ -7,15 +7,13 @@ use std::ffi::CString;
 use std::ptr;
 
 pub use wgn::{
-    AdapterDescriptor, Color, CommandBufferDescriptor, DeviceDescriptor, Extensions, Extent3d,
-    Origin3d, PowerPreference, ShaderModuleDescriptor, ShaderStage, ShaderStageFlags,
-    BindGroupLayoutBinding, BindingType, TextureDimension, TextureDescriptor, TextureFormat,
-    TextureUsageFlags, TextureViewDescriptor,
-    PrimitiveTopology, BlendStateDescriptor, ColorWriteFlags, DepthStencilStateDescriptor,
-    RenderPassDescriptor, RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
-    Attachment, LoadOp, StoreOp,
+    AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
+    Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor, DeviceDescriptor,
+    Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
+    RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
+    RenderPassDescriptor, ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
 };
-
 
 pub struct Instance {
     id: wgn::InstanceId,
@@ -115,7 +113,6 @@ pub struct RenderPipelineDescriptor<'a> {
     pub depth_stencil_state: &'a DepthStencilState,
 }
 
-
 impl Instance {
     pub fn new() -> Self {
         Instance {
@@ -165,24 +162,31 @@ impl Device {
 
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
         BindGroupLayout {
-            id: wgn::wgpu_device_create_bind_group_layout(self.id, &wgn::BindGroupLayoutDescriptor {
-                bindings: desc.bindings.as_ptr(),
-                bindings_length: desc.bindings.len(),
-            }),
+            id: wgn::wgpu_device_create_bind_group_layout(
+                self.id,
+                &wgn::BindGroupLayoutDescriptor {
+                    bindings: desc.bindings.as_ptr(),
+                    bindings_length: desc.bindings.len(),
+                },
+            ),
         }
     }
 
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
         //TODO: avoid allocation here
-        let temp_layouts = desc.bind_group_layouts
+        let temp_layouts = desc
+            .bind_group_layouts
             .iter()
             .map(|bgl| bgl.id)
             .collect::<Vec<_>>();
         PipelineLayout {
-            id: wgn::wgpu_device_create_pipeline_layout(self.id, &wgn::PipelineLayoutDescriptor {
-                bind_group_layouts: temp_layouts.as_ptr(),
-                bind_group_layouts_length: temp_layouts.len(),
-            }),
+            id: wgn::wgpu_device_create_pipeline_layout(
+                self.id,
+                &wgn::PipelineLayoutDescriptor {
+                    bind_group_layouts: temp_layouts.as_ptr(),
+                    bind_group_layouts_length: temp_layouts.len(),
+                },
+            ),
         }
     }
 
@@ -192,18 +196,23 @@ impl Device {
         }
     }
 
-    pub fn create_depth_stencil_state(&self, desc: &DepthStencilStateDescriptor) -> DepthStencilState {
+    pub fn create_depth_stencil_state(
+        &self,
+        desc: &DepthStencilStateDescriptor,
+    ) -> DepthStencilState {
         DepthStencilState {
             id: wgn::wgpu_device_create_depth_stencil_state(self.id, desc),
         }
     }
 
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
-        let entry_points = desc.stages
+        let entry_points = desc
+            .stages
             .iter()
             .map(|ps| CString::new(ps.entry_point).unwrap())
             .collect::<ArrayVec<[_; 2]>>();
-        let stages = desc.stages
+        let stages = desc
+            .stages
             .iter()
             .zip(&entry_points)
             .map(|(ps, ep_name)| wgn::PipelineStageDescriptor {
@@ -213,26 +222,31 @@ impl Device {
             })
             .collect::<ArrayVec<[_; 2]>>();
 
-        let temp_blend_states = desc.blend_states
-            .iter()
-            .map(|bs| bs.id)
-            .collect::<Vec<_>>();
+        let temp_blend_states = desc.blend_states.iter().map(|bs| bs.id).collect::<Vec<_>>();
 
         RenderPipeline {
-            id: wgn::wgpu_device_create_render_pipeline(self.id, &wgn::RenderPipelineDescriptor {
-                layout: desc.layout.id,
-                stages: stages.as_ptr(),
-                stages_length: stages.len(),
-                primitive_topology: desc.primitive_topology,
-                attachments_state: wgn::AttachmentsState {
-                    color_attachments: desc.attachments_state.color_attachments.as_ptr(),
-                    color_attachments_length: desc.attachments_state.color_attachments.len(),
-                    depth_stencil_attachment: desc.attachments_state.depth_stencil_attachment.as_ref().map(|at| at as *const _).unwrap_or(ptr::null()),
+            id: wgn::wgpu_device_create_render_pipeline(
+                self.id,
+                &wgn::RenderPipelineDescriptor {
+                    layout: desc.layout.id,
+                    stages: stages.as_ptr(),
+                    stages_length: stages.len(),
+                    primitive_topology: desc.primitive_topology,
+                    attachments_state: wgn::AttachmentsState {
+                        color_attachments: desc.attachments_state.color_attachments.as_ptr(),
+                        color_attachments_length: desc.attachments_state.color_attachments.len(),
+                        depth_stencil_attachment: desc
+                            .attachments_state
+                            .depth_stencil_attachment
+                            .as_ref()
+                            .map(|at| at as *const _)
+                            .unwrap_or(ptr::null()),
+                    },
+                    blend_states: temp_blend_states.as_ptr(),
+                    blend_states_length: temp_blend_states.len(),
+                    depth_stencil_state: desc.depth_stencil_state.id,
                 },
-                blend_states: temp_blend_states.as_ptr(),
-                blend_states_length: temp_blend_states.len(),
-                depth_stencil_state: desc.depth_stencil_state.id,
-            }),
+            ),
         }
     }
 
@@ -259,7 +273,8 @@ impl Texture {
 
 impl CommandBuffer {
     pub fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<&TextureView>) -> RenderPass {
-        let colors = desc.color_attachments
+        let colors = desc
+            .color_attachments
             .iter()
             .map(|ca| RenderPassColorAttachmentDescriptor {
                 attachment: ca.attachment.id,
@@ -269,9 +284,8 @@ impl CommandBuffer {
             })
             .collect::<ArrayVec<[_; 4]>>();
 
-        let depth_stencil = desc.depth_stencil_attachment
-            .as_ref()
-            .map(|dsa| RenderPassDepthStencilAttachmentDescriptor {
+        let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
+            RenderPassDepthStencilAttachmentDescriptor {
                 attachment: dsa.attachment.id,
                 depth_load_op: dsa.depth_load_op,
                 depth_store_op: dsa.depth_store_op,
@@ -279,13 +293,17 @@ impl CommandBuffer {
                 stencil_load_op: dsa.stencil_load_op,
                 stencil_store_op: dsa.stencil_store_op,
                 clear_stencil: dsa.clear_stencil,
-            });
+            }
+        });
 
         RenderPass {
-            id: wgn::wgpu_command_buffer_begin_render_pass(self.id, RenderPassDescriptor {
-                color_attachments: &colors,
-                depth_stencil_attachment: depth_stencil,
-            }),
+            id: wgn::wgpu_command_buffer_begin_render_pass(
+                self.id,
+                RenderPassDescriptor {
+                    color_attachments: &colors,
+                    depth_stencil_attachment: depth_stencil,
+                },
+            ),
             parent: self,
         }
     }

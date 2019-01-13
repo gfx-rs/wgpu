@@ -1,7 +1,6 @@
 use std::marker::PhantomData;
 use std::os::raw::c_void;
 
-
 pub type Id = *mut c_void;
 
 pub struct Items<T> {

@@ -1,6 +1,5 @@
 use hal::backend::FastHashMap;
 
-
 pub type Id = u32;
 
 pub struct Items<T> {
