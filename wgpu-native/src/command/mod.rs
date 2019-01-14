@@ -11,6 +11,7 @@ use hal::Device;
 
 use crate::device::{FramebufferKey, RenderPassKey};
 use crate::registry::{Items, HUB};
+use crate::swap_chain::SwapChainLink;
 use crate::track::{BufferTracker, TextureTracker};
 use crate::{conv, resource};
 use crate::{
@@ -87,6 +88,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     life_guard: LifeGuard,
     pub(crate) buffer_tracker: BufferTracker,
     pub(crate) texture_tracker: TextureTracker,
+    swap_chain_links: Vec<SwapChainLink>,
 }
 
 impl CommandBuffer<B> {
@@ -162,6 +164,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 
     let rp_key = {
         let tracker = &mut cmb.texture_tracker;
+        //let swap_chain_links = &mut cmb.swap_chain_links;
 
         let depth_stencil_key = match desc.depth_stencil_attachment {
             Some(ref at) => {

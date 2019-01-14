@@ -1,5 +1,4 @@
 use bitflags::bitflags;
-use parking_lot::RwLock;
 
 use hal;
 
@@ -86,7 +85,7 @@ pub(crate) struct Texture<B: hal::Backend> {
     pub kind: hal::image::Kind,
     pub format: TextureFormat,
     pub full_range: hal::image::SubresourceRange,
-    pub swap_chain_link: RwLock<Option<SwapChainLink>>,
+    pub swap_chain_link: Option<SwapChainLink>,
     pub life_guard: LifeGuard,
 }
 
@@ -127,6 +126,7 @@ pub(crate) struct TextureView<B: hal::Backend> {
     pub format: TextureFormat,
     pub extent: hal::image::Extent,
     pub samples: hal::image::NumSamples,
+    pub is_owned_by_swap_chain: bool,
     pub life_guard: LifeGuard,
 }
 

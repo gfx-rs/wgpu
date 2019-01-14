@@ -99,6 +99,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             life_guard: LifeGuard::new(),
             buffer_tracker: Tracker::new(),
             texture_tracker: Tracker::new(),
+            swap_chain_links: Vec::new(),
         }
     }
 

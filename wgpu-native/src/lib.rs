@@ -90,7 +90,7 @@ impl LifeGuard {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Stored<T> {
     value: T,
     ref_count: RefCount,

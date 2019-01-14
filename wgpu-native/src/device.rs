@@ -14,7 +14,7 @@ use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
 use hal::{self, Device as _Device, Surface as _Surface};
 //use rendy_memory::{allocator, Config, Heaps};
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex};
 
 use std::{ffi, slice};
 use std::collections::hash_map::{Entry, HashMap};
@@ -134,12 +134,12 @@ impl<B: hal::Backend> DestroyedResources<B> {
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     adapter_id: WeaklyStored<AdapterId>,
-    queue_group: hal::QueueGroup<B, hal::General>,
+    pub(crate) queue_group: hal::QueueGroup<B, hal::General>,
     //mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     life_guard: LifeGuard,
     buffer_tracker: Mutex<BufferTracker>,
-    texture_tracker: Mutex<TextureTracker>,
+    pub(crate) texture_tracker: Mutex<TextureTracker>,
     mem_props: hal::MemoryProperties,
     pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<HashMap<FramebufferKey, B::Framebuffer>>,
@@ -267,7 +267,7 @@ pub extern "C" fn wgpu_device_create_texture(
             kind,
             format: desc.format,
             full_range,
-            swap_chain_link: RwLock::new(None),
+            swap_chain_link: None,
             life_guard,
         });
     let query = device.texture_tracker
@@ -301,26 +301,27 @@ pub extern "C" fn wgpu_texture_create_texture_view(
                 hal::format::Swizzle::NO,
                 hal::image::SubresourceRange {
                     aspects: conv::map_texture_aspect_flags(desc.aspect),
-                    levels: desc.base_mip_level as u8
-                        ..(desc.base_mip_level + desc.level_count) as u8,
-                    layers: desc.base_array_layer as u16
-                        ..(desc.base_array_layer + desc.array_count) as u16,
+                    levels: desc.base_mip_level as u8 .. (desc.base_mip_level + desc.level_count) as u8,
+                    layers: desc.base_array_layer as u16 .. (desc.base_array_layer + desc.array_count) as u16,
                 },
             )
-    }
-    .unwrap();
+            .unwrap()
+    };
 
-    HUB.texture_views.write().register(resource::TextureView {
-        raw,
-        texture_id: Stored {
-            value: texture_id,
-            ref_count: texture.life_guard.ref_count.clone(),
-        },
-        format: texture.format,
-        extent: texture.kind.extent(),
-        samples: texture.kind.num_samples(),
-        life_guard: LifeGuard::new(),
-    })
+    HUB.texture_views
+        .write()
+        .register(resource::TextureView {
+            raw,
+            texture_id: Stored {
+                value: texture_id,
+                ref_count: texture.life_guard.ref_count.clone(),
+            },
+            format: texture.format,
+            extent: texture.kind.extent(),
+            samples: texture.kind.num_samples(),
+            is_owned_by_swap_chain: false,
+            life_guard: LifeGuard::new(),
+        })
 }
 
 #[no_mangle]
@@ -334,7 +335,7 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(texture_id: TextureId
         hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
     };
 
-    let raw = unsafe {
+    let raw = unsafe{
         HUB.devices
             .read()
             .get(texture.device_id.value)
@@ -346,20 +347,23 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(texture_id: TextureId
                 hal::format::Swizzle::NO,
                 texture.full_range.clone(),
             )
-    }
-    .unwrap();
+            .unwrap()
+    };
 
-    HUB.texture_views.write().register(resource::TextureView {
-        raw,
-        texture_id: Stored {
-            value: texture_id,
-            ref_count: texture.life_guard.ref_count.clone(),
-        },
-        format: texture.format,
-        extent: texture.kind.extent(),
-        samples: texture.kind.num_samples(),
-        life_guard: LifeGuard::new(),
-    })
+    HUB.texture_views
+        .write()
+        .register(resource::TextureView {
+            raw,
+            texture_id: Stored {
+                value: texture_id,
+                ref_count: texture.life_guard.ref_count.clone(),
+            },
+            format: texture.format,
+            extent: texture.kind.extent(),
+            samples: texture.kind.num_samples(),
+            is_owned_by_swap_chain: false,
+            life_guard: LifeGuard::new(),
+        })
 }
 
 #[no_mangle]
@@ -849,13 +853,17 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     let mut surface_guard = HUB.surfaces.write();
     let surface = surface_guard.get_mut(surface_id);
     let mut texture_guard = HUB.textures.write();
+    let mut texture_view_guard = HUB.texture_views.write();
+    let mut swap_chain_guard = HUB.swap_chains.write();
 
     let (caps, formats, _present_modes, _composite_alphas) = surface.raw.compatibility(physical_device);
+    let num_frames = caps.image_count.start; //TODO: configure?
+    let frame_format = conv::map_texture_format(desc.format);
     let config = hal::SwapchainConfig::new(
         desc.width,
         desc.height,
-        conv::map_texture_format(desc.format),
-        caps.image_count.start, //TODO: configure?
+        frame_format,
+        num_frames, //TODO: configure?
     );
 
     let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
@@ -874,51 +882,94 @@ pub extern "C" fn wgpu_device_create_swap_chain(
             )
             .unwrap()
     };
-
-    let frames = match backbuffer {
-        hal::Backbuffer::Images(images) => images
-            .into_iter()
-            .map(|image| {
-                let texture = resource::Texture {
-                    raw: image,
-                    device_id: Stored {
-                        value: device_id,
-                        ref_count: device.life_guard.ref_count.clone(),
-                    },
-                    kind: hal::image::Kind::D2(desc.width, desc.height, 1, 1),
-                    format: desc.format,
-                    full_range: hal::image::SubresourceRange {
-                        aspects: hal::format::Aspects::COLOR,
-                        levels: 0 .. 1,
-                        layers: 0 .. 1,
-                    },
-                    swap_chain_link: RwLock::new(None),
-                    life_guard: LifeGuard::new(),
-                };
-                swap_chain::Frame {
-                    texture: Stored {
-                        ref_count: texture.life_guard.ref_count.clone(),
-                        value: texture_guard.register(texture),
-                    },
-                    fence: device.raw.create_fence(true).unwrap(),
-                    sem_available: device.raw.create_semaphore().unwrap(),
-                    sem_present: device.raw.create_semaphore().unwrap(),
-                }
-            })
-            .collect(),
-        hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
+    let command_pool = unsafe {
+        device.raw
+            .create_command_pool_typed(
+                &device.queue_group,
+                hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+            )
+            .unwrap()
     };
 
-    HUB.swap_chains
-        .write()
+    let swap_chain_id = swap_chain_guard
         .register(swap_chain::SwapChain {
             raw,
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.ref_count.clone(),
             },
-            frames,
+            frames: Vec::with_capacity(num_frames as usize),
+            acquired: Vec::with_capacity(num_frames as usize),
             sem_available: device.raw.create_semaphore().unwrap(),
+            command_pool,
             epoch: 1,
-        })
+        });
+    let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
+
+    let images = match backbuffer {
+        hal::Backbuffer::Images(images) => images,
+        hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
+    };
+
+    for (i, image) in images.into_iter().enumerate() {
+        let kind = hal::image::Kind::D2(desc.width, desc.height, 1, 1);
+        let full_range = hal::image::SubresourceRange {
+            aspects: hal::format::Aspects::COLOR,
+            levels: 0 .. 1,
+            layers: 0 .. 1,
+        };
+        let view_raw = unsafe {
+            device.raw
+                .create_image_view(
+                    &image,
+                    hal::image::ViewKind::D2,
+                    frame_format,
+                    hal::format::Swizzle::NO,
+                    full_range.clone(),
+                )
+                .unwrap()
+            };
+        let texture = resource::Texture {
+            raw: image,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.ref_count.clone(),
+            },
+            kind,
+            format: desc.format,
+            full_range,
+            swap_chain_link: Some(swap_chain::SwapChainLink {
+                swap_chain_id: WeaklyStored(swap_chain_id), //TODO: strongly
+                epoch: Mutex::new(0),
+                image_index: i as hal::SwapImageIndex,
+            }),
+            life_guard: LifeGuard::new(),
+        };
+        let texture_id = Stored {
+            ref_count: texture.life_guard.ref_count.clone(),
+            value: texture_guard.register(texture),
+        };
+        let view = resource::TextureView {
+            raw: view_raw,
+            texture_id: texture_id.clone(),
+            format: desc.format,
+            extent: kind.extent(),
+            samples: kind.num_samples(),
+            is_owned_by_swap_chain: true,
+            life_guard: LifeGuard::new(),
+        };
+        swap_chain.frames.push(swap_chain::Frame {
+            texture_id,
+            view_id: Stored {
+                 ref_count: view.life_guard.ref_count.clone(),
+                 value: texture_view_guard.register(view),
+            },
+            fence: device.raw.create_fence(true).unwrap(),
+            sem_available: device.raw.create_semaphore().unwrap(),
+            sem_present: device.raw.create_semaphore().unwrap(),
+            comb: swap_chain.command_pool.acquire_command_buffer(),
+        });
+    }
+
+    swap_chain_id
 }
