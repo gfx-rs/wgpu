@@ -4,6 +4,7 @@ use crate::{CommandBuffer, CommandBufferId, RenderPassId, Stored};
 
 use hal::command::RawCommandBuffer;
 
+
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,

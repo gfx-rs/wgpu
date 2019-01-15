@@ -99,7 +99,7 @@ struct Stored<T> {
 unsafe impl<T> Send for Stored<T> {}
 unsafe impl<T> Sync for Stored<T> {}
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct WeaklyStored<T>(T);
 
 unsafe impl<T> Send for WeaklyStored<T> {}

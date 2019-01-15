@@ -1,12 +1,12 @@
-use bitflags::bitflags;
-
-use hal;
-
 use crate::{
     Extent3d, LifeGuard, Stored,
     DeviceId, TextureId,
 };
-use crate::swap_chain::SwapChainLink;
+use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
+
+use bitflags::bitflags;
+use hal;
+use parking_lot::Mutex;
 
 
 bitflags! {
@@ -85,7 +85,7 @@ pub(crate) struct Texture<B: hal::Backend> {
     pub kind: hal::image::Kind,
     pub format: TextureFormat,
     pub full_range: hal::image::SubresourceRange,
-    pub swap_chain_link: Option<SwapChainLink>,
+    pub swap_chain_link: Option<SwapChainLink<Mutex<SwapImageEpoch>>>,
     pub life_guard: LifeGuard,
 }
 

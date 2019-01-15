@@ -7,17 +7,16 @@ use crate::track::{Tracktion, TrackPermit};
 
 use hal;
 use hal::{Device as _Device, Swapchain as _Swapchain};
-
-use parking_lot::Mutex;
+use log::trace;
 
 use std::{iter, mem};
 
 
-pub type Epoch = u16;
+pub type SwapImageEpoch = u16;
 
-pub(crate) struct SwapChainLink {
+pub(crate) struct SwapChainLink<E> {
     pub swap_chain_id: WeaklyStored<SwapChainId>, //TODO: strongly
-    pub epoch: Mutex<Epoch>,
+    pub epoch: E,
     pub image_index: hal::SwapImageIndex,
 }
 
@@ -41,7 +40,6 @@ pub(crate) struct SwapChain<B: hal::Backend> {
     pub acquired: Vec<hal::SwapImageIndex>,
     pub sem_available: B::Semaphore,
     pub command_pool: hal::CommandPool<B, hal::General>,
-    pub epoch: Epoch,
 }
 
 #[repr(C)]
@@ -77,7 +75,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
     let texture_guard = HUB.textures.read();
     let texture = texture_guard.get(frame.texture_id.value);
     match texture.swap_chain_link {
-        Some(ref link) => *link.epoch.lock() = swap_chain.epoch,
+        Some(ref link) => *link.epoch.lock() += 1,
         None => unreachable!(),
     }
 
@@ -103,7 +101,7 @@ pub extern "C" fn wgpu_swap_chain_present(
         None => unreachable!(),
     }
 
-    //trace!("transit {:?} to present", frame.texture_id.value);
+    trace!("transit {:?} to present", frame.texture_id.value);
     let tracktion = device.texture_tracker
         .lock()
         .transit(

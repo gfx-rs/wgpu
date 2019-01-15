@@ -20,6 +20,7 @@ use std::{ffi, slice};
 use std::collections::hash_map::{Entry, HashMap};
 use std::sync::atomic::Ordering;
 
+
 #[derive(Hash, PartialEq)]
 pub(crate) struct RenderPassKey {
     pub attachments: Vec<hal::pass::Attachment>,
@@ -902,7 +903,6 @@ pub extern "C" fn wgpu_device_create_swap_chain(
             acquired: Vec::with_capacity(num_frames as usize),
             sem_available: device.raw.create_semaphore().unwrap(),
             command_pool,
-            epoch: 1,
         });
     let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
 

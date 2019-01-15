@@ -1,12 +1,9 @@
-#[cfg(not(feature = "winit"))]
-extern crate winit;
-
-use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
-
 use crate::registry::{HUB, Items};
 use crate::{WeaklyStored, Device, Surface,
     AdapterId, DeviceId, InstanceId, SurfaceId,
 };
+
+use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
 
 #[repr(C)]

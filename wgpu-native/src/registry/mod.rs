@@ -1,8 +1,3 @@
-use std::sync::Arc;
-
-use lazy_static::lazy_static;
-use parking_lot::RwLock;
-
 use crate::{
     AdapterHandle, BindGroupLayoutHandle, BindGroupHandle,
     BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
@@ -11,6 +6,11 @@ use crate::{
     BufferHandle, TextureHandle, TextureViewHandle,
     SurfaceHandle, SwapChainHandle,
 };
+
+use lazy_static::lazy_static;
+use parking_lot::RwLock;
+
+use std::sync::Arc;
 
 
 #[cfg(not(feature = "remote"))]
