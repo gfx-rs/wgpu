@@ -11,9 +11,10 @@ edition = "2018"
 
 [features]
 default = []
-metal = ["wgpu-native/gfx-backend-metal"]
-dx12 = ["wgpu-native/gfx-backend-dx12"]
-vulkan = ["wgpu-native/gfx-backend-vulkan"]
+backed = []
+metal = ["wgpu-native/gfx-backend-metal", "backed"]
+dx12 = ["wgpu-native/gfx-backend-dx12", "backed"]
+vulkan = ["wgpu-native/gfx-backend-vulkan", "backed"]
 
 [dependencies]
 wgpu-native = { path = "../wgpu-native" }

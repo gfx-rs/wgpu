@@ -50,7 +50,14 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(all(
+    not(feature = "remote"),
+    any(
+        feature = "gfx-backend-vulkan",
+        feature = "gfx-backend-dx12",
+        feature = "gfx-backend-metal"
+    )
+))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,

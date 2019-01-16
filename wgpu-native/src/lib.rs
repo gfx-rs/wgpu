@@ -1,5 +1,5 @@
 #[cfg(not(feature = "remote"))]
-extern crate winit;
+pub extern crate winit;
 
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;

@@ -52,10 +52,16 @@ pub struct SwapChainDescriptor {
     pub height: u32,
 }
 
+#[repr(C)]
+pub struct SwapChainOutput {
+    pub texture_id: TextureId,
+    pub view_id: TextureViewId,
+}
+
 #[no_mangle]
 pub extern "C" fn wgpu_swap_chain_get_next_texture(
     swap_chain_id: SwapChainId,
-) -> TextureId {
+) -> SwapChainOutput {
     let mut swap_chain_guard = HUB.swap_chains.write();
     let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
     let device_guard = HUB.devices.read();
@@ -81,7 +87,10 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
         None => unreachable!(),
     }
 
-    frame.texture_id.value
+    SwapChainOutput {
+        texture_id: frame.texture_id.value,
+        view_id: frame.view_id.value,
+    }
 }
 
 #[no_mangle]
