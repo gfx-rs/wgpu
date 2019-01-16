@@ -88,7 +88,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     life_guard: LifeGuard,
     pub(crate) buffer_tracker: BufferTracker,
     pub(crate) texture_tracker: TextureTracker,
-    swap_chain_links: Vec<SwapChainLink<SwapImageEpoch>>,
+    pub(crate) swap_chain_links: Vec<SwapChainLink<SwapImageEpoch>>,
 }
 
 impl CommandBuffer<B> {

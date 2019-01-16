@@ -33,6 +33,8 @@ pub(crate) struct Frame<B: hal::Backend> {
     pub comb: hal::command::CommandBuffer<B, hal::General, hal::command::MultiShot>,
 }
 
+//TODO: does it need a ref-counted lifetime?
+
 pub(crate) struct SwapChain<B: hal::Backend> {
     pub raw: B::Swapchain,
     pub device_id: Stored<DeviceId>,

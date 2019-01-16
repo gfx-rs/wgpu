@@ -538,6 +538,8 @@ pub extern "C" fn wgpu_queue_submit(
         .submission_index
         .fetch_add(1, Ordering::Relaxed);
 
+    let mut swap_chain_links = Vec::new();
+
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
     // a temporary one, since the chains are not finished.
@@ -545,6 +547,7 @@ pub extern "C" fn wgpu_queue_submit(
     // finish all the command buffers first
     for &cmb_id in command_buffer_ids {
         let comb = command_buffer_guard.get_mut(cmb_id);
+        swap_chain_links.extend(comb.swap_chain_links.drain(..));
         // update submission IDs
         for id in comb.buffer_tracker.used() {
             buffer_guard
@@ -589,14 +592,25 @@ pub extern "C" fn wgpu_queue_submit(
     // now prepare the GPU submission
     let fence = device.raw.create_fence(false).unwrap();
     {
+        let swap_chain_guard = HUB.swap_chains.read();
+        let wait_semaphores = swap_chain_links
+            .into_iter()
+            .map(|link| {
+                //TODO: check the epoch
+                let sem = &swap_chain_guard
+                    .get(link.swap_chain_id.0)
+                    .frames[link.image_index as usize]
+                    .sem_available;
+                (sem, hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT)
+            });
         let submission =
             hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
                 //TODO: may `OneShot` be enough?
                 command_buffers: command_buffer_ids
                     .iter()
                     .flat_map(|&cmb_id| &command_buffer_guard.get(cmb_id).raw),
-                wait_semaphores: Vec::new(),
-                signal_semaphores: &[],
+                wait_semaphores,
+                signal_semaphores: &[], //TODO: signal `sem_present`?
             };
         unsafe {
             device.queue_group.queues[0]
