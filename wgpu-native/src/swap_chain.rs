@@ -64,6 +64,9 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
 ) -> SwapChainOutput {
     let mut swap_chain_guard = HUB.swap_chains.write();
     let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
+    assert_ne!(swap_chain.acquired.len(), swap_chain.acquired.capacity(),
+        "Unable to acquire any more swap chain images before presenting");
+
     let device_guard = HUB.devices.read();
     let device = device_guard.get(swap_chain.device_id.value);
 
@@ -119,7 +122,7 @@ pub extern "C" fn wgpu_swap_chain_present(
             frame.texture_id.value,
             &texture.life_guard.ref_count,
             resource::TextureUsageFlags::PRESENT,
-            TrackPermit::EXTEND,
+            TrackPermit::REPLACE,
         )
         .unwrap();
 
@@ -146,8 +149,22 @@ pub extern "C" fn wgpu_swap_chain_present(
         frame.comb.finish();
 
         // now prepare the GPU submission
-        device.raw.reset_fence(&frame.fence);
+        let submission = hal::Submission {
+            command_buffers: iter::once(&frame.comb),
+            wait_semaphores: None,
+            signal_semaphores: Some(&frame.sem_present),
+        };
+
+        device.raw.reset_fence(&frame.fence).unwrap();
         device.queue_group.queues[0]
-            .submit_nosemaphores(iter::once(&frame.comb), Some(&frame.fence));
+            .submit(submission, Some(&frame.fence));
+
+        swap_chain.raw
+            .present(
+                &mut device.queue_group.queues[0],
+                image_index,
+                iter::once(&frame.sem_present),
+            )
+            .unwrap();
     }
 }

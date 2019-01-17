@@ -539,6 +539,7 @@ pub extern "C" fn wgpu_queue_submit(
         .fetch_add(1, Ordering::Relaxed);
 
     let mut swap_chain_links = Vec::new();
+    device.com_allocator.maintain(&device.raw);
 
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
@@ -883,10 +884,15 @@ pub extern "C" fn wgpu_device_create_swap_chain(
 
     let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
     if let Some(formats) = formats {
-        assert!(formats.contains(&config.format));
+        assert!(formats.contains(&config.format),
+            "Requested format {:?} is not in supported list: {:?}",
+            config.format, formats);
     }
-    assert!(desc.width >= caps.extents.start.width && desc.width < caps.extents.end.width);
-    assert!(desc.height >= caps.extents.start.height && desc.width < caps.extents.end.height);
+    //TODO: properly exclusive range
+    assert!(desc.width >= caps.extents.start.width && desc.width <= caps.extents.end.width &&
+        desc.height >= caps.extents.start.height && desc.height <= caps.extents.end.height,
+        "Requested size {}x{} is outside of the supported range: {:?}",
+        desc.width, desc.height, caps.extents);
 
     let (raw, backbuffer) = unsafe {
         device.raw
@@ -914,7 +920,7 @@ pub extern "C" fn wgpu_device_create_swap_chain(
                 ref_count: device.life_guard.ref_count.clone(),
             },
             frames: Vec::with_capacity(num_frames as usize),
-            acquired: Vec::with_capacity(num_frames as usize),
+            acquired: Vec::with_capacity(1), //TODO: get it from gfx-hal?
             sem_available: device.raw.create_semaphore().unwrap(),
             command_pool,
         });
@@ -963,6 +969,10 @@ pub extern "C" fn wgpu_device_create_swap_chain(
             ref_count: texture.life_guard.ref_count.clone(),
             value: texture_guard.register(texture),
         };
+        device.texture_tracker
+            .lock()
+            .query(&texture_id, TextureUsageFlags::WRITE_ALL);
+
         let view = resource::TextureView {
             raw: view_raw,
             texture_id: texture_id.clone(),

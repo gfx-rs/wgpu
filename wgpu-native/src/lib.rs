@@ -1,4 +1,4 @@
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "winit")]
 pub extern crate winit;
 
 #[cfg(feature = "gfx-backend-dx12")]

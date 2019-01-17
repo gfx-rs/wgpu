@@ -135,8 +135,8 @@ impl Instance {
         }
     }
 
-    #[cfg(feature = "backed")]
-    pub fn create_surface(&self, window: &::winit::Window) -> Surface {
+    #[cfg(feature = "winit")]
+    pub fn create_surface(&self, window: &wgn::winit::Window) -> Surface {
         Surface {
             id: wgn::wgpu_instance_create_surface_from_winit(self.id, window)
         }

@@ -1,7 +1,9 @@
 use crate::registry::{HUB, Items};
-use crate::{WeaklyStored, Device, Surface,
-    AdapterId, DeviceId, InstanceId, SurfaceId,
+use crate::{WeaklyStored, Device,
+    AdapterId, DeviceId, InstanceId,
 };
+#[cfg(feature = "winit")]
+use crate::{Surface, SurfaceId};
 
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
@@ -50,14 +52,7 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     }
 }
 
-#[cfg(all(
-    not(feature = "remote"),
-    any(
-        feature = "gfx-backend-vulkan",
-        feature = "gfx-backend-dx12",
-        feature = "gfx-backend-metal"
-    )
-))]
+#[cfg(feature = "winit")]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
