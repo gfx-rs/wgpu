@@ -110,3 +110,45 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
         pass.raw.bind_vertex_buffers(0, buffers);
     }
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_draw(
+    pass_id: RenderPassId,
+    vertex_count: u32,
+    instance_count: u32,
+    first_vertex: u32,
+    first_instance: u32,
+) {
+    unsafe {
+        HUB.render_passes
+            .write()
+            .get_mut(pass_id)
+            .raw
+            .draw(
+                first_vertex .. first_vertex + vertex_count,
+                first_instance .. first_instance + instance_count,
+            );
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_draw_indexed(
+    pass_id: RenderPassId,
+    index_count: u32,
+    instance_count: u32,
+    first_index: u32,
+    base_vertex: i32,
+    first_instance: u32,
+) {
+    unsafe {
+        HUB.render_passes
+            .write()
+            .get_mut(pass_id)
+            .raw
+            .draw_indexed(
+                first_index .. first_index + index_count,
+                base_vertex,
+                first_instance .. first_instance + instance_count,
+            );
+    }
+}

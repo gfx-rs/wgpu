@@ -4,6 +4,7 @@ extern crate wgpu_native as wgn;
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
+use std::ops::Range;
 use std::ptr;
 
 pub use wgn::{
@@ -352,6 +353,31 @@ impl<'a> RenderPass<'a> {
     pub fn end_pass(self) -> &'a mut CommandBuffer {
         wgn::wgpu_render_pass_end_pass(self.id);
         self.parent
+    }
+
+    pub fn draw(
+        &self, vertices: Range<u32>, instances: Range<u32>
+    ) {
+        wgn::wgpu_render_pass_draw(
+            self.id,
+            vertices.end - vertices.start,
+            instances.end - instances.start,
+            vertices.start,
+            instances.start,
+        );
+    }
+
+    pub fn draw_indexed(
+        &self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>
+    ) {
+        wgn::wgpu_render_pass_draw_indexed(
+            self.id,
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
+            instances.start,
+        );
     }
 }
 
