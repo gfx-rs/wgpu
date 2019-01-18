@@ -35,21 +35,17 @@ pub struct DeviceDescriptor {
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
     #[cfg(any(
         feature = "gfx-backend-vulkan",
+        feature = "gfx-backend-dx11",
         feature = "gfx-backend-dx12",
         feature = "gfx-backend-metal"
     ))]
     {
         let inst = ::back::Instance::create("wgpu", 1);
-        HUB.instances.write().register(inst)
+        if true {
+            return HUB.instances.write().register(inst);
+        }
     }
-    #[cfg(not(any(
-        feature = "gfx-backend-vulkan",
-        feature = "gfx-backend-dx12",
-        feature = "gfx-backend-metal"
-    )))]
-    {
-        unimplemented!()
-    }
+    unimplemented!()
 }
 
 #[cfg(feature = "winit")]

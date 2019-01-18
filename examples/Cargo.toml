@@ -16,6 +16,7 @@ default = []
 remote = ["wgpu-native/remote"]
 winit = ["wgpu/winit"]
 metal = ["wgpu-native/gfx-backend-metal"]
+dx11 = ["wgpu-native/gfx-backend-dx11"]
 dx12 = ["wgpu-native/gfx-backend-dx12"]
 vulkan = ["wgpu-native/gfx-backend-vulkan"]
 
