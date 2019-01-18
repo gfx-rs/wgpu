@@ -1,4 +1,8 @@
-use crate::{BindGroupLayoutId, BufferId, SamplerId, TextureViewId};
+use crate::track::{BufferTracker, TextureTracker};
+use crate::{
+    LifeGuard,
+    BindGroupLayoutId, BufferId, SamplerId, TextureViewId,
+};
 
 use bitflags::bitflags;
 
@@ -77,4 +81,7 @@ pub struct BindGroupDescriptor {
 
 pub(crate) struct BindGroup<B: hal::Backend> {
     pub raw: B::DescriptorSet,
+    pub life_guard: LifeGuard,
+    pub used_buffers: BufferTracker,
+    pub used_textures: TextureTracker,
 }

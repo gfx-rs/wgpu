@@ -36,7 +36,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     bind_group_id: BindGroupId,
 ) {
     let bind_group_guard = HUB.bind_groups.read();
-    let set = &bind_group_guard.get(bind_group_id).raw;
+    let bind_group = bind_group_guard.get(bind_group_id);
     let layout = unimplemented!();
     // see https://github.com/gpuweb/gpuweb/pull/93
 
@@ -45,7 +45,12 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
             .write()
             .get_mut(pass_id)
             .raw
-            .bind_compute_descriptor_sets(layout, index as usize, iter::once(set), &[]);
+            .bind_compute_descriptor_sets(
+                layout,
+                index as usize,
+                iter::once(&bind_group.raw),
+                &[],
+            );
     }
 }
 

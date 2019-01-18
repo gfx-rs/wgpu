@@ -195,6 +195,6 @@ pub struct SamplerDescriptor {
     pub border_color: BorderColor,
 }
 
-pub struct Sampler {
-    // TODO
+pub(crate) struct Sampler<B: hal::Backend> {
+    pub raw: B::Sampler,
 }
