@@ -26,7 +26,12 @@ pub struct Query<T> {
 
 bitflags! {
     pub struct TrackPermit: u32 {
+        /// Allow extension of the current usage. This is useful during render pass
+        /// recording, where the usage has to stay constant, but we can defer the
+        /// decision on what it is until the end of the pass.
         const EXTEND = 1;
+        /// Allow replacing the current usage with the new one. This is useful when
+        /// recording a command buffer live, and the current usage is already been set.
         const REPLACE = 2;
     }
 }

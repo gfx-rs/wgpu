@@ -1,6 +1,10 @@
+use crate::resource::BufferUsageFlags;
 use crate::registry::{Items, HUB};
-use crate::track::{BufferTracker, TextureTracker};
-use crate::{CommandBuffer, CommandBufferId, RenderPassId, Stored};
+use crate::track::{BufferTracker, TextureTracker, TrackPermit};
+use crate::{
+    CommandBuffer, Stored,
+    BufferId, CommandBufferId, RenderPassId,
+};
 
 use hal::command::RawCommandBuffer;
 
@@ -46,4 +50,64 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
 
     cmb.raw.push(pass.raw);
     pass.cmb_id.value
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_index_buffer(
+    pass_id: RenderPassId, buffer_id: BufferId, offset: u32
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let buffer_guard = HUB.buffers.read();
+
+    let pass = pass_guard.get_mut(pass_id);
+    let buffer = buffer_guard.get(buffer_id);
+    pass.buffer_tracker
+        .transit(
+            buffer_id,
+            &buffer.life_guard.ref_count,
+            BufferUsageFlags::INDEX,
+            TrackPermit::EXTEND,
+        )
+        .unwrap();
+
+    let view = hal::buffer::IndexBufferView {
+        buffer: &buffer.raw,
+        offset: offset as u64,
+        index_type: hal::IndexType::U16, //TODO?
+    };
+
+    unsafe {
+        pass.raw.bind_index_buffer(view);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
+    pass_id: RenderPassId, buffers: &[BufferId], offsets: &[u32]
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let buffer_guard = HUB.buffers.read();
+
+    let pass = pass_guard.get_mut(pass_id);
+    for &id in buffers {
+        let buffer = buffer_guard.get(id);
+        pass.buffer_tracker
+            .transit(
+                id,
+                &buffer.life_guard.ref_count,
+                BufferUsageFlags::VERTEX,
+                TrackPermit::EXTEND,
+            )
+            .unwrap();
+    }
+
+    assert_eq!(buffers.len(), offsets.len());
+    let buffers = buffers
+        .iter()
+        .map(|&id| &buffer_guard.get(id).raw)
+        .zip(offsets.iter().map(|&off| off as u64));
+
+    unsafe {
+        pass.raw.bind_vertex_buffers(0, buffers);
+    }
 }
