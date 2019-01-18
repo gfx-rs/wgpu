@@ -12,8 +12,11 @@ use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use crate::track::{BufferTracker, TextureTracker};
 use crate::{conv, resource};
 use crate::{
-    BufferId, BufferUsageFlags, Color, CommandBufferId, ComputePassId, DeviceId, LifeGuard,
-    Origin3d, RenderPassId, Stored, TextureId, TextureUsageFlags, TextureViewId, WeaklyStored, B,
+    BufferId, CommandBufferId, ComputePassId, DeviceId,
+    RenderPassId, TextureId, TextureViewId,
+    BufferUsageFlags, TextureUsageFlags, Color, Origin3d,
+    LifeGuard, Stored, WeaklyStored,
+    B,
 };
 
 use hal::command::RawCommandBuffer;
@@ -82,10 +85,9 @@ pub struct TextureCopyView {
 
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
-    fence: B::Fence,
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
-    life_guard: LifeGuard,
+    pub(crate) life_guard: LifeGuard,
     pub(crate) buffer_tracker: BufferTracker,
     pub(crate) texture_tracker: TextureTracker,
     pub(crate) swap_chain_links: Vec<SwapChainLink<SwapImageEpoch>>,

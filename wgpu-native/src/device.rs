@@ -105,12 +105,16 @@ impl<B: hal::Backend> DestroyedResources<B> {
         }
     }
 
-    fn cleanup(&mut self, raw: &B::Device) {
+    /// Returns the last submission index that is done.
+    fn cleanup(&mut self, raw: &B::Device) -> SubmissionIndex {
+        let mut last_done = 0;
+
         for i in (0..self.active.len()).rev() {
             if unsafe {
                 raw.get_fence_status(&self.active[i].fence).unwrap()
             } {
                 let a = self.active.swap_remove(i);
+                last_done = last_done.max(a.index);
                 self.free.extend(a.resources);
                 unsafe {
                     raw.destroy_fence(a.fence);
@@ -128,6 +132,8 @@ impl<B: hal::Backend> DestroyedResources<B> {
                 }
             }
         }
+
+        last_done
     }
 }
 
@@ -539,7 +545,6 @@ pub extern "C" fn wgpu_queue_submit(
         .fetch_add(1, Ordering::Relaxed);
 
     let mut swap_chain_links = Vec::new();
-    device.com_allocator.maintain(&device.raw);
 
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
@@ -550,6 +555,8 @@ pub extern "C" fn wgpu_queue_submit(
         let comb = command_buffer_guard.get_mut(cmb_id);
         swap_chain_links.extend(comb.swap_chain_links.drain(..));
         // update submission IDs
+        comb.life_guard.submission_index
+            .store(old_submit_index, Ordering::Release);
         for id in comb.buffer_tracker.used() {
             buffer_guard
                 .get(id)
@@ -620,17 +627,21 @@ pub extern "C" fn wgpu_queue_submit(
         }
     }
 
-    {
+    let last_done = {
         let mut destroyed = device.destroyed.lock();
         destroyed.triage_referenced(&mut *buffer_guard, &mut *texture_guard);
-        destroyed.cleanup(&device.raw);
+        let last_done = destroyed.cleanup(&device.raw);
 
         destroyed.active.push(ActiveSubmission {
             index: old_submit_index + 1,
             fence,
             resources: Vec::new(),
         });
-    }
+
+        last_done
+    };
+
+    device.com_allocator.maintain(&device.raw, last_done);
 
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {
@@ -864,15 +875,15 @@ pub extern "C" fn wgpu_device_create_swap_chain(
 ) -> SwapChainId {
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
-    let adapter_guard = HUB.adapters.read();
-    let physical_device = &adapter_guard.get(device.adapter_id.0).physical_device;
     let mut surface_guard = HUB.surfaces.write();
     let surface = surface_guard.get_mut(surface_id);
-    let mut texture_guard = HUB.textures.write();
-    let mut texture_view_guard = HUB.texture_views.write();
-    let mut swap_chain_guard = HUB.swap_chains.write();
 
-    let (caps, formats, _present_modes, _composite_alphas) = surface.raw.compatibility(physical_device);
+    let (caps, formats, _present_modes, _composite_alphas) = {
+        let adapter_guard = HUB.adapters.read();
+        let adapter = adapter_guard.get(device.adapter_id.0);
+        assert!(surface.raw.supports_queue_family(&adapter.queue_families[0]));
+        surface.raw.compatibility(&adapter.physical_device)
+    };
     let num_frames = caps.image_count.start; //TODO: configure?
     let frame_format = conv::map_texture_format(desc.format);
     let config = hal::SwapchainConfig::new(
@@ -912,6 +923,8 @@ pub extern "C" fn wgpu_device_create_swap_chain(
             .unwrap()
     };
 
+    let mut swap_chain_guard = HUB.swap_chains.write();
+
     let swap_chain_id = swap_chain_guard
         .register(swap_chain::SwapChain {
             raw,
@@ -930,6 +943,9 @@ pub extern "C" fn wgpu_device_create_swap_chain(
         hal::Backbuffer::Images(images) => images,
         hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
     };
+
+    let mut texture_guard = HUB.textures.write();
+    let mut texture_view_guard = HUB.texture_views.write();
 
     for (i, image) in images.into_iter().enumerate() {
         let kind = hal::image::Kind::D2(desc.width, desc.height, 1, 1);

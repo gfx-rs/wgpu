@@ -55,7 +55,7 @@ fn main() {
 
     #[cfg(feature = "winit")]
     {
-        use wgpu_native::winit::{ControlFlow, Event, EventsLoop, Window, WindowEvent};
+        use wgpu_native::winit::{ControlFlow, Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode};
 
         let mut events_loop = EventsLoop::new();
         let window = Window::new(&events_loop).unwrap();
@@ -74,8 +74,20 @@ fn main() {
 
         events_loop.run_forever(|event| {
             match event {
-                Event::WindowEvent { event: WindowEvent::CloseRequested, .. } => {
-                    return ControlFlow::Break
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::KeyboardInput {
+                        input: KeyboardInput { virtual_keycode: Some(code), state: ElementState::Pressed, .. },
+                        ..
+                    } => match code {
+                        VirtualKeyCode::Escape => {
+                            return ControlFlow::Break
+                        }
+                        _ => {}
+                    }
+                    WindowEvent::CloseRequested => {
+                        return ControlFlow::Break
+                    }
+                    _ => {}
                 }
                 _ => {}
             }
@@ -100,7 +112,6 @@ fn main() {
                 .submit(&[cmd_buf]);
 
             swap_chain.present();
-
             ControlFlow::Continue
         });
     }

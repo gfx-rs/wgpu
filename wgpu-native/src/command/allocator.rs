@@ -1,14 +1,14 @@
 use super::CommandBuffer;
 use crate::track::Tracker;
-use crate::{DeviceId, LifeGuard, Stored};
+use crate::{DeviceId, LifeGuard, Stored, SubmissionIndex};
 
 use hal::command::RawCommandBuffer;
 use hal::pool::RawCommandPool;
 use hal::Device;
+use parking_lot::Mutex;
 
 use std::collections::HashMap;
-//TODO: use `parking_lot::Mutex`?
-use std::sync::Mutex;
+use std::sync::atomic::Ordering;
 use std::thread;
 
 struct CommandPool<B: hal::Backend> {
@@ -29,7 +29,6 @@ impl<B: hal::Backend> CommandPool<B> {
 
 struct Inner<B: hal::Backend> {
     pools: HashMap<thread::ThreadId, CommandPool<B>>,
-    fences: Vec<B::Fence>,
     pending: Vec<CommandBuffer<B>>,
 }
 
@@ -42,7 +41,6 @@ impl<B: hal::Backend> Inner<B> {
             }
             pool.available.push(raw);
         }
-        self.fences.push(cmd_buf.fence);
     }
 }
 
@@ -57,7 +55,6 @@ impl<B: hal::Backend> CommandAllocator<B> {
             queue_family,
             inner: Mutex::new(Inner {
                 pools: HashMap::new(),
-                fences: Vec::new(),
                 pending: Vec::new(),
             }),
         }
@@ -69,15 +66,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         device: &B::Device,
     ) -> CommandBuffer<B> {
         let thread_id = thread::current().id();
-        let mut inner = self.inner.lock().unwrap();
-
-        let fence = match inner.fences.pop() {
-            Some(fence) => {
-                unsafe { device.reset_fence(&fence).unwrap() };
-                fence
-            }
-            None => device.create_fence(false).unwrap(),
-        };
+        let mut inner = self.inner.lock();
 
         let pool = inner.pools.entry(thread_id).or_insert_with(|| CommandPool {
             raw: unsafe {
@@ -93,7 +82,6 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
         CommandBuffer {
             raw: vec![init],
-            fence,
             recorded_thread_id: thread_id,
             device_id,
             life_guard: LifeGuard::new(),
@@ -104,7 +92,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub fn extend(&self, cmd_buf: &CommandBuffer<B>) -> B::CommandBuffer {
-        let mut inner = self.inner.lock().unwrap();
+        let mut inner = self.inner.lock();
         let pool = inner.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
 
         if pool.available.is_empty() {
@@ -116,17 +104,18 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub fn submit(&self, cmd_buf: CommandBuffer<B>) {
-        self.inner.lock().unwrap().pending.push(cmd_buf);
+        self.inner.lock().pending.push(cmd_buf);
     }
 
     pub fn recycle(&self, cmd_buf: CommandBuffer<B>) {
-        self.inner.lock().unwrap().recycle(cmd_buf);
+        self.inner.lock().recycle(cmd_buf);
     }
 
-    pub fn maintain(&self, device: &B::Device) {
-        let mut inner = self.inner.lock().unwrap();
+    pub fn maintain(&self, device: &B::Device, last_done: SubmissionIndex) {
+        let mut inner = self.inner.lock();
         for i in (0..inner.pending.len()).rev() {
-            if unsafe { device.get_fence_status(&inner.pending[i].fence).unwrap() } {
+            let index = inner.pending[i].life_guard.submission_index.load(Ordering::Acquire);
+            if index <= last_done {
                 let cmd_buf = inner.pending.swap_remove(i);
                 inner.recycle(cmd_buf);
             }
