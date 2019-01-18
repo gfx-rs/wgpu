@@ -1,6 +1,8 @@
+use crate::registry::{Id, Items};
 use crate::resource::{BufferUsageFlags, TextureUsageFlags};
 use crate::{BufferId, RefCount, Stored, TextureId, WeaklyStored};
 
+use std::borrow::Borrow;
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;
 use std::mem;
@@ -152,5 +154,19 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
     /// Return an iterator over used resources keys.
     pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
         self.map.keys().map(|&WeaklyStored(ref id)| id.clone())
+    }
+}
+
+impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
+    pub(crate) fn get_with_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+        &mut self,
+        items: &'a V,
+        id: Id,
+        usage: U,
+        permit: TrackPermit,
+    ) -> Result<(&'a T, Tracktion<U>), U> {
+        let item = items.get(id);
+        self.transit(id, item.borrow(), usage, permit)
+            .map(|tracktion| (item, tracktion))
     }
 }

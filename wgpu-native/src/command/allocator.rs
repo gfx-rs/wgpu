@@ -103,7 +103,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         pool.available.pop().unwrap()
     }
 
-    pub fn submit(&self, cmd_buf: CommandBuffer<B>) {
+    pub fn after_submit(&self, cmd_buf: CommandBuffer<B>) {
         self.inner.lock().pending.push(cmd_buf);
     }
 
@@ -111,7 +111,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         self.inner.lock().recycle(cmd_buf);
     }
 
-    pub fn maintain(&self, device: &B::Device, last_done: SubmissionIndex) {
+    pub fn maintain(&self, last_done: SubmissionIndex) {
         let mut inner = self.inner.lock();
         for i in (0..inner.pending.len()).rev() {
             let index = inner.pending[i].life_guard.submission_index.load(Ordering::Acquire);

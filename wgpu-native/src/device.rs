@@ -641,12 +641,12 @@ pub extern "C" fn wgpu_queue_submit(
         last_done
     };
 
-    device.com_allocator.maintain(&device.raw, last_done);
+    device.com_allocator.maintain(last_done);
 
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {
         let cmd_buf = command_buffer_guard.take(cmb_id);
-        device.com_allocator.submit(cmd_buf);
+        device.com_allocator.after_submit(cmd_buf);
     }
 }
 

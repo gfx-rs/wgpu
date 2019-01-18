@@ -1,5 +1,5 @@
 use crate::{
-    Extent3d, LifeGuard, Stored,
+    Extent3d, LifeGuard, RefCount, Stored,
     DeviceId, TextureId,
 };
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
@@ -7,6 +7,8 @@ use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use bitflags::bitflags;
 use hal;
 use parking_lot::Mutex;
+
+use std::borrow::Borrow;
 
 
 bitflags! {
@@ -32,11 +34,16 @@ pub struct BufferDescriptor {
 }
 
 pub(crate) struct Buffer<B: hal::Backend> {
-    //pub raw: B::UnboundBuffer,
     pub raw: B::Buffer,
     pub memory_properties: hal::memory::Properties,
     pub life_guard: LifeGuard,
     // TODO: mapping, unmap()
+}
+
+impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
+    fn borrow(&self) -> &RefCount {
+        &self.life_guard.ref_count
+    }
 }
 
 #[repr(C)]
@@ -87,6 +94,12 @@ pub(crate) struct Texture<B: hal::Backend> {
     pub full_range: hal::image::SubresourceRange,
     pub swap_chain_link: Option<SwapChainLink<Mutex<SwapImageEpoch>>>,
     pub life_guard: LifeGuard,
+}
+
+impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
+    fn borrow(&self) -> &RefCount {
+        &self.life_guard.ref_count
+    }
 }
 
 bitflags! {

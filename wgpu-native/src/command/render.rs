@@ -60,15 +60,15 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
     let buffer_guard = HUB.buffers.read();
 
     let pass = pass_guard.get_mut(pass_id);
-    let buffer = buffer_guard.get(buffer_id);
-    pass.buffer_tracker
-        .transit(
+    let (buffer, _) = pass.buffer_tracker
+        .get_with_usage(
+            &*buffer_guard,
             buffer_id,
-            &buffer.life_guard.ref_count,
             BufferUsageFlags::INDEX,
             TrackPermit::EXTEND,
         )
         .unwrap();
+        buffer_guard.get(buffer_id);
 
     let view = hal::buffer::IndexBufferView {
         buffer: &buffer.raw,
@@ -90,11 +90,10 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
 
     let pass = pass_guard.get_mut(pass_id);
     for &id in buffers {
-        let buffer = buffer_guard.get(id);
         pass.buffer_tracker
-            .transit(
+            .get_with_usage(
+                &*buffer_guard,
                 id,
-                &buffer.life_guard.ref_count,
                 BufferUsageFlags::VERTEX,
                 TrackPermit::EXTEND,
             )
