@@ -6,23 +6,27 @@ pub(crate) use self::allocator::CommandAllocator;
 pub use self::compute::*;
 pub use self::render::*;
 
-use hal::command::RawCommandBuffer;
-use hal::Device;
-
 use crate::device::{FramebufferKey, RenderPassKey};
 use crate::registry::{Items, HUB};
+use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use crate::track::{BufferTracker, TextureTracker};
 use crate::{conv, resource};
 use crate::{
-    BufferId, BufferUsageFlags, Color, CommandBufferId, ComputePassId, DeviceId, LifeGuard,
-    Origin3d, RenderPassId, Stored, TextureId, TextureUsageFlags, TextureViewId, WeaklyStored, B,
+    BufferId, CommandBufferId, ComputePassId, DeviceId,
+    RenderPassId, TextureId, TextureViewId,
+    BufferUsageFlags, TextureUsageFlags, Color, Origin3d,
+    LifeGuard, Stored, WeaklyStored,
+    B,
 };
+
+use hal::command::RawCommandBuffer;
+use hal::Device;
+use log::trace;
 
 use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::thread::ThreadId;
 
-use log::trace;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -81,12 +85,12 @@ pub struct TextureCopyView {
 
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
-    fence: B::Fence,
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
-    life_guard: LifeGuard,
+    pub(crate) life_guard: LifeGuard,
     pub(crate) buffer_tracker: BufferTracker,
     pub(crate) texture_tracker: TextureTracker,
+    pub(crate) swap_chain_links: Vec<SwapChainLink<SwapImageEpoch>>,
 }
 
 impl CommandBuffer<B> {
@@ -162,6 +166,7 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 
     let rp_key = {
         let tracker = &mut cmb.texture_tracker;
+        let swap_chain_links = &mut cmb.swap_chain_links;
 
         let depth_stencil_key = match desc.depth_stencil_attachment {
             Some(ref at) => {
@@ -189,6 +194,23 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 
         let color_keys = desc.color_attachments.iter().map(|at| {
             let view = view_guard.get(at.attachment);
+
+            if view.is_owned_by_swap_chain {
+                let link = match HUB.textures
+                    .read()
+                    .get(view.texture_id.value)
+                    .swap_chain_link
+                {
+                    Some(ref link) => SwapChainLink {
+                        swap_chain_id: link.swap_chain_id.clone(),
+                        epoch: *link.epoch.lock(),
+                        image_index: link.image_index,
+                    },
+                    None => unreachable!()
+                };
+                swap_chain_links.push(link);
+            }
+
             if let Some(ex) = extent {
                 assert_eq!(ex, view.extent);
             } else {

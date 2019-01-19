@@ -1,6 +1,13 @@
-use crate::{DeviceId, Extent3d, LifeGuard, Stored, TextureId};
+use crate::{
+    Extent3d, LifeGuard, Stored,
+    DeviceId, TextureId,
+};
+use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 
 use bitflags::bitflags;
+use hal;
+use parking_lot::Mutex;
+
 
 bitflags! {
     #[repr(transparent)]
@@ -78,6 +85,7 @@ pub(crate) struct Texture<B: hal::Backend> {
     pub kind: hal::image::Kind,
     pub format: TextureFormat,
     pub full_range: hal::image::SubresourceRange,
+    pub swap_chain_link: Option<SwapChainLink<Mutex<SwapImageEpoch>>>,
     pub life_guard: LifeGuard,
 }
 
@@ -118,6 +126,7 @@ pub(crate) struct TextureView<B: hal::Backend> {
     pub format: TextureFormat,
     pub extent: hal::image::Extent,
     pub samples: hal::image::NumSamples,
+    pub is_owned_by_swap_chain: bool,
     pub life_guard: LifeGuard,
 }
 

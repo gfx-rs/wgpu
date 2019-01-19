@@ -1,15 +1,17 @@
-use std::sync::Arc;
-
-use parking_lot::RwLock;
+use crate::{
+    AdapterHandle, BindGroupLayoutHandle, BindGroupHandle,
+    BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
+    RenderPassHandle, ComputePassHandle,
+    PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
+    BufferHandle, TextureHandle, TextureViewHandle,
+    SurfaceHandle, SwapChainHandle,
+};
 
 use lazy_static::lazy_static;
+use parking_lot::RwLock;
 
-use crate::{
-    AdapterHandle, BindGroupHandle, BindGroupLayoutHandle, BlendStateHandle, BufferHandle,
-    CommandBufferHandle, ComputePassHandle, ComputePipelineHandle, DepthStencilStateHandle,
-    DeviceHandle, InstanceHandle, PipelineLayoutHandle, RenderPassHandle, RenderPipelineHandle,
-    ShaderModuleHandle, TextureHandle, TextureViewHandle,
-};
+use std::sync::Arc;
+
 
 #[cfg(not(feature = "remote"))]
 mod local;
@@ -49,6 +51,8 @@ pub struct Hub {
     pub(crate) buffers: ConcreteRegistry<BufferHandle>,
     pub(crate) textures: ConcreteRegistry<TextureHandle>,
     pub(crate) texture_views: ConcreteRegistry<TextureViewHandle>,
+    pub(crate) surfaces: ConcreteRegistry<SurfaceHandle>,
+    pub(crate) swap_chains: ConcreteRegistry<SwapChainHandle>,
 }
 
 lazy_static! {

@@ -1,9 +1,15 @@
+#[cfg(feature = "winit")]
+pub extern crate winit;
+
+#[cfg(feature = "gfx-backend-dx11")]
+extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "gfx-backend-dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(not(any(
     feature = "gfx-backend-vulkan",
+    feature = "gfx-backend-dx11",
     feature = "gfx-backend-dx12",
-    feature = "gfx-backend-metal"
+    feature = "gfx-backend-metal",
 )))]
 extern crate gfx_backend_empty as back;
 #[cfg(feature = "gfx-backend-metal")]
@@ -22,6 +28,7 @@ mod instance;
 mod pipeline;
 mod registry;
 mod resource;
+mod swap_chain;
 mod track;
 
 pub use self::binding_model::*;
@@ -30,6 +37,7 @@ pub use self::device::*;
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
+pub use self::swap_chain::*;
 
 use back::Backend as B;
 pub use crate::registry::Id;
@@ -85,7 +93,7 @@ impl LifeGuard {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Stored<T> {
     value: T,
     ref_count: RefCount,
@@ -94,7 +102,7 @@ struct Stored<T> {
 unsafe impl<T> Send for Stored<T> {}
 unsafe impl<T> Sync for Stored<T> {}
 
-#[derive(Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct WeaklyStored<T>(T);
 
 unsafe impl<T> Send for WeaklyStored<T> {}
@@ -214,3 +222,9 @@ pub type RenderPassId = Id;
 type RenderPassHandle = RenderPass<B>;
 pub type ComputePassId = Id;
 type ComputePassHandle = ComputePass<B>;
+
+
+pub type SurfaceId = Id;
+type SurfaceHandle = Surface<B>;
+pub type SwapChainId = Id;
+type SwapChainHandle = SwapChain<B>;

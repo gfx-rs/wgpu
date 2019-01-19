@@ -5,6 +5,7 @@ use hal::command::RawCommandBuffer;
 
 use std::iter;
 
+
 pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,

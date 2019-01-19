@@ -1,4 +1,6 @@
 extern crate wgpu;
+extern crate wgpu_native;
+
 fn main() {
     let instance = wgpu::Instance::new();
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
@@ -9,19 +11,6 @@ fn main() {
             anisotropic_filtering: false,
         },
     });
-
-    let texture = device.create_texture(&wgpu::TextureDescriptor {
-        size: wgpu::Extent3d {
-            width: 256,
-            height: 256,
-            depth: 1,
-        },
-        array_size: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::R8g8b8a8Unorm,
-        usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
-    });
-    let color_view = texture.create_default_texture_view();
 
     let vs_bytes = include_bytes!("./../data/hello_triangle.vert.spv");
     let vs_module = device.create_shader_module(vs_bytes);
@@ -64,21 +53,100 @@ fn main() {
         depth_stencil_state: &depth_stencil_state,
     });
 
-    let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
-
+    #[cfg(feature = "winit")]
     {
-        let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &color_view,
-                load_op: wgpu::LoadOp::Clear,
-                store_op: wgpu::StoreOp::Store,
-                clear_color: wgpu::Color::GREEN,
-            }],
-            depth_stencil_attachment: None,
+        use wgpu_native::winit::{ControlFlow, Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode};
+
+        let mut events_loop = EventsLoop::new();
+        let window = Window::new(&events_loop).unwrap();
+        let size = window
+            .get_inner_size()
+            .unwrap()
+            .to_physical(window.get_hidpi_factor());
+
+        let surface = instance.create_surface(&window);
+        let swap_chain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
+            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT | wgpu::TextureUsageFlags::PRESENT,
+            format: wgpu::TextureFormat::B8g8r8a8Unorm,
+            width: size.width as u32,
+            height: size.height as u32,
         });
-        rpass.end_pass();
+
+        events_loop.run_forever(|event| {
+            match event {
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::KeyboardInput {
+                        input: KeyboardInput { virtual_keycode: Some(code), state: ElementState::Pressed, .. },
+                        ..
+                    } => match code {
+                        VirtualKeyCode::Escape => {
+                            return ControlFlow::Break
+                        }
+                        _ => {}
+                    }
+                    WindowEvent::CloseRequested => {
+                        return ControlFlow::Break
+                    }
+                    _ => {}
+                }
+                _ => {}
+            }
+
+            let (_, view) = swap_chain.get_next_texture();
+            let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
+            {
+                let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                        attachment: &view,
+                        load_op: wgpu::LoadOp::Clear,
+                        store_op: wgpu::StoreOp::Store,
+                        clear_color: wgpu::Color::GREEN,
+                    }],
+                    depth_stencil_attachment: None,
+                });
+                rpass.end_pass();
+            }
+
+            device
+                .get_queue()
+                .submit(&[cmd_buf]);
+
+            swap_chain.present();
+            ControlFlow::Continue
+        });
     }
 
-    let queue = device.get_queue();
-    queue.submit(&[cmd_buf]);
+    #[cfg(not(feature = "winit"))]
+    {
+        let texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: 256,
+                height: 256,
+                depth: 1,
+            },
+            array_size: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::R8g8b8a8Unorm,
+            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+        });
+        let color_view = texture.create_default_texture_view();
+
+        let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
+        {
+            let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &color_view,
+                    load_op: wgpu::LoadOp::Clear,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color::GREEN,
+                }],
+                depth_stencil_attachment: None,
+            });
+            rpass.end_pass();
+        }
+
+        device
+            .get_queue()
+            .submit(&[cmd_buf]);
+    }
 }

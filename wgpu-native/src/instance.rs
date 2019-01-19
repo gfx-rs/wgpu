@@ -1,7 +1,12 @@
-use hal::{Instance as _Instance, PhysicalDevice as _PhysicalDevice};
+use crate::registry::{HUB, Items};
+use crate::{WeaklyStored, Device,
+    AdapterId, DeviceId, InstanceId,
+};
+#[cfg(feature = "winit")]
+use crate::{Surface, SurfaceId};
 
-use crate::registry::{Items, HUB};
-use crate::{AdapterId, Device, DeviceId, InstanceId};
+use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -30,21 +35,36 @@ pub struct DeviceDescriptor {
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
     #[cfg(any(
         feature = "gfx-backend-vulkan",
+        feature = "gfx-backend-dx11",
         feature = "gfx-backend-dx12",
         feature = "gfx-backend-metal"
     ))]
     {
         let inst = ::back::Instance::create("wgpu", 1);
-        HUB.instances.write().register(inst)
+        if true {
+            return HUB.instances.write().register(inst);
+        }
     }
-    #[cfg(not(any(
-        feature = "gfx-backend-vulkan",
-        feature = "gfx-backend-dx12",
-        feature = "gfx-backend-metal"
-    )))]
-    {
-        unimplemented!()
-    }
+    unimplemented!()
+}
+
+#[cfg(feature = "winit")]
+#[no_mangle]
+pub extern "C" fn wgpu_instance_create_surface_from_winit(
+    instance_id: InstanceId,
+    window: &winit::Window,
+) -> SurfaceId {
+    let raw = HUB.instances
+        .read()
+        .get(instance_id)
+        .create_surface(window);
+    let surface = Surface {
+        raw,
+    };
+
+    HUB.surfaces
+        .write()
+        .register(surface)
 }
 
 #[no_mangle]
@@ -77,9 +97,11 @@ pub extern "C" fn wgpu_adapter_create_device(
 ) -> DeviceId {
     let mut adapter_guard = HUB.adapters.write();
     let adapter = adapter_guard.get_mut(adapter_id);
-    let (device, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
+    let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
+    let device = Device::new(raw, WeaklyStored(adapter_id), queue_group, mem_props);
+
     HUB.devices
         .write()
-        .register(Device::new(device, queue_group, mem_props))
+        .register(device)
 }

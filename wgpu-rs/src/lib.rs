@@ -13,6 +13,7 @@ pub use wgn::{
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     RenderPassDescriptor, ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
+    SwapChainDescriptor,
 };
 
 pub struct Instance {
@@ -33,6 +34,14 @@ pub struct Texture {
 
 pub struct TextureView {
     id: wgn::TextureViewId,
+}
+
+pub struct Surface {
+    id: wgn::SurfaceId,
+}
+
+pub struct SwapChain {
+    id: wgn::SwapChainId,
 }
 
 pub struct BindGroupLayout {
@@ -125,6 +134,13 @@ impl Instance {
             id: wgn::wgpu_instance_get_adapter(self.id, desc),
         }
     }
+
+    #[cfg(feature = "winit")]
+    pub fn create_surface(&self, window: &wgn::winit::Window) -> Surface {
+        Surface {
+            id: wgn::wgpu_instance_create_surface_from_winit(self.id, window)
+        }
+    }
 }
 
 impl Adapter {
@@ -148,6 +164,7 @@ impl Device {
         }
     }
 
+    //TODO: borrow instead of new object?
     pub fn get_queue(&self) -> Queue {
         Queue {
             id: wgn::wgpu_device_get_queue(self.id),
@@ -255,6 +272,12 @@ impl Device {
             id: wgn::wgpu_device_create_texture(self.id, &desc),
         }
     }
+
+    pub fn create_swap_chain(&self, surface: &Surface, desc: &SwapChainDescriptor) -> SwapChain {
+        SwapChain {
+            id: wgn::wgpu_device_create_swap_chain(self.id, surface.id, desc),
+        }
+    }
 }
 
 impl Texture {
@@ -349,5 +372,17 @@ impl Queue {
             command_buffers.as_ptr() as *const _,
             command_buffers.len(),
         );
+    }
+}
+
+impl SwapChain {
+    //TODO: borrow instead of new object?
+    pub fn get_next_texture(&self) -> (Texture, TextureView) {
+        let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
+        (Texture { id: output.texture_id} , TextureView { id: output.view_id })
+    }
+
+    pub fn present(&self) {
+        wgn::wgpu_swap_chain_present(self.id);
     }
 }
