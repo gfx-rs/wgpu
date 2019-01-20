@@ -105,7 +105,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 [[package]]
 name = "cbindgen"
 version = "0.6.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
+source = "git+https://github.com/eqrion/cbindgen?rev=2932819#2932819567de0b1c83432af4070105a13502e471"
 dependencies = [
  "clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1079,7 +1079,7 @@ dependencies = [
 name = "wgpu-bindings"
 version = "0.1.0"
 dependencies = [
- "cbindgen 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)",
+ "cbindgen 0.6.8 (git+https://github.com/eqrion/cbindgen?rev=2932819)",
 ]
 
 [[package]]
@@ -1208,7 +1208,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 "checksum bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)" = "228047a76f468627ca71776ecdebd732a3423081fcf5125585bcd7c49886ce12"
 "checksum block 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "0d8c1fef690941d3e7788d328517591fecc684c084084702d6ff1641e993699a"
 "checksum byteorder 1.2.7 (registry+https://github.com/rust-lang/crates.io-index)" = "94f88df23a25417badc922ab0f5716cc1330e87f71ddd9203b3a3ccd9cedf75d"
-"checksum cbindgen 0.6.8 (registry+https://github.com/rust-lang/crates.io-index)" = "89ae8c2f780373f1842acb548fa53c7fd3acd6ca27d47966c69351719b239eae"
+"checksum cbindgen 0.6.8 (git+https://github.com/eqrion/cbindgen?rev=2932819)" = "<none>"
 "checksum cc 1.0.28 (registry+https://github.com/rust-lang/crates.io-index)" = "bb4a8b715cb4597106ea87c7c84b2f1d452c7492033765df7f32651e66fcf749"
 "checksum cfg-if 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)" = "082bb9b28e00d3c9d39cc03e64ce4cea0f1bb9b3fde493f0cbc008472d22bdf4"
 "checksum clap 2.32.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b957d88f4b6a63b9d70d5f454ac8011819c6efa7727858f458ab71c756ce2d3e"

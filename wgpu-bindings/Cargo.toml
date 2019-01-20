@@ -11,4 +11,4 @@ edition = "2018"
 default = []
 
 [dependencies]
-cbindgen = "0.6.8"
+cbindgen = { git = "https://github.com/eqrion/cbindgen", rev = "2932819" }
