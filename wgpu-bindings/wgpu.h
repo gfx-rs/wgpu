@@ -4,9 +4,10 @@
     typedef void *WGPUId;
 #endif
 
+#include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-#include <stdbool.h>
 
 typedef enum {
   WGPUBindingType_UniformBuffer = 0,
@@ -51,6 +52,11 @@ typedef enum {
 } WGPUCompareFunction;
 
 typedef enum {
+  WGPULoadOp_Clear = 0,
+  WGPULoadOp_Load = 1,
+} WGPULoadOp;
+
+typedef enum {
   WGPUPowerPreference_Default = 0,
   WGPUPowerPreference_LowPower = 1,
   WGPUPowerPreference_HighPerformance = 2,
@@ -82,6 +88,10 @@ typedef enum {
 } WGPUStencilOperation;
 
 typedef enum {
+  WGPUStoreOp_Store = 0,
+} WGPUStoreOp;
+
+typedef enum {
   WGPUTextureDimension_D1,
   WGPUTextureDimension_D2,
   WGPUTextureDimension_D3,
@@ -103,8 +113,6 @@ typedef enum {
   WGPUTextureViewDimension_D3,
 } WGPUTextureViewDimension;
 
-typedef struct WGPURenderPassDescriptor_TextureViewId WGPURenderPassDescriptor_TextureViewId;
-
 typedef WGPUId WGPUDeviceId;
 
 typedef WGPUId WGPUAdapterId;
@@ -122,6 +130,38 @@ typedef WGPUId WGPUComputePassId;
 typedef WGPUId WGPUCommandBufferId;
 
 typedef WGPUId WGPURenderPassId;
+
+typedef WGPUId WGPUTextureViewId;
+
+typedef struct {
+  float r;
+  float g;
+  float b;
+  float a;
+} WGPUColor;
+
+typedef struct {
+  WGPUTextureViewId attachment;
+  WGPULoadOp load_op;
+  WGPUStoreOp store_op;
+  WGPUColor clear_color;
+} WGPURenderPassColorAttachmentDescriptor_TextureViewId;
+
+typedef struct {
+  WGPUTextureViewId attachment;
+  WGPULoadOp depth_load_op;
+  WGPUStoreOp depth_store_op;
+  float clear_depth;
+  WGPULoadOp stencil_load_op;
+  WGPUStoreOp stencil_store_op;
+  uint32_t clear_stencil;
+} WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId;
+
+typedef struct {
+  const WGPURenderPassColorAttachmentDescriptor_TextureViewId *color_attachments;
+  uintptr_t color_attachments_length;
+  const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
+} WGPURenderPassDescriptor;
 
 typedef WGPUId WGPUBindGroupId;
 
@@ -231,6 +271,19 @@ typedef struct {
   WGPUByteArray code;
 } WGPUShaderModuleDescriptor;
 
+typedef WGPUId WGPUSwapChainId;
+
+typedef WGPUId WGPUSurfaceId;
+
+typedef uint32_t WGPUTextureUsageFlags;
+
+typedef struct {
+  WGPUTextureUsageFlags usage;
+  WGPUTextureFormat format;
+  uint32_t width;
+  uint32_t height;
+} WGPUSwapChainDescriptor;
+
 typedef WGPUId WGPUTextureId;
 
 typedef struct {
@@ -238,8 +291,6 @@ typedef struct {
   uint32_t height;
   uint32_t depth;
 } WGPUExtent3d;
-
-typedef uint32_t WGPUTextureUsageFlags;
 
 typedef struct {
   WGPUExtent3d size;
@@ -255,7 +306,10 @@ typedef struct {
   WGPUPowerPreference power_preference;
 } WGPUAdapterDescriptor;
 
-typedef WGPUId WGPUTextureViewId;
+typedef struct {
+  WGPUTextureId texture_id;
+  WGPUTextureViewId view_id;
+} WGPUSwapChainOutput;
 
 typedef uint32_t WGPUTextureAspectFlags;
 
@@ -337,13 +391,17 @@ typedef struct {
 
 #define WGPUTextureUsageFlags_TRANSFER_SRC 1
 
+#define WGPUTrackPermit_EXTEND (WGPUTrackPermit){ .bits = 1 }
+
+#define WGPUTrackPermit_REPLACE (WGPUTrackPermit){ .bits = 2 }
+
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
                                         const WGPUDeviceDescriptor *_desc);
 
 WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId command_buffer_id);
 
 WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
-                                                       WGPURenderPassDescriptor_TextureViewId desc);
+                                                       WGPURenderPassDescriptor desc);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 
@@ -378,6 +436,10 @@ WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
                                                     const WGPUShaderModuleDescriptor *desc);
 
+WGPUSwapChainId wgpu_device_create_swap_chain(WGPUDeviceId device_id,
+                                              WGPUSurfaceId surface_id,
+                                              const WGPUSwapChainDescriptor *desc);
+
 WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
@@ -390,6 +452,10 @@ void wgpu_queue_submit(WGPUQueueId queue_id,
                        uintptr_t command_buffer_count);
 
 WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
+
+WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
+
+void wgpu_swap_chain_present(WGPUSwapChainId swap_chain_id);
 
 WGPUTextureViewId wgpu_texture_create_default_texture_view(WGPUTextureId texture_id);
 
