@@ -462,10 +462,11 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
     desc: &binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
-    let bind_group_layouts =
-        unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) };
+    let bind_group_layout_ids = unsafe {
+        slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
+    };
     let bind_group_layout_guard = HUB.bind_group_layouts.read();
-    let descriptor_set_layouts = bind_group_layouts
+    let descriptor_set_layouts = bind_group_layout_ids
         .iter()
         .map(|&id| &bind_group_layout_guard.get(id).raw);
 
@@ -483,6 +484,11 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
         .write()
         .register(binding_model::PipelineLayout {
             raw: pipeline_layout,
+            bind_group_layout_ids: bind_group_layout_ids
+                .iter()
+                .cloned()
+                .map(WeaklyStored)
+                .collect(),
         })
 }
 
@@ -562,6 +568,7 @@ pub extern "C" fn wgpu_device_create_bind_group(
         .write()
         .register(binding_model::BindGroup {
             raw: desc_set,
+            layout_id: WeaklyStored(desc.layout),
             life_guard: LifeGuard::new(),
             used_buffers,
             used_textures,

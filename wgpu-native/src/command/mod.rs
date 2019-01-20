@@ -13,6 +13,7 @@ use crate::track::{BufferTracker, TextureTracker};
 use crate::{conv, resource};
 use crate::{
     BufferId, CommandBufferId, ComputePassId, DeviceId,
+    BindGroupId, BindGroupLayoutId,
     RenderPassId, TextureId, TextureViewId,
     BufferUsageFlags, TextureUsageFlags, Color, Origin3d,
     LifeGuard, Stored, WeaklyStored,
@@ -28,6 +29,12 @@ use std::ops::Range;
 use std::slice;
 use std::thread::ThreadId;
 
+
+#[derive(Clone, Default)]
+struct BindGroupEntry {
+    layout: Option<WeaklyStored<BindGroupLayoutId>>,
+    data: Option<Stored<BindGroupId>>,
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
