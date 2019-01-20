@@ -11,7 +11,7 @@ pub use wgn::{
     Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor, DeviceDescriptor,
     Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
-    RenderPassDescriptor, ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp,
+    ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
     SwapChainDescriptor,
 };
@@ -120,6 +120,11 @@ pub struct RenderPipelineDescriptor<'a> {
     pub attachments_state: AttachmentsState<'a>,
     pub blend_states: &'a [&'a BlendState],
     pub depth_stencil_state: &'a DepthStencilState,
+}
+
+pub struct RenderPassDescriptor<'a> {
+    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<&'a TextureView>],
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<&'a TextureView>>,
 }
 
 impl Instance {
@@ -295,7 +300,7 @@ impl Texture {
 }
 
 impl CommandBuffer {
-    pub fn begin_render_pass(&mut self, desc: &RenderPassDescriptor<&TextureView>) -> RenderPass {
+    pub fn begin_render_pass(&mut self, desc: &RenderPassDescriptor) -> RenderPass {
         let colors = desc
             .color_attachments
             .iter()
@@ -322,9 +327,13 @@ impl CommandBuffer {
         RenderPass {
             id: wgn::wgpu_command_buffer_begin_render_pass(
                 self.id,
-                RenderPassDescriptor {
-                    color_attachments: &colors,
-                    depth_stencil_attachment: depth_stencil,
+                wgn::RenderPassDescriptor {
+                    color_attachments: colors.as_ptr(),
+                    color_attachments_length: colors.len(),
+                    depth_stencil_attachment: depth_stencil
+                        .as_ref()
+                        .map(|at| at as *const _)
+                        .unwrap_or(ptr::null()),
                 },
             ),
             parent: self,

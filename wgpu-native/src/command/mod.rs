@@ -25,6 +25,7 @@ use log::trace;
 
 use std::collections::hash_map::Entry;
 use std::ops::Range;
+use std::slice;
 use std::thread::ThreadId;
 
 
@@ -61,9 +62,10 @@ pub struct RenderPassDepthStencilAttachmentDescriptor<T> {
 }
 
 #[repr(C)]
-pub struct RenderPassDescriptor<'a, T: 'a> {
-    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<T>],
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<T>>,
+pub struct RenderPassDescriptor {
+    pub color_attachments: *const RenderPassColorAttachmentDescriptor<TextureViewId>,
+    pub color_attachments_length: usize,
+    pub depth_stencil_attachment: *const RenderPassDepthStencilAttachmentDescriptor<TextureViewId>,
 }
 
 #[repr(C)]
@@ -147,7 +149,7 @@ pub struct CommandBufferDescriptor {}
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     command_buffer_id: CommandBufferId,
-    desc: RenderPassDescriptor<TextureViewId>,
+    desc: RenderPassDescriptor,
 ) -> RenderPassId {
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(command_buffer_id);
@@ -164,35 +166,42 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     }
     let mut extent = None;
 
+    let color_attachments = unsafe {
+        slice::from_raw_parts(
+            desc.color_attachments,
+            desc.color_attachments_length,
+        )
+    };
+    let depth_stencil_attachment = unsafe {
+        desc.depth_stencil_attachment.as_ref()
+    };
+
     let rp_key = {
         let tracker = &mut cmb.texture_tracker;
         let swap_chain_links = &mut cmb.swap_chain_links;
 
-        let depth_stencil_key = match desc.depth_stencil_attachment {
-            Some(ref at) => {
-                let view = view_guard.get(at.attachment);
-                if let Some(ex) = extent {
-                    assert_eq!(ex, view.extent);
-                } else {
-                    extent = Some(view.extent);
-                }
-                let query = tracker.query(&view.texture_id, TextureUsageFlags::empty());
-                let (_, layout) = conv::map_texture_state(
-                    query.usage,
-                    hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
-                );
-                Some(hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(view.format)),
-                    samples: view.samples,
-                    ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
-                    stencil_ops: conv::map_load_store_ops(at.stencil_load_op, at.stencil_store_op),
-                    layouts: layout..layout,
-                })
+        let depth_stencil_key = depth_stencil_attachment.map(|at| {
+            let view = view_guard.get(at.attachment);
+            if let Some(ex) = extent {
+                assert_eq!(ex, view.extent);
+            } else {
+                extent = Some(view.extent);
             }
-            None => None,
-        };
+            let query = tracker.query(&view.texture_id, TextureUsageFlags::empty());
+            let (_, layout) = conv::map_texture_state(
+                query.usage,
+                hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
+            );
+            hal::pass::Attachment {
+                format: Some(conv::map_texture_format(view.format)),
+                samples: view.samples,
+                ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
+                stencil_ops: conv::map_load_store_ops(at.stencil_load_op, at.stencil_store_op),
+                layouts: layout..layout,
+            }
+        });
 
-        let color_keys = desc.color_attachments.iter().map(|at| {
+        let color_keys = color_attachments.iter().map(|at| {
             let view = view_guard.get(at.attachment);
 
             if view.is_owned_by_swap_chain {
@@ -243,13 +252,13 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
                 (3, hal::image::Layout::ColorAttachmentOptimal),
             ];
             let depth_id = (
-                desc.color_attachments.len(),
+                color_attachments.len(),
                 hal::image::Layout::DepthStencilAttachmentOptimal,
             );
 
             let subpass = hal::pass::SubpassDesc {
-                colors: &color_ids[..desc.color_attachments.len()],
-                depth_stencil: desc.depth_stencil_attachment.as_ref().map(|_| &depth_id),
+                colors: &color_ids[..color_attachments.len()],
+                depth_stencil: depth_stencil_attachment.map(|_| &depth_id),
                 inputs: &[],
                 resolves: &[],
                 preserves: &[],
@@ -267,14 +276,11 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
 
     let mut framebuffer_cache = device.framebuffers.lock();
     let fb_key = FramebufferKey {
-        attachments: desc
-            .color_attachments
+        attachments: color_attachments
             .iter()
             .map(|at| WeaklyStored(at.attachment))
             .chain(
-                desc.depth_stencil_attachment
-                    .as_ref()
-                    .map(|at| WeaklyStored(at.attachment)),
+                depth_stencil_attachment.map(|at| WeaklyStored(at.attachment)),
             )
             .collect(),
     };
@@ -308,15 +314,15 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
             h: ex.height as _,
         }
     };
-    let clear_values = desc
-        .color_attachments
+
+    let clear_values = color_attachments
         .iter()
         .map(|at| {
             //TODO: integer types?
             let value = hal::command::ClearColor::Float(conv::map_color(at.clear_color));
             hal::command::ClearValueRaw::from(hal::command::ClearValue::Color(value))
         })
-        .chain(desc.depth_stencil_attachment.map(|at| {
+        .chain(depth_stencil_attachment.map(|at| {
             let value = hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
             hal::command::ClearValueRaw::from(hal::command::ClearValue::DepthStencil(value))
         }));
