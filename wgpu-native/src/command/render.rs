@@ -1,17 +1,21 @@
+use crate::command::bind::Binder;
 use crate::resource::BufferUsageFlags;
 use crate::registry::{Items, HUB};
 use crate::track::{BufferTracker, TextureTracker, TrackPermit};
 use crate::{
     CommandBuffer, Stored,
-    BufferId, CommandBufferId, RenderPassId,
+    BindGroupId, BufferId, CommandBufferId, RenderPassId, RenderPipelineId,
 };
 
 use hal::command::RawCommandBuffer;
+
+use std::iter;
 
 
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
+    binder: Binder,
     buffer_tracker: BufferTracker,
     texture_tracker: TextureTracker,
 }
@@ -21,6 +25,7 @@ impl<B: hal::Backend> RenderPass<B> {
         RenderPass {
             raw,
             cmb_id,
+            binder: Binder::default(),
             buffer_tracker: BufferTracker::new(),
             texture_tracker: TextureTracker::new(),
         }
@@ -151,4 +156,47 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
                 first_instance .. first_instance + instance_count,
             );
     }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_bind_group(
+    pass_id: RenderPassId,
+    index: u32,
+    bind_group_id: BindGroupId,
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let RenderPass { ref mut raw, ref mut binder, .. } = *pass_guard.get_mut(pass_id);
+
+    binder.bind_group(index as usize, bind_group_id, |pipeline_layout, desc_set| unsafe {
+        raw.bind_compute_descriptor_sets(
+            pipeline_layout,
+            index as usize,
+            iter::once(desc_set),
+            &[],
+        );
+    });
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_pipeline(
+    pass_id: RenderPassId,
+    pipeline_id: RenderPipelineId,
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let RenderPass { ref mut raw, ref mut binder, .. } = *pass_guard.get_mut(pass_id);
+
+    let pipeline_guard = HUB.render_pipelines.read();
+    let pipeline = pipeline_guard.get(pipeline_id);
+
+    unsafe {
+        raw.bind_graphics_pipeline(&pipeline.raw);
+    }
+    binder.change_layout(pipeline.layout_id.0, |pipeline_layout, index, desc_set| unsafe {
+        raw.bind_graphics_descriptor_sets(
+            pipeline_layout,
+            index,
+            iter::once(desc_set),
+            &[],
+        );
+    });
 }

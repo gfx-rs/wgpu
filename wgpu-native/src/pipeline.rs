@@ -1,5 +1,8 @@
 use crate::resource;
-use crate::{BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId};
+use crate::{
+    ByteArray, WeaklyStored,
+    BlendStateId, DepthStencilStateId, PipelineLayoutId, ShaderModuleId,
+};
 
 use bitflags::bitflags;
 
@@ -212,6 +215,7 @@ pub struct ComputePipelineDescriptor {
 
 pub(crate) struct ComputePipeline<B: hal::Backend> {
     pub raw: B::ComputePipeline,
+    pub layout_id: WeaklyStored<PipelineLayoutId>,
 }
 
 #[repr(C)]
@@ -251,4 +255,5 @@ pub struct RenderPipelineDescriptor {
 
 pub(crate) struct RenderPipeline<B: hal::Backend> {
     pub raw: B::GraphicsPipeline,
+    pub layout_id: WeaklyStored<PipelineLayoutId>,
 }

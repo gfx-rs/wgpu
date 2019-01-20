@@ -1,12 +1,10 @@
-use crate::registry::{HUB, Items, ConcreteItems};
+use crate::registry::{HUB, Items};
 use crate::{
     B, Stored, WeaklyStored,
-    BindGroup, PipelineLayout,
     BindGroupId, BindGroupLayoutId, PipelineLayoutId,
 };
 
 use hal;
-use parking_lot::RwLockReadGuard;
 
 
 #[derive(Clone, Default)]
@@ -21,35 +19,20 @@ pub struct Binder {
     entries: Vec<BindGroupEntry>,
 }
 
-pub struct NewBind<'a, B: hal::Backend> {
-    pipeline_layout_guard: RwLockReadGuard<'a, ConcreteItems<PipelineLayout<B>>>,
-    pipeline_layout_id: PipelineLayoutId,
-    bind_group_guard: RwLockReadGuard<'a, ConcreteItems<BindGroup<B>>>,
-    bind_group_id: BindGroupId,
-}
-
-impl<'a, B: hal::Backend> NewBind<'a, B> {
-    pub fn pipeline_layout(&self) -> &B::PipelineLayout {
-        &self.pipeline_layout_guard.get(self.pipeline_layout_id).raw
-    }
-
-    pub fn descriptor_set(&self) -> &B::DescriptorSet {
-        &self.bind_group_guard.get(self.bind_group_id).raw
-    }
-}
+//Note: we can probably make this much better than passing an `FnMut`
 
 impl Binder {
-    //Note: `'a` is need to avoid inheriting the lifetime from `self`
-    pub fn bind_group<'a>(
-        &mut self, index: u32, bind_group_id: BindGroupId
-    ) -> Option<NewBind<'a, B>> {
+    pub fn bind_group<F>(&mut self, index: usize, bind_group_id: BindGroupId, mut fun: F)
+    where
+        F: FnMut(&<B as hal::Backend>::PipelineLayout, &<B as hal::Backend>::DescriptorSet),
+    {
         let bind_group_guard = HUB.bind_groups.read();
         let bind_group = bind_group_guard.get(bind_group_id);
 
-        while self.entries.len() <= index as usize {
+        while self.entries.len() <= index {
             self.entries.push(BindGroupEntry::default());
         }
-        *self.entries.get_mut(index as usize).unwrap() = BindGroupEntry {
+        *self.entries.get_mut(index).unwrap() = BindGroupEntry {
             layout: Some(bind_group.layout_id.clone()),
             data: Some(Stored {
                 value: bind_group_id,
@@ -61,16 +44,41 @@ impl Binder {
             //TODO: we can cache the group layout ids of the current pipeline in `Binder` itself
             let pipeline_layout_guard = HUB.pipeline_layouts.read();
             let pipeline_layout = pipeline_layout_guard.get(pipeline_layout_id);
-            if pipeline_layout.bind_group_layout_ids[index as usize] == bind_group.layout_id {
-                return Some(NewBind {
-                    pipeline_layout_guard,
-                    pipeline_layout_id,
-                    bind_group_guard,
-                    bind_group_id,
-                })
+            if pipeline_layout.bind_group_layout_ids[index] == bind_group.layout_id {
+                fun(&pipeline_layout.raw, &bind_group.raw);
             }
         }
+    }
 
-        None
+    pub fn change_layout<F>(&mut self, pipeline_layout_id: PipelineLayoutId, mut fun: F)
+    where
+        F: FnMut(&<B as hal::Backend>::PipelineLayout, usize, &<B as hal::Backend>::DescriptorSet),
+    {
+        if self.pipeline_layout_id == Some(WeaklyStored(pipeline_layout_id)) {
+            return
+        }
+
+        self.pipeline_layout_id = Some(WeaklyStored(pipeline_layout_id));
+        let pipeline_layout_guard = HUB.pipeline_layouts.read();
+        let pipeline_layout = pipeline_layout_guard.get(pipeline_layout_id);
+        let bing_group_guard = HUB.bind_groups.read();
+
+        while self.entries.len() < pipeline_layout.bind_group_layout_ids.len() {
+            self.entries.push(BindGroupEntry::default());
+        }
+        for (index, (entry, bgl_id)) in self.entries
+            .iter_mut()
+            .zip(&pipeline_layout.bind_group_layout_ids)
+            .enumerate()
+        {
+            if entry.layout == Some(bgl_id.clone()) {
+                continue
+            }
+            entry.layout = Some(bgl_id.clone());
+            if let Some(ref bg_id) = entry.data {
+                let bind_group = bing_group_guard.get(bg_id.value);
+                fun(&pipeline_layout.raw, index, &bind_group.raw);
+            }
+        }
     }
 }

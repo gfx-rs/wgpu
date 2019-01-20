@@ -986,7 +986,10 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
 
     HUB.render_pipelines
         .write()
-        .register(pipeline::RenderPipeline { raw: pipeline })
+        .register(pipeline::RenderPipeline {
+            raw: pipeline,
+            layout_id: WeaklyStored(desc.layout),
+        })
 }
 
 #[no_mangle]
