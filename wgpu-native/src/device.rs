@@ -304,6 +304,18 @@ pub extern "C" fn wgpu_device_create_buffer(
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
+    let buffer_guard = HUB.buffers.read();
+    let buffer = buffer_guard.get(buffer_id);
+    HUB.devices
+        .read()
+        .get(buffer.device_id.value)
+        .destroyed
+        .lock()
+        .add(ResourceId::Buffer(buffer_id), &buffer.life_guard);
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
@@ -477,8 +489,8 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(texture_id: TextureId
 pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     let texture_guard = HUB.textures.read();
     let texture = texture_guard.get(texture_id);
-    let device_guard = HUB.devices.write();
-    device_guard
+    HUB.devices
+        .read()
         .get(texture.device_id.value)
         .destroyed
         .lock()
@@ -844,12 +856,6 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> RenderPipelineId {
-    // TODO
-    let extent = hal::window::Extent2D {
-        width: 100,
-        height: 100,
-    };
-
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
@@ -1003,21 +1009,8 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
 
     // TODO
     let baked_states = hal::pso::BakedStates {
-        viewport: Some(hal::pso::Viewport {
-            rect: hal::pso::Rect {
-                x: 0,
-                y: 0,
-                w: extent.width as i16,
-                h: extent.height as i16,
-            },
-            depth: (0.0..1.0),
-        }),
-        scissor: Some(hal::pso::Rect {
-            x: 0,
-            y: 0,
-            w: extent.width as i16,
-            h: extent.height as i16,
-        }),
+        viewport: None,
+        scissor: None,
         blend_color: None,
         depth_bounds: None,
     };

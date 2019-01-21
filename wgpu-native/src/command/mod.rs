@@ -26,7 +26,7 @@ use log::trace;
 
 use std::collections::hash_map::Entry;
 use std::ops::Range;
-use std::slice;
+use std::{iter, slice};
 use std::thread::ThreadId;
 
 
@@ -336,6 +336,11 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
             clear_values,
             hal::command::SubpassContents::Inline,
         );
+        current_comb.set_scissors(0, iter::once(&rect));
+        current_comb.set_viewports(0, iter::once(hal::pso::Viewport {
+            rect,
+            depth: 0.0 .. 1.0,
+        }));
     }
 
     HUB.render_passes.write().register(RenderPass::new(

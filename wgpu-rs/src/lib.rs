@@ -374,7 +374,7 @@ impl<'a> RenderPass<'a> {
     }
 
     pub fn draw(
-        &self, vertices: Range<u32>, instances: Range<u32>
+        &mut self, vertices: Range<u32>, instances: Range<u32>
     ) {
         wgn::wgpu_render_pass_draw(
             self.id,
@@ -386,7 +386,7 @@ impl<'a> RenderPass<'a> {
     }
 
     pub fn draw_indexed(
-        &self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>
+        &mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>
     ) {
         wgn::wgpu_render_pass_draw_indexed(
             self.id,
