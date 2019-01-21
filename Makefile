@@ -44,7 +44,7 @@ doc:
 	cargo doc --all
 
 clear:
-	cargo clear
+	cargo clean
 	rm wgpu-bindings/wgpu.h
 
 lib-native: Cargo.lock wgpu-native/Cargo.toml $(wildcard wgpu-native/**/*.rs)
@@ -54,7 +54,7 @@ lib-rust: Cargo.lock wgpu-rs/Cargo.toml $(wildcard wgpu-rs/**/*.rs)
 	cargo build --manifest-path wgpu-rs/Cargo.toml --features $(FEATURE_RUST)
 
 wgpu-bindings/wgpu.h: Cargo.lock wgpu-bindings/src/*.rs lib-native
-	cargo +nightly run --manifest-path wgpu-bindings/Cargo.toml
+	cargo run --manifest-path wgpu-bindings/Cargo.toml
 
 examples-native: lib-native wgpu-bindings/wgpu.h $(wildcard wgpu-native/**/*.c)
 	$(MAKE) -C examples
