@@ -155,7 +155,6 @@ pub struct Device<B: hal::Backend> {
     pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<HashMap<FramebufferKey, B::Framebuffer>>,
     desc_pool: Mutex<B::DescriptorPool>,
-    last_submission_index: SubmissionIndex,
     destroyed: Mutex<DestroyedResources<B>>,
 }
 
@@ -227,7 +226,6 @@ impl<B: hal::Backend> Device<B> {
             render_passes: Mutex::new(HashMap::new()),
             framebuffers: Mutex::new(HashMap::new()),
             desc_pool,
-            last_submission_index: 0,
             destroyed: Mutex::new(DestroyedResources {
                 referenced: Vec::new(),
                 active: Vec::new(),
@@ -242,6 +240,70 @@ pub(crate) struct ShaderModule<B: hal::Backend> {
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_device_create_buffer(
+    device_id: DeviceId,
+    desc: &resource::BufferDescriptor,
+) -> BufferId {
+    let device_guard = HUB.devices.read();
+    let device = &device_guard.get(device_id);
+    let (usage, _) = conv::map_buffer_usage(desc.usage);
+
+    let mut buffer = unsafe {
+        device.raw.create_buffer(desc.size as u64, usage).unwrap()
+    };
+    let requirements = unsafe {
+        device.raw.get_buffer_requirements(&buffer)
+    };
+    let device_type = device
+        .mem_props
+        .memory_types
+        .iter()
+        .enumerate()
+        .position(|(id, memory_type)| {
+            // TODO
+            requirements.type_mask & (1 << id) != 0
+                && memory_type
+                    .properties
+                    .contains(hal::memory::Properties::DEVICE_LOCAL)
+        })
+        .unwrap()
+        .into();
+    // TODO: allocate with rendy
+    let memory = unsafe {
+        device.raw
+            .allocate_memory(device_type, requirements.size)
+            .unwrap()
+    };
+    unsafe {
+        device.raw
+            .bind_buffer_memory(&memory, 0, &mut buffer)
+            .unwrap()
+    };
+
+    let life_guard = LifeGuard::new();
+    let ref_count = life_guard.ref_count.clone();
+    let id = HUB.buffers
+        .write()
+        .register(resource::Buffer {
+            raw: buffer,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.ref_count.clone(),
+            },
+            life_guard,
+        });
+    let query = device.buffer_tracker
+        .lock()
+        .query(
+            &Stored { value: id, ref_count },
+            resource::BufferUsageFlags::WRITE_ALL,
+        );
+    assert!(query.initialized);
+
+    id
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
@@ -252,7 +314,8 @@ pub extern "C" fn wgpu_device_create_texture(
     let usage = conv::map_texture_usage(desc.usage, aspects);
     let device_guard = HUB.devices.read();
     let device = &device_guard.get(device_id);
-    let mut image_unbound = unsafe {
+
+    let mut image = unsafe {
         device.raw.create_image(
             kind,
             1, // TODO: mips
@@ -263,7 +326,9 @@ pub extern "C" fn wgpu_device_create_texture(
         )
     }
     .unwrap();
-    let image_req = unsafe { device.raw.get_image_requirements(&image_unbound) };
+    let requirements = unsafe {
+        device.raw.get_image_requirements(&image)
+    };
     let device_type = device
         .mem_props
         .memory_types
@@ -271,7 +336,7 @@ pub extern "C" fn wgpu_device_create_texture(
         .enumerate()
         .position(|(id, memory_type)| {
             // TODO
-            image_req.type_mask & (1 << id) != 0
+            requirements.type_mask & (1 << id) != 0
                 && memory_type
                     .properties
                     .contains(hal::memory::Properties::DEVICE_LOCAL)
@@ -279,14 +344,16 @@ pub extern "C" fn wgpu_device_create_texture(
         .unwrap()
         .into();
     // TODO: allocate with rendy
-    let image_memory = unsafe { device.raw.allocate_memory(device_type, image_req.size) }.unwrap();
+    let memory = unsafe {
+        device.raw
+            .allocate_memory(device_type, requirements.size)
+            .unwrap()
+    };
     unsafe {
-        device
-            .raw
-            .bind_image_memory(&image_memory, 0, &mut image_unbound)
-    }
-    .unwrap();
-    let bound_image = image_unbound; //TODO: Maybe call this image the same way in the first place
+        device.raw
+            .bind_image_memory(&memory, 0, &mut image)
+            .unwrap()
+    };
 
     let full_range = hal::image::SubresourceRange {
         aspects,
@@ -299,7 +366,7 @@ pub extern "C" fn wgpu_device_create_texture(
     let id = HUB.textures
         .write()
         .register(resource::Texture {
-            raw: bound_image,
+            raw: image,
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.ref_count.clone(),

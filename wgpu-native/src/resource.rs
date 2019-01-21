@@ -35,7 +35,8 @@ pub struct BufferDescriptor {
 
 pub(crate) struct Buffer<B: hal::Backend> {
     pub raw: B::Buffer,
-    pub memory_properties: hal::memory::Properties,
+    pub device_id: Stored<DeviceId>,
+    //pub memory_properties: hal::memory::Properties,
     pub life_guard: LifeGuard,
     // TODO: mapping, unmap()
 }

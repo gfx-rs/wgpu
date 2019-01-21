@@ -107,10 +107,6 @@ impl<B: hal::Backend> CommandAllocator<B> {
         self.inner.lock().pending.push(cmd_buf);
     }
 
-    pub fn recycle(&self, cmd_buf: CommandBuffer<B>) {
-        self.inner.lock().recycle(cmd_buf);
-    }
-
     pub fn maintain(&self, last_done: SubmissionIndex) {
         let mut inner = self.inner.lock();
         for i in (0..inner.pending.len()).rev() {
