@@ -1,84 +1,78 @@
-use crate::registry::{HUB, Items};
 use crate::{
-    B, Stored, WeaklyStored,
+    B, BindGroup, Stored, WeaklyStored,
     BindGroupId, BindGroupLayoutId, PipelineLayoutId,
 };
 
-use hal;
 
+pub struct BindGroupPair {
+    layout_id: WeaklyStored<BindGroupLayoutId>,
+    group_id: Stored<BindGroupId>,
+}
 
-#[derive(Clone, Default)]
-struct BindGroupEntry {
-    layout: Option<WeaklyStored<BindGroupLayoutId>>,
-    data: Option<Stored<BindGroupId>>,
+#[derive(Default)]
+pub struct BindGroupEntry {
+    expected_layout_id: Option<WeaklyStored<BindGroupLayoutId>>,
+    provided: Option<BindGroupPair>,
+}
+
+impl BindGroupEntry {
+    fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroup<B>) -> bool {
+        if let Some(BindGroupPair { ref layout_id, ref group_id }) = self.provided {
+            if group_id.value == bind_group_id {
+                assert_eq!(*layout_id, bind_group.layout_id);
+                return false
+            }
+        }
+
+        self.provided = Some(BindGroupPair {
+            layout_id: bind_group.layout_id.clone(),
+            group_id: Stored {
+                value: bind_group_id,
+                ref_count: bind_group.life_guard.ref_count.clone(),
+            },
+        });
+
+        self.expected_layout_id == Some(bind_group.layout_id.clone())
+    }
+
+    pub fn expect_layout(
+        &mut self, bind_group_layout_id: BindGroupLayoutId,
+    ) -> Option<BindGroupId> {
+        let some = Some(WeaklyStored(bind_group_layout_id));
+        if self.expected_layout_id != some {
+            self.expected_layout_id = some;
+            match self.provided {
+                Some(BindGroupPair { ref layout_id, ref group_id })
+                    if layout_id.0 == bind_group_layout_id => Some(group_id.value),
+                Some(_) | None => None,
+            }
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Default)]
 pub struct Binder {
-    pipeline_layout_id: Option<WeaklyStored<PipelineLayoutId>>, //TODO: strongly `Stored`
-    entries: Vec<BindGroupEntry>,
+    pub(crate) pipeline_layout_id: Option<WeaklyStored<PipelineLayoutId>>, //TODO: strongly `Stored`
+    pub(crate) entries: Vec<BindGroupEntry>,
 }
 
-//Note: we can probably make this much better than passing an `FnMut`
-
 impl Binder {
-    pub fn bind_group<F>(&mut self, index: usize, bind_group_id: BindGroupId, mut fun: F)
-    where
-        F: FnMut(&<B as hal::Backend>::PipelineLayout, &<B as hal::Backend>::DescriptorSet),
-    {
-        let bind_group_guard = HUB.bind_groups.read();
-        let bind_group = bind_group_guard.get(bind_group_id);
-
-        while self.entries.len() <= index {
+    pub fn ensure_length(&mut self, length: usize) {
+        while self.entries.len() < length {
             self.entries.push(BindGroupEntry::default());
-        }
-        *self.entries.get_mut(index).unwrap() = BindGroupEntry {
-            layout: Some(bind_group.layout_id.clone()),
-            data: Some(Stored {
-                value: bind_group_id,
-                ref_count: bind_group.life_guard.ref_count.clone(),
-            }),
-        };
-
-        if let Some(WeaklyStored(pipeline_layout_id)) = self.pipeline_layout_id {
-            //TODO: we can cache the group layout ids of the current pipeline in `Binder` itself
-            let pipeline_layout_guard = HUB.pipeline_layouts.read();
-            let pipeline_layout = pipeline_layout_guard.get(pipeline_layout_id);
-            if pipeline_layout.bind_group_layout_ids[index] == bind_group.layout_id {
-                fun(&pipeline_layout.raw, &bind_group.raw);
-            }
         }
     }
 
-    pub fn change_layout<F>(&mut self, pipeline_layout_id: PipelineLayoutId, mut fun: F)
-    where
-        F: FnMut(&<B as hal::Backend>::PipelineLayout, usize, &<B as hal::Backend>::DescriptorSet),
-    {
-        if self.pipeline_layout_id == Some(WeaklyStored(pipeline_layout_id)) {
-            return
-        }
-
-        self.pipeline_layout_id = Some(WeaklyStored(pipeline_layout_id));
-        let pipeline_layout_guard = HUB.pipeline_layouts.read();
-        let pipeline_layout = pipeline_layout_guard.get(pipeline_layout_id);
-        let bing_group_guard = HUB.bind_groups.read();
-
-        while self.entries.len() < pipeline_layout.bind_group_layout_ids.len() {
-            self.entries.push(BindGroupEntry::default());
-        }
-        for (index, (entry, bgl_id)) in self.entries
-            .iter_mut()
-            .zip(&pipeline_layout.bind_group_layout_ids)
-            .enumerate()
-        {
-            if entry.layout == Some(bgl_id.clone()) {
-                continue
-            }
-            entry.layout = Some(bgl_id.clone());
-            if let Some(ref bg_id) = entry.data {
-                let bind_group = bing_group_guard.get(bg_id.value);
-                fun(&pipeline_layout.raw, index, &bind_group.raw);
-            }
+    pub(crate) fn provide_entry(
+        &mut self, index: usize, bind_group_id: BindGroupId, bind_group: &BindGroup<B>
+    ) -> Option<PipelineLayoutId> {
+        self.ensure_length(index + 1);
+        if self.entries[index].provide(bind_group_id, bind_group) {
+            self.pipeline_layout_id.as_ref().map(|&WeaklyStored(id)| id)
+        } else {
+            None
         }
     }
 }

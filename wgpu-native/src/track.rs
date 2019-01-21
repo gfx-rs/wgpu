@@ -70,7 +70,7 @@ pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
 
 impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Tracker {
             map: HashMap::new(),
         }
@@ -132,7 +132,7 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
     }
 
     /// Consume another tacker, adding it's transitions to `self`.
-    pub fn consume<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+    pub fn consume_by_replace<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map.iter().flat_map(move |(id, new)| {
             match self.map.entry(WeaklyStored(id.0.clone())) {
                 Entry::Vacant(e) => {
@@ -149,6 +149,27 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
                 }
             }
         })
+    }
+
+    pub fn consume_by_extend<'a>(&'a mut self, other: &'a Self) -> Result<(), (I, Range<U>)> {
+        for (id, new) in other.map.iter() {
+            match self.map.entry(WeaklyStored(id.0.clone())) {
+                Entry::Vacant(e) => {
+                    e.insert(new.clone());
+                }
+                Entry::Occupied(mut e) => {
+                    let old = e.get().last;
+                    if old != new.last {
+                        let extended = old | new.last;
+                        if extended.is_exclusive() {
+                            return Err((id.0.clone(), old..new.last));
+                        }
+                        e.get_mut().last = extended;
+                    }
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Return an iterator over used resources keys.

@@ -45,8 +45,8 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
     if let Some(ref mut last) = cmb.raw.last_mut() {
         CommandBuffer::insert_barriers(
             last,
-            cmb.buffer_tracker.consume(&pass.buffer_tracker),
-            cmb.texture_tracker.consume(&pass.texture_tracker),
+            cmb.buffer_tracker.consume_by_replace(&pass.buffer_tracker),
+            cmb.texture_tracker.consume_by_replace(&pass.texture_tracker),
             &*HUB.buffers.read(),
             &*HUB.textures.read(),
         );
@@ -165,16 +165,29 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     bind_group_id: BindGroupId,
 ) {
     let mut pass_guard = HUB.render_passes.write();
-    let RenderPass { ref mut raw, ref mut binder, .. } = *pass_guard.get_mut(pass_id);
+    let pass = pass_guard.get_mut(pass_id);
+    let bind_group_guard = HUB.bind_groups.read();
+    let bind_group = bind_group_guard.get(bind_group_id);
 
-    binder.bind_group(index as usize, bind_group_id, |pipeline_layout, desc_set| unsafe {
-        raw.bind_compute_descriptor_sets(
-            pipeline_layout,
-            index as usize,
-            iter::once(desc_set),
-            &[],
-        );
-    });
+    pass.buffer_tracker
+        .consume_by_extend(&bind_group.used_buffers)
+        .unwrap();
+    pass.texture_tracker
+        .consume_by_extend(&bind_group.used_textures)
+        .unwrap();
+
+    if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
+        let pipeline_layout_guard = HUB.pipeline_layouts.read();
+        let pipeline_layout = pipeline_layout_guard.get(pipeline_layout_id);
+        unsafe {
+            pass.raw.bind_graphics_descriptor_sets(
+                &pipeline_layout.raw,
+                index as usize,
+                iter::once(&bind_group.raw),
+                &[],
+            );
+        }
+    }
 }
 
 #[no_mangle]
@@ -183,20 +196,40 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     pipeline_id: RenderPipelineId,
 ) {
     let mut pass_guard = HUB.render_passes.write();
-    let RenderPass { ref mut raw, ref mut binder, .. } = *pass_guard.get_mut(pass_id);
-
+    let pass = pass_guard.get_mut(pass_id);
     let pipeline_guard = HUB.render_pipelines.read();
     let pipeline = pipeline_guard.get(pipeline_id);
 
     unsafe {
-        raw.bind_graphics_pipeline(&pipeline.raw);
+        pass.raw.bind_graphics_pipeline(&pipeline.raw);
     }
-    binder.change_layout(pipeline.layout_id.0, |pipeline_layout, index, desc_set| unsafe {
-        raw.bind_graphics_descriptor_sets(
-            pipeline_layout,
-            index,
-            iter::once(desc_set),
-            &[],
-        );
-    });
+
+    if pass.binder.pipeline_layout_id == Some(pipeline.layout_id.clone()) {
+        return
+    }
+
+    let pipeline_layout_guard = HUB.pipeline_layouts.read();
+    let pipeline_layout = pipeline_layout_guard.get(pipeline.layout_id.0);
+    let bing_group_guard = HUB.bind_groups.read();
+
+    pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
+    pass.binder.ensure_length(pipeline_layout.bind_group_layout_ids.len());
+
+    for (index, (entry, bgl_id)) in pass.binder.entries
+        .iter_mut()
+        .zip(&pipeline_layout.bind_group_layout_ids)
+        .enumerate()
+    {
+        if let Some(bg_id) = entry.expect_layout(bgl_id.0) {
+            let bind_group = bing_group_guard.get(bg_id);
+            unsafe {
+                pass.raw.bind_graphics_descriptor_sets(
+                    &pipeline_layout.raw,
+                    index,
+                    iter::once(&bind_group.raw),
+                    &[]
+                );
+            }
+        }
+    }
 }

@@ -705,8 +705,8 @@ pub extern "C" fn wgpu_queue_submit(
         //TODO: fix the consume
         command::CommandBuffer::insert_barriers(
             &mut transit,
-            buffer_tracker.consume(&comb.buffer_tracker),
-            texture_tracker.consume(&comb.texture_tracker),
+            buffer_tracker.consume_by_replace(&comb.buffer_tracker),
+            texture_tracker.consume_by_replace(&comb.texture_tracker),
             &*buffer_guard,
             &*texture_guard,
         );
