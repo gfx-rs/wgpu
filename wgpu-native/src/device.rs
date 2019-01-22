@@ -1,10 +1,10 @@
 use crate::{back, binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::registry::{HUB, Items};
-use crate::track::{BufferTracker, TextureTracker};
+use crate::track::{BufferTracker, TextureTracker, TrackPermit};
 use crate::{
-    CommandBuffer, LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
-    TextureUsageFlags,
-    BindGroupLayoutId, BlendStateId, BufferId, CommandBufferId, DepthStencilStateId,
+    LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
+    BindGroupLayoutId, BindGroupId,
+    BlendStateId, BufferId, CommandBufferId, DepthStencilStateId,
     AdapterId, DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
     TextureId, TextureViewId,
     SurfaceId, SwapChainId,
@@ -12,11 +12,15 @@ use crate::{
 
 use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
-use hal::{self, Device as _Device, Surface as _Surface};
+use hal::{self,
+    DescriptorPool as _DescriptorPool,
+    Device as _Device,
+    Surface as _Surface,
+};
 //use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::{Mutex};
 
-use std::{ffi, slice};
+use std::{ffi, iter, slice};
 use std::collections::hash_map::{Entry, HashMap};
 use std::sync::atomic::Ordering;
 
@@ -150,7 +154,7 @@ pub struct Device<B: hal::Backend> {
     mem_props: hal::MemoryProperties,
     pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<HashMap<FramebufferKey, B::Framebuffer>>,
-    last_submission_index: SubmissionIndex,
+    desc_pool: Mutex<B::DescriptorPool>,
     destroyed: Mutex<DestroyedResources<B>>,
 }
 
@@ -182,6 +186,33 @@ impl<B: hal::Backend> Device<B> {
             )
         };*/
 
+        //TODO: generic allocator for descriptors
+        let desc_pool = Mutex::new(
+            unsafe {
+                raw.create_descriptor_pool(
+                    100,
+                    &[
+                        hal::pso::DescriptorRangeDesc {
+                            ty: hal::pso::DescriptorType::Sampler,
+                            count: 100,
+                        },
+                        hal::pso::DescriptorRangeDesc {
+                            ty: hal::pso::DescriptorType::SampledImage,
+                            count: 100,
+                        },
+                        hal::pso::DescriptorRangeDesc {
+                            ty: hal::pso::DescriptorType::UniformBuffer,
+                            count: 100,
+                        },
+                        hal::pso::DescriptorRangeDesc {
+                            ty: hal::pso::DescriptorType::StorageBuffer,
+                            count: 100,
+                        },
+                    ],
+                )
+            }.unwrap()
+        );
+
         Device {
             raw,
             adapter_id,
@@ -194,7 +225,7 @@ impl<B: hal::Backend> Device<B> {
             mem_props,
             render_passes: Mutex::new(HashMap::new()),
             framebuffers: Mutex::new(HashMap::new()),
-            last_submission_index: 0,
+            desc_pool,
             destroyed: Mutex::new(DestroyedResources {
                 referenced: Vec::new(),
                 active: Vec::new(),
@@ -209,6 +240,82 @@ pub(crate) struct ShaderModule<B: hal::Backend> {
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_device_create_buffer(
+    device_id: DeviceId,
+    desc: &resource::BufferDescriptor,
+) -> BufferId {
+    let device_guard = HUB.devices.read();
+    let device = &device_guard.get(device_id);
+    let (usage, _) = conv::map_buffer_usage(desc.usage);
+
+    let mut buffer = unsafe {
+        device.raw.create_buffer(desc.size as u64, usage).unwrap()
+    };
+    let requirements = unsafe {
+        device.raw.get_buffer_requirements(&buffer)
+    };
+    let device_type = device
+        .mem_props
+        .memory_types
+        .iter()
+        .enumerate()
+        .position(|(id, memory_type)| {
+            // TODO
+            requirements.type_mask & (1 << id) != 0
+                && memory_type
+                    .properties
+                    .contains(hal::memory::Properties::DEVICE_LOCAL)
+        })
+        .unwrap()
+        .into();
+    // TODO: allocate with rendy
+    let memory = unsafe {
+        device.raw
+            .allocate_memory(device_type, requirements.size)
+            .unwrap()
+    };
+    unsafe {
+        device.raw
+            .bind_buffer_memory(&memory, 0, &mut buffer)
+            .unwrap()
+    };
+
+    let life_guard = LifeGuard::new();
+    let ref_count = life_guard.ref_count.clone();
+    let id = HUB.buffers
+        .write()
+        .register(resource::Buffer {
+            raw: buffer,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.ref_count.clone(),
+            },
+            life_guard,
+        });
+    let query = device.buffer_tracker
+        .lock()
+        .query(
+            &Stored { value: id, ref_count },
+            resource::BufferUsageFlags::WRITE_ALL,
+        );
+    assert!(query.initialized);
+
+    id
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
+    let buffer_guard = HUB.buffers.read();
+    let buffer = buffer_guard.get(buffer_id);
+    HUB.devices
+        .read()
+        .get(buffer.device_id.value)
+        .destroyed
+        .lock()
+        .add(ResourceId::Buffer(buffer_id), &buffer.life_guard);
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
@@ -219,7 +326,8 @@ pub extern "C" fn wgpu_device_create_texture(
     let usage = conv::map_texture_usage(desc.usage, aspects);
     let device_guard = HUB.devices.read();
     let device = &device_guard.get(device_id);
-    let mut image_unbound = unsafe {
+
+    let mut image = unsafe {
         device.raw.create_image(
             kind,
             1, // TODO: mips
@@ -230,7 +338,9 @@ pub extern "C" fn wgpu_device_create_texture(
         )
     }
     .unwrap();
-    let image_req = unsafe { device.raw.get_image_requirements(&image_unbound) };
+    let requirements = unsafe {
+        device.raw.get_image_requirements(&image)
+    };
     let device_type = device
         .mem_props
         .memory_types
@@ -238,7 +348,7 @@ pub extern "C" fn wgpu_device_create_texture(
         .enumerate()
         .position(|(id, memory_type)| {
             // TODO
-            image_req.type_mask & (1 << id) != 0
+            requirements.type_mask & (1 << id) != 0
                 && memory_type
                     .properties
                     .contains(hal::memory::Properties::DEVICE_LOCAL)
@@ -246,14 +356,16 @@ pub extern "C" fn wgpu_device_create_texture(
         .unwrap()
         .into();
     // TODO: allocate with rendy
-    let image_memory = unsafe { device.raw.allocate_memory(device_type, image_req.size) }.unwrap();
+    let memory = unsafe {
+        device.raw
+            .allocate_memory(device_type, requirements.size)
+            .unwrap()
+    };
     unsafe {
-        device
-            .raw
-            .bind_image_memory(&image_memory, 0, &mut image_unbound)
-    }
-    .unwrap();
-    let bound_image = image_unbound; //TODO: Maybe call this image the same way in the first place
+        device.raw
+            .bind_image_memory(&memory, 0, &mut image)
+            .unwrap()
+    };
 
     let full_range = hal::image::SubresourceRange {
         aspects,
@@ -266,7 +378,7 @@ pub extern "C" fn wgpu_device_create_texture(
     let id = HUB.textures
         .write()
         .register(resource::Texture {
-            raw: bound_image,
+            raw: image,
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.ref_count.clone(),
@@ -281,7 +393,7 @@ pub extern "C" fn wgpu_device_create_texture(
         .lock()
         .query(
             &Stored { value: id, ref_count },
-            TextureUsageFlags::WRITE_ALL,
+            resource::TextureUsageFlags::WRITE_ALL,
         );
     assert!(query.initialized);
 
@@ -377,8 +489,8 @@ pub extern "C" fn wgpu_texture_create_default_texture_view(texture_id: TextureId
 pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     let texture_guard = HUB.textures.read();
     let texture = texture_guard.get(texture_id);
-    let device_guard = HUB.devices.write();
-    device_guard
+    HUB.devices
+        .read()
         .get(texture.device_id.value)
         .destroyed
         .lock()
@@ -429,10 +541,11 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
     desc: &binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
-    let bind_group_layouts =
-        unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) };
+    let bind_group_layout_ids = unsafe {
+        slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
+    };
     let bind_group_layout_guard = HUB.bind_group_layouts.read();
-    let descriptor_set_layouts = bind_group_layouts
+    let descriptor_set_layouts = bind_group_layout_ids
         .iter()
         .map(|&id| &bind_group_layout_guard.get(id).raw);
 
@@ -450,6 +563,94 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
         .write()
         .register(binding_model::PipelineLayout {
             raw: pipeline_layout,
+            bind_group_layout_ids: bind_group_layout_ids
+                .iter()
+                .cloned()
+                .map(WeaklyStored)
+                .collect(),
+        })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_bind_group(
+    device_id: DeviceId,
+    desc: &binding_model::BindGroupDescriptor,
+) -> BindGroupId {
+    let device_guard = HUB.devices.read();
+    let device = device_guard.get(device_id);
+    let bind_group_layout_guard = HUB.bind_group_layouts.read();
+    let bind_group_layout = bind_group_layout_guard.get(desc.layout);
+    let bindings = unsafe {
+        slice::from_raw_parts(desc.bindings, desc.bindings_length as usize)
+    };
+
+    let mut desc_pool = device.desc_pool.lock();
+    let desc_set = unsafe {
+        desc_pool
+            .allocate_set(&bind_group_layout.raw)
+            .unwrap()
+    };
+
+    let buffer_guard = HUB.buffers.read();
+    let sampler_guard = HUB.samplers.read();
+    let texture_view_guard = HUB.texture_views.read();
+
+    //TODO: group writes into contiguous sections
+    let mut writes = Vec::new();
+    let mut used_buffers = BufferTracker::new();
+    let mut used_textures = TextureTracker::new();
+    for b in bindings {
+        let descriptor = match b.resource {
+            binding_model::BindingResource::Buffer(ref bb) => {
+                let (buffer, _) = used_buffers
+                    .get_with_usage(
+                        &*buffer_guard,
+                        bb.buffer,
+                        resource::BufferUsageFlags::UNIFORM,
+                        TrackPermit::EXTEND,
+                    )
+                    .unwrap();
+                let range = Some(bb.offset as u64) .. Some((bb.offset + bb.size) as u64);
+                hal::pso::Descriptor::Buffer(&buffer.raw, range)
+            }
+            binding_model::BindingResource::Sampler(id) => {
+                let sampler = sampler_guard.get(id);
+                hal::pso::Descriptor::Sampler(&sampler.raw)
+            }
+            binding_model::BindingResource::TextureView(id) => {
+                let view = texture_view_guard.get(id);
+                used_textures
+                    .transit(
+                        view.texture_id.value,
+                        &view.texture_id.ref_count,
+                        resource::TextureUsageFlags::SAMPLED,
+                        TrackPermit::EXTEND,
+                    )
+                    .unwrap();
+                hal::pso::Descriptor::Image(&view.raw, hal::image::Layout::ShaderReadOnlyOptimal)
+            }
+        };
+        let write = hal::pso::DescriptorSetWrite {
+            set: &desc_set,
+            binding: b.binding,
+            array_offset: 0, //TODO
+            descriptors: iter::once(descriptor),
+        };
+        writes.push(write);
+    }
+
+    unsafe {
+        device.raw.write_descriptor_sets(writes);
+    }
+
+    HUB.bind_groups
+        .write()
+        .register(binding_model::BindGroup {
+            raw: desc_set,
+            layout_id: WeaklyStored(desc.layout),
+            life_guard: LifeGuard::new(),
+            used_buffers,
+            used_textures,
         })
 }
 
@@ -581,10 +782,10 @@ pub extern "C" fn wgpu_queue_submit(
             );
         }
         //TODO: fix the consume
-        CommandBuffer::insert_barriers(
+        command::CommandBuffer::insert_barriers(
             &mut transit,
-            buffer_tracker.consume(&comb.buffer_tracker),
-            texture_tracker.consume(&comb.texture_tracker),
+            buffer_tracker.consume_by_replace(&comb.buffer_tracker),
+            texture_tracker.consume_by_replace(&comb.texture_tracker),
             &*buffer_guard,
             &*texture_guard,
         );
@@ -641,12 +842,12 @@ pub extern "C" fn wgpu_queue_submit(
         last_done
     };
 
-    device.com_allocator.maintain(&device.raw, last_done);
+    device.com_allocator.maintain(last_done);
 
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {
         let cmd_buf = command_buffer_guard.take(cmb_id);
-        device.com_allocator.submit(cmd_buf);
+        device.com_allocator.after_submit(cmd_buf);
     }
 }
 
@@ -655,12 +856,6 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> RenderPipelineId {
-    // TODO
-    let extent = hal::window::Extent2D {
-        width: 100,
-        height: 100,
-    };
-
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
@@ -814,21 +1009,8 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
 
     // TODO
     let baked_states = hal::pso::BakedStates {
-        viewport: Some(hal::pso::Viewport {
-            rect: hal::pso::Rect {
-                x: 0,
-                y: 0,
-                w: extent.width as i16,
-                h: extent.height as i16,
-            },
-            depth: (0.0..1.0),
-        }),
-        scissor: Some(hal::pso::Rect {
-            x: 0,
-            y: 0,
-            w: extent.width as i16,
-            h: extent.height as i16,
-        }),
+        viewport: None,
+        scissor: None,
         blend_color: None,
         depth_bounds: None,
     };
@@ -864,7 +1046,10 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
 
     HUB.render_pipelines
         .write()
-        .register(pipeline::RenderPipeline { raw: pipeline })
+        .register(pipeline::RenderPipeline {
+            raw: pipeline,
+            layout_id: WeaklyStored(desc.layout),
+        })
 }
 
 #[no_mangle]
@@ -987,7 +1172,7 @@ pub extern "C" fn wgpu_device_create_swap_chain(
         };
         device.texture_tracker
             .lock()
-            .query(&texture_id, TextureUsageFlags::WRITE_ALL);
+            .query(&texture_id, resource::TextureUsageFlags::WRITE_ALL);
 
         let view = resource::TextureView {
             raw: view_raw,

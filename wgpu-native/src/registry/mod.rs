@@ -3,7 +3,7 @@ use crate::{
     BlendStateHandle, CommandBufferHandle, DepthStencilStateHandle, DeviceHandle, InstanceHandle,
     RenderPassHandle, ComputePassHandle,
     PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
-    BufferHandle, TextureHandle, TextureViewHandle,
+    BufferHandle, SamplerHandle, TextureHandle, TextureViewHandle,
     SurfaceHandle, SwapChainHandle,
 };
 
@@ -51,6 +51,7 @@ pub struct Hub {
     pub(crate) buffers: ConcreteRegistry<BufferHandle>,
     pub(crate) textures: ConcreteRegistry<TextureHandle>,
     pub(crate) texture_views: ConcreteRegistry<TextureViewHandle>,
+    pub(crate) samplers: ConcreteRegistry<SamplerHandle>,
     pub(crate) surfaces: ConcreteRegistry<SurfaceHandle>,
     pub(crate) swap_chains: ConcreteRegistry<SwapChainHandle>,
 }

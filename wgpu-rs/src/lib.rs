@@ -4,6 +4,7 @@ extern crate wgpu_native as wgn;
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
+use std::ops::Range;
 use std::ptr;
 
 pub use wgn::{
@@ -13,7 +14,7 @@ pub use wgn::{
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
-    SwapChainDescriptor,
+    BufferDescriptor, SwapChainDescriptor,
 };
 
 pub struct Instance {
@@ -26,6 +27,10 @@ pub struct Adapter {
 
 pub struct Device {
     id: wgn::DeviceId,
+}
+
+pub struct Buffer {
+    id: wgn::BufferId,
 }
 
 pub struct Texture {
@@ -272,9 +277,15 @@ impl Device {
         }
     }
 
+    pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
+        Buffer {
+            id: wgn::wgpu_device_create_buffer(self.id, desc),
+        }
+    }
+
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
-            id: wgn::wgpu_device_create_texture(self.id, &desc),
+            id: wgn::wgpu_device_create_texture(self.id, desc),
         }
     }
 
@@ -288,7 +299,7 @@ impl Device {
 impl Texture {
     pub fn create_texture_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
-            id: wgn::wgpu_texture_create_texture_view(self.id, &desc),
+            id: wgn::wgpu_texture_create_texture_view(self.id, desc),
         }
     }
 
@@ -352,6 +363,39 @@ impl<'a> RenderPass<'a> {
     pub fn end_pass(self) -> &'a mut CommandBuffer {
         wgn::wgpu_render_pass_end_pass(self.id);
         self.parent
+    }
+
+    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
+        wgn::wgpu_render_pass_set_bind_group(self.id, index, bind_group.id);
+    }
+
+    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
+        wgn::wgpu_render_pass_set_pipeline(self.id, pipeline.id);
+    }
+
+    pub fn draw(
+        &mut self, vertices: Range<u32>, instances: Range<u32>
+    ) {
+        wgn::wgpu_render_pass_draw(
+            self.id,
+            vertices.end - vertices.start,
+            instances.end - instances.start,
+            vertices.start,
+            instances.start,
+        );
+    }
+
+    pub fn draw_indexed(
+        &mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>
+    ) {
+        wgn::wgpu_render_pass_draw_indexed(
+            self.id,
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
+            instances.start,
+        );
     }
 }
 

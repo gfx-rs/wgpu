@@ -27,7 +27,7 @@ fn main() {
     let depth_stencil_state =
         device.create_depth_stencil_state(&wgpu::DepthStencilStateDescriptor::IGNORE);
 
-    let _render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+    let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
         stages: &[
             wgpu::PipelineStageDescriptor {
@@ -44,7 +44,7 @@ fn main() {
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         attachments_state: wgpu::AttachmentsState {
             color_attachments: &[wgpu::Attachment {
-                format: wgpu::TextureFormat::R8g8b8a8Unorm,
+                format: wgpu::TextureFormat::B8g8r8a8Unorm,
                 samples: 1,
             }],
             depth_stencil_attachment: None,
@@ -95,7 +95,7 @@ fn main() {
             let (_, view) = swap_chain.get_next_texture();
             let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
             {
-                let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
+                let mut rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
                     color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                         attachment: &view,
                         load_op: wgpu::LoadOp::Clear,
@@ -104,6 +104,8 @@ fn main() {
                     }],
                     depth_stencil_attachment: None,
                 });
+                rpass.set_pipeline(&render_pipeline);
+                rpass.draw(0..3, 0..1);
                 rpass.end_pass();
             }
 
@@ -118,6 +120,7 @@ fn main() {
 
     #[cfg(not(feature = "winit"))]
     {
+        let _ = render_pipeline;
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
                 width: 256,

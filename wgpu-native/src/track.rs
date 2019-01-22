@@ -1,6 +1,8 @@
+use crate::registry::{Id, Items};
 use crate::resource::{BufferUsageFlags, TextureUsageFlags};
 use crate::{BufferId, RefCount, Stored, TextureId, WeaklyStored};
 
+use std::borrow::Borrow;
 use std::collections::hash_map::{Entry, HashMap};
 use std::hash::Hash;
 use std::mem;
@@ -26,7 +28,12 @@ pub struct Query<T> {
 
 bitflags! {
     pub struct TrackPermit: u32 {
+        /// Allow extension of the current usage. This is useful during render pass
+        /// recording, where the usage has to stay constant, but we can defer the
+        /// decision on what it is until the end of the pass.
         const EXTEND = 1;
+        /// Allow replacing the current usage with the new one. This is useful when
+        /// recording a command buffer live, and the current usage is already been set.
         const REPLACE = 2;
     }
 }
@@ -63,7 +70,7 @@ pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
 
 impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Tracker {
             map: HashMap::new(),
         }
@@ -125,7 +132,7 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
     }
 
     /// Consume another tacker, adding it's transitions to `self`.
-    pub fn consume<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+    pub fn consume_by_replace<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map.iter().flat_map(move |(id, new)| {
             match self.map.entry(WeaklyStored(id.0.clone())) {
                 Entry::Vacant(e) => {
@@ -144,8 +151,43 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
         })
     }
 
+    pub fn consume_by_extend<'a>(&'a mut self, other: &'a Self) -> Result<(), (I, Range<U>)> {
+        for (id, new) in other.map.iter() {
+            match self.map.entry(WeaklyStored(id.0.clone())) {
+                Entry::Vacant(e) => {
+                    e.insert(new.clone());
+                }
+                Entry::Occupied(mut e) => {
+                    let old = e.get().last;
+                    if old != new.last {
+                        let extended = old | new.last;
+                        if extended.is_exclusive() {
+                            return Err((id.0.clone(), old..new.last));
+                        }
+                        e.get_mut().last = extended;
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Return an iterator over used resources keys.
     pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
         self.map.keys().map(|&WeaklyStored(ref id)| id.clone())
+    }
+}
+
+impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
+    pub(crate) fn get_with_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+        &mut self,
+        items: &'a V,
+        id: Id,
+        usage: U,
+        permit: TrackPermit,
+    ) -> Result<(&'a T, Tracktion<U>), U> {
+        let item = items.get(id);
+        self.transit(id, item.borrow(), usage, permit)
+            .map(|tracktion| (item, tracktion))
     }
 }

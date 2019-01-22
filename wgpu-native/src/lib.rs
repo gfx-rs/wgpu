@@ -194,6 +194,7 @@ type TextureViewHandle = TextureView<B>;
 pub type TextureId = Id;
 type TextureHandle = Texture<B>;
 pub type SamplerId = Id;
+type SamplerHandle = Sampler<B>;
 
 // Binding model
 pub type BindGroupLayoutId = Id;
