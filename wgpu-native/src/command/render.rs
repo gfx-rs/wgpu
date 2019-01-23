@@ -73,7 +73,6 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
             TrackPermit::EXTEND,
         )
         .unwrap();
-        buffer_guard.get(buffer_id);
 
     let view = hal::buffer::IndexBufferView {
         buffer: &buffer.raw,
