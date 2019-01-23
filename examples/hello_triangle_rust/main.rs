@@ -117,39 +117,4 @@ fn main() {
             ControlFlow::Continue
         });
     }
-
-    #[cfg(not(feature = "winit"))]
-    {
-        let _ = render_pipeline;
-        let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: 256,
-                height: 256,
-                depth: 1,
-            },
-            array_size: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8g8b8a8Unorm,
-            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
-        });
-        let color_view = texture.create_default_texture_view();
-
-        let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
-        {
-            let rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                    attachment: &color_view,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color::GREEN,
-                }],
-                depth_stencil_attachment: None,
-            });
-            rpass.end_pass();
-        }
-
-        device
-            .get_queue()
-            .submit(&[cmd_buf]);
-    }
 }
