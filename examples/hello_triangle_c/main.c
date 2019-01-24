@@ -191,7 +191,9 @@ int main()
     }
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
     {
-        // TODO
+		HWND hwnd = glfwGetWin32Window(window);
+		HINSTANCE hinstance = GetModuleHandle(NULL);
+		surface = wgpu_instance_create_surface_from_windows_hwnd(instance, hinstance, hwnd);
     }
 #endif
 
@@ -206,7 +208,7 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         WGPUSwapChainOutput next_texture = wgpu_swap_chain_get_next_texture(swap_chain);
-        WGPUCommandBufferDescriptor cmd_buf_desc = {};
+        WGPUCommandBufferDescriptor cmd_buf_desc = { .todo = 0 };
         WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, &cmd_buf_desc);
         WGPURenderPassColorAttachmentDescriptor_TextureViewId color_attachments[ATTACHMENTS_LENGTH] = {
             {

@@ -7,7 +7,7 @@ set(TARGET_NAME hello_triangle)
 add_executable(hello_triangle main.c)
 
 if(MSVC)
-    target_compile_options(${TARGET_NAME} PRIVATE /W4 /WX)
+    target_compile_options(${TARGET_NAME} PRIVATE /W4)
 else(MSVC)
     target_compile_options(${TARGET_NAME} PRIVATE -Wall -Wextra -pedantic)
 endif(MSVC)
@@ -24,4 +24,4 @@ find_library(WGPU_LIBRARY wgpu_native
     HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../../target/debug"
 )
 
-target_link_libraries(${TARGET_NAME} glfw ${WGPU_LIBRARY} ${OS_LIBRARIES})
+target_link_libraries(${TARGET_NAME} glfw3 ${WGPU_LIBRARY} ${OS_LIBRARIES})

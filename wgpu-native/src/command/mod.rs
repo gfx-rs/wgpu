@@ -145,7 +145,11 @@ impl CommandBuffer<B> {
 }
 
 #[repr(C)]
-pub struct CommandBufferDescriptor {}
+pub struct CommandBufferDescriptor {
+    // MSVC doesn't allow zero-sized structs
+    // We can remove this when we actually have a field
+    pub todo: u32,
+}
 
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_begin_render_pass(

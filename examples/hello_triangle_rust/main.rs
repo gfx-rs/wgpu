@@ -93,7 +93,7 @@ fn main() {
             }
 
             let (_, view) = swap_chain.get_next_texture();
-            let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {});
+            let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor { todo: 0 });
             {
                 let mut rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
                     color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
