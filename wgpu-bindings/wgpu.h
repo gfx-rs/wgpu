@@ -125,6 +125,8 @@ typedef struct {
   WGPUExtensions extensions;
 } WGPUDeviceDescriptor;
 
+typedef WGPUId WGPUBufferId;
+
 typedef WGPUId WGPUComputePassId;
 
 typedef WGPUId WGPUCommandBufferId;
@@ -171,6 +173,52 @@ typedef WGPUId WGPUInstanceId;
 
 typedef WGPUId WGPUBindGroupLayoutId;
 
+typedef struct {
+  WGPUBufferId buffer;
+  uint32_t offset;
+  uint32_t size;
+} WGPUBufferBinding;
+
+typedef WGPUId WGPUSamplerId;
+
+typedef enum {
+  WGPUBindingResource_Buffer,
+  WGPUBindingResource_Sampler,
+  WGPUBindingResource_TextureView,
+} WGPUBindingResource_Tag;
+
+typedef struct {
+  WGPUBufferBinding _0;
+} WGPUBindingResource_WGPUBuffer_Body;
+
+typedef struct {
+  WGPUSamplerId _0;
+} WGPUBindingResource_WGPUSampler_Body;
+
+typedef struct {
+  WGPUTextureViewId _0;
+} WGPUBindingResource_WGPUTextureView_Body;
+
+typedef struct {
+  WGPUBindingResource_Tag tag;
+  union {
+    WGPUBindingResource_WGPUBuffer_Body buffer;
+    WGPUBindingResource_WGPUSampler_Body sampler;
+    WGPUBindingResource_WGPUTextureView_Body texture_view;
+  };
+} WGPUBindingResource;
+
+typedef struct {
+  uint32_t binding;
+  WGPUBindingResource resource;
+} WGPUBinding;
+
+typedef struct {
+  WGPUBindGroupLayoutId layout;
+  const WGPUBinding *bindings;
+  uintptr_t bindings_length;
+} WGPUBindGroupDescriptor;
+
 typedef uint32_t WGPUShaderStageFlags;
 
 typedef struct {
@@ -200,6 +248,13 @@ typedef struct {
   WGPUBlendDescriptor color;
   WGPUColorWriteFlags write_mask;
 } WGPUBlendStateDescriptor;
+
+typedef uint32_t WGPUBufferUsageFlags;
+
+typedef struct {
+  uint32_t size;
+  WGPUBufferUsageFlags usage;
+} WGPUBufferDescriptor;
 
 typedef struct {
 
@@ -398,6 +453,8 @@ typedef struct {
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
                                         const WGPUDeviceDescriptor *_desc);
 
+void wgpu_buffer_destroy(WGPUBufferId buffer_id);
+
 WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId command_buffer_id);
 
 WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
@@ -415,11 +472,16 @@ void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipeli
 
 WGPUInstanceId wgpu_create_instance(void);
 
+WGPUBindGroupId wgpu_device_create_bind_group(WGPUDeviceId device_id,
+                                              const WGPUBindGroupDescriptor *desc);
+
 WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_id,
                                                            const WGPUBindGroupLayoutDescriptor *desc);
 
 WGPUBlendStateId wgpu_device_create_blend_state(WGPUDeviceId _device_id,
                                                 const WGPUBlendStateDescriptor *desc);
+
+WGPUBufferId wgpu_device_create_buffer(WGPUDeviceId device_id, const WGPUBufferDescriptor *desc);
 
 WGPUCommandBufferId wgpu_device_create_command_buffer(WGPUDeviceId device_id,
                                                       const WGPUCommandBufferDescriptor *_desc);
@@ -444,6 +506,9 @@ WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextu
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
+WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId instance_id,
+                                                            void *layer);
+
 WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id,
                                         const WGPUAdapterDescriptor *desc);
 
@@ -451,7 +516,30 @@ void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffer_ptr,
                        uintptr_t command_buffer_count);
 
+void wgpu_render_pass_draw(WGPURenderPassId pass_id,
+                           uint32_t vertex_count,
+                           uint32_t instance_count,
+                           uint32_t first_vertex,
+                           uint32_t first_instance);
+
+void wgpu_render_pass_draw_indexed(WGPURenderPassId pass_id,
+                                   uint32_t index_count,
+                                   uint32_t instance_count,
+                                   uint32_t first_index,
+                                   int32_t base_vertex,
+                                   uint32_t first_instance);
+
 WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
+
+void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
+                                     uint32_t index,
+                                     WGPUBindGroupId bind_group_id);
+
+void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
+                                       WGPUBufferId buffer_id,
+                                       uint32_t offset);
+
+void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
 
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 
