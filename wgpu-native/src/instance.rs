@@ -63,6 +63,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
         .register(surface)
 }
 
+#[allow(unused)]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
     instance_id: InstanceId,
@@ -77,6 +78,49 @@ pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
             .read()
             .get(instance_id)
             .create_surface_from_layer(layer as *mut _);
+        let surface = Surface {
+            raw,
+        };
+
+        HUB.surfaces
+            .write()
+            .register(surface)
+    }
+}
+
+#[allow(unused)]
+#[no_mangle]
+pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
+    instance_id: InstanceId,
+    hinstance: *mut std::ffi::c_void,
+    hwnd: *mut std::ffi::c_void,
+) -> SurfaceId {
+    #[cfg(not(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12", feature = "gfx-backend-vulkan")))]
+    unimplemented!();
+
+    #[cfg(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12"))]
+    {
+        let raw = HUB.instances
+            .read()
+            .get(instance_id)
+            .create_surface_from_hwnd(hwnd);
+
+        let surface = Surface {
+            raw,
+        };
+
+        HUB.surfaces
+            .write()
+            .register(surface)
+    }
+
+    #[cfg(any(feature = "gfx-backend-vulkan"))]
+    {
+        let raw = HUB.instances
+            .read()
+            .get(instance_id)
+            .create_surface_from_hwnd(hinstance, hwnd);
+        
         let surface = Surface {
             raw,
         };

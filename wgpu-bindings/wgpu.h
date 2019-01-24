@@ -257,7 +257,7 @@ typedef struct {
 } WGPUBufferDescriptor;
 
 typedef struct {
-
+  uint32_t todo;
 } WGPUCommandBufferDescriptor;
 
 typedef WGPUId WGPUDepthStencilStateId;
@@ -508,6 +508,10 @@ WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
 WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId instance_id,
                                                             void *layer);
+
+WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
+                                                             void *hinstance,
+                                                             void *hwnd);
 
 WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id,
                                         const WGPUAdapterDescriptor *desc);
