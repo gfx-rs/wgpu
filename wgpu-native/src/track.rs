@@ -20,6 +20,17 @@ pub enum Tracktion<T> {
     Replace { old: T },
 }
 
+impl<T> Tracktion<T> {
+    pub fn into_source(self) -> Option<T> {
+        match self {
+            Tracktion::Init |
+            Tracktion::Keep => None,
+            Tracktion::Extend { old } |
+            Tracktion::Replace { old } => Some(old),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Query<T> {
     pub usage: T,

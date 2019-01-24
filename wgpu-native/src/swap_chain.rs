@@ -3,7 +3,7 @@ use crate::{Stored, WeaklyStored,
 };
 use crate::{conv, resource};
 use crate::registry::{HUB, Items};
-use crate::track::{Tracktion, TrackPermit};
+use crate::track::{TrackPermit};
 
 use hal;
 use hal::{Device as _Device, Swapchain as _Swapchain};
@@ -116,7 +116,7 @@ pub extern "C" fn wgpu_swap_chain_present(
     }
 
     trace!("transit {:?} to present", frame.texture_id.value);
-    let tracktion = device.texture_tracker
+    let barrier = device.texture_tracker
         .lock()
         .transit(
             frame.texture_id.value,
@@ -124,20 +124,15 @@ pub extern "C" fn wgpu_swap_chain_present(
             resource::TextureUsageFlags::PRESENT,
             TrackPermit::REPLACE,
         )
-        .unwrap();
-
-    let barrier = match tracktion {
-        Tracktion::Keep => None,
-        Tracktion::Replace { old } => Some(hal::memory::Barrier::Image {
+        .unwrap()
+        .into_source()
+        .map(|old| hal::memory::Barrier::Image {
             states: conv::map_texture_state(old, hal::format::Aspects::COLOR) ..
                 (hal::image::Access::empty(), hal::image::Layout::Present),
             target: &texture.raw,
             families: None,
             range: texture.full_range.clone(),
-        }),
-        Tracktion::Init |
-        Tracktion::Extend {..} => unreachable!(),
-    };
+        });
 
     unsafe {
         frame.comb.begin(false);

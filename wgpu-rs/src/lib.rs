@@ -352,6 +352,12 @@ impl Device {
     }
 }
 
+impl Buffer {
+    pub fn set_sub_data(&self, offset: u32, data: &[u8]) {
+        wgn::wgpu_buffer_set_sub_data(self.id, offset, data.len() as u32, data.as_ptr());
+    }
+}
+
 impl Texture {
     pub fn create_texture_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
