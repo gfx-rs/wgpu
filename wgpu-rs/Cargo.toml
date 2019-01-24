@@ -6,6 +6,11 @@ authors = [
 	"Joshua Groves <josh@joshgroves.com>",
 ]
 edition = "2018"
+description = "WebGPU native Rust wrapper"
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MPL-2.0"
 
 [lib]
 
@@ -18,5 +23,5 @@ dx12 = ["wgpu-native/gfx-backend-dx12"]
 vulkan = ["wgpu-native/gfx-backend-vulkan"]
 
 [dependencies]
-wgpu-native = { path = "../wgpu-native" }
+wgpu-native = { version = "0.1", path = "../wgpu-native" }
 arrayvec = "0.4"

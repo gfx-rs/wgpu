@@ -1,5 +1,6 @@
 # WebGPU
 [![Build Status](https://travis-ci.org/gfx-rs/wgpu.svg)](https://travis-ci.org/gfx-rs/wgpu)
+[![Crates.io](https://img.shields.io/crates/v/wgpu.svg)](https://crates.io/crates/wgpu)
 [![Gitter](https://badges.gitter.im/gfx-rs/webgpu.svg)](https://gitter.im/gfx-rs/webgpu)
 
 This is an experimental [WebGPU](https://www.w3.org/community/gpu/) implementation as a native static library. It's written in Rust and is based on [gfx-hal](https://github.com/gfx-rs/gfx) and [satellite](https://github.com/gfx-rs/gfx-memory) libraries. The corresponding WebIDL specification can be found at [gpuweb project](https://github.com/gpuweb/gpuweb/blob/master/design/sketch.webidl).
