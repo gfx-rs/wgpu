@@ -14,7 +14,8 @@
 #if WGPU_TARGET == WGPU_TARGET_MACOS
 #define GLFW_EXPOSE_NATIVE_COCOA
 #elif WGPU_TARGET == WGPU_TARGET_LINUX
-// TODO
+#define GLFW_EXPOSE_NATIVE_X11
+#define GLFW_EXPOSE_NATIVE_WAYLAND
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
 #define GLFW_EXPOSE_NATIVE_WIN32
 #endif
@@ -187,7 +188,9 @@ int main()
     }
 #elif WGPU_TARGET == WGPU_TARGET_LINUX
     {
-        // TODO
+        Display* x11_display = glfwGetX11Display();
+        Window x11_window = glfwGetX11Window(window);
+        surface = wgpu_instance_create_surface_from_xlib(instance, (const void**)x11_display, x11_window);
     }
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
     {

@@ -513,6 +513,10 @@ WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId inst
                                                              void *hinstance,
                                                              void *hwnd);
 
+WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
+                                                     const void **display,
+                                                     uint64_t window);
+
 WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id,
                                         const WGPUAdapterDescriptor *desc);
 
