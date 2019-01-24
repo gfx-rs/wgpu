@@ -1,9 +1,5 @@
 use crate::registry::{HUB, Items};
-use crate::{WeaklyStored, Device,
-    AdapterId, DeviceId, InstanceId,
-};
-#[cfg(feature = "winit")]
-use crate::{Surface, SurfaceId};
+use crate::{AdapterId, Device, DeviceId, InstanceId, Surface, SurfaceId, WeaklyStored};
 
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
@@ -65,6 +61,100 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
     HUB.surfaces
         .write()
         .register(surface)
+}
+
+#[allow(unused)]
+#[no_mangle]
+pub extern "C" fn wgpu_instance_create_surface_from_xlib(
+    instance_id: InstanceId,
+    display: *mut *const std::ffi::c_void,
+    window: u64,
+) -> SurfaceId {
+    #[cfg(not(feature = "gfx-backend-vulkan"))]
+    unimplemented!();
+
+    #[cfg(feature = "gfx-backend-vulkan")]
+    {
+        let raw = HUB.instances
+            .read()
+            .get(instance_id)
+            .create_surface_from_xlib(display, window);
+        let surface = Surface {
+            raw,
+        };
+
+        HUB.surfaces
+            .write()
+            .register(surface)
+    }
+}
+
+#[allow(unused)]
+#[no_mangle]
+pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
+    instance_id: InstanceId,
+    layer: *mut std::ffi::c_void,
+) -> SurfaceId {
+    #[cfg(not(feature = "gfx-backend-metal"))]
+    unimplemented!();
+
+    #[cfg(feature = "gfx-backend-metal")]
+    {
+        let raw = HUB.instances
+            .read()
+            .get(instance_id)
+            .create_surface_from_layer(layer as *mut _);
+        let surface = Surface {
+            raw,
+        };
+
+        HUB.surfaces
+            .write()
+            .register(surface)
+    }
+}
+
+#[allow(unused)]
+#[no_mangle]
+pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
+    instance_id: InstanceId,
+    hinstance: *mut std::ffi::c_void,
+    hwnd: *mut std::ffi::c_void,
+) -> SurfaceId {
+    #[cfg(not(target_os = "windows"))]
+    unimplemented!();
+
+    #[cfg(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12"))]
+    {
+        let raw = HUB.instances
+            .read()
+            .get(instance_id)
+            .create_surface_from_hwnd(hwnd);
+
+        let surface = Surface {
+            raw,
+        };
+
+        HUB.surfaces
+            .write()
+            .register(surface)
+    }
+
+    #[cfg(all(target_os = "windows", feature = "gfx-backend-vulkan"))]
+    {
+        let raw = HUB.instances
+            .read()
+            .get(instance_id)
+            .create_surface_from_hwnd(hinstance, hwnd);
+
+        let surface = Surface {
+            raw,
+        };
+
+        HUB.surfaces
+            .write()
+            .register(surface)
+    }
 }
 
 #[no_mangle]
