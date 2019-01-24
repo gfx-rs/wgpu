@@ -1,9 +1,30 @@
 #include <stdio.h>
 #include "./../../wgpu-bindings/wgpu.h"
 
-#define STAGES_LENGTH        (2)
-#define BLEND_STATES_LENGTH  (1)
-#define ATTACHMENTS_LENGTH   (1)
+#define WGPU_TARGET_MACOS 1
+#define WGPU_TARGET_LINUX 2
+#define WGPU_TARGET_WINDOWS 3
+
+#if WGPU_TARGET == WGPU_TARGET_MACOS
+#include <QuartzCore/CAMetalLayer.h>
+#include <Foundation/Foundation.h>
+#endif
+
+#include <GLFW/glfw3.h>
+#if WGPU_TARGET == WGPU_TARGET_MACOS
+#define GLFW_EXPOSE_NATIVE_COCOA
+#elif WGPU_TARGET == WGPU_TARGET_LINUX
+// TODO
+#elif WGPU_TARGET == WGPU_TARGET_WINDOWS
+#define GLFW_EXPOSE_NATIVE_WIN32
+#endif
+#include <GLFW/glfw3native.h>
+
+#define STAGES_LENGTH (2)
+#define BLEND_STATES_LENGTH (1)
+#define ATTACHMENTS_LENGTH (1)
+#define RENDER_PASS_ATTACHMENTS_LENGTH (1)
+#define BIND_GROUP_LAYOUTS_LENGTH (1)
 
 WGPUByteArray read_file(const char *name)
 {
@@ -35,20 +56,8 @@ int main()
     };
     WGPUDeviceId device = wgpu_adapter_create_device(adapter, &device_desc);
 
-    WGPUBindGroupLayoutDescriptor bind_group_layout_desc = {
-        .bindings = NULL,
-        .bindings_length = 0,
-    };
-    WGPUBindGroupLayoutId _bind_group_layout = wgpu_device_create_bind_group_layout(device, &bind_group_layout_desc);
-
-    WGPUPipelineLayoutDescriptor pipeline_layout_desc = {
-        .bind_group_layouts = NULL,
-        .bind_group_layouts_length = 0,
-    };
-    WGPUPipelineLayoutId layout = wgpu_device_create_pipeline_layout(device, &pipeline_layout_desc);
-
     WGPUShaderModuleDescriptor vertex_shader_desc = {
-        .code = read_file("./../data/hello_triangle.vert.spv"),
+        .code = read_file("./../../data/hello_triangle.vert.spv"),
     };
     WGPUShaderModuleId vertex_shader = wgpu_device_create_shader_module(device, &vertex_shader_desc);
     WGPUPipelineStageDescriptor vertex_stage = {
@@ -58,7 +67,7 @@ int main()
     };
 
     WGPUShaderModuleDescriptor fragment_shader_desc = {
-        .code = read_file("./../data/hello_triangle.frag.spv"),
+        .code = read_file("./../../data/hello_triangle.frag.spv"),
     };
     WGPUShaderModuleId fragment_shader = wgpu_device_create_shader_module(device, &fragment_shader_desc);
     WGPUPipelineStageDescriptor fragment_stage = {
@@ -67,15 +76,29 @@ int main()
         .entry_point = "main",
     };
 
-    WGPUPipelineStageDescriptor stages[STAGES_LENGTH] = { vertex_stage, fragment_stage };
+    WGPUPipelineStageDescriptor stages[STAGES_LENGTH] = {vertex_stage, fragment_stage};
+
+    WGPUBindGroupLayoutDescriptor bind_group_layout_desc = {
+        .bindings = NULL,
+        .bindings_length = 0,
+    };
+    WGPUBindGroupLayoutId bind_group_layout = wgpu_device_create_bind_group_layout(device, &bind_group_layout_desc);
+
+    WGPUBindGroupLayoutId bind_group_layouts[BIND_GROUP_LAYOUTS_LENGTH] = { bind_group_layout };
+
+    WGPUPipelineLayoutDescriptor pipeline_layout_desc = {
+        .bind_group_layouts = bind_group_layouts,
+        .bind_group_layouts_length = BIND_GROUP_LAYOUTS_LENGTH,
+    };
+    WGPUPipelineLayoutId pipeline_layout = wgpu_device_create_pipeline_layout(device, &pipeline_layout_desc);
 
     WGPUBlendDescriptor blend_alpha = {
-        .src_factor = WGPUBlendFactor_Zero,
+        .src_factor = WGPUBlendFactor_One,
         .dst_factor = WGPUBlendFactor_Zero,
         .operation = WGPUBlendOperation_Add,
     };
     WGPUBlendDescriptor blend_color = {
-        .src_factor = WGPUBlendFactor_Zero,
+        .src_factor = WGPUBlendFactor_One,
         .dst_factor = WGPUBlendFactor_Zero,
         .operation = WGPUBlendOperation_Add,
     };
@@ -83,10 +106,10 @@ int main()
         .blend_enabled = false,
         .alpha = blend_alpha,
         .color = blend_color,
-        .write_mask = 0,
+        .write_mask = WGPUColorWriteFlags_ALL,
     };
     WGPUBlendStateId blend_state_0 = wgpu_device_create_blend_state(device, &blend_state_0_desc);
-    WGPUBlendStateId blend_state[BLEND_STATES_LENGTH] = { blend_state_0 };
+    WGPUBlendStateId blend_state[BLEND_STATES_LENGTH] = {blend_state_0};
 
     WGPUStencilStateFaceDescriptor stencil_state_front = {
         .compare = WGPUCompareFunction_Never,
@@ -112,7 +135,7 @@ int main()
 
     WGPUAttachment attachments[ATTACHMENTS_LENGTH] = {
         {
-            .format = WGPUTextureFormat_R8g8b8a8Unorm,
+            .format = WGPUTextureFormat_B8g8r8a8Unorm,
             .samples = 1,
         },
     };
@@ -123,7 +146,7 @@ int main()
     };
 
     WGPURenderPipelineDescriptor render_pipeline_desc = {
-        .layout = layout,
+        .layout = pipeline_layout,
         .stages = stages,
         .stages_length = STAGES_LENGTH,
         .primitive_topology = WGPUPrimitiveTopology_TriangleList,
@@ -135,32 +158,82 @@ int main()
 
     WGPURenderPipelineId render_pipeline = wgpu_device_create_render_pipeline(device, &render_pipeline_desc);
 
-    WGPUCommandBufferDescriptor cmd_buf_desc = { };
-    WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, &cmd_buf_desc);
-    WGPUQueueId queue = wgpu_device_get_queue(device);
-    wgpu_queue_submit(queue, &cmd_buf, 1);
+    if (!glfwInit())
+    {
+        printf("Cannot initialize glfw");
+        return 1;
+    }
 
-    const uint32_t TEXTURE_WIDTH = 800;
-    const uint32_t TEXTURE_HEIGHT = 600;
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    GLFWwindow *window = glfwCreateWindow(640, 480, "wgpu with glfw", NULL, NULL);
 
-    WGPUExtent3d texture_size = {
-        .width = TEXTURE_WIDTH,
-        .height = TEXTURE_HEIGHT,
-        .depth = 1,
+    if (!window)
+    {
+        printf("Cannot create window");
+        return 1;
+    }
+
+    WGPUSurfaceId surface = NULL;
+
+#if WGPU_TARGET == WGPU_TARGET_MACOS
+    {
+        id metal_layer = NULL;
+        NSWindow *ns_window = glfwGetCocoaWindow(window);
+        CALayer *layer = ns_window.contentView.layer;
+        [ns_window.contentView setWantsLayer:YES];
+        metal_layer = [CAMetalLayer layer];
+        [ns_window.contentView setLayer:metal_layer];
+        surface = wgpu_instance_create_surface_from_macos_layer(instance, metal_layer);
+    }
+#elif WGPU_TARGET == WGPU_TARGET_LINUX
+    {
+        // TODO
+    }
+#elif WGPU_TARGET == WGPU_TARGET_WINDOWS
+    {
+        // TODO
+    }
+#endif
+
+    WGPUSwapChainDescriptor swap_chain_desc = {
+        .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT | WGPUTextureUsageFlags_PRESENT,
+        .format = WGPUTextureFormat_B8g8r8a8Unorm,
+        .width = 640,
+        .height = 480,
     };
+    WGPUSwapChainId swap_chain = wgpu_device_create_swap_chain(device, surface, &swap_chain_desc);
 
-    const WGPUTextureFormat texture_format = WGPUTextureFormat_R8g8b8a8Unorm;
-    const WGPUTextureUsageFlags texture_usage = WGPUTextureUsageFlags_TRANSFER_DST | WGPUTextureUsageFlags_SAMPLED;
+    while (!glfwWindowShouldClose(window))
+    {
+        WGPUSwapChainOutput next_texture = wgpu_swap_chain_get_next_texture(swap_chain);
+        WGPUCommandBufferDescriptor cmd_buf_desc = {};
+        WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, &cmd_buf_desc);
+        WGPURenderPassColorAttachmentDescriptor_TextureViewId color_attachments[ATTACHMENTS_LENGTH] = {
+            {
+                .attachment = next_texture.view_id,
+                .load_op = WGPULoadOp_Clear,
+                .store_op = WGPUStoreOp_Store,
+                .clear_color = WGPUColor_GREEN,
+            },
+        };
+        WGPURenderPassDescriptor rpass_desc = {
+            .color_attachments = color_attachments,
+            .color_attachments_length = RENDER_PASS_ATTACHMENTS_LENGTH,
+            .depth_stencil_attachment = NULL,
+        };
+        WGPURenderPassId rpass = wgpu_command_buffer_begin_render_pass(cmd_buf, rpass_desc);
+        wgpu_render_pass_set_pipeline(rpass, render_pipeline);
+        wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
+        wgpu_render_pass_end_pass(rpass);
+        WGPUQueueId queue = wgpu_device_get_queue(device);
+        wgpu_queue_submit(queue, &cmd_buf, 1);
+        wgpu_swap_chain_present(swap_chain);
 
-    WGPUTextureDescriptor texture_desc = {
-        .size = texture_size,
-        .array_size = 1,
-        .dimension = WGPUTextureDimension_D2,
-        .format = texture_format,
-        .usage = texture_usage,
-    };
+        glfwPollEvents();
+    }
 
-    WGPUTextureId texture = wgpu_device_create_texture(device, &texture_desc);
+    glfwDestroyWindow(window);
+    glfwTerminate();
 
     return 0;
 }
