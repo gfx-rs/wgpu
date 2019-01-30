@@ -9,12 +9,11 @@ use std::ptr;
 
 pub use wgn::{
     AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
-    Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor, DeviceDescriptor,
-    Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
+    BufferDescriptor, Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor,
+    DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
-    ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp,
+    ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp, SwapChainDescriptor,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
-    BufferDescriptor, SwapChainDescriptor,
 };
 
 pub struct Instance {
@@ -41,12 +40,30 @@ pub struct TextureView {
     id: wgn::TextureViewId,
 }
 
+pub struct Sampler {
+    id: wgn::SamplerId,
+}
+
 pub struct Surface {
     id: wgn::SurfaceId,
 }
 
 pub struct SwapChain {
     id: wgn::SwapChainId,
+}
+
+pub enum BindingResource<'a> {
+    Buffer {
+        buffer: &'a Buffer,
+        range: Range<u32>,
+    },
+    Sampler(&'a Sampler),
+    TextureView(&'a TextureView),
+}
+
+pub struct Binding<'a> {
+    pub binding: u32,
+    pub resource: BindingResource<'a>,
 }
 
 pub struct BindGroupLayout {
@@ -103,6 +120,11 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub bindings: &'a [BindGroupLayoutBinding],
 }
 
+pub struct BindGroupDescriptor<'a> {
+    pub layout: &'a BindGroupLayout,
+    pub bindings: &'a [Binding<'a>],
+}
+
 pub struct PipelineLayoutDescriptor<'a> {
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
 }
@@ -129,7 +151,8 @@ pub struct RenderPipelineDescriptor<'a> {
 
 pub struct RenderPassDescriptor<'a> {
     pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<&'a TextureView>],
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<&'a TextureView>>,
+    pub depth_stencil_attachment:
+        Option<RenderPassDepthStencilAttachmentDescriptor<&'a TextureView>>,
 }
 
 impl Instance {
@@ -148,7 +171,7 @@ impl Instance {
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &wgn::winit::Window) -> Surface {
         Surface {
-            id: wgn::wgpu_instance_create_surface_from_winit(self.id, window)
+            id: wgn::wgpu_instance_create_surface_from_winit(self.id, window),
         }
     }
 }
@@ -184,6 +207,39 @@ impl Device {
     pub fn create_command_buffer(&self, desc: &CommandBufferDescriptor) -> CommandBuffer {
         CommandBuffer {
             id: wgn::wgpu_device_create_command_buffer(self.id, desc),
+        }
+    }
+
+    pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
+        let bindings = desc
+            .bindings
+            .into_iter()
+            .map(|binding| wgn::Binding {
+                binding: binding.binding,
+                resource: match binding.resource {
+                    BindingResource::Buffer { ref buffer, ref range } => {
+                        wgn::BindingResource::Buffer(wgn::BufferBinding {
+                            buffer: buffer.id,
+                            offset: range.start,
+                            size: range.end,
+                        })
+                    }
+                    BindingResource::Sampler(ref sampler) => wgn::BindingResource::Sampler(sampler.id),
+                    BindingResource::TextureView(ref texture_view) => {
+                        wgn::BindingResource::TextureView(texture_view.id)
+                    }
+                },
+            })
+            .collect::<Vec<_>>();
+        BindGroup {
+            id: wgn::wgpu_device_create_bind_group(
+                self.id,
+                &wgn::BindGroupDescriptor {
+                    layout: desc.layout.id,
+                    bindings: bindings.as_ptr(),
+                    bindings_length: bindings.len(),
+                },
+            ),
         }
     }
 
@@ -373,9 +429,7 @@ impl<'a> RenderPass<'a> {
         wgn::wgpu_render_pass_set_pipeline(self.id, pipeline.id);
     }
 
-    pub fn draw(
-        &mut self, vertices: Range<u32>, instances: Range<u32>
-    ) {
+    pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         wgn::wgpu_render_pass_draw(
             self.id,
             vertices.end - vertices.start,
@@ -385,9 +439,7 @@ impl<'a> RenderPass<'a> {
         );
     }
 
-    pub fn draw_indexed(
-        &mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>
-    ) {
+    pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         wgn::wgpu_render_pass_draw_indexed(
             self.id,
             indices.end - indices.start,
@@ -432,7 +484,12 @@ impl SwapChain {
     //TODO: borrow instead of new object?
     pub fn get_next_texture(&self) -> (Texture, TextureView) {
         let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
-        (Texture { id: output.texture_id} , TextureView { id: output.view_id })
+        (
+            Texture {
+                id: output.texture_id,
+            },
+            TextureView { id: output.view_id },
+        )
     }
 
     pub fn present(&self) {
