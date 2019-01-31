@@ -72,9 +72,9 @@ bitflags! {
         const SAMPLED = 4;
         const STORAGE = 8;
         const OUTPUT_ATTACHMENT = 16;
-        const PRESENT = 32;
         const NONE = 0;
         const WRITE_ALL = 2 + 8 + 16;
+        const UNINITIALIZED = 0xFFFF;
     }
 }
 

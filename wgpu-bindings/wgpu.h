@@ -436,8 +436,6 @@ typedef struct {
 
 #define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT 16
 
-#define WGPUTextureUsageFlags_PRESENT 32
-
 #define WGPUTextureUsageFlags_SAMPLED 4
 
 #define WGPUTextureUsageFlags_STORAGE 8
@@ -454,6 +452,11 @@ WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
                                         const WGPUDeviceDescriptor *_desc);
 
 void wgpu_buffer_destroy(WGPUBufferId buffer_id);
+
+void wgpu_buffer_set_sub_data(WGPUBufferId buffer_id,
+                              uint32_t start,
+                              uint32_t count,
+                              const uint8_t *data);
 
 WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId command_buffer_id);
 

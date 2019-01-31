@@ -2,6 +2,7 @@ use crate::{Stored, WeaklyStored,
     DeviceId, SwapChainId, TextureId, TextureViewId,
 };
 use crate::{conv, resource};
+use crate::device::all_image_stages;
 use crate::registry::{HUB, Items};
 use crate::track::{TrackPermit};
 
@@ -115,20 +116,22 @@ pub extern "C" fn wgpu_swap_chain_present(
         None => unreachable!(),
     }
 
+    //TODO: support for swapchain being sampled or read by the shader?
+
     trace!("transit {:?} to present", frame.texture_id.value);
     let barrier = device.texture_tracker
         .lock()
         .transit(
             frame.texture_id.value,
             &texture.life_guard.ref_count,
-            resource::TextureUsageFlags::PRESENT,
+            resource::TextureUsageFlags::UNINITIALIZED,
             TrackPermit::REPLACE,
         )
         .unwrap()
         .into_source()
         .map(|old| hal::memory::Barrier::Image {
             states: conv::map_texture_state(old, hal::format::Aspects::COLOR) ..
-                (hal::image::Access::empty(), hal::image::Layout::Present),
+                (hal::image::Access::COLOR_ATTACHMENT_WRITE, hal::image::Layout::Present),
             target: &texture.raw,
             families: None,
             range: texture.full_range.clone(),
@@ -137,7 +140,7 @@ pub extern "C" fn wgpu_swap_chain_present(
     unsafe {
         frame.comb.begin(false);
         frame.comb.pipeline_barrier(
-            hal::pso::PipelineStage::TOP_OF_PIPE .. hal::pso::PipelineStage::BOTTOM_OF_PIPE,
+            all_image_stages() .. hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
             hal::memory::Dependencies::empty(),
             barrier,
         );

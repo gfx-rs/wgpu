@@ -1,7 +1,10 @@
+extern crate env_logger;
 extern crate wgpu;
 extern crate wgpu_native;
 
 fn main() {
+    env_logger::init();
+
     let instance = wgpu::Instance::new();
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
@@ -66,7 +69,7 @@ fn main() {
 
         let surface = instance.create_surface(&window);
         let swap_chain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT | wgpu::TextureUsageFlags::PRESENT,
+            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
             format: wgpu::TextureFormat::B8g8r8a8Unorm,
             width: size.width as u32,
             height: size.height as u32,
