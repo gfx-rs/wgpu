@@ -17,6 +17,7 @@ use hal::{self,
     Device as _Device,
     Surface as _Surface,
 };
+use log::trace;
 //use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::{Mutex};
 
@@ -1197,4 +1198,69 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     }
 
     swap_chain_id
+}
+
+
+
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_set_sub_data(
+    buffer_id: BufferId,
+    start: u32, count: u32, data: *const u8,
+) {
+    let buffer_guard = HUB.buffers.read();
+    let buffer = buffer_guard.get(buffer_id);
+    let mut device_guard = HUB.devices.write();
+    let device = device_guard.get_mut(buffer.device_id.value);
+
+    //Note: this is just doing `update_buffer`, which is limited to 64KB
+
+    trace!("transit {:?} to transfer dst", buffer_id);
+    let barrier = device.buffer_tracker
+        .lock()
+        .transit(
+            buffer_id,
+            &buffer.life_guard.ref_count,
+            resource::BufferUsageFlags::TRANSFER_DST,
+            TrackPermit::REPLACE,
+        )
+        .unwrap()
+        .into_source()
+        .map(|old| hal::memory::Barrier::Buffer {
+            states: conv::map_buffer_state(old) ..
+                hal::buffer::State::TRANSFER_WRITE,
+            target: &buffer.raw,
+            families: None,
+            range: None .. None, //TODO: could be partial
+        });
+
+    let mut comb = device.com_allocator.allocate(buffer.device_id.clone(), &device.raw);
+    unsafe {
+        let raw = comb.raw.last_mut().unwrap();
+        raw.begin(
+            hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+            hal::command::CommandBufferInheritanceInfo::default(),
+        );
+        raw.pipeline_barrier(
+            hal::pso::PipelineStage::TOP_OF_PIPE .. hal::pso::PipelineStage::TRANSFER,
+            hal::memory::Dependencies::empty(),
+            barrier,
+        );
+        raw.update_buffer(
+            &buffer.raw,
+            start as hal::buffer::Offset,
+            slice::from_raw_parts(data, count as usize),
+        );
+        raw.finish();
+
+        let submission = hal::queue::Submission {
+            command_buffers: iter::once(&*raw),
+            wait_semaphores: None,
+            signal_semaphores: None,
+        };
+        device.queue_group.queues[0]
+            .as_raw_mut()
+            .submit::<_, _, <back::Backend as hal::Backend>::Semaphore, _, _>(submission, None);
+    }
+
+    device.com_allocator.after_submit(comb);
 }
