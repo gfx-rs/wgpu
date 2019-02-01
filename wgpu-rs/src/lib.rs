@@ -4,6 +4,7 @@ extern crate wgpu_native as wgn;
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
+use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr;
 
@@ -112,8 +113,9 @@ pub struct ComputePass<'a> {
     parent: &'a mut CommandBuffer,
 }
 
-pub struct Queue {
+pub struct Queue<'a> {
     id: wgn::QueueId,
+    _marker: PhantomData<&'a Self>,
 }
 
 pub struct BindGroupLayoutDescriptor<'a> {
@@ -153,6 +155,12 @@ pub struct RenderPassDescriptor<'a> {
     pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<&'a TextureView>],
     pub depth_stencil_attachment:
         Option<RenderPassDepthStencilAttachmentDescriptor<&'a TextureView>>,
+}
+
+pub struct SwapChainOutput<'a> {
+    pub texture: Texture,
+    pub view: TextureView,
+    swap_chain_id: &'a wgn::SwapChainId,
 }
 
 impl Instance {
@@ -197,10 +205,10 @@ impl Device {
         }
     }
 
-    //TODO: borrow instead of new object?
-    pub fn get_queue(&self) -> Queue {
+    pub fn get_queue(&mut self) -> Queue {
         Queue {
             id: wgn::wgpu_device_get_queue(self.id),
+            _marker: PhantomData,
         }
     }
 
@@ -476,8 +484,8 @@ impl<'a> ComputePass<'a> {
     }
 }
 
-impl Queue {
-    pub fn submit(&self, command_buffers: &[CommandBuffer]) {
+impl<'a> Queue<'a> {
+    pub fn submit(&mut self, command_buffers: &[CommandBuffer]) {
         wgn::wgpu_queue_submit(
             self.id,
             command_buffers.as_ptr() as *const _,
@@ -486,19 +494,19 @@ impl Queue {
     }
 }
 
-impl SwapChain {
-    //TODO: borrow instead of new object?
-    pub fn get_next_texture(&self) -> (Texture, TextureView) {
-        let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
-        (
-            Texture {
-                id: output.texture_id,
-            },
-            TextureView { id: output.view_id },
-        )
+impl<'a> Drop for SwapChainOutput<'a> {
+    fn drop(&mut self) {
+        wgn::wgpu_swap_chain_present(*self.swap_chain_id);
     }
+}
 
-    pub fn present(&self) {
-        wgn::wgpu_swap_chain_present(self.id);
+impl SwapChain {
+    pub fn get_next_texture(&mut self) -> SwapChainOutput {
+        let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
+        SwapChainOutput {
+            texture: Texture { id: output.texture_id },
+            view: TextureView { id: output.view_id },
+            swap_chain_id: &self.id,
+        }
     }
 }

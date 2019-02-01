@@ -154,13 +154,11 @@ pub extern "C" fn wgpu_swap_chain_present(
         };
 
         device.raw.reset_fence(&frame.fence).unwrap();
-        device.queue_group.queues[0]
-            .submit(submission, Some(&frame.fence));
-
-        swap_chain.raw
+        let queue = &mut device.queue_group.queues[0];
+        queue.submit(submission, Some(&frame.fence));
+        queue
             .present(
-                &mut device.queue_group.queues[0],
-                image_index,
+                iter::once((&swap_chain.raw, image_index)),
                 iter::once(&frame.sem_present),
             )
             .unwrap();
