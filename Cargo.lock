@@ -392,6 +392,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gfx-examples"
+version = "0.1.0"
+dependencies = [
+ "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
+ "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "wgpu 0.1.0",
+ "wgpu-native 0.1.0",
+]
+
+[[package]]
 name = "gfx-hal"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
