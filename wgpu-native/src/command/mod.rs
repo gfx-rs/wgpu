@@ -7,7 +7,10 @@ pub(crate) use self::allocator::CommandAllocator;
 pub use self::compute::*;
 pub use self::render::*;
 
-use crate::device::{FramebufferKey, RenderPassKey};
+use crate::device::{
+    FramebufferKey, RenderPassKey,
+    all_buffer_stages, all_image_stages,
+};
 use crate::registry::{Items, HUB};
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use crate::track::{BufferTracker, TextureTracker};
@@ -21,7 +24,7 @@ use crate::{
 };
 
 use hal::command::RawCommandBuffer;
-use hal::Device;
+use hal::{Device as _Device};
 use log::trace;
 
 use std::collections::hash_map::Entry;
@@ -109,6 +112,7 @@ impl CommandBuffer<B> {
         Gb: Items<resource::Buffer<B>>,
         Gt: Items<resource::Texture<B>>,
     {
+
         let buffer_barriers = buffer_iter.map(|(id, transit)| {
             let b = buffer_guard.get(id);
             trace!("transit {:?} {:?}", id, transit);
@@ -134,9 +138,11 @@ impl CommandBuffer<B> {
                 families: None,
             }
         });
+
+        let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             raw.pipeline_barrier(
-                hal::pso::PipelineStage::TOP_OF_PIPE..hal::pso::PipelineStage::BOTTOM_OF_PIPE,
+                stages .. stages,
                 hal::memory::Dependencies::empty(),
                 buffer_barriers.chain(texture_barriers),
             );

@@ -26,6 +26,27 @@ use std::collections::hash_map::{Entry, HashMap};
 use std::sync::atomic::Ordering;
 
 
+pub fn all_buffer_stages() -> hal::pso::PipelineStage {
+    use hal::pso::PipelineStage as Ps;
+    Ps::DRAW_INDIRECT |
+    Ps::VERTEX_INPUT |
+    Ps::VERTEX_SHADER |
+    Ps::FRAGMENT_SHADER |
+    Ps::COMPUTE_SHADER |
+    Ps::TRANSFER |
+    Ps::HOST
+}
+pub fn all_image_stages() -> hal::pso::PipelineStage {
+    use hal::pso::PipelineStage as Ps;
+    Ps::EARLY_FRAGMENT_TESTS |
+    Ps::LATE_FRAGMENT_TESTS |
+    Ps::COLOR_ATTACHMENT_OUTPUT |
+    Ps::VERTEX_SHADER |
+    Ps::FRAGMENT_SHADER |
+    Ps::COMPUTE_SHADER |
+    Ps::TRANSFER
+}
+
 #[derive(Hash, PartialEq)]
 pub(crate) struct RenderPassKey {
     pub attachments: Vec<hal::pass::Attachment>,
@@ -236,6 +257,7 @@ impl<B: hal::Backend> Device<B> {
     }
 }
 
+
 pub(crate) struct ShaderModule<B: hal::Backend> {
     pub raw: B::ShaderModule,
 }
@@ -297,7 +319,7 @@ pub extern "C" fn wgpu_device_create_buffer(
         .lock()
         .query(
             &Stored { value: id, ref_count },
-            resource::BufferUsageFlags::WRITE_ALL,
+            resource::BufferUsageFlags::empty(),
         );
     assert!(query.initialized);
 
@@ -394,7 +416,7 @@ pub extern "C" fn wgpu_device_create_texture(
         .lock()
         .query(
             &Stored { value: id, ref_count },
-            resource::TextureUsageFlags::WRITE_ALL,
+            resource::TextureUsageFlags::UNINITIALIZED,
         );
     assert!(query.initialized);
 
@@ -1173,7 +1195,7 @@ pub extern "C" fn wgpu_device_create_swap_chain(
         };
         device.texture_tracker
             .lock()
-            .query(&texture_id, resource::TextureUsageFlags::WRITE_ALL);
+            .query(&texture_id, resource::TextureUsageFlags::UNINITIALIZED);
 
         let view = resource::TextureView {
             raw: view_raw,
@@ -1241,7 +1263,7 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
             hal::command::CommandBufferInheritanceInfo::default(),
         );
         raw.pipeline_barrier(
-            hal::pso::PipelineStage::TOP_OF_PIPE .. hal::pso::PipelineStage::TRANSFER,
+            all_buffer_stages() .. hal::pso::PipelineStage::TRANSFER,
             hal::memory::Dependencies::empty(),
             barrier,
         );
