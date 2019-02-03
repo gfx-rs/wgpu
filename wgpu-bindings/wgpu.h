@@ -10,6 +10,13 @@
 #include <stdlib.h>
 
 typedef enum {
+  WGPUAddressMode_ClampToEdge = 0,
+  WGPUAddressMode_Repeat = 1,
+  WGPUAddressMode_MirrorRepeat = 2,
+  WGPUAddressMode_ClampToBorderColor = 3,
+} WGPUAddressMode;
+
+typedef enum {
   WGPUBindingType_UniformBuffer = 0,
   WGPUBindingType_Sampler = 1,
   WGPUBindingType_SampledTexture = 2,
@@ -41,6 +48,12 @@ typedef enum {
 } WGPUBlendOperation;
 
 typedef enum {
+  WGPUBorderColor_TransparentBlack = 0,
+  WGPUBorderColor_OpaqueBlack = 1,
+  WGPUBorderColor_OpaqueWhite = 2,
+} WGPUBorderColor;
+
+typedef enum {
   WGPUCompareFunction_Never = 0,
   WGPUCompareFunction_Less = 1,
   WGPUCompareFunction_Equal = 2,
@@ -50,6 +63,11 @@ typedef enum {
   WGPUCompareFunction_GreaterEqual = 6,
   WGPUCompareFunction_Always = 7,
 } WGPUCompareFunction;
+
+typedef enum {
+  WGPUFilterMode_Nearest = 0,
+  WGPUFilterMode_Linear = 1,
+} WGPUFilterMode;
 
 typedef enum {
   WGPULoadOp_Clear = 0,
@@ -318,6 +336,20 @@ typedef struct {
 } WGPURenderPipelineDescriptor;
 
 typedef struct {
+  WGPUAddressMode r_address_mode;
+  WGPUAddressMode s_address_mode;
+  WGPUAddressMode t_address_mode;
+  WGPUFilterMode mag_filter;
+  WGPUFilterMode min_filter;
+  WGPUFilterMode mipmap_filter;
+  float lod_min_clamp;
+  float lod_max_clamp;
+  uint32_t max_anisotropy;
+  WGPUCompareFunction compare_function;
+  WGPUBorderColor border_color;
+} WGPUSamplerDescriptor;
+
+typedef struct {
   const uint8_t *bytes;
   uintptr_t length;
 } WGPUByteArray;
@@ -444,6 +476,8 @@ typedef struct {
 
 #define WGPUTextureUsageFlags_TRANSFER_SRC 1
 
+#define WGPUTextureUsageFlags_UNINITIALIZED 65535
+
 #define WGPUTrackPermit_EXTEND (WGPUTrackPermit){ .bits = 1 }
 
 #define WGPUTrackPermit_REPLACE (WGPUTrackPermit){ .bits = 2 }
@@ -497,6 +531,8 @@ WGPUPipelineLayoutId wgpu_device_create_pipeline_layout(WGPUDeviceId device_id,
 
 WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
                                                         const WGPURenderPipelineDescriptor *desc);
+
+WGPUSamplerId wgpu_device_create_sampler(WGPUDeviceId device_id, const WGPUSamplerDescriptor *desc);
 
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
                                                     const WGPUShaderModuleDescriptor *desc);

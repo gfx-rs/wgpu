@@ -10,11 +10,13 @@ use std::ptr;
 
 pub use wgn::{
     AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
-    BufferDescriptor, Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor,
+    BufferDescriptor, BufferUsageFlags,
+    Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor,
     DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp, SwapChainDescriptor,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
+    SamplerDescriptor, AddressMode, FilterMode, CompareFunction, BorderColor,
 };
 
 pub struct Instance {
@@ -350,6 +352,12 @@ impl Device {
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
             id: wgn::wgpu_device_create_texture(self.id, desc),
+        }
+    }
+
+    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
+        Sampler {
+            id: wgn::wgpu_device_create_sampler(self.id, desc),
         }
     }
 

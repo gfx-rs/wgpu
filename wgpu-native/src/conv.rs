@@ -1,4 +1,5 @@
 use crate::{binding_model, command, pipeline, resource, Color, Extent3d};
+use log::warn;
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
@@ -222,7 +223,7 @@ fn map_stencil_face(
     }
 }
 
-fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
+pub fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
     use hal::pso::Comparison as H;
     use crate::resource::CompareFunction::*;
     match compare_function {
@@ -407,4 +408,25 @@ pub fn map_load_store_ops(
 
 pub fn map_color(color: Color) -> hal::pso::ColorValue {
     [color.r, color.g, color.b, color.a]
+}
+
+pub fn map_filter(filter: resource::FilterMode) -> hal::image::Filter {
+    match filter {
+        resource::FilterMode::Nearest => hal::image::Filter::Nearest,
+        resource::FilterMode::Linear => hal::image::Filter::Linear,
+    }
+}
+
+pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
+    use hal::image::WrapMode as W;
+    use crate::resource::AddressMode as Am;
+    match address {
+        Am::ClampToEdge => W::Clamp,
+        Am::Repeat => W::Tile,
+        Am::MirrorRepeat => {
+            warn!("MirrorRepeat isn't supported yet");
+            W::Tile
+        }
+        Am::ClampToBorderColor => W::Border,
+    }
 }

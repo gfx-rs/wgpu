@@ -6,7 +6,7 @@ use crate::{
     BindGroupLayoutId, BindGroupId,
     BlendStateId, BufferId, CommandBufferId, DepthStencilStateId,
     AdapterId, DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
-    TextureId, TextureViewId,
+    SamplerId, TextureId, TextureViewId,
     SurfaceId, SwapChainId,
 };
 
@@ -523,6 +523,49 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
 #[no_mangle]
 pub extern "C" fn wgpu_texture_view_destroy(_texture_view_id: TextureViewId) {
     unimplemented!()
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_sampler(
+    device_id: DeviceId, desc: &resource::SamplerDescriptor
+) -> SamplerId {
+    let device_guard = HUB.devices.read();
+    let device = &device_guard.get(device_id);
+
+    let info = hal::image::SamplerInfo {
+        min_filter: conv::map_filter(desc.min_filter),
+        mag_filter: conv::map_filter(desc.mag_filter),
+        mip_filter: conv::map_filter(desc.mipmap_filter),
+        wrap_mode: (
+            conv::map_wrap(desc.r_address_mode),
+            conv::map_wrap(desc.s_address_mode),
+            conv::map_wrap(desc.t_address_mode),
+        ),
+        lod_bias: 0.0.into(),
+        lod_range: desc.lod_min_clamp.into() .. desc.lod_max_clamp.into(),
+        comparison: if desc.compare_function == resource::CompareFunction::Always {
+            None
+        } else {
+            Some(conv::map_compare_function(desc.compare_function))
+        },
+        border: hal::image::PackedColor(match desc.border_color {
+            resource::BorderColor::TransparentBlack => 0x00000000,
+            resource::BorderColor::OpaqueBlack => 0x000000FF,
+            resource::BorderColor::OpaqueWhite => 0xFFFFFFFF,
+        }),
+        anisotropic: hal::image::Anisotropic::Off, //TODO
+    };
+    let raw = unsafe {
+        device.raw
+            .create_sampler(info)
+            .unwrap()
+    };
+
+    HUB.samplers
+        .write()
+        .register(resource::Sampler {
+            raw
+        })
 }
 
 #[no_mangle]
