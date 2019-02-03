@@ -8,8 +8,8 @@ authors = [
 publish = false
 
 [[bin]]
-name = "triangle"
-path = "src/triangle.rs"
+name = "cube"
+path = "src/cube.rs"
 
 [features]
 default = []
@@ -22,4 +22,5 @@ vulkan = ["wgpu-native/gfx-backend-vulkan"]
 wgpu-native = { path = "../wgpu-native" }
 wgpu = { path = "../wgpu-rs", features = ["winit"] }
 env_logger = "0.5"
+glsl-to-spirv = "0.1"
 log = "0.4"

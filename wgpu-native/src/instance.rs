@@ -50,17 +50,32 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
     window: &winit::Window,
 ) -> SurfaceId {
-    let raw = HUB.instances
-        .read()
-        .get(instance_id)
-        .create_surface(window);
-    let surface = Surface {
-        raw,
-    };
+    #[cfg(any(
+        feature = "gfx-backend-vulkan",
+        feature = "gfx-backend-dx11",
+        feature = "gfx-backend-dx12",
+        feature = "gfx-backend-metal"
+    ))]
+    {
+        let raw = HUB.instances
+            .read()
+            .get(instance_id)
+            .create_surface(window);
+        let surface = Surface {
+            raw,
+        };
 
-    HUB.surfaces
-        .write()
-        .register(surface)
+        HUB.surfaces
+            .write()
+            .register(surface)
+    }
+    #[cfg(not(any(
+        feature = "gfx-backend-vulkan",
+        feature = "gfx-backend-dx11",
+        feature = "gfx-backend-dx12",
+        feature = "gfx-backend-metal"
+    )))]
+    unimplemented!()
 }
 
 #[allow(unused)]

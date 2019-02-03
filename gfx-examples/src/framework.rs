@@ -1,4 +1,5 @@
 extern crate env_logger;
+extern crate glsl_to_spirv;
 extern crate log;
 extern crate wgpu_native;
 
@@ -9,10 +10,29 @@ use self::log::info;
 
 pub const SWAP_CHAIN_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::B8g8r8a8Unorm;
 
+pub fn load_glsl_pair(name: &str) -> (Vec<u8>, Vec<u8>) {
+    use self::glsl_to_spirv::{ShaderType, compile};
+    use std::fs::read_to_string;
+    use std::io::Read;
+    use std::path::PathBuf;
+
+    let base_path = PathBuf::from("data").join(name);
+    let code_vs = read_to_string(base_path.with_extension("vert")).unwrap();
+    let code_fs = read_to_string(base_path.with_extension("frag")).unwrap();
+
+    let mut output_vs = compile(&code_vs, ShaderType::Vertex).unwrap();
+    let mut output_fs = compile(&code_fs, ShaderType::Fragment).unwrap();
+
+    let (mut spv_vs, mut spv_fs) = (Vec::new(), Vec::new());
+    output_vs.read_to_end(&mut spv_vs).unwrap();
+    output_fs.read_to_end(&mut spv_fs).unwrap();
+    (spv_vs, spv_fs)
+}
+
 pub trait Example {
-    fn init(device: &wgpu::Device) -> Self;
+    fn init(device: &mut wgpu::Device) -> Self;
     fn update(&mut self, event: winit::WindowEvent);
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device);
+    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device);
 }
 
 pub fn run<E: Example>() {
@@ -26,14 +46,14 @@ pub fn run<E: Example>() {
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
     });
-    let device = adapter.create_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.create_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
     });
 
     info!("Initializing the example...");
-    let mut example = E::init(&device);
+    let mut example = E::init(&mut device);
 
     info!("Initializing the window...");
     let mut events_loop = EventsLoop::new();
@@ -84,6 +104,6 @@ pub fn run<E: Example>() {
         });
 
         let frame = swap_chain.get_next_texture();
-        example.render(&frame, &device);
+        example.render(&frame, &mut device);
     }
 }
