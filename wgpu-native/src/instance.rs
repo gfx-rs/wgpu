@@ -50,6 +50,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
     window: &winit::Window,
 ) -> SurfaceId {
+    //TODO: remove these workarounds when porting on gfx-hal 0.2
     #[cfg(any(
         feature = "gfx-backend-vulkan",
         feature = "gfx-backend-dx11",

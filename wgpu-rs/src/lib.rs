@@ -451,6 +451,25 @@ impl<'a> RenderPass<'a> {
         wgn::wgpu_render_pass_set_pipeline(self.id, pipeline.id);
     }
 
+    pub fn set_index_buffer(&mut self, buffer: &Buffer, offset: u32) {
+        wgn::wgpu_render_pass_set_index_buffer(self.id, buffer.id, offset);
+    }
+
+    pub fn set_vertex_buffers(&mut self, buffer_pairs: &[(&Buffer, u32)]) {
+        let mut buffers = Vec::new();
+        let mut offsets = Vec::new();
+        for &(buffer, offset) in buffer_pairs {
+            buffers.push(buffer.id);
+            offsets.push(offset);
+        }
+        wgn::wgpu_render_pass_set_vertex_buffers(
+            self.id,
+            buffers.as_ptr(),
+            offsets.as_ptr(),
+            buffer_pairs.len(),
+        );
+    }
+
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         wgn::wgpu_render_pass_draw(
             self.id,

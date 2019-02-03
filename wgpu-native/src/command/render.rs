@@ -9,7 +9,7 @@ use crate::{
 
 use hal::command::RawCommandBuffer;
 
-use std::iter;
+use std::{iter, slice};
 
 
 pub struct RenderPass<B: hal::Backend> {
@@ -87,10 +87,19 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
-    pass_id: RenderPassId, buffers: &[BufferId], offsets: &[u32]
+    pass_id: RenderPassId,
+    buffer_ptr: *const BufferId,
+    offset_ptr: *const u32,
+    count: usize,
 ) {
     let mut pass_guard = HUB.render_passes.write();
     let buffer_guard = HUB.buffers.read();
+    let buffers = unsafe {
+        slice::from_raw_parts(buffer_ptr, count)
+    };
+    let offsets = unsafe {
+        slice::from_raw_parts(offset_ptr, count)
+    };
 
     let pass = pass_guard.get_mut(pass_id);
     for &id in buffers {
@@ -104,7 +113,6 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
             .unwrap();
     }
 
-    assert_eq!(buffers.len(), offsets.len());
     let buffers = buffers
         .iter()
         .map(|&id| &buffer_guard.get(id).raw)

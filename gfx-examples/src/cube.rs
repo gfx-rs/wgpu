@@ -221,8 +221,9 @@ impl fw::Example for Cube {
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&self.pipeline);
-            //rpass.bind_groups();
-            //rpass.set_vertex_buffers();
+            rpass.set_bind_group(0, &self.bind_group);
+            rpass.set_index_buffer(&self.index_buf, 0);
+            rpass.set_vertex_buffers(&[(&self.vertex_buf, 0)]);
             rpass.draw(0..3, 0..1);
             rpass.end_pass();
         }
