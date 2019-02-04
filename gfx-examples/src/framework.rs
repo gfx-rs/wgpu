@@ -10,6 +10,15 @@ use self::log::info;
 
 pub const SWAP_CHAIN_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::B8g8r8a8Unorm;
 
+pub fn cast_slice<T>(data: &[T]) -> &[u8] {
+    use std::mem::size_of;
+    use std::slice::from_raw_parts;
+
+    unsafe {
+        from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<T>())
+    }
+}
+
 pub fn load_glsl_pair(name: &str) -> (Vec<u8>, Vec<u8>) {
     use self::glsl_to_spirv::{ShaderType, compile};
     use std::fs::read_to_string;

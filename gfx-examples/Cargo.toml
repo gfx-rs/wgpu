@@ -21,6 +21,7 @@ vulkan = ["wgpu-native/gfx-backend-vulkan"]
 [dependencies]
 wgpu-native = { path = "../wgpu-native" }
 wgpu = { path = "../wgpu-rs", features = ["winit"] }
+cgmath = "0.17"
 env_logger = "0.5"
 glsl-to-spirv = "0.1"
 log = "0.4"

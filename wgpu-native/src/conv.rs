@@ -1,5 +1,9 @@
-use crate::{binding_model, command, pipeline, resource, Color, Extent3d};
+use crate::{
+    binding_model, command, pipeline, resource, Color,
+    Extent3d, Origin3d,
+};
 use log::warn;
+
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
@@ -99,6 +103,22 @@ pub fn map_shader_stage_flags(
         value |= H::COMPUTE;
     }
     value
+}
+
+pub fn map_origin(origin: Origin3d) -> hal::image::Offset {
+    hal::image::Offset {
+        x: origin.x as i32,
+        y: origin.y as i32,
+        z: origin.z as i32,
+    }
+}
+
+pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
+    hal::image::Extent {
+        width: extent.width,
+        height: extent.height,
+        depth: extent.depth,
+    }
 }
 
 pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::Primitive {

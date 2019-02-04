@@ -174,6 +174,43 @@ pub struct SwapChainOutput<'a> {
     swap_chain_id: &'a wgn::SwapChainId,
 }
 
+pub struct BufferCopyView<'a> {
+    pub buffer: &'a Buffer,
+    pub offset: u32,
+    pub row_pitch: u32,
+    pub image_height: u32,
+}
+
+impl<'a> BufferCopyView<'a> {
+    fn into_native(self) -> wgn::BufferCopyView {
+        wgn::BufferCopyView {
+            buffer: self.buffer.id,
+            offset: self.offset,
+            row_pitch: self.row_pitch,
+            image_height: self.image_height,
+        }
+    }
+}
+
+pub struct TextureCopyView<'a> {
+    pub texture: &'a Texture,
+    pub level: u32,
+    pub slice: u32,
+    pub origin: Origin3d,
+}
+
+impl<'a> TextureCopyView<'a> {
+    fn into_native(self) -> wgn::TextureCopyView {
+        wgn::TextureCopyView {
+            texture: self.texture.id,
+            level: self.level,
+            slice: self.slice,
+            origin: self.origin,
+        }
+    }
+}
+
+
 impl Instance {
     pub fn new() -> Self {
         Instance {
@@ -457,6 +494,20 @@ impl CommandBuffer {
             id: wgn::wgpu_command_buffer_begin_compute_pass(self.id),
             parent: self,
         }
+    }
+
+    pub fn copy_buffer_to_texture(
+        &mut self,
+        source: BufferCopyView,
+        destination: TextureCopyView,
+        copy_size: Extent3d,
+    ) {
+        wgn::wgpu_command_buffer_copy_buffer_to_texture(
+            self.id,
+            &source.into_native(),
+            &destination.into_native(),
+            copy_size,
+        );
     }
 }
 

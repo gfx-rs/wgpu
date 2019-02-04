@@ -200,6 +200,34 @@ typedef struct {
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
 
+typedef struct {
+  WGPUBufferId buffer;
+  uint32_t offset;
+  uint32_t row_pitch;
+  uint32_t image_height;
+} WGPUBufferCopyView;
+
+typedef WGPUId WGPUTextureId;
+
+typedef struct {
+  float x;
+  float y;
+  float z;
+} WGPUOrigin3d;
+
+typedef struct {
+  WGPUTextureId texture;
+  uint32_t level;
+  uint32_t slice;
+  WGPUOrigin3d origin;
+} WGPUTextureCopyView;
+
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  uint32_t depth;
+} WGPUExtent3d;
+
 typedef WGPUId WGPUBindGroupId;
 
 typedef WGPUId WGPUComputePipelineId;
@@ -410,14 +438,6 @@ typedef struct {
   uint32_t height;
 } WGPUSwapChainDescriptor;
 
-typedef WGPUId WGPUTextureId;
-
-typedef struct {
-  uint32_t width;
-  uint32_t height;
-  uint32_t depth;
-} WGPUExtent3d;
-
 typedef struct {
   WGPUExtent3d size;
   uint32_t array_size;
@@ -535,6 +555,11 @@ WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId com
 
 WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
                                                        WGPURenderPassDescriptor desc);
+
+void wgpu_command_buffer_copy_buffer_to_texture(WGPUCommandBufferId command_buffer_id,
+                                                const WGPUBufferCopyView *source,
+                                                const WGPUTextureCopyView *destination,
+                                                WGPUExtent3d copy_size);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 

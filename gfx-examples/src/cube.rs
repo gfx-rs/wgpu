@@ -1,3 +1,4 @@
+extern crate cgmath;
 extern crate wgpu;
 
 #[path="framework.rs"]
@@ -85,16 +86,21 @@ impl fw::Example for Cube {
             size: (vertex_data.len() * vertex_size) as u32,
             usage: wgpu::BufferUsageFlags::VERTEX | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
-        vertex_buf.set_sub_data(0, unsafe { mem::transmute(&vertex_data[..]) });
+        vertex_buf.set_sub_data(0, fw::cast_slice(&vertex_data));
         let index_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: (index_data.len() * 2) as u32,
             usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
-        index_buf.set_sub_data(0, unsafe { mem::transmute(&index_data[..]) });
+        index_buf.set_sub_data(0, fw::cast_slice(&index_data));
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &[
+                wgpu::BindGroupLayoutBinding {
+                    binding: 0,
+                    visibility: wgpu::ShaderStageFlags::VERTEX,
+                    ty: wgpu::BindingType::UniformBuffer,
+                },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
                     visibility: wgpu::ShaderStageFlags::FRAGMENT,
@@ -113,12 +119,13 @@ impl fw::Example for Cube {
 
         // Create the texture
         let texels = [0x20u8, 0xA0, 0xC0, 0xFF];
+        let texture_extent = wgpu::Extent3d {
+            width: 1,
+            height: 1,
+            depth: 1,
+        };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: wgpu::Extent3d {
-                width: 1,
-                height: 1,
-                depth: 1,
-            },
+            size: texture_extent,
             array_size: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R8g8b8a8Unorm,
@@ -130,9 +137,27 @@ impl fw::Example for Cube {
             usage: wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST
         });
         temp_buf.set_sub_data(0, &texels);
-        //init_command_buf.copy_buffer_to_texture(); //TODO!
+        init_command_buf.copy_buffer_to_texture(
+            wgpu::BufferCopyView {
+                buffer: &temp_buf,
+                offset: 0,
+                row_pitch: 4,
+                image_height: 1,
+            },
+            wgpu::TextureCopyView {
+                texture: &texture,
+                level: 0,
+                slice: 0,
+                origin: wgpu::Origin3d {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 0.0,
+                },
+            },
+            texture_extent,
+        );
 
-        // Create the bind group
+        // Create other resources
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             r_address_mode: wgpu::AddressMode::ClampToEdge,
             s_address_mode: wgpu::AddressMode::ClampToEdge,
@@ -146,15 +171,40 @@ impl fw::Example for Cube {
             compare_function: wgpu::CompareFunction::Always,
             border_color: wgpu::BorderColor::TransparentBlack,
         });
+        let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            size: 64,
+            usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+        });
+        {
+            let aspect_ratio = 1.0; //TODO
+            let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
+            let mx_view = cgmath::Matrix4::look_at(
+                cgmath::Point3::new(1.5f32, -5.0, 3.0),
+                cgmath::Point3::new(0f32, 0.0, 0.0),
+                cgmath::Vector3::unit_z(),
+            );
+            let mx_total = mx_projection * mx_view;
+            let mx_raw: &[f32; 16] = mx_total.as_ref();
+            vertex_buf.set_sub_data(0, fw::cast_slice(&mx_raw[..]));
+        }
+
+        // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &uniform_buf,
+                        range: 0 .. 64,
+                    },
                 },
                 wgpu::Binding {
                     binding: 1,
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                },
+                wgpu::Binding {
+                    binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
