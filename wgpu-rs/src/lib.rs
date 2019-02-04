@@ -11,6 +11,7 @@ use std::ptr;
 pub use wgn::{
     AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
     BufferDescriptor, BufferUsageFlags,
+    IndexFormat, VertexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor,
     Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor,
     DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
@@ -144,6 +145,12 @@ pub struct AttachmentsState<'a> {
     pub depth_stencil_attachment: Option<Attachment>,
 }
 
+pub struct VertexBufferDescriptor<'a> {
+    pub stride: u32,
+    pub step_mode: InputStepMode,
+    pub attributes: &'a [VertexAttributeDescriptor],
+}
+
 pub struct RenderPipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
     pub stages: &'a [PipelineStageDescriptor<'a>],
@@ -151,6 +158,8 @@ pub struct RenderPipelineDescriptor<'a> {
     pub attachments_state: AttachmentsState<'a>,
     pub blend_states: &'a [&'a BlendState],
     pub depth_stencil_state: &'a DepthStencilState,
+    pub index_format: IndexFormat,
+    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
 }
 
 pub struct RenderPassDescriptor<'a> {
@@ -316,6 +325,15 @@ impl Device {
             .collect::<ArrayVec<[_; 2]>>();
 
         let temp_blend_states = desc.blend_states.iter().map(|bs| bs.id).collect::<Vec<_>>();
+        let temp_vertex_buffers = desc.vertex_buffers
+            .iter()
+            .map(|vbuf| wgn::VertexBufferDescriptor {
+                stride: vbuf.stride,
+                step_mode: vbuf.step_mode,
+                attributes: vbuf.attributes.as_ptr(),
+                attributes_count: vbuf.attributes.len(),
+            })
+            .collect::<Vec<_>>();
 
         RenderPipeline {
             id: wgn::wgpu_device_create_render_pipeline(
@@ -338,6 +356,11 @@ impl Device {
                     blend_states: temp_blend_states.as_ptr(),
                     blend_states_length: temp_blend_states.len(),
                     depth_stencil_state: desc.depth_stencil_state.id,
+                    vertex_buffer_state: wgn::VertexBufferStateDescriptor {
+                        index_format: desc.index_format,
+                        vertex_buffers: temp_vertex_buffers.as_ptr(),
+                        vertex_buffers_count: temp_vertex_buffers.len(),
+                    },
                 },
             ),
         }

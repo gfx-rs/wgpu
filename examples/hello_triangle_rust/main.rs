@@ -54,6 +54,8 @@ fn main() {
         },
         blend_states: &[&blend_state0],
         depth_stencil_state: &depth_stencil_state,
+        index_format: wgpu::IndexFormat::Uint16,
+        vertex_buffers: &[],
     });
 
     #[cfg(feature = "winit")]

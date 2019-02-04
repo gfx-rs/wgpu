@@ -96,12 +96,12 @@ impl fw::Example for Cube {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &[
                 wgpu::BindGroupLayoutBinding {
-                    binding: 0,
+                    binding: 1,
                     visibility: wgpu::ShaderStageFlags::FRAGMENT,
                     ty: wgpu::BindingType::SampledTexture,
                 },
                 wgpu::BindGroupLayoutBinding {
-                    binding: 1,
+                    binding: 2,
                     visibility: wgpu::ShaderStageFlags::FRAGMENT,
                     ty: wgpu::BindingType::Sampler,
                 },
@@ -193,6 +193,25 @@ impl fw::Example for Cube {
             },
             blend_states: &[&blend_state0],
             depth_stencil_state: &depth_stencil_state,
+            index_format: wgpu::IndexFormat::Uint16,
+            vertex_buffers: &[
+                wgpu::VertexBufferDescriptor {
+                    stride: vertex_size as u32,
+                    step_mode: wgpu::InputStepMode::Vertex,
+                    attributes: &[
+                        wgpu::VertexAttributeDescriptor {
+                            attribute_index: 0,
+                            format: wgpu::VertexFormat::FloatR32G32B32A32,
+                            offset: 0,
+                        },
+                        wgpu::VertexAttributeDescriptor {
+                            attribute_index: 1,
+                            format: wgpu::VertexFormat::FloatR32G32,
+                            offset: 4 * 4,
+                        },
+                    ],
+                },
+            ],
         });
 
         // Done

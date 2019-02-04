@@ -264,6 +264,17 @@ pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::forma
     }
 }
 
+pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::Format {
+    use hal::format::Format as H;
+    use crate::pipeline::VertexFormat::*;
+    match vertex_format {
+        FloatR32G32B32A32 => H::Rgba32Float,
+        FloatR32G32B32 => H::Rgb32Float,
+        FloatR32G32 => H::Rg32Float,
+        FloatR32 => H::R32Float,
+    }
+}
+
 fn checked_u32_as_u16(value: u32) -> u16 {
     assert!(value <= ::std::u16::MAX as u32);
     value as u16

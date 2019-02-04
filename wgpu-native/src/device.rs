@@ -1044,11 +1044,37 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         conservative: false,
     };
 
-    // TODO
-    let vertex_buffers: Vec<hal::pso::VertexBufferDesc> = Vec::new();
-
-    // TODO
-    let attributes: Vec<hal::pso::AttributeDesc> = Vec::new();
+    let desc_vbs = unsafe {
+        slice::from_raw_parts(desc.vertex_buffer_state.vertex_buffers, desc.vertex_buffer_state.vertex_buffers_count)
+    };
+    let mut vertex_buffers: Vec<hal::pso::VertexBufferDesc> = Vec::with_capacity(desc_vbs.len());
+    let mut attributes: Vec<hal::pso::AttributeDesc> = Vec::new();
+    for (i, vb_state) in desc_vbs.iter().enumerate() {
+        if vb_state.attributes_count == 0 {
+            continue
+        }
+        vertex_buffers.push(hal::pso::VertexBufferDesc {
+            binding: i as u32,
+            stride: vb_state.stride,
+            rate: match vb_state.step_mode {
+                pipeline::InputStepMode::Vertex => 0,
+                pipeline::InputStepMode::Instance => 1,
+            },
+        });
+        let desc_atts = unsafe {
+            slice::from_raw_parts(vb_state.attributes, vb_state.attributes_count)
+        };
+        for attribute in desc_atts {
+            attributes.push(hal::pso::AttributeDesc {
+                location: attribute.attribute_index,
+                binding: i as u32,
+                element: hal::pso::Element {
+                    format: conv::map_vertex_format(attribute.format),
+                    offset: attribute.offset,
+                },
+            });
+        }
+    }
 
     let input_assembler = hal::pso::InputAssemblerDesc {
         primitive: conv::map_primitive_topology(desc.primitive_topology),

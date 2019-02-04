@@ -70,6 +70,16 @@ typedef enum {
 } WGPUFilterMode;
 
 typedef enum {
+  WGPUIndexFormat_Uint16 = 0,
+  WGPUIndexFormat_Uint32 = 1,
+} WGPUIndexFormat;
+
+typedef enum {
+  WGPUInputStepMode_Vertex = 0,
+  WGPUInputStepMode_Instance = 1,
+} WGPUInputStepMode;
+
+typedef enum {
   WGPULoadOp_Clear = 0,
   WGPULoadOp_Load = 1,
 } WGPULoadOp;
@@ -130,6 +140,13 @@ typedef enum {
   WGPUTextureViewDimension_CubeArray,
   WGPUTextureViewDimension_D3,
 } WGPUTextureViewDimension;
+
+typedef enum {
+  WGPUVertexFormat_FloatR32G32B32A32 = 0,
+  WGPUVertexFormat_FloatR32G32B32 = 1,
+  WGPUVertexFormat_FloatR32G32 = 2,
+  WGPUVertexFormat_FloatR32 = 3,
+} WGPUVertexFormat;
 
 typedef WGPUId WGPUDeviceId;
 
@@ -324,6 +341,27 @@ typedef struct {
   const WGPUAttachment *depth_stencil_attachment;
 } WGPUAttachmentsState;
 
+typedef uint32_t WGPUShaderAttributeIndex;
+
+typedef struct {
+  uint32_t offset;
+  WGPUVertexFormat format;
+  WGPUShaderAttributeIndex attribute_index;
+} WGPUVertexAttributeDescriptor;
+
+typedef struct {
+  uint32_t stride;
+  WGPUInputStepMode step_mode;
+  const WGPUVertexAttributeDescriptor *attributes;
+  uintptr_t attributes_count;
+} WGPUVertexBufferDescriptor;
+
+typedef struct {
+  WGPUIndexFormat index_format;
+  const WGPUVertexBufferDescriptor *vertex_buffers;
+  uintptr_t vertex_buffers_count;
+} WGPUVertexBufferStateDescriptor;
+
 typedef struct {
   WGPUPipelineLayoutId layout;
   const WGPUPipelineStageDescriptor *stages;
@@ -333,6 +371,7 @@ typedef struct {
   const WGPUBlendStateId *blend_states;
   uintptr_t blend_states_length;
   WGPUDepthStencilStateId depth_stencil_state;
+  WGPUVertexBufferStateDescriptor vertex_buffer_state;
 } WGPURenderPipelineDescriptor;
 
 typedef struct {
@@ -587,6 +626,11 @@ void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
                                        uint32_t offset);
 
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
+
+void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
+                                         const WGPUBufferId *buffer_ptr,
+                                         const uint32_t *offset_ptr,
+                                         uintptr_t count);
 
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 

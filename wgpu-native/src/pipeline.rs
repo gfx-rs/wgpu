@@ -7,6 +7,8 @@ use crate::{
 use bitflags::bitflags;
 
 
+pub type ShaderAttributeIndex = u32;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BlendFactor {
@@ -163,28 +165,24 @@ pub enum InputStepMode {
 
 #[repr(C)]
 pub struct VertexAttributeDescriptor {
-    pub shader_location: u32,
-    pub input_slot: u32,
     pub offset: u32,
     pub format: VertexFormat,
+    pub attribute_index: ShaderAttributeIndex,
 }
 
 #[repr(C)]
-pub struct VertexInputDescriptor {
-    pub input_slot: u32,
+pub struct VertexBufferDescriptor {
     pub stride: u32,
     pub step_mode: InputStepMode,
+    pub attributes: *const VertexAttributeDescriptor,
+    pub attributes_count: usize,
 }
 
 #[repr(C)]
-pub struct InputStateDescriptor<'a> {
+pub struct VertexBufferStateDescriptor {
     pub index_format: IndexFormat,
-    pub attributes: &'a [VertexAttributeDescriptor],
-    pub inputs: &'a [VertexInputDescriptor],
-}
-
-pub struct InputState {
-    // TODO
+    pub vertex_buffers: *const VertexBufferDescriptor,
+    pub vertex_buffers_count: usize,
 }
 
 #[repr(C)]
@@ -251,6 +249,7 @@ pub struct RenderPipelineDescriptor {
     pub blend_states: *const BlendStateId,
     pub blend_states_length: usize,
     pub depth_stencil_state: DepthStencilStateId,
+    pub vertex_buffer_state: VertexBufferStateDescriptor,
 }
 
 pub(crate) struct RenderPipeline<B: hal::Backend> {
