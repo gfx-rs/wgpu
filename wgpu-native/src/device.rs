@@ -1047,8 +1047,8 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     let desc_vbs = unsafe {
         slice::from_raw_parts(desc.vertex_buffer_state.vertex_buffers, desc.vertex_buffer_state.vertex_buffers_count)
     };
-    let mut vertex_buffers: Vec<hal::pso::VertexBufferDesc> = Vec::with_capacity(desc_vbs.len());
-    let mut attributes: Vec<hal::pso::AttributeDesc> = Vec::new();
+    let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
+    let mut attributes = Vec::new();
     for (i, vb_state) in desc_vbs.iter().enumerate() {
         if vb_state.attributes_count == 0 {
             continue

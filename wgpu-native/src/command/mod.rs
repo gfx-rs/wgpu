@@ -34,6 +34,8 @@ use std::{iter, slice};
 use std::thread::ThreadId;
 
 
+const BITS_PER_BYTE: u32 = 8;
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum LoadOp {
@@ -443,7 +445,8 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         });
     }
 
-    let bytes_per_texel = conv::map_texture_format(dst_texture.format).surface_desc().bits as u32 / 8;
+    let bytes_per_texel = conv::map_texture_format(dst_texture.format)
+        .surface_desc().bits as u32 / BITS_PER_BYTE;
     let buffer_width = source.row_pitch / bytes_per_texel;
     assert_eq!(source.row_pitch % bytes_per_texel, 0);
     let region = hal::command::BufferImageCopy {

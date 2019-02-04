@@ -1,8 +1,4 @@
-extern crate cgmath;
-extern crate wgpu;
-
-#[path="framework.rs"]
-mod fw;
+mod framework;
 
 
 #[derive(Clone)]
@@ -64,6 +60,29 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
     (vertex_data.to_vec(), index_data.to_vec())
 }
 
+fn create_texels(size: usize) -> Vec<u8> {
+    use std::iter;
+
+    (0 .. size * size)
+        .flat_map(|id| {
+            // get high five for recognizing this ;)
+            let cx = 3.0*(id % size) as f32 / (size - 1) as f32 - 2.0;
+            let cy = 2.0*(id / size) as f32 / (size - 1) as f32 - 1.0;
+            let (mut x, mut y, mut count) = (cx, cy, 0);
+            while count < 0xFF && x*x + y*y < 4.0 {
+                let old_x = x;
+                x = x * x - y * y + cx;
+                y = 2.0 * old_x * y + cy;
+                count += 1;
+            }
+            iter::once(0xFF - (count * 5) as u8)
+                .chain(iter::once(0xFF - (count * 15) as u8))
+                .chain(iter::once(0xFF - (count * 50) as u8))
+                .chain(iter::once(1))
+        })
+        .collect()
+}
+
 struct Cube {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
@@ -72,8 +91,8 @@ struct Cube {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl fw::Example for Cube {
-    fn init(device: &mut wgpu::Device) -> Self {
+impl framework::Example for Cube {
+    fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
         use std::mem;
 
         let mut init_command_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {
@@ -87,12 +106,12 @@ impl fw::Example for Cube {
             size: (vertex_data.len() * vertex_size) as u32,
             usage: wgpu::BufferUsageFlags::VERTEX | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
-        vertex_buf.set_sub_data(0, fw::cast_slice(&vertex_data));
+        vertex_buf.set_sub_data(0, framework::cast_slice(&vertex_data));
         let index_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: (index_data.len() * 2) as u32,
             usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
-        index_buf.set_sub_data(0, fw::cast_slice(&index_data));
+        index_buf.set_sub_data(0, framework::cast_slice(&index_data));
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -119,10 +138,11 @@ impl fw::Example for Cube {
         });
 
         // Create the texture
-        let texels = [0x20u8, 0xA0, 0xC0, 0xFF];
+        let size = 256u32;
+        let texels = create_texels(size as usize);
         let texture_extent = wgpu::Extent3d {
-            width: 1,
-            height: 1,
+            width: size,
+            height: size,
             depth: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -142,8 +162,8 @@ impl fw::Example for Cube {
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
                 offset: 0,
-                row_pitch: 4,
-                image_height: 1,
+                row_pitch: 4 * size,
+                image_height: size,
             },
             wgpu::TextureCopyView {
                 texture: &texture,
@@ -164,7 +184,7 @@ impl fw::Example for Cube {
             s_address_mode: wgpu::AddressMode::ClampToEdge,
             t_address_mode: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
@@ -177,7 +197,7 @@ impl fw::Example for Cube {
             usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
         {
-            let aspect_ratio = 1.0; //TODO
+            let aspect_ratio = sc_desc.width as f32 / sc_desc.height as f32;
             let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
             let mx_view = cgmath::Matrix4::look_at(
                 cgmath::Point3::new(1.5f32, -5.0, 3.0),
@@ -186,7 +206,7 @@ impl fw::Example for Cube {
             );
             let mx_total = mx_projection * mx_view;
             let mx_raw: &[f32; 16] = mx_total.as_ref();
-            uniform_buf.set_sub_data(0, fw::cast_slice(&mx_raw[..]));
+            uniform_buf.set_sub_data(0, framework::cast_slice(&mx_raw[..]));
         }
 
         // Create bind group
@@ -212,7 +232,8 @@ impl fw::Example for Cube {
         });
 
         // Create the render pipeline
-        let (vs_bytes, fs_bytes) = fw::load_glsl_pair("cube");
+        let vs_bytes = framework::load_glsl("cube.vert", wgpu::ShaderStage::Vertex);
+        let fs_bytes = framework::load_glsl("cube.frag", wgpu::ShaderStage::Fragment);
         let vs_module = device.create_shader_module(&vs_bytes);
         let fs_module = device.create_shader_module(&fs_bytes);
 
@@ -237,7 +258,7 @@ impl fw::Example for Cube {
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
             attachments_state: wgpu::AttachmentsState {
                 color_attachments: &[wgpu::Attachment {
-                    format: fw::SWAP_CHAIN_FORMAT,
+                    format: sc_desc.format,
                     samples: 1,
                 }],
                 depth_stencil_attachment: None,
@@ -276,7 +297,7 @@ impl fw::Example for Cube {
         }
     }
 
-    fn update(&mut self, _event: fw::winit::WindowEvent) {
+    fn update(&mut self, _event: framework::winit::WindowEvent) {
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
@@ -287,7 +308,7 @@ impl fw::Example for Cube {
                     attachment: &frame.view,
                     load_op: wgpu::LoadOp::Clear,
                     store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color::GREEN,
+                    clear_color: wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 },
                 }],
                 depth_stencil_attachment: None,
             });
@@ -306,5 +327,5 @@ impl fw::Example for Cube {
 }
 
 fn main() {
-    fw::run::<Cube>("cube");
+    framework::run::<Cube>("cube");
 }

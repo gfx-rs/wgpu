@@ -2,7 +2,6 @@ use crate::{
     binding_model, command, pipeline, resource, Color,
     Extent3d, Origin3d,
 };
-use log::warn;
 
 
 pub fn map_buffer_usage(
@@ -454,10 +453,7 @@ pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
     match address {
         Am::ClampToEdge => W::Clamp,
         Am::Repeat => W::Tile,
-        Am::MirrorRepeat => {
-            warn!("MirrorRepeat isn't supported yet");
-            W::Tile
-        }
+        Am::MirrorRepeat => W::Mirror,
         Am::ClampToBorderColor => W::Border,
     }
 }

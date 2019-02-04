@@ -1,6 +1,6 @@
 # gfx pre-ll examples
 
-Original gfx-rs examples were growing for years, but then got abandoned once we changed the API to match vulkan:
+The original gfx-rs examples had grown over several years, but then were abandoned owhen the gfx API was changed to match Vulkan:
 https://github.com/gfx-rs/gfx/tree/pre-ll/examples
 
-This is the new home for them, considering `wgpu-rs` to be the spiritual successor of gfx pre-ll.
+wgpu-rs is considered to be the spiritual successor of gfx pre-ll, so this is the new home for the examples.
