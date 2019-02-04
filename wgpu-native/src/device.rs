@@ -6,7 +6,7 @@ use crate::{
     BindGroupLayoutId, BindGroupId,
     BlendStateId, BufferId, CommandBufferId, DepthStencilStateId,
     AdapterId, DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
-    TextureId, TextureViewId,
+    SamplerId, TextureId, TextureViewId,
     SurfaceId, SwapChainId,
 };
 
@@ -526,6 +526,49 @@ pub extern "C" fn wgpu_texture_view_destroy(_texture_view_id: TextureViewId) {
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_device_create_sampler(
+    device_id: DeviceId, desc: &resource::SamplerDescriptor
+) -> SamplerId {
+    let device_guard = HUB.devices.read();
+    let device = &device_guard.get(device_id);
+
+    let info = hal::image::SamplerInfo {
+        min_filter: conv::map_filter(desc.min_filter),
+        mag_filter: conv::map_filter(desc.mag_filter),
+        mip_filter: conv::map_filter(desc.mipmap_filter),
+        wrap_mode: (
+            conv::map_wrap(desc.r_address_mode),
+            conv::map_wrap(desc.s_address_mode),
+            conv::map_wrap(desc.t_address_mode),
+        ),
+        lod_bias: 0.0.into(),
+        lod_range: desc.lod_min_clamp.into() .. desc.lod_max_clamp.into(),
+        comparison: if desc.compare_function == resource::CompareFunction::Always {
+            None
+        } else {
+            Some(conv::map_compare_function(desc.compare_function))
+        },
+        border: hal::image::PackedColor(match desc.border_color {
+            resource::BorderColor::TransparentBlack => 0x00000000,
+            resource::BorderColor::OpaqueBlack => 0x000000FF,
+            resource::BorderColor::OpaqueWhite => 0xFFFFFFFF,
+        }),
+        anisotropic: hal::image::Anisotropic::Off, //TODO
+    };
+    let raw = unsafe {
+        device.raw
+            .create_sampler(info)
+            .unwrap()
+    };
+
+    HUB.samplers
+        .write()
+        .register(resource::Sampler {
+            raw
+        })
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group_layout(
     device_id: DeviceId,
     desc: &binding_model::BindGroupLayoutDescriptor,
@@ -1001,11 +1044,37 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
         conservative: false,
     };
 
-    // TODO
-    let vertex_buffers: Vec<hal::pso::VertexBufferDesc> = Vec::new();
-
-    // TODO
-    let attributes: Vec<hal::pso::AttributeDesc> = Vec::new();
+    let desc_vbs = unsafe {
+        slice::from_raw_parts(desc.vertex_buffer_state.vertex_buffers, desc.vertex_buffer_state.vertex_buffers_count)
+    };
+    let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
+    let mut attributes = Vec::new();
+    for (i, vb_state) in desc_vbs.iter().enumerate() {
+        if vb_state.attributes_count == 0 {
+            continue
+        }
+        vertex_buffers.push(hal::pso::VertexBufferDesc {
+            binding: i as u32,
+            stride: vb_state.stride,
+            rate: match vb_state.step_mode {
+                pipeline::InputStepMode::Vertex => 0,
+                pipeline::InputStepMode::Instance => 1,
+            },
+        });
+        let desc_atts = unsafe {
+            slice::from_raw_parts(vb_state.attributes, vb_state.attributes_count)
+        };
+        for attribute in desc_atts {
+            attributes.push(hal::pso::AttributeDesc {
+                location: attribute.attribute_index,
+                binding: i as u32,
+                element: hal::pso::Element {
+                    format: conv::map_vertex_format(attribute.format),
+                    offset: attribute.offset,
+                },
+            });
+        }
+    }
 
     let input_assembler = hal::pso::InputAssemblerDesc {
         primitive: conv::map_primitive_topology(desc.primitive_topology),

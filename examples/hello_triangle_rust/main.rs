@@ -9,7 +9,7 @@ fn main() {
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
     });
-    let device = adapter.create_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.create_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
@@ -54,6 +54,8 @@ fn main() {
         },
         blend_states: &[&blend_state0],
         depth_stencil_state: &depth_stencil_state,
+        index_format: wgpu::IndexFormat::Uint16,
+        vertex_buffers: &[],
     });
 
     #[cfg(feature = "winit")]
@@ -68,7 +70,7 @@ fn main() {
             .to_physical(window.get_hidpi_factor());
 
         let surface = instance.create_surface(&window);
-        let swap_chain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
+        let mut swap_chain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
             format: wgpu::TextureFormat::B8g8r8a8Unorm,
             width: size.width as u32,
@@ -95,12 +97,12 @@ fn main() {
                 _ => {}
             }
 
-            let (_, view) = swap_chain.get_next_texture();
+            let frame = swap_chain.get_next_texture();
             let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor { todo: 0 });
             {
                 let mut rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
                     color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment: &view,
+                        attachment: &frame.view,
                         load_op: wgpu::LoadOp::Clear,
                         store_op: wgpu::StoreOp::Store,
                         clear_color: wgpu::Color::GREEN,
@@ -116,7 +118,6 @@ fn main() {
                 .get_queue()
                 .submit(&[cmd_buf]);
 
-            swap_chain.present();
             ControlFlow::Continue
         });
     }

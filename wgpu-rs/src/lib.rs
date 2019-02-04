@@ -4,16 +4,20 @@ extern crate wgpu_native as wgn;
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
+use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr;
 
 pub use wgn::{
     AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
-    BufferDescriptor, Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor,
+    BufferDescriptor, BufferUsageFlags,
+    IndexFormat, VertexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor,
+    Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor,
     DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp, SwapChainDescriptor,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
+    SamplerDescriptor, AddressMode, FilterMode, CompareFunction, BorderColor,
 };
 
 pub struct Instance {
@@ -112,8 +116,9 @@ pub struct ComputePass<'a> {
     parent: &'a mut CommandBuffer,
 }
 
-pub struct Queue {
+pub struct Queue<'a> {
     id: wgn::QueueId,
+    _marker: PhantomData<&'a Self>,
 }
 
 pub struct BindGroupLayoutDescriptor<'a> {
@@ -140,6 +145,12 @@ pub struct AttachmentsState<'a> {
     pub depth_stencil_attachment: Option<Attachment>,
 }
 
+pub struct VertexBufferDescriptor<'a> {
+    pub stride: u32,
+    pub step_mode: InputStepMode,
+    pub attributes: &'a [VertexAttributeDescriptor],
+}
+
 pub struct RenderPipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
     pub stages: &'a [PipelineStageDescriptor<'a>],
@@ -147,6 +158,8 @@ pub struct RenderPipelineDescriptor<'a> {
     pub attachments_state: AttachmentsState<'a>,
     pub blend_states: &'a [&'a BlendState],
     pub depth_stencil_state: &'a DepthStencilState,
+    pub index_format: IndexFormat,
+    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
 }
 
 pub struct RenderPassDescriptor<'a> {
@@ -154,6 +167,49 @@ pub struct RenderPassDescriptor<'a> {
     pub depth_stencil_attachment:
         Option<RenderPassDepthStencilAttachmentDescriptor<&'a TextureView>>,
 }
+
+pub struct SwapChainOutput<'a> {
+    pub texture: Texture,
+    pub view: TextureView,
+    swap_chain_id: &'a wgn::SwapChainId,
+}
+
+pub struct BufferCopyView<'a> {
+    pub buffer: &'a Buffer,
+    pub offset: u32,
+    pub row_pitch: u32,
+    pub image_height: u32,
+}
+
+impl<'a> BufferCopyView<'a> {
+    fn into_native(self) -> wgn::BufferCopyView {
+        wgn::BufferCopyView {
+            buffer: self.buffer.id,
+            offset: self.offset,
+            row_pitch: self.row_pitch,
+            image_height: self.image_height,
+        }
+    }
+}
+
+pub struct TextureCopyView<'a> {
+    pub texture: &'a Texture,
+    pub level: u32,
+    pub slice: u32,
+    pub origin: Origin3d,
+}
+
+impl<'a> TextureCopyView<'a> {
+    fn into_native(self) -> wgn::TextureCopyView {
+        wgn::TextureCopyView {
+            texture: self.texture.id,
+            level: self.level,
+            slice: self.slice,
+            origin: self.origin,
+        }
+    }
+}
+
 
 impl Instance {
     pub fn new() -> Self {
@@ -197,10 +253,10 @@ impl Device {
         }
     }
 
-    //TODO: borrow instead of new object?
-    pub fn get_queue(&self) -> Queue {
+    pub fn get_queue(&mut self) -> Queue {
         Queue {
             id: wgn::wgpu_device_get_queue(self.id),
+            _marker: PhantomData,
         }
     }
 
@@ -306,6 +362,15 @@ impl Device {
             .collect::<ArrayVec<[_; 2]>>();
 
         let temp_blend_states = desc.blend_states.iter().map(|bs| bs.id).collect::<Vec<_>>();
+        let temp_vertex_buffers = desc.vertex_buffers
+            .iter()
+            .map(|vbuf| wgn::VertexBufferDescriptor {
+                stride: vbuf.stride,
+                step_mode: vbuf.step_mode,
+                attributes: vbuf.attributes.as_ptr(),
+                attributes_count: vbuf.attributes.len(),
+            })
+            .collect::<Vec<_>>();
 
         RenderPipeline {
             id: wgn::wgpu_device_create_render_pipeline(
@@ -328,6 +393,11 @@ impl Device {
                     blend_states: temp_blend_states.as_ptr(),
                     blend_states_length: temp_blend_states.len(),
                     depth_stencil_state: desc.depth_stencil_state.id,
+                    vertex_buffer_state: wgn::VertexBufferStateDescriptor {
+                        index_format: desc.index_format,
+                        vertex_buffers: temp_vertex_buffers.as_ptr(),
+                        vertex_buffers_count: temp_vertex_buffers.len(),
+                    },
                 },
             ),
         }
@@ -342,6 +412,12 @@ impl Device {
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
             id: wgn::wgpu_device_create_texture(self.id, desc),
+        }
+    }
+
+    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
+        Sampler {
+            id: wgn::wgpu_device_create_sampler(self.id, desc),
         }
     }
 
@@ -419,6 +495,20 @@ impl CommandBuffer {
             parent: self,
         }
     }
+
+    pub fn copy_buffer_to_texture(
+        &mut self,
+        source: BufferCopyView,
+        destination: TextureCopyView,
+        copy_size: Extent3d,
+    ) {
+        wgn::wgpu_command_buffer_copy_buffer_to_texture(
+            self.id,
+            &source.into_native(),
+            &destination.into_native(),
+            copy_size,
+        );
+    }
 }
 
 impl<'a> RenderPass<'a> {
@@ -433,6 +523,25 @@ impl<'a> RenderPass<'a> {
 
     pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
         wgn::wgpu_render_pass_set_pipeline(self.id, pipeline.id);
+    }
+
+    pub fn set_index_buffer(&mut self, buffer: &Buffer, offset: u32) {
+        wgn::wgpu_render_pass_set_index_buffer(self.id, buffer.id, offset);
+    }
+
+    pub fn set_vertex_buffers(&mut self, buffer_pairs: &[(&Buffer, u32)]) {
+        let mut buffers = Vec::new();
+        let mut offsets = Vec::new();
+        for &(buffer, offset) in buffer_pairs {
+            buffers.push(buffer.id);
+            offsets.push(offset);
+        }
+        wgn::wgpu_render_pass_set_vertex_buffers(
+            self.id,
+            buffers.as_ptr(),
+            offsets.as_ptr(),
+            buffer_pairs.len(),
+        );
     }
 
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
@@ -476,8 +585,8 @@ impl<'a> ComputePass<'a> {
     }
 }
 
-impl Queue {
-    pub fn submit(&self, command_buffers: &[CommandBuffer]) {
+impl<'a> Queue<'a> {
+    pub fn submit(&mut self, command_buffers: &[CommandBuffer]) {
         wgn::wgpu_queue_submit(
             self.id,
             command_buffers.as_ptr() as *const _,
@@ -486,19 +595,19 @@ impl Queue {
     }
 }
 
-impl SwapChain {
-    //TODO: borrow instead of new object?
-    pub fn get_next_texture(&self) -> (Texture, TextureView) {
-        let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
-        (
-            Texture {
-                id: output.texture_id,
-            },
-            TextureView { id: output.view_id },
-        )
+impl<'a> Drop for SwapChainOutput<'a> {
+    fn drop(&mut self) {
+        wgn::wgpu_swap_chain_present(*self.swap_chain_id);
     }
+}
 
-    pub fn present(&self) {
-        wgn::wgpu_swap_chain_present(self.id);
+impl SwapChain {
+    pub fn get_next_texture(&mut self) -> SwapChainOutput {
+        let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
+        SwapChainOutput {
+            texture: Texture { id: output.texture_id },
+            view: TextureView { id: output.view_id },
+            swap_chain_id: &self.id,
+        }
     }
 }

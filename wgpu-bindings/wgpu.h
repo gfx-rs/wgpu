@@ -10,6 +10,13 @@
 #include <stdlib.h>
 
 typedef enum {
+  WGPUAddressMode_ClampToEdge = 0,
+  WGPUAddressMode_Repeat = 1,
+  WGPUAddressMode_MirrorRepeat = 2,
+  WGPUAddressMode_ClampToBorderColor = 3,
+} WGPUAddressMode;
+
+typedef enum {
   WGPUBindingType_UniformBuffer = 0,
   WGPUBindingType_Sampler = 1,
   WGPUBindingType_SampledTexture = 2,
@@ -41,6 +48,12 @@ typedef enum {
 } WGPUBlendOperation;
 
 typedef enum {
+  WGPUBorderColor_TransparentBlack = 0,
+  WGPUBorderColor_OpaqueBlack = 1,
+  WGPUBorderColor_OpaqueWhite = 2,
+} WGPUBorderColor;
+
+typedef enum {
   WGPUCompareFunction_Never = 0,
   WGPUCompareFunction_Less = 1,
   WGPUCompareFunction_Equal = 2,
@@ -50,6 +63,21 @@ typedef enum {
   WGPUCompareFunction_GreaterEqual = 6,
   WGPUCompareFunction_Always = 7,
 } WGPUCompareFunction;
+
+typedef enum {
+  WGPUFilterMode_Nearest = 0,
+  WGPUFilterMode_Linear = 1,
+} WGPUFilterMode;
+
+typedef enum {
+  WGPUIndexFormat_Uint16 = 0,
+  WGPUIndexFormat_Uint32 = 1,
+} WGPUIndexFormat;
+
+typedef enum {
+  WGPUInputStepMode_Vertex = 0,
+  WGPUInputStepMode_Instance = 1,
+} WGPUInputStepMode;
 
 typedef enum {
   WGPULoadOp_Clear = 0,
@@ -113,6 +141,13 @@ typedef enum {
   WGPUTextureViewDimension_D3,
 } WGPUTextureViewDimension;
 
+typedef enum {
+  WGPUVertexFormat_FloatR32G32B32A32 = 0,
+  WGPUVertexFormat_FloatR32G32B32 = 1,
+  WGPUVertexFormat_FloatR32G32 = 2,
+  WGPUVertexFormat_FloatR32 = 3,
+} WGPUVertexFormat;
+
 typedef WGPUId WGPUDeviceId;
 
 typedef WGPUId WGPUAdapterId;
@@ -164,6 +199,34 @@ typedef struct {
   uintptr_t color_attachments_length;
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
+
+typedef struct {
+  WGPUBufferId buffer;
+  uint32_t offset;
+  uint32_t row_pitch;
+  uint32_t image_height;
+} WGPUBufferCopyView;
+
+typedef WGPUId WGPUTextureId;
+
+typedef struct {
+  float x;
+  float y;
+  float z;
+} WGPUOrigin3d;
+
+typedef struct {
+  WGPUTextureId texture;
+  uint32_t level;
+  uint32_t slice;
+  WGPUOrigin3d origin;
+} WGPUTextureCopyView;
+
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  uint32_t depth;
+} WGPUExtent3d;
 
 typedef WGPUId WGPUBindGroupId;
 
@@ -306,6 +369,27 @@ typedef struct {
   const WGPUAttachment *depth_stencil_attachment;
 } WGPUAttachmentsState;
 
+typedef uint32_t WGPUShaderAttributeIndex;
+
+typedef struct {
+  uint32_t offset;
+  WGPUVertexFormat format;
+  WGPUShaderAttributeIndex attribute_index;
+} WGPUVertexAttributeDescriptor;
+
+typedef struct {
+  uint32_t stride;
+  WGPUInputStepMode step_mode;
+  const WGPUVertexAttributeDescriptor *attributes;
+  uintptr_t attributes_count;
+} WGPUVertexBufferDescriptor;
+
+typedef struct {
+  WGPUIndexFormat index_format;
+  const WGPUVertexBufferDescriptor *vertex_buffers;
+  uintptr_t vertex_buffers_count;
+} WGPUVertexBufferStateDescriptor;
+
 typedef struct {
   WGPUPipelineLayoutId layout;
   const WGPUPipelineStageDescriptor *stages;
@@ -315,7 +399,22 @@ typedef struct {
   const WGPUBlendStateId *blend_states;
   uintptr_t blend_states_length;
   WGPUDepthStencilStateId depth_stencil_state;
+  WGPUVertexBufferStateDescriptor vertex_buffer_state;
 } WGPURenderPipelineDescriptor;
+
+typedef struct {
+  WGPUAddressMode r_address_mode;
+  WGPUAddressMode s_address_mode;
+  WGPUAddressMode t_address_mode;
+  WGPUFilterMode mag_filter;
+  WGPUFilterMode min_filter;
+  WGPUFilterMode mipmap_filter;
+  float lod_min_clamp;
+  float lod_max_clamp;
+  uint32_t max_anisotropy;
+  WGPUCompareFunction compare_function;
+  WGPUBorderColor border_color;
+} WGPUSamplerDescriptor;
 
 typedef struct {
   const uint8_t *bytes;
@@ -338,14 +437,6 @@ typedef struct {
   uint32_t width;
   uint32_t height;
 } WGPUSwapChainDescriptor;
-
-typedef WGPUId WGPUTextureId;
-
-typedef struct {
-  uint32_t width;
-  uint32_t height;
-  uint32_t depth;
-} WGPUExtent3d;
 
 typedef struct {
   WGPUExtent3d size;
@@ -444,6 +535,8 @@ typedef struct {
 
 #define WGPUTextureUsageFlags_TRANSFER_SRC 1
 
+#define WGPUTextureUsageFlags_UNINITIALIZED 65535
+
 #define WGPUTrackPermit_EXTEND (WGPUTrackPermit){ .bits = 1 }
 
 #define WGPUTrackPermit_REPLACE (WGPUTrackPermit){ .bits = 2 }
@@ -462,6 +555,11 @@ WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId com
 
 WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
                                                        WGPURenderPassDescriptor desc);
+
+void wgpu_command_buffer_copy_buffer_to_texture(WGPUCommandBufferId command_buffer_id,
+                                                const WGPUBufferCopyView *source,
+                                                const WGPUTextureCopyView *destination,
+                                                WGPUExtent3d copy_size);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 
@@ -497,6 +595,8 @@ WGPUPipelineLayoutId wgpu_device_create_pipeline_layout(WGPUDeviceId device_id,
 
 WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
                                                         const WGPURenderPipelineDescriptor *desc);
+
+WGPUSamplerId wgpu_device_create_sampler(WGPUDeviceId device_id, const WGPUSamplerDescriptor *desc);
 
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
                                                     const WGPUShaderModuleDescriptor *desc);
@@ -551,6 +651,11 @@ void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
                                        uint32_t offset);
 
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
+
+void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
+                                         const WGPUBufferId *buffer_ptr,
+                                         const uint32_t *offset_ptr,
+                                         uintptr_t count);
 
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 

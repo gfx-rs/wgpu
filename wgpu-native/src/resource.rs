@@ -188,7 +188,7 @@ pub struct SamplerDescriptor {
     pub t_address_mode: AddressMode,
     pub mag_filter: FilterMode,
     pub min_filter: FilterMode,
-    pub mipmap_filer: FilterMode,
+    pub mipmap_filter: FilterMode,
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
     pub max_anisotropy: u32,

@@ -1,4 +1,8 @@
-use crate::{binding_model, command, pipeline, resource, Color, Extent3d};
+use crate::{
+    binding_model, command, pipeline, resource, Color,
+    Extent3d, Origin3d,
+};
+
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
@@ -98,6 +102,22 @@ pub fn map_shader_stage_flags(
         value |= H::COMPUTE;
     }
     value
+}
+
+pub fn map_origin(origin: Origin3d) -> hal::image::Offset {
+    hal::image::Offset {
+        x: origin.x as i32,
+        y: origin.y as i32,
+        z: origin.z as i32,
+    }
+}
+
+pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
+    hal::image::Extent {
+        width: extent.width,
+        height: extent.height,
+        depth: extent.depth,
+    }
 }
 
 pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::Primitive {
@@ -222,7 +242,7 @@ fn map_stencil_face(
     }
 }
 
-fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
+pub fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
     use hal::pso::Comparison as H;
     use crate::resource::CompareFunction::*;
     match compare_function {
@@ -260,6 +280,17 @@ pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::forma
         R8g8b8a8Uint => H::Rgba8Uint,
         B8g8r8a8Unorm => H::Bgra8Unorm,
         D32FloatS8Uint => H::D32FloatS8Uint,
+    }
+}
+
+pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::Format {
+    use hal::format::Format as H;
+    use crate::pipeline::VertexFormat::*;
+    match vertex_format {
+        FloatR32G32B32A32 => H::Rgba32Float,
+        FloatR32G32B32 => H::Rgb32Float,
+        FloatR32G32 => H::Rg32Float,
+        FloatR32 => H::R32Float,
     }
 }
 
@@ -407,4 +438,22 @@ pub fn map_load_store_ops(
 
 pub fn map_color(color: Color) -> hal::pso::ColorValue {
     [color.r, color.g, color.b, color.a]
+}
+
+pub fn map_filter(filter: resource::FilterMode) -> hal::image::Filter {
+    match filter {
+        resource::FilterMode::Nearest => hal::image::Filter::Nearest,
+        resource::FilterMode::Linear => hal::image::Filter::Linear,
+    }
+}
+
+pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
+    use hal::image::WrapMode as W;
+    use crate::resource::AddressMode as Am;
+    match address {
+        Am::ClampToEdge => W::Clamp,
+        Am::Repeat => W::Tile,
+        Am::MirrorRepeat => W::Mirror,
+        Am::ClampToBorderColor => W::Border,
+    }
 }
