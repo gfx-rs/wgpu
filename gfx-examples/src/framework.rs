@@ -44,7 +44,7 @@ pub trait Example {
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device);
 }
 
-pub fn run<E: Example>() {
+pub fn run<E: Example>(title: &str) {
     use self::wgpu_native::winit::{
         Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode
     };
@@ -67,6 +67,7 @@ pub fn run<E: Example>() {
     info!("Initializing the window...");
     let mut events_loop = EventsLoop::new();
     let window = Window::new(&events_loop).unwrap();
+    window.set_title(title);
     let size = window
         .get_inner_size()
         .unwrap()

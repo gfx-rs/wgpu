@@ -67,6 +67,7 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 struct Cube {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
+    index_count: usize,
     bind_group: wgpu::BindGroup,
     pipeline: wgpu::RenderPipeline,
 }
@@ -185,7 +186,7 @@ impl fw::Example for Cube {
             );
             let mx_total = mx_projection * mx_view;
             let mx_raw: &[f32; 16] = mx_total.as_ref();
-            vertex_buf.set_sub_data(0, fw::cast_slice(&mx_raw[..]));
+            uniform_buf.set_sub_data(0, fw::cast_slice(&mx_raw[..]));
         }
 
         // Create bind group
@@ -269,6 +270,7 @@ impl fw::Example for Cube {
         Cube {
             vertex_buf,
             index_buf,
+            index_count: index_data.len(),
             bind_group,
             pipeline,
         }
@@ -293,7 +295,7 @@ impl fw::Example for Cube {
             rpass.set_bind_group(0, &self.bind_group);
             rpass.set_index_buffer(&self.index_buf, 0);
             rpass.set_vertex_buffers(&[(&self.vertex_buf, 0)]);
-            rpass.draw(0..3, 0..1);
+            rpass.draw_indexed(0 .. self.index_count as u32, 0, 0..1);
             rpass.end_pass();
         }
 
@@ -304,5 +306,5 @@ impl fw::Example for Cube {
 }
 
 fn main() {
-    fw::run::<Cube>();
+    fw::run::<Cube>("cube");
 }
