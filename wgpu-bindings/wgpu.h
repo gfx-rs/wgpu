@@ -9,6 +9,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define WGPUBITS_PER_BYTE 8
+
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
   WGPUAddressMode_Repeat = 1,
