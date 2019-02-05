@@ -29,19 +29,8 @@ pub struct DeviceDescriptor {
 
 #[no_mangle]
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
-    #[cfg(any(
-        feature = "gfx-backend-vulkan",
-        feature = "gfx-backend-dx11",
-        feature = "gfx-backend-dx12",
-        feature = "gfx-backend-metal"
-    ))]
-    {
-        let inst = ::back::Instance::create("wgpu", 1);
-        if true {
-            return HUB.instances.write().register(inst);
-        }
-    }
-    unimplemented!()
+    let inst = ::back::Instance::create("wgpu", 1);
+    HUB.instances.write().register(inst)
 }
 
 #[cfg(feature = "winit")]
@@ -50,33 +39,17 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
     window: &winit::Window,
 ) -> SurfaceId {
-    //TODO: remove these workarounds when porting on gfx-hal 0.2
-    #[cfg(any(
-        feature = "gfx-backend-vulkan",
-        feature = "gfx-backend-dx11",
-        feature = "gfx-backend-dx12",
-        feature = "gfx-backend-metal"
-    ))]
-    {
-        let raw = HUB.instances
-            .read()
-            .get(instance_id)
-            .create_surface(window);
-        let surface = Surface {
-            raw,
-        };
+    let raw = HUB.instances
+        .read()
+        .get(instance_id)
+        .create_surface(window);
+    let surface = Surface {
+        raw,
+    };
 
-        HUB.surfaces
-            .write()
-            .register(surface)
-    }
-    #[cfg(not(any(
-        feature = "gfx-backend-vulkan",
-        feature = "gfx-backend-dx11",
-        feature = "gfx-backend-dx12",
-        feature = "gfx-backend-metal"
-    )))]
-    unimplemented!()
+    HUB.surfaces
+        .write()
+        .register(surface)
 }
 
 #[allow(unused)]
@@ -86,10 +59,10 @@ pub extern "C" fn wgpu_instance_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
     window: u64,
 ) -> SurfaceId {
-    #[cfg(not(feature = "gfx-backend-vulkan"))]
+    #[cfg(not(all(unix, feature = "gfx-backend-vulkan")))]
     unimplemented!();
 
-    #[cfg(feature = "gfx-backend-vulkan")]
+    #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
     {
         let raw = HUB.instances
             .read()
