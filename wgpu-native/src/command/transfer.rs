@@ -1,7 +1,6 @@
 use crate::device::{all_buffer_stages, all_image_stages};
 use crate::registry::{Items, HUB};
 use crate::swap_chain::SwapChainLink;
-use crate::track::{TrackPermit, Tracktion};
 use crate::conv;
 use crate::{
     BufferId, CommandBufferId, TextureId,
@@ -46,45 +45,33 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let cmb = cmb_guard.get_mut(command_buffer_id);
     let buffer_guard = HUB.buffers.read();
 
-    let (src_buffer, src_tracktion) = cmb.buffer_tracker
-        .get_with_usage(
+    let (src_buffer, src_usage) = cmb.buffer_tracker
+        .get_with_replaced_usage(
             &*buffer_guard,
             src,
             BufferUsageFlags::TRANSFER_SRC,
-            TrackPermit::REPLACE,
         )
         .unwrap();
-    let src_barrier = match src_tracktion {
-        Tracktion::Init |
-        Tracktion::Keep => None,
-        Tracktion::Extend { .. } => unreachable!(),
-        Tracktion::Replace { old } => Some(hal::memory::Barrier::Buffer {
-            states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
-            target: &src_buffer.raw,
-            families: None,
-            range: None .. None,
-        }),
-    };
+    let src_barrier = src_usage.map(|old| hal::memory::Barrier::Buffer {
+        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
+        target: &src_buffer.raw,
+        families: None,
+        range: None .. None,
+    });
 
-    let (dst_buffer, dst_tracktion) = cmb.buffer_tracker
-        .get_with_usage(
+    let (dst_buffer, dst_usage) = cmb.buffer_tracker
+        .get_with_replaced_usage(
             &*buffer_guard,
             dst,
             BufferUsageFlags::TRANSFER_DST,
-            TrackPermit::REPLACE,
         )
         .unwrap();
-    let dst_barrier = match dst_tracktion {
-        Tracktion::Init |
-        Tracktion::Keep => None,
-        Tracktion::Extend { .. } => unreachable!(),
-        Tracktion::Replace { old } => Some(hal::memory::Barrier::Buffer {
-            states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
-            target: &dst_buffer.raw,
-            families: None,
-            range: None .. None,
-        }),
-    };
+    let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Buffer {
+        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
+        target: &dst_buffer.raw,
+        families: None,
+        range: None .. None,
+    });
 
     let region = hal::command::BufferCopy {
         src: src_offset as hal::buffer::Offset,
@@ -118,47 +105,35 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
-    let (src_buffer, src_tracktion) = cmb.buffer_tracker
-        .get_with_usage(
+    let (src_buffer, src_state) = cmb.buffer_tracker
+        .get_with_replaced_usage(
             &*buffer_guard,
             source.buffer,
             BufferUsageFlags::TRANSFER_SRC,
-            TrackPermit::REPLACE,
         )
         .unwrap();
-    let src_barrier = match src_tracktion {
-        Tracktion::Init |
-        Tracktion::Keep => None,
-        Tracktion::Extend { .. } => unreachable!(),
-        Tracktion::Replace { old } => Some(hal::memory::Barrier::Buffer {
-            states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
-            target: &src_buffer.raw,
-            families: None,
-            range: None .. None,
-        }),
-    };
+    let src_barrier = src_state.map(|old| hal::memory::Barrier::Buffer {
+        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
+        target: &src_buffer.raw,
+        families: None,
+        range: None .. None,
+    });
 
-    let (dst_texture, dst_tracktion) = cmb.texture_tracker
-        .get_with_usage(
+    let (dst_texture, dst_usage) = cmb.texture_tracker
+        .get_with_replaced_usage(
             &*texture_guard,
             destination.texture,
             TextureUsageFlags::TRANSFER_DST,
-            TrackPermit::REPLACE,
         )
         .unwrap();
     let aspects = dst_texture.full_range.aspects;
     let dst_texture_state = conv::map_texture_state(TextureUsageFlags::TRANSFER_DST, aspects);
-    let dst_barrier = match dst_tracktion {
-        Tracktion::Init |
-        Tracktion::Keep => None,
-        Tracktion::Extend { .. } => unreachable!(),
-        Tracktion::Replace { old } => Some(hal::memory::Barrier::Image {
-            states: conv::map_texture_state(old, aspects) .. dst_texture_state,
-            target: &dst_texture.raw,
-            families: None,
-            range: dst_texture.full_range.clone(),
-        }),
-    };
+    let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Image {
+        states: conv::map_texture_state(old, aspects) .. dst_texture_state,
+        target: &dst_texture.raw,
+        families: None,
+        range: dst_texture.full_range.clone(),
+    });
 
     if let Some(ref link) = dst_texture.swap_chain_link {
         cmb.swap_chain_links.push(SwapChainLink {
