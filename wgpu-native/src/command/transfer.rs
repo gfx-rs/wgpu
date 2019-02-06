@@ -34,6 +34,79 @@ pub struct TextureCopyView {
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
+    command_buffer_id: CommandBufferId,
+    src:  BufferId,
+    src_offset: u32,
+    dst: BufferId,
+    dst_offset: u32,
+    size: u32,
+) {
+    let mut cmb_guard = HUB.command_buffers.write();
+    let cmb = cmb_guard.get_mut(command_buffer_id);
+    let buffer_guard = HUB.buffers.read();
+
+    let (src_buffer, src_tracktion) = cmb.buffer_tracker
+        .get_with_usage(
+            &*buffer_guard,
+            src,
+            BufferUsageFlags::TRANSFER_SRC,
+            TrackPermit::REPLACE,
+        )
+        .unwrap();
+    let src_barrier = match src_tracktion {
+        Tracktion::Init |
+        Tracktion::Keep => None,
+        Tracktion::Extend { .. } => unreachable!(),
+        Tracktion::Replace { old } => Some(hal::memory::Barrier::Buffer {
+            states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
+            target: &src_buffer.raw,
+            families: None,
+            range: None .. None,
+        }),
+    };
+
+    let (dst_buffer, dst_tracktion) = cmb.buffer_tracker
+        .get_with_usage(
+            &*buffer_guard,
+            dst,
+            BufferUsageFlags::TRANSFER_DST,
+            TrackPermit::REPLACE,
+        )
+        .unwrap();
+    let dst_barrier = match dst_tracktion {
+        Tracktion::Init |
+        Tracktion::Keep => None,
+        Tracktion::Extend { .. } => unreachable!(),
+        Tracktion::Replace { old } => Some(hal::memory::Barrier::Buffer {
+            states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
+            target: &dst_buffer.raw,
+            families: None,
+            range: None .. None,
+        }),
+    };
+
+    let region = hal::command::BufferCopy {
+        src: src_offset as hal::buffer::Offset,
+        dst: dst_offset as hal::buffer::Offset,
+        size: size as hal::buffer::Offset,
+    };
+    let cmb_raw = cmb.raw.last_mut().unwrap();
+    unsafe {
+        cmb_raw.pipeline_barrier(
+            all_buffer_stages() .. all_buffer_stages(),
+            hal::memory::Dependencies::empty(),
+            src_barrier.into_iter().chain(dst_barrier),
+        );
+        cmb_raw.copy_buffer(
+            &src_buffer.raw,
+            &dst_buffer.raw,
+            iter::once(region),
+        );
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     command_buffer_id: CommandBufferId,
     source: &BufferCopyView,
@@ -58,7 +131,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         Tracktion::Keep => None,
         Tracktion::Extend { .. } => unreachable!(),
         Tracktion::Replace { old } => Some(hal::memory::Barrier::Buffer {
-            states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
+            states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
             target: &src_buffer.raw,
             families: None,
             range: None .. None,
