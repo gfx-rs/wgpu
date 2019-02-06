@@ -160,7 +160,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         image_extent: conv::map_extent(copy_size),
     };
     let cmb_raw = cmb.raw.last_mut().unwrap();
-    let stages = all_image_stages() | all_image_stages();
+    let stages = all_buffer_stages() | all_image_stages();
     unsafe {
         cmb_raw.pipeline_barrier(
             stages .. stages,
@@ -236,7 +236,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         image_extent: conv::map_extent(copy_size),
     };
     let cmb_raw = cmb.raw.last_mut().unwrap();
-    let stages = all_image_stages() | all_image_stages();
+    let stages = all_buffer_stages() | all_image_stages();
     unsafe {
         cmb_raw.pipeline_barrier(
             stages .. stages,
