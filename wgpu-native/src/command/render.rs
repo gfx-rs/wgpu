@@ -1,7 +1,7 @@
 use crate::command::bind::Binder;
 use crate::resource::BufferUsageFlags;
 use crate::registry::{Items, HUB};
-use crate::track::{BufferTracker, TextureTracker, TrackPermit};
+use crate::track::{BufferTracker, TextureTracker};
 use crate::{
     CommandBuffer, Stored,
     BindGroupId, BufferId, CommandBufferId, RenderPassId, RenderPipelineId,
@@ -65,12 +65,11 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
     let buffer_guard = HUB.buffers.read();
 
     let pass = pass_guard.get_mut(pass_id);
-    let (buffer, _) = pass.buffer_tracker
-        .get_with_usage(
+    let buffer = pass.buffer_tracker
+        .get_with_extended_usage(
             &*buffer_guard,
             buffer_id,
             BufferUsageFlags::INDEX,
-            TrackPermit::EXTEND,
         )
         .unwrap();
 
@@ -104,11 +103,10 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     let pass = pass_guard.get_mut(pass_id);
     for &id in buffers {
         pass.buffer_tracker
-            .get_with_usage(
+            .get_with_extended_usage(
                 &*buffer_guard,
                 id,
                 BufferUsageFlags::VERTEX,
-                TrackPermit::EXTEND,
             )
             .unwrap();
     }

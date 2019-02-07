@@ -190,7 +190,7 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
 }
 
 impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
-    pub(crate) fn get_with_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+    fn get_with_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
         &mut self,
         items: &'a V,
         id: Id,
@@ -200,5 +200,32 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
         let item = items.get(id);
         self.transit(id, item.borrow(), usage, permit)
             .map(|tracktion| (item, tracktion))
+    }
+
+    pub(crate) fn get_with_extended_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+        &mut self,
+        items: &'a V,
+        id: Id,
+        usage: U,
+    ) -> Result<&'a T, U> {
+        let item = items.get(id);
+        self.transit(id, item.borrow(), usage, TrackPermit::EXTEND)
+            .map(|_tracktion| item)
+    }
+
+    pub(crate) fn get_with_replaced_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+        &mut self,
+        items: &'a V,
+        id: Id,
+        usage: U,
+    ) -> Result<(&'a T, Option<U>), U> {
+        let item = items.get(id);
+        self.transit(id, item.borrow(), usage, TrackPermit::REPLACE)
+            .map(|tracktion| (item, match tracktion {
+                Tracktion::Init |
+                Tracktion::Keep => None,
+                Tracktion::Extend { ..} => unreachable!(),
+                Tracktion::Replace { old } => Some(old),
+            }))
     }
 }

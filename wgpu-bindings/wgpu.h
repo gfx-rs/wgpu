@@ -558,10 +558,27 @@ WGPUComputePassId wgpu_command_buffer_begin_compute_pass(WGPUCommandBufferId com
 WGPURenderPassId wgpu_command_buffer_begin_render_pass(WGPUCommandBufferId command_buffer_id,
                                                        WGPURenderPassDescriptor desc);
 
+void wgpu_command_buffer_copy_buffer_to_buffer(WGPUCommandBufferId command_buffer_id,
+                                               WGPUBufferId src,
+                                               uint32_t src_offset,
+                                               WGPUBufferId dst,
+                                               uint32_t dst_offset,
+                                               uint32_t size);
+
 void wgpu_command_buffer_copy_buffer_to_texture(WGPUCommandBufferId command_buffer_id,
                                                 const WGPUBufferCopyView *source,
                                                 const WGPUTextureCopyView *destination,
                                                 WGPUExtent3d copy_size);
+
+void wgpu_command_buffer_copy_texture_to_buffer(WGPUCommandBufferId command_buffer_id,
+                                                const WGPUTextureCopyView *source,
+                                                const WGPUBufferCopyView *destination,
+                                                WGPUExtent3d copy_size);
+
+void wgpu_command_buffer_copy_texture_to_texture(WGPUCommandBufferId command_buffer_id,
+                                                 const WGPUTextureCopyView *source,
+                                                 const WGPUTextureCopyView *destination,
+                                                 WGPUExtent3d copy_size);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 

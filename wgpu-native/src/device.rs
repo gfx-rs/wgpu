@@ -668,12 +668,11 @@ pub extern "C" fn wgpu_device_create_bind_group(
     for b in bindings {
         let descriptor = match b.resource {
             binding_model::BindingResource::Buffer(ref bb) => {
-                let (buffer, _) = used_buffers
-                    .get_with_usage(
+                let buffer = used_buffers
+                    .get_with_extended_usage(
                         &*buffer_guard,
                         bb.buffer,
                         resource::BufferUsageFlags::UNIFORM,
-                        TrackPermit::EXTEND,
                     )
                     .unwrap();
                 let range = Some(bb.offset as u64) .. Some((bb.offset + bb.size) as u64);

@@ -496,6 +496,24 @@ impl CommandBuffer {
         }
     }
 
+    pub fn copy_buffer_tobuffer(
+        &mut self,
+        source: &Buffer,
+        source_offset: u32,
+        destination: &Buffer,
+        destination_offset: u32,
+        copy_size: u32,
+    ) {
+        wgn::wgpu_command_buffer_copy_buffer_to_buffer(
+            self.id,
+            source.id,
+            source_offset,
+            destination.id,
+            destination_offset,
+            copy_size,
+        );
+    }
+
     pub fn copy_buffer_to_texture(
         &mut self,
         source: BufferCopyView,
@@ -503,6 +521,34 @@ impl CommandBuffer {
         copy_size: Extent3d,
     ) {
         wgn::wgpu_command_buffer_copy_buffer_to_texture(
+            self.id,
+            &source.into_native(),
+            &destination.into_native(),
+            copy_size,
+        );
+    }
+
+    pub fn copy_texture_to_buffer(
+        &mut self,
+        source: TextureCopyView,
+        destination: BufferCopyView,
+        copy_size: Extent3d,
+    ) {
+        wgn::wgpu_command_buffer_copy_texture_to_buffer(
+            self.id,
+            &source.into_native(),
+            &destination.into_native(),
+            copy_size,
+        );
+    }
+
+    pub fn copy_texture_to_texture(
+        &mut self,
+        source: TextureCopyView,
+        destination: TextureCopyView,
+        copy_size: Extent3d,
+    ) {
+        wgn::wgpu_command_buffer_copy_texture_to_texture(
             self.id,
             &source.into_native(),
             &destination.into_native(),
