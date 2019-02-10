@@ -11,6 +11,10 @@ publish = false
 name = "hello_triangle"
 path = "hello_triangle_rust/main.rs"
 
+[[bin]]
+name = "hello_compute"
+path = "hello_compute_rust/main.rs"
+
 [features]
 default = []
 remote = ["wgpu-native/remote"]

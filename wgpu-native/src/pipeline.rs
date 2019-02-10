@@ -1,11 +1,9 @@
 use crate::resource;
 use crate::{
-    ByteArray, WeaklyStored,
-    BlendStateId, DepthStencilStateId, PipelineLayoutId, ShaderModuleId,
+    BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId, WeaklyStored,
 };
 
 use bitflags::bitflags;
-
 
 pub type ShaderAttributeIndex = u32;
 
@@ -208,7 +206,7 @@ pub struct PipelineStageDescriptor {
 #[repr(C)]
 pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub stages: *const PipelineStageDescriptor,
+    pub compute_stage: PipelineStageDescriptor,
 }
 
 pub(crate) struct ComputePipeline<B: hal::Backend> {
