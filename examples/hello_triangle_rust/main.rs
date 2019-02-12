@@ -58,67 +58,64 @@ fn main() {
         vertex_buffers: &[],
     });
 
-    #[cfg(feature = "winit")]
-    {
-        use wgpu_native::winit::{ControlFlow, Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode};
+    use wgpu_native::winit::{ControlFlow, Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode};
 
-        let mut events_loop = EventsLoop::new();
-        let window = Window::new(&events_loop).unwrap();
-        let size = window
-            .get_inner_size()
-            .unwrap()
-            .to_physical(window.get_hidpi_factor());
+    let mut events_loop = EventsLoop::new();
+    let window = Window::new(&events_loop).unwrap();
+    let size = window
+        .get_inner_size()
+        .unwrap()
+        .to_physical(window.get_hidpi_factor());
 
-        let surface = instance.create_surface(&window);
-        let mut swap_chain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
-            format: wgpu::TextureFormat::B8g8r8a8Unorm,
-            width: size.width as u32,
-            height: size.height as u32,
-        });
+    let surface = instance.create_surface(&window);
+    let mut swap_chain = device.create_swap_chain(&surface, &wgpu::SwapChainDescriptor {
+        usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+        format: wgpu::TextureFormat::B8g8r8a8Unorm,
+        width: size.width as u32,
+        height: size.height as u32,
+    });
 
-        events_loop.run_forever(|event| {
-            match event {
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::KeyboardInput {
-                        input: KeyboardInput { virtual_keycode: Some(code), state: ElementState::Pressed, .. },
-                        ..
-                    } => match code {
-                        VirtualKeyCode::Escape => {
-                            return ControlFlow::Break
-                        }
-                        _ => {}
-                    }
-                    WindowEvent::CloseRequested => {
+    events_loop.run_forever(|event| {
+        match event {
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::KeyboardInput {
+                    input: KeyboardInput { virtual_keycode: Some(code), state: ElementState::Pressed, .. },
+                    ..
+                } => match code {
+                    VirtualKeyCode::Escape => {
                         return ControlFlow::Break
                     }
                     _ => {}
                 }
+                WindowEvent::CloseRequested => {
+                    return ControlFlow::Break
+                }
                 _ => {}
             }
+            _ => {}
+        }
 
-            let frame = swap_chain.get_next_texture();
-            let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor { todo: 0 });
-            {
-                let mut rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment: &frame.view,
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_color: wgpu::Color::GREEN,
-                    }],
-                    depth_stencil_attachment: None,
-                });
-                rpass.set_pipeline(&render_pipeline);
-                rpass.draw(0..3, 0..1);
-                rpass.end_pass();
-            }
+        let frame = swap_chain.get_next_texture();
+        let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor { todo: 0 });
+        {
+            let mut rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
+                    load_op: wgpu::LoadOp::Clear,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color::GREEN,
+                }],
+                depth_stencil_attachment: None,
+            });
+            rpass.set_pipeline(&render_pipeline);
+            rpass.draw(0..3, 0..1);
+            rpass.end_pass();
+        }
 
-            device
-                .get_queue()
-                .submit(&[cmd_buf]);
+        device
+            .get_queue()
+            .submit(&[cmd_buf]);
 
-            ControlFlow::Continue
-        });
-    }
+        ControlFlow::Continue
+    });
 }

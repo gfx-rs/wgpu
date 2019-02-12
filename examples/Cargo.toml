@@ -18,7 +18,6 @@ path = "hello_compute_rust/main.rs"
 [features]
 default = []
 remote = ["wgpu-native/remote"]
-winit = ["wgpu/winit"]
 metal = ["wgpu-native/gfx-backend-metal"]
 dx11 = ["wgpu-native/gfx-backend-dx11"]
 dx12 = ["wgpu-native/gfx-backend-dx12"]
@@ -26,5 +25,5 @@ vulkan = ["wgpu-native/gfx-backend-vulkan"]
 
 [dependencies]
 wgpu-native = { path = "../wgpu-native" }
-wgpu = { path = "../wgpu-rs" }
+wgpu = { path = "../wgpu-rs", features=["winit"] }
 env_logger = "0.5"
