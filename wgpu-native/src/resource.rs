@@ -1,6 +1,7 @@
 use crate::{
     Extent3d, LifeGuard, RefCount, Stored,
     DeviceId, TextureId,
+    BufferMapReadCallback, BufferMapWriteCallback,
 };
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 
@@ -9,7 +10,6 @@ use hal;
 use parking_lot::Mutex;
 
 use std::borrow::Borrow;
-
 
 bitflags! {
     #[repr(transparent)]
@@ -33,12 +33,29 @@ pub struct BufferDescriptor {
     pub usage: BufferUsageFlags,
 }
 
+pub enum BufferMapAsyncStatus {
+    Success,
+    Error,
+    Unknown,
+    ContextLost,
+}
+
+pub(crate) enum BufferMapOperation {
+    Read(std::ops::Range<u64>, BufferMapReadCallback, *mut u8),
+    Write(std::ops::Range<u64>, BufferMapWriteCallback, *mut u8),
+}
+
+unsafe impl Send for BufferMapOperation {}
+unsafe impl Sync for BufferMapOperation {}
+
 pub struct Buffer<B: hal::Backend> {
     pub(crate) raw: B::Buffer,
     pub(crate) device_id: Stored<DeviceId>,
-    //pub memory_properties: hal::memory::Properties,
+    pub(crate) memory_properties: hal::memory::Properties,
+    pub(crate) memory: B::Memory,
+    pub(crate) mapped_write_ranges: Vec<std::ops::Range<u64>>,
+    pub(crate) pending_map_operation: Option<BufferMapOperation>,
     pub(crate) life_guard: LifeGuard,
-    // TODO: mapping, unmap()
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
