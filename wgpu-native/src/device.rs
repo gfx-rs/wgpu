@@ -2,12 +2,10 @@ use crate::{back, binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::registry::{HUB, Items};
 use crate::track::{BufferTracker, TextureTracker, TrackPermit};
 use crate::{
-    LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
-    BindGroupLayoutId, BindGroupId,
-    BlendStateId, BufferId, CommandBufferId, DepthStencilStateId,
-    AdapterId, DeviceId, PipelineLayoutId, QueueId, RenderPipelineId, ShaderModuleId,
-    SamplerId, TextureId, TextureViewId,
-    SurfaceId, SwapChainId,
+    AdapterId, BindGroupId, BindGroupLayoutId, BlendStateId, BufferId, CommandBufferId,
+    ComputePipelineId, DepthStencilStateId, DeviceId, LifeGuard, PipelineLayoutId, QueueId,
+    RefCount, RenderPipelineId, SamplerId, ShaderModuleId, Stored, SubmissionIndex, SurfaceId,
+    SwapChainId, TextureId, TextureViewId, WeaklyStored,
 };
 
 use hal::command::RawCommandBuffer;
@@ -1138,6 +1136,55 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     HUB.render_pipelines
         .write()
         .register(pipeline::RenderPipeline {
+            raw: pipeline,
+            layout_id: WeaklyStored(desc.layout),
+        })
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_compute_pipeline(
+    device_id: DeviceId,
+    desc: &pipeline::ComputePipelineDescriptor,
+) -> ComputePipelineId {
+    let device_guard = HUB.devices.read();
+    let device = device_guard.get(device_id);
+    let pipeline_layout_guard = HUB.pipeline_layouts.read();
+    let layout = &pipeline_layout_guard.get(desc.layout).raw;
+    let pipeline_stage = &desc.compute_stage;
+    let shader_module_guard = HUB.shader_modules.read();
+
+    assert!(pipeline_stage.stage == pipeline::ShaderStage::Compute); // TODO
+
+    let shader = hal::pso::EntryPoint::<back::Backend> {
+        entry: unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
+            .to_str()
+            .to_owned()
+            .unwrap(), // TODO
+        module: &shader_module_guard.get(pipeline_stage.module).raw,
+        specialization: hal::pso::Specialization {
+            // TODO
+            constants: &[],
+            data: &[],
+        },
+    };
+
+    // TODO
+    let flags = hal::pso::PipelineCreationFlags::empty();
+    // TODO
+    let parent = hal::pso::BasePipeline::None;
+
+    let pipeline_desc = hal::pso::ComputePipelineDesc {
+        shader,
+        layout,
+        flags,
+        parent,
+    };
+
+    let pipeline = unsafe { device.raw.create_compute_pipeline(&pipeline_desc, None) }.unwrap();
+
+    HUB.compute_pipelines
+        .write()
+        .register(pipeline::ComputePipeline {
             raw: pipeline,
             layout_id: WeaklyStored(desc.layout),
         })

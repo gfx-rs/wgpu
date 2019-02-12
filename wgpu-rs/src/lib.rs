@@ -9,15 +9,15 @@ use std::ops::Range;
 use std::ptr;
 
 pub use wgn::{
-    AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
-    BufferDescriptor, BufferUsageFlags,
-    IndexFormat, VertexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor,
-    Color, ColorWriteFlags, CommandBufferDescriptor, DepthStencilStateDescriptor,
-    DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
-    RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
+    AdapterDescriptor, AddressMode, Attachment, BindGroupLayoutBinding, BindingType,
+    BlendStateDescriptor, BorderColor, BufferDescriptor, BufferUsageFlags, Color, ColorWriteFlags,
+    CommandBufferDescriptor, CompareFunction, DepthStencilStateDescriptor, DeviceDescriptor,
+    Extensions, Extent3d, FilterMode, IndexFormat, InputStepMode, LoadOp, Origin3d,
+    PowerPreference, PrimitiveTopology, RenderPassColorAttachmentDescriptor,
+    RenderPassDepthStencilAttachmentDescriptor, SamplerDescriptor, ShaderAttributeIndex,
     ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp, SwapChainDescriptor,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
-    SamplerDescriptor, AddressMode, FilterMode, CompareFunction, BorderColor,
+    VertexAttributeDescriptor, VertexFormat,
 };
 
 pub struct Instance {
@@ -162,6 +162,11 @@ pub struct RenderPipelineDescriptor<'a> {
     pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
 }
 
+pub struct ComputePipelineDescriptor<'a> {
+    pub layout: &'a PipelineLayout,
+    pub compute_stage: PipelineStageDescriptor<'a>,
+}
+
 pub struct RenderPassDescriptor<'a> {
     pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<&'a TextureView>],
     pub depth_stencil_attachment:
@@ -209,7 +214,6 @@ impl<'a> TextureCopyView<'a> {
         }
     }
 }
-
 
 impl Instance {
     pub fn new() -> Self {
@@ -273,14 +277,17 @@ impl Device {
             .map(|binding| wgn::Binding {
                 binding: binding.binding,
                 resource: match binding.resource {
-                    BindingResource::Buffer { ref buffer, ref range } => {
-                        wgn::BindingResource::Buffer(wgn::BufferBinding {
-                            buffer: buffer.id,
-                            offset: range.start,
-                            size: range.end,
-                        })
+                    BindingResource::Buffer {
+                        ref buffer,
+                        ref range,
+                    } => wgn::BindingResource::Buffer(wgn::BufferBinding {
+                        buffer: buffer.id,
+                        offset: range.start,
+                        size: range.end,
+                    }),
+                    BindingResource::Sampler(ref sampler) => {
+                        wgn::BindingResource::Sampler(sampler.id)
                     }
-                    BindingResource::Sampler(ref sampler) => wgn::BindingResource::Sampler(sampler.id),
                     BindingResource::TextureView(ref texture_view) => {
                         wgn::BindingResource::TextureView(texture_view.id)
                     }
@@ -362,7 +369,8 @@ impl Device {
             .collect::<ArrayVec<[_; 2]>>();
 
         let temp_blend_states = desc.blend_states.iter().map(|bs| bs.id).collect::<Vec<_>>();
-        let temp_vertex_buffers = desc.vertex_buffers
+        let temp_vertex_buffers = desc
+            .vertex_buffers
             .iter()
             .map(|vbuf| wgn::VertexBufferDescriptor {
                 stride: vbuf.stride,
@@ -398,6 +406,25 @@ impl Device {
                         vertex_buffers: temp_vertex_buffers.as_ptr(),
                         vertex_buffers_count: temp_vertex_buffers.len(),
                     },
+                },
+            ),
+        }
+    }
+
+    pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
+        let entry_point = CString::new(desc.compute_stage.entry_point).unwrap();
+        let compute_stage = wgn::PipelineStageDescriptor {
+            module: desc.compute_stage.module.id,
+            stage: desc.compute_stage.stage,
+            entry_point: entry_point.as_ptr(),
+        };
+
+        ComputePipeline {
+            id: wgn::wgpu_device_create_compute_pipeline(
+                self.id,
+                &wgn::ComputePipelineDescriptor {
+                    layout: desc.layout.id,
+                    compute_stage,
                 },
             ),
         }
@@ -651,7 +678,9 @@ impl SwapChain {
     pub fn get_next_texture(&mut self) -> SwapChainOutput {
         let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
         SwapChainOutput {
-            texture: Texture { id: output.texture_id },
+            texture: Texture {
+                id: output.texture_id,
+            },
             view: TextureView { id: output.view_id },
             swap_chain_id: &self.id,
         }
