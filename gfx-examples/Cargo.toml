@@ -14,13 +14,12 @@ path = "src/cube.rs"
 
 [features]
 default = []
-metal = ["wgpu-native/gfx-backend-metal"]
-dx11 = ["wgpu-native/gfx-backend-dx11"]
-dx12 = ["wgpu-native/gfx-backend-dx12"]
-vulkan = ["wgpu-native/gfx-backend-vulkan"]
+metal = ["wgpu/metal"]
+dx11 = ["wgpu/dx11"]
+dx12 = ["wgpu/dx12"]
+vulkan = ["wgpu/vulkan"]
 
 [dependencies]
-wgpu-native = { path = "../wgpu-native" }
 wgpu = { path = "../wgpu-rs", features = ["winit"] }
 cgmath = "0.17"
 env_logger = "0.5"

@@ -1,6 +1,5 @@
 extern crate env_logger;
 extern crate wgpu;
-extern crate wgpu_native;
 
 fn main() {
     env_logger::init();
@@ -58,7 +57,7 @@ fn main() {
         vertex_buffers: &[],
     });
 
-    use wgpu_native::winit::{ControlFlow, Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode};
+    use wgpu::winit::{ControlFlow, Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode};
 
     let mut events_loop = EventsLoop::new();
     let window = Window::new(&events_loop).unwrap();
@@ -96,9 +95,9 @@ fn main() {
         }
 
         let frame = swap_chain.get_next_texture();
-        let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor { todo: 0 });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {
-            let mut rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     load_op: wgpu::LoadOp::Clear,
@@ -114,7 +113,7 @@ fn main() {
 
         device
             .get_queue()
-            .submit(&[cmd_buf]);
+            .submit(&[encoder.finish()]);
 
         ControlFlow::Continue
     });

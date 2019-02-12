@@ -1,5 +1,3 @@
-pub use wgpu_native::winit;
-
 use log::info;
 
 
@@ -32,12 +30,12 @@ pub fn load_glsl(name: &str, stage: wgpu::ShaderStage) -> Vec<u8> {
 
 pub trait Example {
     fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self;
-    fn update(&mut self, event: winit::WindowEvent);
+    fn update(&mut self, event: wgpu::winit::WindowEvent);
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device);
 }
 
 pub fn run<E: Example>(title: &str) {
-    use wgpu_native::winit::{
+    use wgpu::winit::{
         Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode
     };
 

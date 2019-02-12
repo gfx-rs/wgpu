@@ -82,6 +82,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
         CommandBuffer {
             raw: vec![init],
+            is_recording: true,
             recorded_thread_id: thread_id,
             device_id,
             life_guard: LifeGuard::new(),

@@ -184,7 +184,7 @@ pub type AdapterId = Id;
 type AdapterHandle = hal::Adapter<B>;
 pub type DeviceId = Id;
 type DeviceHandle = Device<B>;
-pub type QueueId = Id;
+pub type QueueId = DeviceId;
 pub type BufferId = Id;
 type BufferHandle = Buffer<B>;
 
@@ -219,6 +219,7 @@ type ComputePipelineHandle = ComputePipeline<B>;
 
 pub type CommandBufferId = Id;
 type CommandBufferHandle = CommandBuffer<B>;
+pub type CommandEncoderId = CommandBufferId;
 pub type RenderPassId = Id;
 type RenderPassHandle = RenderPass<B>;
 pub type ComputePassId = Id;

@@ -95,7 +95,7 @@ impl framework::Example for Cube {
     fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
         use std::mem;
 
-        let mut init_command_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor {
+        let mut init_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             todo: 0,
         });
 
@@ -158,7 +158,7 @@ impl framework::Example for Cube {
             usage: wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST
         });
         temp_buf.set_sub_data(0, &texels);
-        init_command_buf.copy_buffer_to_texture(
+        init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
                 offset: 0,
@@ -287,6 +287,7 @@ impl framework::Example for Cube {
         });
 
         // Done
+        let init_command_buf = init_encoder.finish();
         device.get_queue().submit(&[init_command_buf]);
         Cube {
             vertex_buf,
@@ -297,13 +298,13 @@ impl framework::Example for Cube {
         }
     }
 
-    fn update(&mut self, _event: framework::winit::WindowEvent) {
+    fn update(&mut self, _event: wgpu::winit::WindowEvent) {
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
-        let mut cmd_buf = device.create_command_buffer(&wgpu::CommandBufferDescriptor { todo: 0 });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {
-            let mut rpass = cmd_buf.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     load_op: wgpu::LoadOp::Clear,
@@ -322,7 +323,7 @@ impl framework::Example for Cube {
 
         device
             .get_queue()
-            .submit(&[cmd_buf]);
+            .submit(&[encoder.finish()]);
     }
 }
 

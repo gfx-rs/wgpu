@@ -32,7 +32,7 @@ endif
 
 .PHONY: all check test doc clear lib-native lib-rust examples-native examples-rust
 
-all: examples-native examples-rust
+all: examples-native examples-rust examples-gfx
 
 check:
 	cargo check --all
@@ -57,7 +57,10 @@ wgpu-bindings/wgpu.h: Cargo.lock wgpu-bindings/src/*.rs lib-native
 	cargo +nightly-2018-12-27 run --manifest-path wgpu-bindings/Cargo.toml
 
 examples-native: lib-native wgpu-bindings/wgpu.h $(wildcard wgpu-native/**/*.c)
-	$(MAKE) -C examples
+	#$(MAKE) -C examples
 
 examples-rust: lib-rust examples/Cargo.toml $(wildcard wgpu-native/**/*.rs)
-	cargo build --manifest-path examples/Cargo.toml --bin hello_triangle --features $(FEATURE_RUST)
+	cargo build --manifest-path examples/Cargo.toml --features winit,$(FEATURE_RUST)
+
+examples-gfx: lib-rust gfx-examples/Cargo.toml $(wildcard gfx-examples/*.rs)
+	cargo build --manifest-path gfx-examples/Cargo.toml --features $(FEATURE_RUST)

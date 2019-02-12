@@ -190,7 +190,7 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
 }
 
 impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
-    fn get_with_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+    fn _get_with_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
         &mut self,
         items: &'a V,
         id: Id,
