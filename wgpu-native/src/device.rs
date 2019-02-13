@@ -2,10 +2,13 @@ use crate::{back, binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::registry::{HUB, Items};
 use crate::track::{BufferTracker, TextureTracker, TrackPermit};
 use crate::{
-    AdapterId, BindGroupId, BindGroupLayoutId, BlendStateId, BufferId, CommandBufferId,
-    ComputePipelineId, DepthStencilStateId, DeviceId, LifeGuard, PipelineLayoutId, QueueId,
-    RefCount, RenderPipelineId, SamplerId, ShaderModuleId, Stored, SubmissionIndex, SurfaceId,
-    SwapChainId, TextureId, TextureViewId, WeaklyStored,
+    LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
+    BindGroupLayoutId, BindGroupId,
+    BlendStateId, BufferId, CommandBufferId, CommandEncoderId, DepthStencilStateId,
+    ComputePipelineId, RenderPipelineId,
+    AdapterId, DeviceId, PipelineLayoutId, QueueId, ShaderModuleId,
+    SamplerId, TextureId, TextureViewId,
+    SurfaceId, SwapChainId,
 };
 
 use hal::command::RawCommandBuffer;
@@ -233,13 +236,17 @@ impl<B: hal::Backend> Device<B> {
             }.unwrap()
         );
 
+        // don't start submission index at zero
+        let life_guard = LifeGuard::new();
+        life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
+
         Device {
             raw,
             adapter_id,
             //mem_allocator,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
-            life_guard: LifeGuard::new(),
+            life_guard,
             buffer_tracker: Mutex::new(BufferTracker::new()),
             texture_tracker: Mutex::new(TextureTracker::new()),
             mem_props,
@@ -760,10 +767,10 @@ pub extern "C" fn wgpu_device_create_shader_module(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_device_create_command_buffer(
+pub extern "C" fn wgpu_device_create_command_encoder(
     device_id: DeviceId,
-    _desc: &command::CommandBufferDescriptor,
-) -> CommandBufferId {
+    _desc: &command::CommandEncoderDescriptor,
+) -> CommandEncoderId {
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
 
@@ -771,14 +778,14 @@ pub extern "C" fn wgpu_device_create_command_buffer(
         value: device_id,
         ref_count: device.life_guard.ref_count.clone(),
     };
-    let mut cmd_buf = device.com_allocator.allocate(dev_stored, &device.raw);
+    let mut cmb = device.com_allocator.allocate(dev_stored, &device.raw);
     unsafe {
-        cmd_buf.raw.last_mut().unwrap().begin(
+        cmb.raw.last_mut().unwrap().begin(
             hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
             hal::command::CommandBufferInheritanceInfo::default(),
         );
     }
-    HUB.command_buffers.write().register(cmd_buf)
+    HUB.command_buffers.write().register(cmb)
 }
 
 #[no_mangle]
@@ -905,7 +912,9 @@ pub extern "C" fn wgpu_queue_submit(
         last_done
     };
 
-    device.com_allocator.maintain(last_done);
+    if last_done != 0 {
+        device.com_allocator.maintain(last_done);
+    }
 
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {

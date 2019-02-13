@@ -18,8 +18,8 @@ use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use crate::track::{BufferTracker, TextureTracker};
 use crate::{conv, resource};
 use crate::{
-    BufferId, CommandBufferId, ComputePassId, DeviceId,
-    RenderPassId, TextureId, TextureViewId,
+    BufferId, CommandBufferId, CommandEncoderId, DeviceId,
+    ComputePassId, RenderPassId, TextureId, TextureViewId,
     BufferUsageFlags, TextureUsageFlags, Color,
     LifeGuard, Stored, WeaklyStored,
     B,
@@ -77,6 +77,7 @@ pub struct RenderPassDescriptor {
 
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
+    is_recording: bool,
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
@@ -137,19 +138,30 @@ impl CommandBuffer<B> {
 }
 
 #[repr(C)]
-pub struct CommandBufferDescriptor {
+pub struct CommandEncoderDescriptor {
     // MSVC doesn't allow zero-sized structs
     // We can remove this when we actually have a field
     pub todo: u32,
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_begin_render_pass(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_finish(
+    command_encoder_id: CommandEncoderId,
+) -> CommandBufferId {
+    HUB.command_buffers
+        .write()
+        .get_mut(command_encoder_id)
+        .is_recording = false; //TODO: check for the old value
+    command_encoder_id
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_command_encoder_begin_render_pass(
+    command_encoder_id: CommandEncoderId,
     desc: RenderPassDescriptor,
 ) -> RenderPassId {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_buffer_id);
+    let cmb = cmb_guard.get_mut(command_encoder_id);
     let device_guard = HUB.devices.read();
     let device = device_guard.get(cmb.device_id.value);
     let view_guard = HUB.texture_views.read();
@@ -342,22 +354,22 @@ pub extern "C" fn wgpu_command_buffer_begin_render_pass(
     HUB.render_passes.write().register(RenderPass::new(
         current_comb,
         Stored {
-            value: command_buffer_id,
+            value: command_encoder_id,
             ref_count: cmb.life_guard.ref_count.clone(),
         },
     ))
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_begin_compute_pass(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
+    command_encoder_id: CommandEncoderId,
 ) -> ComputePassId {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_buffer_id);
+    let cmb = cmb_guard.get_mut(command_encoder_id);
 
     let raw = cmb.raw.pop().unwrap();
     let stored = Stored {
-        value: command_buffer_id,
+        value: command_encoder_id,
         ref_count: cmb.life_guard.ref_count.clone(),
     };
 

@@ -8,16 +8,19 @@ use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr;
 
+#[cfg(feature = "winit")]
+pub use wgn::winit;
+
 pub use wgn::{
-    AdapterDescriptor, AddressMode, Attachment, BindGroupLayoutBinding, BindingType,
-    BlendStateDescriptor, BorderColor, BufferDescriptor, BufferUsageFlags, Color, ColorWriteFlags,
-    CommandBufferDescriptor, CompareFunction, DepthStencilStateDescriptor, DeviceDescriptor,
-    Extensions, Extent3d, FilterMode, IndexFormat, InputStepMode, LoadOp, Origin3d,
-    PowerPreference, PrimitiveTopology, RenderPassColorAttachmentDescriptor,
-    RenderPassDepthStencilAttachmentDescriptor, SamplerDescriptor, ShaderAttributeIndex,
+    AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
+    BufferDescriptor, BufferUsageFlags,
+    IndexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor, VertexFormat,
+    Color, ColorWriteFlags, CommandEncoderDescriptor, DepthStencilStateDescriptor,
+    DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
+    RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp, SwapChainDescriptor,
+    SamplerDescriptor, AddressMode, FilterMode, BorderColor, CompareFunction,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
-    VertexAttributeDescriptor, VertexFormat,
 };
 
 pub struct Instance {
@@ -103,17 +106,21 @@ pub struct ComputePipeline {
 }
 
 pub struct CommandBuffer {
-    id: wgn::CommandBufferId,
+    _id: wgn::CommandBufferId,
+}
+
+pub struct CommandEncoder {
+    id: wgn::CommandEncoderId,
 }
 
 pub struct RenderPass<'a> {
     id: wgn::RenderPassId,
-    parent: &'a mut CommandBuffer,
+    _parent: &'a mut CommandEncoder,
 }
 
 pub struct ComputePass<'a> {
     id: wgn::ComputePassId,
-    parent: &'a mut CommandBuffer,
+    _parent: &'a mut CommandEncoder,
 }
 
 pub struct Queue<'a> {
@@ -229,7 +236,7 @@ impl Instance {
     }
 
     #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &wgn::winit::Window) -> Surface {
+    pub fn create_surface(&self, window: &winit::Window) -> Surface {
         Surface {
             id: wgn::wgpu_instance_create_surface_from_winit(self.id, window),
         }
@@ -264,9 +271,9 @@ impl Device {
         }
     }
 
-    pub fn create_command_buffer(&self, desc: &CommandBufferDescriptor) -> CommandBuffer {
-        CommandBuffer {
-            id: wgn::wgpu_device_create_command_buffer(self.id, desc),
+    pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
+        CommandEncoder {
+            id: wgn::wgpu_device_create_command_encoder(self.id, desc),
         }
     }
 
@@ -475,7 +482,13 @@ impl Texture {
     }
 }
 
-impl CommandBuffer {
+impl CommandEncoder {
+    pub fn finish(self) -> CommandBuffer {
+        CommandBuffer {
+            _id: wgn::wgpu_command_encoder_finish(self.id),
+        }
+    }
+
     pub fn begin_render_pass(&mut self, desc: &RenderPassDescriptor) -> RenderPass {
         let colors = desc
             .color_attachments
@@ -501,7 +514,7 @@ impl CommandBuffer {
         });
 
         RenderPass {
-            id: wgn::wgpu_command_buffer_begin_render_pass(
+            id: wgn::wgpu_command_encoder_begin_render_pass(
                 self.id,
                 wgn::RenderPassDescriptor {
                     color_attachments: colors.as_ptr(),
@@ -512,14 +525,14 @@ impl CommandBuffer {
                         .unwrap_or(ptr::null()),
                 },
             ),
-            parent: self,
+            _parent: self,
         }
     }
 
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: wgn::wgpu_command_buffer_begin_compute_pass(self.id),
-            parent: self,
+            id: wgn::wgpu_command_encoder_begin_compute_pass(self.id),
+            _parent: self,
         }
     }
 
@@ -585,9 +598,8 @@ impl CommandBuffer {
 }
 
 impl<'a> RenderPass<'a> {
-    pub fn end_pass(self) -> &'a mut CommandBuffer {
+    pub fn end_pass(self) {
         wgn::wgpu_render_pass_end_pass(self.id);
-        self.parent
     }
 
     pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
@@ -640,9 +652,8 @@ impl<'a> RenderPass<'a> {
 }
 
 impl<'a> ComputePass<'a> {
-    pub fn end_pass(self) -> &'a mut CommandBuffer {
+    pub fn end_pass(self) {
         wgn::wgpu_compute_pass_end_pass(self.id);
-        self.parent
     }
 
     pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
