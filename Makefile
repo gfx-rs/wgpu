@@ -60,7 +60,7 @@ examples-native: lib-native wgpu-bindings/wgpu.h $(wildcard wgpu-native/**/*.c)
 	#$(MAKE) -C examples
 
 examples-rust: lib-rust examples/Cargo.toml $(wildcard wgpu-native/**/*.rs)
-	cargo build --manifest-path examples/Cargo.toml --features winit,$(FEATURE_RUST)
+	cargo build --manifest-path examples/Cargo.toml --features $(FEATURE_RUST)
 
 examples-gfx: lib-rust gfx-examples/Cargo.toml $(wildcard gfx-examples/*.rs)
 	cargo build --manifest-path gfx-examples/Cargo.toml --features $(FEATURE_RUST)

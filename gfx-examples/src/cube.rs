@@ -152,7 +152,7 @@ impl framework::Example for Cube {
             format: wgpu::TextureFormat::R8g8b8a8Unorm,
             usage: wgpu::TextureUsageFlags::SAMPLED | wgpu::TextureUsageFlags::TRANSFER_DST
         });
-        let texture_view = texture.create_default_texture_view();
+        let texture_view = texture.create_default_view();
         let temp_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: texels.len() as u32,
             usage: wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST
@@ -232,39 +232,38 @@ impl framework::Example for Cube {
         });
 
         // Create the render pipeline
-        let vs_bytes = framework::load_glsl("cube.vert", wgpu::ShaderStage::Vertex);
-        let fs_bytes = framework::load_glsl("cube.frag", wgpu::ShaderStage::Fragment);
+        let vs_bytes = framework::load_glsl("cube.vert", framework::ShaderStage::Vertex);
+        let fs_bytes = framework::load_glsl("cube.frag", framework::ShaderStage::Fragment);
         let vs_module = device.create_shader_module(&vs_bytes);
         let fs_module = device.create_shader_module(&fs_bytes);
 
-        let blend_state0 = device.create_blend_state(&wgpu::BlendStateDescriptor::REPLACE);
-        let depth_stencil_state =
-            device.create_depth_stencil_state(&wgpu::DepthStencilStateDescriptor::IGNORE);
-
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
-            stages: &[
-                wgpu::PipelineStageDescriptor {
-                    module: &vs_module,
-                    stage: wgpu::ShaderStage::Vertex,
-                    entry_point: "main",
-                },
-                wgpu::PipelineStageDescriptor {
-                    module: &fs_module,
-                    stage: wgpu::ShaderStage::Fragment,
-                    entry_point: "main",
+            vertex_stage: wgpu::PipelineStageDescriptor {
+                module: &vs_module,
+                entry_point: "main",
+            },
+            fragment_stage: wgpu::PipelineStageDescriptor {
+                module: &fs_module,
+                entry_point: "main",
+            },
+            rasterization_state: wgpu::RasterizationStateDescriptor {
+                front_face: wgpu::FrontFace::Cw,
+                cull_mode: wgpu::CullMode::Back,
+                depth_bias: 0,
+                depth_bias_slope_scale: 0.0,
+                depth_bias_clamp: 16.0,
+            },
+            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+            color_states: &[
+                wgpu::ColorStateDescriptor {
+                    format: sc_desc.format,
+                    color: &wgpu::BlendDescriptor::REPLACE,
+                    alpha: &wgpu::BlendDescriptor::REPLACE,
+                    write_mask: wgpu::ColorWriteFlags::ALL,
                 },
             ],
-            primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            attachments_state: wgpu::AttachmentsState {
-                color_attachments: &[wgpu::Attachment {
-                    format: sc_desc.format,
-                    samples: 1,
-                }],
-                depth_stencil_attachment: None,
-            },
-            blend_states: &[&blend_state0],
-            depth_stencil_state: &depth_stencil_state,
+            depth_stencil_state: None,
             index_format: wgpu::IndexFormat::Uint16,
             vertex_buffers: &[
                 wgpu::VertexBufferDescriptor {
@@ -284,6 +283,7 @@ impl framework::Example for Cube {
                     ],
                 },
             ],
+            sample_count: 1,
         });
 
         // Done

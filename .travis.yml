@@ -14,4 +14,4 @@ before_install:
 
 script:
   - cargo test
-  - cargo check --manifest-path wgpu-native/Cargo.toml --features remote
+  - cargo check --manifest-path wgpu-native/Cargo.toml

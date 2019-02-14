@@ -1,4 +1,4 @@
-use crate::registry::{Id, Items};
+use crate::hub::{Id, Storage};
 use crate::resource::{BufferUsageFlags, TextureUsageFlags};
 use crate::{BufferId, RefCount, Stored, TextureId, WeaklyStored};
 
@@ -190,36 +190,36 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
 }
 
 impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
-    fn _get_with_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+    fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        items: &'a V,
+        storage: &'a Storage<T>,
         id: Id,
         usage: U,
         permit: TrackPermit,
     ) -> Result<(&'a T, Tracktion<U>), U> {
-        let item = items.get(id);
+        let item = storage.get(id);
         self.transit(id, item.borrow(), usage, permit)
             .map(|tracktion| (item, tracktion))
     }
 
-    pub(crate) fn get_with_extended_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+    pub(crate) fn get_with_extended_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        items: &'a V,
+        storage: &'a Storage<T>,
         id: Id,
         usage: U,
     ) -> Result<&'a T, U> {
-        let item = items.get(id);
+        let item = storage.get(id);
         self.transit(id, item.borrow(), usage, TrackPermit::EXTEND)
             .map(|_tracktion| item)
     }
 
-    pub(crate) fn get_with_replaced_usage<'a, T: 'a + Borrow<RefCount>, V: Items<T>>(
+    pub(crate) fn get_with_replaced_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        items: &'a V,
+        storage: &'a Storage<T>,
         id: Id,
         usage: U,
     ) -> Result<(&'a T, Option<U>), U> {
-        let item = items.get(id);
+        let item = storage.get(id);
         self.transit(id, item.borrow(), usage, TrackPermit::REPLACE)
             .map(|tracktion| (item, match tracktion {
                 Tracktion::Init |

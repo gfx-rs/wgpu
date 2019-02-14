@@ -13,18 +13,22 @@ use crate::device::{
     FramebufferKey, RenderPassKey,
     all_buffer_stages, all_image_stages,
 };
-use crate::registry::{Items, HUB};
+use crate::hub::{HUB, Storage};
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use crate::track::{BufferTracker, TextureTracker};
-use crate::{conv, resource};
+use crate::conv;
 use crate::{
+    BufferHandle, TextureHandle,
     BufferId, CommandBufferId, CommandEncoderId, DeviceId,
-    ComputePassId, RenderPassId, TextureId, TextureViewId,
+    TextureId, TextureViewId,
     BufferUsageFlags, TextureUsageFlags, Color,
     LifeGuard, Stored, WeaklyStored,
-    B,
+    CommandBufferHandle,
 };
+#[cfg(feature = "local")]
+use crate::{RenderPassId, ComputePassId};
 
+use back::Backend;
 use hal::command::RawCommandBuffer;
 use hal::{Device as _Device};
 use log::trace;
@@ -86,18 +90,16 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) swap_chain_links: Vec<SwapChainLink<SwapImageEpoch>>,
 }
 
-impl CommandBuffer<B> {
-    pub(crate) fn insert_barriers<I, J, Gb, Gt>(
-        raw: &mut <B as hal::Backend>::CommandBuffer,
+impl CommandBufferHandle {
+    pub(crate) fn insert_barriers<I, J>(
+        raw: &mut <Backend as hal::Backend>::CommandBuffer,
         buffer_iter: I,
         texture_iter: J,
-        buffer_guard: &Gb,
-        texture_guard: &Gt,
+        buffer_guard: &Storage<BufferHandle>,
+        texture_guard: &Storage<TextureHandle>,
     ) where
         I: Iterator<Item = (BufferId, Range<BufferUsageFlags>)>,
         J: Iterator<Item = (TextureId, Range<TextureUsageFlags>)>,
-        Gb: Items<resource::Buffer<B>>,
-        Gt: Items<resource::Texture<B>>,
     {
 
         let buffer_barriers = buffer_iter.map(|(id, transit)| {
@@ -155,11 +157,10 @@ pub extern "C" fn wgpu_command_encoder_finish(
     command_encoder_id
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_command_encoder_begin_render_pass(
+pub fn wgpu_command_encoder_begin_render_pass_impl(
     command_encoder_id: CommandEncoderId,
     desc: RenderPassDescriptor,
-) -> RenderPassId {
+) -> RenderPass<Backend> {
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(command_encoder_id);
     let device_guard = HUB.devices.read();
@@ -351,19 +352,28 @@ pub extern "C" fn wgpu_command_encoder_begin_render_pass(
         }));
     }
 
-    HUB.render_passes.write().register(RenderPass::new(
+    RenderPass::new(
         current_comb,
         Stored {
             value: command_encoder_id,
             ref_count: cmb.life_guard.ref_count.clone(),
         },
-    ))
+    )
 }
 
+#[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
+pub extern "C" fn wgpu_command_encoder_begin_render_pass(
     command_encoder_id: CommandEncoderId,
-) -> ComputePassId {
+    desc: RenderPassDescriptor,
+) -> RenderPassId {
+    let pass = wgpu_command_encoder_begin_render_pass_impl(command_encoder_id, desc);
+    HUB.render_passes.register(pass)
+}
+
+pub fn wgpu_command_encoder_begin_compute_pass_impl(
+    command_encoder_id: CommandEncoderId,
+) -> ComputePass<Backend> {
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(command_encoder_id);
 
@@ -373,7 +383,14 @@ pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
         ref_count: cmb.life_guard.ref_count.clone(),
     };
 
-    HUB.compute_passes
-        .write()
-        .register(ComputePass::new(raw, stored))
+    ComputePass::new(raw, stored)
+}
+
+#[cfg(feature = "local")]
+#[no_mangle]
+pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
+    command_encoder_id: CommandEncoderId,
+) -> ComputePassId {
+    let pass = wgpu_command_encoder_begin_compute_pass_impl(command_encoder_id);
+    HUB.compute_passes.register(pass)
 }

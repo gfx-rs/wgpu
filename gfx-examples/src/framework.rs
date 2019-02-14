@@ -10,15 +10,22 @@ pub fn cast_slice<T>(data: &[T]) -> &[u8] {
     }
 }
 
-pub fn load_glsl(name: &str, stage: wgpu::ShaderStage) -> Vec<u8> {
+#[allow(dead_code)]
+pub enum ShaderStage {
+    Vertex,
+    Fragment,
+    Compute,
+}
+
+pub fn load_glsl(name: &str, stage: ShaderStage) -> Vec<u8> {
     use std::fs::read_to_string;
     use std::io::Read;
     use std::path::PathBuf;
 
     let ty = match stage {
-        wgpu::ShaderStage::Vertex => glsl_to_spirv::ShaderType::Vertex,
-        wgpu::ShaderStage::Fragment => glsl_to_spirv::ShaderType::Fragment,
-        wgpu::ShaderStage::Compute => glsl_to_spirv::ShaderType::Compute,
+        ShaderStage::Vertex => glsl_to_spirv::ShaderType::Vertex,
+        ShaderStage::Fragment => glsl_to_spirv::ShaderType::Fragment,
+        ShaderStage::Compute => glsl_to_spirv::ShaderType::Compute,
     };
     let path = PathBuf::from("data").join(name);
     let code = read_to_string(path).unwrap();

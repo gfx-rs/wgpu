@@ -17,7 +17,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-remote = []
+local = ["winit", "gfx-backend-empty/winit"]
 
 [dependencies]
 bitflags = "1.0"
@@ -25,7 +25,7 @@ lazy_static = "1.1.0"
 log = "0.4"
 parking_lot = { version = "0.7" }
 gfx-hal = "0.1.0"
-gfx-backend-empty = { version = "0.1.1", features = ["winit"] }
+gfx-backend-empty = { version = "0.1.1" }
 gfx-backend-vulkan = { version = "0.1.0", optional = true }
 gfx-backend-dx11 = { version = "0.1.0", optional = true }
 gfx-backend-dx12 = { version = "0.1.0", optional = true }

@@ -1,4 +1,4 @@
-#[cfg(feature = "winit")]
+#[cfg(feature = "local")]
 pub extern crate winit;
 
 #[cfg(feature = "gfx-backend-dx11")]
@@ -24,9 +24,9 @@ mod binding_model;
 mod command;
 mod conv;
 mod device;
+mod hub;
 mod instance;
 mod pipeline;
-mod registry;
 mod resource;
 mod swap_chain;
 mod track;
@@ -38,17 +38,17 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-
-use back::Backend as B;
-pub use crate::registry::Id;
+#[cfg(not(feature = "local"))]
+pub use self::hub::{Id, IdentityManager};
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 type SubmissionIndex = usize;
 
+//TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]
-struct RefCount(ptr::NonNull<AtomicUsize>);
+pub struct RefCount(ptr::NonNull<AtomicUsize>);
 
 impl RefCount {
     const MAX: usize = 1 << 24;
@@ -105,8 +105,6 @@ unsafe impl<T> Sync for Stored<T> {}
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct WeaklyStored<T>(T);
 
-unsafe impl<T> Send for WeaklyStored<T> {}
-unsafe impl<T> Sync for WeaklyStored<T> {}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
@@ -178,55 +176,47 @@ pub struct ByteArray {
     pub length: usize,
 }
 
-pub type InstanceId = Id;
+pub type InstanceId = hub::Id;
 type InstanceHandle = back::Instance;
-pub type AdapterId = Id;
-type AdapterHandle = hal::Adapter<B>;
-pub type DeviceId = Id;
-type DeviceHandle = Device<B>;
+pub type AdapterId = hub::Id;
+type AdapterHandle = hal::Adapter<back::Backend>;
+pub type DeviceId = hub::Id;
+type DeviceHandle = Device<back::Backend>;
 pub type QueueId = DeviceId;
-pub type BufferId = Id;
-type BufferHandle = Buffer<B>;
-
+pub type BufferId = hub::Id;
+type BufferHandle = Buffer<back::Backend>;
 // Resource
-pub type TextureViewId = Id;
-type TextureViewHandle = TextureView<B>;
-pub type TextureId = Id;
-type TextureHandle = Texture<B>;
-pub type SamplerId = Id;
-type SamplerHandle = Sampler<B>;
-
+pub type TextureViewId = hub::Id;
+type TextureViewHandle = TextureView<back::Backend>;
+pub type TextureId = hub::Id;
+type TextureHandle = Texture<back::Backend>;
+pub type SamplerId = hub::Id;
+type SamplerHandle = Sampler<back::Backend>;
 // Binding model
-pub type BindGroupLayoutId = Id;
-type BindGroupLayoutHandle = BindGroupLayout<B>;
-pub type PipelineLayoutId = Id;
-type PipelineLayoutHandle = PipelineLayout<B>;
-pub type BindGroupId = Id;
-type BindGroupHandle = BindGroup<B>;
-
+pub type BindGroupLayoutId = hub::Id;
+type BindGroupLayoutHandle = BindGroupLayout<back::Backend>;
+pub type PipelineLayoutId = hub::Id;
+type PipelineLayoutHandle = PipelineLayout<back::Backend>;
+pub type BindGroupId = hub::Id;
+type BindGroupHandle = BindGroup<back::Backend>;
 // Pipeline
-pub type BlendStateId = Id;
-type BlendStateHandle = BlendState;
-pub type DepthStencilStateId = Id;
-type DepthStencilStateHandle = DepthStencilState;
-pub type InputStateId = Id;
-pub type ShaderModuleId = Id;
-type ShaderModuleHandle = ShaderModule<B>;
-pub type RenderPipelineId = Id;
-type RenderPipelineHandle = RenderPipeline<B>;
-pub type ComputePipelineId = Id;
-type ComputePipelineHandle = ComputePipeline<B>;
-
-pub type CommandBufferId = Id;
-type CommandBufferHandle = CommandBuffer<B>;
+pub type InputStateId = hub::Id;
+pub type ShaderModuleId = hub::Id;
+type ShaderModuleHandle = ShaderModule<back::Backend>;
+pub type RenderPipelineId = hub::Id;
+type RenderPipelineHandle = RenderPipeline<back::Backend>;
+pub type ComputePipelineId = hub::Id;
+type ComputePipelineHandle = ComputePipeline<back::Backend>;
+// Command
+pub type CommandBufferId = hub::Id;
+type CommandBufferHandle = CommandBuffer<back::Backend>;
 pub type CommandEncoderId = CommandBufferId;
-pub type RenderPassId = Id;
-type RenderPassHandle = RenderPass<B>;
-pub type ComputePassId = Id;
-type ComputePassHandle = ComputePass<B>;
-
-
-pub type SurfaceId = Id;
-type SurfaceHandle = Surface<B>;
-pub type SwapChainId = Id;
-type SwapChainHandle = SwapChain<B>;
+pub type RenderPassId = hub::Id;
+type RenderPassHandle = RenderPass<back::Backend>;
+pub type ComputePassId = hub::Id;
+type ComputePassHandle = ComputePass<back::Backend>;
+// Swap chain
+pub type SurfaceId = hub::Id;
+type SurfaceHandle = Surface<back::Backend>;
+pub type SwapChainId = hub::Id;
+type SwapChainHandle = SwapChain<back::Backend>;

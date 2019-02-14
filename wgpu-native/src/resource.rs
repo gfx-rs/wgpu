@@ -33,11 +33,11 @@ pub struct BufferDescriptor {
     pub usage: BufferUsageFlags,
 }
 
-pub(crate) struct Buffer<B: hal::Backend> {
-    pub raw: B::Buffer,
-    pub device_id: Stored<DeviceId>,
+pub struct Buffer<B: hal::Backend> {
+    pub(crate) raw: B::Buffer,
+    pub(crate) device_id: Stored<DeviceId>,
     //pub memory_properties: hal::memory::Properties,
-    pub life_guard: LifeGuard,
+    pub(crate) life_guard: LifeGuard,
     // TODO: mapping, unmap()
 }
 
@@ -87,14 +87,14 @@ pub struct TextureDescriptor {
     pub usage: TextureUsageFlags,
 }
 
-pub(crate) struct Texture<B: hal::Backend> {
-    pub raw: B::Image,
-    pub device_id: Stored<DeviceId>,
-    pub kind: hal::image::Kind,
-    pub format: TextureFormat,
-    pub full_range: hal::image::SubresourceRange,
-    pub swap_chain_link: Option<SwapChainLink<Mutex<SwapImageEpoch>>>,
-    pub life_guard: LifeGuard,
+pub struct Texture<B: hal::Backend> {
+    pub(crate) raw: B::Image,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) kind: hal::image::Kind,
+    pub(crate) format: TextureFormat,
+    pub(crate) full_range: hal::image::SubresourceRange,
+    pub(crate) swap_chain_link: Option<SwapChainLink<Mutex<SwapImageEpoch>>>,
+    pub(crate) life_guard: LifeGuard,
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
@@ -134,14 +134,15 @@ pub struct TextureViewDescriptor {
     pub array_count: u32,
 }
 
-pub(crate) struct TextureView<B: hal::Backend> {
-    pub raw: B::ImageView,
-    pub texture_id: Stored<TextureId>,
-    pub format: TextureFormat,
-    pub extent: hal::image::Extent,
-    pub samples: hal::image::NumSamples,
-    pub is_owned_by_swap_chain: bool,
-    pub life_guard: LifeGuard,
+pub struct TextureView<B: hal::Backend> {
+    pub(crate) raw: B::ImageView,
+    pub(crate) texture_id: Stored<TextureId>,
+    pub(crate) format: TextureFormat,
+    pub(crate) extent: hal::image::Extent,
+    pub(crate) samples: hal::image::NumSamples,
+    pub(crate) is_owned_by_swap_chain: bool,
+    #[cfg_attr(not(feature = "local"), allow(dead_code))]
+    pub(crate) life_guard: LifeGuard, //TODO: use
 }
 
 #[repr(C)]
@@ -196,6 +197,6 @@ pub struct SamplerDescriptor {
     pub border_color: BorderColor,
 }
 
-pub(crate) struct Sampler<B: hal::Backend> {
-    pub raw: B::Sampler,
+pub struct Sampler<B: hal::Backend> {
+    pub(crate) raw: B::Sampler,
 }

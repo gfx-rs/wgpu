@@ -132,14 +132,16 @@ pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -
     }
 }
 
-pub fn map_blend_state_descriptor(
-    desc: &pipeline::BlendStateDescriptor,
+pub fn map_color_state_descriptor(
+    desc: &pipeline::ColorStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.blend_enabled {
+    let blend_state = if *desc.color != pipeline::BlendDescriptor::REPLACE ||
+        *desc.alpha != pipeline::BlendDescriptor::REPLACE
+    {
         hal::pso::BlendState::On {
-            color: map_blend_descriptor(&desc.color),
-            alpha: map_blend_descriptor(&desc.alpha),
+            color: map_blend_descriptor(desc.color),
+            alpha: map_blend_descriptor(desc.alpha),
         }
     } else {
         hal::pso::BlendState::Off
@@ -208,20 +210,29 @@ fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
     }
 }
 
-pub fn map_depth_stencil_state(
+pub fn map_depth_stencil_state_descriptor(
     desc: &pipeline::DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
-        // TODO DepthTest::Off?
-        depth: hal::pso::DepthTest::On {
-            fun: map_compare_function(desc.depth_compare),
-            write: desc.depth_write_enabled,
+        depth: if desc.depth_write_enabled || desc.depth_compare != resource::CompareFunction::Always {
+            hal::pso::DepthTest::On {
+                fun: map_compare_function(desc.depth_compare),
+                write: desc.depth_write_enabled,
+            }
+        } else {
+            hal::pso::DepthTest::Off
         },
         depth_bounds: false, // TODO
-        // TODO StencilTest::Off?
-        stencil: hal::pso::StencilTest::On {
-            front: map_stencil_face(&desc.front, desc.stencil_read_mask, desc.stencil_write_mask),
-            back: map_stencil_face(&desc.back, desc.stencil_read_mask, desc.stencil_write_mask),
+        stencil: if desc.stencil_read_mask != !0 || desc.stencil_write_mask != !0 ||
+            *desc.stencil_front != pipeline::StencilStateFaceDescriptor::IGNORE ||
+            *desc.stencil_back != pipeline::StencilStateFaceDescriptor::IGNORE
+        {
+            hal::pso::StencilTest::On {
+                front: map_stencil_face(desc.stencil_front, desc.stencil_read_mask, desc.stencil_write_mask),
+                back: map_stencil_face(desc.stencil_back, desc.stencil_read_mask, desc.stencil_write_mask),
+            }
+        } else {
+            hal::pso::StencilTest::Off
         },
     }
 }
@@ -235,7 +246,7 @@ fn map_stencil_face(
         fun: map_compare_function(stencil_state_face_desc.compare),
         mask_read: hal::pso::State::Static(stencil_read_mask), // TODO dynamic?
         mask_write: hal::pso::State::Static(stencil_write_mask), // TODO dynamic?
-        op_fail: map_stencil_operation(stencil_state_face_desc.stencil_fail_op),
+        op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
         op_depth_fail: map_stencil_operation(stencil_state_face_desc.depth_fail_op),
         op_pass: map_stencil_operation(stencil_state_face_desc.pass_op),
         reference: hal::pso::State::Static(0), // TODO can this be set?
@@ -455,5 +466,33 @@ pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
         Am::Repeat => W::Tile,
         Am::MirrorRepeat => W::Mirror,
         Am::ClampToBorderColor => W::Border,
+    }
+}
+
+pub fn map_rasterization_state_descriptor(
+    desc: &pipeline::RasterizationStateDescriptor
+) -> hal::pso::Rasterizer {
+    hal::pso::Rasterizer {
+        depth_clamping: false,
+        polygon_mode: hal::pso::PolygonMode::Fill,
+        cull_face: match desc.cull_mode {
+            pipeline::CullMode::None => hal::pso::Face::empty(),
+            pipeline::CullMode::Front => hal::pso::Face::FRONT,
+            pipeline::CullMode::Back => hal::pso::Face::BACK,
+        },
+        front_face: match desc.front_face {
+            pipeline::FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
+            pipeline::FrontFace::Cw => hal::pso::FrontFace::Clockwise,
+        },
+        depth_bias: if desc.depth_bias != 0 || desc.depth_bias_slope_scale != 0.0 || desc.depth_bias_clamp < 16.0 {
+            Some(hal::pso::State::Static(hal::pso::DepthBias {
+                const_factor: desc.depth_bias as f32,
+                slope_factor: desc.depth_bias_slope_scale,
+                clamp: desc.depth_bias_clamp,
+            }))
+        } else {
+            None
+        },
+        conservative: false,
     }
 }

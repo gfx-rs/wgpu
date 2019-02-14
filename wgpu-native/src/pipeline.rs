@@ -1,6 +1,6 @@
 use crate::resource;
 use crate::{
-    BlendStateId, ByteArray, DepthStencilStateId, PipelineLayoutId, ShaderModuleId, WeaklyStored,
+    ByteArray, PipelineLayoutId, ShaderModuleId, WeaklyStored,
 };
 
 use bitflags::bitflags;
@@ -48,6 +48,7 @@ bitflags! {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BlendDescriptor {
     pub src_factor: BlendFactor,
     pub dst_factor: BlendFactor,
@@ -63,24 +64,12 @@ impl BlendDescriptor {
 }
 
 #[repr(C)]
-pub struct BlendStateDescriptor {
-    pub blend_enabled: bool,
-    pub alpha: BlendDescriptor,
-    pub color: BlendDescriptor,
+#[derive(Clone, Debug)]
+pub struct ColorStateDescriptor<'a> {
+    pub format: resource::TextureFormat,
+    pub alpha: &'a BlendDescriptor,
+    pub color: &'a BlendDescriptor,
     pub write_mask: ColorWriteFlags,
-}
-
-impl BlendStateDescriptor {
-    pub const REPLACE: Self = BlendStateDescriptor {
-        blend_enabled: false,
-        alpha: BlendDescriptor::REPLACE,
-        color: BlendDescriptor::REPLACE,
-        write_mask: ColorWriteFlags::ALL,
-    };
-}
-
-pub(crate) struct BlendState {
-    pub raw: hal::pso::ColorBlendDesc,
 }
 
 #[repr(C)]
@@ -97,9 +86,10 @@ pub enum StencilOperation {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct StencilStateFaceDescriptor {
     pub compare: resource::CompareFunction,
-    pub stencil_fail_op: StencilOperation,
+    pub fail_op: StencilOperation,
     pub depth_fail_op: StencilOperation,
     pub pass_op: StencilOperation,
 }
@@ -107,35 +97,22 @@ pub struct StencilStateFaceDescriptor {
 impl StencilStateFaceDescriptor {
     pub const IGNORE: Self = StencilStateFaceDescriptor {
         compare: resource::CompareFunction::Always,
-        stencil_fail_op: StencilOperation::Keep,
+        fail_op: StencilOperation::Keep,
         depth_fail_op: StencilOperation::Keep,
         pass_op: StencilOperation::Keep,
     };
 }
 
 #[repr(C)]
-pub struct DepthStencilStateDescriptor {
+#[derive(Clone, Debug)]
+pub struct DepthStencilStateDescriptor<'a> {
+    pub format: resource::TextureFormat,
     pub depth_write_enabled: bool,
     pub depth_compare: resource::CompareFunction,
-    pub front: StencilStateFaceDescriptor,
-    pub back: StencilStateFaceDescriptor,
+    pub stencil_front: &'a StencilStateFaceDescriptor,
+    pub stencil_back: &'a StencilStateFaceDescriptor,
     pub stencil_read_mask: u32,
     pub stencil_write_mask: u32,
-}
-
-impl DepthStencilStateDescriptor {
-    pub const IGNORE: Self = DepthStencilStateDescriptor {
-        depth_write_enabled: false,
-        depth_compare: resource::CompareFunction::Always,
-        front: StencilStateFaceDescriptor::IGNORE,
-        back: StencilStateFaceDescriptor::IGNORE,
-        stencil_read_mask: 0xFF,
-        stencil_write_mask: 0xFF,
-    };
-}
-
-pub(crate) struct DepthStencilState {
-    pub raw: hal::pso::DepthStencilDesc,
 }
 
 #[repr(C)]
@@ -162,6 +139,7 @@ pub enum InputStepMode {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug)]
 pub struct VertexAttributeDescriptor {
     pub offset: u32,
     pub format: VertexFormat,
@@ -189,29 +167,20 @@ pub struct ShaderModuleDescriptor {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum ShaderStage {
-    Vertex = 0,
-    Fragment = 1,
-    Compute = 2,
-}
-
-#[repr(C)]
 pub struct PipelineStageDescriptor {
     pub module: ShaderModuleId,
-    pub stage: ShaderStage,
     pub entry_point: *const ::std::os::raw::c_char,
 }
 
 #[repr(C)]
-pub struct ComputePipelineDescriptor {
+pub struct ComputePipelineDescriptor<'a> {
     pub layout: PipelineLayoutId,
-    pub compute_stage: PipelineStageDescriptor,
+    pub compute_stage: &'a PipelineStageDescriptor,
 }
 
-pub(crate) struct ComputePipeline<B: hal::Backend> {
-    pub raw: B::ComputePipeline,
-    pub layout_id: WeaklyStored<PipelineLayoutId>,
+pub struct ComputePipeline<B: hal::Backend> {
+    pub(crate) raw: B::ComputePipeline,
+    pub(crate) layout_id: WeaklyStored<PipelineLayoutId>,
 }
 
 #[repr(C)]
@@ -225,32 +194,44 @@ pub enum PrimitiveTopology {
 }
 
 #[repr(C)]
-pub struct Attachment {
-    pub format: resource::TextureFormat,
-    pub samples: u32,
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum FrontFace {
+    Ccw = 0,
+    Cw = 1,
 }
 
 #[repr(C)]
-pub struct AttachmentsState {
-    pub color_attachments: *const Attachment,
-    pub color_attachments_length: usize,
-    pub depth_stencil_attachment: *const Attachment,
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum CullMode {
+    None = 0,
+    Front = 1,
+    Back = 2,
 }
 
 #[repr(C)]
-pub struct RenderPipelineDescriptor {
+pub struct RasterizationStateDescriptor {
+    pub front_face: FrontFace,
+    pub cull_mode: CullMode,
+    pub depth_bias: i32,
+    pub depth_bias_slope_scale: f32,
+    pub depth_bias_clamp: f32,
+}
+
+#[repr(C)]
+pub struct RenderPipelineDescriptor<'a> {
     pub layout: PipelineLayoutId,
-    pub stages: *const PipelineStageDescriptor,
-    pub stages_length: usize,
+    pub vertex_stage: &'a PipelineStageDescriptor,
+    pub fragment_stage: &'a PipelineStageDescriptor,
     pub primitive_topology: PrimitiveTopology,
-    pub attachments_state: AttachmentsState,
-    pub blend_states: *const BlendStateId,
-    pub blend_states_length: usize,
-    pub depth_stencil_state: DepthStencilStateId,
+    pub rasterization_state: &'a RasterizationStateDescriptor,
+    pub color_states: *const ColorStateDescriptor<'a>,
+    pub color_states_length: usize,
+    pub depth_stencil_state: Option<&'a DepthStencilStateDescriptor<'a>>,
     pub vertex_buffer_state: VertexBufferStateDescriptor,
+    pub sample_count: u32,
 }
 
-pub(crate) struct RenderPipeline<B: hal::Backend> {
-    pub raw: B::GraphicsPipeline,
-    pub layout_id: WeaklyStored<PipelineLayoutId>,
+pub struct RenderPipeline<B: hal::Backend> {
+    pub(crate) raw: B::GraphicsPipeline,
+    pub(crate) layout_id: WeaklyStored<PipelineLayoutId>,
 }

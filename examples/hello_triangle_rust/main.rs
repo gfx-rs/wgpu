@@ -25,36 +25,36 @@ fn main() {
         bind_group_layouts: &[&bind_group_layout],
     });
 
-    let blend_state0 = device.create_blend_state(&wgpu::BlendStateDescriptor::REPLACE);
-    let depth_stencil_state =
-        device.create_depth_stencil_state(&wgpu::DepthStencilStateDescriptor::IGNORE);
-
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
-        stages: &[
-            wgpu::PipelineStageDescriptor {
-                module: &vs_module,
-                stage: wgpu::ShaderStage::Vertex,
-                entry_point: "main",
-            },
-            wgpu::PipelineStageDescriptor {
-                module: &fs_module,
-                stage: wgpu::ShaderStage::Fragment,
-                entry_point: "main",
+        vertex_stage: wgpu::PipelineStageDescriptor {
+            module: &vs_module,
+            entry_point: "main",
+        },
+        fragment_stage: wgpu::PipelineStageDescriptor {
+            module: &fs_module,
+            entry_point: "main",
+        },
+        rasterization_state: wgpu::RasterizationStateDescriptor {
+            front_face: wgpu::FrontFace::Ccw,
+            cull_mode: wgpu::CullMode::None,
+            depth_bias: 0,
+            depth_bias_slope_scale: 0.0,
+            depth_bias_clamp: 16.0,
+        },
+        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
+        color_states: &[
+            wgpu::ColorStateDescriptor {
+                format: wgpu::TextureFormat::B8g8r8a8Unorm,
+                color: &wgpu::BlendDescriptor::REPLACE,
+                alpha: &wgpu::BlendDescriptor::REPLACE,
+                write_mask: wgpu::ColorWriteFlags::ALL,
             },
         ],
-        primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        attachments_state: wgpu::AttachmentsState {
-            color_attachments: &[wgpu::Attachment {
-                format: wgpu::TextureFormat::B8g8r8a8Unorm,
-                samples: 1,
-            }],
-            depth_stencil_attachment: None,
-        },
-        blend_states: &[&blend_state0],
-        depth_stencil_state: &depth_stencil_state,
+        depth_stencil_state: None,
         index_format: wgpu::IndexFormat::Uint16,
         vertex_buffers: &[],
+        sample_count: 1,
     });
 
     use wgpu::winit::{ControlFlow, Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode};
