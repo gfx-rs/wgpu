@@ -8,20 +8,25 @@ use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr;
 
-#[cfg(feature = "winit")]
 pub use wgn::winit;
-
 pub use wgn::{
-    AdapterDescriptor, Attachment, BindGroupLayoutBinding, BindingType, BlendStateDescriptor,
+    MAX_DEPTH_BIAS_CLAMP,
+    AdapterDescriptor, BindGroupLayoutBinding, BindingType,
+    BlendDescriptor, BlendOperation, BlendFactor, ColorWriteFlags,
+    RasterizationStateDescriptor, CullMode, FrontFace,
     BufferDescriptor, BufferUsageFlags,
     IndexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor, VertexFormat,
-    Color, ColorWriteFlags, CommandEncoderDescriptor, DepthStencilStateDescriptor,
+    Color, CommandEncoderDescriptor,
+    ColorStateDescriptor, DepthStencilStateDescriptor,
     DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
-    ShaderModuleDescriptor, ShaderStage, ShaderStageFlags, StoreOp, SwapChainDescriptor,
+    ShaderModuleDescriptor, ShaderStageFlags, StoreOp, SwapChainDescriptor,
     SamplerDescriptor, AddressMode, FilterMode, BorderColor, CompareFunction,
     TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
 };
+
+
+//Note: we need some better guidelines on which structures receive by value, and which by pointer.
 
 pub struct Instance {
     id: wgn::InstanceId,
@@ -89,14 +94,6 @@ pub struct PipelineLayout {
     id: wgn::PipelineLayoutId,
 }
 
-pub struct BlendState {
-    id: wgn::BlendStateId,
-}
-
-pub struct DepthStencilState {
-    id: wgn::DepthStencilStateId,
-}
-
 pub struct RenderPipeline {
     id: wgn::RenderPipelineId,
 }
@@ -143,13 +140,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 
 pub struct PipelineStageDescriptor<'a> {
     pub module: &'a ShaderModule,
-    pub stage: ShaderStage,
     pub entry_point: &'a str,
-}
-
-pub struct AttachmentsState<'a> {
-    pub color_attachments: &'a [Attachment],
-    pub depth_stencil_attachment: Option<Attachment>,
 }
 
 pub struct VertexBufferDescriptor<'a> {
@@ -160,13 +151,15 @@ pub struct VertexBufferDescriptor<'a> {
 
 pub struct RenderPipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
-    pub stages: &'a [PipelineStageDescriptor<'a>],
+    pub vertex_stage: PipelineStageDescriptor<'a>,
+    pub fragment_stage: PipelineStageDescriptor<'a>,
+    pub rasterization_state: RasterizationStateDescriptor,
     pub primitive_topology: PrimitiveTopology,
-    pub attachments_state: AttachmentsState<'a>,
-    pub blend_states: &'a [&'a BlendState],
-    pub depth_stencil_state: &'a DepthStencilState,
+    pub color_states: &'a [ColorStateDescriptor],
+    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
     pub index_format: IndexFormat,
     pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
+    pub sample_count: u32,
 }
 
 pub struct ComputePipelineDescriptor<'a> {
@@ -235,7 +228,6 @@ impl Instance {
         }
     }
 
-    #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         Surface {
             id: wgn::wgpu_instance_create_surface_from_winit(self.id, window),
@@ -343,39 +335,11 @@ impl Device {
         }
     }
 
-    pub fn create_blend_state(&self, desc: &BlendStateDescriptor) -> BlendState {
-        BlendState {
-            id: wgn::wgpu_device_create_blend_state(self.id, desc),
-        }
-    }
-
-    pub fn create_depth_stencil_state(
-        &self,
-        desc: &DepthStencilStateDescriptor,
-    ) -> DepthStencilState {
-        DepthStencilState {
-            id: wgn::wgpu_device_create_depth_stencil_state(self.id, desc),
-        }
-    }
-
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
-        let entry_points = desc
-            .stages
-            .iter()
-            .map(|ps| CString::new(ps.entry_point).unwrap())
-            .collect::<ArrayVec<[_; 2]>>();
-        let stages = desc
-            .stages
-            .iter()
-            .zip(&entry_points)
-            .map(|(ps, ep_name)| wgn::PipelineStageDescriptor {
-                module: ps.module.id,
-                stage: ps.stage,
-                entry_point: ep_name.as_ptr(),
-            })
-            .collect::<ArrayVec<[_; 2]>>();
+        let vertex_entry_point = CString::new(desc.vertex_stage.entry_point).unwrap();
+        let fragment_entry_point = CString::new(desc.fragment_stage.entry_point).unwrap();
 
-        let temp_blend_states = desc.blend_states.iter().map(|bs| bs.id).collect::<Vec<_>>();
+        let temp_color_states = desc.color_states.to_vec();
         let temp_vertex_buffers = desc
             .vertex_buffers
             .iter()
@@ -392,27 +356,27 @@ impl Device {
                 self.id,
                 &wgn::RenderPipelineDescriptor {
                     layout: desc.layout.id,
-                    stages: stages.as_ptr(),
-                    stages_length: stages.len(),
-                    primitive_topology: desc.primitive_topology,
-                    attachments_state: wgn::AttachmentsState {
-                        color_attachments: desc.attachments_state.color_attachments.as_ptr(),
-                        color_attachments_length: desc.attachments_state.color_attachments.len(),
-                        depth_stencil_attachment: desc
-                            .attachments_state
-                            .depth_stencil_attachment
-                            .as_ref()
-                            .map(|at| at as *const _)
-                            .unwrap_or(ptr::null()),
+                    vertex_stage: wgn::PipelineStageDescriptor {
+                        module: desc.vertex_stage.module.id,
+                        entry_point: vertex_entry_point.as_ptr(),
                     },
-                    blend_states: temp_blend_states.as_ptr(),
-                    blend_states_length: temp_blend_states.len(),
-                    depth_stencil_state: desc.depth_stencil_state.id,
+                    fragment_stage: wgn::PipelineStageDescriptor {
+                        module: desc.fragment_stage.module.id,
+                        entry_point: fragment_entry_point.as_ptr(),
+                    },
+                    rasterization_state: desc.rasterization_state.clone(),
+                    primitive_topology: desc.primitive_topology,
+                    color_states: temp_color_states.as_ptr(),
+                    color_states_length: temp_color_states.len(),
+                    depth_stencil_state: desc.depth_stencil_state
+                        .as_ref()
+                        .map_or(ptr::null(), |p| p as *const _),
                     vertex_buffer_state: wgn::VertexBufferStateDescriptor {
                         index_format: desc.index_format,
                         vertex_buffers: temp_vertex_buffers.as_ptr(),
                         vertex_buffers_count: temp_vertex_buffers.len(),
                     },
+                    sample_count: desc.sample_count,
                 },
             ),
         }
@@ -420,18 +384,16 @@ impl Device {
 
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
         let entry_point = CString::new(desc.compute_stage.entry_point).unwrap();
-        let compute_stage = wgn::PipelineStageDescriptor {
-            module: desc.compute_stage.module.id,
-            stage: desc.compute_stage.stage,
-            entry_point: entry_point.as_ptr(),
-        };
 
         ComputePipeline {
             id: wgn::wgpu_device_create_compute_pipeline(
                 self.id,
                 &wgn::ComputePipelineDescriptor {
                     layout: desc.layout.id,
-                    compute_stage,
+                    compute_stage: wgn::PipelineStageDescriptor {
+                        module: desc.compute_stage.module.id,
+                        entry_point: entry_point.as_ptr(),
+                    },
                 },
             ),
         }
@@ -469,15 +431,15 @@ impl Buffer {
 }
 
 impl Texture {
-    pub fn create_texture_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
-            id: wgn::wgpu_texture_create_texture_view(self.id, desc),
+            id: wgn::wgpu_texture_create_view(self.id, desc),
         }
     }
 
-    pub fn create_default_texture_view(&self) -> TextureView {
+    pub fn create_default_view(&self) -> TextureView {
         TextureView {
-            id: wgn::wgpu_texture_create_default_texture_view(self.id),
+            id: wgn::wgpu_texture_create_default_view(self.id),
         }
     }
 }

@@ -3,7 +3,7 @@ use crate::{Stored, WeaklyStored,
 };
 use crate::{conv, resource};
 use crate::device::all_image_stages;
-use crate::registry::{HUB, Items};
+use crate::hub::HUB;
 use crate::track::{TrackPermit};
 
 use hal;
@@ -21,8 +21,8 @@ pub(crate) struct SwapChainLink<E> {
     pub image_index: hal::SwapImageIndex,
 }
 
-pub(crate) struct Surface<B: hal::Backend> {
-    pub raw: B::Surface,
+pub struct Surface<B: hal::Backend> {
+    pub(crate) raw: B::Surface,
 }
 
 pub(crate) struct Frame<B: hal::Backend> {
@@ -36,13 +36,14 @@ pub(crate) struct Frame<B: hal::Backend> {
 
 //TODO: does it need a ref-counted lifetime?
 
-pub(crate) struct SwapChain<B: hal::Backend> {
-    pub raw: B::Swapchain,
-    pub device_id: Stored<DeviceId>,
-    pub frames: Vec<Frame<B>>,
-    pub acquired: Vec<hal::SwapImageIndex>,
-    pub sem_available: B::Semaphore,
-    pub command_pool: hal::CommandPool<B, hal::General>,
+pub struct SwapChain<B: hal::Backend> {
+    pub(crate) raw: B::Swapchain,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) frames: Vec<Frame<B>>,
+    pub(crate) acquired: Vec<hal::SwapImageIndex>,
+    pub(crate) sem_available: B::Semaphore,
+    #[cfg_attr(not(feature = "local"), allow(dead_code))] //TODO: remove
+    pub(crate) command_pool: hal::CommandPool<B, hal::General>,
 }
 
 #[repr(C)]

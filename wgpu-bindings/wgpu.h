@@ -11,6 +11,8 @@
 
 #define WGPUBITS_PER_BYTE 8
 
+#define WGPUMAX_DEPTH_BIAS_CLAMP 16
+
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
   WGPUAddressMode_Repeat = 1,
@@ -67,9 +69,20 @@ typedef enum {
 } WGPUCompareFunction;
 
 typedef enum {
+  WGPUCullMode_None = 0,
+  WGPUCullMode_Front = 1,
+  WGPUCullMode_Back = 2,
+} WGPUCullMode;
+
+typedef enum {
   WGPUFilterMode_Nearest = 0,
   WGPUFilterMode_Linear = 1,
 } WGPUFilterMode;
+
+typedef enum {
+  WGPUFrontFace_Ccw = 0,
+  WGPUFrontFace_Cw = 1,
+} WGPUFrontFace;
 
 typedef enum {
   WGPUIndexFormat_Uint16 = 0,
@@ -99,12 +112,6 @@ typedef enum {
   WGPUPrimitiveTopology_TriangleList = 3,
   WGPUPrimitiveTopology_TriangleStrip = 4,
 } WGPUPrimitiveTopology;
-
-typedef enum {
-  WGPUShaderStage_Vertex = 0,
-  WGPUShaderStage_Fragment = 1,
-  WGPUShaderStage_Compute = 2,
-} WGPUShaderStage;
 
 typedef enum {
   WGPUStencilOperation_Keep = 0,
@@ -299,23 +306,6 @@ typedef struct {
   uintptr_t bindings_length;
 } WGPUBindGroupLayoutDescriptor;
 
-typedef WGPUId WGPUBlendStateId;
-
-typedef struct {
-  WGPUBlendFactor src_factor;
-  WGPUBlendFactor dst_factor;
-  WGPUBlendOperation operation;
-} WGPUBlendDescriptor;
-
-typedef uint32_t WGPUColorWriteFlags;
-
-typedef struct {
-  bool blend_enabled;
-  WGPUBlendDescriptor alpha;
-  WGPUBlendDescriptor color;
-  WGPUColorWriteFlags write_mask;
-} WGPUBlendStateDescriptor;
-
 typedef uint32_t WGPUBufferUsageFlags;
 
 typedef struct {
@@ -333,7 +323,6 @@ typedef WGPUId WGPUShaderModuleId;
 
 typedef struct {
   WGPUShaderModuleId module;
-  WGPUShaderStage stage;
   const char *entry_point;
 } WGPUPipelineStageDescriptor;
 
@@ -341,24 +330,6 @@ typedef struct {
   WGPUPipelineLayoutId layout;
   WGPUPipelineStageDescriptor compute_stage;
 } WGPUComputePipelineDescriptor;
-
-typedef WGPUId WGPUDepthStencilStateId;
-
-typedef struct {
-  WGPUCompareFunction compare;
-  WGPUStencilOperation stencil_fail_op;
-  WGPUStencilOperation depth_fail_op;
-  WGPUStencilOperation pass_op;
-} WGPUStencilStateFaceDescriptor;
-
-typedef struct {
-  bool depth_write_enabled;
-  WGPUCompareFunction depth_compare;
-  WGPUStencilStateFaceDescriptor front;
-  WGPUStencilStateFaceDescriptor back;
-  uint32_t stencil_read_mask;
-  uint32_t stencil_write_mask;
-} WGPUDepthStencilStateDescriptor;
 
 typedef struct {
   const WGPUBindGroupLayoutId *bind_group_layouts;
@@ -368,15 +339,44 @@ typedef struct {
 typedef WGPUId WGPURenderPipelineId;
 
 typedef struct {
-  WGPUTextureFormat format;
-  uint32_t samples;
-} WGPUAttachment;
+  WGPUFrontFace front_face;
+  WGPUCullMode cull_mode;
+  int32_t depth_bias;
+  float depth_bias_slope_scale;
+  float depth_bias_clamp;
+} WGPURasterizationStateDescriptor;
 
 typedef struct {
-  const WGPUAttachment *color_attachments;
-  uintptr_t color_attachments_length;
-  const WGPUAttachment *depth_stencil_attachment;
-} WGPUAttachmentsState;
+  WGPUBlendFactor src_factor;
+  WGPUBlendFactor dst_factor;
+  WGPUBlendOperation operation;
+} WGPUBlendDescriptor;
+
+typedef uint32_t WGPUColorWriteFlags;
+
+typedef struct {
+  WGPUTextureFormat format;
+  WGPUBlendDescriptor alpha;
+  WGPUBlendDescriptor color;
+  WGPUColorWriteFlags write_mask;
+} WGPUColorStateDescriptor;
+
+typedef struct {
+  WGPUCompareFunction compare;
+  WGPUStencilOperation fail_op;
+  WGPUStencilOperation depth_fail_op;
+  WGPUStencilOperation pass_op;
+} WGPUStencilStateFaceDescriptor;
+
+typedef struct {
+  WGPUTextureFormat format;
+  bool depth_write_enabled;
+  WGPUCompareFunction depth_compare;
+  WGPUStencilStateFaceDescriptor stencil_front;
+  WGPUStencilStateFaceDescriptor stencil_back;
+  uint32_t stencil_read_mask;
+  uint32_t stencil_write_mask;
+} WGPUDepthStencilStateDescriptor;
 
 typedef uint32_t WGPUShaderAttributeIndex;
 
@@ -401,14 +401,15 @@ typedef struct {
 
 typedef struct {
   WGPUPipelineLayoutId layout;
-  const WGPUPipelineStageDescriptor *stages;
-  uintptr_t stages_length;
+  WGPUPipelineStageDescriptor vertex_stage;
+  WGPUPipelineStageDescriptor fragment_stage;
   WGPUPrimitiveTopology primitive_topology;
-  WGPUAttachmentsState attachments_state;
-  const WGPUBlendStateId *blend_states;
-  uintptr_t blend_states_length;
-  WGPUDepthStencilStateId depth_stencil_state;
+  WGPURasterizationStateDescriptor rasterization_state;
+  const WGPUColorStateDescriptor *color_states;
+  uintptr_t color_states_length;
+  const WGPUDepthStencilStateDescriptor *depth_stencil_state;
   WGPUVertexBufferStateDescriptor vertex_buffer_state;
+  uint32_t sample_count;
 } WGPURenderPipelineDescriptor;
 
 typedef struct {
@@ -550,8 +551,7 @@ typedef struct {
 
 #define WGPUTrackPermit_REPLACE (WGPUTrackPermit){ .bits = 2 }
 
-WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id,
-                                        const WGPUDeviceDescriptor *_desc);
+WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDeviceDescriptor *desc);
 
 void wgpu_buffer_destroy(WGPUBufferId buffer_id);
 
@@ -607,19 +607,13 @@ WGPUBindGroupId wgpu_device_create_bind_group(WGPUDeviceId device_id,
 WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_id,
                                                            const WGPUBindGroupLayoutDescriptor *desc);
 
-WGPUBlendStateId wgpu_device_create_blend_state(WGPUDeviceId _device_id,
-                                                const WGPUBlendStateDescriptor *desc);
-
 WGPUBufferId wgpu_device_create_buffer(WGPUDeviceId device_id, const WGPUBufferDescriptor *desc);
 
 WGPUCommandEncoderId wgpu_device_create_command_encoder(WGPUDeviceId device_id,
-                                                        const WGPUCommandEncoderDescriptor *_desc);
+                                                        const WGPUCommandEncoderDescriptor *desc);
 
 WGPUComputePipelineId wgpu_device_create_compute_pipeline(WGPUDeviceId device_id,
                                                           const WGPUComputePipelineDescriptor *desc);
-
-WGPUDepthStencilStateId wgpu_device_create_depth_stencil_state(WGPUDeviceId _device_id,
-                                                               const WGPUDepthStencilStateDescriptor *desc);
 
 WGPUPipelineLayoutId wgpu_device_create_pipeline_layout(WGPUDeviceId device_id,
                                                         const WGPUPipelineLayoutDescriptor *desc);
@@ -646,6 +640,9 @@ WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId insta
 WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
                                                              void *hinstance,
                                                              void *hwnd);
+
+WGPUSurfaceId wgpu_instance_create_surface_from_winit(WGPUInstanceId instance_id,
+                                                      const WGPUWindow *window);
 
 WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
                                                      const void **display,
@@ -692,10 +689,10 @@ WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_
 
 void wgpu_swap_chain_present(WGPUSwapChainId swap_chain_id);
 
-WGPUTextureViewId wgpu_texture_create_default_texture_view(WGPUTextureId texture_id);
+WGPUTextureViewId wgpu_texture_create_default_view(WGPUTextureId texture_id);
 
-WGPUTextureViewId wgpu_texture_create_texture_view(WGPUTextureId texture_id,
-                                                   const WGPUTextureViewDescriptor *desc);
+WGPUTextureViewId wgpu_texture_create_view(WGPUTextureId texture_id,
+                                           const WGPUTextureViewDescriptor *desc);
 
 void wgpu_texture_destroy(WGPUTextureId texture_id);
 

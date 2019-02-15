@@ -36,6 +36,7 @@ fn main() {
         .with_crate(source_dir)
         .with_config(config)
         .with_parse_expand(&["wgpu-native"])
+        .with_parse_expand_features(&["local"])
         .generate()
         .unwrap()
         .write_to_file(crate_dir.join("wgpu.h"));

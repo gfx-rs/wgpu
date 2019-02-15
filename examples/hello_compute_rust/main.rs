@@ -81,7 +81,6 @@ fn main() {
         layout: &pipeline_layout,
         compute_stage: wgpu::PipelineStageDescriptor {
             module: &cs_module,
-            stage: wgpu::ShaderStage::Compute,
             entry_point: "main",
         },
     });

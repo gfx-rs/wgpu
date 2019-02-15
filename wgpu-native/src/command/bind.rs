@@ -1,5 +1,5 @@
 use crate::{
-    B, BindGroup, Stored, WeaklyStored,
+    BindGroupHandle, Stored, WeaklyStored,
     BindGroupId, BindGroupLayoutId, PipelineLayoutId,
 };
 
@@ -16,7 +16,7 @@ pub struct BindGroupEntry {
 }
 
 impl BindGroupEntry {
-    fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroup<B>) -> bool {
+    fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroupHandle) -> bool {
         if let Some(BindGroupPair { ref layout_id, ref group_id }) = self.provided {
             if group_id.value == bind_group_id {
                 assert_eq!(*layout_id, bind_group.layout_id);
@@ -66,7 +66,7 @@ impl Binder {
     }
 
     pub(crate) fn provide_entry(
-        &mut self, index: usize, bind_group_id: BindGroupId, bind_group: &BindGroup<B>
+        &mut self, index: usize, bind_group_id: BindGroupId, bind_group: &BindGroupHandle
     ) -> Option<PipelineLayoutId> {
         self.ensure_length(index + 1);
         if self.entries[index].provide(bind_group_id, bind_group) {

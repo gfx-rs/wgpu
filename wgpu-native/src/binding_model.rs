@@ -38,8 +38,8 @@ pub struct BindGroupLayoutDescriptor {
     pub bindings_length: usize,
 }
 
-pub(crate) struct BindGroupLayout<B: hal::Backend> {
-    pub raw: B::DescriptorSetLayout,
+pub struct BindGroupLayout<B: hal::Backend> {
+    pub(crate) raw: B::DescriptorSetLayout,
 }
 
 #[repr(C)]
@@ -48,9 +48,9 @@ pub struct PipelineLayoutDescriptor {
     pub bind_group_layouts_length: usize,
 }
 
-pub(crate) struct PipelineLayout<B: hal::Backend> {
-    pub raw: B::PipelineLayout,
-    pub bind_group_layout_ids: Vec<WeaklyStored<BindGroupLayoutId>>,
+pub struct PipelineLayout<B: hal::Backend> {
+    pub(crate) raw: B::PipelineLayout,
+    pub(crate) bind_group_layout_ids: Vec<WeaklyStored<BindGroupLayoutId>>,
 }
 
 #[repr(C)]
@@ -80,10 +80,10 @@ pub struct BindGroupDescriptor {
     pub bindings_length: usize,
 }
 
-pub(crate) struct BindGroup<B: hal::Backend> {
-    pub raw: B::DescriptorSet,
-    pub layout_id: WeaklyStored<BindGroupLayoutId>,
-    pub life_guard: LifeGuard,
-    pub used_buffers: BufferTracker,
-    pub used_textures: TextureTracker,
+pub struct BindGroup<B: hal::Backend> {
+    pub(crate) raw: B::DescriptorSet,
+    pub(crate) layout_id: WeaklyStored<BindGroupLayoutId>,
+    pub(crate) life_guard: LifeGuard,
+    pub(crate) used_buffers: BufferTracker,
+    pub(crate) used_textures: TextureTracker,
 }

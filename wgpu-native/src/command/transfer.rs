@@ -1,5 +1,5 @@
 use crate::device::{all_buffer_stages, all_image_stages};
-use crate::registry::{Items, HUB};
+use crate::hub::HUB;
 use crate::swap_chain::SwapChainLink;
 use crate::conv;
 use crate::{

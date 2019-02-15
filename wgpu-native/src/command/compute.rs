@@ -1,5 +1,5 @@
 use crate::command::bind::{Binder};
-use crate::registry::{Items, HUB};
+use crate::hub::HUB;
 use crate::track::{BufferTracker, TextureTracker};
 use crate::{
     Stored, CommandBuffer,
@@ -34,6 +34,8 @@ impl<B: hal::Backend> ComputePass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
+    #[cfg(feature = "local")]
+    HUB.compute_passes.unregister(pass_id);
     let pass = HUB.compute_passes.write().take(pass_id);
 
     HUB.command_buffers

@@ -1,6 +1,6 @@
 use crate::command::bind::Binder;
+use crate::hub::HUB;
 use crate::resource::BufferUsageFlags;
-use crate::registry::{Items, HUB};
 use crate::track::{BufferTracker, TextureTracker};
 use crate::{
     CommandBuffer, Stored,
@@ -34,6 +34,8 @@ impl<B: hal::Backend> RenderPass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBufferId {
+    #[cfg(feature = "local")]
+    HUB.render_passes.unregister(pass_id);
     let mut pass = HUB.render_passes.write().take(pass_id);
     unsafe {
         pass.raw.end_render_pass();

@@ -20,7 +20,7 @@ dx12 = ["wgpu/dx12"]
 vulkan = ["wgpu/vulkan"]
 
 [dependencies]
-wgpu = { path = "../wgpu-rs", features = ["winit"] }
+wgpu = { path = "../wgpu-rs" }
 cgmath = "0.17"
 env_logger = "0.5"
 glsl-to-spirv = "0.1"
