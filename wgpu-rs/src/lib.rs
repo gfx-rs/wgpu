@@ -10,6 +10,7 @@ use std::ptr;
 
 pub use wgn::winit;
 pub use wgn::{
+    MAX_DEPTH_BIAS_CLAMP,
     AdapterDescriptor, BindGroupLayoutBinding, BindingType,
     BlendDescriptor, BlendOperation, BlendFactor, ColorWriteFlags,
     RasterizationStateDescriptor, CullMode, FrontFace,
@@ -154,8 +155,8 @@ pub struct RenderPipelineDescriptor<'a> {
     pub fragment_stage: PipelineStageDescriptor<'a>,
     pub rasterization_state: RasterizationStateDescriptor,
     pub primitive_topology: PrimitiveTopology,
-    pub color_states: &'a [ColorStateDescriptor<'a>],
-    pub depth_stencil_state: Option<DepthStencilStateDescriptor<'a>>,
+    pub color_states: &'a [ColorStateDescriptor],
+    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
     pub index_format: IndexFormat,
     pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
     pub sample_count: u32,
@@ -355,19 +356,21 @@ impl Device {
                 self.id,
                 &wgn::RenderPipelineDescriptor {
                     layout: desc.layout.id,
-                    vertex_stage: &wgn::PipelineStageDescriptor {
+                    vertex_stage: wgn::PipelineStageDescriptor {
                         module: desc.vertex_stage.module.id,
                         entry_point: vertex_entry_point.as_ptr(),
                     },
-                    fragment_stage: &wgn::PipelineStageDescriptor {
+                    fragment_stage: wgn::PipelineStageDescriptor {
                         module: desc.fragment_stage.module.id,
                         entry_point: fragment_entry_point.as_ptr(),
                     },
-                    rasterization_state: &desc.rasterization_state,
+                    rasterization_state: desc.rasterization_state.clone(),
                     primitive_topology: desc.primitive_topology,
                     color_states: temp_color_states.as_ptr(),
                     color_states_length: temp_color_states.len(),
-                    depth_stencil_state: desc.depth_stencil_state.as_ref(),
+                    depth_stencil_state: desc.depth_stencil_state
+                        .as_ref()
+                        .map_or(ptr::null(), |p| p as *const _),
                     vertex_buffer_state: wgn::VertexBufferStateDescriptor {
                         index_format: desc.index_format,
                         vertex_buffers: temp_vertex_buffers.as_ptr(),
@@ -387,7 +390,7 @@ impl Device {
                 self.id,
                 &wgn::ComputePipelineDescriptor {
                     layout: desc.layout.id,
-                    compute_stage: &wgn::PipelineStageDescriptor {
+                    compute_stage: wgn::PipelineStageDescriptor {
                         module: desc.compute_stage.module.id,
                         entry_point: entry_point.as_ptr(),
                     },

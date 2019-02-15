@@ -252,14 +252,14 @@ impl framework::Example for Cube {
                 cull_mode: wgpu::CullMode::Back,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
-                depth_bias_clamp: 16.0,
+                depth_bias_clamp: wgpu::MAX_DEPTH_BIAS_CLAMP,
             },
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
             color_states: &[
                 wgpu::ColorStateDescriptor {
                     format: sc_desc.format,
-                    color: &wgpu::BlendDescriptor::REPLACE,
-                    alpha: &wgpu::BlendDescriptor::REPLACE,
+                    color: wgpu::BlendDescriptor::REPLACE,
+                    alpha: wgpu::BlendDescriptor::REPLACE,
                     write_mask: wgpu::ColorWriteFlags::ALL,
                 },
             ],

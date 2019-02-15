@@ -44,6 +44,7 @@ pub use self::hub::{Id, IdentityManager};
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+pub const MAX_DEPTH_BIAS_CLAMP: f32 = 16.0;
 type SubmissionIndex = usize;
 
 //TODO: make it private. Currently used for swapchain creation impl.

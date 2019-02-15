@@ -276,7 +276,7 @@ pub struct ShaderModule<B: hal::Backend> {
 }
 
 
-pub fn wgpu_device_create_buffer_impl(
+pub fn device_create_buffer(
     device_id: DeviceId,
     desc: &resource::BufferDescriptor,
 ) -> resource::Buffer<back::Backend> {
@@ -326,7 +326,7 @@ pub fn wgpu_device_create_buffer_impl(
     }
 }
 
-pub fn wgpu_device_track_buffer(
+pub fn device_track_buffer(
     device_id: DeviceId,
     buffer_id: BufferId,
     ref_count: RefCount,
@@ -349,10 +349,10 @@ pub extern "C" fn wgpu_device_create_buffer(
     device_id: DeviceId,
     desc: &resource::BufferDescriptor,
 ) -> BufferId {
-    let buffer = wgpu_device_create_buffer_impl(device_id, desc);
+    let buffer = device_create_buffer(device_id, desc);
     let ref_count = buffer.life_guard.ref_count.clone();
     let id = HUB.buffers.register(buffer);
-    wgpu_device_track_buffer(device_id, id, ref_count);
+    device_track_buffer(device_id, id, ref_count);
     id
 }
 
@@ -369,7 +369,7 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
 }
 
 
-pub fn wgpu_device_create_texture_impl(
+pub fn device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
 ) -> resource::Texture<back::Backend> {
@@ -438,7 +438,7 @@ pub fn wgpu_device_create_texture_impl(
     }
 }
 
-pub fn wgpu_device_track_texture(
+pub fn device_track_texture(
     device_id: DeviceId,
     texture_id: TextureId,
     ref_count: RefCount,
@@ -461,14 +461,14 @@ pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
 ) -> TextureId {
-    let texture = wgpu_device_create_texture_impl(device_id, desc);
+    let texture = device_create_texture(device_id, desc);
     let ref_count = texture.life_guard.ref_count.clone();
     let id = HUB.textures.register(texture);
-    wgpu_device_track_texture(device_id, id, ref_count);
+    device_track_texture(device_id, id, ref_count);
     id
 }
 
-pub fn wgpu_texture_create_view_impl(
+pub fn texture_create_view(
     texture_id: TextureId,
     desc: &resource::TextureViewDescriptor,
 ) -> resource::TextureView<back::Backend> {
@@ -514,11 +514,11 @@ pub extern "C" fn wgpu_texture_create_view(
     texture_id: TextureId,
     desc: &resource::TextureViewDescriptor,
 ) -> TextureViewId {
-    let view = wgpu_texture_create_view_impl(texture_id, desc);
+    let view = texture_create_view(texture_id, desc);
     HUB.texture_views.register(view)
 }
 
-pub fn wgpu_texture_create_default_view_impl(
+pub fn texture_create_default_view(
     texture_id: TextureId
 ) -> resource::TextureView<back::Backend> {
     let texture_guard = HUB.textures.read();
@@ -562,7 +562,7 @@ pub fn wgpu_texture_create_default_view_impl(
 #[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> TextureViewId {
-    let view = wgpu_texture_create_default_view_impl(texture_id);
+    let view = texture_create_default_view(texture_id);
     HUB.texture_views.register(view)
 }
 
@@ -584,7 +584,7 @@ pub extern "C" fn wgpu_texture_view_destroy(_texture_view_id: TextureViewId) {
 }
 
 
-pub fn wgpu_device_create_sampler_impl(
+pub fn device_create_sampler(
     device_id: DeviceId, desc: &resource::SamplerDescriptor
 ) -> resource::Sampler<back::Backend> {
     let device_guard = HUB.devices.read();
@@ -629,12 +629,12 @@ pub fn wgpu_device_create_sampler_impl(
 pub extern "C" fn wgpu_device_create_sampler(
     device_id: DeviceId, desc: &resource::SamplerDescriptor
 ) -> SamplerId {
-    let sampler = wgpu_device_create_sampler_impl(device_id, desc);
+    let sampler = device_create_sampler(device_id, desc);
     HUB.samplers.register(sampler)
 }
 
 
-pub fn wgpu_device_create_bind_group_layout_impl(
+pub fn device_create_bind_group_layout(
     device_id: DeviceId,
     desc: &binding_model::BindGroupLayoutDescriptor,
 ) -> binding_model::BindGroupLayout<back::Backend> {
@@ -671,11 +671,11 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
     device_id: DeviceId,
     desc: &binding_model::BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
-    let layout = wgpu_device_create_bind_group_layout_impl(device_id, desc);
+    let layout = device_create_bind_group_layout(device_id, desc);
     HUB.bind_group_layouts.register(layout)
 }
 
-pub fn wgpu_device_create_pipeline_layout_impl(
+pub fn device_create_pipeline_layout(
     device_id: DeviceId,
     desc: &binding_model::PipelineLayoutDescriptor,
 ) -> binding_model::PipelineLayout<back::Backend> {
@@ -713,11 +713,11 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
     desc: &binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
-    let layout = wgpu_device_create_pipeline_layout_impl(device_id, desc);
+    let layout = device_create_pipeline_layout(device_id, desc);
     HUB.pipeline_layouts.register(layout)
 }
 
-pub fn wgpu_device_create_bind_group_impl(
+pub fn device_create_bind_group(
     device_id: DeviceId,
     desc: &binding_model::BindGroupDescriptor,
 ) -> binding_model::BindGroup<back::Backend> {
@@ -802,12 +802,12 @@ pub extern "C" fn wgpu_device_create_bind_group(
     device_id: DeviceId,
     desc: &binding_model::BindGroupDescriptor,
 ) -> BindGroupId {
-    let bind_group = wgpu_device_create_bind_group_impl(device_id, desc);
+    let bind_group = device_create_bind_group(device_id, desc);
     HUB.bind_groups.register(bind_group)
 }
 
 
-pub fn wgpu_device_create_shader_module_impl(
+pub fn device_create_shader_module(
     device_id: DeviceId,
     desc: &pipeline::ShaderModuleDescriptor,
 ) -> ShaderModule<back::Backend> {
@@ -830,11 +830,11 @@ pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
     desc: &pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
-    let module = wgpu_device_create_shader_module_impl(device_id, desc);
+    let module = device_create_shader_module(device_id, desc);
     HUB.shader_modules.register(module)
 }
 
-pub fn wgpu_device_create_command_encoder_impl(
+pub fn device_create_command_encoder(
     device_id: DeviceId,
     _desc: &command::CommandEncoderDescriptor,
 ) -> command::CommandBuffer<back::Backend> {
@@ -861,7 +861,7 @@ pub extern "C" fn wgpu_device_create_command_encoder(
     device_id: DeviceId,
     desc: &command::CommandEncoderDescriptor,
 ) -> CommandEncoderId {
-    let cmb = wgpu_device_create_command_encoder_impl(device_id, desc);
+    let cmb = device_create_command_encoder(device_id, desc);
     HUB.command_buffers.register(cmb)
 }
 
@@ -1003,7 +1003,7 @@ pub extern "C" fn wgpu_queue_submit(
 }
 
 
-pub fn wgpu_device_create_render_pipeline_impl(
+pub fn device_create_render_pipeline(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> pipeline::RenderPipeline<back::Backend> {
@@ -1019,6 +1019,9 @@ pub fn wgpu_device_create_render_pipeline_impl(
             desc.color_states_length,
         )
     };
+    let depth_stencil_state = unsafe {
+        desc.depth_stencil_state.as_ref()
+    };
 
     let rp_key = {
         let color_keys = color_states.iter().map(|at| hal::pass::Attachment {
@@ -1028,7 +1031,7 @@ pub fn wgpu_device_create_render_pipeline_impl(
             stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
             layouts: hal::image::Layout::General..hal::image::Layout::General,
         });
-        let depth_stencil_key = desc.depth_stencil_state.map(|at| hal::pass::Attachment {
+        let depth_stencil_key = depth_stencil_state.map(|at| hal::pass::Attachment {
             format: Some(conv::map_texture_format(at.format)),
             samples: desc.sample_count as u8,
             ops: hal::pass::AttachmentOps::PRESERVE,
@@ -1057,7 +1060,7 @@ pub fn wgpu_device_create_render_pipeline_impl(
 
             let subpass = hal::pass::SubpassDesc {
                 colors: &color_ids[..desc.color_states_length],
-                depth_stencil: desc.depth_stencil_state.map(|_| &depth_id),
+                depth_stencil: depth_stencil_state.map(|_| &depth_id),
                 inputs: &[],
                 resolves: &[],
                 preserves: &[],
@@ -1105,7 +1108,7 @@ pub fn wgpu_device_create_render_pipeline_impl(
         geometry: None,
         fragment: Some(fragment),
     };
-    let rasterizer = conv::map_rasterization_state_descriptor(desc.rasterization_state);
+    let rasterizer = conv::map_rasterization_state_descriptor(&desc.rasterization_state);
 
     let desc_vbs = unsafe {
         slice::from_raw_parts(desc.vertex_buffer_state.vertex_buffers, desc.vertex_buffer_state.vertex_buffers_count)
@@ -1151,7 +1154,7 @@ pub fn wgpu_device_create_render_pipeline_impl(
             .map(conv::map_color_state_descriptor)
             .collect(),
     };
-    let depth_stencil = desc.depth_stencil_state
+    let depth_stencil = depth_stencil_state
         .map(conv::map_depth_stencil_state_descriptor)
         .unwrap_or_default();
 
@@ -1211,11 +1214,11 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> RenderPipelineId {
-    let pipeline = wgpu_device_create_render_pipeline_impl(device_id, desc);
+    let pipeline = device_create_render_pipeline(device_id, desc);
     HUB.render_pipelines.register(pipeline)
 }
 
-pub fn wgpu_device_create_compute_pipeline_impl(
+pub fn device_create_compute_pipeline(
     device_id: DeviceId,
     desc: &pipeline::ComputePipelineDescriptor,
 ) -> pipeline::ComputePipeline<back::Backend> {
@@ -1269,12 +1272,12 @@ pub extern "C" fn wgpu_device_create_compute_pipeline(
     device_id: DeviceId,
     desc: &pipeline::ComputePipelineDescriptor,
 ) -> ComputePipelineId {
-    let pipeline = wgpu_device_create_compute_pipeline_impl(device_id, desc);
+    let pipeline = device_create_compute_pipeline(device_id, desc);
     HUB.compute_pipelines.register(pipeline)
 }
 
 
-pub fn wgpu_device_create_swap_chain_impl(
+pub fn device_create_swap_chain(
     device_id: DeviceId,
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
@@ -1369,7 +1372,7 @@ pub fn wgpu_device_create_swap_chain_impl(
 }
 
 #[cfg(feature = "local")]
-pub fn wgpu_swap_chain_populate_textures(
+fn swap_chain_populate_textures(
     swap_chain_id: SwapChainId,
     textures: Vec<resource::Texture<back::Backend>>,
 ) {
@@ -1436,9 +1439,9 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
 ) -> SwapChainId {
-    let (swap_chain, textures) = wgpu_device_create_swap_chain_impl(device_id, surface_id, desc);
+    let (swap_chain, textures) = device_create_swap_chain(device_id, surface_id, desc);
     let id = HUB.swap_chains.register(swap_chain);
-    wgpu_swap_chain_populate_textures(id, textures);
+    swap_chain_populate_textures(id, textures);
     id
 }
 

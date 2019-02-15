@@ -1,6 +1,7 @@
 use crate::{
     binding_model, command, pipeline, resource, Color,
     Extent3d, Origin3d,
+    MAX_DEPTH_BIAS_CLAMP,
 };
 
 
@@ -136,12 +137,12 @@ pub fn map_color_state_descriptor(
     desc: &pipeline::ColorStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if *desc.color != pipeline::BlendDescriptor::REPLACE ||
-        *desc.alpha != pipeline::BlendDescriptor::REPLACE
+    let blend_state = if desc.color != pipeline::BlendDescriptor::REPLACE ||
+        desc.alpha != pipeline::BlendDescriptor::REPLACE
     {
         hal::pso::BlendState::On {
-            color: map_blend_descriptor(desc.color),
-            alpha: map_blend_descriptor(desc.alpha),
+            color: map_blend_descriptor(&desc.color),
+            alpha: map_blend_descriptor(&desc.alpha),
         }
     } else {
         hal::pso::BlendState::Off
@@ -224,12 +225,12 @@ pub fn map_depth_stencil_state_descriptor(
         },
         depth_bounds: false, // TODO
         stencil: if desc.stencil_read_mask != !0 || desc.stencil_write_mask != !0 ||
-            *desc.stencil_front != pipeline::StencilStateFaceDescriptor::IGNORE ||
-            *desc.stencil_back != pipeline::StencilStateFaceDescriptor::IGNORE
+            desc.stencil_front != pipeline::StencilStateFaceDescriptor::IGNORE ||
+            desc.stencil_back != pipeline::StencilStateFaceDescriptor::IGNORE
         {
             hal::pso::StencilTest::On {
-                front: map_stencil_face(desc.stencil_front, desc.stencil_read_mask, desc.stencil_write_mask),
-                back: map_stencil_face(desc.stencil_back, desc.stencil_read_mask, desc.stencil_write_mask),
+                front: map_stencil_face(&desc.stencil_front, desc.stencil_read_mask, desc.stencil_write_mask),
+                back: map_stencil_face(&desc.stencil_back, desc.stencil_read_mask, desc.stencil_write_mask),
             }
         } else {
             hal::pso::StencilTest::Off
@@ -484,7 +485,7 @@ pub fn map_rasterization_state_descriptor(
             pipeline::FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
             pipeline::FrontFace::Cw => hal::pso::FrontFace::Clockwise,
         },
-        depth_bias: if desc.depth_bias != 0 || desc.depth_bias_slope_scale != 0.0 || desc.depth_bias_clamp < 16.0 {
+        depth_bias: if desc.depth_bias != 0 || desc.depth_bias_slope_scale != 0.0 || desc.depth_bias_clamp < MAX_DEPTH_BIAS_CLAMP {
             Some(hal::pso::State::Static(hal::pso::DepthBias {
                 const_factor: desc.depth_bias as f32,
                 slope_factor: desc.depth_bias_slope_scale,

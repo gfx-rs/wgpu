@@ -65,10 +65,10 @@ impl BlendDescriptor {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-pub struct ColorStateDescriptor<'a> {
+pub struct ColorStateDescriptor {
     pub format: resource::TextureFormat,
-    pub alpha: &'a BlendDescriptor,
-    pub color: &'a BlendDescriptor,
+    pub alpha: BlendDescriptor,
+    pub color: BlendDescriptor,
     pub write_mask: ColorWriteFlags,
 }
 
@@ -105,12 +105,12 @@ impl StencilStateFaceDescriptor {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-pub struct DepthStencilStateDescriptor<'a> {
+pub struct DepthStencilStateDescriptor {
     pub format: resource::TextureFormat,
     pub depth_write_enabled: bool,
     pub depth_compare: resource::CompareFunction,
-    pub stencil_front: &'a StencilStateFaceDescriptor,
-    pub stencil_back: &'a StencilStateFaceDescriptor,
+    pub stencil_front: StencilStateFaceDescriptor,
+    pub stencil_back: StencilStateFaceDescriptor,
     pub stencil_read_mask: u32,
     pub stencil_write_mask: u32,
 }
@@ -173,9 +173,9 @@ pub struct PipelineStageDescriptor {
 }
 
 #[repr(C)]
-pub struct ComputePipelineDescriptor<'a> {
+pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub compute_stage: &'a PipelineStageDescriptor,
+    pub compute_stage: PipelineStageDescriptor,
 }
 
 pub struct ComputePipeline<B: hal::Backend> {
@@ -209,6 +209,7 @@ pub enum CullMode {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug)]
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
@@ -218,15 +219,15 @@ pub struct RasterizationStateDescriptor {
 }
 
 #[repr(C)]
-pub struct RenderPipelineDescriptor<'a> {
+pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub vertex_stage: &'a PipelineStageDescriptor,
-    pub fragment_stage: &'a PipelineStageDescriptor,
+    pub vertex_stage: PipelineStageDescriptor,
+    pub fragment_stage: PipelineStageDescriptor,
     pub primitive_topology: PrimitiveTopology,
-    pub rasterization_state: &'a RasterizationStateDescriptor,
-    pub color_states: *const ColorStateDescriptor<'a>,
+    pub rasterization_state: RasterizationStateDescriptor,
+    pub color_states: *const ColorStateDescriptor,
     pub color_states_length: usize,
-    pub depth_stencil_state: Option<&'a DepthStencilStateDescriptor<'a>>,
+    pub depth_stencil_state: *const DepthStencilStateDescriptor,
     pub vertex_buffer_state: VertexBufferStateDescriptor,
     pub sample_count: u32,
 }

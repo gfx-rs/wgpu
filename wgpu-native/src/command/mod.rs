@@ -106,12 +106,9 @@ impl CommandBufferHandle {
             let b = buffer_guard.get(id);
             trace!("transit {:?} {:?}", id, transit);
             hal::memory::Barrier::Buffer {
-                states: conv::map_buffer_state(transit.start)..conv::map_buffer_state(transit.end),
+                states: conv::map_buffer_state(transit.start) .. conv::map_buffer_state(transit.end),
                 target: &b.raw,
-                range: Range {
-                    start: None,
-                    end: None,
-                },
+                range: None .. None,
                 families: None,
             }
         });
@@ -157,7 +154,7 @@ pub extern "C" fn wgpu_command_encoder_finish(
     command_encoder_id
 }
 
-pub fn wgpu_command_encoder_begin_render_pass_impl(
+pub fn command_encoder_begin_render_pass(
     command_encoder_id: CommandEncoderId,
     desc: RenderPassDescriptor,
 ) -> RenderPass<Backend> {
@@ -367,11 +364,11 @@ pub extern "C" fn wgpu_command_encoder_begin_render_pass(
     command_encoder_id: CommandEncoderId,
     desc: RenderPassDescriptor,
 ) -> RenderPassId {
-    let pass = wgpu_command_encoder_begin_render_pass_impl(command_encoder_id, desc);
+    let pass = command_encoder_begin_render_pass(command_encoder_id, desc);
     HUB.render_passes.register(pass)
 }
 
-pub fn wgpu_command_encoder_begin_compute_pass_impl(
+pub fn command_encoder_begin_compute_pass(
     command_encoder_id: CommandEncoderId,
 ) -> ComputePass<Backend> {
     let mut cmb_guard = HUB.command_buffers.write();
@@ -391,6 +388,6 @@ pub fn wgpu_command_encoder_begin_compute_pass_impl(
 pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
     command_encoder_id: CommandEncoderId,
 ) -> ComputePassId {
-    let pass = wgpu_command_encoder_begin_compute_pass_impl(command_encoder_id);
+    let pass = command_encoder_begin_compute_pass(command_encoder_id);
     HUB.compute_passes.register(pass)
 }

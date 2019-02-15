@@ -33,14 +33,14 @@ pub struct DeviceDescriptor {
     pub extensions: Extensions,
 }
 
-pub fn wgpu_create_instance_impl() -> ::back::Instance {
+pub fn create_instance() -> ::back::Instance {
     ::back::Instance::create("wgpu", 1)
 }
 
 #[no_mangle]
 #[cfg(feature = "local")]
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
-    let inst = wgpu_create_instance_impl();
+    let inst = create_instance();
     HUB.instances.register(inst)
 }
 
@@ -62,7 +62,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
 }
 
 #[allow(unused_variables)]
-pub fn wgpu_instance_create_surface_from_xlib_impl(
+pub fn instance_create_surface_from_xlib(
     instance_id: InstanceId,
     display: *mut *const std::ffi::c_void,
     window: u64,
@@ -86,12 +86,12 @@ pub extern "C" fn wgpu_instance_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
     window: u64,
 ) -> SurfaceId {
-    let surface = wgpu_instance_create_surface_from_xlib_impl(instance_id, display, window);
+    let surface = instance_create_surface_from_xlib(instance_id, display, window);
     HUB.surfaces.register(surface)
 }
 
 #[allow(unused_variables)]
-pub fn wgpu_instance_create_surface_from_macos_layer_impl(
+pub fn instance_create_surface_from_macos_layer(
     instance_id: InstanceId,
     layer: *mut std::ffi::c_void,
 ) -> SurfaceHandle {
@@ -113,12 +113,12 @@ pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
     instance_id: InstanceId,
     layer: *mut std::ffi::c_void,
 ) -> SurfaceId {
-    let surface = wgpu_instance_create_surface_from_macos_layer_impl(instance_id, layer);
+    let surface = instance_create_surface_from_macos_layer(instance_id, layer);
     HUB.surfaces.register(surface)
 }
 
 #[allow(unused_variables)]
-pub fn wgpu_instance_create_surface_from_windows_hwnd_impl(
+pub fn instance_create_surface_from_windows_hwnd(
     instance_id: InstanceId,
     hinstance: *mut std::ffi::c_void,
     hwnd: *mut std::ffi::c_void,
@@ -151,11 +151,11 @@ pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
     hinstance: *mut std::ffi::c_void,
     hwnd: *mut std::ffi::c_void,
 ) -> SurfaceId {
-    let surface = wgpu_instance_create_surface_from_windows_hwnd_impl(instance_id, hinstance, hwnd);
+    let surface = instance_create_surface_from_windows_hwnd(instance_id, hinstance, hwnd);
     HUB.surfaces.register(surface)
 }
 
-pub fn wgpu_instance_get_adapter_impl(
+pub fn instance_get_adapter(
     instance_id: InstanceId,
     desc: &AdapterDescriptor,
 ) -> AdapterHandle {
@@ -183,11 +183,11 @@ pub extern "C" fn wgpu_instance_get_adapter(
     instance_id: InstanceId,
     desc: &AdapterDescriptor,
 ) -> AdapterId {
-    let adapter = wgpu_instance_get_adapter_impl(instance_id, desc);
+    let adapter = instance_get_adapter(instance_id, desc);
     HUB.adapters.register(adapter)
 }
 
-pub fn wgpu_adapter_create_device_impl(
+pub fn adapter_create_device(
     adapter_id: AdapterId,
     _desc: &DeviceDescriptor,
 ) -> DeviceHandle {
@@ -204,6 +204,6 @@ pub extern "C" fn wgpu_adapter_create_device(
     adapter_id: AdapterId,
     desc: &DeviceDescriptor,
 ) -> DeviceId {
-    let device = wgpu_adapter_create_device_impl(adapter_id, desc);
+    let device = adapter_create_device(adapter_id, desc);
     HUB.devices.register(device)
 }
