@@ -107,6 +107,14 @@ impl<T> Registry<T> {
     }
 }
 
+#[cfg(feature = "remote")]
+impl<T> Registry<T> {
+    pub fn register(&self, id: Id, value: T) {
+        let old = self.data.write().map.insert(id, value);
+        assert!(old.is_none());
+    }
+}
+
 #[derive(Default)]
 pub struct Hub {
     pub(crate) instances: Arc<Registry<InstanceHandle>>,

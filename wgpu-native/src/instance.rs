@@ -7,11 +7,15 @@ use crate::{
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
+#[cfg(feature = "remote")]
+use serde::{Serialize, Deserialize};
+
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
 
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
@@ -19,16 +23,19 @@ pub enum PowerPreference {
 }
 
 #[repr(C)]
+#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct AdapterDescriptor {
     pub power_preference: PowerPreference,
 }
 
 #[repr(C)]
+#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
+#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
 }

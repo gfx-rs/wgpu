@@ -39,7 +39,7 @@ pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
 #[cfg(not(feature = "local"))]
-pub use self::hub::{Id, IdentityManager};
+pub use self::hub::{HUB, Id, IdentityManager, Registry};
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
