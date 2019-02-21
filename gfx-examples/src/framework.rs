@@ -27,7 +27,9 @@ pub fn load_glsl(name: &str, stage: ShaderStage) -> Vec<u8> {
         ShaderStage::Fragment => glsl_to_spirv::ShaderType::Fragment,
         ShaderStage::Compute => glsl_to_spirv::ShaderType::Compute,
     };
-    let path = PathBuf::from("data").join(name);
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("data")
+        .join(name);
     let code = read_to_string(path).unwrap();
     let mut output = glsl_to_spirv::compile(&code, ty).unwrap();
     let mut spv = Vec::new();

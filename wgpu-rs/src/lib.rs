@@ -4,7 +4,6 @@ extern crate wgpu_native as wgn;
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr;
 
@@ -26,7 +25,14 @@ pub use wgn::{
 };
 
 
-//Note: we need some better guidelines on which structures receive by value, and which by pointer.
+//TODO: avoid heap allocating vectors during resource creation.
+#[derive(Default)]
+struct Temp {
+    //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
+    //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
+    command_buffers: Vec<wgn::CommandBufferId>,
+}
+
 
 pub struct Instance {
     id: wgn::InstanceId,
@@ -38,6 +44,7 @@ pub struct Adapter {
 
 pub struct Device {
     id: wgn::DeviceId,
+    temp: Temp,
 }
 
 pub struct Buffer {
@@ -62,20 +69,6 @@ pub struct Surface {
 
 pub struct SwapChain {
     id: wgn::SwapChainId,
-}
-
-pub enum BindingResource<'a> {
-    Buffer {
-        buffer: &'a Buffer,
-        range: Range<u32>,
-    },
-    Sampler(&'a Sampler),
-    TextureView(&'a TextureView),
-}
-
-pub struct Binding<'a> {
-    pub binding: u32,
-    pub resource: BindingResource<'a>,
 }
 
 pub struct BindGroupLayout {
@@ -103,7 +96,7 @@ pub struct ComputePipeline {
 }
 
 pub struct CommandBuffer {
-    _id: wgn::CommandBufferId,
+    id: wgn::CommandBufferId,
 }
 
 pub struct CommandEncoder {
@@ -122,7 +115,22 @@ pub struct ComputePass<'a> {
 
 pub struct Queue<'a> {
     id: wgn::QueueId,
-    _marker: PhantomData<&'a Self>,
+    temp: &'a mut Temp,
+}
+
+
+pub enum BindingResource<'a> {
+    Buffer {
+        buffer: &'a Buffer,
+        range: Range<u32>,
+    },
+    Sampler(&'a Sampler),
+    TextureView(&'a TextureView),
+}
+
+pub struct Binding<'a> {
+    pub binding: u32,
+    pub resource: BindingResource<'a>,
 }
 
 pub struct BindGroupLayoutDescriptor<'a> {
@@ -215,6 +223,7 @@ impl<'a> TextureCopyView<'a> {
     }
 }
 
+
 impl Instance {
     pub fn new() -> Self {
         Instance {
@@ -239,6 +248,7 @@ impl Adapter {
     pub fn create_device(&self, desc: &DeviceDescriptor) -> Device {
         Device {
             id: wgn::wgpu_adapter_create_device(self.id, desc),
+            temp: Temp::default(),
         }
     }
 }
@@ -259,7 +269,7 @@ impl Device {
     pub fn get_queue(&mut self) -> Queue {
         Queue {
             id: wgn::wgpu_device_get_queue(self.id),
-            _marker: PhantomData,
+            temp: &mut self.temp,
         }
     }
 
@@ -430,6 +440,12 @@ impl Buffer {
     }
 }
 
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        wgn::wgpu_buffer_destroy(self.id);
+    }
+}
+
 impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
@@ -444,10 +460,22 @@ impl Texture {
     }
 }
 
+impl Drop for Texture {
+    fn drop(&mut self) {
+        wgn::wgpu_texture_destroy(self.id);
+    }
+}
+
+impl Drop for TextureView {
+    fn drop(&mut self) {
+        wgn::wgpu_texture_view_destroy(self.id);
+    }
+}
+
 impl CommandEncoder {
     pub fn finish(self) -> CommandBuffer {
         CommandBuffer {
-            _id: wgn::wgpu_command_encoder_finish(self.id),
+            id: wgn::wgpu_command_encoder_finish(self.id),
         }
     }
 
@@ -560,10 +588,6 @@ impl CommandEncoder {
 }
 
 impl<'a> RenderPass<'a> {
-    pub fn end_pass(self) {
-        wgn::wgpu_render_pass_end_pass(self.id);
-    }
-
     pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
         wgn::wgpu_render_pass_set_bind_group(self.id, index, bind_group.id);
     }
@@ -613,11 +637,13 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-impl<'a> ComputePass<'a> {
-    pub fn end_pass(self) {
-        wgn::wgpu_compute_pass_end_pass(self.id);
+impl<'a> Drop for RenderPass<'a> {
+    fn drop(&mut self) {
+        wgn::wgpu_render_pass_end_pass(self.id);
     }
+}
 
+impl<'a> ComputePass<'a> {
     pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
         wgn::wgpu_compute_pass_set_bind_group(self.id, index, bind_group.id);
     }
@@ -631,11 +657,22 @@ impl<'a> ComputePass<'a> {
     }
 }
 
+impl<'a> Drop for ComputePass<'a> {
+    fn drop(&mut self) {
+        wgn::wgpu_compute_pass_end_pass(self.id);
+    }
+}
+
 impl<'a> Queue<'a> {
     pub fn submit(&mut self, command_buffers: &[CommandBuffer]) {
+        self.temp.command_buffers.clear();
+        self.temp.command_buffers.extend(
+            command_buffers.iter().map(|cb| cb.id)
+        );
+
         wgn::wgpu_queue_submit(
             self.id,
-            command_buffers.as_ptr() as *const _,
+            self.temp.command_buffers.as_ptr(),
             command_buffers.len(),
         );
     }

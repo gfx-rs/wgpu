@@ -34,9 +34,7 @@ impl<B: hal::Backend> ComputePass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
-    #[cfg(feature = "local")]
-    HUB.compute_passes.unregister(pass_id);
-    let pass = HUB.compute_passes.write().take(pass_id);
+    let pass = HUB.compute_passes.unregister(pass_id);
 
     HUB.command_buffers
         .write()

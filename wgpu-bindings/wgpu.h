@@ -696,4 +696,4 @@ WGPUTextureViewId wgpu_texture_create_view(WGPUTextureId texture_id,
 
 void wgpu_texture_destroy(WGPUTextureId texture_id);
 
-void wgpu_texture_view_destroy(WGPUTextureViewId _texture_view_id);
+void wgpu_texture_view_destroy(WGPUTextureViewId texture_view_id);
