@@ -98,9 +98,8 @@ unsafe impl<B: hal::Backend> Send for DestroyedResources<B> {}
 unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
 
 impl<B: hal::Backend> DestroyedResources<B> {
-    fn add(&mut self, resource_id: ResourceId, life_guard: &LifeGuard) {
-        self.referenced
-            .push((resource_id, life_guard.ref_count.clone()));
+    fn add(&mut self, resource_id: ResourceId, ref_count: RefCount) {
+        self.referenced.push((resource_id, ref_count));
     }
 
     /// Returns the last submission index that is done.
@@ -369,7 +368,10 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
         .get(buffer.device_id.value)
         .destroyed
         .lock()
-        .add(ResourceId::Buffer(buffer_id), &buffer.life_guard);
+        .add(
+            ResourceId::Buffer(buffer_id),
+            buffer.life_guard.ref_count.clone(),
+        );
 }
 
 
@@ -579,7 +581,10 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
         .get(texture.device_id.value)
         .destroyed
         .lock()
-        .add(ResourceId::Texture(texture_id), &texture.life_guard);
+        .add(
+            ResourceId::Texture(texture_id),
+            texture.life_guard.ref_count.clone(),
+        );
 }
 
 #[no_mangle]
@@ -595,7 +600,10 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
         .get(device_id)
         .destroyed
         .lock()
-        .add(ResourceId::TextureView(texture_view_id), &view.life_guard);
+        .add(
+            ResourceId::TextureView(texture_view_id),
+            view.life_guard.ref_count.clone(),
+        );
 }
 
 
@@ -1336,10 +1344,14 @@ pub fn device_create_swap_chain(
 
 
     let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
-        Some(old) => {
+        Some(mut old) => {
             assert_eq!(old.device_id.value, device_id);
-            HUB.textures.unregister(old.outdated.texture_id.value);
-            HUB.texture_views.unregister(old.outdated.view_id.value);
+            let mut destroyed = device.destroyed.lock();
+            destroyed.add(ResourceId::Texture(old.outdated.texture_id.value), old.outdated.texture_id.ref_count);
+            destroyed.add(ResourceId::TextureView(old.outdated.view_id.value), old.outdated.view_id.ref_count);
+            unsafe {
+                old.command_pool.reset()
+            };
             (Some(old.raw), old.sem_available, old.command_pool)
         }
         _ => unsafe {
