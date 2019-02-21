@@ -242,6 +242,13 @@ impl Instance {
             id: wgn::wgpu_instance_create_surface_from_winit(self.id, window),
         }
     }
+    
+    #[cfg(feature = "metal")]
+    pub fn create_surface_with_metal_layer(&self, window: *mut std::ffi::c_void) -> Surface {
+        Surface {
+            id: wgn::wgpu_instance_create_surface_from_macos_layer(self.id, window),
+        }
+    }
 }
 
 impl Adapter {
