@@ -88,7 +88,20 @@ struct Cube {
     index_buf: wgpu::Buffer,
     index_count: usize,
     bind_group: wgpu::BindGroup,
+    uniform_buf: wgpu::Buffer,
     pipeline: wgpu::RenderPipeline,
+}
+
+impl Cube {
+    fn generate_matrix(aspect_ratio: f32) -> cgmath::Matrix4<f32> {
+        let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
+        let mx_view = cgmath::Matrix4::look_at(
+            cgmath::Point3::new(1.5f32, -5.0, 3.0),
+            cgmath::Point3::new(0f32, 0.0, 0.0),
+            cgmath::Vector3::unit_z(),
+        );
+        mx_projection * mx_view
+    }
 }
 
 impl framework::Example for Cube {
@@ -196,18 +209,9 @@ impl framework::Example for Cube {
             size: 64,
             usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
-        {
-            let aspect_ratio = sc_desc.width as f32 / sc_desc.height as f32;
-            let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
-            let mx_view = cgmath::Matrix4::look_at(
-                cgmath::Point3::new(1.5f32, -5.0, 3.0),
-                cgmath::Point3::new(0f32, 0.0, 0.0),
-                cgmath::Vector3::unit_z(),
-            );
-            let mx_total = mx_projection * mx_view;
-            let mx_raw: &[f32; 16] = mx_total.as_ref();
-            uniform_buf.set_sub_data(0, framework::cast_slice(&mx_raw[..]));
-        }
+        let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+        let mx_ref: &[f32; 16] = mx_total.as_ref();
+        uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
 
         // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -294,11 +298,17 @@ impl framework::Example for Cube {
             index_buf,
             index_count: index_data.len(),
             bind_group,
+            uniform_buf,
             pipeline,
         }
     }
 
-    fn update(&mut self, _event: wgpu::winit::WindowEvent) {
+    fn update(&mut self, event: wgpu::winit::WindowEvent) {
+        if let wgpu::winit::WindowEvent::Resized(size) = event {
+            let mx_total = Self::generate_matrix(size.width as f32 / size.height as f32);
+            let mx_ref: &[f32; 16] = mx_total.as_ref();
+            self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
+        }
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
