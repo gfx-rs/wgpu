@@ -92,7 +92,6 @@ fn main() {
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group);
         cpass.dispatch(numbers.len() as u32, 1, 1);
-        cpass.end_pass();
     }
     encoder.copy_buffer_tobuffer(&storage_buffer, 0, &staging_buffer, 0, size);
 

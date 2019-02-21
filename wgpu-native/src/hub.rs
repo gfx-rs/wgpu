@@ -58,9 +58,6 @@ impl<T> Storage<T> {
     pub fn get_mut(&mut self, id: Id) -> &mut T {
         self.map.get_mut(&id).unwrap()
     }
-    pub fn take(&mut self, id: Id) -> T {
-        self.map.remove(&id).unwrap()
-    }
 }
 
 pub struct Registry<T> {
@@ -94,16 +91,19 @@ impl<T> ops::DerefMut for Registry<T> {
     }
 }
 
-#[cfg(feature = "local")]
 impl<T> Registry<T> {
+    #[cfg(feature = "local")]
     pub fn register(&self, value: T) -> Id {
         let id = self.identity.lock().alloc();
         let old = self.data.write().map.insert(id, value);
         assert!(old.is_none());
         id
     }
-    pub fn unregister(&self, id: Id) {
+
+    pub fn unregister(&self, id: Id) -> T {
+        #[cfg(feature = "local")]
         self.identity.lock().free(id);
+        self.data.write().map.remove(&id).unwrap()
     }
 }
 

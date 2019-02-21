@@ -318,7 +318,6 @@ impl framework::Example for Cube {
             rpass.set_index_buffer(&self.index_buf, 0);
             rpass.set_vertex_buffers(&[(&self.vertex_buf, 0)]);
             rpass.draw_indexed(0 .. self.index_count as u32, 0, 0..1);
-            rpass.end_pass();
         }
 
         device

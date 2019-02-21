@@ -71,20 +71,6 @@ pub struct SwapChain {
     id: wgn::SwapChainId,
 }
 
-pub enum BindingResource<'a> {
-    Buffer {
-        buffer: &'a Buffer,
-        range: Range<u32>,
-    },
-    Sampler(&'a Sampler),
-    TextureView(&'a TextureView),
-}
-
-pub struct Binding<'a> {
-    pub binding: u32,
-    pub resource: BindingResource<'a>,
-}
-
 pub struct BindGroupLayout {
     id: wgn::BindGroupLayoutId,
 }
@@ -130,6 +116,21 @@ pub struct ComputePass<'a> {
 pub struct Queue<'a> {
     id: wgn::QueueId,
     temp: &'a mut Temp,
+}
+
+
+pub enum BindingResource<'a> {
+    Buffer {
+        buffer: &'a Buffer,
+        range: Range<u32>,
+    },
+    Sampler(&'a Sampler),
+    TextureView(&'a TextureView),
+}
+
+pub struct Binding<'a> {
+    pub binding: u32,
+    pub resource: BindingResource<'a>,
 }
 
 pub struct BindGroupLayoutDescriptor<'a> {
@@ -221,6 +222,7 @@ impl<'a> TextureCopyView<'a> {
         }
     }
 }
+
 
 impl Instance {
     pub fn new() -> Self {
@@ -438,6 +440,12 @@ impl Buffer {
     }
 }
 
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        wgn::wgpu_buffer_destroy(self.id);
+    }
+}
+
 impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
@@ -449,6 +457,18 @@ impl Texture {
         TextureView {
             id: wgn::wgpu_texture_create_default_view(self.id),
         }
+    }
+}
+
+impl Drop for Texture {
+    fn drop(&mut self) {
+        wgn::wgpu_texture_destroy(self.id);
+    }
+}
+
+impl Drop for TextureView {
+    fn drop(&mut self) {
+        wgn::wgpu_texture_view_destroy(self.id);
     }
 }
 
@@ -568,10 +588,6 @@ impl CommandEncoder {
 }
 
 impl<'a> RenderPass<'a> {
-    pub fn end_pass(self) {
-        wgn::wgpu_render_pass_end_pass(self.id);
-    }
-
     pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
         wgn::wgpu_render_pass_set_bind_group(self.id, index, bind_group.id);
     }
@@ -621,11 +637,13 @@ impl<'a> RenderPass<'a> {
     }
 }
 
-impl<'a> ComputePass<'a> {
-    pub fn end_pass(self) {
-        wgn::wgpu_compute_pass_end_pass(self.id);
+impl<'a> Drop for RenderPass<'a> {
+    fn drop(&mut self) {
+        wgn::wgpu_render_pass_end_pass(self.id);
     }
+}
 
+impl<'a> ComputePass<'a> {
     pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
         wgn::wgpu_compute_pass_set_bind_group(self.id, index, bind_group.id);
     }
@@ -636,6 +654,12 @@ impl<'a> ComputePass<'a> {
 
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         wgn::wgpu_compute_pass_dispatch(self.id, x, y, z);
+    }
+}
+
+impl<'a> Drop for ComputePass<'a> {
+    fn drop(&mut self) {
+        wgn::wgpu_compute_pass_end_pass(self.id);
     }
 }
 

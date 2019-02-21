@@ -1,5 +1,5 @@
 use crate::{binding_model, command, conv, pipeline, resource, swap_chain};
-use crate::hub::{HUB, Storage};
+use crate::hub::HUB;
 use crate::track::{BufferTracker, TextureTracker, TrackPermit};
 use crate::{
     LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
@@ -67,11 +67,13 @@ impl Eq for FramebufferKey {}
 enum ResourceId {
     Buffer(BufferId),
     Texture(TextureId),
+    TextureView(TextureViewId),
 }
 
 enum Resource<B: hal::Backend> {
     Buffer(resource::Buffer<B>),
     Texture(resource::Texture<B>),
+    TextureView(resource::TextureView<B>),
 }
 
 struct ActiveSubmission<B: hal::Backend> {
@@ -101,45 +103,6 @@ impl<B: hal::Backend> DestroyedResources<B> {
             .push((resource_id, life_guard.ref_count.clone()));
     }
 
-    fn triage_referenced(
-        &mut self,
-        buffer_guard: &mut Storage<resource::Buffer<B>>,
-        texture_guard: &mut Storage<resource::Texture<B>>,
-    ) {
-        for i in (0..self.referenced.len()).rev() {
-            // one in resource itself, and one here in this list
-            let num_refs = self.referenced[i].1.load();
-            if num_refs <= 2 {
-                assert_eq!(num_refs, 2);
-                let resource_id = self.referenced.swap_remove(i).0;
-                let (submit_index, resource) = match resource_id {
-                    ResourceId::Buffer(id) => {
-                        #[cfg(feature = "local")]
-                        HUB.buffers.unregister(id);
-                        let buf = buffer_guard.take(id);
-                        let si = buf.life_guard.submission_index.load(Ordering::Acquire);
-                        (si, Resource::Buffer(buf))
-                    }
-                    ResourceId::Texture(id) => {
-                        #[cfg(feature = "local")]
-                        HUB.textures.unregister(id);
-                        let tex = texture_guard.take(id);
-                        let si = tex.life_guard.submission_index.load(Ordering::Acquire);
-                        (si, Resource::Texture(tex))
-                    }
-                };
-                match self
-                    .active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                {
-                    Some(a) => a.resources.push(resource),
-                    None => self.free.push(resource),
-                }
-            }
-        }
-    }
-
     /// Returns the last submission index that is done.
     fn cleanup(&mut self, raw: &B::Device) -> SubmissionIndex {
         let mut last_done = 0;
@@ -159,16 +122,57 @@ impl<B: hal::Backend> DestroyedResources<B> {
 
         for resource in self.free.drain(..) {
             match resource {
-                Resource::Buffer(buf) => {
-                    unsafe { raw.destroy_buffer(buf.raw) };
-                }
-                Resource::Texture(tex) => {
-                    unsafe { raw.destroy_image(tex.raw) };
-                }
+                Resource::Buffer(buf) => unsafe {
+                    raw.destroy_buffer(buf.raw)
+                },
+                Resource::Texture(tex) => unsafe {
+                    raw.destroy_image(tex.raw)
+                },
+                Resource::TextureView(view) => unsafe {
+                    raw.destroy_image_view(view.raw)
+                },
             }
         }
 
         last_done
+    }
+}
+
+impl DestroyedResources<back::Backend> {
+    fn triage_referenced(&mut self) {
+        for i in (0..self.referenced.len()).rev() {
+            // one in resource itself, and one here in this list
+            let num_refs = self.referenced[i].1.load();
+            if num_refs <= 2 {
+                assert_eq!(num_refs, 2);
+                let resource_id = self.referenced.swap_remove(i).0;
+                let (submit_index, resource) = match resource_id {
+                    ResourceId::Buffer(id) => {
+                        let buf = HUB.buffers.unregister(id);
+                        let si = buf.life_guard.submission_index.load(Ordering::Acquire);
+                        (si, Resource::Buffer(buf))
+                    }
+                    ResourceId::Texture(id) => {
+                        let tex = HUB.textures.unregister(id);
+                        let si = tex.life_guard.submission_index.load(Ordering::Acquire);
+                        (si, Resource::Texture(tex))
+                    }
+                    ResourceId::TextureView(id) => {
+                        let view = HUB.texture_views.unregister(id);
+                        let si = view.life_guard.submission_index.load(Ordering::Acquire);
+                        (si, Resource::TextureView(view))
+                    }
+                };
+                match self
+                    .active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                {
+                    Some(a) => a.resources.push(resource),
+                    None => self.free.push(resource),
+                }
+            }
+        }
     }
 }
 
@@ -579,8 +583,19 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_texture_view_destroy(_texture_view_id: TextureViewId) {
-    unimplemented!()
+pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
+    let texture_view_guard = HUB.texture_views.read();
+    let view = texture_view_guard.get(texture_view_id);
+    let device_id = HUB.textures
+        .read()
+        .get(view.texture_id.value)
+        .device_id.value;
+    HUB.devices
+        .read()
+        .get(device_id)
+        .destroyed
+        .lock()
+        .add(ResourceId::TextureView(texture_view_id), &view.life_guard);
 }
 
 
@@ -878,77 +893,80 @@ pub extern "C" fn wgpu_queue_submit(
 ) {
     let mut device_guard = HUB.devices.write();
     let device = device_guard.get_mut(queue_id);
-    let mut buffer_tracker = device.buffer_tracker.lock();
-    let mut texture_tracker = device.texture_tracker.lock();
 
-    let mut command_buffer_guard = HUB.command_buffers.write();
+    let mut swap_chain_links = Vec::new();
     let command_buffer_ids =
         unsafe { slice::from_raw_parts(command_buffer_ptr, command_buffer_count) };
 
-    let mut buffer_guard = HUB.buffers.write();
-    let mut texture_guard = HUB.textures.write();
     let old_submit_index = device
         .life_guard
         .submission_index
         .fetch_add(1, Ordering::Relaxed);
 
-    let mut swap_chain_links = Vec::new();
-
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
     // a temporary one, since the chains are not finished.
+    {
+        let mut command_buffer_guard = HUB.command_buffers.write();
+        let buffer_guard = HUB.buffers.read();
+        let texture_guard = HUB.textures.read();
+        let mut buffer_tracker = device.buffer_tracker.lock();
+        let mut texture_tracker = device.texture_tracker.lock();
 
-    // finish all the command buffers first
-    for &cmb_id in command_buffer_ids {
-        let comb = command_buffer_guard.get_mut(cmb_id);
-        swap_chain_links.extend(comb.swap_chain_links.drain(..));
-        // update submission IDs
-        comb.life_guard.submission_index
-            .store(old_submit_index, Ordering::Release);
-        for id in comb.buffer_tracker.used() {
-            buffer_guard
-                .get(id)
-                .life_guard
-                .submission_index
+        // finish all the command buffers first
+        for &cmb_id in command_buffer_ids {
+            let comb = command_buffer_guard.get_mut(cmb_id);
+            swap_chain_links.extend(comb.swap_chain_links.drain(..));
+            // update submission IDs
+            comb.life_guard.submission_index
                 .store(old_submit_index, Ordering::Release);
-        }
-        for id in comb.texture_tracker.used() {
-            texture_guard
-                .get(id)
-                .life_guard
-                .submission_index
-                .store(old_submit_index, Ordering::Release);
-        }
+            for id in comb.buffer_tracker.used() {
+                buffer_guard
+                    .get(id)
+                    .life_guard
+                    .submission_index
+                    .store(old_submit_index, Ordering::Release);
+            }
+            for id in comb.texture_tracker.used() {
+                texture_guard
+                    .get(id)
+                    .life_guard
+                    .submission_index
+                    .store(old_submit_index, Ordering::Release);
+            }
 
-        // execute resource transitions
-        let mut transit = device.com_allocator.extend(comb);
-        unsafe {
-            transit.begin(
-                hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-                hal::command::CommandBufferInheritanceInfo::default(),
+            // execute resource transitions
+            let mut transit = device.com_allocator.extend(comb);
+            unsafe {
+                transit.begin(
+                    hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+                    hal::command::CommandBufferInheritanceInfo::default(),
+                );
+            }
+            //TODO: fix the consume
+            command::CommandBuffer::insert_barriers(
+                &mut transit,
+                buffer_tracker.consume_by_replace(&comb.buffer_tracker),
+                texture_tracker.consume_by_replace(&comb.texture_tracker),
+                &*buffer_guard,
+                &*texture_guard,
             );
-        }
-        //TODO: fix the consume
-        command::CommandBuffer::insert_barriers(
-            &mut transit,
-            buffer_tracker.consume_by_replace(&comb.buffer_tracker),
-            texture_tracker.consume_by_replace(&comb.texture_tracker),
-            &*buffer_guard,
-            &*texture_guard,
-        );
-        unsafe {
-            transit.finish();
-        }
-        comb.raw.insert(0, transit);
-        unsafe {
-            comb.raw.last_mut().unwrap().finish();
+            unsafe {
+                transit.finish();
+            }
+            comb.raw.insert(0, transit);
+            unsafe {
+                comb.raw.last_mut().unwrap().finish();
+            }
         }
     }
 
     // now prepare the GPU submission
     let fence = device.raw.create_fence(false).unwrap();
     {
+        let command_buffer_guard = HUB.command_buffers.read();
         let swap_chain_guard = HUB.swap_chains.read();
+
         let wait_semaphores = swap_chain_links
             .into_iter()
             .map(|link| {
@@ -959,6 +977,7 @@ pub extern "C" fn wgpu_queue_submit(
                     .sem_available;
                 (sem, hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT)
             });
+
         let submission =
             hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
                 //TODO: may `OneShot` be enough?
@@ -968,6 +987,7 @@ pub extern "C" fn wgpu_queue_submit(
                 wait_semaphores,
                 signal_semaphores: &[], //TODO: signal `sem_present`?
             };
+
         unsafe {
             device.queue_group.queues[0]
                 .as_raw_mut()
@@ -977,7 +997,7 @@ pub extern "C" fn wgpu_queue_submit(
 
     let last_done = {
         let mut destroyed = device.destroyed.lock();
-        destroyed.triage_referenced(&mut *buffer_guard, &mut *texture_guard);
+        destroyed.triage_referenced();
         let last_done = destroyed.cleanup(&device.raw);
 
         destroyed.active.push(ActiveSubmission {
@@ -995,9 +1015,7 @@ pub extern "C" fn wgpu_queue_submit(
 
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {
-        #[cfg(feature = "local")]
-        HUB.command_buffers.unregister(cmb_id);
-        let cmd_buf = command_buffer_guard.take(cmb_id);
+        let cmd_buf = HUB.command_buffers.unregister(cmb_id);
         device.com_allocator.after_submit(cmd_buf);
     }
 }

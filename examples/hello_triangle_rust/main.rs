@@ -108,7 +108,6 @@ fn main() {
             });
             rpass.set_pipeline(&render_pipeline);
             rpass.draw(0..3, 0..1);
-            rpass.end_pass();
         }
 
         device
