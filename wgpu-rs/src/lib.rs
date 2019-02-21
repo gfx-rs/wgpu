@@ -4,7 +4,6 @@ extern crate wgpu_native as wgn;
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
-use std::marker::PhantomData;
 use std::ops::Range;
 use std::ptr;
 
@@ -26,7 +25,14 @@ pub use wgn::{
 };
 
 
-//Note: we need some better guidelines on which structures receive by value, and which by pointer.
+//TODO: avoid heap allocating vectors during resource creation.
+#[derive(Default)]
+struct Temp {
+    //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
+    //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
+    command_buffers: Vec<wgn::CommandBufferId>,
+}
+
 
 pub struct Instance {
     id: wgn::InstanceId,
@@ -38,6 +44,7 @@ pub struct Adapter {
 
 pub struct Device {
     id: wgn::DeviceId,
+    temp: Temp,
 }
 
 pub struct Buffer {
@@ -103,7 +110,7 @@ pub struct ComputePipeline {
 }
 
 pub struct CommandBuffer {
-    _id: wgn::CommandBufferId,
+    id: wgn::CommandBufferId,
 }
 
 pub struct CommandEncoder {
@@ -122,7 +129,7 @@ pub struct ComputePass<'a> {
 
 pub struct Queue<'a> {
     id: wgn::QueueId,
-    _marker: PhantomData<&'a Self>,
+    temp: &'a mut Temp,
 }
 
 pub struct BindGroupLayoutDescriptor<'a> {
@@ -239,6 +246,7 @@ impl Adapter {
     pub fn create_device(&self, desc: &DeviceDescriptor) -> Device {
         Device {
             id: wgn::wgpu_adapter_create_device(self.id, desc),
+            temp: Temp::default(),
         }
     }
 }
@@ -259,7 +267,7 @@ impl Device {
     pub fn get_queue(&mut self) -> Queue {
         Queue {
             id: wgn::wgpu_device_get_queue(self.id),
-            _marker: PhantomData,
+            temp: &mut self.temp,
         }
     }
 
@@ -447,7 +455,7 @@ impl Texture {
 impl CommandEncoder {
     pub fn finish(self) -> CommandBuffer {
         CommandBuffer {
-            _id: wgn::wgpu_command_encoder_finish(self.id),
+            id: wgn::wgpu_command_encoder_finish(self.id),
         }
     }
 
@@ -633,9 +641,14 @@ impl<'a> ComputePass<'a> {
 
 impl<'a> Queue<'a> {
     pub fn submit(&mut self, command_buffers: &[CommandBuffer]) {
+        self.temp.command_buffers.clear();
+        self.temp.command_buffers.extend(
+            command_buffers.iter().map(|cb| cb.id)
+        );
+
         wgn::wgpu_queue_submit(
             self.id,
-            command_buffers.as_ptr() as *const _,
+            self.temp.command_buffers.as_ptr(),
             command_buffers.len(),
         );
     }
