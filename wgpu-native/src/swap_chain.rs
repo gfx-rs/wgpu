@@ -24,6 +24,16 @@ pub(crate) struct SwapChainLink<E> {
 
 pub struct Surface<B: hal::Backend> {
     pub(crate) raw: B::Surface,
+    pub(crate) swap_chain: Option<SwapChain<B>>,
+}
+
+impl<B: hal::Backend> Surface<B> {
+    pub(crate) fn new(raw: B::Surface) -> Self {
+        Surface {
+            raw,
+            swap_chain: None,
+        }
+    }
 }
 
 pub(crate) struct Frame<B: hal::Backend> {
@@ -88,8 +98,12 @@ pub struct SwapChainOutput {
 pub extern "C" fn wgpu_swap_chain_get_next_texture(
     swap_chain_id: SwapChainId,
 ) -> SwapChainOutput {
-    let mut swap_chain_guard = HUB.swap_chains.write();
-    let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
+    let mut surface_guard = HUB.surfaces.write();
+    let swap_chain = surface_guard
+        .get_mut(swap_chain_id)
+        .swap_chain
+        .as_mut()
+        .unwrap();
     let device_guard = HUB.devices.read();
     let device = device_guard.get(swap_chain.device_id.value);
 
@@ -136,8 +150,12 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
 pub extern "C" fn wgpu_swap_chain_present(
     swap_chain_id: SwapChainId,
 ) {
-    let mut swap_chain_guard = HUB.swap_chains.write();
-    let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
+    let mut surface_guard = HUB.surfaces.write();
+    let swap_chain = surface_guard
+        .get_mut(swap_chain_id)
+        .swap_chain
+        .as_mut()
+        .unwrap();
 
     let image_index = swap_chain.acquired.remove(0);
     let frame = match swap_chain.frames.get_mut(image_index as usize) {

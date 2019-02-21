@@ -965,17 +965,20 @@ pub extern "C" fn wgpu_queue_submit(
     let fence = device.raw.create_fence(false).unwrap();
     {
         let command_buffer_guard = HUB.command_buffers.read();
-        let swap_chain_guard = HUB.swap_chains.read();
+        let surface_guard = HUB.surfaces.read();
 
         let wait_semaphores = swap_chain_links
             .into_iter()
-            .map(|link| {
+            .flat_map(|link| {
                 //TODO: check the epoch
-                let sem = &swap_chain_guard
+                surface_guard
                     .get(link.swap_chain_id.0)
-                    .frames[link.image_index as usize]
-                    .sem_available;
-                (sem, hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT)
+                    .swap_chain
+                    .as_ref()
+                    .map(|swap_chain| (
+                        &swap_chain.frames[link.image_index as usize].sem_available,
+                        hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                    ))
             });
 
         let submission =
@@ -1299,7 +1302,7 @@ pub fn device_create_swap_chain(
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
     outdated: swap_chain::OutdatedFrame,
-) -> (swap_chain::SwapChain<back::Backend>, Vec<resource::Texture<back::Backend>>) {
+) -> Vec<resource::Texture<back::Backend>> {
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
     let mut surface_guard = HUB.surfaces.write();
@@ -1331,25 +1334,38 @@ pub fn device_create_swap_chain(
         "Requested size {}x{} is outside of the supported range: {:?}",
         desc.width, desc.height, caps.extents);
 
+
+    let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
+        Some(old) => {
+            assert_eq!(old.device_id.value, device_id);
+            HUB.textures.unregister(old.outdated.texture_id.value);
+            HUB.texture_views.unregister(old.outdated.view_id.value);
+            (Some(old.raw), old.sem_available, old.command_pool)
+        }
+        _ => unsafe {
+            let sem_available = device.raw
+                .create_semaphore()
+                .unwrap();
+            let command_pool = device.raw
+                .create_command_pool_typed(
+                    &device.queue_group,
+                    hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                )
+                .unwrap();
+            (None, sem_available, command_pool)
+        }
+    };
+
     let (raw, backbuffer) = unsafe {
         device.raw
             .create_swapchain(
                 &mut surface.raw,
                 config.with_image_usage(usage),
-                None,
+                old_raw,
             )
             .unwrap()
     };
-    let command_pool = unsafe {
-        device.raw
-            .create_command_pool_typed(
-                &device.queue_group,
-                hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-            )
-            .unwrap()
-    };
-
-    let swap_chain = swap_chain::SwapChain {
+    surface.swap_chain = Some(swap_chain::SwapChain {
         raw,
         device_id: Stored {
             value: device_id,
@@ -1357,17 +1373,17 @@ pub fn device_create_swap_chain(
         },
         frames: Vec::with_capacity(num_frames as usize),
         acquired: Vec::with_capacity(1), //TODO: get it from gfx-hal?
-        sem_available: device.raw.create_semaphore().unwrap(),
+        sem_available,
         outdated,
         command_pool,
-    };
+    });
 
     let images = match backbuffer {
         hal::Backbuffer::Images(images) => images,
         hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
     };
 
-    let textures = images
+    images
         .into_iter()
         .map(|raw| resource::Texture {
             raw,
@@ -1385,9 +1401,7 @@ pub fn device_create_swap_chain(
             swap_chain_link: None,
             life_guard: LifeGuard::new(),
         })
-        .collect();
-
-    (swap_chain, textures)
+        .collect()
 }
 
 #[cfg(feature = "local")]
@@ -1395,8 +1409,12 @@ fn swap_chain_populate_textures(
     swap_chain_id: SwapChainId,
     textures: Vec<resource::Texture<back::Backend>>,
 ) {
-    let mut swap_chain_guard = HUB.swap_chains.write();
-    let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
+    let mut surface_guard = HUB.surfaces.write();
+    let swap_chain = surface_guard
+        .get_mut(swap_chain_id)
+        .swap_chain
+        .as_mut()
+        .unwrap();
     let device_guard = HUB.devices.read();
     let device = device_guard.get(swap_chain.device_id.value);
 
@@ -1477,10 +1495,9 @@ pub extern "C" fn wgpu_device_create_swap_chain(
         }
     };
 
-    let (swap_chain, textures) = device_create_swap_chain(device_id, surface_id, desc, outdated);
-    let id = HUB.swap_chains.register(swap_chain);
-    swap_chain_populate_textures(id, textures);
-    id
+    let textures = device_create_swap_chain(device_id, surface_id, desc, outdated);
+    swap_chain_populate_textures(surface_id, textures);
+    surface_id
 }
 
 

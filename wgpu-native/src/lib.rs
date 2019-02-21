@@ -219,5 +219,4 @@ type ComputePassHandle = ComputePass<back::Backend>;
 // Swap chain
 pub type SurfaceId = hub::Id;
 type SurfaceHandle = Surface<back::Backend>;
-pub type SwapChainId = hub::Id;
-type SwapChainHandle = SwapChain<back::Backend>;
+pub type SwapChainId = SurfaceId;

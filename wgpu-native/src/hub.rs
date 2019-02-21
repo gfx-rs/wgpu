@@ -4,7 +4,7 @@ use crate::{
     RenderPassHandle, ComputePassHandle,
     PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
     BufferHandle, SamplerHandle, TextureHandle, TextureViewHandle,
-    SurfaceHandle, SwapChainHandle,
+    SurfaceHandle,
 };
 
 use hal::backend::FastHashMap;
@@ -126,7 +126,6 @@ pub struct Hub {
     pub(crate) texture_views: Arc<Registry<TextureViewHandle>>,
     pub(crate) samplers: Arc<Registry<SamplerHandle>>,
     pub(crate) surfaces: Arc<Registry<SurfaceHandle>>,
-    pub(crate) swap_chains: Arc<Registry<SwapChainHandle>>,
 }
 
 lazy_static! {
