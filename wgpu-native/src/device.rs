@@ -138,7 +138,11 @@ impl<B: hal::Backend> DestroyedResources<B> {
 }
 
 impl DestroyedResources<back::Backend> {
-    fn triage_referenced(&mut self) {
+    fn triage_referenced(
+        &mut self,
+        buffer_tracker: &mut BufferTracker,
+        texture_tracker: &mut TextureTracker,
+    ) {
         for i in (0..self.referenced.len()).rev() {
             // one in resource itself, and one here in this list
             let num_refs = self.referenced[i].1.load();
@@ -147,11 +151,13 @@ impl DestroyedResources<back::Backend> {
                 let resource_id = self.referenced.swap_remove(i).0;
                 let (submit_index, resource) = match resource_id {
                     ResourceId::Buffer(id) => {
+                        buffer_tracker.remove(id);
                         let buf = HUB.buffers.unregister(id);
                         let si = buf.life_guard.submission_index.load(Ordering::Acquire);
                         (si, Resource::Buffer(buf))
                     }
                     ResourceId::Texture(id) => {
+                        texture_tracker.remove(id);
                         let tex = HUB.textures.unregister(id);
                         let si = tex.life_guard.submission_index.load(Ordering::Acquire);
                         (si, Resource::Texture(tex))
@@ -910,6 +916,8 @@ pub extern "C" fn wgpu_queue_submit(
         .life_guard
         .submission_index
         .fetch_add(1, Ordering::Relaxed);
+    let mut buffer_tracker = device.buffer_tracker.lock();
+    let mut texture_tracker = device.texture_tracker.lock();
 
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
@@ -918,8 +926,6 @@ pub extern "C" fn wgpu_queue_submit(
         let mut command_buffer_guard = HUB.command_buffers.write();
         let buffer_guard = HUB.buffers.read();
         let texture_guard = HUB.textures.read();
-        let mut buffer_tracker = device.buffer_tracker.lock();
-        let mut texture_tracker = device.texture_tracker.lock();
 
         // finish all the command buffers first
         for &cmb_id in command_buffer_ids {
@@ -1008,7 +1014,7 @@ pub extern "C" fn wgpu_queue_submit(
 
     let last_done = {
         let mut destroyed = device.destroyed.lock();
-        destroyed.triage_referenced();
+        destroyed.triage_referenced(&mut *buffer_tracker, &mut *texture_tracker);
         let last_done = destroyed.cleanup(&device.raw);
 
         destroyed.active.push(ActiveSubmission {
