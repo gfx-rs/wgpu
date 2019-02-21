@@ -1294,11 +1294,11 @@ pub extern "C" fn wgpu_device_create_compute_pipeline(
     HUB.compute_pipelines.register(pipeline)
 }
 
-
 pub fn device_create_swap_chain(
     device_id: DeviceId,
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
+    outdated: swap_chain::OutdatedFrame,
 ) -> (swap_chain::SwapChain<back::Backend>, Vec<resource::Texture<back::Backend>>) {
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
@@ -1358,6 +1358,7 @@ pub fn device_create_swap_chain(
         frames: Vec::with_capacity(num_frames as usize),
         acquired: Vec::with_capacity(1), //TODO: get it from gfx-hal?
         sem_available: device.raw.create_semaphore().unwrap(),
+        outdated,
         command_pool,
     };
 
@@ -1457,7 +1458,26 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
 ) -> SwapChainId {
-    let (swap_chain, textures) = device_create_swap_chain(device_id, surface_id, desc);
+    let outdated = {
+        let outdated_texture = device_create_texture(device_id, &desc.to_texture_desc());
+        let texture_id = Stored {
+            ref_count: outdated_texture.life_guard.ref_count.clone(),
+            value: HUB.textures.register(outdated_texture),
+        };
+        device_track_texture(device_id, texture_id.value, texture_id.ref_count.clone());
+
+        let outdated_view = texture_create_default_view(texture_id.value);
+        let view_id = Stored {
+            ref_count: outdated_view.life_guard.ref_count.clone(),
+            value: HUB.texture_views.register(outdated_view),
+        };
+        swap_chain::OutdatedFrame {
+            texture_id,
+            view_id,
+        }
+    };
+
+    let (swap_chain, textures) = device_create_swap_chain(device_id, surface_id, desc, outdated);
     let id = HUB.swap_chains.register(swap_chain);
     swap_chain_populate_textures(id, textures);
     id
