@@ -30,7 +30,7 @@ else
 endif
 
 
-.PHONY: all check test doc clear lib-native lib-rust examples-native examples-rust
+.PHONY: all check test doc clear lib-native lib-rust examples-native examples-rust gfx-cube
 
 all: examples-native examples-rust examples-gfx
 
@@ -64,3 +64,6 @@ examples-rust: lib-rust examples/Cargo.toml $(wildcard wgpu-native/**/*.rs)
 
 examples-gfx: lib-rust gfx-examples/Cargo.toml $(wildcard gfx-examples/*.rs)
 	cargo build --manifest-path gfx-examples/Cargo.toml --features $(FEATURE_RUST)
+
+gfx-cube:
+	cargo run --manifest-path gfx-examples/Cargo.toml --bin cube --features $(FEATURE_RUST)
