@@ -123,5 +123,6 @@ pub fn run<E: Example>(title: &str) {
 
         let frame = swap_chain.get_next_texture();
         example.render(&frame, &mut device);
+        running &= !cfg!(feature = "metal-auto-capture");
     }
 }

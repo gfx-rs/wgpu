@@ -12,8 +12,13 @@ publish = false
 name = "cube"
 path = "src/cube.rs"
 
+[[bin]]
+name = "shadow"
+path = "src/shadow.rs"
+
 [features]
 default = []
+metal-auto-capture = ["wgpu/metal-auto-capture"]
 metal = ["wgpu/metal"]
 dx11 = ["wgpu/dx11"]
 dx12 = ["wgpu/dx12"]
