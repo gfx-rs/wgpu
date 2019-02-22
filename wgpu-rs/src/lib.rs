@@ -16,12 +16,13 @@ pub use wgn::{
     BufferDescriptor, BufferUsageFlags,
     IndexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor, VertexFormat,
     Color, CommandEncoderDescriptor,
-    ColorStateDescriptor, DepthStencilStateDescriptor,
+    ColorStateDescriptor, DepthStencilStateDescriptor, StencilStateFaceDescriptor, StencilOperation,
     DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     ShaderModuleDescriptor, ShaderStageFlags, StoreOp, SwapChainDescriptor,
     SamplerDescriptor, AddressMode, FilterMode, BorderColor, CompareFunction,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags,
+    TextureViewDescriptor, TextureViewDimension, TextureAspectFlags,
 };
 
 
@@ -151,6 +152,7 @@ pub struct PipelineStageDescriptor<'a> {
     pub entry_point: &'a str,
 }
 
+#[derive(Clone, Debug)]
 pub struct VertexBufferDescriptor<'a> {
     pub stride: u32,
     pub step_mode: InputStepMode,

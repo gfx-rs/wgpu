@@ -61,7 +61,8 @@ pub enum TextureFormat {
     R8g8b8a8Unorm = 0,
     R8g8b8a8Uint = 1,
     B8g8r8a8Unorm = 2,
-    D32FloatS8Uint = 3,
+    D32Float = 3,
+    D32FloatS8Uint = 4,
 }
 
 bitflags! {

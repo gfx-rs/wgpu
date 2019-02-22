@@ -83,7 +83,7 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-struct Cube {
+struct Example {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     index_count: usize,
@@ -92,7 +92,7 @@ struct Cube {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl Cube {
+impl Example {
     fn generate_matrix(aspect_ratio: f32) -> cgmath::Matrix4<f32> {
         let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
         let mx_view = cgmath::Matrix4::look_at(
@@ -104,7 +104,7 @@ impl Cube {
     }
 }
 
-impl framework::Example for Cube {
+impl framework::Example for Example {
     fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
         use std::mem;
 
@@ -293,7 +293,7 @@ impl framework::Example for Cube {
         // Done
         let init_command_buf = init_encoder.finish();
         device.get_queue().submit(&[init_command_buf]);
-        Cube {
+        Example {
             vertex_buf,
             index_buf,
             index_count: index_data.len(),
@@ -337,5 +337,5 @@ impl framework::Example for Cube {
 }
 
 fn main() {
-    framework::run::<Cube>("cube");
+    framework::run::<Example>("cube");
 }

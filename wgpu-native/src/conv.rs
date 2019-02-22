@@ -291,6 +291,7 @@ pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::forma
         R8g8b8a8Unorm => H::Rgba8Unorm,
         R8g8b8a8Uint => H::Rgba8Uint,
         B8g8r8a8Unorm => H::Bgra8Unorm,
+        D32Float => H::D32Float,
         D32FloatS8Uint => H::D32FloatS8Uint,
     }
 }
@@ -303,6 +304,7 @@ pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::
         FloatR32G32B32 => H::Rgb32Float,
         FloatR32G32 => H::Rg32Float,
         FloatR32 => H::R32Float,
+        IntR8G8B8A8 => H::Rgba8Int,
     }
 }
 
@@ -313,21 +315,25 @@ fn checked_u32_as_u16(value: u32) -> u16 {
 
 pub fn map_texture_dimension_size(
     dimension: resource::TextureDimension,
-    Extent3d {
-        width,
-        height,
-        depth,
-    }: Extent3d,
+    Extent3d { width, height, depth }: Extent3d,
+    array_size: u32,
 ) -> hal::image::Kind {
     use hal::image::Kind as H;
     use crate::resource::TextureDimension::*;
     match dimension {
         D1 => {
             assert_eq!(height, 1);
-            H::D1(width, checked_u32_as_u16(depth))
+            assert_eq!(depth, 1);
+            H::D1(width, checked_u32_as_u16(array_size))
         }
-        D2 => H::D2(width, height, checked_u32_as_u16(depth), 1), // TODO: Samples
-        D3 => H::D3(width, height, depth),
+        D2 => {
+            assert_eq!(depth, 1);
+            H::D2(width, height, checked_u32_as_u16(array_size), 1) // TODO: Samples
+        }
+        D3 => {
+            assert_eq!(array_size, 1);
+            H::D3(width, height, depth)
+        }
     }
 }
 
