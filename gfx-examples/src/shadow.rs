@@ -1,3 +1,4 @@
+use std::mem;
 use std::ops::Range;
 use std::rc::Rc;
 
@@ -82,6 +83,7 @@ fn create_plane(size: i8) -> (Vec<Vertex>, Vec<u16>) {
 
 struct Entity {
     mx_world: cgmath::Matrix4<f32>,
+    color: wgpu::Color,
     vertex_buf: Rc<wgpu::Buffer>,
     index_buf: Rc<wgpu::Buffer>,
     index_count: usize,
@@ -99,9 +101,9 @@ struct Light {
 
 #[repr(C)]
 struct LightRaw {
+    proj: [[f32; 4]; 4],
     pos: [f32; 4],
     color: [f32; 4],
-    proj: [[f32; 4]; 4],
 }
 
 impl Light {
@@ -131,8 +133,13 @@ impl Light {
 #[repr(C)]
 struct ForwardUniforms {
     proj: [[f32; 4]; 4],
-    color: [f32; 4],
     num_lights: [u32; 4],
+}
+
+#[repr(C)]
+struct EntityUniforms {
+    model: [[f32; 4]; 4],
+    color: [f32; 4],
 }
 
 #[repr(C)]
@@ -177,8 +184,6 @@ impl Example {
 
 impl framework::Example for Example {
     fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
-        use std::mem;
-
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
@@ -204,8 +209,9 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
         plane_index_buf.set_sub_data(0, framework::cast_slice(&plane_index_data));
+        let entity_uniform_size = mem::size_of::<EntityUniforms>() as u32;
         let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            size: 64,
+            size: entity_uniform_size,
             usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
 
@@ -229,13 +235,14 @@ impl framework::Example for Example {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer {
                             buffer: &plane_uniform_buf,
-                            range: 0 .. 64,
+                            range: 0 .. entity_uniform_size,
                         },
                     },
                 ],
             });
             Entity {
                 mx_world: cgmath::Matrix4::identity(),
+                color: wgpu::Color::WHITE,
                 vertex_buf: Rc::new(plane_vertex_buf),
                 index_buf: Rc::new(plane_index_buf),
                 index_count: plane_index_data.len(),
@@ -284,11 +291,12 @@ impl framework::Example for Example {
                 scale: cube.scale,
             };
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-                size: 64,
+                size: entity_uniform_size,
                 usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
             });
             entities.push(Entity {
                 mx_world: cgmath::Matrix4::from(transform),
+                color: wgpu::Color::GREEN,
                 vertex_buf: Rc::clone(&cube_vertex_buf),
                 index_buf: Rc::clone(&cube_index_buf),
                 index_count: cube_index_data.len(),
@@ -299,7 +307,7 @@ impl framework::Example for Example {
                             binding: 0,
                             resource: wgpu::BindingResource::Buffer {
                                 buffer: &uniform_buf,
-                                range: 0 .. 64,
+                                range: 0 .. entity_uniform_size,
                             },
                         },
                     ],
@@ -421,7 +429,7 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_bytes = framework::load_glsl("shadow-base.vert", framework::ShaderStage::Vertex);
+            let vs_bytes = framework::load_glsl("shadow-bake.vert", framework::ShaderStage::Vertex);
             let fs_bytes = framework::load_glsl("shadow-bake.frag", framework::ShaderStage::Fragment);
             let vs_module = device.create_shader_module(&vs_bytes);
             let fs_module = device.create_shader_module(&fs_bytes);
@@ -507,7 +515,6 @@ impl framework::Example for Example {
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let data = ForwardUniforms {
                 proj: *mx_total.as_ref(),
-                color: [1.0; 4],
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
             uniform_buf.set_sub_data(0, framework::cast_slice(&[data]));
@@ -606,8 +613,11 @@ impl framework::Example for Example {
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
         for entity in &self.entities {
-            let raw: &[f32; 16] = entity.mx_world.as_ref();
-            entity.uniform_buf.set_sub_data(0, framework::cast_slice(&raw[..]));
+            let data = EntityUniforms {
+                model: *entity.mx_world.as_ref(),
+                color: [entity.color.r, entity.color.g, entity.color.b, entity.color.a],
+            };
+            entity.uniform_buf.set_sub_data(0, framework::cast_slice(&[data]));
         }
         if self.lights_are_dirty {
             self.lights_are_dirty = false;
@@ -620,8 +630,17 @@ impl framework::Example for Example {
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
-        for (_i, light) in self.lights.iter().enumerate() {
-            //TODO: update light uniforms
+        for (i, light) in self.lights.iter().enumerate() {
+            // The light uniform buffer already has the projection,
+            // let's just copy it over to the shadow uniform buffer.
+            encoder.copy_buffer_to_buffer(
+                &self.light_uniform_buf,
+                (i * mem::size_of::<LightRaw>()) as u32,
+                &self.shadow_pass.uniform_buf,
+                0,
+                64,
+            );
+
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
@@ -656,8 +675,8 @@ impl framework::Example for Example {
                 }],
                 depth_stencil_attachment: None,
             });
-            pass.set_pipeline(&self.shadow_pass.pipeline);
-            pass.set_bind_group(0, &self.shadow_pass.bind_group);
+            pass.set_pipeline(&self.forward_pass.pipeline);
+            pass.set_bind_group(0, &self.forward_pass.bind_group);
 
             for entity in &self.entities {
                 pass.set_bind_group(1, &entity.bind_group);

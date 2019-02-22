@@ -86,14 +86,14 @@ fn main() {
     });
 
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
-    encoder.copy_buffer_tobuffer(&staging_buffer, 0, &storage_buffer, 0, size);
+    encoder.copy_buffer_to_buffer(&staging_buffer, 0, &storage_buffer, 0, size);
     {
         let mut cpass = encoder.begin_compute_pass();
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group);
         cpass.dispatch(numbers.len() as u32, 1, 1);
     }
-    encoder.copy_buffer_tobuffer(&storage_buffer, 0, &staging_buffer, 0, size);
+    encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
     // TODO: read the results back out of the staging buffer
 

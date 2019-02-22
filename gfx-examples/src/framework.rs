@@ -30,7 +30,11 @@ pub fn load_glsl(name: &str, stage: ShaderStage) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("data")
         .join(name);
-    let code = read_to_string(path).unwrap();
+    let code = match read_to_string(&path) {
+        Ok(code) => code,
+        Err(e) => panic!("Unable to read {:?}: {:?}", path, e),
+    };
+
     let mut output = glsl_to_spirv::compile(&code, ty).unwrap();
     let mut spv = Vec::new();
     output.read_to_end(&mut spv).unwrap();

@@ -535,7 +535,7 @@ impl CommandEncoder {
         }
     }
 
-    pub fn copy_buffer_tobuffer(
+    pub fn copy_buffer_to_buffer(
         &mut self,
         source: &Buffer,
         source_offset: u32,
