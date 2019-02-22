@@ -113,7 +113,7 @@ impl Light {
         let mx_view = Matrix4::look_at(
             self.pos,
             Point3::origin(),
-            Vector3::unit_z(),
+            -Vector3::unit_z(),
         );
         let projection = PerspectiveFov {
             fovy: Deg(self.fov).into(),

@@ -39,7 +39,6 @@ void main() {
         // project into the light space
         vec4 light_local = light.proj * v_Position;
         // compute texture coordinates for shadow lookup
-        light_local.y *= -1.0; // difference in Vulkan target versus texture coordinates...
         light_local.xyw = (light_local.xyz/light_local.w + 1.0) / 2.0;
         light_local.z = i;
         // do the lookup, using HW PCF and comparison

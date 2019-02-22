@@ -442,8 +442,8 @@ pub fn device_create_texture(
         format: desc.format,
         full_range: hal::image::SubresourceRange {
             aspects,
-            levels: 0..1, //TODO: mips
-            layers: 0..1, //TODO
+            levels: 0 .. 1, //TODO: mips
+            layers: 0 .. desc.array_size as u16,
         },
         swap_chain_link: None,
         life_guard: LifeGuard::new(),
