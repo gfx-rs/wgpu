@@ -22,7 +22,7 @@ use hal::{self,
     Device as _Device,
     Surface as _Surface,
 };
-use log::trace;
+use log::{info, trace};
 //use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::{Mutex};
 
@@ -1343,8 +1343,9 @@ pub fn device_create_swap_chain(
     device_id: DeviceId,
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
-    outdated: swap_chain::OutdatedFrame,
 ) -> Vec<resource::Texture<back::Backend>> {
+    info!("creating swap chain {:?}", desc);
+
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
     let mut surface_guard = HUB.surfaces.write();
@@ -1357,6 +1358,7 @@ pub fn device_create_swap_chain(
         surface.raw.compatibility(&adapter.physical_device)
     };
     let num_frames = caps.image_count.start; //TODO: configure?
+    let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
     let config = hal::SwapchainConfig::new(
         desc.width,
         desc.height,
@@ -1364,7 +1366,6 @@ pub fn device_create_swap_chain(
         num_frames, //TODO: configure?
     );
 
-    let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
     if let Some(formats) = formats {
         assert!(formats.contains(&config.format),
             "Requested format {:?} is not in supported list: {:?}",
@@ -1380,9 +1381,6 @@ pub fn device_create_swap_chain(
     let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
         Some(mut old) => {
             assert_eq!(old.device_id.value, device_id);
-            let mut destroyed = device.destroyed.lock();
-            destroyed.add(ResourceId::Texture(old.outdated.texture_id.value), old.outdated.texture_id.ref_count);
-            destroyed.add(ResourceId::TextureView(old.outdated.view_id.value), old.outdated.view_id.ref_count);
             unsafe {
                 old.command_pool.reset()
             };
@@ -1417,10 +1415,10 @@ pub fn device_create_swap_chain(
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
         },
+        desc: desc.clone(),
         frames: Vec::with_capacity(num_frames as usize),
         acquired: Vec::with_capacity(1), //TODO: get it from gfx-hal?
         sem_available,
-        outdated,
         command_pool,
     });
 
@@ -1451,7 +1449,7 @@ pub fn device_create_swap_chain(
 }
 
 #[cfg(feature = "local")]
-fn swap_chain_populate_textures(
+pub fn swap_chain_populate_textures(
     swap_chain_id: SwapChainId,
     textures: Vec<resource::Texture<back::Backend>>,
 ) {
@@ -1531,28 +1529,7 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
 ) -> SwapChainId {
-    let outdated = {
-        let outdated_texture = device_create_texture(device_id, &desc.to_texture_desc());
-        let texture_id = Stored {
-            ref_count: outdated_texture.life_guard.ref_count.clone(),
-            value: HUB.textures.register(outdated_texture),
-        };
-        device_track_texture(device_id, texture_id.value, texture_id.ref_count.clone());
-
-        let outdated_view = texture_create_default_view(texture_id.value);
-        let view_id = Stored {
-            ref_count: outdated_view.life_guard.ref_count.clone(),
-            value: HUB.texture_views.register(outdated_view),
-        };
-        device_track_view(texture_id.value, view_id.value, view_id.ref_count.clone());
-
-        swap_chain::OutdatedFrame {
-            texture_id,
-            view_id,
-        }
-    };
-
-    let textures = device_create_swap_chain(device_id, surface_id, desc, outdated);
+    let textures = device_create_swap_chain(device_id, surface_id, desc);
     swap_chain_populate_textures(surface_id, textures);
     surface_id
 }
