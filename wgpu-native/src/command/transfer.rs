@@ -45,7 +45,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let cmb = cmb_guard.get_mut(command_buffer_id);
     let buffer_guard = HUB.buffers.read();
 
-    let (src_buffer, src_usage) = cmb.buffer_tracker
+    let (src_buffer, src_usage) = cmb.trackers.buffers
         .get_with_replaced_usage(
             &*buffer_guard,
             src,
@@ -59,7 +59,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
         range: None .. None,
     });
 
-    let (dst_buffer, dst_usage) = cmb.buffer_tracker
+    let (dst_buffer, dst_usage) = cmb.trackers.buffers
         .get_with_replaced_usage(
             &*buffer_guard,
             dst,
@@ -105,7 +105,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
-    let (src_buffer, src_usage) = cmb.buffer_tracker
+    let (src_buffer, src_usage) = cmb.trackers.buffers
         .get_with_replaced_usage(
             &*buffer_guard,
             source.buffer,
@@ -119,7 +119,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         range: None .. None,
     });
 
-    let (dst_texture, dst_usage) = cmb.texture_tracker
+    let (dst_texture, dst_usage) = cmb.trackers.textures
         .get_with_replaced_usage(
             &*texture_guard,
             destination.texture,
@@ -188,7 +188,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
-    let (src_texture, src_usage) = cmb.texture_tracker
+    let (src_texture, src_usage) = cmb.trackers.textures
         .get_with_replaced_usage(
             &*texture_guard,
             source.texture,
@@ -205,7 +205,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     });
     assert!(src_texture.swap_chain_link.is_none()); //TODO
 
-    let (dst_buffer, dst_usage) = cmb.buffer_tracker
+    let (dst_buffer, dst_usage) = cmb.trackers.buffers
         .get_with_replaced_usage(
             &*buffer_guard,
             destination.buffer,
@@ -263,14 +263,14 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     let cmb = cmb_guard.get_mut(command_buffer_id);
     let texture_guard = HUB.textures.read();
 
-    let (src_texture, src_usage) = cmb.texture_tracker
+    let (src_texture, src_usage) = cmb.trackers.textures
         .get_with_replaced_usage(
             &*texture_guard,
             source.texture,
             TextureUsageFlags::TRANSFER_SRC,
         )
         .unwrap();
-    let (dst_texture, dst_usage) = cmb.texture_tracker
+    let (dst_texture, dst_usage) = cmb.trackers.textures
         .get_with_replaced_usage(
             &*texture_guard,
             destination.texture,

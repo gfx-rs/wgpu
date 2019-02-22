@@ -1,5 +1,5 @@
 use super::CommandBuffer;
-use crate::track::Tracker;
+use crate::track::TrackerSet;
 use crate::{DeviceId, LifeGuard, Stored, SubmissionIndex};
 
 use hal::command::RawCommandBuffer;
@@ -86,8 +86,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             recorded_thread_id: thread_id,
             device_id,
             life_guard: LifeGuard::new(),
-            buffer_tracker: Tracker::new(),
-            texture_tracker: Tracker::new(),
+            trackers: TrackerSet::new(),
             swap_chain_links: Vec::new(),
         }
     }

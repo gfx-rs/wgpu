@@ -443,6 +443,14 @@ impl Device {
     }
 }
 
+impl Drop for Device {
+    fn drop(&mut self) {
+        //TODO: make this work in general
+        #[cfg(feature = "metal-auto-capture")]
+        wgn::wgpu_device_destroy(self.id);
+    }
+}
+
 impl Buffer {
     pub fn set_sub_data(&self, offset: u32, data: &[u8]) {
         wgn::wgpu_buffer_set_sub_data(self.id, offset, data.len() as u32, data.as_ptr());

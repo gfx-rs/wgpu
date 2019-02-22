@@ -1,7 +1,7 @@
 use crate::command::bind::Binder;
 use crate::hub::HUB;
 use crate::resource::BufferUsageFlags;
-use crate::track::{BufferTracker, TextureTracker};
+use crate::track::TrackerSet;
 use crate::{
     CommandBuffer, Stored,
     BindGroupId, BufferId, CommandBufferId, RenderPassId, RenderPipelineId,
@@ -16,8 +16,7 @@ pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
     binder: Binder,
-    buffer_tracker: BufferTracker,
-    texture_tracker: TextureTracker,
+    trackers: TrackerSet,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
@@ -26,8 +25,7 @@ impl<B: hal::Backend> RenderPass<B> {
             raw,
             cmb_id,
             binder: Binder::default(),
-            buffer_tracker: BufferTracker::new(),
-            texture_tracker: TextureTracker::new(),
+            trackers: TrackerSet::new(),
         }
     }
 }
@@ -42,16 +40,27 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = cmb_guard.get_mut(pass.cmb_id.value);
 
-    if let Some(ref mut last) = cmb.raw.last_mut() {
-        CommandBuffer::insert_barriers(
-            last,
-            cmb.buffer_tracker.consume_by_replace(&pass.buffer_tracker),
-            cmb.texture_tracker.consume_by_replace(&pass.texture_tracker),
-            &*HUB.buffers.read(),
-            &*HUB.textures.read(),
-        );
-        unsafe { last.finish() };
+    match cmb.raw.last_mut() {
+        Some(ref mut last) => {
+            CommandBuffer::insert_barriers(
+                last,
+                cmb.trackers.buffers.consume_by_replace(&pass.trackers.buffers),
+                cmb.trackers.textures.consume_by_replace(&pass.trackers.textures),
+                &*HUB.buffers.read(),
+                &*HUB.textures.read(),
+            );
+            unsafe { last.finish() };
+        }
+        None => {
+            cmb.trackers.buffers
+                .consume_by_extend(&pass.trackers.buffers)
+                .unwrap();
+            cmb.trackers.textures
+                .consume_by_extend(&pass.trackers.textures)
+                .unwrap();
+        }
     }
+    cmb.trackers.views.consume(&pass.trackers.views);
 
     cmb.raw.push(pass.raw);
     pass.cmb_id.value
@@ -65,7 +74,7 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
     let buffer_guard = HUB.buffers.read();
 
     let pass = pass_guard.get_mut(pass_id);
-    let buffer = pass.buffer_tracker
+    let buffer = pass.trackers.buffers
         .get_with_extended_usage(
             &*buffer_guard,
             buffer_id,
@@ -102,7 +111,7 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
 
     let pass = pass_guard.get_mut(pass_id);
     for &id in buffers {
-        pass.buffer_tracker
+        pass.trackers.buffers
             .get_with_extended_usage(
                 &*buffer_guard,
                 id,
@@ -174,12 +183,13 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     let bind_group_guard = HUB.bind_groups.read();
     let bind_group = bind_group_guard.get(bind_group_id);
 
-    pass.buffer_tracker
-        .consume_by_extend(&bind_group.used_buffers)
+    pass.trackers.buffers
+        .consume_by_extend(&bind_group.used.buffers)
         .unwrap();
-    pass.texture_tracker
-        .consume_by_extend(&bind_group.used_textures)
+    pass.trackers.textures
+        .consume_by_extend(&bind_group.used.textures)
         .unwrap();
+    pass.trackers.views.consume(&bind_group.used.views);
 
     if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();

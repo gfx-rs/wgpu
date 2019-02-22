@@ -16,6 +16,7 @@ license = "MPL-2.0"
 
 [features]
 default = []
+metal-auto-capture = ["wgpu-native/metal-auto-capture"]
 metal = ["wgpu-native/gfx-backend-metal"]
 dx11 = ["wgpu-native/gfx-backend-dx11"]
 dx12 = ["wgpu-native/gfx-backend-dx12"]

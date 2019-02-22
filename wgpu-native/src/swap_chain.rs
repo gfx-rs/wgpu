@@ -179,8 +179,9 @@ pub extern "C" fn wgpu_swap_chain_present(
     //TODO: support for swapchain being sampled or read by the shader?
 
     trace!("transit {:?} to present", frame.texture_id.value);
-    let barrier = device.texture_tracker
+    let barrier = device.trackers
         .lock()
+        .textures
         .transit(
             frame.texture_id.value,
             &texture.life_guard.ref_count,

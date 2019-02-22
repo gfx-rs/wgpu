@@ -15,7 +15,7 @@ use crate::device::{
 };
 use crate::hub::{HUB, Storage};
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
-use crate::track::{BufferTracker, TextureTracker};
+use crate::track::TrackerSet;
 use crate::conv;
 use crate::{
     BufferHandle, TextureHandle,
@@ -85,8 +85,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     recorded_thread_id: ThreadId,
     device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) buffer_tracker: BufferTracker,
-    pub(crate) texture_tracker: TextureTracker,
+    pub(crate) trackers: TrackerSet,
     pub(crate) swap_chain_links: Vec<SwapChainLink<SwapImageEpoch>>,
 }
 
@@ -184,7 +183,7 @@ pub fn command_encoder_begin_render_pass(
     };
 
     let rp_key = {
-        let tracker = &mut cmb.texture_tracker;
+        let trackers = &mut cmb.trackers;
         let swap_chain_links = &mut cmb.swap_chain_links;
 
         let depth_stencil_key = depth_stencil_attachment.map(|at| {
@@ -194,7 +193,12 @@ pub fn command_encoder_begin_render_pass(
             } else {
                 extent = Some(view.extent);
             }
-            let query = tracker.query(&view.texture_id, TextureUsageFlags::empty());
+            trackers.views.query(at.attachment, &view.life_guard.ref_count);
+            let query = trackers.textures.query(
+                view.texture_id.value,
+                &view.texture_id.ref_count,
+                TextureUsageFlags::empty(),
+            );
             let (_, layout) = conv::map_texture_state(
                 query.usage,
                 hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
@@ -232,7 +236,12 @@ pub fn command_encoder_begin_render_pass(
             } else {
                 extent = Some(view.extent);
             }
-            let query = tracker.query(&view.texture_id, TextureUsageFlags::empty());
+            trackers.views.query(at.attachment, &view.life_guard.ref_count);
+            let query = trackers.textures.query(
+                view.texture_id.value,
+                &view.texture_id.ref_count,
+                TextureUsageFlags::empty(),
+            );
             let (_, layout) = conv::map_texture_state(query.usage, hal::format::Aspects::COLOR);
             hal::pass::Attachment {
                 format: Some(conv::map_texture_format(view.format)),

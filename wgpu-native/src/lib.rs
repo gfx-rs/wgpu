@@ -51,6 +51,10 @@ type SubmissionIndex = usize;
 #[derive(Debug)]
 pub struct RefCount(ptr::NonNull<AtomicUsize>);
 
+unsafe impl Send for RefCount {}
+unsafe impl Sync for RefCount {}
+
+
 impl RefCount {
     const MAX: usize = 1 << 24;
 
@@ -80,10 +84,6 @@ struct LifeGuard {
     submission_index: AtomicUsize,
 }
 
-//TODO: reconsider this
-unsafe impl Send for LifeGuard {}
-unsafe impl Sync for LifeGuard {}
-
 impl LifeGuard {
     fn new() -> Self {
         let bx = Box::new(AtomicUsize::new(1));
@@ -99,9 +99,6 @@ struct Stored<T> {
     value: T,
     ref_count: RefCount,
 }
-
-unsafe impl<T> Send for Stored<T> {}
-unsafe impl<T> Sync for Stored<T> {}
 
 #[derive(Clone, Debug, Hash, PartialEq, Eq)]
 struct WeaklyStored<T>(T);

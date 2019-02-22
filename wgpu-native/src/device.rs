@@ -1,6 +1,6 @@
 use crate::{binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::hub::HUB;
-use crate::track::{BufferTracker, TextureTracker, TrackPermit};
+use crate::track::{TrackerSet, TrackPermit};
 use crate::{
     LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
 };
@@ -64,6 +64,7 @@ pub(crate) struct FramebufferKey {
 }
 impl Eq for FramebufferKey {}
 
+#[derive(Debug)]
 enum ResourceId {
     Buffer(BufferId),
     Texture(TextureId),
@@ -140,29 +141,32 @@ impl<B: hal::Backend> DestroyedResources<B> {
 impl DestroyedResources<back::Backend> {
     fn triage_referenced(
         &mut self,
-        buffer_tracker: &mut BufferTracker,
-        texture_tracker: &mut TextureTracker,
+        trackers: &mut TrackerSet,
     ) {
         for i in (0..self.referenced.len()).rev() {
-            // one in resource itself, and one here in this list
             let num_refs = self.referenced[i].1.load();
-            if num_refs <= 2 {
-                assert_eq!(num_refs, 2);
+            // Before destruction, a resource is expected to have the following strong refs:
+            //  1. in resource itself
+            //  2. in the device tracker
+            //  3. in this list
+            if num_refs <= 3 {
                 let resource_id = self.referenced.swap_remove(i).0;
+                assert_eq!(num_refs, 3, "Resource {:?} misses some references", resource_id);
                 let (submit_index, resource) = match resource_id {
                     ResourceId::Buffer(id) => {
-                        buffer_tracker.remove(id);
+                        trackers.buffers.remove(id);
                         let buf = HUB.buffers.unregister(id);
                         let si = buf.life_guard.submission_index.load(Ordering::Acquire);
                         (si, Resource::Buffer(buf))
                     }
                     ResourceId::Texture(id) => {
-                        texture_tracker.remove(id);
+                        trackers.textures.remove(id);
                         let tex = HUB.textures.unregister(id);
                         let si = tex.life_guard.submission_index.load(Ordering::Acquire);
                         (si, Resource::Texture(tex))
                     }
                     ResourceId::TextureView(id) => {
+                        trackers.views.remove(id);
                         let view = HUB.texture_views.unregister(id);
                         let si = view.life_guard.submission_index.load(Ordering::Acquire);
                         (si, Resource::TextureView(view))
@@ -189,8 +193,7 @@ pub struct Device<B: hal::Backend> {
     //mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     life_guard: LifeGuard,
-    buffer_tracker: Mutex<BufferTracker>,
-    pub(crate) texture_tracker: Mutex<TextureTracker>,
+    pub(crate) trackers: Mutex<TrackerSet>,
     mem_props: hal::MemoryProperties,
     pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<HashMap<FramebufferKey, B::Framebuffer>>,
@@ -264,8 +267,7 @@ impl<B: hal::Backend> Device<B> {
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             queue_group,
             life_guard,
-            buffer_tracker: Mutex::new(BufferTracker::new()),
-            texture_tracker: Mutex::new(TextureTracker::new()),
+            trackers: Mutex::new(TrackerSet::new()),
             mem_props,
             render_passes: Mutex::new(HashMap::new()),
             framebuffers: Mutex::new(HashMap::new()),
@@ -343,12 +345,10 @@ pub fn device_track_buffer(
     let query = HUB.devices
         .read()
         .get(device_id)
-        .buffer_tracker
+        .trackers
         .lock()
-        .query(
-            &Stored { value: buffer_id, ref_count },
-            resource::BufferUsageFlags::empty(),
-        );
+        .buffers
+        .query(buffer_id, &ref_count, resource::BufferUsageFlags::empty());
     assert!(query.initialized);
 }
 
@@ -458,12 +458,10 @@ pub fn device_track_texture(
     let query = HUB.devices
         .read()
         .get(device_id)
-        .texture_tracker
+        .trackers
         .lock()
-        .query(
-            &Stored { value: texture_id, ref_count },
-            resource::TextureUsageFlags::UNINITIALIZED,
-        );
+        .textures
+        .query(texture_id, &ref_count, resource::TextureUsageFlags::UNINITIALIZED);
     assert!(query.initialized);
 }
 
@@ -520,6 +518,26 @@ pub fn texture_create_view(
     }
 }
 
+pub fn device_track_view(
+    texture_id: TextureId,
+    view_id: BufferId,
+    ref_count: RefCount,
+) {
+    let device_id = HUB.textures
+        .read()
+        .get(texture_id)
+        .device_id
+        .value;
+    let initialized = HUB.devices
+        .read()
+        .get(device_id)
+        .trackers
+        .lock()
+        .views
+        .query(view_id, &ref_count);
+    assert!(initialized);
+}
+
 #[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_view(
@@ -527,7 +545,11 @@ pub extern "C" fn wgpu_texture_create_view(
     desc: &resource::TextureViewDescriptor,
 ) -> TextureViewId {
     let view = texture_create_view(texture_id, desc);
-    HUB.texture_views.register(view)
+    let texture_id = view.texture_id.value;
+    let ref_count = view.life_guard.ref_count.clone();
+    let id = HUB.texture_views.register(view);
+    device_track_view(texture_id, id, ref_count);
+    id
 }
 
 pub fn texture_create_default_view(
@@ -537,8 +559,10 @@ pub fn texture_create_default_view(
     let texture = texture_guard.get(texture_id);
 
     let view_kind = match texture.kind {
-        hal::image::Kind::D1(..) => hal::image::ViewKind::D1,
-        hal::image::Kind::D2(..) => hal::image::ViewKind::D2, //TODO: array
+        hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
+        hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
+        hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
+        hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
         hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
     };
 
@@ -575,7 +599,11 @@ pub fn texture_create_default_view(
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> TextureViewId {
     let view = texture_create_default_view(texture_id);
-    HUB.texture_views.register(view)
+    let texture_id = view.texture_id.value;
+    let ref_count = view.life_guard.ref_count.clone();
+    let id = HUB.texture_views.register(view);
+    device_track_view(texture_id, id, ref_count);
+    id
 }
 
 #[no_mangle]
@@ -679,7 +707,7 @@ pub fn device_create_bind_group_layout(
                     hal::pso::DescriptorSetLayoutBinding {
                         binding: binding.binding,
                         ty: conv::map_binding_type(binding.ty),
-                        count: bindings.len(),
+                        count: 1, //TODO: consolidate
                         stage_flags: conv::map_shader_stage_flags(binding.visibility),
                         immutable_samplers: false, // TODO
                     }
@@ -771,12 +799,11 @@ pub fn device_create_bind_group(
 
     //TODO: group writes into contiguous sections
     let mut writes = Vec::new();
-    let mut used_buffers = BufferTracker::new();
-    let mut used_textures = TextureTracker::new();
+    let mut used = TrackerSet::new();
     for b in bindings {
         let descriptor = match b.resource {
             binding_model::BindingResource::Buffer(ref bb) => {
-                let buffer = used_buffers
+                let buffer = used.buffers
                     .get_with_extended_usage(
                         &*buffer_guard,
                         bb.buffer,
@@ -792,7 +819,8 @@ pub fn device_create_bind_group(
             }
             binding_model::BindingResource::TextureView(id) => {
                 let view = texture_view_guard.get(id);
-                used_textures
+                used.views.query(id, &view.life_guard.ref_count);
+                used.textures
                     .transit(
                         view.texture_id.value,
                         &view.texture_id.ref_count,
@@ -820,8 +848,7 @@ pub fn device_create_bind_group(
         raw: desc_set,
         layout_id: WeaklyStored(desc.layout),
         life_guard: LifeGuard::new(),
-        used_buffers,
-        used_textures,
+        used,
     }
 }
 
@@ -916,8 +943,7 @@ pub extern "C" fn wgpu_queue_submit(
         .life_guard
         .submission_index
         .fetch_add(1, Ordering::Relaxed);
-    let mut buffer_tracker = device.buffer_tracker.lock();
-    let mut texture_tracker = device.texture_tracker.lock();
+    let mut trackers = device.trackers.lock();
 
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
@@ -934,14 +960,14 @@ pub extern "C" fn wgpu_queue_submit(
             // update submission IDs
             comb.life_guard.submission_index
                 .store(old_submit_index, Ordering::Release);
-            for id in comb.buffer_tracker.used() {
+            for id in comb.trackers.buffers.used() {
                 buffer_guard
                     .get(id)
                     .life_guard
                     .submission_index
                     .store(old_submit_index, Ordering::Release);
             }
-            for id in comb.texture_tracker.used() {
+            for id in comb.trackers.textures.used() {
                 texture_guard
                     .get(id)
                     .life_guard
@@ -958,13 +984,15 @@ pub extern "C" fn wgpu_queue_submit(
                 );
             }
             //TODO: fix the consume
+            let TrackerSet { ref mut buffers, ref mut textures, ref mut views } = *trackers;
             command::CommandBuffer::insert_barriers(
                 &mut transit,
-                buffer_tracker.consume_by_replace(&comb.buffer_tracker),
-                texture_tracker.consume_by_replace(&comb.texture_tracker),
+                buffers.consume_by_replace(&comb.trackers.buffers),
+                textures.consume_by_replace(&comb.trackers.textures),
                 &*buffer_guard,
                 &*texture_guard,
             );
+            views.consume(&comb.trackers.views);
             unsafe {
                 transit.finish();
             }
@@ -1014,7 +1042,7 @@ pub extern "C" fn wgpu_queue_submit(
 
     let last_done = {
         let mut destroyed = device.destroyed.lock();
-        destroyed.triage_referenced(&mut *buffer_tracker, &mut *texture_tracker);
+        destroyed.triage_referenced(&mut *trackers);
         let last_done = destroyed.cleanup(&device.raw);
 
         destroyed.active.push(ActiveSubmission {
@@ -1435,6 +1463,7 @@ fn swap_chain_populate_textures(
         .unwrap();
     let device_guard = HUB.devices.read();
     let device = device_guard.get(swap_chain.device_id.value);
+    let mut trackers = device.trackers.lock();
 
     for (i, mut texture) in textures.into_iter().enumerate() {
         let format = texture.format;
@@ -1460,9 +1489,11 @@ fn swap_chain_populate_textures(
             ref_count: texture.life_guard.ref_count.clone(),
             value: HUB.textures.register(texture),
         };
-        device.texture_tracker
-            .lock()
-            .query(&texture_id, resource::TextureUsageFlags::UNINITIALIZED);
+        trackers.textures.query(
+            texture_id.value,
+            &texture_id.ref_count,
+            resource::TextureUsageFlags::UNINITIALIZED,
+        );
 
         let view = resource::TextureView {
             raw: view_raw,
@@ -1473,12 +1504,18 @@ fn swap_chain_populate_textures(
             is_owned_by_swap_chain: true,
             life_guard: LifeGuard::new(),
         };
+        let view_id = Stored {
+             ref_count: view.life_guard.ref_count.clone(),
+             value: HUB.texture_views.register(view),
+        };
+        trackers.views.query(
+            view_id.value,
+            &view_id.ref_count,
+        );
+
         swap_chain.frames.push(swap_chain::Frame {
             texture_id,
-            view_id: Stored {
-                 ref_count: view.life_guard.ref_count.clone(),
-                 value: HUB.texture_views.register(view),
-            },
+            view_id,
             fence: device.raw.create_fence(true).unwrap(),
             sem_available: device.raw.create_semaphore().unwrap(),
             sem_present: device.raw.create_semaphore().unwrap(),
@@ -1507,6 +1544,8 @@ pub extern "C" fn wgpu_device_create_swap_chain(
             ref_count: outdated_view.life_guard.ref_count.clone(),
             value: HUB.texture_views.register(outdated_view),
         };
+        device_track_view(texture_id.value, view_id.value, view_id.ref_count.clone());
+
         swap_chain::OutdatedFrame {
             texture_id,
             view_id,
@@ -1532,8 +1571,9 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
     //Note: this is just doing `update_buffer`, which is limited to 64KB
 
     trace!("transit {:?} to transfer dst", buffer_id);
-    let barrier = device.buffer_tracker
+    let barrier = device.trackers
         .lock()
+        .buffers
         .transit(
             buffer_id,
             &buffer.life_guard.ref_count,
@@ -1580,4 +1620,9 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
     }
 
     device.com_allocator.after_submit(comb);
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_destroy(device_id: BufferId) {
+    HUB.devices.unregister(device_id);
 }
