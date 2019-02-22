@@ -105,7 +105,7 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
         use std::mem;
 
         let mut init_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -303,12 +303,14 @@ impl framework::Example for Example {
         }
     }
 
-    fn update(&mut self, event: wgpu::winit::WindowEvent) {
-        if let wgpu::winit::WindowEvent::Resized(size) = event {
-            let mx_total = Self::generate_matrix(size.width as f32 / size.height as f32);
-            let mx_ref: &[f32; 16] = mx_total.as_ref();
-            self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
-        }
+    fn update(&mut self, _event: wgpu::winit::WindowEvent) {
+        //empty
+    }
+
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, _device: &mut wgpu::Device) {
+        let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+        let mx_ref: &[f32; 16] = mx_total.as_ref();
+        self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {

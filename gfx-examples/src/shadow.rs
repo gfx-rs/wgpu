@@ -83,6 +83,7 @@ fn create_plane(size: i8) -> (Vec<Vertex>, Vec<u16>) {
 
 struct Entity {
     mx_world: cgmath::Matrix4<f32>,
+    rotation_speed: f32,
     color: wgpu::Color,
     vertex_buf: Rc<wgpu::Buffer>,
     index_buf: Rc<wgpu::Buffer>,
@@ -159,6 +160,7 @@ struct Example {
     lights_are_dirty: bool,
     shadow_pass: Pass,
     forward_pass: Pass,
+    forward_depth: wgpu::TextureView,
     light_uniform_buf: wgpu::Buffer,
 }
 
@@ -170,6 +172,7 @@ impl Example {
         height: 512,
         depth: 1,
     };
+    const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::D32Float;
 
     fn generate_matrix(aspect_ratio: f32) -> cgmath::Matrix4<f32> {
         let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 20.0);
@@ -183,7 +186,7 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
@@ -242,6 +245,7 @@ impl framework::Example for Example {
             });
             Entity {
                 mx_world: cgmath::Matrix4::identity(),
+                rotation_speed: 0.0,
                 color: wgpu::Color::WHITE,
                 vertex_buf: Rc::new(plane_vertex_buf),
                 index_buf: Rc::new(plane_index_buf),
@@ -255,27 +259,32 @@ impl framework::Example for Example {
             offset: cgmath::Vector3<f32>,
             angle: f32,
             scale: f32,
+            rotation: f32,
         }
         let cube_descs = [
             CubeDesc {
                 offset: cgmath::vec3(-2.0, -2.0, 2.0),
                 angle: 10.0,
                 scale: 0.7,
+                rotation: 1.0,
             },
             CubeDesc {
                 offset: cgmath::vec3(2.0, -2.0, 2.0),
                 angle: 50.0,
                 scale: 1.3,
+                rotation: 2.0,
             },
             CubeDesc {
                 offset: cgmath::vec3(-2.0, 2.0, 2.0),
                 angle: 140.0,
                 scale: 1.1,
+                rotation: 3.0,
             },
             CubeDesc {
                 offset: cgmath::vec3(2.0, 2.0, 2.0),
                 angle: 210.0,
                 scale: 0.9,
+                rotation: 4.0,
             },
         ];
 
@@ -296,6 +305,7 @@ impl framework::Example for Example {
             });
             entities.push(Entity {
                 mx_world: cgmath::Matrix4::from(transform),
+                rotation_speed: cube.rotation,
                 color: wgpu::Color::GREEN,
                 vertex_buf: Rc::clone(&cube_vertex_buf),
                 index_buf: Rc::clone(&cube_index_buf),
@@ -447,8 +457,8 @@ impl framework::Example for Example {
                 rasterization_state: wgpu::RasterizationStateDescriptor {
                     front_face: wgpu::FrontFace::Cw,
                     cull_mode: wgpu::CullMode::Back,
-                    depth_bias: 2,
-                    depth_bias_slope_scale: 1.0,
+                    depth_bias: 2, // corresponds to bilinear filtering
+                    depth_bias_slope_scale: 2.0,
                     depth_bias_clamp: wgpu::MAX_DEPTH_BIAS_CLAMP,
                 },
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
@@ -580,7 +590,15 @@ impl framework::Example for Example {
                         write_mask: wgpu::ColorWriteFlags::ALL,
                     },
                 ],
-                depth_stencil_state: None,
+                depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
+                    format: Self::DEPTH_FORMAT,
+                    depth_write_enabled: true,
+                    depth_compare: wgpu::CompareFunction::Less,
+                    stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
+                    stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
+                    stencil_read_mask: 0,
+                    stencil_write_mask: 0,
+                }),
                 index_format: wgpu::IndexFormat::Uint16,
                 vertex_buffers: &[vb_desc],
                 sample_count: 1,
@@ -593,26 +611,58 @@ impl framework::Example for Example {
             }
         };
 
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: sc_desc.width,
+                height: sc_desc.height,
+                depth: 1,
+            },
+            array_size: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: Self::DEPTH_FORMAT,
+            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+        });
+
         Example {
             entities,
             lights,
             lights_are_dirty: true,
             shadow_pass,
             forward_pass,
+            forward_depth: depth_texture.create_default_view(),
             light_uniform_buf,
         }
     }
 
-    fn update(&mut self, event: wgpu::winit::WindowEvent) {
-        if let wgpu::winit::WindowEvent::Resized(size) = event {
-            let mx_total = Self::generate_matrix(size.width as f32 / size.height as f32);
-            let mx_ref: &[f32; 16] = mx_total.as_ref();
-            self.forward_pass.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
-        }
+    fn update(&mut self, _event: wgpu::winit::WindowEvent) {
+        //empty
+    }
+
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) {
+        let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+        let mx_ref: &[f32; 16] = mx_total.as_ref();
+        self.forward_pass.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
+
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            size: wgpu::Extent3d {
+                width: sc_desc.width,
+                height: sc_desc.height,
+                depth: 1,
+            },
+            array_size: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: Self::DEPTH_FORMAT,
+            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+        });
+        self.forward_depth = depth_texture.create_default_view();
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
-        for entity in &self.entities {
+        for entity in &mut self.entities {
+            if entity.rotation_speed != 0.0 {
+                let rotation = cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
+                entity.mx_world = entity.mx_world * rotation;
+            }
             let data = EntityUniforms {
                 model: *entity.mx_world.as_ref(),
                 color: [entity.color.r, entity.color.g, entity.color.b, entity.color.a],
@@ -673,7 +723,15 @@ impl framework::Example for Example {
                     store_op: wgpu::StoreOp::Store,
                     clear_color: wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 },
                 }],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                    attachment: &self.forward_depth,
+                    depth_load_op: wgpu::LoadOp::Clear,
+                    depth_store_op: wgpu::StoreOp::Store,
+                    stencil_load_op: wgpu::LoadOp::Clear,
+                    stencil_store_op: wgpu::StoreOp::Store,
+                    clear_depth: 1.0,
+                    clear_stencil: 0,
+                }),
             });
             pass.set_pipeline(&self.forward_pass.pipeline);
             pass.set_bind_group(0, &self.forward_pass.bind_group);

@@ -19,4 +19,6 @@ void main() {
     v_Normal = mat3(u_World) * vec3(a_Normal.xyz);
     v_Position = u_World * vec4(a_Pos);
     gl_Position = u_ViewProj * v_Position;
+    // convert from -1,1 Z to 0,1
+    gl_Position.z = 0.5 * (gl_Position.z + gl_Position.w);
 }
