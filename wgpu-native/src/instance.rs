@@ -54,10 +54,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
         .read()
         .get(instance_id)
         .create_surface(window);
-    let surface = SurfaceHandle {
-        raw,
-    };
-
+    let surface = SurfaceHandle::new(raw);
     HUB.surfaces.register(surface)
 }
 
@@ -71,12 +68,11 @@ pub fn instance_create_surface_from_xlib(
     unimplemented!();
 
     #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
-    SurfaceHandle {
-        raw: HUB.instances
-            .read()
-            .get(instance_id)
-            .create_surface_from_xlib(display, window),
-    }
+    SurfaceHandle::new(HUB.instances
+        .read()
+        .get(instance_id)
+        .create_surface_from_xlib(display, window)
+    )
 }
 
 #[cfg(feature = "local")]
@@ -99,12 +95,11 @@ pub fn instance_create_surface_from_macos_layer(
     unimplemented!();
 
     #[cfg(feature = "gfx-backend-metal")]
-    SurfaceHandle {
-        raw: HUB.instances
-            .read()
-            .get(instance_id)
-            .create_surface_from_layer(layer as *mut _),
-    }
+    SurfaceHandle::new(HUB.instances
+        .read()
+        .get(instance_id)
+        .create_surface_from_layer(layer as *mut _)
+    )
 }
 
 #[cfg(feature = "local")]
@@ -139,9 +134,7 @@ pub fn instance_create_surface_from_windows_hwnd(
         .create_surface_from_hwnd(hinstance, hwnd);
 
     #[cfg_attr(not(target_os = "windows"), allow(unreachable_code))]
-    SurfaceHandle {
-        raw,
-    }
+    SurfaceHandle::new(raw)
 }
 
 #[cfg(feature = "local")]

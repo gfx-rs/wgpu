@@ -435,9 +435,9 @@ typedef struct {
   WGPUByteArray code;
 } WGPUShaderModuleDescriptor;
 
-typedef WGPUId WGPUSwapChainId;
-
 typedef WGPUId WGPUSurfaceId;
+
+typedef WGPUSurfaceId WGPUSwapChainId;
 
 typedef uint32_t WGPUTextureUsageFlags;
 

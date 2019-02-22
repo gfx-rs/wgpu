@@ -98,9 +98,8 @@ unsafe impl<B: hal::Backend> Send for DestroyedResources<B> {}
 unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
 
 impl<B: hal::Backend> DestroyedResources<B> {
-    fn add(&mut self, resource_id: ResourceId, life_guard: &LifeGuard) {
-        self.referenced
-            .push((resource_id, life_guard.ref_count.clone()));
+    fn add(&mut self, resource_id: ResourceId, ref_count: RefCount) {
+        self.referenced.push((resource_id, ref_count));
     }
 
     /// Returns the last submission index that is done.
@@ -139,7 +138,11 @@ impl<B: hal::Backend> DestroyedResources<B> {
 }
 
 impl DestroyedResources<back::Backend> {
-    fn triage_referenced(&mut self) {
+    fn triage_referenced(
+        &mut self,
+        buffer_tracker: &mut BufferTracker,
+        texture_tracker: &mut TextureTracker,
+    ) {
         for i in (0..self.referenced.len()).rev() {
             // one in resource itself, and one here in this list
             let num_refs = self.referenced[i].1.load();
@@ -148,11 +151,13 @@ impl DestroyedResources<back::Backend> {
                 let resource_id = self.referenced.swap_remove(i).0;
                 let (submit_index, resource) = match resource_id {
                     ResourceId::Buffer(id) => {
+                        buffer_tracker.remove(id);
                         let buf = HUB.buffers.unregister(id);
                         let si = buf.life_guard.submission_index.load(Ordering::Acquire);
                         (si, Resource::Buffer(buf))
                     }
                     ResourceId::Texture(id) => {
+                        texture_tracker.remove(id);
                         let tex = HUB.textures.unregister(id);
                         let si = tex.life_guard.submission_index.load(Ordering::Acquire);
                         (si, Resource::Texture(tex))
@@ -369,7 +374,10 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
         .get(buffer.device_id.value)
         .destroyed
         .lock()
-        .add(ResourceId::Buffer(buffer_id), &buffer.life_guard);
+        .add(
+            ResourceId::Buffer(buffer_id),
+            buffer.life_guard.ref_count.clone(),
+        );
 }
 
 
@@ -579,7 +587,10 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
         .get(texture.device_id.value)
         .destroyed
         .lock()
-        .add(ResourceId::Texture(texture_id), &texture.life_guard);
+        .add(
+            ResourceId::Texture(texture_id),
+            texture.life_guard.ref_count.clone(),
+        );
 }
 
 #[no_mangle]
@@ -595,7 +606,10 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
         .get(device_id)
         .destroyed
         .lock()
-        .add(ResourceId::TextureView(texture_view_id), &view.life_guard);
+        .add(
+            ResourceId::TextureView(texture_view_id),
+            view.life_guard.ref_count.clone(),
+        );
 }
 
 
@@ -902,6 +916,8 @@ pub extern "C" fn wgpu_queue_submit(
         .life_guard
         .submission_index
         .fetch_add(1, Ordering::Relaxed);
+    let mut buffer_tracker = device.buffer_tracker.lock();
+    let mut texture_tracker = device.texture_tracker.lock();
 
     //TODO: if multiple command buffers are submitted, we can re-use the last
     // native command buffer of the previous chain instead of always creating
@@ -910,8 +926,6 @@ pub extern "C" fn wgpu_queue_submit(
         let mut command_buffer_guard = HUB.command_buffers.write();
         let buffer_guard = HUB.buffers.read();
         let texture_guard = HUB.textures.read();
-        let mut buffer_tracker = device.buffer_tracker.lock();
-        let mut texture_tracker = device.texture_tracker.lock();
 
         // finish all the command buffers first
         for &cmb_id in command_buffer_ids {
@@ -965,17 +979,20 @@ pub extern "C" fn wgpu_queue_submit(
     let fence = device.raw.create_fence(false).unwrap();
     {
         let command_buffer_guard = HUB.command_buffers.read();
-        let swap_chain_guard = HUB.swap_chains.read();
+        let surface_guard = HUB.surfaces.read();
 
         let wait_semaphores = swap_chain_links
             .into_iter()
-            .map(|link| {
+            .flat_map(|link| {
                 //TODO: check the epoch
-                let sem = &swap_chain_guard
+                surface_guard
                     .get(link.swap_chain_id.0)
-                    .frames[link.image_index as usize]
-                    .sem_available;
-                (sem, hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT)
+                    .swap_chain
+                    .as_ref()
+                    .map(|swap_chain| (
+                        &swap_chain.frames[link.image_index as usize].sem_available,
+                        hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                    ))
             });
 
         let submission =
@@ -997,7 +1014,7 @@ pub extern "C" fn wgpu_queue_submit(
 
     let last_done = {
         let mut destroyed = device.destroyed.lock();
-        destroyed.triage_referenced();
+        destroyed.triage_referenced(&mut *buffer_tracker, &mut *texture_tracker);
         let last_done = destroyed.cleanup(&device.raw);
 
         destroyed.active.push(ActiveSubmission {
@@ -1294,12 +1311,12 @@ pub extern "C" fn wgpu_device_create_compute_pipeline(
     HUB.compute_pipelines.register(pipeline)
 }
 
-
 pub fn device_create_swap_chain(
     device_id: DeviceId,
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
-) -> (swap_chain::SwapChain<back::Backend>, Vec<resource::Texture<back::Backend>>) {
+    outdated: swap_chain::OutdatedFrame,
+) -> Vec<resource::Texture<back::Backend>> {
     let device_guard = HUB.devices.read();
     let device = device_guard.get(device_id);
     let mut surface_guard = HUB.surfaces.write();
@@ -1331,25 +1348,42 @@ pub fn device_create_swap_chain(
         "Requested size {}x{} is outside of the supported range: {:?}",
         desc.width, desc.height, caps.extents);
 
+
+    let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
+        Some(mut old) => {
+            assert_eq!(old.device_id.value, device_id);
+            let mut destroyed = device.destroyed.lock();
+            destroyed.add(ResourceId::Texture(old.outdated.texture_id.value), old.outdated.texture_id.ref_count);
+            destroyed.add(ResourceId::TextureView(old.outdated.view_id.value), old.outdated.view_id.ref_count);
+            unsafe {
+                old.command_pool.reset()
+            };
+            (Some(old.raw), old.sem_available, old.command_pool)
+        }
+        _ => unsafe {
+            let sem_available = device.raw
+                .create_semaphore()
+                .unwrap();
+            let command_pool = device.raw
+                .create_command_pool_typed(
+                    &device.queue_group,
+                    hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                )
+                .unwrap();
+            (None, sem_available, command_pool)
+        }
+    };
+
     let (raw, backbuffer) = unsafe {
         device.raw
             .create_swapchain(
                 &mut surface.raw,
                 config.with_image_usage(usage),
-                None,
+                old_raw,
             )
             .unwrap()
     };
-    let command_pool = unsafe {
-        device.raw
-            .create_command_pool_typed(
-                &device.queue_group,
-                hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-            )
-            .unwrap()
-    };
-
-    let swap_chain = swap_chain::SwapChain {
+    surface.swap_chain = Some(swap_chain::SwapChain {
         raw,
         device_id: Stored {
             value: device_id,
@@ -1357,16 +1391,17 @@ pub fn device_create_swap_chain(
         },
         frames: Vec::with_capacity(num_frames as usize),
         acquired: Vec::with_capacity(1), //TODO: get it from gfx-hal?
-        sem_available: device.raw.create_semaphore().unwrap(),
+        sem_available,
+        outdated,
         command_pool,
-    };
+    });
 
     let images = match backbuffer {
         hal::Backbuffer::Images(images) => images,
         hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
     };
 
-    let textures = images
+    images
         .into_iter()
         .map(|raw| resource::Texture {
             raw,
@@ -1384,9 +1419,7 @@ pub fn device_create_swap_chain(
             swap_chain_link: None,
             life_guard: LifeGuard::new(),
         })
-        .collect();
-
-    (swap_chain, textures)
+        .collect()
 }
 
 #[cfg(feature = "local")]
@@ -1394,8 +1427,12 @@ fn swap_chain_populate_textures(
     swap_chain_id: SwapChainId,
     textures: Vec<resource::Texture<back::Backend>>,
 ) {
-    let mut swap_chain_guard = HUB.swap_chains.write();
-    let swap_chain = swap_chain_guard.get_mut(swap_chain_id);
+    let mut surface_guard = HUB.surfaces.write();
+    let swap_chain = surface_guard
+        .get_mut(swap_chain_id)
+        .swap_chain
+        .as_mut()
+        .unwrap();
     let device_guard = HUB.devices.read();
     let device = device_guard.get(swap_chain.device_id.value);
 
@@ -1457,10 +1494,28 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
 ) -> SwapChainId {
-    let (swap_chain, textures) = device_create_swap_chain(device_id, surface_id, desc);
-    let id = HUB.swap_chains.register(swap_chain);
-    swap_chain_populate_textures(id, textures);
-    id
+    let outdated = {
+        let outdated_texture = device_create_texture(device_id, &desc.to_texture_desc());
+        let texture_id = Stored {
+            ref_count: outdated_texture.life_guard.ref_count.clone(),
+            value: HUB.textures.register(outdated_texture),
+        };
+        device_track_texture(device_id, texture_id.value, texture_id.ref_count.clone());
+
+        let outdated_view = texture_create_default_view(texture_id.value);
+        let view_id = Stored {
+            ref_count: outdated_view.life_guard.ref_count.clone(),
+            value: HUB.texture_views.register(outdated_view),
+        };
+        swap_chain::OutdatedFrame {
+            texture_id,
+            view_id,
+        }
+    };
+
+    let textures = device_create_swap_chain(device_id, surface_id, desc, outdated);
+    swap_chain_populate_textures(surface_id, textures);
+    surface_id
 }
 
 

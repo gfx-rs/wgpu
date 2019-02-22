@@ -70,7 +70,7 @@ pub fn run<E: Example>(title: &str) {
         .to_physical(window.get_hidpi_factor());
 
     let surface = instance.create_surface(&window);
-    let sc_desc = wgpu::SwapChainDescriptor {
+    let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
         format: wgpu::TextureFormat::B8g8r8a8Unorm,
         width: size.width as u32,
@@ -91,7 +91,11 @@ pub fn run<E: Example>(title: &str) {
                     ..
                 } => {
                     let physical = size.to_physical(window.get_hidpi_factor());
-                    info!("Resized to {:?}", physical);
+                    info!("Resizing to {:?}", physical);
+                    sc_desc.width = physical.width as u32;
+                    sc_desc.height = physical.height as u32;
+                    swap_chain = device.create_swap_chain(&surface, &sc_desc);
+                    example.update(WindowEvent::Resized(size));
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::KeyboardInput {

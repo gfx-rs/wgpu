@@ -87,6 +87,11 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
         }
     }
 
+    /// Remove an id from the tracked map.
+    pub(crate) fn remove(&mut self, id: I) -> bool {
+        self.map.remove(&WeaklyStored(id)).is_some()
+    }
+
     /// Get the last usage on a resource.
     pub(crate) fn query(&mut self, stored: &Stored<I>, default: U) -> Query<U> {
         match self.map.entry(WeaklyStored(stored.value.clone())) {
