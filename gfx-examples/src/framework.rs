@@ -30,7 +30,11 @@ pub fn load_glsl(name: &str, stage: ShaderStage) -> Vec<u8> {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("data")
         .join(name);
-    let code = read_to_string(path).unwrap();
+    let code = match read_to_string(&path) {
+        Ok(code) => code,
+        Err(e) => panic!("Unable to read {:?}: {:?}", path, e),
+    };
+
     let mut output = glsl_to_spirv::compile(&code, ty).unwrap();
     let mut spv = Vec::new();
     output.read_to_end(&mut spv).unwrap();
@@ -38,7 +42,8 @@ pub fn load_glsl(name: &str, stage: ShaderStage) -> Vec<u8> {
 }
 
 pub trait Example {
-    fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self;
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self;
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device);
     fn update(&mut self, event: wgpu::winit::WindowEvent);
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device);
 }
@@ -79,7 +84,7 @@ pub fn run<E: Example>(title: &str) {
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     info!("Initializing the example...");
-    let mut example = E::init(&mut device, &sc_desc);
+    let mut example = E::init(&sc_desc, &mut device);
 
     info!("Entering render loop...");
     let mut running = true;
@@ -95,7 +100,7 @@ pub fn run<E: Example>(title: &str) {
                     sc_desc.width = physical.width as u32;
                     sc_desc.height = physical.height as u32;
                     swap_chain = device.create_swap_chain(&surface, &sc_desc);
-                    example.update(WindowEvent::Resized(size));
+                    example.resize(&sc_desc, &mut device);
                 }
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::KeyboardInput {
@@ -119,5 +124,6 @@ pub fn run<E: Example>(title: &str) {
 
         let frame = swap_chain.get_next_texture();
         example.render(&frame, &mut device);
+        running &= !cfg!(feature = "metal-auto-capture");
     }
 }

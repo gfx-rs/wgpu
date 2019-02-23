@@ -83,7 +83,7 @@ fn create_texels(size: usize) -> Vec<u8> {
         .collect()
 }
 
-struct Cube {
+struct Example {
     vertex_buf: wgpu::Buffer,
     index_buf: wgpu::Buffer,
     index_count: usize,
@@ -92,20 +92,20 @@ struct Cube {
     pipeline: wgpu::RenderPipeline,
 }
 
-impl Cube {
+impl Example {
     fn generate_matrix(aspect_ratio: f32) -> cgmath::Matrix4<f32> {
         let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 10.0);
         let mx_view = cgmath::Matrix4::look_at(
             cgmath::Point3::new(1.5f32, -5.0, 3.0),
             cgmath::Point3::new(0f32, 0.0, 0.0),
-            cgmath::Vector3::unit_z(),
+            -cgmath::Vector3::unit_z(),
         );
         mx_projection * mx_view
     }
 }
 
-impl framework::Example for Cube {
-    fn init(device: &mut wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor) -> Self {
+impl framework::Example for Example {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
         use std::mem;
 
         let mut init_encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -293,7 +293,7 @@ impl framework::Example for Cube {
         // Done
         let init_command_buf = init_encoder.finish();
         device.get_queue().submit(&[init_command_buf]);
-        Cube {
+        Example {
             vertex_buf,
             index_buf,
             index_count: index_data.len(),
@@ -303,12 +303,14 @@ impl framework::Example for Cube {
         }
     }
 
-    fn update(&mut self, event: wgpu::winit::WindowEvent) {
-        if let wgpu::winit::WindowEvent::Resized(size) = event {
-            let mx_total = Self::generate_matrix(size.width as f32 / size.height as f32);
-            let mx_ref: &[f32; 16] = mx_total.as_ref();
-            self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
-        }
+    fn update(&mut self, _event: wgpu::winit::WindowEvent) {
+        //empty
+    }
+
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, _device: &mut wgpu::Device) {
+        let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+        let mx_ref: &[f32; 16] = mx_total.as_ref();
+        self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
@@ -337,5 +339,5 @@ impl framework::Example for Cube {
 }
 
 fn main() {
-    framework::run::<Cube>("cube");
+    framework::run::<Example>("cube");
 }

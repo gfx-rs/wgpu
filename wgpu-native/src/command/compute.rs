@@ -1,6 +1,6 @@
 use crate::command::bind::{Binder};
 use crate::hub::HUB;
-use crate::track::{BufferTracker, TextureTracker};
+use crate::track::TrackerSet;
 use crate::{
     Stored, CommandBuffer,
     BindGroupId, CommandBufferId, ComputePassId, ComputePipelineId,
@@ -16,8 +16,7 @@ pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
     binder: Binder,
-    buffer_tracker: BufferTracker,
-    texture_tracker: TextureTracker,
+    trackers: TrackerSet,
 }
 
 impl<B: hal::Backend> ComputePass<B> {
@@ -26,8 +25,7 @@ impl<B: hal::Backend> ComputePass<B> {
             raw,
             cmb_id,
             binder: Binder::default(),
-            buffer_tracker: BufferTracker::new(),
-            texture_tracker: TextureTracker::new(),
+            trackers: TrackerSet::new(),
         }
     }
 }
@@ -35,6 +33,8 @@ impl<B: hal::Backend> ComputePass<B> {
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
     let pass = HUB.compute_passes.unregister(pass_id);
+
+    //TODO: transitions?
 
     HUB.command_buffers
         .write()
@@ -69,13 +69,15 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     //Note: currently, WebGPU compute passes have synchronization defined
     // at a dispatch granularity, so we insert the necessary barriers here.
 
+    //TODO: have `TrackerSet::consume()` ?
     CommandBuffer::insert_barriers(
         &mut pass.raw,
-        pass.buffer_tracker.consume_by_replace(&bind_group.used_buffers),
-        pass.texture_tracker.consume_by_replace(&bind_group.used_textures),
+        pass.trackers.buffers.consume_by_replace(&bind_group.used.buffers),
+        pass.trackers.textures.consume_by_replace(&bind_group.used.textures),
         &*HUB.buffers.read(),
         &*HUB.textures.read(),
     );
+    pass.trackers.views.consume(&bind_group.used.views);
 
     if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();

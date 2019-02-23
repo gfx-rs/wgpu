@@ -1,14 +1,18 @@
 use crate::hub::{Id, Storage};
 use crate::resource::{BufferUsageFlags, TextureUsageFlags};
-use crate::{BufferId, RefCount, Stored, TextureId, WeaklyStored};
+use crate::{
+    RefCount, WeaklyStored,
+    BufferId, TextureId, TextureViewId,
+};
 
 use std::borrow::Borrow;
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::hash_map::Entry;
 use std::hash::Hash;
 use std::mem;
 use std::ops::{BitOr, Range};
 
 use bitflags::bitflags;
+use hal::backend::FastHashMap;
 
 
 #[derive(Clone, Debug, PartialEq)]
@@ -70,20 +74,38 @@ struct Track<U> {
     last: U,
 }
 
-unsafe impl<U> Send for Track<U> {}
-unsafe impl<U> Sync for Track<U> {}
-
 //TODO: consider having `I` as an associated type of `U`?
 pub struct Tracker<I, U> {
-    map: HashMap<WeaklyStored<I>, Track<U>>,
+    map: FastHashMap<WeaklyStored<I>, Track<U>>,
 }
 pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
+pub struct DummyTracker<I> {
+    map: FastHashMap<WeaklyStored<I>, RefCount>,
+}
+pub type TextureViewTracker = DummyTracker<TextureViewId>;
 
-impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+pub struct TrackerSet {
+    pub buffers: BufferTracker,
+    pub textures: TextureTracker,
+    pub views: TextureViewTracker,
+    //TODO: samplers
+}
+
+impl TrackerSet {
     pub fn new() -> Self {
-        Tracker {
-            map: HashMap::new(),
+        TrackerSet {
+            buffers: BufferTracker::new(),
+            textures: TextureTracker::new(),
+            views: TextureViewTracker::new(),
+        }
+    }
+}
+
+impl<I: Clone + Hash + Eq> DummyTracker<I> {
+    pub fn new() -> Self {
+        DummyTracker {
+            map: FastHashMap::default(),
         }
     }
 
@@ -93,11 +115,42 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
     }
 
     /// Get the last usage on a resource.
-    pub(crate) fn query(&mut self, stored: &Stored<I>, default: U) -> Query<U> {
-        match self.map.entry(WeaklyStored(stored.value.clone())) {
+    pub(crate) fn query(&mut self, id: I, ref_count: &RefCount) -> bool {
+        match self.map.entry(WeaklyStored(id)) {
+            Entry::Vacant(e) => {
+                e.insert(ref_count.clone());
+                true
+            }
+            Entry::Occupied(_) => false,
+        }
+    }
+
+    /// Consume another tacker.
+    pub fn consume(&mut self, other: &Self) {
+        for (id, ref_count) in &other.map {
+            self.query(id.0.clone(), ref_count);
+        }
+    }
+}
+
+impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+    pub fn new() -> Self {
+        Tracker {
+            map: FastHashMap::default(),
+        }
+    }
+
+    /// Remove an id from the tracked map.
+    pub(crate) fn remove(&mut self, id: I) -> bool {
+        self.map.remove(&WeaklyStored(id)).is_some()
+    }
+
+    /// Get the last usage on a resource.
+    pub(crate) fn query(&mut self, id: I, ref_count: &RefCount, default: U) -> Query<U> {
+        match self.map.entry(WeaklyStored(id)) {
             Entry::Vacant(e) => {
                 e.insert(Track {
-                    ref_count: stored.ref_count.clone(),
+                    ref_count: ref_count.clone(),
                     init: default,
                     last: default,
                 });

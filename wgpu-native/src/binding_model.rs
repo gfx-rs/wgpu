@@ -1,4 +1,4 @@
-use crate::track::{BufferTracker, TextureTracker};
+use crate::track::TrackerSet;
 use crate::{
     LifeGuard, WeaklyStored,
     BindGroupLayoutId, BufferId, SamplerId, TextureViewId,
@@ -84,6 +84,5 @@ pub struct BindGroup<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSet,
     pub(crate) layout_id: WeaklyStored<BindGroupLayoutId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) used_buffers: BufferTracker,
-    pub(crate) used_textures: TextureTracker,
+    pub(crate) used: TrackerSet,
 }

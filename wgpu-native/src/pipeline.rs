@@ -129,6 +129,7 @@ pub enum VertexFormat {
     FloatR32G32B32 = 1,
     FloatR32G32 = 2,
     FloatR32 = 3,
+    IntR8G8B8A8 = 4,
 }
 
 #[repr(C)]

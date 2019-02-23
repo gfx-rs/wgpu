@@ -16,12 +16,13 @@ pub use wgn::{
     BufferDescriptor, BufferUsageFlags,
     IndexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor, VertexFormat,
     Color, CommandEncoderDescriptor,
-    ColorStateDescriptor, DepthStencilStateDescriptor,
+    ColorStateDescriptor, DepthStencilStateDescriptor, StencilStateFaceDescriptor, StencilOperation,
     DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
     RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
     ShaderModuleDescriptor, ShaderStageFlags, StoreOp, SwapChainDescriptor,
     SamplerDescriptor, AddressMode, FilterMode, BorderColor, CompareFunction,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags, TextureViewDescriptor,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags,
+    TextureViewDescriptor, TextureViewDimension, TextureAspectFlags,
 };
 
 
@@ -53,10 +54,12 @@ pub struct Buffer {
 
 pub struct Texture {
     id: wgn::TextureId,
+    owned: bool,
 }
 
 pub struct TextureView {
     id: wgn::TextureViewId,
+    owned: bool,
 }
 
 pub struct Sampler {
@@ -151,6 +154,7 @@ pub struct PipelineStageDescriptor<'a> {
     pub entry_point: &'a str,
 }
 
+#[derive(Clone, Debug)]
 pub struct VertexBufferDescriptor<'a> {
     pub stride: u32,
     pub step_mode: InputStepMode,
@@ -425,6 +429,7 @@ impl Device {
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
             id: wgn::wgpu_device_create_texture(self.id, desc),
+            owned: true,
         }
     }
 
@@ -438,6 +443,14 @@ impl Device {
         SwapChain {
             id: wgn::wgpu_device_create_swap_chain(self.id, surface.id, desc),
         }
+    }
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        //TODO: make this work in general
+        #[cfg(feature = "metal-auto-capture")]
+        wgn::wgpu_device_destroy(self.id);
     }
 }
 
@@ -457,25 +470,31 @@ impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
             id: wgn::wgpu_texture_create_view(self.id, desc),
+            owned: true,
         }
     }
 
     pub fn create_default_view(&self) -> TextureView {
         TextureView {
             id: wgn::wgpu_texture_create_default_view(self.id),
+            owned: true,
         }
     }
 }
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        wgn::wgpu_texture_destroy(self.id);
+        if self.owned {
+            wgn::wgpu_texture_destroy(self.id);
+        }
     }
 }
 
 impl Drop for TextureView {
     fn drop(&mut self) {
-        wgn::wgpu_texture_view_destroy(self.id);
+        if self.owned {
+            wgn::wgpu_texture_view_destroy(self.id);
+        }
     }
 }
 
@@ -533,7 +552,7 @@ impl CommandEncoder {
         }
     }
 
-    pub fn copy_buffer_tobuffer(
+    pub fn copy_buffer_to_buffer(
         &mut self,
         source: &Buffer,
         source_offset: u32,
@@ -697,8 +716,12 @@ impl SwapChain {
         SwapChainOutput {
             texture: Texture {
                 id: output.texture_id,
+                owned: false,
             },
-            view: TextureView { id: output.view_id },
+            view: TextureView {
+                id: output.view_id,
+                owned: false,
+            },
             swap_chain_id: &self.id,
         }
     }
