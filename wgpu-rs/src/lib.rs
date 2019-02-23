@@ -54,10 +54,12 @@ pub struct Buffer {
 
 pub struct Texture {
     id: wgn::TextureId,
+    owned: bool,
 }
 
 pub struct TextureView {
     id: wgn::TextureViewId,
+    owned: bool,
 }
 
 pub struct Sampler {
@@ -427,6 +429,7 @@ impl Device {
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
             id: wgn::wgpu_device_create_texture(self.id, desc),
+            owned: true,
         }
     }
 
@@ -467,25 +470,31 @@ impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
             id: wgn::wgpu_texture_create_view(self.id, desc),
+            owned: true,
         }
     }
 
     pub fn create_default_view(&self) -> TextureView {
         TextureView {
             id: wgn::wgpu_texture_create_default_view(self.id),
+            owned: true,
         }
     }
 }
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        wgn::wgpu_texture_destroy(self.id);
+        if self.owned {
+            wgn::wgpu_texture_destroy(self.id);
+        }
     }
 }
 
 impl Drop for TextureView {
     fn drop(&mut self) {
-        wgn::wgpu_texture_view_destroy(self.id);
+        if self.owned {
+            wgn::wgpu_texture_view_destroy(self.id);
+        }
     }
 }
 
@@ -707,8 +716,12 @@ impl SwapChain {
         SwapChainOutput {
             texture: Texture {
                 id: output.texture_id,
+                owned: false,
             },
-            view: TextureView { id: output.view_id },
+            view: TextureView {
+                id: output.view_id,
+                owned: false,
+            },
             swap_chain_id: &self.id,
         }
     }

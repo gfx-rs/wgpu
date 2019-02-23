@@ -15,9 +15,11 @@ use crate::{
 };
 
 use back;
+use hal::backend::FastHashMap;
 use hal::command::RawCommandBuffer;
 use hal::queue::RawCommandQueue;
-use hal::{self,
+use hal::{
+    self,
     DescriptorPool as _DescriptorPool,
     Device as _Device,
     Surface as _Surface,
@@ -27,7 +29,7 @@ use log::{info, trace};
 use parking_lot::{Mutex};
 
 use std::{ffi, iter, slice};
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::hash_map::Entry;
 use std::sync::atomic::Ordering;
 
 
@@ -64,7 +66,7 @@ pub(crate) struct FramebufferKey {
 }
 impl Eq for FramebufferKey {}
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 enum ResourceId {
     Buffer(BufferId),
     Texture(TextureId),
@@ -100,6 +102,7 @@ unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
 
 impl<B: hal::Backend> DestroyedResources<B> {
     fn add(&mut self, resource_id: ResourceId, ref_count: RefCount) {
+        debug_assert!(!self.referenced.iter().any(|r| r.0 == resource_id));
         self.referenced.push((resource_id, ref_count));
     }
 
@@ -195,8 +198,8 @@ pub struct Device<B: hal::Backend> {
     life_guard: LifeGuard,
     pub(crate) trackers: Mutex<TrackerSet>,
     mem_props: hal::MemoryProperties,
-    pub(crate) render_passes: Mutex<HashMap<RenderPassKey, B::RenderPass>>,
-    pub(crate) framebuffers: Mutex<HashMap<FramebufferKey, B::Framebuffer>>,
+    pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
+    pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     desc_pool: Mutex<B::DescriptorPool>,
     destroyed: Mutex<DestroyedResources<B>>,
 }
@@ -269,8 +272,8 @@ impl<B: hal::Backend> Device<B> {
             life_guard,
             trackers: Mutex::new(TrackerSet::new()),
             mem_props,
-            render_passes: Mutex::new(HashMap::new()),
-            framebuffers: Mutex::new(HashMap::new()),
+            render_passes: Mutex::new(FastHashMap::default()),
+            framebuffers: Mutex::new(FastHashMap::default()),
             desc_pool,
             destroyed: Mutex::new(DestroyedResources {
                 referenced: Vec::new(),
@@ -1380,7 +1383,12 @@ pub fn device_create_swap_chain(
 
     let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
         Some(mut old) => {
+            let mut destroyed = device.destroyed.lock();
             assert_eq!(old.device_id.value, device_id);
+            for frame in old.frames {
+                destroyed.add(ResourceId::Texture(frame.texture_id.value), frame.texture_id.ref_count);
+                destroyed.add(ResourceId::TextureView(frame.view_id.value), frame.view_id.ref_count);
+            }
             unsafe {
                 old.command_pool.reset()
             };
