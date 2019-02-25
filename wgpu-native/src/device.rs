@@ -1390,6 +1390,9 @@ pub fn device_create_swap_chain(
                 destroyed.add(ResourceId::TextureView(frame.view_id.value), frame.view_id.ref_count);
             }
             unsafe {
+                for (_, framebuffer) in device.framebuffers.lock().drain() {  
+                    device.raw.destroy_framebuffer(framebuffer);                 
+                }
                 old.command_pool.reset()
             };
             (Some(old.raw), old.sem_available, old.command_pool)
