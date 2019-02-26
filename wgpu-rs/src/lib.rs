@@ -83,6 +83,12 @@ pub struct BindGroup {
     id: wgn::BindGroupId,
 }
 
+impl Drop for BindGroup {
+    fn drop(&mut self) {
+        wgn::wgpu_bind_group_destroy(self.id);
+    }
+}
+
 pub struct ShaderModule {
     id: wgn::ShaderModuleId,
 }

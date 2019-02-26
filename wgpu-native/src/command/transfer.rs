@@ -1,5 +1,6 @@
 use crate::device::{all_buffer_stages, all_image_stages};
 use crate::hub::HUB;
+use crate::resource::TexturePlacement;
 use crate::swap_chain::SwapChainLink;
 use crate::conv;
 use crate::{
@@ -135,7 +136,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         range: dst_texture.full_range.clone(),
     });
 
-    if let Some(ref link) = dst_texture.swap_chain_link {
+    if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
         cmb.swap_chain_links.push(SwapChainLink {
             swap_chain_id: link.swap_chain_id.clone(),
             epoch: *link.epoch.lock(),
@@ -203,7 +204,11 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         families: None,
         range: src_texture.full_range.clone(),
     });
-    assert!(src_texture.swap_chain_link.is_none()); //TODO
+    match src_texture.placement {
+        TexturePlacement::SwapChain(_) => unimplemented!(),
+        TexturePlacement::Void => unreachable!(),
+        TexturePlacement::Memory(_) => (),
+    }
 
     let (dst_buffer, dst_usage) = cmb.trackers.buffers
         .get_with_replaced_usage(
@@ -295,7 +300,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
         range: dst_texture.full_range.clone(),
     });
 
-    if let Some(ref link) = dst_texture.swap_chain_link {
+    if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
         cmb.swap_chain_links.push(SwapChainLink {
             swap_chain_id: link.swap_chain_id.clone(),
             epoch: *link.epoch.lock(),

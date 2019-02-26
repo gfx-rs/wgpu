@@ -14,6 +14,7 @@ use crate::device::{
     all_buffer_stages, all_image_stages,
 };
 use crate::hub::{HUB, Storage};
+use crate::resource::TexturePlacement;
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use crate::track::TrackerSet;
 use crate::conv;
@@ -218,14 +219,15 @@ pub fn command_encoder_begin_render_pass(
             if view.is_owned_by_swap_chain {
                 let link = match HUB.textures
                     .read()
-                    [view.texture_id.value].swap_chain_link
+                    [view.texture_id.value].placement
                 {
-                    Some(ref link) => SwapChainLink {
+                    TexturePlacement::SwapChain(ref link) => SwapChainLink {
                         swap_chain_id: link.swap_chain_id.clone(),
                         epoch: *link.epoch.lock(),
                         image_index: link.image_index,
                     },
-                    None => unreachable!()
+                    TexturePlacement::Memory(_) |
+                    TexturePlacement::Void => unreachable!()
                 };
                 swap_chain_links.push(link);
             }

@@ -7,11 +7,11 @@ use crate::{
 };
 use crate::{
     BufferId, CommandBufferId, AdapterId, DeviceId, QueueId,
-    TextureId, TextureViewId, SurfaceId,
+    BindGroupId, TextureId, TextureViewId, SurfaceId,
 };
 #[cfg(feature = "local")]
 use crate::{
-    BindGroupId, BindGroupLayoutId, PipelineLayoutId, SamplerId, SwapChainId,
+    BindGroupLayoutId, PipelineLayoutId, SamplerId, SwapChainId,
     ShaderModuleId, CommandEncoderId, RenderPipelineId, ComputePipelineId, 
 };
 
@@ -78,8 +78,8 @@ enum ResourceId {
 }
 
 enum NativeResource<B: hal::Backend> {
-    Buffer(B::Buffer),
-    Image(B::Image),
+    Buffer(B::Buffer, B::Memory),
+    Image(B::Image, B::Memory),
     ImageView(B::ImageView),
     Framebuffer(B::Framebuffer),
 }
@@ -140,17 +140,19 @@ impl<B: hal::Backend> DestroyedResources<B> {
 
         for resource in self.free.drain(..) {
             match resource {
-                NativeResource::Buffer(raw) => unsafe {
-                    device.destroy_buffer(raw)
+                NativeResource::Buffer(raw, memory) => unsafe {
+                    device.destroy_buffer(raw);
+                    device.free_memory(memory);
                 },
-                NativeResource::Image(raw) => unsafe {
-                    device.destroy_image(raw)
+                NativeResource::Image(raw, memory) => unsafe {
+                    device.destroy_image(raw);
+                    device.free_memory(memory);
                 },
                 NativeResource::ImageView(raw) => unsafe {
-                    device.destroy_image_view(raw)
+                    device.destroy_image_view(raw);
                 },
                 NativeResource::Framebuffer(raw) => unsafe {
-                    device.destroy_framebuffer(raw)
+                    device.destroy_framebuffer(raw);
                 },
             }
         }
@@ -177,12 +179,18 @@ impl DestroyedResources<back::Backend> {
                     ResourceId::Buffer(id) => {
                         trackers.buffers.remove(id);
                         let buf = HUB.buffers.unregister(id);
-                        (buf.life_guard, NativeResource::Buffer(buf.raw))
+                        (buf.life_guard, NativeResource::Buffer(buf.raw, buf.memory))
                     }
                     ResourceId::Texture(id) => {
                         trackers.textures.remove(id);
                         let tex = HUB.textures.unregister(id);
-                        (tex.life_guard, NativeResource::Image(tex.raw))
+                        let memory = match tex.placement {
+                            // swapchain-owned images don't need explicit destruction
+                            resource::TexturePlacement::SwapChain(_) => continue,
+                            resource::TexturePlacement::Memory(mem) => mem,
+                            resource::TexturePlacement::Void => unreachable!(),
+                        };
+                        (tex.life_guard, NativeResource::Image(tex.raw, memory))
                     }
                     ResourceId::TextureView(id) => {
                         trackers.views.remove(id);
@@ -555,7 +563,7 @@ pub fn device_create_texture(
             levels: 0 .. 1, //TODO: mips
             layers: 0 .. desc.array_size as u16,
         },
-        swap_chain_link: None,
+        placement: resource::TexturePlacement::Memory(memory),
         life_guard: LifeGuard::new(),
     }
 }
@@ -940,6 +948,11 @@ pub extern "C" fn wgpu_device_create_bind_group(
     HUB.bind_groups.register_local(bind_group)
 }
 
+#[no_mangle]
+pub extern "C" fn wgpu_bind_group_destroy(bind_group_id: BindGroupId) {
+    HUB.bind_groups.unregister(bind_group_id);
+}
+
 
 pub fn device_create_shader_module(
     device_id: DeviceId,
@@ -1029,6 +1042,7 @@ pub extern "C" fn wgpu_queue_submit(
         let mut command_buffer_guard = HUB.command_buffers.write();
         let buffer_guard = HUB.buffers.read();
         let texture_guard = HUB.textures.read();
+        let texture_view_guard = HUB.texture_views.read();
 
         // finish all the command buffers first
         for &cmb_id in command_buffer_ids {
@@ -1043,6 +1057,10 @@ pub extern "C" fn wgpu_queue_submit(
             }
             for id in comb.trackers.textures.used() {
                 texture_guard[id].life_guard.submission_index
+                    .store(old_submit_index, Ordering::Release);
+            }
+            for id in comb.trackers.views.used() {
+                texture_view_guard[id].life_guard.submission_index
                     .store(old_submit_index, Ordering::Release);
             }
 
@@ -1519,7 +1537,7 @@ pub fn device_create_swap_chain(
                 levels: 0 .. 1,
                 layers: 0 .. 1,
             },
-            swap_chain_link: None,
+            placement: resource::TexturePlacement::Void,
             life_guard: LifeGuard::new(),
         })
         .collect()
@@ -1553,7 +1571,7 @@ pub fn swap_chain_populate_textures(
                 )
                 .unwrap()
             };
-        texture.swap_chain_link = Some(swap_chain::SwapChainLink {
+        texture.placement = resource::TexturePlacement::SwapChain(swap_chain::SwapChainLink {
             swap_chain_id, //TODO: strongly
             epoch: Mutex::new(0),
             image_index: i as hal::SwapImageIndex,

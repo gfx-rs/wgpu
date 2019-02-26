@@ -144,6 +144,11 @@ impl<I: NewId> DummyTracker<I> {
             self.query(I::new(index, epoch), ref_count);
         }
     }
+
+    /// Return an iterator over used resources keys.
+    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
+        self.map.iter().map(|(&index, &(_, epoch))| I::new(index, epoch))
+    }
 }
 
 impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
