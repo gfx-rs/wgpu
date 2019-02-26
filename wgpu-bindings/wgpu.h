@@ -1,9 +1,3 @@
-#ifdef WGPU_REMOTE
-    typedef uint32_t WGPUId;
-#else
-    typedef void *WGPUId;
-#endif
-
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -138,7 +132,8 @@ typedef enum {
   WGPUTextureFormat_R8g8b8a8Unorm = 0,
   WGPUTextureFormat_R8g8b8a8Uint = 1,
   WGPUTextureFormat_B8g8r8a8Unorm = 2,
-  WGPUTextureFormat_D32FloatS8Uint = 3,
+  WGPUTextureFormat_D32Float = 3,
+  WGPUTextureFormat_D32FloatS8Uint = 4,
 } WGPUTextureFormat;
 
 typedef enum {
@@ -155,7 +150,10 @@ typedef enum {
   WGPUVertexFormat_FloatR32G32B32 = 1,
   WGPUVertexFormat_FloatR32G32 = 2,
   WGPUVertexFormat_FloatR32 = 3,
+  WGPUVertexFormat_IntR8G8B8A8 = 4,
 } WGPUVertexFormat;
+
+typedef uint32_t WGPUId;
 
 typedef WGPUId WGPUDeviceId;
 
@@ -631,6 +629,8 @@ WGPUSwapChainId wgpu_device_create_swap_chain(WGPUDeviceId device_id,
                                               const WGPUSwapChainDescriptor *desc);
 
 WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
+
+void wgpu_device_destroy(WGPUBufferId device_id);
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
