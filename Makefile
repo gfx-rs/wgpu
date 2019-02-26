@@ -48,7 +48,7 @@ clear:
 	rm wgpu-bindings/wgpu.h
 
 lib-native: Cargo.lock wgpu-native/Cargo.toml $(wildcard wgpu-native/**/*.rs)
-	cargo build --manifest-path wgpu-native/Cargo.toml --features $(FEATURE_NATIVE)
+	cargo build --manifest-path wgpu-native/Cargo.toml --features "local,$(FEATURE_NATIVE)"
 
 lib-rust: Cargo.lock wgpu-rs/Cargo.toml $(wildcard wgpu-rs/**/*.rs)
 	cargo build --manifest-path wgpu-rs/Cargo.toml --features $(FEATURE_RUST)

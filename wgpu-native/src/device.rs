@@ -64,7 +64,7 @@ pub(crate) struct RenderPassKey {
 }
 impl Eq for RenderPassKey {}
 
-#[derive(Hash, PartialEq)]
+#[derive(Clone, Hash, PartialEq)]
 pub(crate) struct FramebufferKey {
     pub attachments: AttachmentVec<TextureViewId>,
 }
@@ -77,16 +77,19 @@ enum ResourceId {
     TextureView(TextureViewId),
 }
 
-enum Resource<B: hal::Backend> {
-    Buffer(resource::Buffer<B>),
-    Texture(resource::Texture<B>),
-    TextureView(resource::TextureView<B>),
+enum NativeResource<B: hal::Backend> {
+    Buffer(B::Buffer),
+    Image(B::Image),
+    ImageView(B::ImageView),
+    Framebuffer(B::Framebuffer),
 }
 
 struct ActiveSubmission<B: hal::Backend> {
     index: SubmissionIndex,
     fence: B::Fence,
-    resources: Vec<Resource<B>>,
+    // Note: we keep the associated ID here in order to be able to check
+    // at any point what resources are used in a submission.
+    resources: Vec<(Option<ResourceId>, NativeResource<B>)>,
     mapped: Vec<BufferId>,
 }
 
@@ -101,7 +104,7 @@ struct DestroyedResources<B: hal::Backend> {
     active: Vec<ActiveSubmission<B>>,
     /// Resources that are neither referenced or used, just pending
     /// actual deletion.
-    free: Vec<Resource<B>>,
+    free: Vec<NativeResource<B>>,
     ready_to_map: Vec<BufferId>,
 }
 
@@ -119,32 +122,35 @@ impl<B: hal::Backend> DestroyedResources<B> {
     }
 
     /// Returns the last submission index that is done.
-    fn cleanup(&mut self, raw: &B::Device) -> SubmissionIndex {
+    fn cleanup(&mut self, device: &B::Device) -> SubmissionIndex {
         let mut last_done = 0;
 
         for i in (0..self.active.len()).rev() {
             if unsafe {
-                raw.get_fence_status(&self.active[i].fence).unwrap()
+                device.get_fence_status(&self.active[i].fence).unwrap()
             } {
                 let a = self.active.swap_remove(i);
                 last_done = last_done.max(a.index);
-                self.free.extend(a.resources);
+                self.free.extend(a.resources.into_iter().map(|(_, r)| r));
                 unsafe {
-                    raw.destroy_fence(a.fence);
+                    device.destroy_fence(a.fence);
                 }
             }
         }
 
         for resource in self.free.drain(..) {
             match resource {
-                Resource::Buffer(buf) => unsafe {
-                    raw.destroy_buffer(buf.raw)
+                NativeResource::Buffer(raw) => unsafe {
+                    device.destroy_buffer(raw)
                 },
-                Resource::Texture(tex) => unsafe {
-                    raw.destroy_image(tex.raw)
+                NativeResource::Image(raw) => unsafe {
+                    device.destroy_image(raw)
                 },
-                Resource::TextureView(view) => unsafe {
-                    raw.destroy_image_view(view.raw)
+                NativeResource::ImageView(raw) => unsafe {
+                    device.destroy_image_view(raw)
+                },
+                NativeResource::Framebuffer(raw) => unsafe {
+                    device.destroy_framebuffer(raw)
                 },
             }
         }
@@ -167,32 +173,30 @@ impl DestroyedResources<back::Backend> {
             if num_refs <= 3 {
                 let resource_id = self.referenced.swap_remove(i).0;
                 assert_eq!(num_refs, 3, "Resource {:?} misses some references", resource_id);
-                let (submit_index, resource) = match resource_id {
+                let (life_guard, resource) = match resource_id {
                     ResourceId::Buffer(id) => {
                         trackers.buffers.remove(id);
                         let buf = HUB.buffers.unregister(id);
-                        let si = buf.life_guard.submission_index.load(Ordering::Acquire);
-                        (si, Resource::Buffer(buf))
+                        (buf.life_guard, NativeResource::Buffer(buf.raw))
                     }
                     ResourceId::Texture(id) => {
                         trackers.textures.remove(id);
                         let tex = HUB.textures.unregister(id);
-                        let si = tex.life_guard.submission_index.load(Ordering::Acquire);
-                        (si, Resource::Texture(tex))
+                        (tex.life_guard, NativeResource::Image(tex.raw))
                     }
                     ResourceId::TextureView(id) => {
                         trackers.views.remove(id);
                         let view = HUB.texture_views.unregister(id);
-                        let si = view.life_guard.submission_index.load(Ordering::Acquire);
-                        (si, Resource::TextureView(view))
+                        (view.life_guard, NativeResource::ImageView(view.raw))
                     }
                 };
-                match self
-                    .active
+
+                let submit_index = life_guard.submission_index.load(Ordering::Acquire);
+                match self.active
                     .iter_mut()
                     .find(|a| a.index == submit_index)
                 {
-                    Some(a) => a.resources.push(resource),
+                    Some(a) => a.resources.push((Some(resource_id), resource)),
                     None => self.free.push(resource),
                 }
             }
@@ -209,14 +213,49 @@ impl DestroyedResources<back::Backend> {
                 let resource_id = self.mapped.swap_remove(i).value;
                 let buf = &buffer_guard[resource_id];
                 let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-                match self
-                    .active
+                self.active
                     .iter_mut()
                     .find(|a| a.index == submit_index)
-                {
-                    Some(a) => a.mapped.push(resource_id),
-                    None => self.ready_to_map.push(resource_id),
+                    .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
+                    .push(resource_id);
+            }
+        }
+    }
+
+    fn triage_framebuffers(
+        &mut self,
+        framebuffers: &mut FastHashMap<FramebufferKey, <back::Backend as hal::Backend>::Framebuffer>,
+    ) {
+        let texture_view_guard = HUB.texture_views.read();
+        let remove_list = framebuffers
+            .keys()
+            .filter_map(|key| {
+                let mut last_submit: SubmissionIndex = 0;
+                for &at in &key.attachments {
+                    if texture_view_guard.contains(at) {
+                        return None
+                    }
+                    // This attachment is no longer registered.
+                    // Let's see if it's used by any of the active submissions.
+                    let res_id = &Some(ResourceId::TextureView(at));
+                    for a in &self.active {
+                        if a.resources.iter().any(|&(ref id, _)| id == res_id) {
+                            last_submit = last_submit.max(a.index);
+                        }
+                    }
                 }
+                Some((key.clone(), last_submit))
+            })
+            .collect::<FastHashMap<_,_>>();
+
+        for (ref key, submit_index) in remove_list {
+            let resource = NativeResource::Framebuffer(framebuffers.remove(key).unwrap());
+            match self.active
+                .iter_mut()
+                .find(|a| a.index == submit_index)
+            {
+                Some(a) => a.resources.push((None, resource)),
+                None => self.free.push(resource),
             }
         }
     }
@@ -1073,6 +1112,7 @@ pub extern "C" fn wgpu_queue_submit(
     let last_done = {
         let mut destroyed = device.destroyed.lock();
         destroyed.triage_referenced(&mut *trackers);
+        destroyed.triage_framebuffers(&mut *device.framebuffers.lock());
         let last_done = destroyed.cleanup(&device.raw);
         destroyed.handle_mapping(&device.raw);
 

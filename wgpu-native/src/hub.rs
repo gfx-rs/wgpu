@@ -100,6 +100,15 @@ impl<T> ops::IndexMut<Id> for Storage<T> {
     }
 }
 
+impl<T> Storage<T> {
+    pub fn contains(&self, id: Id) -> bool {
+        match self.map.get(id.0 as usize) {
+            Some(&(_, epoch)) if epoch == id.1 => true,
+            _ => false
+        }
+    }
+}
+
 pub struct Registry<T> {
     #[cfg(feature = "local")]
     identity: Mutex<IdentityManager>,
@@ -136,9 +145,7 @@ impl<T> Registry<T> {
         let old = self.data.write().map.insert(id.0 as usize, (value, id.1));
         assert!(old.is_none());
     }
-}
 
-impl<T> Registry<T> {
     #[cfg(feature = "local")]
     pub fn register_local(&self, value: T) -> Id {
         let id = self.identity.lock().alloc();
