@@ -38,7 +38,7 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-#[cfg(not(feature = "local"))]
+#[cfg(feature = "remote")]
 pub use self::hub::{HUB, Id, IdentityManager, Registry};
 
 use std::ptr;

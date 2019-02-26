@@ -11,6 +11,8 @@ use lazy_static::lazy_static;
 use parking_lot::RwLock;
 #[cfg(feature = "local")]
 use parking_lot::Mutex;
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
 use vec_map::VecMap;
 
 use std::ops;
@@ -20,6 +22,7 @@ use std::sync::Arc;
 pub(crate) type Index = u32;
 pub(crate) type Epoch = u32;
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Id(Index, Epoch);
 
 pub trait NewId {
