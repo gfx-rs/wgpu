@@ -42,7 +42,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     size: u32,
 ) {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_buffer_id);
+    let cmb = &mut cmb_guard[command_buffer_id];
     let buffer_guard = HUB.buffers.read();
 
     let (src_buffer, src_usage) = cmb.trackers.buffers
@@ -101,7 +101,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     copy_size: Extent3d,
 ) {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_buffer_id);
+    let cmb = &mut cmb_guard[command_buffer_id];
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
@@ -184,7 +184,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     copy_size: Extent3d,
 ) {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_buffer_id);
+    let cmb = &mut cmb_guard[command_buffer_id];
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
@@ -260,7 +260,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     copy_size: Extent3d,
 ) {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_buffer_id);
+    let cmb = &mut cmb_guard[command_buffer_id];
     let texture_guard = HUB.textures.read();
 
     let (src_texture, src_usage) = cmb.trackers.textures

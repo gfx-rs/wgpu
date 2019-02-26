@@ -287,7 +287,7 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
         usage: U,
         permit: TrackPermit,
     ) -> Result<(&'a T, Tracktion<U>), U> {
-        let item = storage.get(id);
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, permit)
             .map(|tracktion| (item, tracktion))
     }
@@ -298,7 +298,7 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
         id: Id,
         usage: U,
     ) -> Result<&'a T, U> {
-        let item = storage.get(id);
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, TrackPermit::EXTEND)
             .map(|_tracktion| item)
     }
@@ -309,7 +309,7 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
         id: Id,
         usage: U,
     ) -> Result<(&'a T, Option<U>), U> {
-        let item = storage.get(id);
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, TrackPermit::REPLACE)
             .map(|tracktion| (item, match tracktion {
                 Tracktion::Init |

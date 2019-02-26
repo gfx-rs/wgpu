@@ -102,7 +102,7 @@ impl CommandBufferHandle {
     {
 
         let buffer_barriers = buffer_iter.map(|(id, transit)| {
-            let b = buffer_guard.get(id);
+            let b = &buffer_guard[id];
             trace!("transit {:?} {:?}", id, transit);
             hal::memory::Barrier::Buffer {
                 states: conv::map_buffer_state(transit.start) .. conv::map_buffer_state(transit.end),
@@ -112,7 +112,7 @@ impl CommandBufferHandle {
             }
         });
         let texture_barriers = texture_iter.map(|(id, transit)| {
-            let t = texture_guard.get(id);
+            let t = &texture_guard[id];
             trace!("transit {:?} {:?}", id, transit);
             let aspects = t.full_range.aspects;
             hal::memory::Barrier::Image {
@@ -148,7 +148,7 @@ pub extern "C" fn wgpu_command_encoder_finish(
 ) -> CommandBufferId {
     HUB.command_buffers
         .write()
-        .get_mut(command_encoder_id)
+        [command_encoder_id]
         .is_recording = false; //TODO: check for the old value
     command_encoder_id
 }
@@ -158,9 +158,9 @@ pub fn command_encoder_begin_render_pass(
     desc: RenderPassDescriptor,
 ) -> RenderPass<Backend> {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_encoder_id);
+    let cmb = &mut cmb_guard[command_encoder_id];
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(cmb.device_id.value);
+    let device = &device_guard[cmb.device_id.value];
     let view_guard = HUB.texture_views.read();
 
     let mut current_comb = device.com_allocator.extend(cmb);
@@ -187,7 +187,7 @@ pub fn command_encoder_begin_render_pass(
         let swap_chain_links = &mut cmb.swap_chain_links;
 
         let depth_stencil_key = depth_stencil_attachment.map(|at| {
-            let view = view_guard.get(at.attachment);
+            let view = &view_guard[at.attachment];
             if let Some(ex) = extent {
                 assert_eq!(ex, view.extent);
             } else {
@@ -213,13 +213,12 @@ pub fn command_encoder_begin_render_pass(
         });
 
         let color_keys = color_attachments.iter().map(|at| {
-            let view = view_guard.get(at.attachment);
+            let view = &view_guard[at.attachment];
 
             if view.is_owned_by_swap_chain {
                 let link = match HUB.textures
                     .read()
-                    .get(view.texture_id.value)
-                    .swap_chain_link
+                    [view.texture_id.value].swap_chain_link
                 {
                     Some(ref link) => SwapChainLink {
                         swap_chain_id: link.swap_chain_id.clone(),
@@ -308,7 +307,7 @@ pub fn command_encoder_begin_render_pass(
                     .key()
                     .attachments
                     .iter()
-                    .map(|&id| &view_guard.get(id).raw);
+                    .map(|&id| &view_guard[id].raw);
 
                 unsafe {
                     device
@@ -381,7 +380,7 @@ pub fn command_encoder_begin_compute_pass(
     command_encoder_id: CommandEncoderId,
 ) -> ComputePass<Backend> {
     let mut cmb_guard = HUB.command_buffers.write();
-    let cmb = cmb_guard.get_mut(command_encoder_id);
+    let cmb = &mut cmb_guard[command_encoder_id];
 
     let raw = cmb.raw.pop().unwrap();
     let stored = Stored {

@@ -207,7 +207,7 @@ impl DestroyedResources<back::Backend> {
             if num_refs <= 4 {
                 // assert_eq!(num_refs, 4);
                 let resource_id = self.mapped.swap_remove(i).value;
-                let buf = buffer_guard.get(resource_id);
+                let buf = &buffer_guard[resource_id];
                 let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
                 match self
                     .active
@@ -225,7 +225,7 @@ impl DestroyedResources<back::Backend> {
         let mut buffer_guard = HUB.buffers.write();
 
         for buffer_id in self.ready_to_map.drain(..) {
-            let buffer = buffer_guard.get_mut(buffer_id);
+            let buffer = &mut buffer_guard[buffer_id];
             let mut operation = None;
             std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
             match operation {
@@ -363,7 +363,7 @@ pub fn device_create_buffer(
     desc: &resource::BufferDescriptor,
 ) -> resource::Buffer<back::Backend> {
     let device_guard = HUB.devices.read();
-    let device = &device_guard.get(device_id);
+    let device = &device_guard[device_id];
     let (usage, memory_properties) = conv::map_buffer_usage(desc.usage);
 
     let mut buffer = unsafe {
@@ -418,8 +418,7 @@ pub fn device_track_buffer(
 ) {
     let query = HUB.devices
         .read()
-        .get(device_id)
-        .trackers
+        [device_id].trackers
         .lock()
         .buffers
         .query(buffer_id, &ref_count, resource::BufferUsageFlags::empty());
@@ -442,11 +441,10 @@ pub extern "C" fn wgpu_device_create_buffer(
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
     let buffer_guard = HUB.buffers.read();
-    let buffer = buffer_guard.get(buffer_id);
+    let buffer = &buffer_guard[buffer_id];
     HUB.devices
         .read()
-        .get(buffer.device_id.value)
-        .destroyed
+        [buffer.device_id.value].destroyed
         .lock()
         .destroy(
             ResourceId::Buffer(buffer_id),
@@ -463,7 +461,7 @@ pub fn device_create_texture(
     let aspects = format.surface_desc().aspects;
     let usage = conv::map_texture_usage(desc.usage, aspects);
     let device_guard = HUB.devices.read();
-    let device = &device_guard.get(device_id);
+    let device = &device_guard[device_id];
 
     let mut image = unsafe {
         device.raw.create_image(
@@ -530,8 +528,7 @@ pub fn device_track_texture(
 ) {
     let query = HUB.devices
         .read()
-        .get(device_id)
-        .trackers
+        [device_id].trackers
         .lock()
         .textures
         .query(texture_id, &ref_count, resource::TextureUsageFlags::UNINITIALIZED);
@@ -556,13 +553,12 @@ pub fn texture_create_view(
     desc: &resource::TextureViewDescriptor,
 ) -> resource::TextureView<back::Backend> {
     let texture_guard = HUB.textures.read();
-    let texture = texture_guard.get(texture_id);
+    let texture = &texture_guard[texture_id];
 
     let raw = unsafe {
         HUB.devices
             .read()
-            .get(texture.device_id.value)
-            .raw
+            [texture.device_id.value].raw
             .create_image_view(
                 &texture.raw,
                 conv::map_texture_view_dimension(desc.dimension),
@@ -598,13 +594,10 @@ pub fn device_track_view(
 ) {
     let device_id = HUB.textures
         .read()
-        .get(texture_id)
-        .device_id
-        .value;
+        [texture_id].device_id.value;
     let initialized = HUB.devices
         .read()
-        .get(device_id)
-        .trackers
+        [device_id].trackers
         .lock()
         .views
         .query(view_id, &ref_count);
@@ -629,7 +622,7 @@ pub fn texture_create_default_view(
     texture_id: TextureId
 ) -> resource::TextureView<back::Backend> {
     let texture_guard = HUB.textures.read();
-    let texture = texture_guard.get(texture_id);
+    let texture = &texture_guard[texture_id];
 
     let view_kind = match texture.kind {
         hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
@@ -642,8 +635,7 @@ pub fn texture_create_default_view(
     let raw = unsafe{
         HUB.devices
             .read()
-            .get(texture.device_id.value)
-            .raw
+            [texture.device_id.value].raw
             .create_image_view(
                 &texture.raw,
                 view_kind,
@@ -682,11 +674,10 @@ pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> Tex
 #[no_mangle]
 pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     let texture_guard = HUB.textures.read();
-    let texture = texture_guard.get(texture_id);
+    let texture = &texture_guard[texture_id];
     HUB.devices
         .read()
-        .get(texture.device_id.value)
-        .destroyed
+        [texture.device_id.value].destroyed
         .lock()
         .destroy(
             ResourceId::Texture(texture_id),
@@ -697,15 +688,13 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
 #[no_mangle]
 pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
     let texture_view_guard = HUB.texture_views.read();
-    let view = texture_view_guard.get(texture_view_id);
+    let view = &texture_view_guard[texture_view_id];
     let device_id = HUB.textures
         .read()
-        .get(view.texture_id.value)
-        .device_id.value;
+        [view.texture_id.value].device_id.value;
     HUB.devices
         .read()
-        .get(device_id)
-        .destroyed
+        [device_id].destroyed
         .lock()
         .destroy(
             ResourceId::TextureView(texture_view_id),
@@ -718,7 +707,7 @@ pub fn device_create_sampler(
     device_id: DeviceId, desc: &resource::SamplerDescriptor
 ) -> resource::Sampler<back::Backend> {
     let device_guard = HUB.devices.read();
-    let device = &device_guard.get(device_id);
+    let device = &device_guard[device_id];
 
     let info = hal::image::SamplerInfo {
         min_filter: conv::map_filter(desc.min_filter),
@@ -773,8 +762,7 @@ pub fn device_create_bind_group_layout(
     let raw = unsafe {
         HUB.devices
             .read()
-            .get(device_id)
-            .raw
+            [device_id].raw
             .create_descriptor_set_layout(
                 bindings.iter().map(|binding| {
                     hal::pso::DescriptorSetLayoutBinding {
@@ -815,14 +803,13 @@ pub fn device_create_pipeline_layout(
     let bind_group_layout_guard = HUB.bind_group_layouts.read();
     let descriptor_set_layouts = bind_group_layout_ids
         .iter()
-        .map(|&id| &bind_group_layout_guard.get(id).raw);
+        .map(|&id| &bind_group_layout_guard[id].raw);
 
     // TODO: push constants
     let pipeline_layout = unsafe {
         HUB.devices
             .read()
-            .get(device_id)
-            .raw
+            [device_id].raw
             .create_pipeline_layout(descriptor_set_layouts, &[])
     }
     .unwrap();
@@ -851,9 +838,9 @@ pub fn device_create_bind_group(
     desc: &binding_model::BindGroupDescriptor,
 ) -> binding_model::BindGroup<back::Backend> {
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(device_id);
+    let device = &device_guard[device_id];
     let bind_group_layout_guard = HUB.bind_group_layouts.read();
-    let bind_group_layout = bind_group_layout_guard.get(desc.layout);
+    let bind_group_layout = &bind_group_layout_guard[desc.layout];
     let bindings = unsafe {
         slice::from_raw_parts(desc.bindings, desc.bindings_length as usize)
     };
@@ -886,11 +873,11 @@ pub fn device_create_bind_group(
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
             binding_model::BindingResource::Sampler(id) => {
-                let sampler = sampler_guard.get(id);
+                let sampler = &sampler_guard[id];
                 hal::pso::Descriptor::Sampler(&sampler.raw)
             }
             binding_model::BindingResource::TextureView(id) => {
-                let view = texture_view_guard.get(id);
+                let view = &texture_view_guard[id];
                 used.views.query(id, &view.life_guard.ref_count);
                 used.textures
                     .transit(
@@ -943,8 +930,7 @@ pub fn device_create_shader_module(
     let shader = unsafe {
         HUB.devices
             .read()
-            .get(device_id)
-            .raw
+            [device_id].raw
             .create_shader_module(spv)
             .unwrap()
     };
@@ -967,7 +953,7 @@ pub fn device_create_command_encoder(
     _desc: &command::CommandEncoderDescriptor,
 ) -> command::CommandBuffer<back::Backend> {
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(device_id);
+    let device = &device_guard[device_id];
 
     let dev_stored = Stored {
         value: device_id,
@@ -1005,7 +991,7 @@ pub extern "C" fn wgpu_queue_submit(
     command_buffer_count: usize,
 ) {
     let mut device_guard = HUB.devices.write();
-    let device = device_guard.get_mut(queue_id);
+    let device = &mut device_guard[queue_id];
 
     let mut swap_chain_links = Vec::new();
     let command_buffer_ids =
@@ -1027,23 +1013,17 @@ pub extern "C" fn wgpu_queue_submit(
 
         // finish all the command buffers first
         for &cmb_id in command_buffer_ids {
-            let comb = command_buffer_guard.get_mut(cmb_id);
+            let comb = &mut command_buffer_guard[cmb_id];
             swap_chain_links.extend(comb.swap_chain_links.drain(..));
             // update submission IDs
             comb.life_guard.submission_index
                 .store(old_submit_index, Ordering::Release);
             for id in comb.trackers.buffers.used() {
-                buffer_guard
-                    .get(id)
-                    .life_guard
-                    .submission_index
+                buffer_guard[id].life_guard.submission_index
                     .store(old_submit_index, Ordering::Release);
             }
             for id in comb.trackers.textures.used() {
-                texture_guard
-                    .get(id)
-                    .life_guard
-                    .submission_index
+                texture_guard[id].life_guard.submission_index
                     .store(old_submit_index, Ordering::Release);
             }
 
@@ -1085,9 +1065,7 @@ pub extern "C" fn wgpu_queue_submit(
             .into_iter()
             .flat_map(|link| {
                 //TODO: check the epoch
-                surface_guard
-                    .get(link.swap_chain_id)
-                    .swap_chain
+                surface_guard[link.swap_chain_id].swap_chain
                     .as_ref()
                     .map(|swap_chain| (
                         &swap_chain.frames[link.image_index as usize].sem_available,
@@ -1100,7 +1078,7 @@ pub extern "C" fn wgpu_queue_submit(
                 //TODO: may `OneShot` be enough?
                 command_buffers: command_buffer_ids
                     .iter()
-                    .flat_map(|&cmb_id| &command_buffer_guard.get(cmb_id).raw),
+                    .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
                 wait_semaphores,
                 signal_semaphores: &[], //TODO: signal `sem_present`?
             };
@@ -1145,9 +1123,9 @@ pub fn device_create_render_pipeline(
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> pipeline::RenderPipeline<back::Backend> {
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(device_id);
+    let device = &device_guard[device_id];
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
-    let layout = &pipeline_layout_guard.get(desc.layout).raw;
+    let layout = &pipeline_layout_guard[desc.layout].raw;
     let shader_module_guard = HUB.shader_modules.read();
 
     let color_states = unsafe {
@@ -1218,7 +1196,7 @@ pub fn device_create_render_pipeline(
             .to_str()
             .to_owned()
             .unwrap(), // TODO
-        module: &shader_module_guard.get(desc.vertex_stage.module).raw,
+        module: &shader_module_guard[desc.vertex_stage.module].raw,
         specialization: hal::pso::Specialization {
             // TODO
             constants: &[],
@@ -1230,7 +1208,7 @@ pub fn device_create_render_pipeline(
             .to_str()
             .to_owned()
             .unwrap(), // TODO
-        module: &shader_module_guard.get(desc.fragment_stage.module).raw,
+        module: &shader_module_guard[desc.fragment_stage.module].raw,
         specialization: hal::pso::Specialization {
             // TODO
             constants: &[],
@@ -1360,9 +1338,9 @@ pub fn device_create_compute_pipeline(
     desc: &pipeline::ComputePipelineDescriptor,
 ) -> pipeline::ComputePipeline<back::Backend> {
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(device_id);
+    let device = &device_guard[device_id].raw;
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
-    let layout = &pipeline_layout_guard.get(desc.layout).raw;
+    let layout = &pipeline_layout_guard[desc.layout].raw;
     let pipeline_stage = &desc.compute_stage;
     let shader_module_guard = HUB.shader_modules.read();
 
@@ -1371,7 +1349,7 @@ pub fn device_create_compute_pipeline(
             .to_str()
             .to_owned()
             .unwrap(), // TODO
-        module: &shader_module_guard.get(pipeline_stage.module).raw,
+        module: &shader_module_guard[pipeline_stage.module].raw,
         specialization: hal::pso::Specialization {
             // TODO
             constants: &[],
@@ -1392,7 +1370,7 @@ pub fn device_create_compute_pipeline(
     };
 
     let pipeline = unsafe {
-        device.raw
+        device
             .create_compute_pipeline(&pipeline_desc, None)
             .unwrap()
     };
@@ -1421,13 +1399,13 @@ pub fn device_create_swap_chain(
     info!("creating swap chain {:?}", desc);
 
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(device_id);
+    let device = &device_guard[device_id];
     let mut surface_guard = HUB.surfaces.write();
-    let surface = surface_guard.get_mut(surface_id);
+    let surface = &mut surface_guard[surface_id];
 
     let (caps, formats, _present_modes, _composite_alphas) = {
         let adapter_guard = HUB.adapters.read();
-        let adapter = adapter_guard.get(device.adapter_id);
+        let adapter = &adapter_guard[device.adapter_id];
         assert!(surface.raw.supports_queue_family(&adapter.queue_families[0]));
         surface.raw.compatibility(&adapter.physical_device)
     };
@@ -1533,13 +1511,11 @@ pub fn swap_chain_populate_textures(
     textures: Vec<resource::Texture<back::Backend>>,
 ) {
     let mut surface_guard = HUB.surfaces.write();
-    let swap_chain = surface_guard
-        .get_mut(swap_chain_id)
-        .swap_chain
+    let swap_chain = surface_guard[swap_chain_id].swap_chain
         .as_mut()
         .unwrap();
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(swap_chain.device_id.value);
+    let device = &device_guard[swap_chain.device_id.value];
     let mut trackers = device.trackers.lock();
 
     for (i, mut texture) in textures.into_iter().enumerate() {
@@ -1620,9 +1596,9 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
     start: u32, count: u32, data: *const u8,
 ) {
     let buffer_guard = HUB.buffers.read();
-    let buffer = buffer_guard.get(buffer_id);
+    let buffer = &buffer_guard[buffer_id];
     let mut device_guard = HUB.devices.write();
-    let device = device_guard.get_mut(buffer.device_id.value);
+    let device = &mut device_guard[buffer.device_id.value];
 
     //Note: this is just doing `update_buffer`, which is limited to 64KB
 
@@ -1692,15 +1668,14 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     start: u32, size: u32, callback: BufferMapReadCallback, userdata: *mut u8,
 ) {
     let mut buffer_guard = HUB.buffers.write();
-    let buffer = buffer_guard.get_mut(buffer_id);
-    let device_guard = HUB.devices.read();
-    let device = device_guard.get(buffer.device_id.value);
+    let buffer = &mut buffer_guard[buffer_id];
 
     let range = start as u64..(start + size) as u64;
     buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
 
-    device
-        .destroyed
+    HUB.devices
+        .read()
+        [buffer.device_id.value].destroyed
         .lock()
         .map(buffer_id, buffer.life_guard.ref_count.clone());
 }
@@ -1711,15 +1686,14 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     start: u32, size: u32, callback: BufferMapWriteCallback, userdata: *mut u8,
 ) {
     let mut buffer_guard = HUB.buffers.write();
-    let buffer = buffer_guard.get_mut(buffer_id);
-    let device_guard = HUB.devices.read();
-    let device = device_guard.get(buffer.device_id.value);
+    let buffer = &mut buffer_guard[buffer_id];
 
     let range = start as u64..(start + size) as u64;
     buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
 
-    device
-        .destroyed
+    HUB.devices
+        .read()
+        [buffer.device_id.value].destroyed
         .lock()
         .map(buffer_id, buffer.life_guard.ref_count.clone());
 }
@@ -1729,9 +1703,9 @@ pub extern "C" fn wgpu_buffer_unmap(
     buffer_id: BufferId,
 ) {
     let mut buffer_guard = HUB.buffers.write();
-    let buffer = buffer_guard.get_mut(buffer_id);
-    let mut device_guard = HUB.devices.write();
-    let device = device_guard.get_mut(buffer.device_id.value);
+    let buffer = &mut buffer_guard[buffer_id];
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[buffer.device_id.value];
 
     if !buffer.mapped_write_ranges.is_empty() {
         unsafe { device.raw.flush_mapped_memory_ranges( buffer.mapped_write_ranges.iter().map(|r| {(&buffer.memory, r.clone())}) ).unwrap() }; // TODO

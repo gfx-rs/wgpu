@@ -38,8 +38,7 @@ pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandB
 
     HUB.command_buffers
         .write()
-        .get_mut(pass.cmb_id.value)
-        .raw
+        [pass.cmb_id.value].raw
         .push(pass.raw);
     pass.cmb_id.value
 }
@@ -49,8 +48,7 @@ pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: 
     unsafe {
         HUB.compute_passes
             .write()
-            .get_mut(pass_id)
-            .raw
+            [pass_id].raw
             .dispatch([x, y, z]);
     }
 }
@@ -62,9 +60,9 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     bind_group_id: BindGroupId,
 ) {
     let mut pass_guard = HUB.compute_passes.write();
-    let pass = pass_guard.get_mut(pass_id);
+    let pass = &mut pass_guard[pass_id];
     let bind_group_guard = HUB.bind_groups.read();
-    let bind_group = bind_group_guard.get(bind_group_id);
+    let bind_group = &bind_group_guard[bind_group_id];
 
     //Note: currently, WebGPU compute passes have synchronization defined
     // at a dispatch granularity, so we insert the necessary barriers here.
@@ -81,10 +79,9 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
 
     if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
-        let pipeline_layout = pipeline_layout_guard.get(pipeline_layout_id);
         unsafe {
             pass.raw.bind_compute_descriptor_sets(
-                &pipeline_layout.raw,
+                &pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
                 iter::once(&bind_group.raw),
                 &[],
@@ -99,9 +96,9 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
     pipeline_id: ComputePipelineId,
 ) {
     let mut pass_guard = HUB.compute_passes.write();
-    let pass = pass_guard.get_mut(pass_id);
+    let pass = &mut pass_guard[pass_id];
     let pipeline_guard = HUB.compute_pipelines.read();
-    let pipeline = pipeline_guard.get(pipeline_id);
+    let pipeline = &pipeline_guard[pipeline_id];
 
     unsafe {
         pass.raw.bind_compute_pipeline(&pipeline.raw);
@@ -112,7 +109,7 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
     }
 
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
-    let pipeline_layout = pipeline_layout_guard.get(pipeline.layout_id);
+    let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
     let bing_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
@@ -124,12 +121,12 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
         .enumerate()
     {
         if let Some(bg_id) = entry.expect_layout(bgl_id) {
-            let bind_group = bing_group_guard.get(bg_id);
+            let desc_set = &bing_group_guard[bg_id].raw;
             unsafe {
                 pass.raw.bind_compute_descriptor_sets(
                     &pipeline_layout.raw,
                     index,
-                    iter::once(&bind_group.raw),
+                    iter::once(desc_set),
                     &[]
                 );
             }
