@@ -1,6 +1,7 @@
 use log::info;
 
 
+#[allow(dead_code)]
 pub fn cast_slice<T>(data: &[T]) -> &[u8] {
     use std::mem::size_of;
     use std::slice::from_raw_parts;

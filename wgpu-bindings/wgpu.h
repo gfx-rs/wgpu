@@ -1,9 +1,3 @@
-#ifdef WGPU_REMOTE
-    typedef uint32_t WGPUId;
-#else
-    typedef void *WGPUId;
-#endif
-
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -138,7 +132,8 @@ typedef enum {
   WGPUTextureFormat_R8g8b8a8Unorm = 0,
   WGPUTextureFormat_R8g8b8a8Uint = 1,
   WGPUTextureFormat_B8g8r8a8Unorm = 2,
-  WGPUTextureFormat_D32FloatS8Uint = 3,
+  WGPUTextureFormat_D32Float = 3,
+  WGPUTextureFormat_D32FloatS8Uint = 4,
 } WGPUTextureFormat;
 
 typedef enum {
@@ -155,7 +150,12 @@ typedef enum {
   WGPUVertexFormat_FloatR32G32B32 = 1,
   WGPUVertexFormat_FloatR32G32 = 2,
   WGPUVertexFormat_FloatR32 = 3,
+  WGPUVertexFormat_IntR8G8B8A8 = 4,
 } WGPUVertexFormat;
+
+typedef struct WGPUBufferMapAsyncStatus WGPUBufferMapAsyncStatus;
+
+typedef struct WGPUId WGPUId;
 
 typedef WGPUId WGPUDeviceId;
 
@@ -170,6 +170,10 @@ typedef struct {
 } WGPUDeviceDescriptor;
 
 typedef WGPUId WGPUBufferId;
+
+typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const uint8_t *data, uint8_t *userdata);
+
+typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
 typedef WGPUId WGPUCommandBufferId;
 
@@ -555,10 +559,24 @@ WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDevi
 
 void wgpu_buffer_destroy(WGPUBufferId buffer_id);
 
+void wgpu_buffer_map_read_async(WGPUBufferId buffer_id,
+                                uint32_t start,
+                                uint32_t size,
+                                WGPUBufferMapReadCallback callback,
+                                uint8_t *userdata);
+
+void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
+                                 uint32_t start,
+                                 uint32_t size,
+                                 WGPUBufferMapWriteCallback callback,
+                                 uint8_t *userdata);
+
 void wgpu_buffer_set_sub_data(WGPUBufferId buffer_id,
                               uint32_t start,
                               uint32_t count,
                               const uint8_t *data);
+
+void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
 void wgpu_command_buffer_copy_buffer_to_buffer(WGPUCommandBufferId command_buffer_id,
                                                WGPUBufferId src,
@@ -631,6 +649,8 @@ WGPUSwapChainId wgpu_device_create_swap_chain(WGPUDeviceId device_id,
                                               const WGPUSwapChainDescriptor *desc);
 
 WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
+
+void wgpu_device_destroy(WGPUBufferId device_id);
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 

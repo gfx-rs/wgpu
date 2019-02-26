@@ -38,8 +38,8 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-#[cfg(not(feature = "local"))]
-pub use self::hub::{Id, IdentityManager};
+#[cfg(feature = "remote")]
+pub use self::hub::{HUB, Id, IdentityManager, Registry};
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -99,9 +99,6 @@ struct Stored<T> {
     value: T,
     ref_count: RefCount,
 }
-
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-struct WeaklyStored<T>(T);
 
 
 #[repr(C)]

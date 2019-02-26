@@ -1,17 +1,17 @@
 use crate::{
-    BindGroupHandle, Stored, WeaklyStored,
+    BindGroupHandle, Stored,
     BindGroupId, BindGroupLayoutId, PipelineLayoutId,
 };
 
 
 pub struct BindGroupPair {
-    layout_id: WeaklyStored<BindGroupLayoutId>,
+    layout_id: BindGroupLayoutId,
     group_id: Stored<BindGroupId>,
 }
 
 #[derive(Default)]
 pub struct BindGroupEntry {
-    expected_layout_id: Option<WeaklyStored<BindGroupLayoutId>>,
+    expected_layout_id: Option<BindGroupLayoutId>,
     provided: Option<BindGroupPair>,
 }
 
@@ -38,12 +38,12 @@ impl BindGroupEntry {
     pub fn expect_layout(
         &mut self, bind_group_layout_id: BindGroupLayoutId,
     ) -> Option<BindGroupId> {
-        let some = Some(WeaklyStored(bind_group_layout_id));
+        let some = Some(bind_group_layout_id);
         if self.expected_layout_id != some {
             self.expected_layout_id = some;
             match self.provided {
-                Some(BindGroupPair { ref layout_id, ref group_id })
-                    if layout_id.0 == bind_group_layout_id => Some(group_id.value),
+                Some(BindGroupPair { layout_id, ref group_id })
+                    if layout_id == bind_group_layout_id => Some(group_id.value),
                 Some(_) | None => None,
             }
         } else {
@@ -54,7 +54,7 @@ impl BindGroupEntry {
 
 #[derive(Default)]
 pub struct Binder {
-    pub(crate) pipeline_layout_id: Option<WeaklyStored<PipelineLayoutId>>, //TODO: strongly `Stored`
+    pub(crate) pipeline_layout_id: Option<PipelineLayoutId>, //TODO: strongly `Stored`
     pub(crate) entries: Vec<BindGroupEntry>,
 }
 
@@ -70,7 +70,7 @@ impl Binder {
     ) -> Option<PipelineLayoutId> {
         self.ensure_length(index + 1);
         if self.entries[index].provide(bind_group_id, bind_group) {
-            self.pipeline_layout_id.as_ref().map(|&WeaklyStored(id)| id)
+            self.pipeline_layout_id.as_ref().cloned()
         } else {
             None
         }

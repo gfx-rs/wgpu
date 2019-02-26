@@ -1,5 +1,5 @@
 use crate::{
-    Extent3d, Stored, WeaklyStored,
+    Extent3d, Stored,
     DeviceId, SwapChainId, TextureId, TextureViewId,
 };
 use crate::{conv, resource};
@@ -17,7 +17,7 @@ use std::{iter, mem};
 pub type SwapImageEpoch = u16;
 
 pub(crate) struct SwapChainLink<E> {
-    pub swap_chain_id: WeaklyStored<SwapChainId>, //TODO: strongly
+    pub swap_chain_id: SwapChainId, //TODO: strongly
     pub epoch: E,
     pub image_index: hal::SwapImageIndex,
 }
