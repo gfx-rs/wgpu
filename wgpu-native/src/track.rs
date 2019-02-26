@@ -1,18 +1,18 @@
-use crate::hub::{Id, Storage};
+use crate::hub::{NewId, Id, Index, Epoch, Storage};
 use crate::resource::{BufferUsageFlags, TextureUsageFlags};
 use crate::{
-    RefCount, WeaklyStored,
+    RefCount,
     BufferId, TextureId, TextureViewId,
 };
 
-use std::borrow::Borrow;
-use std::collections::hash_map::Entry;
-use std::hash::Hash;
-use std::mem;
-use std::ops::{BitOr, Range};
-
 use bitflags::bitflags;
 use hal::backend::FastHashMap;
+
+use std::borrow::Borrow;
+use std::collections::hash_map::Entry;
+use std::marker::PhantomData;
+use std::mem;
+use std::ops::{BitOr, Range};
 
 
 #[derive(Clone, Debug, PartialEq)]
@@ -72,16 +72,19 @@ struct Track<U> {
     ref_count: RefCount,
     init: U,
     last: U,
+    epoch: Epoch,
 }
 
 //TODO: consider having `I` as an associated type of `U`?
 pub struct Tracker<I, U> {
-    map: FastHashMap<WeaklyStored<I>, Track<U>>,
+    map: FastHashMap<Index, Track<U>>,
+    _phantom: PhantomData<I>,
 }
 pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
 pub struct DummyTracker<I> {
-    map: FastHashMap<WeaklyStored<I>, RefCount>,
+    map: FastHashMap<Index, (RefCount, Epoch)>,
+    _phantom: PhantomData<I>,
 }
 pub type TextureViewTracker = DummyTracker<TextureViewId>;
 
@@ -102,67 +105,88 @@ impl TrackerSet {
     }
 }
 
-impl<I: Clone + Hash + Eq> DummyTracker<I> {
+impl<I: NewId> DummyTracker<I> {
     pub fn new() -> Self {
         DummyTracker {
             map: FastHashMap::default(),
+            _phantom: PhantomData,
         }
     }
 
     /// Remove an id from the tracked map.
     pub(crate) fn remove(&mut self, id: I) -> bool {
-        self.map.remove(&WeaklyStored(id)).is_some()
+        match self.map.remove(&id.index()) {
+            Some((_, epoch)) => {
+                assert_eq!(epoch, id.epoch());
+                true
+            }
+            None => false,
+        }
     }
 
     /// Get the last usage on a resource.
     pub(crate) fn query(&mut self, id: I, ref_count: &RefCount) -> bool {
-        match self.map.entry(WeaklyStored(id)) {
+        match self.map.entry(id.index()) {
             Entry::Vacant(e) => {
-                e.insert(ref_count.clone());
+                e.insert((ref_count.clone(), id.epoch()));
                 true
             }
-            Entry::Occupied(_) => false,
+            Entry::Occupied(e) => {
+                assert_eq!(e.get().1, id.epoch());
+                false
+            }
         }
     }
 
     /// Consume another tacker.
     pub fn consume(&mut self, other: &Self) {
-        for (id, ref_count) in &other.map {
-            self.query(id.0.clone(), ref_count);
+        for (&index, &(ref ref_count, epoch)) in &other.map {
+            self.query(I::new(index, epoch), ref_count);
         }
     }
 }
 
-impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     pub fn new() -> Self {
         Tracker {
             map: FastHashMap::default(),
+            _phantom: PhantomData,
         }
     }
 
     /// Remove an id from the tracked map.
     pub(crate) fn remove(&mut self, id: I) -> bool {
-        self.map.remove(&WeaklyStored(id)).is_some()
+        match self.map.remove(&id.index()) {
+            Some(track) => {
+                assert_eq!(track.epoch, id.epoch());
+                true
+            }
+            None => false,
+        }
     }
 
     /// Get the last usage on a resource.
     pub(crate) fn query(&mut self, id: I, ref_count: &RefCount, default: U) -> Query<U> {
-        match self.map.entry(WeaklyStored(id)) {
+        match self.map.entry(id.index()) {
             Entry::Vacant(e) => {
                 e.insert(Track {
                     ref_count: ref_count.clone(),
                     init: default,
                     last: default,
+                    epoch: id.epoch(),
                 });
                 Query {
                     usage: default,
                     initialized: true,
                 }
             }
-            Entry::Occupied(e) => Query {
-                usage: e.get().last,
-                initialized: false,
-            },
+            Entry::Occupied(e) => {
+                assert_eq!(e.get().epoch, id.epoch());
+                Query {
+                    usage: e.get().last,
+                    initialized: false,
+                }
+            }
         }
     }
 
@@ -174,16 +198,18 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
         usage: U,
         permit: TrackPermit,
     ) -> Result<Tracktion<U>, U> {
-        match self.map.entry(WeaklyStored(id)) {
+        match self.map.entry(id.index()) {
             Entry::Vacant(e) => {
                 e.insert(Track {
                     ref_count: ref_count.clone(),
                     init: usage,
                     last: usage,
+                    epoch: id.epoch(),
                 });
                 Ok(Tracktion::Init)
             }
             Entry::Occupied(mut e) => {
+                assert_eq!(e.get().epoch, id.epoch());
                 let old = e.get().last;
                 if usage == old {
                     Ok(Tracktion::Keep)
@@ -201,37 +227,43 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
     }
 
     /// Consume another tacker, adding it's transitions to `self`.
+    /// Transitions the current usage to the new one.
     pub fn consume_by_replace<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
-        other.map.iter().flat_map(move |(id, new)| {
-            match self.map.entry(WeaklyStored(id.0.clone())) {
+        other.map.iter().flat_map(move |(&index, new)| {
+            match self.map.entry(index) {
                 Entry::Vacant(e) => {
                     e.insert(new.clone());
                     None
                 }
                 Entry::Occupied(mut e) => {
+                    assert_eq!(e.get().epoch, new.epoch);
                     let old = mem::replace(&mut e.get_mut().last, new.last);
                     if old == new.init {
                         None
                     } else {
-                        Some((id.0.clone(), old..new.last))
+                        Some((I::new(index, new.epoch), old .. new.last))
                     }
                 }
             }
         })
     }
 
+    /// Consume another tacker, adding it's transitions to `self`.
+    /// Extends the current usage without doing any transitions.
     pub fn consume_by_extend<'a>(&'a mut self, other: &'a Self) -> Result<(), (I, Range<U>)> {
-        for (id, new) in other.map.iter() {
-            match self.map.entry(WeaklyStored(id.0.clone())) {
+        for (&index, new) in other.map.iter() {
+            match self.map.entry(index) {
                 Entry::Vacant(e) => {
                     e.insert(new.clone());
                 }
                 Entry::Occupied(mut e) => {
+                    assert_eq!(e.get().epoch, new.epoch);
                     let old = e.get().last;
                     if old != new.last {
                         let extended = old | new.last;
                         if extended.is_exclusive() {
-                            return Err((id.0.clone(), old..new.last));
+                            let id = I::new(index, new.epoch);
+                            return Err((id, old .. new.last));
                         }
                         e.get_mut().last = extended;
                     }
@@ -243,7 +275,7 @@ impl<I: Clone + Hash + Eq, U: Copy + GenericUsage + BitOr<Output = U> + PartialE
 
     /// Return an iterator over used resources keys.
     pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
-        self.map.keys().map(|&WeaklyStored(ref id)| id.clone())
+        self.map.iter().map(|(&index, track)| I::new(index, track.epoch))
     }
 }
 

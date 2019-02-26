@@ -100,9 +100,6 @@ struct Stored<T> {
     ref_count: RefCount,
 }
 
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-struct WeaklyStored<T>(T);
-
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]

@@ -22,7 +22,7 @@ use crate::{
     BufferId, CommandBufferId, CommandEncoderId, DeviceId,
     TextureId, TextureViewId,
     BufferUsageFlags, TextureUsageFlags, Color,
-    LifeGuard, Stored, WeaklyStored,
+    LifeGuard, Stored,
     CommandBufferHandle,
 };
 #[cfg(feature = "local")]
@@ -294,9 +294,9 @@ pub fn command_encoder_begin_render_pass(
     let fb_key = FramebufferKey {
         attachments: color_attachments
             .iter()
-            .map(|at| WeaklyStored(at.attachment))
+            .map(|at| at.attachment)
             .chain(
-                depth_stencil_attachment.map(|at| WeaklyStored(at.attachment)),
+                depth_stencil_attachment.map(|at| at.attachment),
             )
             .collect(),
     };
@@ -308,7 +308,7 @@ pub fn command_encoder_begin_render_pass(
                     .key()
                     .attachments
                     .iter()
-                    .map(|&WeaklyStored(id)| &view_guard.get(id).raw);
+                    .map(|&id| &view_guard.get(id).raw);
 
                 unsafe {
                     device
@@ -374,7 +374,7 @@ pub extern "C" fn wgpu_command_encoder_begin_render_pass(
     desc: RenderPassDescriptor,
 ) -> RenderPassId {
     let pass = command_encoder_begin_render_pass(command_encoder_id, desc);
-    HUB.render_passes.register(pass)
+    HUB.render_passes.register_local(pass)
 }
 
 pub fn command_encoder_begin_compute_pass(
@@ -398,5 +398,5 @@ pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
     command_encoder_id: CommandEncoderId,
 ) -> ComputePassId {
     let pass = command_encoder_begin_compute_pass(command_encoder_id);
-    HUB.compute_passes.register(pass)
+    HUB.compute_passes.register_local(pass)
 }

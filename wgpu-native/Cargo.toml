@@ -22,6 +22,7 @@ remote = ["serde"]
 metal-auto-capture = ["gfx-backend-metal/auto-capture"]
 
 [dependencies]
+arrayvec = "0.4"
 bitflags = "1.0"
 lazy_static = "1.1.0"
 log = "0.4"
@@ -34,4 +35,5 @@ gfx-backend-dx12 = { version = "0.1.0", optional = true }
 gfx-backend-metal = { version = "0.1.0", optional = true }
 #rendy-memory = { git = "https://github.com/rustgd/rendy", rev = "ce7dd7f", features = ["gfx-hal"] }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
+vec_map = "0.8"
 winit = { version = "0.18", optional = true }

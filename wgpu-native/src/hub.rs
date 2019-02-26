@@ -7,56 +7,89 @@ use crate::{
     SurfaceHandle,
 };
 
-use hal::backend::FastHashMap;
 use lazy_static::lazy_static;
 use parking_lot::RwLock;
 #[cfg(feature = "local")]
 use parking_lot::Mutex;
+use vec_map::VecMap;
 
 use std::ops;
 use std::sync::Arc;
 
-//TODO: use Vec instead of HashMap
-//TODO: track epochs of indices
 
-pub type Id = u32;
+pub(crate) type Index = u32;
+pub(crate) type Epoch = u32;
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub struct Id(Index, Epoch);
+
+pub trait NewId {
+    fn new(index: Index, epoch: Epoch) -> Self;
+    fn index(&self) -> Index;
+    fn epoch(&self) -> Epoch;
+}
+
+impl NewId for Id {
+    fn new(index: Index, epoch: Epoch) -> Self {
+        Id(index, epoch)
+    }
+
+    fn index(&self) -> Index {
+        self.0
+    }
+
+    fn epoch(&self) -> Epoch {
+        self.1
+    }
+}
 
 /// A simple structure to manage identities of objects.
 #[derive(Default)]
 pub struct IdentityManager {
-    last_id: Id,
-    free: Vec<Id>,
+    free: Vec<Index>,
+    epochs: Vec<Epoch>,
 }
 
 impl IdentityManager {
     pub fn alloc(&mut self) -> Id {
         match self.free.pop() {
-            Some(id) => id,
+            Some(index) => {
+                Id(index, self.epochs[index as usize])
+            }
             None => {
-                self.last_id += 1;
-                assert_ne!(self.last_id, 0);
-                self.last_id
+                let id = Id(self.epochs.len() as Index, 1);
+                self.epochs.push(id.1);
+                id
             }
         }
     }
 
-    pub fn free(&mut self, id: Id) {
-        debug_assert!(id <= self.last_id && !self.free.contains(&id));
-        self.free.push(id);
+    pub fn free(&mut self, Id(index, epoch): Id) {
+        // avoid doing this check in release
+        if cfg!(debug_assertions) {
+            assert!(!self.free.contains(&index));
+        }
+        let pe = &mut self.epochs[index as usize];
+        assert_eq!(*pe, epoch);
+        *pe += 1;
+        self.free.push(index);
     }
 }
 
 pub struct Storage<T> {
     //TODO: consider concurrent hashmap?
-    map: FastHashMap<Id, T>,
+    map: VecMap<(T, Epoch)>,
 }
 
 impl<T> Storage<T> {
     pub fn get(&self, id: Id) -> &T {
-        self.map.get(&id).unwrap()
+        let (ref value, epoch) = self.map[id.0 as usize];
+        assert_eq!(epoch, id.1);
+        value
     }
     pub fn get_mut(&mut self, id: Id) -> &mut T {
-        self.map.get_mut(&id).unwrap()
+        let (ref mut value, epoch) = self.map[id.0 as usize];
+        assert_eq!(epoch, id.1);
+        value
     }
 }
 
@@ -72,7 +105,7 @@ impl<T> Default for Registry<T> {
             #[cfg(feature = "local")]
             identity: Mutex::new(IdentityManager::default()),
             data: RwLock::new(Storage {
-                map: FastHashMap::default(),
+                map: VecMap::new(),
             }),
         }
     }
@@ -92,26 +125,26 @@ impl<T> ops::DerefMut for Registry<T> {
 }
 
 impl<T> Registry<T> {
-    #[cfg(feature = "local")]
-    pub fn register(&self, value: T) -> Id {
-        let id = self.identity.lock().alloc();
-        let old = self.data.write().map.insert(id, value);
+    pub fn register(&self, id: Id, value: T) {
+        let old = self.data.write().map.insert(id.0 as usize, (value, id.1));
         assert!(old.is_none());
+    }
+}
+
+impl<T> Registry<T> {
+    #[cfg(feature = "local")]
+    pub fn register_local(&self, value: T) -> Id {
+        let id = self.identity.lock().alloc();
+        self.register(id, value);
         id
     }
 
     pub fn unregister(&self, id: Id) -> T {
         #[cfg(feature = "local")]
         self.identity.lock().free(id);
-        self.data.write().map.remove(&id).unwrap()
-    }
-}
-
-#[cfg(feature = "remote")]
-impl<T> Registry<T> {
-    pub fn register(&self, id: Id, value: T) {
-        let old = self.data.write().map.insert(id, value);
-        assert!(old.is_none());
+        let (value, epoch) = self.data.write().map.remove(id.0 as usize).unwrap();
+        assert_eq!(epoch, id.1);
+        value
     }
 }
 

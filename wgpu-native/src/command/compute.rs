@@ -112,18 +112,18 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
     }
 
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
-    let pipeline_layout = pipeline_layout_guard.get(pipeline.layout_id.0);
+    let pipeline_layout = pipeline_layout_guard.get(pipeline.layout_id);
     let bing_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
     pass.binder.ensure_length(pipeline_layout.bind_group_layout_ids.len());
 
-    for (index, (entry, bgl_id)) in pass.binder.entries
+    for (index, (entry, &bgl_id)) in pass.binder.entries
         .iter_mut()
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
     {
-        if let Some(bg_id) = entry.expect_layout(bgl_id.0) {
+        if let Some(bg_id) = entry.expect_layout(bgl_id) {
             let bind_group = bing_group_guard.get(bg_id);
             unsafe {
                 pass.raw.bind_compute_descriptor_sets(

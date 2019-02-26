@@ -1,6 +1,6 @@
 use crate::track::TrackerSet;
 use crate::{
-    LifeGuard, WeaklyStored,
+    LifeGuard,
     BindGroupLayoutId, BufferId, SamplerId, TextureViewId,
 };
 
@@ -50,7 +50,7 @@ pub struct PipelineLayoutDescriptor {
 
 pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
-    pub(crate) bind_group_layout_ids: Vec<WeaklyStored<BindGroupLayoutId>>,
+    pub(crate) bind_group_layout_ids: Vec<BindGroupLayoutId>,
 }
 
 #[repr(C)]
@@ -82,7 +82,7 @@ pub struct BindGroupDescriptor {
 
 pub struct BindGroup<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSet,
-    pub(crate) layout_id: WeaklyStored<BindGroupLayoutId>,
+    pub(crate) layout_id: BindGroupLayoutId,
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
 }

@@ -153,7 +153,9 @@ typedef enum {
   WGPUVertexFormat_IntR8G8B8A8 = 4,
 } WGPUVertexFormat;
 
-typedef uint32_t WGPUId;
+typedef struct WGPUBufferMapAsyncStatus WGPUBufferMapAsyncStatus;
+
+typedef struct WGPUId WGPUId;
 
 typedef WGPUId WGPUDeviceId;
 
@@ -168,6 +170,10 @@ typedef struct {
 } WGPUDeviceDescriptor;
 
 typedef WGPUId WGPUBufferId;
+
+typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const uint8_t *data, uint8_t *userdata);
+
+typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
 typedef WGPUId WGPUCommandBufferId;
 
@@ -553,10 +559,24 @@ WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDevi
 
 void wgpu_buffer_destroy(WGPUBufferId buffer_id);
 
+void wgpu_buffer_map_read_async(WGPUBufferId buffer_id,
+                                uint32_t start,
+                                uint32_t size,
+                                WGPUBufferMapReadCallback callback,
+                                uint8_t *userdata);
+
+void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
+                                 uint32_t start,
+                                 uint32_t size,
+                                 WGPUBufferMapWriteCallback callback,
+                                 uint8_t *userdata);
+
 void wgpu_buffer_set_sub_data(WGPUBufferId buffer_id,
                               uint32_t start,
                               uint32_t count,
                               const uint8_t *data);
+
+void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
 void wgpu_command_buffer_copy_buffer_to_buffer(WGPUCommandBufferId command_buffer_id,
                                                WGPUBufferId src,

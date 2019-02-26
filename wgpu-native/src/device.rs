@@ -2,7 +2,7 @@ use crate::{binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::hub::HUB;
 use crate::track::{TrackerSet, TrackPermit};
 use crate::{
-    LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
+    LifeGuard, RefCount, Stored, SubmissionIndex,
     BufferMapAsyncStatus, BufferMapOperation,
 };
 use crate::{
@@ -15,6 +15,7 @@ use crate::{
     ShaderModuleId, CommandEncoderId, RenderPipelineId, ComputePipelineId, 
 };
 
+use arrayvec::ArrayVec;
 use back;
 use hal::backend::FastHashMap;
 use hal::command::RawCommandBuffer;
@@ -33,6 +34,8 @@ use std::{ffi, iter, slice};
 use std::collections::hash_map::Entry;
 use std::sync::atomic::Ordering;
 
+
+type AttachmentVec<T> = ArrayVec<[T; 5]>;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -57,13 +60,13 @@ pub fn all_image_stages() -> hal::pso::PipelineStage {
 
 #[derive(Hash, PartialEq)]
 pub(crate) struct RenderPassKey {
-    pub attachments: Vec<hal::pass::Attachment>,
+    pub attachments: AttachmentVec<hal::pass::Attachment>,
 }
 impl Eq for RenderPassKey {}
 
 #[derive(Hash, PartialEq)]
 pub(crate) struct FramebufferKey {
-    pub attachments: Vec<WeaklyStored<TextureViewId>>,
+    pub attachments: AttachmentVec<TextureViewId>,
 }
 impl Eq for FramebufferKey {}
 
@@ -222,7 +225,7 @@ impl DestroyedResources<back::Backend> {
         let mut buffer_guard = HUB.buffers.write();
 
         for buffer_id in self.ready_to_map.drain(..) {
-            let mut buffer = buffer_guard.get_mut(buffer_id);
+            let buffer = buffer_guard.get_mut(buffer_id);
             let mut operation = None;
             std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
             match operation {
@@ -254,7 +257,7 @@ impl DestroyedResources<back::Backend> {
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
-    adapter_id: WeaklyStored<AdapterId>,
+    adapter_id: AdapterId,
     pub(crate) queue_group: hal::QueueGroup<B, hal::General>,
     //mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
@@ -270,7 +273,7 @@ pub struct Device<B: hal::Backend> {
 impl<B: hal::Backend> Device<B> {
     pub(crate) fn new(
         raw: B::Device,
-        adapter_id: WeaklyStored<AdapterId>,
+        adapter_id: AdapterId,
         queue_group: hal::QueueGroup<B, hal::General>,
         mem_props: hal::MemoryProperties,
     ) -> Self {
@@ -431,7 +434,7 @@ pub extern "C" fn wgpu_device_create_buffer(
 ) -> BufferId {
     let buffer = device_create_buffer(device_id, desc);
     let ref_count = buffer.life_guard.ref_count.clone();
-    let id = HUB.buffers.register(buffer);
+    let id = HUB.buffers.register_local(buffer);
     device_track_buffer(device_id, id, ref_count);
     id
 }
@@ -543,7 +546,7 @@ pub extern "C" fn wgpu_device_create_texture(
 ) -> TextureId {
     let texture = device_create_texture(device_id, desc);
     let ref_count = texture.life_guard.ref_count.clone();
-    let id = HUB.textures.register(texture);
+    let id = HUB.textures.register_local(texture);
     device_track_texture(device_id, id, ref_count);
     id
 }
@@ -617,7 +620,7 @@ pub extern "C" fn wgpu_texture_create_view(
     let view = texture_create_view(texture_id, desc);
     let texture_id = view.texture_id.value;
     let ref_count = view.life_guard.ref_count.clone();
-    let id = HUB.texture_views.register(view);
+    let id = HUB.texture_views.register_local(view);
     device_track_view(texture_id, id, ref_count);
     id
 }
@@ -671,7 +674,7 @@ pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> Tex
     let view = texture_create_default_view(texture_id);
     let texture_id = view.texture_id.value;
     let ref_count = view.life_guard.ref_count.clone();
-    let id = HUB.texture_views.register(view);
+    let id = HUB.texture_views.register_local(view);
     device_track_view(texture_id, id, ref_count);
     id
 }
@@ -757,7 +760,7 @@ pub extern "C" fn wgpu_device_create_sampler(
     device_id: DeviceId, desc: &resource::SamplerDescriptor
 ) -> SamplerId {
     let sampler = device_create_sampler(device_id, desc);
-    HUB.samplers.register(sampler)
+    HUB.samplers.register_local(sampler)
 }
 
 
@@ -799,7 +802,7 @@ pub extern "C" fn wgpu_device_create_bind_group_layout(
     desc: &binding_model::BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
     let layout = device_create_bind_group_layout(device_id, desc);
-    HUB.bind_group_layouts.register(layout)
+    HUB.bind_group_layouts.register_local(layout)
 }
 
 pub fn device_create_pipeline_layout(
@@ -829,7 +832,6 @@ pub fn device_create_pipeline_layout(
         bind_group_layout_ids: bind_group_layout_ids
             .iter()
             .cloned()
-            .map(WeaklyStored)
             .collect(),
     }
 }
@@ -841,7 +843,7 @@ pub extern "C" fn wgpu_device_create_pipeline_layout(
     desc: &binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
     let layout = device_create_pipeline_layout(device_id, desc);
-    HUB.pipeline_layouts.register(layout)
+    HUB.pipeline_layouts.register_local(layout)
 }
 
 pub fn device_create_bind_group(
@@ -916,7 +918,7 @@ pub fn device_create_bind_group(
 
     binding_model::BindGroup {
         raw: desc_set,
-        layout_id: WeaklyStored(desc.layout),
+        layout_id: desc.layout,
         life_guard: LifeGuard::new(),
         used,
     }
@@ -929,7 +931,7 @@ pub extern "C" fn wgpu_device_create_bind_group(
     desc: &binding_model::BindGroupDescriptor,
 ) -> BindGroupId {
     let bind_group = device_create_bind_group(device_id, desc);
-    HUB.bind_groups.register(bind_group)
+    HUB.bind_groups.register_local(bind_group)
 }
 
 
@@ -957,7 +959,7 @@ pub extern "C" fn wgpu_device_create_shader_module(
     desc: &pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
     let module = device_create_shader_module(device_id, desc);
-    HUB.shader_modules.register(module)
+    HUB.shader_modules.register_local(module)
 }
 
 pub fn device_create_command_encoder(
@@ -988,7 +990,7 @@ pub extern "C" fn wgpu_device_create_command_encoder(
     desc: &command::CommandEncoderDescriptor,
 ) -> CommandEncoderId {
     let cmb = device_create_command_encoder(device_id, desc);
-    HUB.command_buffers.register(cmb)
+    HUB.command_buffers.register_local(cmb)
 }
 
 #[no_mangle]
@@ -1084,7 +1086,7 @@ pub extern "C" fn wgpu_queue_submit(
             .flat_map(|link| {
                 //TODO: check the epoch
                 surface_guard
-                    .get(link.swap_chain_id.0)
+                    .get(link.swap_chain_id)
                     .swap_chain
                     .as_ref()
                     .map(|swap_chain| (
@@ -1339,7 +1341,7 @@ pub fn device_create_render_pipeline(
 
     pipeline::RenderPipeline {
         raw: pipeline,
-        layout_id: WeaklyStored(desc.layout),
+        layout_id: desc.layout,
     }
 }
 
@@ -1350,7 +1352,7 @@ pub extern "C" fn wgpu_device_create_render_pipeline(
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> RenderPipelineId {
     let pipeline = device_create_render_pipeline(device_id, desc);
-    HUB.render_pipelines.register(pipeline)
+    HUB.render_pipelines.register_local(pipeline)
 }
 
 pub fn device_create_compute_pipeline(
@@ -1397,7 +1399,7 @@ pub fn device_create_compute_pipeline(
 
     pipeline::ComputePipeline {
         raw: pipeline,
-        layout_id: WeaklyStored(desc.layout),
+        layout_id: desc.layout,
     }
 }
 
@@ -1408,7 +1410,7 @@ pub extern "C" fn wgpu_device_create_compute_pipeline(
     desc: &pipeline::ComputePipelineDescriptor,
 ) -> ComputePipelineId {
     let pipeline = device_create_compute_pipeline(device_id, desc);
-    HUB.compute_pipelines.register(pipeline)
+    HUB.compute_pipelines.register_local(pipeline)
 }
 
 pub fn device_create_swap_chain(
@@ -1425,7 +1427,7 @@ pub fn device_create_swap_chain(
 
     let (caps, formats, _present_modes, _composite_alphas) = {
         let adapter_guard = HUB.adapters.read();
-        let adapter = adapter_guard.get(device.adapter_id.0);
+        let adapter = adapter_guard.get(device.adapter_id);
         assert!(surface.raw.supports_queue_family(&adapter.queue_families[0]));
         surface.raw.compatibility(&adapter.physical_device)
     };
@@ -1556,13 +1558,13 @@ pub fn swap_chain_populate_textures(
                 .unwrap()
             };
         texture.swap_chain_link = Some(swap_chain::SwapChainLink {
-            swap_chain_id: WeaklyStored(swap_chain_id), //TODO: strongly
+            swap_chain_id, //TODO: strongly
             epoch: Mutex::new(0),
             image_index: i as hal::SwapImageIndex,
         });
         let texture_id = Stored {
             ref_count: texture.life_guard.ref_count.clone(),
-            value: HUB.textures.register(texture),
+            value: HUB.textures.register_local(texture),
         };
         trackers.textures.query(
             texture_id.value,
@@ -1581,7 +1583,7 @@ pub fn swap_chain_populate_textures(
         };
         let view_id = Stored {
              ref_count: view.life_guard.ref_count.clone(),
-             value: HUB.texture_views.register(view),
+             value: HUB.texture_views.register_local(view),
         };
         trackers.views.query(
             view_id.value,

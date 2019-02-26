@@ -1,6 +1,5 @@
 use crate::hub::HUB;
 use crate::{
-    WeaklyStored,
     AdapterHandle, DeviceHandle, SurfaceHandle,
     AdapterId, InstanceId,
 };
@@ -48,7 +47,7 @@ pub fn create_instance() -> ::back::Instance {
 #[cfg(feature = "local")]
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
     let inst = create_instance();
-    HUB.instances.register(inst)
+    HUB.instances.register_local(inst)
 }
 
 #[cfg(feature = "local")]
@@ -62,7 +61,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
         .get(instance_id)
         .create_surface(window);
     let surface = SurfaceHandle::new(raw);
-    HUB.surfaces.register(surface)
+    HUB.surfaces.register_local(surface)
 }
 
 #[allow(unused_variables)]
@@ -90,7 +89,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_xlib(
     window: u64,
 ) -> SurfaceId {
     let surface = instance_create_surface_from_xlib(instance_id, display, window);
-    HUB.surfaces.register(surface)
+    HUB.surfaces.register_local(surface)
 }
 
 #[allow(unused_variables)]
@@ -116,7 +115,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
     layer: *mut std::ffi::c_void,
 ) -> SurfaceId {
     let surface = instance_create_surface_from_macos_layer(instance_id, layer);
-    HUB.surfaces.register(surface)
+    HUB.surfaces.register_local(surface)
 }
 
 #[allow(unused_variables)]
@@ -152,7 +151,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
     hwnd: *mut std::ffi::c_void,
 ) -> SurfaceId {
     let surface = instance_create_surface_from_windows_hwnd(instance_id, hinstance, hwnd);
-    HUB.surfaces.register(surface)
+    HUB.surfaces.register_local(surface)
 }
 
 pub fn instance_get_adapter(
@@ -184,7 +183,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
     desc: &AdapterDescriptor,
 ) -> AdapterId {
     let adapter = instance_get_adapter(instance_id, desc);
-    HUB.adapters.register(adapter)
+    HUB.adapters.register_local(adapter)
 }
 
 pub fn adapter_create_device(
@@ -195,7 +194,7 @@ pub fn adapter_create_device(
     let adapter = adapter_guard.get_mut(adapter_id);
     let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    DeviceHandle::new(raw, WeaklyStored(adapter_id), queue_group, mem_props)
+    DeviceHandle::new(raw, adapter_id, queue_group, mem_props)
 }
 
 #[cfg(feature = "local")]
@@ -205,5 +204,5 @@ pub extern "C" fn wgpu_adapter_create_device(
     desc: &DeviceDescriptor,
 ) -> DeviceId {
     let device = adapter_create_device(adapter_id, desc);
-    HUB.devices.register(device)
+    HUB.devices.register_local(device)
 }
