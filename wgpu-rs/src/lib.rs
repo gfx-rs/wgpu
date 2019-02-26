@@ -6,12 +6,13 @@ use arrayvec::ArrayVec;
 use std::ffi::CString;
 use std::ops::Range;
 use std::ptr;
+use std::slice;
 
 pub use wgn::winit;
 pub use wgn::{
     MAX_DEPTH_BIAS_CLAMP,
     AdapterDescriptor, BindGroupLayoutBinding, BindingType,
-    BlendDescriptor, BlendOperation, BlendFactor, ColorWriteFlags,
+    BlendDescriptor, BlendOperation, BlendFactor, BufferMapAsyncStatus, ColorWriteFlags,
     RasterizationStateDescriptor, CullMode, FrontFace,
     BufferDescriptor, BufferUsageFlags,
     IndexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor, VertexFormat,
@@ -454,9 +455,62 @@ impl Drop for Device {
     }
 }
 
+pub enum BufferMapAsyncResult<T> {
+    Success(T),
+    Error,
+}
+
+struct BufferMapReadAsyncUserData<F: FnOnce(BufferMapAsyncResult<&[u8]>)> {
+    size: u32,
+    callback: F,
+}
+
+struct BufferMapWriteAsyncUserData<F: FnOnce(BufferMapAsyncResult<&mut [u8]>)> {
+    size: u32,
+    callback: F,
+}
+
 impl Buffer {
     pub fn set_sub_data(&self, offset: u32, data: &[u8]) {
         wgn::wgpu_buffer_set_sub_data(self.id, offset, data.len() as u32, data.as_ptr());
+    }
+
+    pub fn map_read_async<F>(&self, start: u32, size: u32, callback: F)
+            where F: FnOnce(BufferMapAsyncResult<&[u8]>) {
+        extern "C" fn buffer_map_read_callback_wrapper<F>(status: wgn::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8)
+                where F: FnOnce(BufferMapAsyncResult<&[u8]>) {
+            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapReadAsyncUserData<F>) };
+            let data = unsafe { slice::from_raw_parts(data, userdata.size as usize) };
+            if let wgn::BufferMapAsyncStatus::Success = status {
+                (userdata.callback)(BufferMapAsyncResult::Success(data));
+            } else {
+                (userdata.callback)(BufferMapAsyncResult::Error);
+            }
+        }
+
+        let userdata = Box::new(BufferMapReadAsyncUserData{size, callback});
+        wgn::wgpu_buffer_map_read_async(self.id, start, size, buffer_map_read_callback_wrapper::<F>, Box::into_raw(userdata) as *mut u8);
+    }
+
+    pub fn map_write_async<F>(&self, start: u32, size: u32, callback: F)
+            where F: FnOnce(BufferMapAsyncResult<&mut [u8]>) {
+        extern "C" fn buffer_map_write_callback_wrapper<F>(status: wgn::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8)
+                where F: FnOnce(BufferMapAsyncResult<&mut [u8]>) {
+            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapWriteAsyncUserData<F>) };
+            let data = unsafe { slice::from_raw_parts_mut(data, userdata.size as usize) };
+            if let wgn::BufferMapAsyncStatus::Success = status {
+                (userdata.callback)(BufferMapAsyncResult::Success(data));
+            } else {
+                (userdata.callback)(BufferMapAsyncResult::Error);
+            }
+        }
+
+        let userdata = Box::new(BufferMapWriteAsyncUserData{size, callback});
+        wgn::wgpu_buffer_map_write_async(self.id, start, size, buffer_map_write_callback_wrapper::<F>, Box::into_raw(userdata) as *mut u8);
+    }
+
+    pub fn unmap(&self) {
+        wgn::wgpu_buffer_unmap(self.id);
     }
 }
 

@@ -3,6 +3,7 @@ use crate::hub::HUB;
 use crate::track::{TrackerSet, TrackPermit};
 use crate::{
     LifeGuard, RefCount, Stored, SubmissionIndex, WeaklyStored,
+    BufferMapAsyncStatus, BufferMapOperation,
 };
 use crate::{
     BufferId, CommandBufferId, AdapterId, DeviceId, QueueId,
@@ -11,7 +12,7 @@ use crate::{
 #[cfg(feature = "local")]
 use crate::{
     BindGroupId, BindGroupLayoutId, PipelineLayoutId, SamplerId, SwapChainId,
-    ShaderModuleId, CommandEncoderId, RenderPipelineId, ComputePipelineId,
+    ShaderModuleId, CommandEncoderId, RenderPipelineId, ComputePipelineId, 
 };
 
 use back;
@@ -83,9 +84,12 @@ struct ActiveSubmission<B: hal::Backend> {
     index: SubmissionIndex,
     fence: B::Fence,
     resources: Vec<Resource<B>>,
+    mapped: Vec<BufferId>,
 }
 
 struct DestroyedResources<B: hal::Backend> {
+    /// Resources that the user has requested be mapped, but are still in use.
+    mapped: Vec<Stored<BufferId>>,
     /// Resources that are destroyed by the user but still referenced by
     /// other objects or command buffers.
     referenced: Vec<(ResourceId, RefCount)>,
@@ -95,15 +99,20 @@ struct DestroyedResources<B: hal::Backend> {
     /// Resources that are neither referenced or used, just pending
     /// actual deletion.
     free: Vec<Resource<B>>,
+    ready_to_map: Vec<BufferId>,
 }
 
 unsafe impl<B: hal::Backend> Send for DestroyedResources<B> {}
 unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
 
 impl<B: hal::Backend> DestroyedResources<B> {
-    fn add(&mut self, resource_id: ResourceId, ref_count: RefCount) {
+    fn destroy(&mut self, resource_id: ResourceId, ref_count: RefCount) {
         debug_assert!(!self.referenced.iter().any(|r| r.0 == resource_id));
         self.referenced.push((resource_id, ref_count));
+    }
+
+    fn map(&mut self, buffer: BufferId, ref_count: RefCount) {
+        self.mapped.push(Stored{value: buffer, ref_count});
     }
 
     /// Returns the last submission index that is done.
@@ -185,9 +194,63 @@ impl DestroyedResources<back::Backend> {
                 }
             }
         }
+
+        let buffer_guard = HUB.buffers.read();
+
+        for i in (0..self.mapped.len()).rev() {
+            // one in resource itself, one here in this list, one the owner holds, and one more somewhere?
+            let num_refs = self.mapped[i].ref_count.load();
+            trace!("{} references remain", num_refs);
+            if num_refs <= 4 {
+                // assert_eq!(num_refs, 4);
+                let resource_id = self.mapped.swap_remove(i).value;
+                let buf = buffer_guard.get(resource_id);
+                let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
+                match self
+                    .active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                {
+                    Some(a) => a.mapped.push(resource_id),
+                    None => self.ready_to_map.push(resource_id),
+                }
+            }
+        }
+    }
+
+    fn handle_mapping(&mut self, raw: &<back::Backend as hal::Backend>::Device) {
+        let mut buffer_guard = HUB.buffers.write();
+
+        for buffer_id in self.ready_to_map.drain(..) {
+            let mut buffer = buffer_guard.get_mut(buffer_id);
+            let mut operation = None;
+            std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
+            match operation {
+                Some(BufferMapOperation::Read(range, callback, userdata)) => {
+                    if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
+                        if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
+                            unsafe { raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range.clone()))).unwrap()  }; // TODO
+                        }
+                        callback(BufferMapAsyncStatus::Success, ptr, userdata);
+                    } else {
+                        callback(BufferMapAsyncStatus::Error, std::ptr::null(), userdata);
+                    }
+                },
+                Some(BufferMapOperation::Write(range, callback, userdata)) => {
+                    if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
+                        if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
+                            buffer.mapped_write_ranges.push(range);
+                        }
+                        callback(BufferMapAsyncStatus::Success, ptr, userdata);
+                    } else {
+                        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+                    }
+                },
+                _ => unreachable!(),
+            };
+        }
     }
 }
-
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
@@ -276,9 +339,11 @@ impl<B: hal::Backend> Device<B> {
             framebuffers: Mutex::new(FastHashMap::default()),
             desc_pool,
             destroyed: Mutex::new(DestroyedResources {
+                mapped: Vec::new(),
                 referenced: Vec::new(),
                 active: Vec::new(),
                 free: Vec::new(),
+                ready_to_map: Vec::new(),
             }),
         }
     }
@@ -296,7 +361,7 @@ pub fn device_create_buffer(
 ) -> resource::Buffer<back::Backend> {
     let device_guard = HUB.devices.read();
     let device = &device_guard.get(device_id);
-    let (usage, _) = conv::map_buffer_usage(desc.usage);
+    let (usage, memory_properties) = conv::map_buffer_usage(desc.usage);
 
     let mut buffer = unsafe {
         device.raw.create_buffer(desc.size as u64, usage).unwrap()
@@ -310,11 +375,10 @@ pub fn device_create_buffer(
         .iter()
         .enumerate()
         .position(|(id, memory_type)| {
-            // TODO
             requirements.type_mask & (1 << id) != 0
                 && memory_type
                     .properties
-                    .contains(hal::memory::Properties::DEVICE_LOCAL)
+                    .contains(memory_properties)
         })
         .unwrap()
         .into();
@@ -336,6 +400,10 @@ pub fn device_create_buffer(
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
         },
+        memory_properties,
+        memory,
+        mapped_write_ranges: Vec::new(),
+        pending_map_operation: None,
         life_guard: LifeGuard::new(),
     }
 }
@@ -377,12 +445,11 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
         .get(buffer.device_id.value)
         .destroyed
         .lock()
-        .add(
+        .destroy(
             ResourceId::Buffer(buffer_id),
             buffer.life_guard.ref_count.clone(),
         );
 }
-
 
 pub fn device_create_texture(
     device_id: DeviceId,
@@ -618,7 +685,7 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
         .get(texture.device_id.value)
         .destroyed
         .lock()
-        .add(
+        .destroy(
             ResourceId::Texture(texture_id),
             texture.life_guard.ref_count.clone(),
         );
@@ -637,7 +704,7 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
         .get(device_id)
         .destroyed
         .lock()
-        .add(
+        .destroy(
             ResourceId::TextureView(texture_view_id),
             view.life_guard.ref_count.clone(),
         );
@@ -1047,11 +1114,13 @@ pub extern "C" fn wgpu_queue_submit(
         let mut destroyed = device.destroyed.lock();
         destroyed.triage_referenced(&mut *trackers);
         let last_done = destroyed.cleanup(&device.raw);
+        destroyed.handle_mapping(&device.raw);
 
         destroyed.active.push(ActiveSubmission {
             index: old_submit_index + 1,
             fence,
             resources: Vec::new(),
+            mapped: Vec::new(),
         });
 
         last_done
@@ -1386,8 +1455,8 @@ pub fn device_create_swap_chain(
             let mut destroyed = device.destroyed.lock();
             assert_eq!(old.device_id.value, device_id);
             for frame in old.frames {
-                destroyed.add(ResourceId::Texture(frame.texture_id.value), frame.texture_id.ref_count);
-                destroyed.add(ResourceId::TextureView(frame.view_id.value), frame.view_id.ref_count);
+                destroyed.destroy(ResourceId::Texture(frame.texture_id.value), frame.texture_id.ref_count);
+                destroyed.destroy(ResourceId::TextureView(frame.view_id.value), frame.view_id.ref_count);
             }
             unsafe {
                 old.command_pool.reset()
@@ -1610,4 +1679,62 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
 #[no_mangle]
 pub extern "C" fn wgpu_device_destroy(device_id: BufferId) {
     HUB.devices.unregister(device_id);
+}
+
+pub type BufferMapReadCallback = extern "C" fn(status: BufferMapAsyncStatus, data: *const u8, userdata: *mut u8);
+pub type BufferMapWriteCallback = extern "C" fn(status: BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8);
+
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_map_read_async(
+    buffer_id: BufferId,
+    start: u32, size: u32, callback: BufferMapReadCallback, userdata: *mut u8,
+) {
+    let mut buffer_guard = HUB.buffers.write();
+    let buffer = buffer_guard.get_mut(buffer_id);
+    let device_guard = HUB.devices.read();
+    let device = device_guard.get(buffer.device_id.value);
+
+    let range = start as u64..(start + size) as u64;
+    buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
+
+    device
+        .destroyed
+        .lock()
+        .map(buffer_id, buffer.life_guard.ref_count.clone());
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_map_write_async(
+    buffer_id: BufferId,
+    start: u32, size: u32, callback: BufferMapWriteCallback, userdata: *mut u8,
+) {
+    let mut buffer_guard = HUB.buffers.write();
+    let buffer = buffer_guard.get_mut(buffer_id);
+    let device_guard = HUB.devices.read();
+    let device = device_guard.get(buffer.device_id.value);
+
+    let range = start as u64..(start + size) as u64;
+    buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
+
+    device
+        .destroyed
+        .lock()
+        .map(buffer_id, buffer.life_guard.ref_count.clone());
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_unmap(
+    buffer_id: BufferId,
+) {
+    let mut buffer_guard = HUB.buffers.write();
+    let buffer = buffer_guard.get_mut(buffer_id);
+    let mut device_guard = HUB.devices.write();
+    let device = device_guard.get_mut(buffer.device_id.value);
+
+    if !buffer.mapped_write_ranges.is_empty() {
+        unsafe { device.raw.flush_mapped_memory_ranges( buffer.mapped_write_ranges.iter().map(|r| {(&buffer.memory, r.clone())}) ).unwrap() }; // TODO
+        buffer.mapped_write_ranges.clear();
+    }
+
+    unsafe { device.raw.unmap_memory(&buffer.memory) };
 }

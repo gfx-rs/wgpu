@@ -115,16 +115,30 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
+        let vertex_buffer_length = vertex_data.len() * vertex_size;
+        let index_buffer_length = index_data.len() * mem::size_of::<u16>();
         let vertex_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            size: (vertex_data.len() * vertex_size) as u32,
-            usage: wgpu::BufferUsageFlags::VERTEX | wgpu::BufferUsageFlags::TRANSFER_DST,
+            size: vertex_buffer_length as u32,
+            usage: wgpu::BufferUsageFlags::VERTEX | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
         });
-        vertex_buf.set_sub_data(0, framework::cast_slice(&vertex_data));
+
+        //vertex_buf.set_sub_data(0, framework::cast_slice(&vertex_data));
+        vertex_buf.map_write_async(0, vertex_buffer_length as u32, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+            if let wgpu::BufferMapAsyncResult::Success(data) = result {
+                unsafe { std::ptr::copy_nonoverlapping(vertex_data.as_ptr() as *const u8, data.as_mut_ptr(), vertex_buffer_length) };
+            }
+        });
+
         let index_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            size: (index_data.len() * 2) as u32,
-            usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST,
+            size: index_buffer_length as u32,
+            usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
         });
-        index_buf.set_sub_data(0, framework::cast_slice(&index_data));
+        // index_buf.set_sub_data(0, framework::cast_slice(&index_data));
+        index_buf.map_write_async(0, index_buffer_length as u32, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+            if let wgpu::BufferMapAsyncResult::Success(data) = result {
+                unsafe { std::ptr::copy_nonoverlapping(index_data.as_ptr() as *const u8, data.as_mut_ptr(), index_buffer_length) };
+            }
+        });
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -163,14 +177,19 @@ impl framework::Example for Example {
             array_size: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::R8g8b8a8Unorm,
-            usage: wgpu::TextureUsageFlags::SAMPLED | wgpu::TextureUsageFlags::TRANSFER_DST
+            usage: wgpu::TextureUsageFlags::SAMPLED | wgpu::TextureUsageFlags::TRANSFER_DST,
         });
         let texture_view = texture.create_default_view();
         let temp_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: texels.len() as u32,
-            usage: wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST
+            usage: wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
         });
-        temp_buf.set_sub_data(0, &texels);
+        // temp_buf.set_sub_data(0, &texels);
+        temp_buf.map_write_async(0, texels.len() as u32, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+            if let wgpu::BufferMapAsyncResult::Success(data) = result {
+                unsafe { std::ptr::copy_nonoverlapping(texels.as_ptr() as *const u8, data.as_mut_ptr(), texels.len()) };
+            }
+        });
         init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
@@ -207,11 +226,16 @@ impl framework::Example for Example {
         });
         let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: 64,
-            usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+            usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
         });
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
+        // uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
+        uniform_buf.map_write_async(0, 64, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+            if let wgpu::BufferMapAsyncResult::Success(data) = result {
+                unsafe { std::ptr::copy_nonoverlapping(mx_ref.as_ptr() as *const u8, data.as_mut_ptr(), 64) };
+            }
+        });
 
         // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -310,7 +334,12 @@ impl framework::Example for Example {
     fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, _device: &mut wgpu::Device) {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
+        // self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
+        self.uniform_buf.map_write_async(0, 64, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+            if let wgpu::BufferMapAsyncResult::Success(data) = result {
+                unsafe { std::ptr::copy_nonoverlapping(mx_ref.as_ptr() as *const u8, data.as_mut_ptr(), 64) };
+            }
+        });
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
