@@ -550,7 +550,9 @@ pub extern "C" fn wgpu_device_create_texture(
 
 pub fn texture_create_view(
     texture_id: TextureId,
-    desc: &resource::TextureViewDescriptor,
+    format: resource::TextureFormat,
+    view_kind: hal::image::ViewKind,
+    range: hal::image::SubresourceRange,
 ) -> resource::TextureView<back::Backend> {
     let texture_guard = HUB.textures.read();
     let texture = &texture_guard[texture_id];
@@ -561,14 +563,10 @@ pub fn texture_create_view(
             [texture.device_id.value].raw
             .create_image_view(
                 &texture.raw,
-                conv::map_texture_view_dimension(desc.dimension),
-                conv::map_texture_format(desc.format),
+                view_kind,
+                conv::map_texture_format(format),
                 hal::format::Swizzle::NO,
-                hal::image::SubresourceRange {
-                    aspects: conv::map_texture_aspect_flags(desc.aspect),
-                    levels: desc.base_mip_level as u8 .. (desc.base_mip_level + desc.level_count) as u8,
-                    layers: desc.base_array_layer as u16 .. (desc.base_array_layer + desc.array_count) as u16,
-                },
+                range,
             )
             .unwrap()
     };
@@ -610,61 +608,43 @@ pub extern "C" fn wgpu_texture_create_view(
     texture_id: TextureId,
     desc: &resource::TextureViewDescriptor,
 ) -> TextureViewId {
-    let view = texture_create_view(texture_id, desc);
-    let texture_id = view.texture_id.value;
+    let view = texture_create_view(
+        texture_id,
+        desc.format,
+        conv::map_texture_view_dimension(desc.dimension),
+        hal::image::SubresourceRange {
+            aspects: conv::map_texture_aspect_flags(desc.aspect),
+            levels: desc.base_mip_level as u8 .. (desc.base_mip_level + desc.level_count) as u8,
+            layers: desc.base_array_layer as u16 .. (desc.base_array_layer + desc.array_count) as u16,
+        },
+    );
     let ref_count = view.life_guard.ref_count.clone();
     let id = HUB.texture_views.register_local(view);
     device_track_view(texture_id, id, ref_count);
     id
 }
 
-pub fn texture_create_default_view(
-    texture_id: TextureId
-) -> resource::TextureView<back::Backend> {
-    let texture_guard = HUB.textures.read();
-    let texture = &texture_guard[texture_id];
-
-    let view_kind = match texture.kind {
-        hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
-        hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
-        hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
-        hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
-        hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
-    };
-
-    let raw = unsafe{
-        HUB.devices
-            .read()
-            [texture.device_id.value].raw
-            .create_image_view(
-                &texture.raw,
-                view_kind,
-                conv::map_texture_format(texture.format),
-                hal::format::Swizzle::NO,
-                texture.full_range.clone(),
-            )
-            .unwrap()
-    };
-
-    resource::TextureView {
-        raw,
-        texture_id: Stored {
-            value: texture_id,
-            ref_count: texture.life_guard.ref_count.clone(),
-        },
-        format: texture.format,
-        extent: texture.kind.extent(),
-        samples: texture.kind.num_samples(),
-        is_owned_by_swap_chain: false,
-        life_guard: LifeGuard::new(),
-    }
-}
-
 #[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> TextureViewId {
-    let view = texture_create_default_view(texture_id);
-    let texture_id = view.texture_id.value;
+    let (format, view_kind, range) = {
+        let texture_guard = HUB.textures.read();
+        let texture = &texture_guard[texture_id];
+        let view_kind = match texture.kind {
+            hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
+            hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
+            hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
+            hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
+            hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
+        };
+        (texture.format, view_kind, texture.full_range.clone())
+    };
+    let view = texture_create_view(
+        texture_id,
+        format,
+        view_kind,
+        range,
+    );
     let ref_count = view.life_guard.ref_count.clone();
     let id = HUB.texture_views.register_local(view);
     device_track_view(texture_id, id, ref_count);
