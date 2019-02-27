@@ -67,11 +67,10 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     //Note: currently, WebGPU compute passes have synchronization defined
     // at a dispatch granularity, so we insert the necessary barriers here.
 
-    //TODO: have `TrackerSet::consume()` ?
     CommandBuffer::insert_barriers(
         &mut pass.raw,
-        pass.trackers.buffers.consume_by_replace(&bind_group.used.buffers),
-        pass.trackers.textures.consume_by_replace(&bind_group.used.textures),
+        &mut pass.trackers,
+        &bind_group.used,
         &*HUB.buffers.read(),
         &*HUB.textures.read(),
     );

@@ -20,9 +20,9 @@ use crate::track::TrackerSet;
 use crate::conv;
 use crate::{
     BufferHandle, TextureHandle,
-    BufferId, CommandBufferId, CommandEncoderId, DeviceId,
-    TextureId, TextureViewId,
-    BufferUsageFlags, TextureUsageFlags, Color,
+    CommandBufferId, CommandEncoderId, DeviceId,
+    TextureViewId,
+    TextureUsageFlags, Color,
     LifeGuard, Stored,
     CommandBufferHandle,
 };
@@ -35,7 +35,6 @@ use hal::{Device as _Device};
 use log::trace;
 
 use std::collections::hash_map::Entry;
-use std::ops::Range;
 use std::{iter, slice};
 use std::thread::ThreadId;
 
@@ -91,39 +90,40 @@ pub struct CommandBuffer<B: hal::Backend> {
 }
 
 impl CommandBufferHandle {
-    pub(crate) fn insert_barriers<I, J>(
+    pub(crate) fn insert_barriers(
         raw: &mut <Backend as hal::Backend>::CommandBuffer,
-        buffer_iter: I,
-        texture_iter: J,
+        base: &mut TrackerSet,
+        head: &TrackerSet,
         buffer_guard: &Storage<BufferHandle>,
         texture_guard: &Storage<TextureHandle>,
-    ) where
-        I: Iterator<Item = (BufferId, Range<BufferUsageFlags>)>,
-        J: Iterator<Item = (TextureId, Range<TextureUsageFlags>)>,
-    {
-
-        let buffer_barriers = buffer_iter.map(|(id, transit)| {
-            let b = &buffer_guard[id];
-            trace!("transit {:?} {:?}", id, transit);
-            hal::memory::Barrier::Buffer {
-                states: conv::map_buffer_state(transit.start) .. conv::map_buffer_state(transit.end),
-                target: &b.raw,
-                range: None .. None,
-                families: None,
-            }
-        });
-        let texture_barriers = texture_iter.map(|(id, transit)| {
-            let t = &texture_guard[id];
-            trace!("transit {:?} {:?}", id, transit);
-            let aspects = t.full_range.aspects;
-            hal::memory::Barrier::Image {
-                states: conv::map_texture_state(transit.start, aspects)
-                    ..conv::map_texture_state(transit.end, aspects),
-                target: &t.raw,
-                range: t.full_range.clone(), //TODO?
-                families: None,
-            }
-        });
+    ) {
+        let buffer_barriers = base.buffers
+            .consume_by_replace(&head.buffers)
+            .map(|(id, transit)| {
+                let b = &buffer_guard[id];
+                trace!("transit buffer {:?} {:?}", id, transit);
+                hal::memory::Barrier::Buffer {
+                    states: conv::map_buffer_state(transit.start) .. conv::map_buffer_state(transit.end),
+                    target: &b.raw,
+                    range: None .. None,
+                    families: None,
+                }
+            });
+        let texture_barriers = base.textures
+            .consume_by_replace(&head.textures)
+            .map(|(id, transit)| {
+                let t = &texture_guard[id];
+                trace!("transit texture {:?} {:?}", id, transit);
+                let aspects = t.full_range.aspects;
+                hal::memory::Barrier::Image {
+                    states: conv::map_texture_state(transit.start, aspects)
+                        ..conv::map_texture_state(transit.end, aspects),
+                    target: &t.raw,
+                    range: t.full_range.clone(), //TODO?
+                    families: None,
+                }
+            });
+        base.views.consume(&head.views);
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {

@@ -12,7 +12,7 @@ use crate::{
 #[cfg(feature = "local")]
 use crate::{
     BindGroupLayoutId, PipelineLayoutId, SamplerId, SwapChainId,
-    ShaderModuleId, CommandEncoderId, RenderPipelineId, ComputePipelineId, 
+    ShaderModuleId, CommandEncoderId, RenderPipelineId, ComputePipelineId,
 };
 
 use arrayvec::ArrayVec;
@@ -1072,16 +1072,13 @@ pub extern "C" fn wgpu_queue_submit(
                     hal::command::CommandBufferInheritanceInfo::default(),
                 );
             }
-            //TODO: fix the consume
-            let TrackerSet { ref mut buffers, ref mut textures, ref mut views } = *trackers;
             command::CommandBuffer::insert_barriers(
                 &mut transit,
-                buffers.consume_by_replace(&comb.trackers.buffers),
-                textures.consume_by_replace(&comb.trackers.textures),
+                &mut *trackers,
+                &comb.trackers,
                 &*buffer_guard,
                 &*texture_guard,
             );
-            views.consume(&comb.trackers.views);
             unsafe {
                 transit.finish();
             }

@@ -44,23 +44,17 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
         Some(ref mut last) => {
             CommandBuffer::insert_barriers(
                 last,
-                cmb.trackers.buffers.consume_by_replace(&pass.trackers.buffers),
-                cmb.trackers.textures.consume_by_replace(&pass.trackers.textures),
+                &mut cmb.trackers,
+                &pass.trackers,
                 &*HUB.buffers.read(),
                 &*HUB.textures.read(),
             );
             unsafe { last.finish() };
         }
         None => {
-            cmb.trackers.buffers
-                .consume_by_extend(&pass.trackers.buffers)
-                .unwrap();
-            cmb.trackers.textures
-                .consume_by_extend(&pass.trackers.textures)
-                .unwrap();
+            cmb.trackers.consume_by_extend(&pass.trackers);
         }
     }
-    cmb.trackers.views.consume(&pass.trackers.views);
 
     cmb.raw.push(pass.raw);
     pass.cmb_id.value

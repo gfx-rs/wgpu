@@ -103,6 +103,16 @@ impl TrackerSet {
             views: TextureViewTracker::new(),
         }
     }
+
+    pub fn consume_by_extend(&mut self, other: &Self) {
+        self.buffers
+            .consume_by_extend(&other.buffers)
+            .unwrap();
+        self.textures
+            .consume_by_extend(&other.textures)
+            .unwrap();
+        self.views.consume(&other.views);
+    }
 }
 
 impl<I: NewId> DummyTracker<I> {
