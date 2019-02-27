@@ -175,13 +175,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     let bind_group_guard = HUB.bind_groups.read();
     let bind_group = &bind_group_guard[bind_group_id];
 
-    pass.trackers.buffers
-        .consume_by_extend(&bind_group.used.buffers)
-        .unwrap();
-    pass.trackers.textures
-        .consume_by_extend(&bind_group.used.textures)
-        .unwrap();
-    pass.trackers.views.consume(&bind_group.used.views);
+    pass.trackers.consume_by_extend(&bind_group.used);
 
     if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();

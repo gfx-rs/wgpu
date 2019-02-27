@@ -74,7 +74,6 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
         &*HUB.buffers.read(),
         &*HUB.textures.read(),
     );
-    pass.trackers.views.consume(&bind_group.used.views);
 
     if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();

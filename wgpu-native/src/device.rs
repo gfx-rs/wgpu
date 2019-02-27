@@ -1,6 +1,6 @@
 use crate::{binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::hub::HUB;
-use crate::track::{TrackerSet, TrackPermit};
+use crate::track::{DummyUsage, TrackerSet, TrackPermit};
 use crate::{
     LifeGuard, RefCount, Stored, SubmissionIndex,
     BufferMapAsyncStatus, BufferMapOperation,
@@ -640,13 +640,13 @@ pub fn device_track_view(
     let device_id = HUB.textures
         .read()
         [texture_id].device_id.value;
-    let initialized = HUB.devices
+    let query = HUB.devices
         .read()
         [device_id].trackers
         .lock()
         .views
-        .query(view_id, &ref_count);
-    assert!(initialized);
+        .query(view_id, &ref_count, DummyUsage);
+    assert!(query.initialized);
 }
 
 #[cfg(feature = "local")]
@@ -905,7 +905,7 @@ pub fn device_create_bind_group(
             }
             binding_model::BindingResource::TextureView(id) => {
                 let view = &texture_view_guard[id];
-                used.views.query(id, &view.life_guard.ref_count);
+                used.views.query(id, &view.life_guard.ref_count, DummyUsage);
                 used.textures
                     .transit(
                         view.texture_id.value,
@@ -1599,6 +1599,7 @@ pub fn swap_chain_populate_textures(
         trackers.views.query(
             view_id.value,
             &view_id.ref_count,
+            DummyUsage,
         );
 
         swap_chain.frames.push(swap_chain::Frame {

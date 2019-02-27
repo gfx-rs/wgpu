@@ -16,7 +16,7 @@ use crate::device::{
 use crate::hub::{HUB, Storage};
 use crate::resource::TexturePlacement;
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
-use crate::track::TrackerSet;
+use crate::track::{DummyUsage, TrackerSet};
 use crate::conv;
 use crate::{
     BufferHandle, TextureHandle,
@@ -123,7 +123,9 @@ impl CommandBufferHandle {
                     families: None,
                 }
             });
-        base.views.consume(&head.views);
+        base.views
+            .consume_by_extend(&head.views)
+            .unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
@@ -194,7 +196,7 @@ pub fn command_encoder_begin_render_pass(
             } else {
                 extent = Some(view.extent);
             }
-            trackers.views.query(at.attachment, &view.life_guard.ref_count);
+            trackers.views.query(at.attachment, &view.life_guard.ref_count, DummyUsage);
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,
@@ -237,7 +239,7 @@ pub fn command_encoder_begin_render_pass(
             } else {
                 extent = Some(view.extent);
             }
-            trackers.views.query(at.attachment, &view.life_guard.ref_count);
+            trackers.views.query(at.attachment, &view.life_guard.ref_count, DummyUsage);
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,

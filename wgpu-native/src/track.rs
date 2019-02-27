@@ -56,6 +56,15 @@ bitflags! {
 pub trait GenericUsage {
     fn is_exclusive(&self) -> bool;
 }
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DummyUsage;
+impl BitOr for DummyUsage {
+    type Output = Self;
+    fn bitor(self, other: Self) -> Self {
+        other
+    }
+}
+
 impl GenericUsage for BufferUsageFlags {
     fn is_exclusive(&self) -> bool {
         BufferUsageFlags::WRITE_ALL.intersects(*self)
@@ -64,6 +73,11 @@ impl GenericUsage for BufferUsageFlags {
 impl GenericUsage for TextureUsageFlags {
     fn is_exclusive(&self) -> bool {
         TextureUsageFlags::WRITE_ALL.intersects(*self)
+    }
+}
+impl GenericUsage for DummyUsage {
+    fn is_exclusive(&self) -> bool {
+        false
     }
 }
 
@@ -82,11 +96,7 @@ pub struct Tracker<I, U> {
 }
 pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
-pub struct DummyTracker<I> {
-    map: FastHashMap<Index, (RefCount, Epoch)>,
-    _phantom: PhantomData<I>,
-}
-pub type TextureViewTracker = DummyTracker<TextureViewId>;
+pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
 
 pub struct TrackerSet {
     pub buffers: BufferTracker,
@@ -111,53 +121,9 @@ impl TrackerSet {
         self.textures
             .consume_by_extend(&other.textures)
             .unwrap();
-        self.views.consume(&other.views);
-    }
-}
-
-impl<I: NewId> DummyTracker<I> {
-    pub fn new() -> Self {
-        DummyTracker {
-            map: FastHashMap::default(),
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Remove an id from the tracked map.
-    pub(crate) fn remove(&mut self, id: I) -> bool {
-        match self.map.remove(&id.index()) {
-            Some((_, epoch)) => {
-                assert_eq!(epoch, id.epoch());
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// Get the last usage on a resource.
-    pub(crate) fn query(&mut self, id: I, ref_count: &RefCount) -> bool {
-        match self.map.entry(id.index()) {
-            Entry::Vacant(e) => {
-                e.insert((ref_count.clone(), id.epoch()));
-                true
-            }
-            Entry::Occupied(e) => {
-                assert_eq!(e.get().1, id.epoch());
-                false
-            }
-        }
-    }
-
-    /// Consume another tacker.
-    pub fn consume(&mut self, other: &Self) {
-        for (&index, &(ref ref_count, epoch)) in &other.map {
-            self.query(I::new(index, epoch), ref_count);
-        }
-    }
-
-    /// Return an iterator over used resources keys.
-    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
-        self.map.iter().map(|(&index, &(_, epoch))| I::new(index, epoch))
+        self.views
+            .consume_by_extend(&other.views)
+            .unwrap();
     }
 }
 
