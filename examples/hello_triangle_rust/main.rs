@@ -40,7 +40,7 @@ fn main() {
             cull_mode: wgpu::CullMode::None,
             depth_bias: 0,
             depth_bias_slope_scale: 0.0,
-            depth_bias_clamp: wgpu::MAX_DEPTH_BIAS_CLAMP,
+            depth_bias_clamp: 0.0,
         },
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         color_states: &[

@@ -105,13 +105,29 @@ pub struct TextureDescriptor {
     pub usage: TextureUsageFlags,
 }
 
+pub(crate) enum TexturePlacement<B: hal::Backend> {
+    SwapChain(SwapChainLink<Mutex<SwapImageEpoch>>),
+    Memory(B::Memory),
+    Void,
+}
+
+impl<B: hal::Backend> TexturePlacement<B> {
+    pub fn as_swap_chain(&self) -> &SwapChainLink<Mutex<SwapImageEpoch>> {
+        match *self {
+            TexturePlacement::SwapChain(ref link) => link,
+            TexturePlacement::Memory(_) |
+            TexturePlacement::Void => panic!("Expected swap chain link!"),
+        }
+    }
+}
+
 pub struct Texture<B: hal::Backend> {
     pub(crate) raw: B::Image,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: TextureFormat,
     pub(crate) full_range: hal::image::SubresourceRange,
-    pub(crate) swap_chain_link: Option<SwapChainLink<Mutex<SwapImageEpoch>>>,
+    pub(crate) placement: TexturePlacement<B>,
     pub(crate) life_guard: LifeGuard,
 }
 

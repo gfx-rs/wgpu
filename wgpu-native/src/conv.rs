@@ -1,7 +1,6 @@
 use crate::{
     binding_model, command, pipeline, resource, Color,
     Extent3d, Origin3d,
-    MAX_DEPTH_BIAS_CLAMP,
 };
 
 
@@ -491,7 +490,7 @@ pub fn map_rasterization_state_descriptor(
             pipeline::FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
             pipeline::FrontFace::Cw => hal::pso::FrontFace::Clockwise,
         },
-        depth_bias: if desc.depth_bias != 0 || desc.depth_bias_slope_scale != 0.0 || desc.depth_bias_clamp < MAX_DEPTH_BIAS_CLAMP {
+        depth_bias: if desc.depth_bias != 0 || desc.depth_bias_slope_scale != 0.0 || desc.depth_bias_clamp != 0.0 {
             Some(hal::pso::State::Static(hal::pso::DepthBias {
                 const_factor: desc.depth_bias as f32,
                 slope_factor: desc.depth_bias_slope_scale,

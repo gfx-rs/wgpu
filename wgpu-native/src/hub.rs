@@ -83,16 +83,29 @@ pub struct Storage<T> {
     map: VecMap<(T, Epoch)>,
 }
 
-impl<T> Storage<T> {
-    pub fn get(&self, id: Id) -> &T {
+impl<T> ops::Index<Id> for Storage<T> {
+    type Output = T;
+    fn index(&self, id: Id) -> &T {
         let (ref value, epoch) = self.map[id.0 as usize];
         assert_eq!(epoch, id.1);
         value
     }
-    pub fn get_mut(&mut self, id: Id) -> &mut T {
+}
+
+impl<T> ops::IndexMut<Id> for Storage<T> {
+    fn index_mut(&mut self, id: Id) -> &mut T {
         let (ref mut value, epoch) = self.map[id.0 as usize];
         assert_eq!(epoch, id.1);
         value
+    }
+}
+
+impl<T> Storage<T> {
+    pub fn contains(&self, id: Id) -> bool {
+        match self.map.get(id.0 as usize) {
+            Some(&(_, epoch)) if epoch == id.1 => true,
+            _ => false
+        }
     }
 }
 
@@ -132,9 +145,7 @@ impl<T> Registry<T> {
         let old = self.data.write().map.insert(id.0 as usize, (value, id.1));
         assert!(old.is_none());
     }
-}
 
-impl<T> Registry<T> {
     #[cfg(feature = "local")]
     pub fn register_local(&self, value: T) -> Id {
         let id = self.identity.lock().alloc();

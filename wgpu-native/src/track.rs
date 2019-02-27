@@ -56,6 +56,15 @@ bitflags! {
 pub trait GenericUsage {
     fn is_exclusive(&self) -> bool;
 }
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DummyUsage;
+impl BitOr for DummyUsage {
+    type Output = Self;
+    fn bitor(self, other: Self) -> Self {
+        other
+    }
+}
+
 impl GenericUsage for BufferUsageFlags {
     fn is_exclusive(&self) -> bool {
         BufferUsageFlags::WRITE_ALL.intersects(*self)
@@ -64,6 +73,11 @@ impl GenericUsage for BufferUsageFlags {
 impl GenericUsage for TextureUsageFlags {
     fn is_exclusive(&self) -> bool {
         TextureUsageFlags::WRITE_ALL.intersects(*self)
+    }
+}
+impl GenericUsage for DummyUsage {
+    fn is_exclusive(&self) -> bool {
+        false
     }
 }
 
@@ -82,11 +96,17 @@ pub struct Tracker<I, U> {
 }
 pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
-pub struct DummyTracker<I> {
-    map: FastHashMap<Index, (RefCount, Epoch)>,
-    _phantom: PhantomData<I>,
+pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
+
+//TODO: make this a generic parameter.
+/// Mode of stitching to states together.
+#[derive(Clone, Copy, Debug)]
+pub enum Stitch {
+    /// Stitch to the init state of the other resource.
+    Init,
+    /// Stitch to the last sttate of the other resource.
+    Last,
 }
-pub type TextureViewTracker = DummyTracker<TextureViewId>;
 
 pub struct TrackerSet {
     pub buffers: BufferTracker,
@@ -103,46 +123,17 @@ impl TrackerSet {
             views: TextureViewTracker::new(),
         }
     }
-}
 
-impl<I: NewId> DummyTracker<I> {
-    pub fn new() -> Self {
-        DummyTracker {
-            map: FastHashMap::default(),
-            _phantom: PhantomData,
-        }
-    }
-
-    /// Remove an id from the tracked map.
-    pub(crate) fn remove(&mut self, id: I) -> bool {
-        match self.map.remove(&id.index()) {
-            Some((_, epoch)) => {
-                assert_eq!(epoch, id.epoch());
-                true
-            }
-            None => false,
-        }
-    }
-
-    /// Get the last usage on a resource.
-    pub(crate) fn query(&mut self, id: I, ref_count: &RefCount) -> bool {
-        match self.map.entry(id.index()) {
-            Entry::Vacant(e) => {
-                e.insert((ref_count.clone(), id.epoch()));
-                true
-            }
-            Entry::Occupied(e) => {
-                assert_eq!(e.get().1, id.epoch());
-                false
-            }
-        }
-    }
-
-    /// Consume another tacker.
-    pub fn consume(&mut self, other: &Self) {
-        for (&index, &(ref ref_count, epoch)) in &other.map {
-            self.query(I::new(index, epoch), ref_count);
-        }
+    pub fn consume_by_extend(&mut self, other: &Self) {
+        self.buffers
+            .consume_by_extend(&other.buffers)
+            .unwrap();
+        self.textures
+            .consume_by_extend(&other.textures)
+            .unwrap();
+        self.views
+            .consume_by_extend(&other.views)
+            .unwrap();
     }
 }
 
@@ -228,7 +219,11 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
 
     /// Consume another tacker, adding it's transitions to `self`.
     /// Transitions the current usage to the new one.
-    pub fn consume_by_replace<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+    pub fn consume_by_replace<'a>(
+        &'a mut self,
+        other: &'a Self,
+        stitch: Stitch,
+    ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map.iter().flat_map(move |(&index, new)| {
             match self.map.entry(index) {
                 Entry::Vacant(e) => {
@@ -241,7 +236,11 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
                     if old == new.init {
                         None
                     } else {
-                        Some((I::new(index, new.epoch), old .. new.last))
+                        let state = match stitch {
+                            Stitch::Init => new.init,
+                            Stitch::Last => new.last,
+                        };
+                        Some((I::new(index, new.epoch), old .. state))
                     }
                 }
             }
@@ -287,7 +286,7 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
         usage: U,
         permit: TrackPermit,
     ) -> Result<(&'a T, Tracktion<U>), U> {
-        let item = storage.get(id);
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, permit)
             .map(|tracktion| (item, tracktion))
     }
@@ -298,7 +297,7 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
         id: Id,
         usage: U,
     ) -> Result<&'a T, U> {
-        let item = storage.get(id);
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, TrackPermit::EXTEND)
             .map(|_tracktion| item)
     }
@@ -309,7 +308,7 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
         id: Id,
         usage: U,
     ) -> Result<(&'a T, Option<U>), U> {
-        let item = storage.get(id);
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, TrackPermit::REPLACE)
             .map(|tracktion| (item, match tracktion {
                 Tracktion::Init |

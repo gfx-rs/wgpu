@@ -10,6 +10,7 @@ use crate::track::{TrackPermit};
 use hal;
 use hal::{Device as _Device, Swapchain as _Swapchain};
 use log::{trace, warn};
+use parking_lot::Mutex;
 
 use std::{iter, mem};
 
@@ -20,6 +21,12 @@ pub(crate) struct SwapChainLink<E> {
     pub swap_chain_id: SwapChainId, //TODO: strongly
     pub epoch: E,
     pub image_index: hal::SwapImageIndex,
+}
+
+impl SwapChainLink<Mutex<SwapImageEpoch>> {
+    pub fn bump_epoch(&self) {
+        *self.epoch.lock() += 1;
+    }
 }
 
 pub struct Surface<B: hal::Backend> {
@@ -95,8 +102,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
     let (image_index, device_id, descriptor) = {
         let mut surface_guard = HUB.surfaces.write();
         let swap_chain = surface_guard
-            .get_mut(swap_chain_id)
-            .swap_chain
+            [swap_chain_id].swap_chain
             .as_mut()
             .unwrap();
         let sync = hal::FrameSync::Semaphore(&swap_chain.sem_available);
@@ -120,8 +126,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
 
     let mut surface_guard = HUB.surfaces.write();
     let swap_chain = surface_guard
-        .get_mut(swap_chain_id)
-        .swap_chain
+        [swap_chain_id].swap_chain
         .as_mut()
         .unwrap();
 
@@ -134,7 +139,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
     };
 
     let device_guard = HUB.devices.read();
-    let device = device_guard.get(device_id);
+    let device = &device_guard[device_id];
 
     assert_ne!(swap_chain.acquired.len(), swap_chain.acquired.capacity(),
         "Unable to acquire any more swap chain images before presenting");
@@ -146,14 +151,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
     }
     mem::swap(&mut frame.sem_available, &mut swap_chain.sem_available);
 
-    match HUB.textures
-        .read()
-        .get(frame.texture_id.value)
-        .swap_chain_link
-    {
-        Some(ref link) => *link.epoch.lock() += 1,
-        None => unreachable!(),
-    }
+    HUB.textures.read()[frame.texture_id.value].placement.as_swap_chain().bump_epoch();
 
     SwapChainOutput {
         texture_id: frame.texture_id.value,
@@ -167,8 +165,7 @@ pub extern "C" fn wgpu_swap_chain_present(
 ) {
     let mut surface_guard = HUB.surfaces.write();
     let swap_chain = surface_guard
-        .get_mut(swap_chain_id)
-        .swap_chain
+        [swap_chain_id].swap_chain
         .as_mut()
         .unwrap();
 
@@ -176,14 +173,11 @@ pub extern "C" fn wgpu_swap_chain_present(
     let frame = &mut swap_chain.frames[image_index as usize];
 
     let mut device_guard = HUB.devices.write();
-    let device = device_guard.get_mut(swap_chain.device_id.value);
+    let device = &mut device_guard[swap_chain.device_id.value];
 
     let texture_guard = HUB.textures.read();
-    let texture = texture_guard.get(frame.texture_id.value);
-    match texture.swap_chain_link {
-        Some(ref link) => *link.epoch.lock() += 1,
-        None => unreachable!(),
-    }
+    let texture = &texture_guard[frame.texture_id.value];
+    texture.placement.as_swap_chain().bump_epoch();
 
     //TODO: support for swapchain being sampled or read by the shader?
 

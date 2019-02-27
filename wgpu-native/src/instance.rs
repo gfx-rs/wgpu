@@ -58,7 +58,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
 ) -> SurfaceId {
     let raw = HUB.instances
         .read()
-        .get(instance_id)
+        [instance_id]
         .create_surface(window);
     let surface = SurfaceHandle::new(raw);
     HUB.surfaces.register_local(surface)
@@ -76,7 +76,7 @@ pub fn instance_create_surface_from_xlib(
     #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
     SurfaceHandle::new(HUB.instances
         .read()
-        .get(instance_id)
+        [instance_id]
         .create_surface_from_xlib(display, window)
     )
 }
@@ -103,7 +103,7 @@ pub fn instance_create_surface_from_macos_layer(
     #[cfg(feature = "gfx-backend-metal")]
     SurfaceHandle::new(HUB.instances
         .read()
-        .get(instance_id)
+        [instance_id]
         .create_surface_from_layer(layer as *mut _)
     )
 }
@@ -130,13 +130,13 @@ pub fn instance_create_surface_from_windows_hwnd(
     #[cfg(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12"))]
     let raw = HUB.instances
         .read()
-        .get(instance_id)
+        [instance_id]
         .create_surface_from_hwnd(hwnd);
 
     #[cfg(all(target_os = "windows", feature = "gfx-backend-vulkan"))]
     let raw = HUB.instances
         .read()
-        .get(instance_id)
+        [instance_id]
         .create_surface_from_hwnd(hinstance, hwnd);
 
     #[cfg_attr(not(target_os = "windows"), allow(unreachable_code))]
@@ -159,7 +159,7 @@ pub fn instance_get_adapter(
     desc: &AdapterDescriptor,
 ) -> AdapterHandle {
     let instance_guard = HUB.instances.read();
-    let instance = instance_guard.get(instance_id);
+    let instance = &instance_guard[instance_id];
     let (mut low, mut high, mut other) = (None, None, None);
     for adapter in instance.enumerate_adapters() {
         match adapter.info.device_type {
@@ -190,8 +190,8 @@ pub fn adapter_create_device(
     adapter_id: AdapterId,
     _desc: &DeviceDescriptor,
 ) -> DeviceHandle {
-    let mut adapter_guard = HUB.adapters.write();
-    let adapter = adapter_guard.get_mut(adapter_id);
+    let adapter_guard = HUB.adapters.read();
+    let adapter = &adapter_guard[adapter_id];
     let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
     DeviceHandle::new(raw, adapter_id, queue_group, mem_props)
