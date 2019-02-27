@@ -1,6 +1,6 @@
 use crate::{binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::hub::HUB;
-use crate::track::{DummyUsage, TrackerSet, TrackPermit};
+use crate::track::{DummyUsage, Stitch, TrackerSet, TrackPermit};
 use crate::{
     LifeGuard, RefCount, Stored, SubmissionIndex,
     BufferMapAsyncStatus, BufferMapOperation,
@@ -1076,6 +1076,7 @@ pub extern "C" fn wgpu_queue_submit(
                 &mut transit,
                 &mut *trackers,
                 &comb.trackers,
+                Stitch::Init,
                 &*buffer_guard,
                 &*texture_guard,
             );

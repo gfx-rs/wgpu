@@ -16,7 +16,7 @@ use crate::device::{
 use crate::hub::{HUB, Storage};
 use crate::resource::TexturePlacement;
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
-use crate::track::{DummyUsage, TrackerSet};
+use crate::track::{DummyUsage, Stitch, TrackerSet};
 use crate::conv;
 use crate::{
     BufferHandle, TextureHandle,
@@ -94,11 +94,12 @@ impl CommandBufferHandle {
         raw: &mut <Backend as hal::Backend>::CommandBuffer,
         base: &mut TrackerSet,
         head: &TrackerSet,
+        stitch: Stitch,
         buffer_guard: &Storage<BufferHandle>,
         texture_guard: &Storage<TextureHandle>,
     ) {
         let buffer_barriers = base.buffers
-            .consume_by_replace(&head.buffers)
+            .consume_by_replace(&head.buffers, stitch)
             .map(|(id, transit)| {
                 let b = &buffer_guard[id];
                 trace!("transit buffer {:?} {:?}", id, transit);
@@ -110,7 +111,7 @@ impl CommandBufferHandle {
                 }
             });
         let texture_barriers = base.textures
-            .consume_by_replace(&head.textures)
+            .consume_by_replace(&head.textures, stitch)
             .map(|(id, transit)| {
                 let t = &texture_guard[id];
                 trace!("transit texture {:?} {:?}", id, transit);

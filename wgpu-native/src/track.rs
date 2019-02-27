@@ -98,6 +98,16 @@ pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
 pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
 pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
 
+//TODO: make this a generic parameter.
+/// Mode of stitching to states together.
+#[derive(Clone, Copy, Debug)]
+pub enum Stitch {
+    /// Stitch to the init state of the other resource.
+    Init,
+    /// Stitch to the last sttate of the other resource.
+    Last,
+}
+
 pub struct TrackerSet {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
@@ -209,7 +219,11 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
 
     /// Consume another tacker, adding it's transitions to `self`.
     /// Transitions the current usage to the new one.
-    pub fn consume_by_replace<'a>(&'a mut self, other: &'a Self) -> impl 'a + Iterator<Item = (I, Range<U>)> {
+    pub fn consume_by_replace<'a>(
+        &'a mut self,
+        other: &'a Self,
+        stitch: Stitch,
+    ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
         other.map.iter().flat_map(move |(&index, new)| {
             match self.map.entry(index) {
                 Entry::Vacant(e) => {
@@ -222,7 +236,11 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
                     if old == new.init {
                         None
                     } else {
-                        Some((I::new(index, new.epoch), old .. new.last))
+                        let state = match stitch {
+                            Stitch::Init => new.init,
+                            Stitch::Last => new.last,
+                        };
+                        Some((I::new(index, new.epoch), old .. state))
                     }
                 }
             }

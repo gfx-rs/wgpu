@@ -1,7 +1,7 @@
 use crate::command::bind::Binder;
 use crate::hub::HUB;
 use crate::resource::BufferUsageFlags;
-use crate::track::TrackerSet;
+use crate::track::{Stitch, TrackerSet};
 use crate::{
     CommandBuffer, Stored,
     BindGroupId, BufferId, CommandBufferId, RenderPassId, RenderPipelineId,
@@ -46,6 +46,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
                 last,
                 &mut cmb.trackers,
                 &pass.trackers,
+                Stitch::Last,
                 &*HUB.buffers.read(),
                 &*HUB.textures.read(),
             );

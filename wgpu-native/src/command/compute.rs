@@ -1,6 +1,6 @@
 use crate::command::bind::{Binder};
 use crate::hub::HUB;
-use crate::track::TrackerSet;
+use crate::track::{Stitch, TrackerSet};
 use crate::{
     Stored, CommandBuffer,
     BindGroupId, CommandBufferId, ComputePassId, ComputePipelineId,
@@ -71,6 +71,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
         &mut pass.raw,
         &mut pass.trackers,
         &bind_group.used,
+        Stitch::Last,
         &*HUB.buffers.read(),
         &*HUB.textures.read(),
     );
