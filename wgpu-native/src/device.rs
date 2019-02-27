@@ -1659,7 +1659,12 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
             range: None .. None, //TODO: could be partial
         });
 
+    // Note: this is not pretty. If we need one-time service command buffers,
+    // we'll need to have some internal abstractions for them to be safe.
     let mut comb = device.com_allocator.allocate(buffer.device_id.clone(), &device.raw);
+    // mark as used by the next submission, conservatively
+    let last_submit_index = device.life_guard.submission_index.load(Ordering::Acquire);
+    comb.life_guard.submission_index.store(last_submit_index + 1, Ordering::Release);
     unsafe {
         let raw = comb.raw.last_mut().unwrap();
         raw.begin(

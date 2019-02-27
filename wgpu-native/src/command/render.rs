@@ -212,7 +212,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
 
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
     let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-    let bing_group_guard = HUB.bind_groups.read();
+    let bind_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
     pass.binder.ensure_length(pipeline_layout.bind_group_layout_ids.len());
@@ -223,7 +223,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         .enumerate()
     {
         if let Some(bg_id) = entry.expect_layout(bgl_id) {
-            let desc_set = &bing_group_guard[bg_id].raw;
+            let desc_set = &bind_group_guard[bg_id].raw;
             unsafe {
                 pass.raw.bind_graphics_descriptor_sets(
                     &pipeline_layout.raw,
