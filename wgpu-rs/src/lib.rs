@@ -10,7 +10,6 @@ use std::slice;
 
 pub use wgn::winit;
 pub use wgn::{
-    MAX_DEPTH_BIAS_CLAMP,
     AdapterDescriptor, BindGroupLayoutBinding, BindingType,
     BlendDescriptor, BlendOperation, BlendFactor, BufferMapAsyncStatus, ColorWriteFlags,
     RasterizationStateDescriptor, CullMode, FrontFace,
@@ -253,7 +252,7 @@ impl Instance {
             id: wgn::wgpu_instance_create_surface_from_winit(self.id, window),
         }
     }
-    
+
     #[cfg(feature = "metal")]
     pub fn create_surface_with_metal_layer(&self, window: *mut std::ffi::c_void) -> Surface {
         Surface {

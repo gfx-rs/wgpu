@@ -219,7 +219,7 @@ impl framework::Example for Example {
         });
 
         let local_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            bindings: &[                     
+            bindings: &[
                 wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStageFlags::VERTEX | wgpu::ShaderStageFlags::FRAGMENT,
@@ -380,7 +380,7 @@ impl framework::Example for Example {
         let light_uniform_size = (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as u32;
         let light_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: light_uniform_size,
-            usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+            usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
 
         let vb_desc = wgpu::VertexBufferDescriptor {
@@ -459,7 +459,7 @@ impl framework::Example for Example {
                     cull_mode: wgpu::CullMode::Back,
                     depth_bias: 2, // corresponds to bilinear filtering
                     depth_bias_slope_scale: 2.0,
-                    depth_bias_clamp: wgpu::MAX_DEPTH_BIAS_CLAMP,
+                    depth_bias_clamp: 0.0,
                 },
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
                 color_states: &[],
@@ -579,7 +579,7 @@ impl framework::Example for Example {
                     cull_mode: wgpu::CullMode::Back,
                     depth_bias: 0,
                     depth_bias_slope_scale: 0.0,
-                    depth_bias_clamp: wgpu::MAX_DEPTH_BIAS_CLAMP,
+                    depth_bias_clamp: 0.0,
                 },
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
                 color_states: &[

@@ -5,8 +5,6 @@
 
 #define WGPUBITS_PER_BYTE 8
 
-#define WGPUMAX_DEPTH_BIAS_CLAMP 16
-
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
   WGPUAddressMode_Repeat = 1,
@@ -169,6 +167,8 @@ typedef struct {
   WGPUExtensions extensions;
 } WGPUDeviceDescriptor;
 
+typedef WGPUId WGPUBindGroupId;
+
 typedef WGPUId WGPUBufferId;
 
 typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const uint8_t *data, uint8_t *userdata);
@@ -242,8 +242,6 @@ typedef struct {
   uintptr_t color_attachments_length;
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
-
-typedef WGPUId WGPUBindGroupId;
 
 typedef WGPUId WGPUComputePipelineId;
 
@@ -556,6 +554,8 @@ typedef struct {
 #define WGPUTrackPermit_REPLACE (WGPUTrackPermit){ .bits = 2 }
 
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDeviceDescriptor *desc);
+
+void wgpu_bind_group_destroy(WGPUBindGroupId bind_group_id);
 
 void wgpu_buffer_destroy(WGPUBufferId buffer_id);
 
