@@ -465,14 +465,18 @@ pub enum BufferMapAsyncResult<T> {
     Error,
 }
 
-struct BufferMapReadAsyncUserData<F: FnOnce(BufferMapAsyncResult<&[u8]>)> {
+struct BufferMapReadAsyncUserData<T,F> 
+    where F: FnOnce(BufferMapAsyncResult<&[T]>) {
     size: u32,
     callback: F,
+    phantom: std::marker::PhantomData<T>,
 }
 
-struct BufferMapWriteAsyncUserData<F: FnOnce(BufferMapAsyncResult<&mut [u8]>)> {
+struct BufferMapWriteAsyncUserData<T, F>
+    where F: FnOnce(BufferMapAsyncResult<&mut [T]>) {
     size: u32,
     callback: F,
+    phantom: std::marker::PhantomData<T>,
 }
 
 impl Buffer {
@@ -480,38 +484,46 @@ impl Buffer {
         wgn::wgpu_buffer_set_sub_data(self.id, offset, data.len() as u32, data.as_ptr());
     }
 
-    pub fn map_read_async<F>(&self, start: u32, size: u32, callback: F)
-            where F: FnOnce(BufferMapAsyncResult<&[u8]>) {
-        extern "C" fn buffer_map_read_callback_wrapper<F>(status: wgn::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8)
-                where F: FnOnce(BufferMapAsyncResult<&[u8]>) {
-            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapReadAsyncUserData<F>) };
-            let data = unsafe { slice::from_raw_parts(data, userdata.size as usize) };
+    pub fn map_read_async<T, F>(&self, start: u32, size: u32, callback: F)
+            where T: 'static + Copy, F: FnOnce(BufferMapAsyncResult<&[T]>) {
+        let type_size = std::mem::size_of::<T>() as u32;
+        assert_ne!(type_size, 0);
+        assert_eq!(size % type_size, 0);
+
+        extern "C" fn buffer_map_read_callback_wrapper<T, F>(status: wgn::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8)
+                where F: FnOnce(BufferMapAsyncResult<&[T]>) {
+            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapReadAsyncUserData<T, F>) };
+            let data = unsafe { slice::from_raw_parts(data as *const T, userdata.size as usize / std::mem::size_of::<T>()) };
             if let wgn::BufferMapAsyncStatus::Success = status {
-                (userdata.callback)(BufferMapAsyncResult::Success(data));
+                (userdata.callback)(BufferMapAsyncResult::Success::<&[T]>(data));
             } else {
                 (userdata.callback)(BufferMapAsyncResult::Error);
             }
         }
 
-        let userdata = Box::new(BufferMapReadAsyncUserData{size, callback});
-        wgn::wgpu_buffer_map_read_async(self.id, start, size, buffer_map_read_callback_wrapper::<F>, Box::into_raw(userdata) as *mut u8);
+        let userdata = Box::new(BufferMapReadAsyncUserData{size, callback, phantom: std::marker::PhantomData});
+        wgn::wgpu_buffer_map_read_async(self.id, start, size, buffer_map_read_callback_wrapper::<T, F>, Box::into_raw(userdata) as *mut u8);
     }
 
-    pub fn map_write_async<F>(&self, start: u32, size: u32, callback: F)
-            where F: FnOnce(BufferMapAsyncResult<&mut [u8]>) {
-        extern "C" fn buffer_map_write_callback_wrapper<F>(status: wgn::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8)
-                where F: FnOnce(BufferMapAsyncResult<&mut [u8]>) {
-            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapWriteAsyncUserData<F>) };
-            let data = unsafe { slice::from_raw_parts_mut(data, userdata.size as usize) };
+    pub fn map_write_async<T, F>(&self, start: u32, size: u32, callback: F)
+            where T: 'static + Copy, F: FnOnce(BufferMapAsyncResult<&mut [T]>) {
+        let type_size = std::mem::size_of::<T>() as u32;
+        assert_ne!(type_size, 0);
+        assert_eq!(size % type_size, 0);
+
+        extern "C" fn buffer_map_write_callback_wrapper<T, F>(status: wgn::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8)
+                where F: FnOnce(BufferMapAsyncResult<&mut [T]>) {
+            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapWriteAsyncUserData<T, F>) };
+            let data = unsafe { slice::from_raw_parts_mut(data as *mut T, userdata.size as usize / std::mem::size_of::<T>()) };
             if let wgn::BufferMapAsyncStatus::Success = status {
-                (userdata.callback)(BufferMapAsyncResult::Success(data));
+                (userdata.callback)(BufferMapAsyncResult::Success::<&mut [T]>(data));
             } else {
                 (userdata.callback)(BufferMapAsyncResult::Error);
             }
         }
 
-        let userdata = Box::new(BufferMapWriteAsyncUserData{size, callback});
-        wgn::wgpu_buffer_map_write_async(self.id, start, size, buffer_map_write_callback_wrapper::<F>, Box::into_raw(userdata) as *mut u8);
+        let userdata = Box::new(BufferMapWriteAsyncUserData{size, callback, phantom: std::marker::PhantomData});
+        wgn::wgpu_buffer_map_write_async(self.id, start, size, buffer_map_write_callback_wrapper::<T, F>, Box::into_raw(userdata) as *mut u8);
     }
 
     pub fn unmap(&self) {
