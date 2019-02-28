@@ -213,20 +213,22 @@ impl DestroyedResources<back::Backend> {
         let buffer_guard = HUB.buffers.read();
 
         for i in (0..self.mapped.len()).rev() {
-            // one in resource itself, one here in this list, one the owner holds, and one more somewhere?
-            let num_refs = self.mapped[i].ref_count.load();
-            trace!("{} references remain", num_refs);
-            if num_refs <= 4 {
-                // assert_eq!(num_refs, 4);
-                let resource_id = self.mapped.swap_remove(i).value;
-                let buf = &buffer_guard[resource_id];
-                let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
-                    .push(resource_id);
-            }
+            let resource_id = self.mapped.swap_remove(i).value;
+            let buf = &buffer_guard[resource_id];
+
+            let usage = match buf.pending_map_operation {
+                Some(BufferMapOperation::Read(..)) => resource::BufferUsageFlags::MAP_READ,
+                Some(BufferMapOperation::Write(..)) => resource::BufferUsageFlags::MAP_WRITE,
+                _ => unreachable!(),
+            };
+            trackers.buffers.get_with_replaced_usage(&buffer_guard, resource_id, usage).unwrap();
+            
+            let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
+            self.active
+                .iter_mut()
+                .find(|a| a.index == submit_index)
+                .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
+                .push(resource_id);
         }
     }
 
@@ -269,34 +271,39 @@ impl DestroyedResources<back::Backend> {
     }
 
     fn handle_mapping(&mut self, raw: &<back::Backend as hal::Backend>::Device) {
-        let mut buffer_guard = HUB.buffers.write();
-
         for buffer_id in self.ready_to_map.drain(..) {
-            let buffer = &mut buffer_guard[buffer_id];
             let mut operation = None;
-            std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
-            match operation {
-                Some(BufferMapOperation::Read(range, callback, userdata)) => {
-                    if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
-                        if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
-                            unsafe { raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range.clone()))).unwrap()  }; // TODO
+            let (result, ptr) = {
+                let mut buffer_guard = HUB.buffers.write();
+                let buffer = &mut buffer_guard[buffer_id];
+                std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
+                match operation.clone().unwrap() {
+                    BufferMapOperation::Read(range, ..) => {
+                        if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
+                            if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
+                                unsafe { raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range.clone()))).unwrap()  }; // TODO
+                            }
+                            (BufferMapAsyncStatus::Success, Some(ptr))
+                        } else {
+                            (BufferMapAsyncStatus::Error, None)
                         }
-                        callback(BufferMapAsyncStatus::Success, ptr, userdata);
-                    } else {
-                        callback(BufferMapAsyncStatus::Error, std::ptr::null(), userdata);
-                    }
-                },
-                Some(BufferMapOperation::Write(range, callback, userdata)) => {
-                    if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
-                        if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
-                            buffer.mapped_write_ranges.push(range);
+                    },
+                    BufferMapOperation::Write(range, ..) => {
+                        if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
+                            if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
+                                buffer.mapped_write_ranges.push(range.clone());
+                            }
+                            (BufferMapAsyncStatus::Success, Some(ptr))
+                        } else {
+                            (BufferMapAsyncStatus::Error, None)
                         }
-                        callback(BufferMapAsyncStatus::Success, ptr, userdata);
-                    } else {
-                        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
-                    }
-                },
-                _ => unreachable!(),
+                    },
+                }
+            };
+
+            match operation.unwrap() {
+                BufferMapOperation::Read(_, callback, userdata) => callback(result, ptr.unwrap_or(std::ptr::null_mut()), userdata),
+                BufferMapOperation::Write(_, callback, userdata) => callback(result, ptr.unwrap_or(std::ptr::null_mut()), userdata),
             };
         }
     }
@@ -1022,108 +1029,119 @@ pub extern "C" fn wgpu_queue_submit(
     command_buffer_ptr: *const CommandBufferId,
     command_buffer_count: usize,
 ) {
-    let mut device_guard = HUB.devices.write();
-    let device = &mut device_guard[queue_id];
-
-    let mut swap_chain_links = Vec::new();
     let command_buffer_ids =
         unsafe { slice::from_raw_parts(command_buffer_ptr, command_buffer_count) };
 
-    let old_submit_index = device
-        .life_guard
-        .submission_index
-        .fetch_add(1, Ordering::Relaxed);
-    let mut trackers = device.trackers.lock();
+    let (old_submit_index, fence) = {
+        let mut device_guard = HUB.devices.write();
+        let device = &mut device_guard[queue_id];
 
-    //TODO: if multiple command buffers are submitted, we can re-use the last
-    // native command buffer of the previous chain instead of always creating
-    // a temporary one, since the chains are not finished.
-    {
-        let mut command_buffer_guard = HUB.command_buffers.write();
-        let buffer_guard = HUB.buffers.read();
-        let texture_guard = HUB.textures.read();
-        let texture_view_guard = HUB.texture_views.read();
+        let mut swap_chain_links = Vec::new();
 
-        // finish all the command buffers first
-        for &cmb_id in command_buffer_ids {
-            let comb = &mut command_buffer_guard[cmb_id];
-            swap_chain_links.extend(comb.swap_chain_links.drain(..));
-            // update submission IDs
-            comb.life_guard.submission_index
-                .store(old_submit_index, Ordering::Release);
-            for id in comb.trackers.buffers.used() {
-                buffer_guard[id].life_guard.submission_index
-                    .store(old_submit_index, Ordering::Release);
-            }
-            for id in comb.trackers.textures.used() {
-                texture_guard[id].life_guard.submission_index
-                    .store(old_submit_index, Ordering::Release);
-            }
-            for id in comb.trackers.views.used() {
-                texture_view_guard[id].life_guard.submission_index
-                    .store(old_submit_index, Ordering::Release);
-            }
+        let old_submit_index = device
+            .life_guard
+            .submission_index
+            .fetch_add(1, Ordering::Relaxed);
+        let mut trackers = device.trackers.lock();
 
-            // execute resource transitions
-            let mut transit = device.com_allocator.extend(comb);
-            unsafe {
-                transit.begin(
-                    hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-                    hal::command::CommandBufferInheritanceInfo::default(),
+        //TODO: if multiple command buffers are submitted, we can re-use the last
+        // native command buffer of the previous chain instead of always creating
+        // a temporary one, since the chains are not finished.
+        {
+            let mut command_buffer_guard = HUB.command_buffers.write();
+            let buffer_guard = HUB.buffers.read();
+            let texture_guard = HUB.textures.read();
+            let texture_view_guard = HUB.texture_views.read();
+
+            // finish all the command buffers first
+            for &cmb_id in command_buffer_ids {
+                let comb = &mut command_buffer_guard[cmb_id];
+                swap_chain_links.extend(comb.swap_chain_links.drain(..));
+                // update submission IDs
+                comb.life_guard.submission_index
+                    .store(old_submit_index, Ordering::Release);
+                for id in comb.trackers.buffers.used() {
+                    buffer_guard[id].life_guard.submission_index
+                        .store(old_submit_index, Ordering::Release);
+                }
+                for id in comb.trackers.textures.used() {
+                    texture_guard[id].life_guard.submission_index
+                        .store(old_submit_index, Ordering::Release);
+                }
+                for id in comb.trackers.views.used() {
+                    texture_view_guard[id].life_guard.submission_index
+                        .store(old_submit_index, Ordering::Release);
+                }
+
+                // execute resource transitions
+                let mut transit = device.com_allocator.extend(comb);
+                unsafe {
+                    transit.begin(
+                        hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+                        hal::command::CommandBufferInheritanceInfo::default(),
+                    );
+                }
+                command::CommandBuffer::insert_barriers(
+                    &mut transit,
+                    &mut *trackers,
+                    &comb.trackers,
+                    Stitch::Init,
+                    &*buffer_guard,
+                    &*texture_guard,
                 );
-            }
-            command::CommandBuffer::insert_barriers(
-                &mut transit,
-                &mut *trackers,
-                &comb.trackers,
-                Stitch::Init,
-                &*buffer_guard,
-                &*texture_guard,
-            );
-            unsafe {
-                transit.finish();
-            }
-            comb.raw.insert(0, transit);
-            unsafe {
-                comb.raw.last_mut().unwrap().finish();
+                unsafe {
+                    transit.finish();
+                }
+                comb.raw.insert(0, transit);
+                unsafe {
+                    comb.raw.last_mut().unwrap().finish();
+                }
             }
         }
-    }
 
-    // now prepare the GPU submission
-    let fence = device.raw.create_fence(false).unwrap();
-    {
-        let command_buffer_guard = HUB.command_buffers.read();
-        let surface_guard = HUB.surfaces.read();
+        // now prepare the GPU submission
+        let fence = device.raw.create_fence(false).unwrap();
+        {
+            let command_buffer_guard = HUB.command_buffers.read();
+            let surface_guard = HUB.surfaces.read();
 
-        let wait_semaphores = swap_chain_links
-            .into_iter()
-            .flat_map(|link| {
-                //TODO: check the epoch
-                surface_guard[link.swap_chain_id].swap_chain
-                    .as_ref()
-                    .map(|swap_chain| (
-                        &swap_chain.frames[link.image_index as usize].sem_available,
-                        hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                    ))
-            });
+            let wait_semaphores = swap_chain_links
+                .into_iter()
+                .flat_map(|link| {
+                    //TODO: check the epoch
+                    surface_guard[link.swap_chain_id].swap_chain
+                        .as_ref()
+                        .map(|swap_chain| (
+                            &swap_chain.frames[link.image_index as usize].sem_available,
+                            hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                        ))
+                });
 
-        let submission =
-            hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
-                //TODO: may `OneShot` be enough?
-                command_buffers: command_buffer_ids
-                    .iter()
-                    .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
-                wait_semaphores,
-                signal_semaphores: &[], //TODO: signal `sem_present`?
-            };
+            let submission =
+                hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
+                    //TODO: may `OneShot` be enough?
+                    command_buffers: command_buffer_ids
+                        .iter()
+                        .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
+                    wait_semaphores,
+                    signal_semaphores: &[], //TODO: signal `sem_present`?
+                };
 
-        unsafe {
-            device.queue_group.queues[0]
-                .as_raw_mut()
-                .submit(submission, Some(&fence));
+            unsafe {
+                device.queue_group.queues[0]
+                    .as_raw_mut()
+                    .submit(submission, Some(&fence));
+            }
         }
-    }
+
+        (old_submit_index, fence)
+    };
+
+    // No need for write access to the device from here on out
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[queue_id];
+
+    let mut trackers = device.trackers.lock();
 
     let last_done = {
         let mut destroyed = device.destroyed.lock();

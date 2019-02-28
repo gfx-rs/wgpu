@@ -40,6 +40,7 @@ pub enum BufferMapAsyncStatus {
     ContextLost,
 }
 
+#[derive(Clone)]
 pub(crate) enum BufferMapOperation {
     Read(std::ops::Range<u64>, BufferMapReadCallback, *mut u8),
     Write(std::ops::Range<u64>, BufferMapWriteCallback, *mut u8),
