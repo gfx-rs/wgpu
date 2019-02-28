@@ -75,11 +75,70 @@ pub enum TextureDimension {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureFormat {
-    R8g8b8a8Unorm = 0,
-    R8g8b8a8Uint = 1,
-    B8g8r8a8Unorm = 2,
-    D32Float = 3,
-    D32FloatS8Uint = 4,
+    // Normal 8 bit formats
+    R8Unorm = 0,
+    R8UnormSrgb = 1,
+    R8Snorm = 2,
+    R8Uint = 3,
+    R8Sint = 4,
+
+    // Normal 16 bit formats
+    R16Unorm = 5,
+    R16Snorm = 6,
+    R16Uint = 7,
+    R16Sint = 8,
+    R16Float = 9,
+
+    Rg8Unorm = 10,
+    Rg8UnormSrgb = 11,
+    Rg8Snorm = 12,
+    Rg8Uint = 13,
+    Rg8Sint = 14,
+
+    // Packed 16 bit formats
+    B5g6r5Unorm = 15,
+
+    // Normal 32 bit formats
+    R32Uint = 16,
+    R32Sint = 17,
+    R32Float = 18,
+    Rg16Unorm = 19,
+    Rg16Snorm = 20,
+    Rg16Uint = 21,
+    Rg16Sint = 22,
+    Rg16Float = 23,
+    Rgba8Unorm = 24,
+    Rgba8UnormSrgb = 25,
+    Rgba8Snorm = 26,
+    Rgba8Uint = 27,
+    Rgba8Sint = 28,
+    Bgra8Unorm = 29,
+    Bgra8UnormSrgb = 30,
+
+    // Packed 32 bit formats
+    Rgb10a2Unorm = 31,
+    Rg11b10Float = 32,
+
+    // Normal 64 bit formats
+    Rg32Uint = 33,
+    Rg32Sint = 34,
+    Rg32Float = 35,
+    Rgba16Unorm = 36,
+    Rgba16Snorm = 37,
+    Rgba16Uint = 38,
+    Rgba16Sint = 39,
+    Rgba16Float = 40,
+
+    // Normal 128 bit formats
+    Rgba32Uint = 41,
+    Rgba32Sint = 42,
+    Rgba32Float = 43,
+
+    // Depth and stencil formats
+    D16Unorm = 44,
+    D32Float = 45,
+    D24UnormS8Uint = 46,
+    D32FloatS8Uint = 47,
 }
 
 bitflags! {

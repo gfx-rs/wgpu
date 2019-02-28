@@ -287,10 +287,69 @@ pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::forma
     use hal::format::Format as H;
     use crate::resource::TextureFormat::*;
     match texture_format {
-        R8g8b8a8Unorm => H::Rgba8Unorm,
-        R8g8b8a8Uint => H::Rgba8Uint,
-        B8g8r8a8Unorm => H::Bgra8Unorm,
+        // Normal 8 bit formats
+        R8Unorm => H::R8Unorm,
+        R8UnormSrgb => H::R8Srgb,
+        R8Snorm => H::R8Inorm,
+        R8Uint => H::R8Uint,
+        R8Sint => H::R8Int,
+
+        // Normal 16 bit formats
+        R16Unorm => H::R16Unorm,
+        R16Snorm => H::R16Inorm,
+        R16Uint => H::R16Uint,
+        R16Sint => H::R16Int,
+        R16Float => H::R16Float,
+
+        Rg8Unorm => H::Rg8Unorm,
+        Rg8UnormSrgb => H::Rg8Srgb,
+        Rg8Snorm => H::Rg8Inorm,
+        Rg8Uint => H::Rg8Uint,
+        Rg8Sint => H::Rg8Int,
+
+        // Packed 16 bit formats
+        B5g6r5Unorm => H::B5g6r5Unorm,
+
+        // Normal 32 bit formats
+        R32Uint => H::R32Uint,
+        R32Sint => H::R32Int,
+        R32Float => H::R32Float,
+        Rg16Unorm => H::Rg16Unorm,
+        Rg16Snorm => H::Rg16Inorm,
+        Rg16Uint => H::Rg16Uint,
+        Rg16Sint => H::Rg16Int,
+        Rg16Float => H::Rg16Float,
+        Rgba8Unorm => H::Rgba8Unorm,
+        Rgba8UnormSrgb => H::Rgba8Srgb,
+        Rgba8Snorm => H::Rgba8Inorm,
+        Rgba8Uint => H::Rgba8Uint,
+        Rgba8Sint => H::Rgba8Int,
+        Bgra8Unorm => H::Bgra8Unorm,
+        Bgra8UnormSrgb => H::Bgra8Srgb,
+
+        // Packed 32 bit formats
+        Rgb10a2Unorm => H::A2r10g10b10Unorm,
+        Rg11b10Float => H::B10g11r11Ufloat,
+
+        // Normal 64 bit formats
+        Rg32Uint => H::Rg32Uint,
+        Rg32Sint => H::Rg32Int,
+        Rg32Float => H::Rg32Float,
+        Rgba16Unorm => H::Rgba16Unorm,
+        Rgba16Snorm => H::Rgba16Inorm,
+        Rgba16Uint => H::Rgba16Uint,
+        Rgba16Sint => H::Rgba16Int,
+        Rgba16Float => H::Rgba16Float,
+
+        // Normal 128 bit formats
+        Rgba32Uint => H::Rgba32Uint,
+        Rgba32Sint => H::Rgba32Int,
+        Rgba32Float => H::Rgba32Float,
+
+        // Depth and stencil formats
+        D16Unorm => H::D16Unorm,
         D32Float => H::D32Float,
+        D24UnormS8Uint => H::D24UnormS8Uint,
         D32FloatS8Uint => H::D32FloatS8Uint,
     }
 }
