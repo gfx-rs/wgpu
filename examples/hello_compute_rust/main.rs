@@ -102,10 +102,8 @@ fn main() {
             println!("Times: {:?}", results);
         }
 
+        staging_buffer.unmap();
     });
 
     device.get_queue().submit(&[encoder.finish()]);
-
-    // TODO: why does calling unmap() inside the callback prevent the program from exiting?
-    staging_buffer.unmap();
 }

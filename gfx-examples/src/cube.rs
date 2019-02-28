@@ -127,6 +127,8 @@ impl framework::Example for Example {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
                 unsafe { std::ptr::copy_nonoverlapping(vertex_data.as_ptr() as *const u8, data.as_mut_ptr(), vertex_buffer_length) };
             }
+
+            vertex_buf.unmap();
         });
 
         let index_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -138,6 +140,8 @@ impl framework::Example for Example {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
                 unsafe { std::ptr::copy_nonoverlapping(index_data.as_ptr() as *const u8, data.as_mut_ptr(), index_buffer_length) };
             }
+
+            index_buf.unmap();
         });
 
         // Create pipeline layout
@@ -189,6 +193,8 @@ impl framework::Example for Example {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
                 unsafe { std::ptr::copy_nonoverlapping(texels.as_ptr() as *const u8, data.as_mut_ptr(), texels.len()) };
             }
+
+            temp_buf.unmap();
         });
         init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
@@ -235,6 +241,8 @@ impl framework::Example for Example {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
                 unsafe { std::ptr::copy_nonoverlapping(mx_ref.as_ptr() as *const u8, data.as_mut_ptr(), 64) };
             }
+
+            uniform_buf.unmap();
         });
 
         // Create bind group
@@ -339,6 +347,8 @@ impl framework::Example for Example {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
                 unsafe { std::ptr::copy_nonoverlapping(mx_ref.as_ptr() as *const u8, data.as_mut_ptr(), 64) };
             }
+
+            self.uniform_buf.unmap();
         });
     }
 
