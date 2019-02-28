@@ -11,7 +11,9 @@ The implementation consists of the following parts:
   - `wgpu-remote` - remoting layer to work with WebGPU across the process boundary
   - `wgpu-rs` - idiomatic Rust wrapper of the native library
 
-## Example
+## Examples
+
+![Cube](etc/gfx-cube.png) ![Shadow](etc/gfx-shadow.png)
 
 To run an example, simply `cd` to the `examples` or `gfx-examples` directory, then use `cargo run` with `--features {backend}` to specify the backend (where `{backend}` is either `vulkan`, `dx12`, `dx11` or `metal`). For example:
 
