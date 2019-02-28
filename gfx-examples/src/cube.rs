@@ -1,7 +1,7 @@
 mod framework;
 
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct Vertex {
     pos: [f32; 4],
     tex_coord: [f32; 2],
@@ -123,9 +123,9 @@ impl framework::Example for Example {
         });
 
         //vertex_buf.set_sub_data(0, framework::cast_slice(&vertex_data));
-        vertex_buf.map_write_async(0, vertex_buffer_length as u32, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+        vertex_buf.map_write_async(0, vertex_buffer_length as u32, |result: wgpu::BufferMapAsyncResult<&mut [Vertex]>| {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
-                unsafe { std::ptr::copy_nonoverlapping(vertex_data.as_ptr() as *const u8, data.as_mut_ptr(), vertex_buffer_length) };
+                data.copy_from_slice(&vertex_data);
             }
 
             vertex_buf.unmap();
@@ -136,9 +136,9 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
         });
         // index_buf.set_sub_data(0, framework::cast_slice(&index_data));
-        index_buf.map_write_async(0, index_buffer_length as u32, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+        index_buf.map_write_async(0, index_buffer_length as u32, |result: wgpu::BufferMapAsyncResult<&mut [u16]>| {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
-                unsafe { std::ptr::copy_nonoverlapping(index_data.as_ptr() as *const u8, data.as_mut_ptr(), index_buffer_length) };
+                data.copy_from_slice(&index_data);
             }
 
             index_buf.unmap();
@@ -191,7 +191,7 @@ impl framework::Example for Example {
         // temp_buf.set_sub_data(0, &texels);
         temp_buf.map_write_async(0, texels.len() as u32, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
-                unsafe { std::ptr::copy_nonoverlapping(texels.as_ptr() as *const u8, data.as_mut_ptr(), texels.len()) };
+                data.copy_from_slice(&texels);
             }
 
             temp_buf.unmap();
@@ -237,9 +237,9 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         // uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
-        uniform_buf.map_write_async(0, 64, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+        uniform_buf.map_write_async(0, 64, |result: wgpu::BufferMapAsyncResult<&mut [f32]>| {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
-                unsafe { std::ptr::copy_nonoverlapping(mx_ref.as_ptr() as *const u8, data.as_mut_ptr(), 64) };
+                data.copy_from_slice(mx_ref);
             }
 
             uniform_buf.unmap();
@@ -343,9 +343,9 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         // self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
-        self.uniform_buf.map_write_async(0, 64, |result: wgpu::BufferMapAsyncResult<&mut [u8]>| {
+        self.uniform_buf.map_write_async(0, 64, |result: wgpu::BufferMapAsyncResult<&mut [f32]>| {
             if let wgpu::BufferMapAsyncResult::Success(data) = result {
-                unsafe { std::ptr::copy_nonoverlapping(mx_ref.as_ptr() as *const u8, data.as_mut_ptr(), 64) };
+                data.copy_from_slice(mx_ref);
             }
 
             self.uniform_buf.unmap();

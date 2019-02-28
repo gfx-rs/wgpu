@@ -96,10 +96,9 @@ fn main() {
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
 
-    staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u8]>| {
+    staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
         if let wgpu::BufferMapAsyncResult::Success(data) = result {
-            let results = unsafe { ::std::slice::from_raw_parts(data.as_ptr() as *const u32, data.len() / std::mem::size_of::<u32>()) };
-            println!("Times: {:?}", results);
+            println!("Times: {:?}", data);
         }
 
         staging_buffer.unmap();
