@@ -78,7 +78,7 @@ pub fn run<E: Example>(title: &str) {
     let surface = instance.create_surface(&window);
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
-        format: wgpu::TextureFormat::B8g8r8a8Unorm,
+        format: wgpu::TextureFormat::Bgra8Unorm,
         width: size.width as u32,
         height: size.height as u32,
     };
