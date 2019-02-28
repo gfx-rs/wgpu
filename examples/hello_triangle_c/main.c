@@ -136,7 +136,7 @@ int main()
 
     WGPUAttachment attachments[ATTACHMENTS_LENGTH] = {
         {
-            .format = WGPUTextureFormat_B8g8r8a8Unorm,
+            .format = WGPUTextureFormat_Bgra8Unorm,
             .samples = 1,
         },
     };
@@ -202,7 +202,7 @@ int main()
 
     WGPUSwapChainDescriptor swap_chain_desc = {
         .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT | WGPUTextureUsageFlags_PRESENT,
-        .format = WGPUTextureFormat_B8g8r8a8Unorm,
+        .format = WGPUTextureFormat_Bgra8Unorm,
         .width = 640,
         .height = 480,
     };

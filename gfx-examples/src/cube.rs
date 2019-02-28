@@ -176,7 +176,7 @@ impl framework::Example for Example {
             size: texture_extent,
             array_size: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: wgpu::TextureFormat::R8g8b8a8Unorm,
+            format: wgpu::TextureFormat::Rgba8Unorm,
             usage: wgpu::TextureUsageFlags::SAMPLED | wgpu::TextureUsageFlags::TRANSFER_DST,
         });
         let texture_view = texture.create_default_view();
