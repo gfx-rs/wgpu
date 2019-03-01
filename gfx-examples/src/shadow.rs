@@ -389,12 +389,12 @@ impl framework::Example for Example {
             attributes: &[
                 wgpu::VertexAttributeDescriptor {
                     attribute_index: 0,
-                    format: wgpu::VertexFormat::IntR8G8B8A8,
+                    format: wgpu::VertexFormat::Char4,
                     offset: 0,
                 },
                 wgpu::VertexAttributeDescriptor {
                     attribute_index: 1,
-                    format: wgpu::VertexFormat::IntR8G8B8A8,
+                    format: wgpu::VertexFormat::Char4,
                     offset: 4 * 1,
                 },
             ],
