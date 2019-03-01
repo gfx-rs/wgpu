@@ -308,12 +308,12 @@ impl framework::Example for Example {
                     attributes: &[
                         wgpu::VertexAttributeDescriptor {
                             attribute_index: 0,
-                            format: wgpu::VertexFormat::FloatR32G32B32A32,
+                            format: wgpu::VertexFormat::Float4,
                             offset: 0,
                         },
                         wgpu::VertexAttributeDescriptor {
                             attribute_index: 1,
-                            format: wgpu::VertexFormat::FloatR32G32,
+                            format: wgpu::VertexFormat::Float2,
                             offset: 4 * 4,
                         },
                     ],
