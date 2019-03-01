@@ -469,13 +469,14 @@ pub fn device_track_buffer(
     device_id: DeviceId,
     buffer_id: BufferId,
     ref_count: RefCount,
+    flags: resource::BufferUsageFlags,
 ) {
     let query = HUB.devices
         .read()
         [device_id].trackers
         .lock()
         .buffers
-        .query(buffer_id, &ref_count, resource::BufferUsageFlags::empty());
+        .query(buffer_id, &ref_count, flags);
     assert!(query.initialized);
 }
 
@@ -488,7 +489,30 @@ pub extern "C" fn wgpu_device_create_buffer(
     let buffer = device_create_buffer(device_id, desc);
     let ref_count = buffer.life_guard.ref_count.clone();
     let id = HUB.buffers.register_local(buffer);
-    device_track_buffer(device_id, id, ref_count);
+    device_track_buffer(device_id, id, ref_count, resource::BufferUsageFlags::empty());
+    id
+}
+
+#[cfg(feature = "local")]
+#[no_mangle]
+pub extern "C" fn wgpu_device_create_buffer_mapped(
+    device_id: DeviceId,
+    desc: &resource::BufferDescriptor,
+    mapped_ptr_out: *mut *mut u8
+) -> BufferId {
+    let buffer = device_create_buffer(device_id, desc);
+
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[device_id];
+
+    if let Ok(ptr) = unsafe { device.raw.map_memory(&buffer.memory, 0..(desc.size as u64)) } {
+        unsafe{ *mapped_ptr_out = ptr; }    
+    }
+
+    let ref_count = buffer.life_guard.ref_count.clone();
+    let id = HUB.buffers.register_local(buffer);
+    device_track_buffer(device_id, id, ref_count, resource::BufferUsageFlags::MAP_WRITE);
+
     id
 }
 
