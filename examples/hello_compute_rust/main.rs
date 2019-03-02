@@ -4,14 +4,6 @@ extern crate wgpu_native;
 
 use std::str::FromStr;
 
-// TODO: deduplicate this with the copy in gfx-examples/framework
-pub fn cast_slice<T>(data: &[T]) -> &[u8] {
-    use std::mem::size_of;
-    use std::slice::from_raw_parts;
-
-    unsafe { from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<T>()) }
-}
-
 fn main() {
     env_logger::init();
 
@@ -39,16 +31,17 @@ fn main() {
     let cs_bytes = include_bytes!("./../data/collatz.comp.spv");
     let cs_module = device.create_shader_module(cs_bytes);
 
-    let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        size,
-        usage: wgpu::BufferUsageFlags::MAP_READ
-            | wgpu::BufferUsageFlags::TRANSFER_DST
-            | wgpu::BufferUsageFlags::TRANSFER_SRC,
-    });
-    staging_buffer.set_sub_data(0, cast_slice(&numbers));
+    let staging_buffer = device
+        .create_buffer_mapped(
+            numbers.len(),
+            wgpu::BufferUsageFlags::MAP_READ
+                | wgpu::BufferUsageFlags::TRANSFER_DST
+                | wgpu::BufferUsageFlags::TRANSFER_SRC,
+        )
+        .fill_from_slice(&numbers);
 
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        size: (numbers.len() * std::mem::size_of::<u32>()) as u32,
+        size,
         usage: wgpu::BufferUsageFlags::STORAGE
             | wgpu::BufferUsageFlags::TRANSFER_DST
             | wgpu::BufferUsageFlags::TRANSFER_SRC,
@@ -68,7 +61,7 @@ fn main() {
             binding: 0,
             resource: wgpu::BindingResource::Buffer {
                 buffer: &storage_buffer,
-                range: 0..(numbers.len() as u32),
+                range: 0..size,
             },
         }],
     });
@@ -94,7 +87,6 @@ fn main() {
         cpass.dispatch(numbers.len() as u32, 1, 1);
     }
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
-
 
     staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
         if let wgpu::BufferMapAsyncResult::Success(data) = result {

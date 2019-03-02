@@ -5,16 +5,16 @@ use std::rc::Rc;
 mod framework;
 
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 struct Vertex {
-    pos: [i8; 4],
-    normal: [i8; 4],
+    _pos: [i8; 4],
+    _normal: [i8; 4],
 }
 
 fn vertex(pos: [i8; 3], nor: [i8; 3]) -> Vertex {
     Vertex {
-        pos: [pos[0], pos[1], pos[2], 1],
-        normal: [nor[0], nor[1], nor[2], 0],
+        _pos: [pos[0], pos[1], pos[2], 1],
+        _normal: [nor[0], nor[1], nor[2], 0],
     }
 }
 
@@ -101,6 +101,7 @@ struct Light {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct LightRaw {
     proj: [[f32; 4]; 4],
     pos: [f32; 4],
@@ -132,14 +133,16 @@ impl Light {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct ForwardUniforms {
     proj: [[f32; 4]; 4],
     num_lights: [u32; 4],
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
 struct EntityUniforms {
-    model: [[f32; 4]; 4],
+    model: cgmath::Matrix4<f32>,
     color: [f32; 4],
 }
 
@@ -190,28 +193,25 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
-        let cube_vertex_buf = Rc::new(device.create_buffer(&wgpu::BufferDescriptor {
-            size: (cube_vertex_data.len() * vertex_size) as u32,
-            usage: wgpu::BufferUsageFlags::VERTEX | wgpu::BufferUsageFlags::TRANSFER_DST,
-        }));
-        cube_vertex_buf.set_sub_data(0, framework::cast_slice(&cube_vertex_data));
-        let cube_index_buf = Rc::new(device.create_buffer(&wgpu::BufferDescriptor {
-            size: (cube_index_data.len() * 2) as u32,
-            usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST,
-        }));
-        cube_index_buf.set_sub_data(0, framework::cast_slice(&cube_index_data));
+        let cube_vertex_buf = Rc::new(
+            device.create_buffer_mapped(cube_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
+            .fill_from_slice(&cube_vertex_data)
+        );
+
+        let cube_index_buf = Rc::new(
+            device.create_buffer_mapped(cube_index_data.len(), wgpu::BufferUsageFlags::INDEX)
+            .fill_from_slice(&cube_index_data)
+        );
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
-        let plane_vertex_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            size: (plane_vertex_data.len() * vertex_size) as u32,
-            usage: wgpu::BufferUsageFlags::VERTEX | wgpu::BufferUsageFlags::TRANSFER_DST,
-        });
-        plane_vertex_buf.set_sub_data(0, framework::cast_slice(&plane_vertex_data));
-        let plane_index_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            size: (plane_index_data.len() * 2) as u32,
-            usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST,
-        });
-        plane_index_buf.set_sub_data(0, framework::cast_slice(&plane_index_data));
+        let plane_vertex_buf =
+            device.create_buffer_mapped(plane_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
+            .fill_from_slice(&plane_vertex_data);
+
+        let plane_index_buf =
+            device.create_buffer_mapped(plane_index_data.len(), wgpu::BufferUsageFlags::INDEX)
+            .fill_from_slice(&plane_index_data);
+
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as u32;
         let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: entity_uniform_size,
@@ -517,17 +517,15 @@ impl framework::Example for Example {
                 ],
             });
 
-            let uniform_size = mem::size_of::<ForwardUniforms>() as u32;
-            let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-                size: uniform_size,
-                usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
-            });
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
-            let data = ForwardUniforms {
+            let forward_uniforms = ForwardUniforms {
                 proj: *mx_total.as_ref(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
-            uniform_buf.set_sub_data(0, framework::cast_slice(&[data]));
+            let uniform_size = mem::size_of::<ForwardUniforms>() as u32;
+            let uniform_buf =
+                device.create_buffer_mapped(1, wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST)
+                .fill_from_slice(&[forward_uniforms]);
 
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -639,9 +637,17 @@ impl framework::Example for Example {
     }
 
     fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) {
-        let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
-        let mx_ref: &[f32; 16] = mx_total.as_ref();
-        self.forward_pass.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
+        {
+            let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+            let mx_ref: &[f32; 16] = mx_total.as_ref();
+            let temp_buf =
+                device.create_buffer_mapped(16, wgpu::BufferUsageFlags::TRANSFER_SRC)
+                .fill_from_slice(mx_ref);
+
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.forward_pass.uniform_buf, 0, 64);
+            device.get_queue().submit(&[encoder.finish()]);
+        }
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
@@ -658,28 +664,42 @@ impl framework::Example for Example {
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
-        for entity in &mut self.entities {
-            if entity.rotation_speed != 0.0 {
-                let rotation = cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
-                entity.mx_world = entity.mx_world * rotation;
-            }
-            let data = EntityUniforms {
-                model: *entity.mx_world.as_ref(),
-                color: [entity.color.r, entity.color.g, entity.color.b, entity.color.a],
-            };
-            entity.uniform_buf.set_sub_data(0, framework::cast_slice(&[data]));
-        }
-        if self.lights_are_dirty {
-            self.lights_are_dirty = false;
-            let raw = self.lights
-                .iter()
-                .map(|light| light.to_raw())
-                .collect::<Vec<_>>();
-            self.light_uniform_buf.set_sub_data(0, framework::cast_slice(&raw));
-        }
-
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
+        {
+            let size = mem::size_of::<EntityUniforms>() as u32;
+            let temp_buf_data =
+                device.create_buffer_mapped(self.entities.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
+
+            for (i, entity) in self.entities.iter_mut().enumerate() {
+                if entity.rotation_speed != 0.0 {
+                    let rotation = cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
+                    entity.mx_world = entity.mx_world * rotation;
+                }
+                temp_buf_data.data[i] = EntityUniforms {
+                    model: entity.mx_world.clone(),
+                    color: [entity.color.r, entity.color.g, entity.color.b, entity.color.a],
+                };
+            }
+
+            let temp_buf = temp_buf_data.finish();
+
+            for (i, entity) in self.entities.iter().enumerate() {
+                encoder.copy_buffer_to_buffer(&temp_buf, i as u32 * size, &entity.uniform_buf, 0, size);
+            }
+        }
+
+        if self.lights_are_dirty {
+            self.lights_are_dirty = false;
+            let size = (self.lights.len() * mem::size_of::<LightRaw>()) as u32;
+            let temp_buf_data =
+                device.create_buffer_mapped(self.lights.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
+            for (i, light) in self.lights.iter().enumerate() {
+                temp_buf_data.data[i] = light.to_raw();
+            }
+            encoder.copy_buffer_to_buffer(&temp_buf_data.finish(), 0, &self.light_uniform_buf, 0, size);
+        }
+        
         for (i, light) in self.lights.iter().enumerate() {
             // The light uniform buffer already has the projection,
             // let's just copy it over to the shadow uniform buffer.

@@ -233,6 +233,25 @@ impl<'a> TextureCopyView<'a> {
     }
 }
 
+pub struct CreateBufferMapped<'a, T> {
+    id: wgn::BufferId,
+    pub data: &'a mut [T],
+}
+
+impl<'a, T> CreateBufferMapped<'a, T>
+        where T: Copy {
+    pub fn fill_from_slice(self, slice: &[T]) -> Buffer {
+        self.data.copy_from_slice(slice);
+        self.finish()
+    }
+
+    pub fn finish(self) -> Buffer {
+        wgn::wgpu_buffer_unmap(self.id);
+        Buffer {
+            id: self.id,
+        }
+    }
+}
 
 impl Instance {
     pub fn new() -> Self {
@@ -432,21 +451,22 @@ impl Device {
         }
     }
 
-    pub fn create_buffer_mapped<T>(&self, desc: &BufferDescriptor) -> (Buffer, &mut [T])
+    pub fn create_buffer_mapped<'a, T>(&self, count: usize, usage: BufferUsageFlags) -> CreateBufferMapped<'a, T>
             where T: 'static + Copy {
         let type_size = std::mem::size_of::<T>() as u32;
         assert_ne!(type_size, 0);
-        assert_eq!(desc.size % type_size, 0);
 
+        let desc = BufferDescriptor{
+            size: type_size * count as u32,
+            usage,
+        };
         let mut ptr : *mut u8 = std::ptr::null_mut();
 
-        let buffer = Buffer {
-            id: wgn::wgpu_device_create_buffer_mapped(self.id, desc, &mut ptr as *mut *mut u8),
-        };
+        let id = wgn::wgpu_device_create_buffer_mapped(self.id, &desc, &mut ptr as *mut *mut u8);
 
-        let data = unsafe { std::slice::from_raw_parts_mut(ptr as *mut T, desc.size as usize / std::mem::size_of::<T>()) };
+        let data = unsafe { std::slice::from_raw_parts_mut(ptr as *mut T, count) };
 
-        (buffer, data)
+        CreateBufferMapped{id, data}
     }
 
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
