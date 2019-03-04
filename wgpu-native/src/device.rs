@@ -35,8 +35,6 @@ use std::collections::hash_map::Entry;
 use std::sync::atomic::Ordering;
 
 
-type AttachmentVec<T> = ArrayVec<[T; 5]>;
-
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
     Ps::DRAW_INDIRECT |
@@ -58,17 +56,21 @@ pub fn all_image_stages() -> hal::pso::PipelineStage {
     Ps::TRANSFER
 }
 
-#[derive(Hash, PartialEq)]
-pub(crate) struct RenderPassKey {
-    pub attachments: AttachmentVec<hal::pass::Attachment>,
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub(crate) struct AttachmentData<T> {
+    pub colors: ArrayVec<[T; 4]>,
+    pub depth_stencil: Option<T>,
 }
-impl Eq for RenderPassKey {}
+impl<T: PartialEq> Eq for AttachmentData<T> {}
+impl<T> AttachmentData<T> {
+    pub(crate) fn all(&self) -> impl Iterator<Item = &T> {
+        self.colors.iter().chain(&self.depth_stencil)
+    }
+}
 
-#[derive(Clone, Hash, PartialEq)]
-pub(crate) struct FramebufferKey {
-    pub attachments: AttachmentVec<TextureViewId>,
-}
-impl Eq for FramebufferKey {}
+pub(crate) type RenderPassKey = AttachmentData<hal::pass::Attachment>;
+pub(crate) type FramebufferKey = AttachmentData<TextureViewId>;
+pub(crate) type RenderPassContext = AttachmentData<resource::TextureFormat>;
 
 #[derive(Debug, PartialEq)]
 enum ResourceId {
@@ -241,7 +243,7 @@ impl DestroyedResources<back::Backend> {
             .keys()
             .filter_map(|key| {
                 let mut last_submit: SubmissionIndex = 0;
-                for &at in &key.attachments {
+                for &at in key.all() {
                     if texture_view_guard.contains(at) {
                         return None
                     }
@@ -1216,24 +1218,25 @@ pub fn device_create_render_pipeline(
         desc.depth_stencil_state.as_ref()
     };
 
-    let rp_key = {
-        let color_keys = color_states.iter().map(|at| hal::pass::Attachment {
-            format: Some(conv::map_texture_format(at.format)),
-            samples: desc.sample_count as u8,
-            ops: hal::pass::AttachmentOps::PRESERVE,
-            stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-            layouts: hal::image::Layout::General..hal::image::Layout::General,
-        });
-        let depth_stencil_key = depth_stencil_state.map(|at| hal::pass::Attachment {
-            format: Some(conv::map_texture_format(at.format)),
-            samples: desc.sample_count as u8,
-            ops: hal::pass::AttachmentOps::PRESERVE,
-            stencil_ops: hal::pass::AttachmentOps::PRESERVE,
-            layouts: hal::image::Layout::General..hal::image::Layout::General,
-        });
-        RenderPassKey {
-            attachments: color_keys.chain(depth_stencil_key).collect(),
-        }
+    let rp_key = RenderPassKey {
+        colors: color_states
+            .iter()
+            .map(|at| hal::pass::Attachment {
+                format: Some(conv::map_texture_format(at.format)),
+                samples: desc.sample_count as u8,
+                ops: hal::pass::AttachmentOps::PRESERVE,
+                stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+                layouts: hal::image::Layout::General..hal::image::Layout::General,
+            })
+            .collect(),
+        depth_stencil: depth_stencil_state
+            .map(|at| hal::pass::Attachment {
+                format: Some(conv::map_texture_format(at.format)),
+                samples: desc.sample_count as u8,
+                ops: hal::pass::AttachmentOps::PRESERVE,
+                stencil_ops: hal::pass::AttachmentOps::PRESERVE,
+                layouts: hal::image::Layout::General..hal::image::Layout::General,
+            }),
     };
 
     let mut render_pass_cache = device.render_passes.lock();
@@ -1262,7 +1265,7 @@ pub fn device_create_render_pipeline(
             let pass = unsafe {
                 device
                     .raw
-                    .create_render_pass(&e.key().attachments, &[subpass], &[])
+                    .create_render_pass(e.key().all(), &[subpass], &[])
             }
             .unwrap();
             e.insert(pass)
@@ -1395,9 +1398,19 @@ pub fn device_create_render_pipeline(
             .unwrap()
     };
 
+    let pass_context = RenderPassContext {
+        colors: color_states
+            .iter()
+            .map(|state| state.format)
+            .collect(),
+        depth_stencil: depth_stencil_state
+            .map(|state| state.format),
+    }; 
+
     pipeline::RenderPipeline {
         raw: pipeline,
         layout_id: desc.layout,
+        pass_context,
     }
 }
 

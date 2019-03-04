@@ -10,7 +10,7 @@ pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::device::{
-    FramebufferKey, RenderPassKey,
+    FramebufferKey, RenderPassKey, RenderPassContext,
     all_buffer_stages, all_image_stages,
 };
 use crate::hub::{HUB, Storage};
@@ -190,7 +190,7 @@ pub fn command_encoder_begin_render_pass(
         let trackers = &mut cmb.trackers;
         let swap_chain_links = &mut cmb.swap_chain_links;
 
-        let depth_stencil_key = depth_stencil_attachment.map(|at| {
+        let depth_stencil = depth_stencil_attachment.map(|at| {
             let view = &view_guard[at.attachment];
             if let Some(ex) = extent {
                 assert_eq!(ex, view.extent);
@@ -257,7 +257,8 @@ pub fn command_encoder_begin_render_pass(
         });
 
         RenderPassKey {
-            attachments: color_keys.chain(depth_stencil_key).collect(),
+            colors: color_keys.collect(),
+            depth_stencil,
         }
     };
 
@@ -287,7 +288,7 @@ pub fn command_encoder_begin_render_pass(
             let pass = unsafe {
                 device
                     .raw
-                    .create_render_pass(&e.key().attachments, &[subpass], &[])
+                    .create_render_pass(e.key().all(), &[subpass], &[])
             }
             .unwrap();
             e.insert(pass)
@@ -296,13 +297,12 @@ pub fn command_encoder_begin_render_pass(
 
     let mut framebuffer_cache = device.framebuffers.lock();
     let fb_key = FramebufferKey {
-        attachments: color_attachments
+        colors: color_attachments
             .iter()
             .map(|at| at.attachment)
-            .chain(
-                depth_stencil_attachment.map(|at| at.attachment),
-            )
             .collect(),
+        depth_stencil: depth_stencil_attachment
+            .map(|at| at.attachment),
     };
     let framebuffer = match framebuffer_cache.entry(fb_key) {
         Entry::Occupied(e) => e.into_mut(),
@@ -310,8 +310,7 @@ pub fn command_encoder_begin_render_pass(
             let fb = {
                 let attachments = e
                     .key()
-                    .attachments
-                    .iter()
+                    .all()
                     .map(|&id| &view_guard[id].raw);
 
                 unsafe {
@@ -362,12 +361,22 @@ pub fn command_encoder_begin_render_pass(
         }));
     }
 
+    let context = RenderPassContext {
+        colors: color_attachments
+            .iter()
+            .map(|at| view_guard[at.attachment].format)
+            .collect(),
+        depth_stencil: depth_stencil_attachment
+            .map(|at| view_guard[at.attachment].format),
+    };
+
     RenderPass::new(
         current_comb,
         Stored {
             value: command_encoder_id,
             ref_count: cmb.life_guard.ref_count.clone(),
         },
+        context,
     )
 }
 

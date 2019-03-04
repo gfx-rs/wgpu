@@ -1,6 +1,7 @@
 use crate::command::bind::Binder;
+use crate::device::RenderPassContext;
 use crate::hub::HUB;
-use crate::resource::BufferUsageFlags;
+use crate::resource::{BufferUsageFlags};
 use crate::track::{Stitch, TrackerSet};
 use crate::{
     CommandBuffer, Stored,
@@ -15,15 +16,21 @@ use std::{iter, slice};
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
+    context: RenderPassContext,
     binder: Binder,
     trackers: TrackerSet,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
-    pub(crate) fn new(raw: B::CommandBuffer, cmb_id: Stored<CommandBufferId>) -> Self {
+    pub(crate) fn new(
+        raw: B::CommandBuffer,
+        cmb_id: Stored<CommandBufferId>,
+        context: RenderPassContext,
+    ) -> Self {
         RenderPass {
             raw,
             cmb_id,
+            context,
             binder: Binder::default(),
             trackers: TrackerSet::new(),
         }
@@ -201,6 +208,9 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let pass = &mut pass_guard[pass_id];
     let pipeline_guard = HUB.render_pipelines.read();
     let pipeline = &pipeline_guard[pipeline_id];
+
+    assert_eq!(pass.context, pipeline.pass_context,
+        "The render pipeline is not compatible with the pass!");
 
     unsafe {
         pass.raw.bind_graphics_pipeline(&pipeline.raw);
