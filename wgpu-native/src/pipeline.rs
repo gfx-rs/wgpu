@@ -1,3 +1,4 @@
+use crate::device::RenderPassContext;
 use crate::resource;
 use crate::{
     ByteArray, PipelineLayoutId, ShaderModuleId,
@@ -280,4 +281,5 @@ pub struct RenderPipelineDescriptor {
 pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) raw: B::GraphicsPipeline,
     pub(crate) layout_id: PipelineLayoutId,
+    pub(crate) pass_context: RenderPassContext,
 }
