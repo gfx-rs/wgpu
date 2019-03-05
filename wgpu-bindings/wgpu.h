@@ -714,6 +714,10 @@ WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_i
 
 WGPUBufferId wgpu_device_create_buffer(WGPUDeviceId device_id, const WGPUBufferDescriptor *desc);
 
+WGPUBufferId wgpu_device_create_buffer_mapped(WGPUDeviceId device_id,
+                                              const WGPUBufferDescriptor *desc,
+                                              uint8_t **mapped_ptr_out);
+
 WGPUCommandEncoderId wgpu_device_create_command_encoder(WGPUDeviceId device_id,
                                                         const WGPUCommandEncoderDescriptor *desc);
 

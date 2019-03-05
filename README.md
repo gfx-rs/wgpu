@@ -11,6 +11,11 @@ The implementation consists of the following parts:
   - `wgpu-remote` - remoting layer to work with WebGPU across the process boundary
   - `wgpu-rs` - idiomatic Rust wrapper of the native library
 
+Supported platforms:
+  - Vulkan on Windows and Linux
+  - D3D12 and D3D12 on Windows
+  - Metal on macOS and iOS
+
 ## Examples
 
 ![Cube](etc/gfx-cube.png) ![Shadow](etc/gfx-shadow.png)
@@ -38,4 +43,4 @@ cargo run --bin cube --features metal
 cargo run --bin cube --features dx12
 ```
 
-These examples assume that necessary dependencies for the graphics backend are already installed. For more information about installation and usage, refer to the [Getting Started](https://github.com/gfx-rs/gfx/blob/master/info/getting_started.md) guide.
+These examples assume that necessary dependencies for the graphics backend are already installed. For more information about installation and usage, refer to the [Getting Started](https://github.com/gfx-rs/gfx/blob/master/info/getting_started.md) gfx-rs guide.

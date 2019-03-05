@@ -1,7 +1,7 @@
 # Change Log
 
-## v0.2 (05-03-2019)
-  - Seen running on: iOS/Metal, D3D11
+## v0.2 (06-03-2019)
+  - Platforms: iOS/Metal, D3D11
   - Crates:
     - `wgpu-remote`: remoting layer for the cross-process boundary
     - `gfx-examples`: selected gfx pre-ll examples ported over
@@ -20,7 +20,7 @@
     - fixed resource destruction
 
 ## v0.1 (24-01-2019)
-  - Seen running on: Linux/Vulkan, Windows/Vulkan, D3D12, macOS/Metal
+  - Platforms: Linux/Vulkan, Windows/Vulkan, D3D12, macOS/Metal
   - Crates:
     - `wgpu-native`: C API implementation of WebGPU, based on gfx-hal
     - `wgpu-bindings`: auto-generated C headers
@@ -30,6 +30,6 @@
     - native examples for triangle rendering
     - basic native swapchain integration
     - concept of the storage hub
-    - basic recording of passes and command buffers 
+    - basic recording of passes and command buffers
     - submission-based lifetime tracking and command buffer recycling
     - automatic resource transitions
