@@ -1515,14 +1515,17 @@ pub fn device_create_swap_chain(
             config.format, formats);
     }
     //TODO: properly exclusive range
+    /* TODO: this is way too restrictive
     assert!(desc.width >= caps.extents.start.width && desc.width <= caps.extents.end.width &&
         desc.height >= caps.extents.start.height && desc.height <= caps.extents.end.height,
         "Requested size {}x{} is outside of the supported range: {:?}",
         desc.width, desc.height, caps.extents);
-
+    */
 
     let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
         Some(mut old) => {
+            //TODO: remove this once gfx-rs stops destroying the old swapchain
+            device.raw.wait_idle().unwrap();
             let mut destroyed = device.destroyed.lock();
             assert_eq!(old.device_id.value, device_id);
             for frame in old.frames {
