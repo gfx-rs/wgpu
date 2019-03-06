@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-native"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",
@@ -29,10 +29,10 @@ log = "0.4"
 parking_lot = { version = "0.7" }
 gfx-hal = "0.1.0"
 gfx-backend-empty = { version = "0.1.1" }
-gfx-backend-vulkan = { version = "0.1.0", optional = true }
-gfx-backend-dx11 = { version = "0.1.0", optional = true }
-gfx-backend-dx12 = { version = "0.1.0", optional = true }
-gfx-backend-metal = { version = "0.1.0", optional = true }
+gfx-backend-vulkan = { version = "0.1", optional = true }
+gfx-backend-dx11 = { version = "0.1", optional = true }
+gfx-backend-dx12 = { version = "0.1", optional = true }
+gfx-backend-metal = { version = "0.1", optional = true }
 #rendy-memory = { git = "https://github.com/rustgd/rendy", rev = "ce7dd7f", features = ["gfx-hal"] }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 vec_map = "0.8"

@@ -320,8 +320,8 @@ name = "examples"
 version = "0.1.0"
 dependencies = [
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
- "wgpu 0.1.0",
- "wgpu-native 0.1.0",
+ "wgpu 0.2.0",
+ "wgpu-native 0.2.0",
 ]
 
 [[package]]
@@ -498,7 +498,7 @@ dependencies = [
  "env_logger 0.5.13 (registry+https://github.com/rust-lang/crates.io-index)",
  "glsl-to-spirv 0.1.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
- "wgpu 0.1.0",
+ "wgpu 0.2.0",
 ]
 
 [[package]]
@@ -1384,10 +1384,10 @@ dependencies = [
 
 [[package]]
 name = "wgpu"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrayvec 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
- "wgpu-native 0.1.0",
+ "wgpu-native 0.2.0",
 ]
 
 [[package]]
@@ -1399,7 +1399,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-native"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "arrayvec 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1425,7 +1425,7 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.7.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.89 (registry+https://github.com/rust-lang/crates.io-index)",
- "wgpu-native 0.1.0",
+ "wgpu-native 0.2.0",
 ]
 
 [[package]]
