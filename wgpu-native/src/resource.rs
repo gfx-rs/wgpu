@@ -28,6 +28,7 @@ bitflags! {
 }
 
 #[repr(C)]
+#[derive(Clone)]
 pub struct BufferDescriptor {
     pub size: u32,
     pub usage: BufferUsageFlags,

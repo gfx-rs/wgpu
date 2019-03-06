@@ -3,14 +3,14 @@ mod framework;
 
 #[derive(Clone, Copy)]
 struct Vertex {
-    pos: [f32; 4],
-    tex_coord: [f32; 2],
+    _pos: [f32; 4],
+    _tex_coord: [f32; 2],
 }
 
 fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
     Vertex {
-        pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
-        tex_coord: [tc[0] as f32, tc[1] as f32],
+        _pos: [pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0],
+        _tex_coord: [tc[0] as f32, tc[1] as f32],
     }
 }
 
@@ -115,27 +115,13 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
-        let vertex_buffer_length = vertex_data.len() * vertex_size;
-        let index_buffer_length = index_data.len() * mem::size_of::<u16>();
-        let vertex_buf = {
-            let (vertex_buf, vertex_buf_data) = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                size: vertex_buffer_length as u32,
-                usage: wgpu::BufferUsageFlags::VERTEX | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
-            });
-            vertex_buf_data.copy_from_slice(&vertex_data);
-            vertex_buf.unmap();
-            vertex_buf
-        };
+        let vertex_buf =
+            device.create_buffer_mapped(vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
+            .fill_from_slice(&vertex_data);
 
-        let index_buf = {
-            let (index_buf, index_buf_data) = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                size: index_buffer_length as u32,
-                usage: wgpu::BufferUsageFlags::INDEX | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
-            });
-            index_buf_data.copy_from_slice(&index_data);
-            index_buf.unmap();
-            index_buf
-        };
+        let index_buf =
+            device.create_buffer_mapped(index_data.len(), wgpu::BufferUsageFlags::INDEX)
+            .fill_from_slice(&index_data);
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -177,15 +163,9 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsageFlags::SAMPLED | wgpu::TextureUsageFlags::TRANSFER_DST,
         });
         let texture_view = texture.create_default_view();
-        let temp_buf = {
-            let (temp_buf, temp_buf_data) = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                size: texels.len() as u32,
-                usage: wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
-            });
-            temp_buf_data.copy_from_slice(&texels);
-            temp_buf.unmap();
-            temp_buf
-        };
+        let temp_buf =
+            device.create_buffer_mapped(texels.len(), wgpu::BufferUsageFlags::TRANSFER_SRC)
+            .fill_from_slice(&texels);
         init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
@@ -222,15 +202,9 @@ impl framework::Example for Example {
         });
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        let uniform_buf = {
-            let (uniform_buf, uniform_buf_data) = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                size: 64,
-                usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST | wgpu::BufferUsageFlags::MAP_WRITE,
-            });
-            uniform_buf_data.copy_from_slice(mx_ref);
-            uniform_buf.unmap();
-            uniform_buf
-        };
+        let uniform_buf =
+            device.create_buffer_mapped(16, wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST)
+            .fill_from_slice(mx_ref);
 
         // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -326,17 +300,17 @@ impl framework::Example for Example {
         //empty
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, _device: &mut wgpu::Device) {
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        // self.uniform_buf.set_sub_data(0, framework::cast_slice(&mx_ref[..]));
-        self.uniform_buf.map_write_async(0, 64, |result: wgpu::BufferMapAsyncResult<&mut [f32]>| {
-            if let wgpu::BufferMapAsyncResult::Success(data) = result {
-                data.copy_from_slice(mx_ref);
-            }
 
-            self.uniform_buf.unmap();
-        });
+        let temp_buf =
+            device.create_buffer_mapped(16, wgpu::BufferUsageFlags::TRANSFER_SRC)
+            .fill_from_slice(mx_ref);
+
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+        encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
+        device.get_queue().submit(&[encoder.finish()]);
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {

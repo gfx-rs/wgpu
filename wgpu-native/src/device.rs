@@ -277,27 +277,25 @@ impl DestroyedResources<back::Backend> {
             let mut operation = None;
             let (result, ptr) = {
                 let mut buffer_guard = HUB.buffers.write();
-                let buffer = &mut buffer_guard[buffer_id];
+                let mut buffer = &mut buffer_guard[buffer_id];
                 std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
                 match operation.clone().unwrap() {
                     BufferMapOperation::Read(range, ..) => {
-                        if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
-                            if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
-                                unsafe { raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range.clone()))).unwrap()  }; // TODO
+                        match map_buffer(raw, &mut buffer, range.clone(), true, false) {
+                            Ok(ptr) => (BufferMapAsyncStatus::Success, Some(ptr)),
+                            Err(e) => {
+                                log::error!("failed to map buffer for reading: {}", e);
+                                (BufferMapAsyncStatus::Error, None)
                             }
-                            (BufferMapAsyncStatus::Success, Some(ptr))
-                        } else {
-                            (BufferMapAsyncStatus::Error, None)
                         }
                     },
                     BufferMapOperation::Write(range, ..) => {
-                        if let Ok(ptr) = unsafe { raw.map_memory(&buffer.memory, range.clone()) } {
-                            if !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
-                                buffer.mapped_write_ranges.push(range.clone());
+                        match map_buffer(raw, &mut buffer, range.clone(), false, true) {
+                            Ok(ptr) => (BufferMapAsyncStatus::Success, Some(ptr)),
+                            Err(e) => {
+                                log::error!("failed to map buffer for writing: {}", e);
+                                (BufferMapAsyncStatus::Error, None)
                             }
-                            (BufferMapAsyncStatus::Success, Some(ptr))
-                        } else {
-                            (BufferMapAsyncStatus::Error, None)
                         }
                     },
                 }
@@ -309,6 +307,23 @@ impl DestroyedResources<back::Backend> {
             };
         }
     }
+}
+
+fn map_buffer(
+    raw: &<back::Backend as hal::Backend>::Device,
+    buffer: &mut resource::Buffer<back::Backend>,
+    range: std::ops::Range<u64>,
+    read: bool,
+    write: bool,
+) -> Result<*mut u8, hal::mapping::Error> {
+    let pointer = unsafe { raw.map_memory(&buffer.memory, range.clone()) }?;
+    if read && !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
+        unsafe { raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range.clone()))).unwrap()  }; // TODO
+    }
+    if write && !buffer.memory_properties.contains(hal::memory::Properties::COHERENT) {
+        buffer.mapped_write_ranges.push(range.clone());
+    }
+    Ok(pointer)
 }
 
 pub struct Device<B: hal::Backend> {
@@ -502,19 +517,24 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
     desc: &resource::BufferDescriptor,
     mapped_ptr_out: *mut *mut u8
 ) -> BufferId {
-    let buffer = device_create_buffer(device_id, desc);
+    let mut desc = desc.clone();
+    desc.usage |= resource::BufferUsageFlags::MAP_WRITE;
+    let mut buffer = device_create_buffer(device_id, &desc);
 
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
 
-    if let Ok(ptr) = unsafe { device.raw.map_memory(&buffer.memory, 0..(desc.size as u64)) } {
-        unsafe{ *mapped_ptr_out = ptr; }    
+    match map_buffer(&device.raw, &mut buffer, 0..(desc.size as u64), false, true) {
+        Ok(ptr) => unsafe { *mapped_ptr_out = ptr; }
+        Err(e) => {
+            log::error!("failed to create buffer in a mapped state: {}", e);
+            unsafe { *mapped_ptr_out = std::ptr::null_mut(); }
+        }
     }
 
     let ref_count = buffer.life_guard.ref_count.clone();
     let id = HUB.buffers.register_local(buffer);
     device_track_buffer(device_id, id, ref_count, resource::BufferUsageFlags::MAP_WRITE);
-
     id
 }
 
