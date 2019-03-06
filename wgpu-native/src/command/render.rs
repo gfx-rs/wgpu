@@ -1,17 +1,15 @@
 use crate::command::bind::Binder;
 use crate::device::RenderPassContext;
 use crate::hub::HUB;
-use crate::resource::{BufferUsageFlags};
+use crate::resource::BufferUsageFlags;
 use crate::track::{Stitch, TrackerSet};
 use crate::{
-    CommandBuffer, Stored,
-    BindGroupId, BufferId, CommandBufferId, RenderPassId, RenderPipelineId,
+    BindGroupId, BufferId, CommandBuffer, CommandBufferId, RenderPassId, RenderPipelineId, Stored,
 };
 
 use hal::command::RawCommandBuffer;
 
 use std::{iter, slice};
-
 
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
@@ -70,18 +68,18 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_index_buffer(
-    pass_id: RenderPassId, buffer_id: BufferId, offset: u32
+    pass_id: RenderPassId,
+    buffer_id: BufferId,
+    offset: u32,
 ) {
     let mut pass_guard = HUB.render_passes.write();
     let buffer_guard = HUB.buffers.read();
 
     let pass = &mut pass_guard[pass_id];
-    let buffer = pass.trackers.buffers
-        .get_with_extended_usage(
-            &*buffer_guard,
-            buffer_id,
-            BufferUsageFlags::INDEX,
-        )
+    let buffer = pass
+        .trackers
+        .buffers
+        .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsageFlags::INDEX)
         .unwrap();
 
     let view = hal::buffer::IndexBufferView {
@@ -104,21 +102,14 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
 ) {
     let mut pass_guard = HUB.render_passes.write();
     let buffer_guard = HUB.buffers.read();
-    let buffers = unsafe {
-        slice::from_raw_parts(buffer_ptr, count)
-    };
-    let offsets = unsafe {
-        slice::from_raw_parts(offset_ptr, count)
-    };
+    let buffers = unsafe { slice::from_raw_parts(buffer_ptr, count) };
+    let offsets = unsafe { slice::from_raw_parts(offset_ptr, count) };
 
     let pass = &mut pass_guard[pass_id];
     for &id in buffers {
-        pass.trackers.buffers
-            .get_with_extended_usage(
-                &*buffer_guard,
-                id,
-                BufferUsageFlags::VERTEX,
-            )
+        pass.trackers
+            .buffers
+            .get_with_extended_usage(&*buffer_guard, id, BufferUsageFlags::VERTEX)
             .unwrap();
     }
 
@@ -141,13 +132,10 @@ pub extern "C" fn wgpu_render_pass_draw(
     first_instance: u32,
 ) {
     unsafe {
-        HUB.render_passes
-            .write()
-            [pass_id].raw
-            .draw(
-                first_vertex .. first_vertex + vertex_count,
-                first_instance .. first_instance + instance_count,
-            );
+        HUB.render_passes.write()[pass_id].raw.draw(
+            first_vertex..first_vertex + vertex_count,
+            first_instance..first_instance + instance_count,
+        );
     }
 }
 
@@ -161,14 +149,11 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
     first_instance: u32,
 ) {
     unsafe {
-        HUB.render_passes
-            .write()
-            [pass_id].raw
-            .draw_indexed(
-                first_index .. first_index + index_count,
-                base_vertex,
-                first_instance .. first_instance + instance_count,
-            );
+        HUB.render_passes.write()[pass_id].raw.draw_indexed(
+            first_index..first_index + index_count,
+            base_vertex,
+            first_instance..first_instance + instance_count,
+        );
     }
 }
 
@@ -185,7 +170,10 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
 
     pass.trackers.consume_by_extend(&bind_group.used);
 
-    if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
+    if let Some(pipeline_layout_id) =
+        pass.binder
+            .provide_entry(index as usize, bind_group_id, bind_group)
+    {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
         unsafe {
@@ -209,15 +197,17 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let pipeline_guard = HUB.render_pipelines.read();
     let pipeline = &pipeline_guard[pipeline_id];
 
-    assert_eq!(pass.context, pipeline.pass_context,
-        "The render pipeline is not compatible with the pass!");
+    assert_eq!(
+        pass.context, pipeline.pass_context,
+        "The render pipeline is not compatible with the pass!"
+    );
 
     unsafe {
         pass.raw.bind_graphics_pipeline(&pipeline.raw);
     }
 
     if pass.binder.pipeline_layout_id == Some(pipeline.layout_id.clone()) {
-        return
+        return;
     }
 
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
@@ -225,9 +215,12 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let bind_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder.ensure_length(pipeline_layout.bind_group_layout_ids.len());
+    pass.binder
+        .ensure_length(pipeline_layout.bind_group_layout_ids.len());
 
-    for (index, (entry, &bgl_id)) in pass.binder.entries
+    for (index, (entry, &bgl_id)) in pass
+        .binder
+        .entries
         .iter_mut()
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
@@ -239,7 +232,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
                     &pipeline_layout.raw,
                     index,
                     iter::once(desc_set),
-                    &[]
+                    &[],
                 );
             }
         }

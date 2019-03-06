@@ -1,14 +1,11 @@
 use log::info;
 
-
 #[allow(dead_code)]
 pub fn cast_slice<T>(data: &[T]) -> &[u8] {
     use std::mem::size_of;
     use std::slice::from_raw_parts;
 
-    unsafe {
-        from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<T>())
-    }
+    unsafe { from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<T>()) }
 }
 
 #[allow(dead_code)]
@@ -51,7 +48,7 @@ pub trait Example {
 
 pub fn run<E: Example>(title: &str) {
     use wgpu::winit::{
-        Event, ElementState, EventsLoop, KeyboardInput, Window, WindowEvent, VirtualKeyCode
+        ElementState, Event, EventsLoop, KeyboardInput, VirtualKeyCode, Window, WindowEvent,
     };
 
     info!("Initializing the device...");
@@ -90,37 +87,36 @@ pub fn run<E: Example>(title: &str) {
     info!("Entering render loop...");
     let mut running = true;
     while running {
-        events_loop.poll_events(|event| {
-            match event {
-                Event::WindowEvent {
-                    event: WindowEvent::Resized(size),
-                    ..
-                } => {
-                    let physical = size.to_physical(window.get_hidpi_factor());
-                    info!("Resizing to {:?}", physical);
-                    sc_desc.width = physical.width as u32;
-                    sc_desc.height = physical.height as u32;
-                    swap_chain = device.create_swap_chain(&surface, &sc_desc);
-                    example.resize(&sc_desc, &mut device);
-                }
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::KeyboardInput {
-                        input: KeyboardInput {
+        events_loop.poll_events(|event| match event {
+            Event::WindowEvent {
+                event: WindowEvent::Resized(size),
+                ..
+            } => {
+                let physical = size.to_physical(window.get_hidpi_factor());
+                info!("Resizing to {:?}", physical);
+                sc_desc.width = physical.width as u32;
+                sc_desc.height = physical.height as u32;
+                swap_chain = device.create_swap_chain(&surface, &sc_desc);
+                example.resize(&sc_desc, &mut device);
+            }
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::KeyboardInput {
+                    input:
+                        KeyboardInput {
                             virtual_keycode: Some(VirtualKeyCode::Escape),
                             state: ElementState::Pressed,
                             ..
                         },
-                        ..
-                    } |
-                    WindowEvent::CloseRequested => {
-                        running = false;
-                    }
-                    _ => {
-                        example.update(event);
-                    }
+                    ..
                 }
-                _ => ()
-            }
+                | WindowEvent::CloseRequested => {
+                    running = false;
+                }
+                _ => {
+                    example.update(event);
+                }
+            },
+            _ => (),
         });
 
         let frame = swap_chain.get_next_texture();

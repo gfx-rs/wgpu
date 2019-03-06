@@ -1,9 +1,8 @@
 use ipc_channel::ipc::IpcSender;
 use parking_lot::Mutex;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use wgpu_native as wgn;
-
 
 #[derive(Serialize, Deserialize)]
 pub enum InstanceMessage {
@@ -41,7 +40,6 @@ impl Client {
     }
 }
 
-
 #[no_mangle]
 pub extern "C" fn wgpu_instance_get_adapter(
     client: &Client,
@@ -49,7 +47,11 @@ pub extern "C" fn wgpu_instance_get_adapter(
     desc: &wgn::AdapterDescriptor,
 ) -> wgn::AdapterId {
     let id = client.identity.lock().adapters.alloc();
-    let msg = GlobalMessage::Instance(InstanceMessage::InstanceGetAdapter(instance_id, desc.clone(), id));
+    let msg = GlobalMessage::Instance(InstanceMessage::InstanceGetAdapter(
+        instance_id,
+        desc.clone(),
+        id,
+    ));
     client.channel.send(msg).unwrap();
     id
 }
@@ -61,7 +63,11 @@ pub extern "C" fn wgpu_adapter_create_device(
     desc: &wgn::DeviceDescriptor,
 ) -> wgn::DeviceId {
     let id = client.identity.lock().devices.alloc();
-    let msg = GlobalMessage::Instance(InstanceMessage::AdapterCreateDevice(adapter_id, desc.clone(), id));
+    let msg = GlobalMessage::Instance(InstanceMessage::AdapterCreateDevice(
+        adapter_id,
+        desc.clone(),
+        id,
+    ));
     client.channel.send(msg).unwrap();
     id
 }

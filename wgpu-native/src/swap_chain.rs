@@ -1,11 +1,8 @@
-use crate::{
-    Extent3d, Stored,
-    DeviceId, SwapChainId, TextureId, TextureViewId,
-};
-use crate::{conv, resource};
 use crate::device::all_image_stages;
 use crate::hub::HUB;
-use crate::track::{TrackPermit};
+use crate::track::TrackPermit;
+use crate::{conv, resource};
+use crate::{DeviceId, Extent3d, Stored, SwapChainId, TextureId, TextureViewId};
 
 use hal;
 use hal::{Device as _Device, Swapchain as _Swapchain};
@@ -13,7 +10,6 @@ use log::{trace, warn};
 use parking_lot::Mutex;
 
 use std::{iter, mem};
-
 
 pub type SwapImageEpoch = u16;
 
@@ -96,20 +92,17 @@ pub struct SwapChainOutput {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_swap_chain_get_next_texture(
-    swap_chain_id: SwapChainId,
-) -> SwapChainOutput {
+pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -> SwapChainOutput {
     let (image_index, device_id, descriptor) = {
         let mut surface_guard = HUB.surfaces.write();
-        let swap_chain = surface_guard
-            [swap_chain_id].swap_chain
-            .as_mut()
-            .unwrap();
+        let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
         let sync = hal::FrameSync::Semaphore(&swap_chain.sem_available);
-        let result = unsafe {
-            swap_chain.raw.acquire_image(!0, sync)
-        };
-        (result.ok(), swap_chain.device_id.value, swap_chain.desc.clone())
+        let result = unsafe { swap_chain.raw.acquire_image(!0, sync) };
+        (
+            result.ok(),
+            swap_chain.device_id.value,
+            swap_chain.desc.clone(),
+        )
     };
 
     #[cfg(not(feature = "local"))]
@@ -125,10 +118,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
     }
 
     let mut surface_guard = HUB.surfaces.write();
-    let swap_chain = surface_guard
-        [swap_chain_id].swap_chain
-        .as_mut()
-        .unwrap();
+    let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
 
     let image_index = match image_index {
         Some(index) => index,
@@ -141,8 +131,11 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
 
-    assert_ne!(swap_chain.acquired.len(), swap_chain.acquired.capacity(),
-        "Unable to acquire any more swap chain images before presenting");
+    assert_ne!(
+        swap_chain.acquired.len(),
+        swap_chain.acquired.capacity(),
+        "Unable to acquire any more swap chain images before presenting"
+    );
     swap_chain.acquired.push(image_index);
 
     let frame = &mut swap_chain.frames[image_index as usize];
@@ -151,7 +144,10 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
     }
     mem::swap(&mut frame.sem_available, &mut swap_chain.sem_available);
 
-    HUB.textures.read()[frame.texture_id.value].placement.as_swap_chain().bump_epoch();
+    HUB.textures.read()[frame.texture_id.value]
+        .placement
+        .as_swap_chain()
+        .bump_epoch();
 
     SwapChainOutput {
         texture_id: frame.texture_id.value,
@@ -160,14 +156,9 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_swap_chain_present(
-    swap_chain_id: SwapChainId,
-) {
+pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
     let mut surface_guard = HUB.surfaces.write();
-    let swap_chain = surface_guard
-        [swap_chain_id].swap_chain
-        .as_mut()
-        .unwrap();
+    let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
 
     let image_index = swap_chain.acquired.remove(0);
     let frame = &mut swap_chain.frames[image_index as usize];
@@ -182,7 +173,8 @@ pub extern "C" fn wgpu_swap_chain_present(
     //TODO: support for swapchain being sampled or read by the shader?
 
     trace!("transit {:?} to present", frame.texture_id.value);
-    let barrier = device.trackers
+    let barrier = device
+        .trackers
         .lock()
         .textures
         .transit(
@@ -194,8 +186,11 @@ pub extern "C" fn wgpu_swap_chain_present(
         .unwrap()
         .into_source()
         .map(|old| hal::memory::Barrier::Image {
-            states: conv::map_texture_state(old, hal::format::Aspects::COLOR) ..
-                (hal::image::Access::COLOR_ATTACHMENT_WRITE, hal::image::Layout::Present),
+            states: conv::map_texture_state(old, hal::format::Aspects::COLOR)
+                ..(
+                    hal::image::Access::COLOR_ATTACHMENT_WRITE,
+                    hal::image::Layout::Present,
+                ),
             target: &texture.raw,
             families: None,
             range: texture.full_range.clone(),
@@ -204,7 +199,7 @@ pub extern "C" fn wgpu_swap_chain_present(
     let err = unsafe {
         frame.comb.begin(false);
         frame.comb.pipeline_barrier(
-            all_image_stages() .. hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+            all_image_stages()..hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
             hal::memory::Dependencies::empty(),
             barrier,
         );

@@ -1,23 +1,20 @@
 use crate::{
-    AdapterHandle, BindGroupLayoutHandle, BindGroupHandle,
-    CommandBufferHandle, DeviceHandle, InstanceHandle,
-    RenderPassHandle, ComputePassHandle,
-    PipelineLayoutHandle, RenderPipelineHandle, ComputePipelineHandle, ShaderModuleHandle,
-    BufferHandle, SamplerHandle, TextureHandle, TextureViewHandle,
-    SurfaceHandle,
+    AdapterHandle, BindGroupHandle, BindGroupLayoutHandle, BufferHandle, CommandBufferHandle,
+    ComputePassHandle, ComputePipelineHandle, DeviceHandle, InstanceHandle, PipelineLayoutHandle,
+    RenderPassHandle, RenderPipelineHandle, SamplerHandle, ShaderModuleHandle, SurfaceHandle,
+    TextureHandle, TextureViewHandle,
 };
 
 use lazy_static::lazy_static;
-use parking_lot::RwLock;
 #[cfg(feature = "local")]
 use parking_lot::Mutex;
+use parking_lot::RwLock;
 #[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use vec_map::VecMap;
 
 use std::ops;
 use std::sync::Arc;
-
 
 pub(crate) type Index = u32;
 pub(crate) type Epoch = u32;
@@ -55,9 +52,7 @@ pub struct IdentityManager {
 impl IdentityManager {
     pub fn alloc(&mut self) -> Id {
         match self.free.pop() {
-            Some(index) => {
-                Id(index, self.epochs[index as usize])
-            }
+            Some(index) => Id(index, self.epochs[index as usize]),
             None => {
                 let id = Id(self.epochs.len() as Index, 1);
                 self.epochs.push(id.1);
@@ -104,7 +99,7 @@ impl<T> Storage<T> {
     pub fn contains(&self, id: Id) -> bool {
         match self.map.get(id.0 as usize) {
             Some(&(_, epoch)) if epoch == id.1 => true,
-            _ => false
+            _ => false,
         }
     }
 }
@@ -120,9 +115,7 @@ impl<T> Default for Registry<T> {
         Registry {
             #[cfg(feature = "local")]
             identity: Mutex::new(IdentityManager::default()),
-            data: RwLock::new(Storage {
-                map: VecMap::new(),
-            }),
+            data: RwLock::new(Storage { map: VecMap::new() }),
         }
     }
 }

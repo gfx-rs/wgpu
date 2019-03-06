@@ -1,11 +1,7 @@
 use crate::track::TrackerSet;
-use crate::{
-    LifeGuard,
-    BindGroupLayoutId, BufferId, SamplerId, TextureViewId,
-};
+use crate::{BindGroupLayoutId, BufferId, LifeGuard, SamplerId, TextureViewId};
 
 use bitflags::bitflags;
-
 
 bitflags! {
     #[repr(transparent)]

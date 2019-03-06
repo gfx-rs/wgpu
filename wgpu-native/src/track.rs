@@ -1,9 +1,6 @@
-use crate::hub::{NewId, Id, Index, Epoch, Storage};
+use crate::hub::{Epoch, Id, Index, NewId, Storage};
 use crate::resource::{BufferUsageFlags, TextureUsageFlags};
-use crate::{
-    RefCount,
-    BufferId, TextureId, TextureViewId,
-};
+use crate::{BufferId, RefCount, TextureId, TextureViewId};
 
 use bitflags::bitflags;
 use hal::backend::FastHashMap;
@@ -13,7 +10,6 @@ use std::collections::hash_map::Entry;
 use std::marker::PhantomData;
 use std::mem;
 use std::ops::{BitOr, Range};
-
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
@@ -27,10 +23,8 @@ pub enum Tracktion<T> {
 impl<T> Tracktion<T> {
     pub fn into_source(self) -> Option<T> {
         match self {
-            Tracktion::Init |
-            Tracktion::Keep => None,
-            Tracktion::Extend { old } |
-            Tracktion::Replace { old } => Some(old),
+            Tracktion::Init | Tracktion::Keep => None,
+            Tracktion::Extend { old } | Tracktion::Replace { old } => Some(old),
         }
     }
 }
@@ -125,15 +119,9 @@ impl TrackerSet {
     }
 
     pub fn consume_by_extend(&mut self, other: &Self) {
-        self.buffers
-            .consume_by_extend(&other.buffers)
-            .unwrap();
-        self.textures
-            .consume_by_extend(&other.textures)
-            .unwrap();
-        self.views
-            .consume_by_extend(&other.views)
-            .unwrap();
+        self.buffers.consume_by_extend(&other.buffers).unwrap();
+        self.textures.consume_by_extend(&other.textures).unwrap();
+        self.views.consume_by_extend(&other.views).unwrap();
     }
 }
 
@@ -224,8 +212,10 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
         other: &'a Self,
         stitch: Stitch,
     ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
-        other.map.iter().flat_map(move |(&index, new)| {
-            match self.map.entry(index) {
+        other
+            .map
+            .iter()
+            .flat_map(move |(&index, new)| match self.map.entry(index) {
                 Entry::Vacant(e) => {
                     e.insert(new.clone());
                     None
@@ -240,11 +230,10 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
                             Stitch::Init => new.init,
                             Stitch::Last => new.last,
                         };
-                        Some((I::new(index, new.epoch), old .. state))
+                        Some((I::new(index, new.epoch), old..state))
                     }
                 }
-            }
-        })
+            })
     }
 
     /// Consume another tacker, adding it's transitions to `self`.
@@ -262,7 +251,7 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
                         let extended = old | new.last;
                         if extended.is_exclusive() {
                             let id = I::new(index, new.epoch);
-                            return Err((id, old .. new.last));
+                            return Err((id, old..new.last));
                         }
                         e.get_mut().last = extended;
                     }
@@ -274,7 +263,9 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
 
     /// Return an iterator over used resources keys.
     pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
-        self.map.iter().map(|(&index, track)| I::new(index, track.epoch))
+        self.map
+            .iter()
+            .map(|(&index, track)| I::new(index, track.epoch))
     }
 }
 
@@ -310,11 +301,15 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
     ) -> Result<(&'a T, Option<U>), U> {
         let item = &storage[id];
         self.transit(id, item.borrow(), usage, TrackPermit::REPLACE)
-            .map(|tracktion| (item, match tracktion {
-                Tracktion::Init |
-                Tracktion::Keep => None,
-                Tracktion::Extend { ..} => unreachable!(),
-                Tracktion::Replace { old } => Some(old),
-            }))
+            .map(|tracktion| {
+                (
+                    item,
+                    match tracktion {
+                        Tracktion::Init | Tracktion::Keep => None,
+                        Tracktion::Extend { .. } => unreachable!(),
+                        Tracktion::Replace { old } => Some(old),
+                    },
+                )
+            })
     }
 }

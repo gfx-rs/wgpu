@@ -1,16 +1,14 @@
-use crate::command::bind::{Binder};
+use crate::command::bind::Binder;
 use crate::hub::HUB;
 use crate::track::{Stitch, TrackerSet};
 use crate::{
-    Stored, CommandBuffer,
-    BindGroupId, CommandBufferId, ComputePassId, ComputePipelineId,
+    BindGroupId, CommandBuffer, CommandBufferId, ComputePassId, ComputePipelineId, Stored,
 };
 
 use hal;
 use hal::command::RawCommandBuffer;
 
 use std::iter;
-
 
 pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,
@@ -36,9 +34,8 @@ pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandB
 
     //TODO: transitions?
 
-    HUB.command_buffers
-        .write()
-        [pass.cmb_id.value].raw
+    HUB.command_buffers.write()[pass.cmb_id.value]
+        .raw
         .push(pass.raw);
     pass.cmb_id.value
 }
@@ -46,10 +43,7 @@ pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandB
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
     unsafe {
-        HUB.compute_passes
-            .write()
-            [pass_id].raw
-            .dispatch([x, y, z]);
+        HUB.compute_passes.write()[pass_id].raw.dispatch([x, y, z]);
     }
 }
 
@@ -76,7 +70,10 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
         &*HUB.textures.read(),
     );
 
-    if let Some(pipeline_layout_id) = pass.binder.provide_entry(index as usize, bind_group_id, bind_group) {
+    if let Some(pipeline_layout_id) =
+        pass.binder
+            .provide_entry(index as usize, bind_group_id, bind_group)
+    {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
         unsafe {
             pass.raw.bind_compute_descriptor_sets(
@@ -104,7 +101,7 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
     }
 
     if pass.binder.pipeline_layout_id == Some(pipeline.layout_id.clone()) {
-        return
+        return;
     }
 
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
@@ -112,9 +109,12 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
     let bing_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder.ensure_length(pipeline_layout.bind_group_layout_ids.len());
+    pass.binder
+        .ensure_length(pipeline_layout.bind_group_layout_ids.len());
 
-    for (index, (entry, &bgl_id)) in pass.binder.entries
+    for (index, (entry, &bgl_id)) in pass
+        .binder
+        .entries
         .iter_mut()
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
@@ -126,7 +126,7 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
                     &pipeline_layout.raw,
                     index,
                     iter::once(desc_set),
-                    &[]
+                    &[],
                 );
             }
         }

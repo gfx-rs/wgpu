@@ -1,9 +1,8 @@
-use crate::{
-    Extent3d, LifeGuard, RefCount, Stored,
-    DeviceId, TextureId,
-    BufferMapReadCallback, BufferMapWriteCallback,
-};
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
+use crate::{
+    BufferMapReadCallback, BufferMapWriteCallback, DeviceId, Extent3d, LifeGuard, RefCount, Stored,
+    TextureId,
+};
 
 use bitflags::bitflags;
 use hal;
@@ -176,8 +175,9 @@ impl<B: hal::Backend> TexturePlacement<B> {
     pub fn as_swap_chain(&self) -> &SwapChainLink<Mutex<SwapImageEpoch>> {
         match *self {
             TexturePlacement::SwapChain(ref link) => link,
-            TexturePlacement::Memory(_) |
-            TexturePlacement::Void => panic!("Expected swap chain link!"),
+            TexturePlacement::Memory(_) | TexturePlacement::Void => {
+                panic!("Expected swap chain link!")
+            }
         }
     }
 }

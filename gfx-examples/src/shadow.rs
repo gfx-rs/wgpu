@@ -4,7 +4,6 @@ use std::rc::Rc;
 
 mod framework;
 
-
 #[derive(Clone, Copy)]
 struct Vertex {
     _pos: [i8; 4],
@@ -21,41 +20,41 @@ fn vertex(pos: [i8; 3], nor: [i8; 3]) -> Vertex {
 fn create_cube() -> (Vec<Vertex>, Vec<u16>) {
     let vertex_data = [
         // top (0, 0, 1)
-        vertex([-1, -1,  1], [0, 0, 1]),
-        vertex([ 1, -1,  1], [0, 0, 1]),
-        vertex([ 1,  1,  1], [0, 0, 1]),
-        vertex([-1,  1,  1], [0, 0, 1]),
+        vertex([-1, -1, 1], [0, 0, 1]),
+        vertex([1, -1, 1], [0, 0, 1]),
+        vertex([1, 1, 1], [0, 0, 1]),
+        vertex([-1, 1, 1], [0, 0, 1]),
         // bottom (0, 0, -1)
-        vertex([-1,  1, -1], [0, 0, -1]),
-        vertex([ 1,  1, -1], [0, 0, -1]),
-        vertex([ 1, -1, -1], [0, 0, -1]),
+        vertex([-1, 1, -1], [0, 0, -1]),
+        vertex([1, 1, -1], [0, 0, -1]),
+        vertex([1, -1, -1], [0, 0, -1]),
         vertex([-1, -1, -1], [0, 0, -1]),
         // right (1, 0, 0)
-        vertex([ 1, -1, -1], [1, 0, 0]),
-        vertex([ 1,  1, -1], [1, 0, 0]),
-        vertex([ 1,  1,  1], [1, 0, 0]),
-        vertex([ 1, -1,  1], [1, 0, 0]),
+        vertex([1, -1, -1], [1, 0, 0]),
+        vertex([1, 1, -1], [1, 0, 0]),
+        vertex([1, 1, 1], [1, 0, 0]),
+        vertex([1, -1, 1], [1, 0, 0]),
         // left (-1, 0, 0)
-        vertex([-1, -1,  1], [-1, 0, 0]),
-        vertex([-1,  1,  1], [-1, 0, 0]),
-        vertex([-1,  1, -1], [-1, 0, 0]),
+        vertex([-1, -1, 1], [-1, 0, 0]),
+        vertex([-1, 1, 1], [-1, 0, 0]),
+        vertex([-1, 1, -1], [-1, 0, 0]),
         vertex([-1, -1, -1], [-1, 0, 0]),
         // front (0, 1, 0)
-        vertex([ 1,  1, -1], [0, 1, 0]),
-        vertex([-1,  1, -1], [0, 1, 0]),
-        vertex([-1,  1,  1], [0, 1, 0]),
-        vertex([ 1,  1,  1], [0, 1, 0]),
+        vertex([1, 1, -1], [0, 1, 0]),
+        vertex([-1, 1, -1], [0, 1, 0]),
+        vertex([-1, 1, 1], [0, 1, 0]),
+        vertex([1, 1, 1], [0, 1, 0]),
         // back (0, -1, 0)
-        vertex([ 1, -1,  1], [0, -1, 0]),
-        vertex([-1, -1,  1], [0, -1, 0]),
+        vertex([1, -1, 1], [0, -1, 0]),
+        vertex([-1, -1, 1], [0, -1, 0]),
         vertex([-1, -1, -1], [0, -1, 0]),
-        vertex([ 1, -1, -1], [0, -1, 0]),
+        vertex([1, -1, -1], [0, -1, 0]),
     ];
 
     let index_data: &[u16] = &[
-         0,  1,  2,  2,  3,  0, // top
-         4,  5,  6,  6,  7,  4, // bottom
-         8,  9, 10, 10, 11,  8, // right
+        0, 1, 2, 2, 3, 0, // top
+        4, 5, 6, 6, 7, 4, // bottom
+        8, 9, 10, 10, 11, 8, // right
         12, 13, 14, 14, 15, 12, // left
         16, 17, 18, 18, 19, 16, // front
         20, 21, 22, 22, 23, 20, // back
@@ -66,20 +65,16 @@ fn create_cube() -> (Vec<Vertex>, Vec<u16>) {
 
 fn create_plane(size: i8) -> (Vec<Vertex>, Vec<u16>) {
     let vertex_data = [
-        vertex([ size, -size,  0], [0, 0, 1]),
-        vertex([ size,  size,  0], [0, 0, 1]),
-        vertex([-size, -size,  0], [0, 0, 1]),
-        vertex([-size,  size,  0], [0, 0, 1]),
+        vertex([size, -size, 0], [0, 0, 1]),
+        vertex([size, size, 0], [0, 0, 1]),
+        vertex([-size, -size, 0], [0, 0, 1]),
+        vertex([-size, size, 0], [0, 0, 1]),
     ];
 
-    let index_data: &[u16] = &[
-        0, 1, 2,
-        2, 1, 3
-    ];
+    let index_data: &[u16] = &[0, 1, 2, 2, 1, 3];
 
     (vertex_data.to_vec(), index_data.to_vec())
 }
-
 
 struct Entity {
     mx_world: cgmath::Matrix4<f32>,
@@ -110,13 +105,9 @@ struct LightRaw {
 
 impl Light {
     fn to_raw(&self) -> LightRaw {
-        use cgmath::{EuclideanSpace, Deg, Point3, Vector3, Matrix4, PerspectiveFov};
+        use cgmath::{Deg, EuclideanSpace, Matrix4, PerspectiveFov, Point3, Vector3};
 
-        let mx_view = Matrix4::look_at(
-            self.pos,
-            Point3::origin(),
-            -Vector3::unit_z(),
-        );
+        let mx_view = Matrix4::look_at(self.pos, Point3::origin(), -Vector3::unit_z());
         let projection = PerspectiveFov {
             fovy: Deg(self.fov).into(),
             aspect: 1.0,
@@ -194,22 +185,24 @@ impl framework::Example for Example {
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
         let cube_vertex_buf = Rc::new(
-            device.create_buffer_mapped(cube_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
-            .fill_from_slice(&cube_vertex_data)
+            device
+                .create_buffer_mapped(cube_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
+                .fill_from_slice(&cube_vertex_data),
         );
 
         let cube_index_buf = Rc::new(
-            device.create_buffer_mapped(cube_index_data.len(), wgpu::BufferUsageFlags::INDEX)
-            .fill_from_slice(&cube_index_data)
+            device
+                .create_buffer_mapped(cube_index_data.len(), wgpu::BufferUsageFlags::INDEX)
+                .fill_from_slice(&cube_index_data),
         );
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
-        let plane_vertex_buf =
-            device.create_buffer_mapped(plane_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
+        let plane_vertex_buf = device
+            .create_buffer_mapped(plane_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
             .fill_from_slice(&plane_vertex_data);
 
-        let plane_index_buf =
-            device.create_buffer_mapped(plane_index_data.len(), wgpu::BufferUsageFlags::INDEX)
+        let plane_index_buf = device
+            .create_buffer_mapped(plane_index_data.len(), wgpu::BufferUsageFlags::INDEX)
             .fill_from_slice(&plane_index_data);
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as u32;
@@ -218,30 +211,27 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
 
-        let local_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            bindings: &[
-                wgpu::BindGroupLayoutBinding {
+        let local_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                bindings: &[wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStageFlags::VERTEX | wgpu::ShaderStageFlags::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer,
-                },
-            ],
-        });
+                }],
+            });
 
         let mut entities = vec![{
             use cgmath::SquareMatrix;
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &local_bind_group_layout,
-                bindings: &[
-                    wgpu::Binding {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &plane_uniform_buf,
-                            range: 0 .. entity_uniform_size,
-                        },
+                bindings: &[wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &plane_uniform_buf,
+                        range: 0..entity_uniform_size,
                     },
-                ],
+                }],
             });
             Entity {
                 mx_world: cgmath::Matrix4::identity(),
@@ -289,14 +279,11 @@ impl framework::Example for Example {
         ];
 
         for cube in &cube_descs {
-            use cgmath::{Deg, Decomposed, Quaternion, Rotation3, InnerSpace};
+            use cgmath::{Decomposed, Deg, InnerSpace, Quaternion, Rotation3};
 
             let transform = Decomposed {
                 disp: cube.offset.clone(),
-                rot: Quaternion::from_axis_angle(
-                    cube.offset.normalize(),
-                    Deg(cube.angle),
-                ),
+                rot: Quaternion::from_axis_angle(cube.offset.normalize(), Deg(cube.angle)),
                 scale: cube.scale,
             };
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -312,15 +299,13 @@ impl framework::Example for Example {
                 index_count: cube_index_data.len(),
                 bind_group: device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &local_bind_group_layout,
-                    bindings: &[
-                        wgpu::Binding {
-                            binding: 0,
-                            resource: wgpu::BindingResource::Buffer {
-                                buffer: &uniform_buf,
-                                range: 0 .. entity_uniform_size,
-                            },
+                    bindings: &[wgpu::Binding {
+                        binding: 0,
+                        resource: wgpu::BindingResource::Buffer {
+                            buffer: &uniform_buf,
+                            range: 0..entity_uniform_size,
                         },
-                    ],
+                    }],
                 }),
                 uniform_buf,
             });
@@ -351,36 +336,50 @@ impl framework::Example for Example {
         let shadow_view = shadow_texture.create_default_view();
 
         let mut shadow_target_views = (0..2)
-            .map(|i| Some(shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-                format: Self::SHADOW_FORMAT,
-                dimension: wgpu::TextureViewDimension::D2,
-                aspect: wgpu::TextureAspectFlags::DEPTH,
-                base_mip_level: 0,
-                level_count: 1,
-                base_array_layer: i as u32,
-                array_count: 1,
-            })))
+            .map(|i| {
+                Some(shadow_texture.create_view(&wgpu::TextureViewDescriptor {
+                    format: Self::SHADOW_FORMAT,
+                    dimension: wgpu::TextureViewDimension::D2,
+                    aspect: wgpu::TextureAspectFlags::DEPTH,
+                    base_mip_level: 0,
+                    level_count: 1,
+                    base_array_layer: i as u32,
+                    array_count: 1,
+                }))
+            })
             .collect::<Vec<_>>();
         let lights = vec![
             Light {
                 pos: cgmath::Point3::new(7.0, -5.0, 10.0),
-                color: wgpu::Color { r: 0.5, g: 1.0, b: 0.5, a: 1.0 },
+                color: wgpu::Color {
+                    r: 0.5,
+                    g: 1.0,
+                    b: 0.5,
+                    a: 1.0,
+                },
                 fov: 60.0,
-                depth: 1.0 .. 20.0,
+                depth: 1.0..20.0,
                 target_view: shadow_target_views[0].take().unwrap(),
             },
             Light {
                 pos: cgmath::Point3::new(-5.0, 7.0, 10.0),
-                color: wgpu::Color { r: 1.0, g: 0.5, b: 0.5, a: 1.0 },
+                color: wgpu::Color {
+                    r: 1.0,
+                    g: 0.5,
+                    b: 0.5,
+                    a: 1.0,
+                },
                 fov: 45.0,
-                depth: 1.0 .. 20.0,
+                depth: 1.0..20.0,
                 target_view: shadow_target_views[1].take().unwrap(),
             },
         ];
         let light_uniform_size = (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as u32;
         let light_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: light_uniform_size,
-            usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_SRC | wgpu::BufferUsageFlags::TRANSFER_DST,
+            usage: wgpu::BufferUsageFlags::UNIFORM
+                | wgpu::BufferUsageFlags::TRANSFER_SRC
+                | wgpu::BufferUsageFlags::TRANSFER_DST,
         });
 
         let vb_desc = wgpu::VertexBufferDescriptor {
@@ -402,20 +401,16 @@ impl framework::Example for Example {
 
         let shadow_pass = {
             // Create pipeline layout
-            let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[
-                    wgpu::BindGroupLayoutBinding {
+            let bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    bindings: &[wgpu::BindGroupLayoutBinding {
                         binding: 0, // global
                         visibility: wgpu::ShaderStageFlags::VERTEX,
                         ty: wgpu::BindingType::UniformBuffer,
-                    },
-                ],
-            });
+                    }],
+                });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[
-                    &bind_group_layout,
-                    &local_bind_group_layout,
-                ],
+                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
             });
 
             let uniform_size = mem::size_of::<ShadowUniforms>() as u32;
@@ -427,20 +422,19 @@ impl framework::Example for Example {
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
-                bindings: &[
-                    wgpu::Binding {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &uniform_buf,
-                            range: 0 .. uniform_size,
-                        },
+                bindings: &[wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer {
+                        buffer: &uniform_buf,
+                        range: 0..uniform_size,
                     },
-                ],
+                }],
             });
 
             // Create the render pipeline
             let vs_bytes = framework::load_glsl("shadow-bake.vert", framework::ShaderStage::Vertex);
-            let fs_bytes = framework::load_glsl("shadow-bake.frag", framework::ShaderStage::Fragment);
+            let fs_bytes =
+                framework::load_glsl("shadow-bake.frag", framework::ShaderStage::Fragment);
             let vs_module = device.create_shader_module(&vs_bytes);
             let fs_module = device.create_shader_module(&fs_bytes);
 
@@ -486,35 +480,35 @@ impl framework::Example for Example {
 
         let forward_pass = {
             // Create pipeline layout
-            let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[
-                    wgpu::BindGroupLayoutBinding {
-                        binding: 0, // global
-                        visibility: wgpu::ShaderStageFlags::VERTEX | wgpu::ShaderStageFlags::FRAGMENT,
-                        ty: wgpu::BindingType::UniformBuffer,
-                    },
-                    wgpu::BindGroupLayoutBinding {
-                        binding: 1, // lights
-                        visibility: wgpu::ShaderStageFlags::VERTEX | wgpu::ShaderStageFlags::FRAGMENT,
-                        ty: wgpu::BindingType::UniformBuffer,
-                    },
-                    wgpu::BindGroupLayoutBinding {
-                        binding: 2,
-                        visibility: wgpu::ShaderStageFlags::FRAGMENT,
-                        ty: wgpu::BindingType::SampledTexture,
-                    },
-                    wgpu::BindGroupLayoutBinding {
-                        binding: 3,
-                        visibility: wgpu::ShaderStageFlags::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler,
-                    },
-                ],
-            });
+            let bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    bindings: &[
+                        wgpu::BindGroupLayoutBinding {
+                            binding: 0, // global
+                            visibility: wgpu::ShaderStageFlags::VERTEX
+                                | wgpu::ShaderStageFlags::FRAGMENT,
+                            ty: wgpu::BindingType::UniformBuffer,
+                        },
+                        wgpu::BindGroupLayoutBinding {
+                            binding: 1, // lights
+                            visibility: wgpu::ShaderStageFlags::VERTEX
+                                | wgpu::ShaderStageFlags::FRAGMENT,
+                            ty: wgpu::BindingType::UniformBuffer,
+                        },
+                        wgpu::BindGroupLayoutBinding {
+                            binding: 2,
+                            visibility: wgpu::ShaderStageFlags::FRAGMENT,
+                            ty: wgpu::BindingType::SampledTexture,
+                        },
+                        wgpu::BindGroupLayoutBinding {
+                            binding: 3,
+                            visibility: wgpu::ShaderStageFlags::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler,
+                        },
+                    ],
+                });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[
-                    &bind_group_layout,
-                    &local_bind_group_layout,
-                ],
+                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
             });
 
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
@@ -523,8 +517,11 @@ impl framework::Example for Example {
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
             let uniform_size = mem::size_of::<ForwardUniforms>() as u32;
-            let uniform_buf =
-                device.create_buffer_mapped(1, wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST)
+            let uniform_buf = device
+                .create_buffer_mapped(
+                    1,
+                    wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+                )
                 .fill_from_slice(&[forward_uniforms]);
 
             // Create bind group
@@ -535,14 +532,14 @@ impl framework::Example for Example {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer {
                             buffer: &uniform_buf,
-                            range: 0 .. uniform_size,
+                            range: 0..uniform_size,
                         },
                     },
                     wgpu::Binding {
                         binding: 1,
                         resource: wgpu::BindingResource::Buffer {
                             buffer: &light_uniform_buf,
-                            range: 0 .. light_uniform_size,
+                            range: 0..light_uniform_size,
                         },
                     },
                     wgpu::Binding {
@@ -557,8 +554,10 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_bytes = framework::load_glsl("shadow-forward.vert", framework::ShaderStage::Vertex);
-            let fs_bytes = framework::load_glsl("shadow-forward.frag", framework::ShaderStage::Fragment);
+            let vs_bytes =
+                framework::load_glsl("shadow-forward.vert", framework::ShaderStage::Vertex);
+            let fs_bytes =
+                framework::load_glsl("shadow-forward.frag", framework::ShaderStage::Fragment);
             let vs_module = device.create_shader_module(&vs_bytes);
             let fs_module = device.create_shader_module(&fs_bytes);
 
@@ -580,14 +579,12 @@ impl framework::Example for Example {
                     depth_bias_clamp: 0.0,
                 },
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-                color_states: &[
-                    wgpu::ColorStateDescriptor {
-                        format: sc_desc.format,
-                        color: wgpu::BlendDescriptor::REPLACE,
-                        alpha: wgpu::BlendDescriptor::REPLACE,
-                        write_mask: wgpu::ColorWriteFlags::ALL,
-                    },
-                ],
+                color_states: &[wgpu::ColorStateDescriptor {
+                    format: sc_desc.format,
+                    color: wgpu::BlendDescriptor::REPLACE,
+                    alpha: wgpu::BlendDescriptor::REPLACE,
+                    write_mask: wgpu::ColorWriteFlags::ALL,
+                }],
                 depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                     format: Self::DEPTH_FORMAT,
                     depth_write_enabled: true,
@@ -640,11 +637,12 @@ impl framework::Example for Example {
         {
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let mx_ref: &[f32; 16] = mx_total.as_ref();
-            let temp_buf =
-                device.create_buffer_mapped(16, wgpu::BufferUsageFlags::TRANSFER_SRC)
+            let temp_buf = device
+                .create_buffer_mapped(16, wgpu::BufferUsageFlags::TRANSFER_SRC)
                 .fill_from_slice(mx_ref);
 
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            let mut encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
             encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.forward_pass.uniform_buf, 0, 64);
             device.get_queue().submit(&[encoder.finish()]);
         }
@@ -664,42 +662,61 @@ impl framework::Example for Example {
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
         {
             let size = mem::size_of::<EntityUniforms>() as u32;
-            let temp_buf_data =
-                device.create_buffer_mapped(self.entities.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
+            let temp_buf_data = device
+                .create_buffer_mapped(self.entities.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
 
             for (i, entity) in self.entities.iter_mut().enumerate() {
                 if entity.rotation_speed != 0.0 {
-                    let rotation = cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
+                    let rotation =
+                        cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
                     entity.mx_world = entity.mx_world * rotation;
                 }
                 temp_buf_data.data[i] = EntityUniforms {
                     model: entity.mx_world.clone(),
-                    color: [entity.color.r, entity.color.g, entity.color.b, entity.color.a],
+                    color: [
+                        entity.color.r,
+                        entity.color.g,
+                        entity.color.b,
+                        entity.color.a,
+                    ],
                 };
             }
 
             let temp_buf = temp_buf_data.finish();
 
             for (i, entity) in self.entities.iter().enumerate() {
-                encoder.copy_buffer_to_buffer(&temp_buf, i as u32 * size, &entity.uniform_buf, 0, size);
+                encoder.copy_buffer_to_buffer(
+                    &temp_buf,
+                    i as u32 * size,
+                    &entity.uniform_buf,
+                    0,
+                    size,
+                );
             }
         }
 
         if self.lights_are_dirty {
             self.lights_are_dirty = false;
             let size = (self.lights.len() * mem::size_of::<LightRaw>()) as u32;
-            let temp_buf_data =
-                device.create_buffer_mapped(self.lights.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
+            let temp_buf_data = device
+                .create_buffer_mapped(self.lights.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
             for (i, light) in self.lights.iter().enumerate() {
                 temp_buf_data.data[i] = light.to_raw();
             }
-            encoder.copy_buffer_to_buffer(&temp_buf_data.finish(), 0, &self.light_uniform_buf, 0, size);
+            encoder.copy_buffer_to_buffer(
+                &temp_buf_data.finish(),
+                0,
+                &self.light_uniform_buf,
+                0,
+                size,
+            );
         }
-        
+
         for (i, light) in self.lights.iter().enumerate() {
             // The light uniform buffer already has the projection,
             // let's just copy it over to the shadow uniform buffer.
@@ -730,7 +747,7 @@ impl framework::Example for Example {
                 pass.set_bind_group(1, &entity.bind_group);
                 pass.set_index_buffer(&entity.index_buf, 0);
                 pass.set_vertex_buffers(&[(&entity.vertex_buf, 0)]);
-                pass.draw_indexed(0 .. entity.index_count as u32, 0, 0..1);
+                pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
             }
         }
 
@@ -741,7 +758,12 @@ impl framework::Example for Example {
                     attachment: &frame.view,
                     load_op: wgpu::LoadOp::Clear,
                     store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color { r: 0.1, g: 0.2, b: 0.3, a: 1.0 },
+                    clear_color: wgpu::Color {
+                        r: 0.1,
+                        g: 0.2,
+                        b: 0.3,
+                        a: 1.0,
+                    },
                 }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.forward_depth,
@@ -760,13 +782,11 @@ impl framework::Example for Example {
                 pass.set_bind_group(1, &entity.bind_group);
                 pass.set_index_buffer(&entity.index_buf, 0);
                 pass.set_vertex_buffers(&[(&entity.vertex_buf, 0)]);
-                pass.draw_indexed(0 .. entity.index_count as u32, 0, 0..1);
+                pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
             }
         }
 
-        device
-            .get_queue()
-            .submit(&[encoder.finish()]);
+        device.get_queue().submit(&[encoder.finish()]);
     }
 }
 

@@ -34,12 +34,12 @@ mod track;
 pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
+#[cfg(feature = "remote")]
+pub use self::hub::{Id, IdentityManager, Registry, HUB};
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-#[cfg(feature = "remote")]
-pub use self::hub::{HUB, Id, IdentityManager, Registry};
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -52,7 +52,6 @@ pub struct RefCount(ptr::NonNull<AtomicUsize>);
 
 unsafe impl Send for RefCount {}
 unsafe impl Sync for RefCount {}
-
 
 impl RefCount {
     const MAX: usize = 1 << 24;
@@ -98,7 +97,6 @@ struct Stored<T> {
     value: T,
     ref_count: RefCount,
 }
-
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
