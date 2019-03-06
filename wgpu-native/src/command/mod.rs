@@ -9,35 +9,29 @@ pub use self::compute::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
+use crate::conv;
 use crate::device::{
-    FramebufferKey, RenderPassKey, RenderPassContext,
-    all_buffer_stages, all_image_stages,
+    all_buffer_stages, all_image_stages, FramebufferKey, RenderPassContext, RenderPassKey,
 };
-use crate::hub::{HUB, Storage};
+use crate::hub::{Storage, HUB};
 use crate::resource::TexturePlacement;
 use crate::swap_chain::{SwapChainLink, SwapImageEpoch};
 use crate::track::{DummyUsage, Stitch, TrackerSet};
-use crate::conv;
 use crate::{
-    BufferHandle, TextureHandle,
-    CommandBufferId, CommandEncoderId, DeviceId,
-    TextureViewId,
-    TextureUsageFlags, Color,
-    LifeGuard, Stored,
-    CommandBufferHandle,
+    BufferHandle, Color, CommandBufferHandle, CommandBufferId, CommandEncoderId, DeviceId,
+    LifeGuard, Stored, TextureHandle, TextureUsageFlags, TextureViewId,
 };
 #[cfg(feature = "local")]
-use crate::{RenderPassId, ComputePassId};
+use crate::{ComputePassId, RenderPassId};
 
 use back::Backend;
 use hal::command::RawCommandBuffer;
-use hal::{Device as _Device};
+use hal::Device as _Device;
 use log::trace;
 
 use std::collections::hash_map::Entry;
-use std::{iter, slice};
 use std::thread::ThreadId;
-
+use std::{iter, slice};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -78,7 +72,6 @@ pub struct RenderPassDescriptor {
     pub depth_stencil_attachment: *const RenderPassDepthStencilAttachmentDescriptor<TextureViewId>,
 }
 
-
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
     is_recording: bool,
@@ -98,19 +91,22 @@ impl CommandBufferHandle {
         buffer_guard: &Storage<BufferHandle>,
         texture_guard: &Storage<TextureHandle>,
     ) {
-        let buffer_barriers = base.buffers
-            .consume_by_replace(&head.buffers, stitch)
-            .map(|(id, transit)| {
-                let b = &buffer_guard[id];
-                trace!("transit buffer {:?} {:?}", id, transit);
-                hal::memory::Barrier::Buffer {
-                    states: conv::map_buffer_state(transit.start) .. conv::map_buffer_state(transit.end),
-                    target: &b.raw,
-                    range: None .. None,
-                    families: None,
-                }
-            });
-        let texture_barriers = base.textures
+        let buffer_barriers =
+            base.buffers
+                .consume_by_replace(&head.buffers, stitch)
+                .map(|(id, transit)| {
+                    let b = &buffer_guard[id];
+                    trace!("transit buffer {:?} {:?}", id, transit);
+                    hal::memory::Barrier::Buffer {
+                        states: conv::map_buffer_state(transit.start)
+                            ..conv::map_buffer_state(transit.end),
+                        target: &b.raw,
+                        range: None..None,
+                        families: None,
+                    }
+                });
+        let texture_barriers = base
+            .textures
             .consume_by_replace(&head.textures, stitch)
             .map(|(id, transit)| {
                 let t = &texture_guard[id];
@@ -124,14 +120,12 @@ impl CommandBufferHandle {
                     families: None,
                 }
             });
-        base.views
-            .consume_by_extend(&head.views)
-            .unwrap();
+        base.views.consume_by_extend(&head.views).unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             raw.pipeline_barrier(
-                stages .. stages,
+                stages..stages,
                 hal::memory::Dependencies::empty(),
                 buffer_barriers.chain(texture_barriers),
             );
@@ -150,10 +144,7 @@ pub struct CommandEncoderDescriptor {
 pub extern "C" fn wgpu_command_encoder_finish(
     command_encoder_id: CommandEncoderId,
 ) -> CommandBufferId {
-    HUB.command_buffers
-        .write()
-        [command_encoder_id]
-        .is_recording = false; //TODO: check for the old value
+    HUB.command_buffers.write()[command_encoder_id].is_recording = false; //TODO: check for the old value
     command_encoder_id
 }
 
@@ -176,15 +167,9 @@ pub fn command_encoder_begin_render_pass(
     }
     let mut extent = None;
 
-    let color_attachments = unsafe {
-        slice::from_raw_parts(
-            desc.color_attachments,
-            desc.color_attachments_length,
-        )
-    };
-    let depth_stencil_attachment = unsafe {
-        desc.depth_stencil_attachment.as_ref()
-    };
+    let color_attachments =
+        unsafe { slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length) };
+    let depth_stencil_attachment = unsafe { desc.depth_stencil_attachment.as_ref() };
 
     let rp_key = {
         let trackers = &mut cmb.trackers;
@@ -197,7 +182,9 @@ pub fn command_encoder_begin_render_pass(
             } else {
                 extent = Some(view.extent);
             }
-            trackers.views.query(at.attachment, &view.life_guard.ref_count, DummyUsage);
+            trackers
+                .views
+                .query(at.attachment, &view.life_guard.ref_count, DummyUsage);
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,
@@ -220,17 +207,13 @@ pub fn command_encoder_begin_render_pass(
             let view = &view_guard[at.attachment];
 
             if view.is_owned_by_swap_chain {
-                let link = match HUB.textures
-                    .read()
-                    [view.texture_id.value].placement
-                {
+                let link = match HUB.textures.read()[view.texture_id.value].placement {
                     TexturePlacement::SwapChain(ref link) => SwapChainLink {
                         swap_chain_id: link.swap_chain_id.clone(),
                         epoch: *link.epoch.lock(),
                         image_index: link.image_index,
                     },
-                    TexturePlacement::Memory(_) |
-                    TexturePlacement::Void => unreachable!()
+                    TexturePlacement::Memory(_) | TexturePlacement::Void => unreachable!(),
                 };
                 swap_chain_links.push(link);
             }
@@ -240,7 +223,9 @@ pub fn command_encoder_begin_render_pass(
             } else {
                 extent = Some(view.extent);
             }
-            trackers.views.query(at.attachment, &view.life_guard.ref_count, DummyUsage);
+            trackers
+                .views
+                .query(at.attachment, &view.life_guard.ref_count, DummyUsage);
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,
@@ -297,21 +282,14 @@ pub fn command_encoder_begin_render_pass(
 
     let mut framebuffer_cache = device.framebuffers.lock();
     let fb_key = FramebufferKey {
-        colors: color_attachments
-            .iter()
-            .map(|at| at.attachment)
-            .collect(),
-        depth_stencil: depth_stencil_attachment
-            .map(|at| at.attachment),
+        colors: color_attachments.iter().map(|at| at.attachment).collect(),
+        depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
     };
     let framebuffer = match framebuffer_cache.entry(fb_key) {
         Entry::Occupied(e) => e.into_mut(),
         Entry::Vacant(e) => {
             let fb = {
-                let attachments = e
-                    .key()
-                    .all()
-                    .map(|&id| &view_guard[id].raw);
+                let attachments = e.key().all().map(|&id| &view_guard[id].raw);
 
                 unsafe {
                     device
@@ -355,10 +333,13 @@ pub fn command_encoder_begin_render_pass(
             hal::command::SubpassContents::Inline,
         );
         current_comb.set_scissors(0, iter::once(&rect));
-        current_comb.set_viewports(0, iter::once(hal::pso::Viewport {
-            rect,
-            depth: 0.0 .. 1.0,
-        }));
+        current_comb.set_viewports(
+            0,
+            iter::once(hal::pso::Viewport {
+                rect,
+                depth: 0.0..1.0,
+            }),
+        );
     }
 
     let context = RenderPassContext {
@@ -366,8 +347,7 @@ pub fn command_encoder_begin_render_pass(
             .iter()
             .map(|at| view_guard[at.attachment].format)
             .collect(),
-        depth_stencil: depth_stencil_attachment
-            .map(|at| view_guard[at.attachment].format),
+        depth_stencil: depth_stencil_attachment.map(|at| view_guard[at.attachment].format),
     };
 
     RenderPass::new(

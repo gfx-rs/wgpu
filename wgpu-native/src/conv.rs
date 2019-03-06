@@ -1,15 +1,11 @@
-use crate::{
-    binding_model, command, pipeline, resource, Color,
-    Extent3d, Origin3d,
-};
-
+use crate::{binding_model, command, pipeline, resource, Color, Extent3d, Origin3d};
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,
 ) -> (hal::buffer::Usage, hal::memory::Properties) {
+    use crate::resource::BufferUsageFlags as W;
     use hal::buffer::Usage as U;
     use hal::memory::Properties as P;
-    use crate::resource::BufferUsageFlags as W;
 
     let mut hal_memory = P::empty();
     if usage.contains(W::MAP_READ) {
@@ -46,8 +42,8 @@ pub fn map_texture_usage(
     usage: resource::TextureUsageFlags,
     aspects: hal::format::Aspects,
 ) -> hal::image::Usage {
-    use hal::image::Usage as U;
     use crate::resource::TextureUsageFlags as W;
+    use hal::image::Usage as U;
 
     let mut value = U::empty();
     if usage.contains(W::TRANSFER_SRC) {
@@ -121,8 +117,8 @@ pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
 }
 
 pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::Primitive {
-    use hal::Primitive as H;
     use crate::pipeline::PrimitiveTopology::*;
+    use hal::Primitive as H;
     match primitive_topology {
         PointList => H::PointList,
         LineList => H::LineList,
@@ -136,8 +132,8 @@ pub fn map_color_state_descriptor(
     desc: &pipeline::ColorStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.color != pipeline::BlendDescriptor::REPLACE ||
-        desc.alpha != pipeline::BlendDescriptor::REPLACE
+    let blend_state = if desc.color != pipeline::BlendDescriptor::REPLACE
+        || desc.alpha != pipeline::BlendDescriptor::REPLACE
     {
         hal::pso::BlendState::On {
             color: map_blend_descriptor(&desc.color),
@@ -150,8 +146,8 @@ pub fn map_color_state_descriptor(
 }
 
 fn map_color_write_flags(flags: pipeline::ColorWriteFlags) -> hal::pso::ColorMask {
-    use hal::pso::ColorMask as H;
     use crate::pipeline::ColorWriteFlags as F;
+    use hal::pso::ColorMask as H;
 
     let mut value = H::empty();
     if flags.contains(F::RED) {
@@ -170,8 +166,8 @@ fn map_color_write_flags(flags: pipeline::ColorWriteFlags) -> hal::pso::ColorMas
 }
 
 fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::BlendOp {
-    use hal::pso::BlendOp as H;
     use crate::pipeline::BlendOperation::*;
+    use hal::pso::BlendOp as H;
     match blend_desc.operation {
         Add => H::Add {
             src: map_blend_factor(blend_desc.src_factor),
@@ -191,8 +187,8 @@ fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::Ble
 }
 
 fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
-    use hal::pso::Factor as H;
     use crate::pipeline::BlendFactor::*;
+    use hal::pso::Factor as H;
     match blend_factor {
         Zero => H::Zero,
         One => H::One,
@@ -214,7 +210,9 @@ pub fn map_depth_stencil_state_descriptor(
     desc: &pipeline::DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
-        depth: if desc.depth_write_enabled || desc.depth_compare != resource::CompareFunction::Always {
+        depth: if desc.depth_write_enabled
+            || desc.depth_compare != resource::CompareFunction::Always
+        {
             hal::pso::DepthTest::On {
                 fun: map_compare_function(desc.depth_compare),
                 write: desc.depth_write_enabled,
@@ -223,13 +221,22 @@ pub fn map_depth_stencil_state_descriptor(
             hal::pso::DepthTest::Off
         },
         depth_bounds: false, // TODO
-        stencil: if desc.stencil_read_mask != !0 || desc.stencil_write_mask != !0 ||
-            desc.stencil_front != pipeline::StencilStateFaceDescriptor::IGNORE ||
-            desc.stencil_back != pipeline::StencilStateFaceDescriptor::IGNORE
+        stencil: if desc.stencil_read_mask != !0
+            || desc.stencil_write_mask != !0
+            || desc.stencil_front != pipeline::StencilStateFaceDescriptor::IGNORE
+            || desc.stencil_back != pipeline::StencilStateFaceDescriptor::IGNORE
         {
             hal::pso::StencilTest::On {
-                front: map_stencil_face(&desc.stencil_front, desc.stencil_read_mask, desc.stencil_write_mask),
-                back: map_stencil_face(&desc.stencil_back, desc.stencil_read_mask, desc.stencil_write_mask),
+                front: map_stencil_face(
+                    &desc.stencil_front,
+                    desc.stencil_read_mask,
+                    desc.stencil_write_mask,
+                ),
+                back: map_stencil_face(
+                    &desc.stencil_back,
+                    desc.stencil_read_mask,
+                    desc.stencil_write_mask,
+                ),
             }
         } else {
             hal::pso::StencilTest::Off
@@ -254,8 +261,8 @@ fn map_stencil_face(
 }
 
 pub fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
-    use hal::pso::Comparison as H;
     use crate::resource::CompareFunction::*;
+    use hal::pso::Comparison as H;
     match compare_function {
         Never => H::Never,
         Less => H::Less,
@@ -269,8 +276,8 @@ pub fn map_compare_function(compare_function: resource::CompareFunction) -> hal:
 }
 
 fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::pso::StencilOp {
-    use hal::pso::StencilOp as H;
     use crate::pipeline::StencilOperation::*;
+    use hal::pso::StencilOp as H;
     match stencil_operation {
         Keep => H::Keep,
         Zero => H::Zero,
@@ -284,8 +291,8 @@ fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::
 }
 
 pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::format::Format {
-    use hal::format::Format as H;
     use crate::resource::TextureFormat::*;
+    use hal::format::Format as H;
     match texture_format {
         // Normal 8 bit formats
         R8Unorm => H::R8Unorm,
@@ -355,8 +362,8 @@ pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::forma
 }
 
 pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::Format {
-    use hal::format::Format as H;
     use crate::pipeline::VertexFormat::*;
+    use hal::format::Format as H;
     match vertex_format {
         Uchar => H::R8Uint,
         Uchar2 => H::Rg8Uint,
@@ -379,7 +386,7 @@ pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::
         Ushort2 => H::Rg16Uint,
         Ushort3 => H::Rgb16Uint,
         Ushort4 => H::Rgba16Uint,
-        Short  => H::R16Int,
+        Short => H::R16Int,
         Short2 => H::Rg16Int,
         Short3 => H::Rgb16Int,
         Short4 => H::Rgba16Int,
@@ -417,11 +424,15 @@ fn checked_u32_as_u16(value: u32) -> u16 {
 
 pub fn map_texture_dimension_size(
     dimension: resource::TextureDimension,
-    Extent3d { width, height, depth }: Extent3d,
+    Extent3d {
+        width,
+        height,
+        depth,
+    }: Extent3d,
     array_size: u32,
 ) -> hal::image::Kind {
-    use hal::image::Kind as H;
     use crate::resource::TextureDimension::*;
+    use hal::image::Kind as H;
     match dimension {
         D1 => {
             assert_eq!(height, 1);
@@ -442,8 +453,8 @@ pub fn map_texture_dimension_size(
 pub fn map_texture_view_dimension(
     dimension: resource::TextureViewDimension,
 ) -> hal::image::ViewKind {
-    use hal::image::ViewKind as H;
     use crate::resource::TextureViewDimension::*;
+    use hal::image::ViewKind as H;
     match dimension {
         D1 => H::D1,
         D2 => H::D2,
@@ -455,8 +466,8 @@ pub fn map_texture_view_dimension(
 }
 
 pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::format::Aspects {
-    use hal::format::Aspects;
     use crate::resource::TextureAspectFlags as Taf;
+    use hal::format::Aspects;
 
     let mut flags = Aspects::empty();
     if aspect.contains(Taf::COLOR) {
@@ -472,8 +483,8 @@ pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::fo
 }
 
 pub fn map_buffer_state(usage: resource::BufferUsageFlags) -> hal::buffer::State {
-    use hal::buffer::Access as A;
     use crate::resource::BufferUsageFlags as W;
+    use hal::buffer::Access as A;
 
     let mut access = A::empty();
     if usage.contains(W::TRANSFER_SRC) {
@@ -502,8 +513,8 @@ pub fn map_texture_state(
     usage: resource::TextureUsageFlags,
     aspects: hal::format::Aspects,
 ) -> hal::image::State {
-    use hal::image::{Access as A, Layout as L};
     use crate::resource::TextureUsageFlags as W;
+    use hal::image::{Access as A, Layout as L};
 
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
     let layout = match usage {
@@ -568,8 +579,8 @@ pub fn map_filter(filter: resource::FilterMode) -> hal::image::Filter {
 }
 
 pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
-    use hal::image::WrapMode as W;
     use crate::resource::AddressMode as Am;
+    use hal::image::WrapMode as W;
     match address {
         Am::ClampToEdge => W::Clamp,
         Am::Repeat => W::Tile,
@@ -579,7 +590,7 @@ pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
 }
 
 pub fn map_rasterization_state_descriptor(
-    desc: &pipeline::RasterizationStateDescriptor
+    desc: &pipeline::RasterizationStateDescriptor,
 ) -> hal::pso::Rasterizer {
     hal::pso::Rasterizer {
         depth_clamping: false,
@@ -593,7 +604,10 @@ pub fn map_rasterization_state_descriptor(
             pipeline::FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
             pipeline::FrontFace::Cw => hal::pso::FrontFace::Clockwise,
         },
-        depth_bias: if desc.depth_bias != 0 || desc.depth_bias_slope_scale != 0.0 || desc.depth_bias_clamp != 0.0 {
+        depth_bias: if desc.depth_bias != 0
+            || desc.depth_bias_slope_scale != 0.0
+            || desc.depth_bias_clamp != 0.0
+        {
             Some(hal::pso::State::Static(hal::pso::DepthBias {
                 const_factor: desc.depth_bias as f32,
                 slope_factor: desc.depth_bias_slope_scale,

@@ -1,8 +1,6 @@
 use crate::device::RenderPassContext;
 use crate::resource;
-use crate::{
-    ByteArray, PipelineLayoutId, ShaderModuleId,
-};
+use crate::{ByteArray, PipelineLayoutId, ShaderModuleId};
 
 use bitflags::bitflags;
 
@@ -147,7 +145,7 @@ pub enum VertexFormat {
     Ushort2 = 18,
     Ushort3 = 19,
     Ushort4 = 20,
-    Short  = 21,
+    Short = 21,
     Short2 = 22,
     Short3 = 23,
     Short4 = 24,
@@ -175,7 +173,7 @@ pub enum VertexFormat {
     Int2 = 46,
     Int3 = 47,
     Int4 = 48,
-  }
+}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

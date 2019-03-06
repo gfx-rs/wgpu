@@ -1,8 +1,4 @@
-use crate::{
-    BindGroupHandle, Stored,
-    BindGroupId, BindGroupLayoutId, PipelineLayoutId,
-};
-
+use crate::{BindGroupHandle, BindGroupId, BindGroupLayoutId, PipelineLayoutId, Stored};
 
 pub struct BindGroupPair {
     layout_id: BindGroupLayoutId,
@@ -17,10 +13,14 @@ pub struct BindGroupEntry {
 
 impl BindGroupEntry {
     fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroupHandle) -> bool {
-        if let Some(BindGroupPair { ref layout_id, ref group_id }) = self.provided {
+        if let Some(BindGroupPair {
+            ref layout_id,
+            ref group_id,
+        }) = self.provided
+        {
             if group_id.value == bind_group_id {
                 assert_eq!(*layout_id, bind_group.layout_id);
-                return false
+                return false;
             }
         }
 
@@ -36,14 +36,17 @@ impl BindGroupEntry {
     }
 
     pub fn expect_layout(
-        &mut self, bind_group_layout_id: BindGroupLayoutId,
+        &mut self,
+        bind_group_layout_id: BindGroupLayoutId,
     ) -> Option<BindGroupId> {
         let some = Some(bind_group_layout_id);
         if self.expected_layout_id != some {
             self.expected_layout_id = some;
             match self.provided {
-                Some(BindGroupPair { layout_id, ref group_id })
-                    if layout_id == bind_group_layout_id => Some(group_id.value),
+                Some(BindGroupPair {
+                    layout_id,
+                    ref group_id,
+                }) if layout_id == bind_group_layout_id => Some(group_id.value),
                 Some(_) | None => None,
             }
         } else {
@@ -66,7 +69,10 @@ impl Binder {
     }
 
     pub(crate) fn provide_entry(
-        &mut self, index: usize, bind_group_id: BindGroupId, bind_group: &BindGroupHandle
+        &mut self,
+        index: usize,
+        bind_group_id: BindGroupId,
+        bind_group: &BindGroupHandle,
     ) -> Option<PipelineLayoutId> {
         self.ensure_length(index + 1);
         if self.entries[index].provide(bind_group_id, bind_group) {

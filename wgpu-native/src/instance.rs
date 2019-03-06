@@ -1,16 +1,12 @@
 use crate::hub::HUB;
-use crate::{
-    AdapterHandle, DeviceHandle, SurfaceHandle,
-    AdapterId, InstanceId,
-};
+use crate::{AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
 #[cfg(feature = "remote")]
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
-
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -56,10 +52,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
     window: &winit::Window,
 ) -> SurfaceId {
-    let raw = HUB.instances
-        .read()
-        [instance_id]
-        .create_surface(window);
+    let raw = HUB.instances.read()[instance_id].create_surface(window);
     let surface = SurfaceHandle::new(raw);
     HUB.surfaces.register_local(surface)
 }
@@ -74,11 +67,7 @@ pub fn instance_create_surface_from_xlib(
     unimplemented!();
 
     #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
-    SurfaceHandle::new(HUB.instances
-        .read()
-        [instance_id]
-        .create_surface_from_xlib(display, window)
-    )
+    SurfaceHandle::new(HUB.instances.read()[instance_id].create_surface_from_xlib(display, window))
 }
 
 #[cfg(feature = "local")]
@@ -101,11 +90,7 @@ pub fn instance_create_surface_from_macos_layer(
     unimplemented!();
 
     #[cfg(feature = "gfx-backend-metal")]
-    SurfaceHandle::new(HUB.instances
-        .read()
-        [instance_id]
-        .create_surface_from_layer(layer as *mut _)
-    )
+    SurfaceHandle::new(HUB.instances.read()[instance_id].create_surface_from_layer(layer as *mut _))
 }
 
 #[cfg(feature = "local")]
@@ -128,16 +113,10 @@ pub fn instance_create_surface_from_windows_hwnd(
     let raw = unimplemented!();
 
     #[cfg(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12"))]
-    let raw = HUB.instances
-        .read()
-        [instance_id]
-        .create_surface_from_hwnd(hwnd);
+    let raw = HUB.instances.read()[instance_id].create_surface_from_hwnd(hwnd);
 
     #[cfg(all(target_os = "windows", feature = "gfx-backend-vulkan"))]
-    let raw = HUB.instances
-        .read()
-        [instance_id]
-        .create_surface_from_hwnd(hinstance, hwnd);
+    let raw = HUB.instances.read()[instance_id].create_surface_from_hwnd(hinstance, hwnd);
 
     #[cfg_attr(not(target_os = "windows"), allow(unreachable_code))]
     SurfaceHandle::new(raw)
@@ -154,10 +133,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
     HUB.surfaces.register_local(surface)
 }
 
-pub fn instance_get_adapter(
-    instance_id: InstanceId,
-    desc: &AdapterDescriptor,
-) -> AdapterHandle {
+pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -> AdapterHandle {
     let instance_guard = HUB.instances.read();
     let instance = &instance_guard[instance_id];
     let (mut low, mut high, mut other) = (None, None, None);
@@ -186,10 +162,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
     HUB.adapters.register_local(adapter)
 }
 
-pub fn adapter_create_device(
-    adapter_id: AdapterId,
-    _desc: &DeviceDescriptor,
-) -> DeviceHandle {
+pub fn adapter_create_device(adapter_id: AdapterId, _desc: &DeviceDescriptor) -> DeviceHandle {
     let adapter_guard = HUB.adapters.read();
     let adapter = &adapter_guard[adapter_id];
     let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();

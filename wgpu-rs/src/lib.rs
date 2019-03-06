@@ -10,21 +10,18 @@ use std::slice;
 
 pub use wgn::winit;
 pub use wgn::{
-    AdapterDescriptor, BindGroupLayoutBinding, BindingType,
-    BlendDescriptor, BlendOperation, BlendFactor, BufferMapAsyncStatus, ColorWriteFlags,
-    RasterizationStateDescriptor, CullMode, FrontFace,
-    BufferDescriptor, BufferUsageFlags,
-    IndexFormat, InputStepMode, ShaderAttributeIndex, VertexAttributeDescriptor, VertexFormat,
-    Color, CommandEncoderDescriptor,
-    ColorStateDescriptor, DepthStencilStateDescriptor, StencilStateFaceDescriptor, StencilOperation,
-    DeviceDescriptor, Extensions, Extent3d, LoadOp, Origin3d, PowerPreference, PrimitiveTopology,
-    RenderPassColorAttachmentDescriptor, RenderPassDepthStencilAttachmentDescriptor,
-    ShaderModuleDescriptor, ShaderStageFlags, StoreOp, SwapChainDescriptor,
-    SamplerDescriptor, AddressMode, FilterMode, BorderColor, CompareFunction,
-    TextureDescriptor, TextureDimension, TextureFormat, TextureUsageFlags,
-    TextureViewDescriptor, TextureViewDimension, TextureAspectFlags,
+    AdapterDescriptor, AddressMode, BindGroupLayoutBinding, BindingType, BlendDescriptor,
+    BlendFactor, BlendOperation, BorderColor, BufferDescriptor, BufferMapAsyncStatus,
+    BufferUsageFlags, Color, ColorStateDescriptor, ColorWriteFlags, CommandEncoderDescriptor,
+    CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, Extensions, Extent3d,
+    FilterMode, FrontFace, IndexFormat, InputStepMode, LoadOp, Origin3d, PowerPreference,
+    PrimitiveTopology, RasterizationStateDescriptor, RenderPassColorAttachmentDescriptor,
+    RenderPassDepthStencilAttachmentDescriptor, SamplerDescriptor, ShaderAttributeIndex,
+    ShaderModuleDescriptor, ShaderStageFlags, StencilOperation, StencilStateFaceDescriptor,
+    StoreOp, SwapChainDescriptor, TextureAspectFlags, TextureDescriptor, TextureDimension,
+    TextureFormat, TextureUsageFlags, TextureViewDescriptor, TextureViewDimension,
+    VertexAttributeDescriptor, VertexFormat,
 };
-
 
 //TODO: avoid heap allocating vectors during resource creation.
 #[derive(Default)]
@@ -33,7 +30,6 @@ struct Temp {
     //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
     command_buffers: Vec<wgn::CommandBufferId>,
 }
-
 
 pub struct Instance {
     id: wgn::InstanceId,
@@ -126,7 +122,6 @@ pub struct Queue<'a> {
     id: wgn::QueueId,
     temp: &'a mut Temp,
 }
-
 
 pub enum BindingResource<'a> {
     Buffer {
@@ -239,7 +234,9 @@ pub struct CreateBufferMapped<'a, T> {
 }
 
 impl<'a, T> CreateBufferMapped<'a, T>
-        where T: Copy {
+where
+    T: Copy,
+{
     pub fn fill_from_slice(self, slice: &[T]) -> Buffer {
         self.data.copy_from_slice(slice);
         self.finish()
@@ -247,9 +244,7 @@ impl<'a, T> CreateBufferMapped<'a, T>
 
     pub fn finish(self) -> Buffer {
         wgn::wgpu_buffer_unmap(self.id);
-        Buffer {
-            id: self.id,
-        }
+        Buffer { id: self.id }
     }
 }
 
@@ -414,7 +409,8 @@ impl Device {
                     primitive_topology: desc.primitive_topology,
                     color_states: temp_color_states.as_ptr(),
                     color_states_length: temp_color_states.len(),
-                    depth_stencil_state: desc.depth_stencil_state
+                    depth_stencil_state: desc
+                        .depth_stencil_state
                         .as_ref()
                         .map_or(ptr::null(), |p| p as *const _),
                     vertex_buffer_state: wgn::VertexBufferStateDescriptor {
@@ -451,22 +447,28 @@ impl Device {
         }
     }
 
-    pub fn create_buffer_mapped<'a, T>(&self, count: usize, usage: BufferUsageFlags) -> CreateBufferMapped<'a, T>
-            where T: 'static + Copy {
+    pub fn create_buffer_mapped<'a, T>(
+        &self,
+        count: usize,
+        usage: BufferUsageFlags,
+    ) -> CreateBufferMapped<'a, T>
+    where
+        T: 'static + Copy,
+    {
         let type_size = std::mem::size_of::<T>() as u32;
         assert_ne!(type_size, 0);
 
-        let desc = BufferDescriptor{
+        let desc = BufferDescriptor {
             size: type_size * count as u32,
             usage,
         };
-        let mut ptr : *mut u8 = std::ptr::null_mut();
+        let mut ptr: *mut u8 = std::ptr::null_mut();
 
         let id = wgn::wgpu_device_create_buffer_mapped(self.id, &desc, &mut ptr as *mut *mut u8);
 
         let data = unsafe { std::slice::from_raw_parts_mut(ptr as *mut T, count) };
 
-        CreateBufferMapped{id, data}
+        CreateBufferMapped { id, data }
     }
 
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
@@ -502,15 +504,19 @@ pub enum BufferMapAsyncResult<T> {
     Error,
 }
 
-struct BufferMapReadAsyncUserData<T,F> 
-    where F: FnOnce(BufferMapAsyncResult<&[T]>) {
+struct BufferMapReadAsyncUserData<T, F>
+where
+    F: FnOnce(BufferMapAsyncResult<&[T]>),
+{
     size: u32,
     callback: F,
     phantom: std::marker::PhantomData<T>,
 }
 
 struct BufferMapWriteAsyncUserData<T, F>
-    where F: FnOnce(BufferMapAsyncResult<&mut [T]>) {
+where
+    F: FnOnce(BufferMapAsyncResult<&mut [T]>),
+{
     size: u32,
     callback: F,
     phantom: std::marker::PhantomData<T>,
@@ -522,15 +528,29 @@ impl Buffer {
     }
 
     pub fn map_read_async<T, F>(&self, start: u32, size: u32, callback: F)
-            where T: 'static + Copy, F: FnOnce(BufferMapAsyncResult<&[T]>) {
+    where
+        T: 'static + Copy,
+        F: FnOnce(BufferMapAsyncResult<&[T]>),
+    {
         let type_size = std::mem::size_of::<T>() as u32;
         assert_ne!(type_size, 0);
         assert_eq!(size % type_size, 0);
 
-        extern "C" fn buffer_map_read_callback_wrapper<T, F>(status: wgn::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8)
-                where F: FnOnce(BufferMapAsyncResult<&[T]>) {
-            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapReadAsyncUserData<T, F>) };
-            let data = unsafe { slice::from_raw_parts(data as *const T, userdata.size as usize / std::mem::size_of::<T>()) };
+        extern "C" fn buffer_map_read_callback_wrapper<T, F>(
+            status: wgn::BufferMapAsyncStatus,
+            data: *const u8,
+            userdata: *mut u8,
+        ) where
+            F: FnOnce(BufferMapAsyncResult<&[T]>),
+        {
+            let userdata =
+                unsafe { Box::from_raw(userdata as *mut BufferMapReadAsyncUserData<T, F>) };
+            let data = unsafe {
+                slice::from_raw_parts(
+                    data as *const T,
+                    userdata.size as usize / std::mem::size_of::<T>(),
+                )
+            };
             if let wgn::BufferMapAsyncStatus::Success = status {
                 (userdata.callback)(BufferMapAsyncResult::Success::<&[T]>(data));
             } else {
@@ -538,20 +558,44 @@ impl Buffer {
             }
         }
 
-        let userdata = Box::new(BufferMapReadAsyncUserData{size, callback, phantom: std::marker::PhantomData});
-        wgn::wgpu_buffer_map_read_async(self.id, start, size, buffer_map_read_callback_wrapper::<T, F>, Box::into_raw(userdata) as *mut u8);
+        let userdata = Box::new(BufferMapReadAsyncUserData {
+            size,
+            callback,
+            phantom: std::marker::PhantomData,
+        });
+        wgn::wgpu_buffer_map_read_async(
+            self.id,
+            start,
+            size,
+            buffer_map_read_callback_wrapper::<T, F>,
+            Box::into_raw(userdata) as *mut u8,
+        );
     }
 
     pub fn map_write_async<T, F>(&self, start: u32, size: u32, callback: F)
-            where T: 'static + Copy, F: FnOnce(BufferMapAsyncResult<&mut [T]>) {
+    where
+        T: 'static + Copy,
+        F: FnOnce(BufferMapAsyncResult<&mut [T]>),
+    {
         let type_size = std::mem::size_of::<T>() as u32;
         assert_ne!(type_size, 0);
         assert_eq!(size % type_size, 0);
 
-        extern "C" fn buffer_map_write_callback_wrapper<T, F>(status: wgn::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8)
-                where F: FnOnce(BufferMapAsyncResult<&mut [T]>) {
-            let userdata = unsafe { Box::from_raw(userdata as *mut BufferMapWriteAsyncUserData<T, F>) };
-            let data = unsafe { slice::from_raw_parts_mut(data as *mut T, userdata.size as usize / std::mem::size_of::<T>()) };
+        extern "C" fn buffer_map_write_callback_wrapper<T, F>(
+            status: wgn::BufferMapAsyncStatus,
+            data: *mut u8,
+            userdata: *mut u8,
+        ) where
+            F: FnOnce(BufferMapAsyncResult<&mut [T]>),
+        {
+            let userdata =
+                unsafe { Box::from_raw(userdata as *mut BufferMapWriteAsyncUserData<T, F>) };
+            let data = unsafe {
+                slice::from_raw_parts_mut(
+                    data as *mut T,
+                    userdata.size as usize / std::mem::size_of::<T>(),
+                )
+            };
             if let wgn::BufferMapAsyncStatus::Success = status {
                 (userdata.callback)(BufferMapAsyncResult::Success::<&mut [T]>(data));
             } else {
@@ -559,8 +603,18 @@ impl Buffer {
             }
         }
 
-        let userdata = Box::new(BufferMapWriteAsyncUserData{size, callback, phantom: std::marker::PhantomData});
-        wgn::wgpu_buffer_map_write_async(self.id, start, size, buffer_map_write_callback_wrapper::<T, F>, Box::into_raw(userdata) as *mut u8);
+        let userdata = Box::new(BufferMapWriteAsyncUserData {
+            size,
+            callback,
+            phantom: std::marker::PhantomData,
+        });
+        wgn::wgpu_buffer_map_write_async(
+            self.id,
+            start,
+            size,
+            buffer_map_write_callback_wrapper::<T, F>,
+            Box::into_raw(userdata) as *mut u8,
+        );
     }
 
     pub fn unmap(&self) {
@@ -800,9 +854,9 @@ impl<'a> Drop for ComputePass<'a> {
 impl<'a> Queue<'a> {
     pub fn submit(&mut self, command_buffers: &[CommandBuffer]) {
         self.temp.command_buffers.clear();
-        self.temp.command_buffers.extend(
-            command_buffers.iter().map(|cb| cb.id)
-        );
+        self.temp
+            .command_buffers
+            .extend(command_buffers.iter().map(|cb| cb.id));
 
         wgn::wgpu_queue_submit(
             self.id,

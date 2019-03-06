@@ -110,7 +110,10 @@ impl<B: hal::Backend> CommandAllocator<B> {
     pub fn maintain(&self, last_done: SubmissionIndex) {
         let mut inner = self.inner.lock();
         for i in (0..inner.pending.len()).rev() {
-            let index = inner.pending[i].life_guard.submission_index.load(Ordering::Acquire);
+            let index = inner.pending[i]
+                .life_guard
+                .submission_index
+                .load(Ordering::Acquire);
             if index <= last_done {
                 let cmd_buf = inner.pending.swap_remove(i);
                 inner.recycle(cmd_buf);
