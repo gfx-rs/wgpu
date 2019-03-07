@@ -1,4 +1,4 @@
-#[cfg(feature = "local")]
+#[cfg(all(feature = "local", feature = "window-winit"))]
 pub extern crate winit;
 
 #[cfg(feature = "gfx-backend-dx11")]

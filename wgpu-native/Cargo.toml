@@ -17,9 +17,10 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-local = ["winit", "gfx-backend-empty/winit"]
+local = []
 remote = ["serde"]
 metal-auto-capture = ["gfx-backend-metal/auto-capture"]
+window-winit = ["winit", "gfx-backend-empty/winit"]
 
 [dependencies]
 arrayvec = "0.4"

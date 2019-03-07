@@ -46,7 +46,7 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     HUB.instances.register_local(inst)
 }
 
-#[cfg(feature = "local")]
+#[cfg(all(feature = "local", feature = "window-winit"))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,

@@ -752,9 +752,6 @@ WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId inst
                                                              void *hinstance,
                                                              void *hwnd);
 
-WGPUSurfaceId wgpu_instance_create_surface_from_winit(WGPUInstanceId instance_id,
-                                                      const WGPUWindow *window);
-
 WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
                                                      const void **display,
                                                      uint64_t window);
