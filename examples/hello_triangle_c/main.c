@@ -63,7 +63,6 @@ int main()
     WGPUShaderModuleId vertex_shader = wgpu_device_create_shader_module(device, &vertex_shader_desc);
     WGPUPipelineStageDescriptor vertex_stage = {
         .module = vertex_shader,
-        .stage = WGPUShaderStage_Vertex,
         .entry_point = "main",
     };
 
@@ -73,7 +72,6 @@ int main()
     WGPUShaderModuleId fragment_shader = wgpu_device_create_shader_module(device, &fragment_shader_desc);
     WGPUPipelineStageDescriptor fragment_stage = {
         .module = fragment_shader,
-        .stage = WGPUShaderStage_Fragment,
         .entry_point = "main",
     };
 
@@ -140,7 +138,7 @@ int main()
             .samples = 1,
         },
     };
-    WGPUAttachmentsState attachment_state = {
+    WGPUColorStateDescriptor attachment_state = {
         .color_attachments = attachments,
         .color_attachments_length = ATTACHMENTS_LENGTH,
         .depth_stencil_attachment = NULL,
@@ -148,8 +146,8 @@ int main()
 
     WGPURenderPipelineDescriptor render_pipeline_desc = {
         .layout = pipeline_layout,
-        .stages = stages,
-        .stages_length = STAGES_LENGTH,
+        .vertex_stage = vertex_stage,
+        .fragment_stage = fragment_stage,
         .primitive_topology = WGPUPrimitiveTopology_TriangleList,
         .attachments_state = attachment_state,
         .blend_states = blend_state,
@@ -201,7 +199,7 @@ int main()
 #endif
 
     WGPUSwapChainDescriptor swap_chain_desc = {
-        .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT | WGPUTextureUsageFlags_PRESENT,
+        .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT,
         .format = WGPUTextureFormat_Bgra8Unorm,
         .width = 640,
         .height = 480,
@@ -211,8 +209,8 @@ int main()
     while (!glfwWindowShouldClose(window))
     {
         WGPUSwapChainOutput next_texture = wgpu_swap_chain_get_next_texture(swap_chain);
-        WGPUCommandBufferDescriptor cmd_buf_desc = { .todo = 0 };
-        WGPUCommandBufferId cmd_buf = wgpu_device_create_command_buffer(device, &cmd_buf_desc);
+        WGPUCommandEncoderDescriptor cmd_encoder_desc = { .todo = 0 };
+        WGPUCommandEncoderId cmd_encoder = wgpu_device_create_command_encoder(device, &cmd_encoder_desc);
         WGPURenderPassColorAttachmentDescriptor_TextureViewId color_attachments[ATTACHMENTS_LENGTH] = {
             {
                 .attachment = next_texture.view_id,
@@ -226,10 +224,10 @@ int main()
             .color_attachments_length = RENDER_PASS_ATTACHMENTS_LENGTH,
             .depth_stencil_attachment = NULL,
         };
-        WGPURenderPassId rpass = wgpu_command_buffer_begin_render_pass(cmd_buf, rpass_desc);
+        WGPURenderPassId rpass = wgpu_command_buffer_begin_render_pass(cmd_encoder, rpass_desc);
         wgpu_render_pass_set_pipeline(rpass, render_pipeline);
         wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
-        wgpu_render_pass_end_pass(rpass);
+        WGPUCommandBufferId cmd_buf = wgpu_render_pass_end_pass(rpass);
         WGPUQueueId queue = wgpu_device_get_queue(device);
         wgpu_queue_submit(queue, &cmd_buf, 1);
         wgpu_swap_chain_present(swap_chain);
