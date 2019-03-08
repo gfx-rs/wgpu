@@ -21,7 +21,6 @@
 #endif
 #include <GLFW/glfw3native.h>
 
-#define STAGES_LENGTH (2)
 #define BLEND_STATES_LENGTH (1)
 #define ATTACHMENTS_LENGTH (1)
 #define RENDER_PASS_ATTACHMENTS_LENGTH (1)
@@ -75,8 +74,6 @@ int main()
         .entry_point = "main",
     };
 
-    WGPUPipelineStageDescriptor stages[STAGES_LENGTH] = {vertex_stage, fragment_stage};
-
     WGPUBindGroupLayoutDescriptor bind_group_layout_desc = {
         .bindings = NULL,
         .bindings_length = 0,
@@ -101,58 +98,35 @@ int main()
         .dst_factor = WGPUBlendFactor_Zero,
         .operation = WGPUBlendOperation_Add,
     };
-    WGPUBlendStateDescriptor blend_state_0_desc = {
-        .blend_enabled = false,
+    WGPUColorStateDescriptor color_state_desc = {
+        .format = WGPUTextureFormat_Bgra8Unorm,
         .alpha = blend_alpha,
         .color = blend_color,
         .write_mask = WGPUColorWriteFlags_ALL,
     };
-    WGPUBlendStateId blend_state_0 = wgpu_device_create_blend_state(device, &blend_state_0_desc);
-    WGPUBlendStateId blend_state[BLEND_STATES_LENGTH] = {blend_state_0};
-
-    WGPUStencilStateFaceDescriptor stencil_state_front = {
-        .compare = WGPUCompareFunction_Never,
-        .stencil_fail_op = WGPUStencilOperation_Keep,
-        .depth_fail_op = WGPUStencilOperation_Keep,
-        .pass_op = WGPUStencilOperation_Keep,
+    WGPURasterizationStateDescriptor rasterization_state = {
+        .front_face = WGPUFrontFace_Ccw,
+        .cull_mode = WGPUCullMode_None,
+        .depth_bias = 0,
+        .depth_bias_slope_scale = 0.0,
+        .depth_bias_clamp = 0.0,
     };
-    WGPUStencilStateFaceDescriptor stencil_state_back = {
-        .compare = WGPUCompareFunction_Never,
-        .stencil_fail_op = WGPUStencilOperation_Keep,
-        .depth_fail_op = WGPUStencilOperation_Keep,
-        .pass_op = WGPUStencilOperation_Keep,
+    WGPUVertexBufferStateDescriptor vertex_buffer_state = {
+        .index_format = WGPUIndexFormat_Uint16,
+        .vertex_buffers = NULL,
+        .vertex_buffers_count = 0,
     };
-    WGPUDepthStencilStateDescriptor depth_stencil_state_desc = {
-        .depth_write_enabled = false,
-        .depth_compare = WGPUCompareFunction_Never,
-        .front = stencil_state_front,
-        .back = stencil_state_back,
-        .stencil_read_mask = 0,
-        .stencil_write_mask = 0,
-    };
-    WGPUDepthStencilStateId depth_stencil_state = wgpu_device_create_depth_stencil_state(device, &depth_stencil_state_desc);
-
-    WGPUAttachment attachments[ATTACHMENTS_LENGTH] = {
-        {
-            .format = WGPUTextureFormat_Bgra8Unorm,
-            .samples = 1,
-        },
-    };
-    WGPUColorStateDescriptor attachment_state = {
-        .color_attachments = attachments,
-        .color_attachments_length = ATTACHMENTS_LENGTH,
-        .depth_stencil_attachment = NULL,
-    };
-
     WGPURenderPipelineDescriptor render_pipeline_desc = {
         .layout = pipeline_layout,
         .vertex_stage = vertex_stage,
         .fragment_stage = fragment_stage,
+        .rasterization_state = rasterization_state,
         .primitive_topology = WGPUPrimitiveTopology_TriangleList,
-        .attachments_state = attachment_state,
-        .blend_states = blend_state,
-        .blend_states_length = BLEND_STATES_LENGTH,
-        .depth_stencil_state = depth_stencil_state,
+        .color_states = &color_state_desc,
+        .color_states_length = 1,
+        .depth_stencil_state = NULL,
+        .vertex_buffer_state = vertex_buffer_state,
+        .sample_count = 1,
     };
 
     WGPURenderPipelineId render_pipeline = wgpu_device_create_render_pipeline(device, &render_pipeline_desc);
@@ -172,7 +146,7 @@ int main()
         return 1;
     }
 
-    WGPUSurfaceId surface = NULL;
+    WGPUSurfaceId surface = {};
 
 #if WGPU_TARGET == WGPU_TARGET_MACOS
     {
@@ -224,7 +198,7 @@ int main()
             .color_attachments_length = RENDER_PASS_ATTACHMENTS_LENGTH,
             .depth_stencil_attachment = NULL,
         };
-        WGPURenderPassId rpass = wgpu_command_buffer_begin_render_pass(cmd_encoder, rpass_desc);
+        WGPURenderPassId rpass = wgpu_command_encoder_begin_render_pass(cmd_encoder, rpass_desc);
         wgpu_render_pass_set_pipeline(rpass, render_pipeline);
         wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
         WGPUCommandBufferId cmd_buf = wgpu_render_pass_end_pass(rpass);
