@@ -1,11 +1,40 @@
 language: rust
-rust:
-  - stable
-  - nightly
+
+matrix:
+  include:
+    # Linux 64bit
+    - os: linux
+      rust: stable
+      compiler: gcc
+    - os: linux
+      rust: nightly
+      compiler: gcc
+
+    # macOS 64bit
+    - env: MACOSX_DEPLOYMENT_TARGET=10.9
+      os: osx
+      rust: stable
+      osx_image: xcode9
+      compiler: clang
+    #- env: MACOSX_DEPLOYMENT_TARGET=10.9
+    #  os: osx
+    #  rust: nightly
+    #  osx_image: xcode9
+    #  compiler: clang
+
+    # iPhoneOS 64bit
+    #- env: TARGET=aarch64-apple-ios
+    #  os: osx
+    #  osx_image: xcode9
+    #  rust: nightly
+
+    # Windows 64bit
+    #- os: windows
+    #  rust: stable
 
 branches:
   except:
-    - staging.tmp
+  - staging.tmp
 
 before_install:
   # Do not run bors builds against the nightly compiler.
@@ -15,3 +44,4 @@ before_install:
 script:
   - cargo test
   - cargo check --manifest-path wgpu-native/Cargo.toml
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then (brew update && brew upgrade cmake && brew install glfw3 && cd wgpu-native && cargo build --features=local,gfx-backend-metal && cd ../examples/hello_triangle_c && mkdir build && cd build && cmake .. && make); fi
