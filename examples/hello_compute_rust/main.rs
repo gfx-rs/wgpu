@@ -88,13 +88,16 @@ fn main() {
     }
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
+    device.get_queue().submit(&[encoder.finish()]);
+
     staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
         if let wgpu::BufferMapAsyncResult::Success(data) = result {
             println!("Times: {:?}", data);
         }
 
-        staging_buffer.unmap();
+        // staging_buffer.unmap(); // TODO
     });
 
+    let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
     device.get_queue().submit(&[encoder.finish()]);
 }
