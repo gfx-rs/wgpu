@@ -240,7 +240,14 @@ typedef enum {
 
 typedef struct WGPUBufferMapAsyncStatus WGPUBufferMapAsyncStatus;
 
-typedef struct WGPUId WGPUId;
+typedef uint32_t WGPUIndex;
+
+typedef uint32_t WGPUEpoch;
+
+typedef struct {
+  WGPUIndex _0;
+  WGPUEpoch _1;
+} WGPUId;
 
 typedef WGPUId WGPUDeviceId;
 
@@ -751,9 +758,6 @@ WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId insta
 WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
                                                              void *hinstance,
                                                              void *hwnd);
-
-WGPUSurfaceId wgpu_instance_create_surface_from_winit(WGPUInstanceId instance_id,
-                                                      const WGPUWindow *window);
 
 WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
                                                      const void **display,
