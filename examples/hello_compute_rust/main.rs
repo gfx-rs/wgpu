@@ -94,10 +94,10 @@ fn main() {
         if let wgpu::BufferMapAsyncResult::Success(data) = result {
             println!("Times: {:?}", data);
         }
-
-        // staging_buffer.unmap(); // TODO
     });
 
     let encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
     device.get_queue().submit(&[encoder.finish()]);
+
+    staging_buffer.unmap(); // TODO: staging_buffer can't be referenced from the callback
 }

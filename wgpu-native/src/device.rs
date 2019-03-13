@@ -1059,11 +1059,15 @@ pub extern "C" fn wgpu_queue_submit(
 
         let mut swap_chain_links = Vec::new();
 
+        let mut trackers = device.trackers.lock();
+        let mut destroyed = device.destroyed.lock();
+        destroyed.triage_referenced(&mut *trackers);
+        destroyed.triage_framebuffers(&mut *device.framebuffers.lock());
+
         let old_submit_index = device
             .life_guard
             .submission_index
             .fetch_add(1, Ordering::Relaxed);
-        let mut trackers = device.trackers.lock();
 
         //TODO: if multiple command buffers are submitted, we can re-use the last
         // native command buffer of the previous chain instead of always creating
@@ -1170,12 +1174,8 @@ pub extern "C" fn wgpu_queue_submit(
     let device_guard = HUB.devices.read();
     let device = &device_guard[queue_id];
 
-    let mut trackers = device.trackers.lock();
-
     let last_done = {
         let mut destroyed = device.destroyed.lock();
-        destroyed.triage_referenced(&mut *trackers);
-        destroyed.triage_framebuffers(&mut *device.framebuffers.lock());
         let last_done = destroyed.cleanup(&device.raw);
         destroyed.handle_mapping(&device.raw);
 
@@ -1776,6 +1776,12 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     let mut buffer_guard = HUB.buffers.write();
     let buffer = &mut buffer_guard[buffer_id];
 
+    if buffer.pending_map_operation.is_some() {
+        log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
+        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+        return;
+    }
+
     let range = start as u64..(start + size) as u64;
     buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
 
@@ -1795,6 +1801,12 @@ pub extern "C" fn wgpu_buffer_map_write_async(
 ) {
     let mut buffer_guard = HUB.buffers.write();
     let buffer = &mut buffer_guard[buffer_id];
+
+    if buffer.pending_map_operation.is_some() {
+        log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
+        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+        return;
+    }
 
     let range = start as u64..(start + size) as u64;
     buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
