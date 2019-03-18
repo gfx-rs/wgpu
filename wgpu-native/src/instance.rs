@@ -149,7 +149,9 @@ pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -
         PowerPreference::LowPower => low.or(high),
         PowerPreference::HighPerformance | PowerPreference::Default => high.or(low),
     };
-    some.or(other).unwrap()
+    some
+        .or(other)
+        .expect("No adapters found. Please enable the feature for one of the graphics backends: vulkan, metal, dx12, dx11")
 }
 
 #[cfg(feature = "local")]
