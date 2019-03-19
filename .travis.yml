@@ -9,6 +9,9 @@ matrix:
     - os: linux
       rust: nightly
       compiler: gcc
+    # Windows 64bit
+    - os: windows
+      rust: stable
 
     # macOS 64bit
     - env: MACOSX_DEPLOYMENT_TARGET=10.9
@@ -28,10 +31,6 @@ matrix:
     #  osx_image: xcode9
     #  rust: nightly
 
-    # Windows 64bit
-    #- os: windows
-    #  rust: stable
-
 branches:
   except:
   - staging.tmp
@@ -40,8 +39,8 @@ before_install:
   # Do not run bors builds against the nightly compiler.
   # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
   - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
+  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
 
 script:
   - cargo test
-  - cargo check --manifest-path wgpu-native/Cargo.toml
   - if [[ $TRAVIS_OS_NAME == "osx" ]]; then (brew update && brew upgrade cmake && brew install glfw3 && cd wgpu-native && cargo build --features=local,gfx-backend-metal && cd ../examples/hello_triangle_c && mkdir build && cd build && cmake .. && make); fi
