@@ -109,7 +109,11 @@ pub fn instance_create_surface_from_windows_hwnd(
     hinstance: *mut std::ffi::c_void,
     hwnd: *mut std::ffi::c_void,
 ) -> SurfaceHandle {
-    #[cfg(not(target_os = "windows"))]
+    #[cfg(not(any(
+        feature = "gfx-backend-dx11",
+        feature = "gfx-backend-dx12",
+        all(target_os = "windows", feature = "gfx-backend-vulkan"),
+    )))]
     let raw = unimplemented!();
 
     #[cfg(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12"))]
@@ -118,7 +122,7 @@ pub fn instance_create_surface_from_windows_hwnd(
     #[cfg(all(target_os = "windows", feature = "gfx-backend-vulkan"))]
     let raw = HUB.instances.read()[instance_id].create_surface_from_hwnd(hinstance, hwnd);
 
-    #[cfg_attr(not(target_os = "windows"), allow(unreachable_code))]
+    #[allow(unreachable_code)]
     SurfaceHandle::new(raw)
 }
 
