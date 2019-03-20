@@ -323,7 +323,7 @@ impl Device {
                     } => wgn::BindingResource::Buffer(wgn::BufferBinding {
                         buffer: buffer.id,
                         offset: range.start,
-                        size: range.end,
+                        size: range.end - range.start,
                     }),
                     BindingResource::Sampler(ref sampler) => {
                         wgn::BindingResource::Sampler(sampler.id)
