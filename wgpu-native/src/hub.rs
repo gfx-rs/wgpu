@@ -18,6 +18,8 @@ use std::sync::Arc;
 
 pub(crate) type Index = u32;
 pub(crate) type Epoch = u32;
+
+#[repr(C)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Id(Index, Epoch);
