@@ -240,7 +240,14 @@ typedef enum {
 
 typedef struct WGPUBufferMapAsyncStatus WGPUBufferMapAsyncStatus;
 
-typedef struct WGPUId WGPUId;
+typedef uint32_t WGPUIndex;
+
+typedef uint32_t WGPUEpoch;
+
+typedef struct {
+  WGPUIndex _0;
+  WGPUEpoch _1;
+} WGPUId;
 
 typedef WGPUId WGPUDeviceId;
 
