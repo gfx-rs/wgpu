@@ -173,7 +173,8 @@ pub fn adapter_create_device(adapter_id: AdapterId, _desc: &DeviceDescriptor) ->
     let adapter = &adapter_guard[adapter_id];
     let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    DeviceHandle::new(raw, adapter_id, queue_group, mem_props)
+    let limits = adapter.physical_device.limits();
+    DeviceHandle::new(raw, adapter_id, queue_group, mem_props, limits)
 }
 
 #[cfg(feature = "local")]

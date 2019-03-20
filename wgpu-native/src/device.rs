@@ -49,6 +49,12 @@ pub fn all_image_stages() -> hal::pso::PipelineStage {
         | Ps::TRANSFER
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum HostMap {
+    Read,
+    Write,
+}
+
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub(crate) struct AttachmentData<T> {
     pub colors: ArrayVec<[T; 4]>,
@@ -267,7 +273,11 @@ impl DestroyedResources<back::Backend> {
         }
     }
 
-    fn handle_mapping(&mut self, raw: &<back::Backend as hal::Backend>::Device) {
+    fn handle_mapping(
+        &mut self,
+        raw: &<back::Backend as hal::Backend>::Device,
+        limits: &hal::Limits,
+    ) {
         for buffer_id in self.ready_to_map.drain(..) {
             let mut operation = None;
             let (result, ptr) = {
@@ -276,7 +286,7 @@ impl DestroyedResources<back::Backend> {
                 std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
                 match operation.clone().unwrap() {
                     BufferMapOperation::Read(range, ..) => {
-                        match map_buffer(raw, &mut buffer, range.clone(), true, false) {
+                        match map_buffer(raw, limits, &mut buffer, range.clone(), HostMap::Read) {
                             Ok(ptr) => (BufferMapAsyncStatus::Success, Some(ptr)),
                             Err(e) => {
                                 log::error!("failed to map buffer for reading: {}", e);
@@ -285,7 +295,7 @@ impl DestroyedResources<back::Backend> {
                         }
                     }
                     BufferMapOperation::Write(range, ..) => {
-                        match map_buffer(raw, &mut buffer, range.clone(), false, true) {
+                        match map_buffer(raw, limits, &mut buffer, range.clone(), HostMap::Write) {
                             Ok(ptr) => (BufferMapAsyncStatus::Success, Some(ptr)),
                             Err(e) => {
                                 log::error!("failed to map buffer for writing: {}", e);
@@ -310,30 +320,33 @@ impl DestroyedResources<back::Backend> {
 
 fn map_buffer(
     raw: &<back::Backend as hal::Backend>::Device,
+    limits: &hal::Limits,
     buffer: &mut resource::Buffer<back::Backend>,
-    range: std::ops::Range<u64>,
-    read: bool,
-    write: bool,
+    mut range: std::ops::Range<u64>,
+    kind: HostMap,
 ) -> Result<*mut u8, hal::mapping::Error> {
+    let is_coherent = buffer.memory_properties.contains(hal::memory::Properties::COHERENT);
+    let atom_mask = if is_coherent { 0 } else { limits.non_coherent_atom_size as u64 - 1 };
+    let atom_offset = range.start & atom_mask;
+    range.start &= !atom_mask;
+    range.end = ((range.end - 1) | atom_mask) + 1;
     let pointer = unsafe { raw.map_memory(&buffer.memory, range.clone()) }?;
-    if read
-        && !buffer
-            .memory_properties
-            .contains(hal::memory::Properties::COHERENT)
-    {
-        unsafe {
-            raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range.clone())))
-                .unwrap()
-        }; // TODO
+
+    if !is_coherent {
+        match kind {
+            HostMap::Read => unsafe {
+                raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range)))
+                    .unwrap();
+            },
+            HostMap::Write => {
+                buffer.mapped_write_ranges.push(range);
+            }
+        }
     }
-    if write
-        && !buffer
-            .memory_properties
-            .contains(hal::memory::Properties::COHERENT)
-    {
-        buffer.mapped_write_ranges.push(range.clone());
-    }
-    Ok(pointer)
+
+    Ok(unsafe {
+        pointer.offset(atom_offset as isize)
+    })
 }
 
 pub struct Device<B: hal::Backend> {
@@ -345,6 +358,7 @@ pub struct Device<B: hal::Backend> {
     life_guard: LifeGuard,
     pub(crate) trackers: Mutex<TrackerSet>,
     mem_props: hal::MemoryProperties,
+    limits: hal::Limits,
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     desc_pool: Mutex<B::DescriptorPool>,
@@ -357,6 +371,7 @@ impl<B: hal::Backend> Device<B> {
         adapter_id: AdapterId,
         queue_group: hal::QueueGroup<B, hal::General>,
         mem_props: hal::MemoryProperties,
+        limits: hal::Limits,
     ) -> Self {
         // TODO: These values are just taken from rendy's test
         // Need to set reasonable values per memory type instead
@@ -420,6 +435,7 @@ impl<B: hal::Backend> Device<B> {
             life_guard,
             trackers: Mutex::new(TrackerSet::new()),
             mem_props,
+            limits,
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
             desc_pool,
@@ -533,7 +549,7 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
 
-    match map_buffer(&device.raw, &mut buffer, 0..(desc.size as u64), false, true) {
+    match map_buffer(&device.raw, &device.limits, &mut buffer, 0..(desc.size as u64), HostMap::Write) {
         Ok(ptr) => unsafe {
             *mapped_ptr_out = ptr;
         },
@@ -847,7 +863,10 @@ pub fn device_create_bind_group_layout(
             .unwrap()
     };
 
-    binding_model::BindGroupLayout { raw }
+    binding_model::BindGroupLayout {
+        raw,
+        bindings: bindings.to_vec(),
+    }
 }
 
 #[cfg(feature = "local")]
@@ -904,6 +923,7 @@ pub fn device_create_bind_group(
     let bind_group_layout_guard = HUB.bind_group_layouts.read();
     let bind_group_layout = &bind_group_layout_guard[desc.layout];
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length as usize) };
+    assert_eq!(bindings.len(), bind_group_layout.bindings.len());
 
     let mut desc_pool = device.desc_pool.lock();
     let desc_set = unsafe { desc_pool.allocate_set(&bind_group_layout.raw).unwrap() };
@@ -915,7 +935,7 @@ pub fn device_create_bind_group(
     //TODO: group writes into contiguous sections
     let mut writes = Vec::new();
     let mut used = TrackerSet::new();
-    for b in bindings {
+    for (b, decl) in bindings.iter().zip(&bind_group_layout.bindings) {
         let descriptor = match b.resource {
             binding_model::BindingResource::Buffer(ref bb) => {
                 let buffer = used
@@ -926,6 +946,12 @@ pub fn device_create_bind_group(
                         resource::BufferUsageFlags::UNIFORM,
                     )
                     .unwrap();
+                let alignment = match decl.ty {
+                    binding_model::BindingType::UniformBuffer => device.limits.min_uniform_buffer_offset_alignment,
+                    _ => panic!("Mismatched buffer binding for {:?}", decl),
+                };
+                assert_eq!(bb.offset as hal::buffer::Offset % alignment, 0,
+                    "Misaligned buffer offset {}", bb.offset);
                 let range = Some(bb.offset as u64)..Some((bb.offset + bb.size) as u64);
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
@@ -1177,7 +1203,7 @@ pub extern "C" fn wgpu_queue_submit(
         destroyed.triage_referenced(&mut *trackers);
         destroyed.triage_framebuffers(&mut *device.framebuffers.lock());
         let last_done = destroyed.cleanup(&device.raw);
-        destroyed.handle_mapping(&device.raw);
+        destroyed.handle_mapping(&device.raw, &device.limits);
 
         destroyed.active.push(ActiveSubmission {
             index: old_submit_index + 1,

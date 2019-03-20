@@ -22,6 +22,7 @@ pub enum BindingType {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug, Hash)]
 pub struct BindGroupLayoutBinding {
     pub binding: u32,
     pub visibility: ShaderStageFlags,
@@ -36,6 +37,7 @@ pub struct BindGroupLayoutDescriptor {
 
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
+    pub(crate) bindings: Vec<BindGroupLayoutBinding>,
 }
 
 #[repr(C)]
