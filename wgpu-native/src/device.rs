@@ -398,7 +398,7 @@ impl<B: hal::Backend> Device<B> {
         let desc_pool = Mutex::new(
             unsafe {
                 raw.create_descriptor_pool(
-                    100,
+                    10000,
                     &[
                         hal::pso::DescriptorRangeDesc {
                             ty: hal::pso::DescriptorType::Sampler,
@@ -406,15 +406,15 @@ impl<B: hal::Backend> Device<B> {
                         },
                         hal::pso::DescriptorRangeDesc {
                             ty: hal::pso::DescriptorType::SampledImage,
-                            count: 100,
+                            count: 1000,
                         },
                         hal::pso::DescriptorRangeDesc {
                             ty: hal::pso::DescriptorType::UniformBuffer,
-                            count: 100,
+                            count: 10000,
                         },
                         hal::pso::DescriptorRangeDesc {
                             ty: hal::pso::DescriptorType::StorageBuffer,
-                            count: 100,
+                            count: 1000,
                         },
                     ],
                 )
