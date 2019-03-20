@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.2.2 (19-03-2019)
+  - fixed vertex format mapping
+  - fixed building with "empty" backend on Windows
+
 ## v0.2 (06-03-2019)
   - Platforms: iOS/Metal, D3D11
   - Crates:
