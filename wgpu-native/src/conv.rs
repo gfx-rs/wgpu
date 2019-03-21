@@ -1,4 +1,8 @@
-use crate::{binding_model, command, pipeline, resource, Color, Extent3d, Origin3d};
+use crate::{
+    binding_model, command, pipeline, resource,
+    Color, Extent3d, Origin3d,
+};
+
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsageFlags,

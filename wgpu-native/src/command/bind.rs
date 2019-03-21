@@ -1,5 +1,8 @@
 use crate::{BindGroupHandle, BindGroupId, BindGroupLayoutId, PipelineLayoutId, Stored};
 
+use copyless::VecHelper as _;
+
+
 pub struct BindGroupPair {
     layout_id: BindGroupLayoutId,
     group_id: Stored<BindGroupId>,
@@ -64,7 +67,7 @@ pub struct Binder {
 impl Binder {
     pub fn ensure_length(&mut self, length: usize) {
         while self.entries.len() < length {
-            self.entries.push(BindGroupEntry::default());
+            self.entries.alloc().init(BindGroupEntry::default());
         }
     }
 

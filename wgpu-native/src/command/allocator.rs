@@ -1,15 +1,21 @@
 use super::CommandBuffer;
-use crate::track::TrackerSet;
-use crate::{DeviceId, LifeGuard, Stored, SubmissionIndex};
+use crate::{
+    track::TrackerSet,
+    DeviceId, LifeGuard, Stored, SubmissionIndex,
+};
 
-use hal::command::RawCommandBuffer;
-use hal::pool::RawCommandPool;
-use hal::Device;
+use hal::{
+    command::RawCommandBuffer,
+    pool::RawCommandPool,
+    Device,
+};
 use parking_lot::Mutex;
 
-use std::collections::HashMap;
-use std::sync::atomic::Ordering;
-use std::thread;
+use std::{
+    collections::HashMap,
+    sync::atomic::Ordering,
+    thread,
+};
 
 struct CommandPool<B: hal::Backend> {
     raw: B::CommandPool,

@@ -1,12 +1,15 @@
-use crate::hub::HUB;
-use crate::{AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
+use crate::{
+    hub::HUB,
+    AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle,
+};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
 
-use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
+use hal::{self, Instance as _, PhysicalDevice as _};
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

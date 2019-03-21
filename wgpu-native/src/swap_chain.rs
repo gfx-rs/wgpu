@@ -1,15 +1,17 @@
-use crate::device::all_image_stages;
-use crate::hub::HUB;
-use crate::track::TrackPermit;
-use crate::{conv, resource};
-use crate::{DeviceId, Extent3d, Stored, SwapChainId, TextureId, TextureViewId};
+use crate::{
+    conv, resource,
+    device::all_image_stages,
+    hub::HUB,
+    track::TrackPermit,
+    DeviceId, Extent3d, Stored, SwapChainId, TextureId, TextureViewId,
+};
 
-use hal;
-use hal::{Device as _Device, Swapchain as _Swapchain};
+use hal::{self, Device as _, Swapchain as _};
 use log::{trace, warn};
 use parking_lot::Mutex;
 
 use std::{iter, mem};
+
 
 pub type SwapImageEpoch = u16;
 

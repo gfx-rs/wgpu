@@ -1,32 +1,38 @@
-use crate::hub::HUB;
-use crate::track::{DummyUsage, Stitch, TrackPermit, TrackerSet};
-use crate::{binding_model, command, conv, pipeline, resource, swap_chain};
 use crate::{
+    binding_model, command, conv, pipeline, resource, swap_chain,
+    hub::HUB,
+    track::{DummyUsage, Stitch, TrackPermit, TrackerSet},
     AdapterId, BindGroupId, BufferId, CommandBufferId, DeviceId, QueueId, SurfaceId, TextureId,
     TextureViewId,
+    BufferMapAsyncStatus, BufferMapOperation, LifeGuard, RefCount, Stored, SubmissionIndex,
 };
 #[cfg(feature = "local")]
 use crate::{
     BindGroupLayoutId, CommandEncoderId, ComputePipelineId, PipelineLayoutId, RenderPipelineId,
     SamplerId, ShaderModuleId, SwapChainId,
 };
-use crate::{
-    BufferMapAsyncStatus, BufferMapOperation, LifeGuard, RefCount, Stored, SubmissionIndex,
-};
 
 use arrayvec::ArrayVec;
+use copyless::VecHelper as _;
 use back;
-use hal::backend::FastHashMap;
-use hal::command::RawCommandBuffer;
-use hal::queue::RawCommandQueue;
-use hal::{self, DescriptorPool as _DescriptorPool, Device as _Device, Surface as _Surface};
+use hal::{
+    self, DescriptorPool as _, Device as _, Surface as _,
+    backend::FastHashMap,
+    command::RawCommandBuffer,
+    queue::RawCommandQueue,
+};
 use log::{info, trace};
 //use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::Mutex;
 
-use std::collections::hash_map::Entry;
-use std::sync::atomic::Ordering;
-use std::{ffi, iter, slice};
+use std::{
+    ffi, iter, ptr, slice,
+    collections::hash_map::Entry,
+    sync::atomic::Ordering,
+};
+
+
+pub const MAX_COLOR_TARGETS: usize = 4;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -57,7 +63,7 @@ enum HostMap {
 
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub(crate) struct AttachmentData<T> {
-    pub colors: ArrayVec<[T; 4]>,
+    pub colors: ArrayVec<[T; MAX_COLOR_TARGETS]>,
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
@@ -204,7 +210,9 @@ impl DestroyedResources<back::Backend> {
 
                 let submit_index = life_guard.submission_index.load(Ordering::Acquire);
                 match self.active.iter_mut().find(|a| a.index == submit_index) {
-                    Some(a) => a.resources.push((Some(resource_id), resource)),
+                    Some(a) => {
+                        a.resources.alloc().init((Some(resource_id), resource));
+                    }
                     None => self.free.push(resource),
                 }
             }
@@ -267,7 +275,9 @@ impl DestroyedResources<back::Backend> {
         for (ref key, submit_index) in remove_list {
             let resource = NativeResource::Framebuffer(framebuffers.remove(key).unwrap());
             match self.active.iter_mut().find(|a| a.index == submit_index) {
-                Some(a) => a.resources.push((None, resource)),
+                Some(a) => {
+                    a.resources.alloc().init((None, resource));
+                }
                 None => self.free.push(resource),
             }
         }
@@ -279,39 +289,33 @@ impl DestroyedResources<back::Backend> {
         limits: &hal::Limits,
     ) {
         for buffer_id in self.ready_to_map.drain(..) {
-            let mut operation = None;
-            let (result, ptr) = {
+            let (operation, status, ptr) = {
                 let mut buffer_guard = HUB.buffers.write();
                 let mut buffer = &mut buffer_guard[buffer_id];
-                std::mem::swap(&mut operation, &mut buffer.pending_map_operation);
-                match operation.clone().unwrap() {
-                    BufferMapOperation::Read(range, ..) => {
-                        match map_buffer(raw, limits, &mut buffer, range.clone(), HostMap::Read) {
-                            Ok(ptr) => (BufferMapAsyncStatus::Success, Some(ptr)),
-                            Err(e) => {
-                                log::error!("failed to map buffer for reading: {}", e);
-                                (BufferMapAsyncStatus::Error, None)
-                            }
-                        }
+                let operation = buffer.pending_map_operation.take().unwrap();
+                let result = match operation {
+                    BufferMapOperation::Read(ref range, ..) => {
+                        map_buffer(raw, limits, &mut buffer, range, HostMap::Read)
                     }
-                    BufferMapOperation::Write(range, ..) => {
-                        match map_buffer(raw, limits, &mut buffer, range.clone(), HostMap::Write) {
-                            Ok(ptr) => (BufferMapAsyncStatus::Success, Some(ptr)),
-                            Err(e) => {
-                                log::error!("failed to map buffer for writing: {}", e);
-                                (BufferMapAsyncStatus::Error, None)
-                            }
-                        }
+                    BufferMapOperation::Write(ref range, ..) => {
+                        map_buffer(raw, limits, &mut buffer, range, HostMap::Write)
+                    }
+                };
+                match result {
+                    Ok(ptr) => (operation, BufferMapAsyncStatus::Success, ptr),
+                    Err(e) => {
+                        log::error!("failed to map buffer: {}", e);
+                        (operation, BufferMapAsyncStatus::Error, ptr::null_mut())
                     }
                 }
             };
 
-            match operation.unwrap() {
+            match operation {
                 BufferMapOperation::Read(_, callback, userdata) => {
-                    callback(result, ptr.unwrap_or(std::ptr::null_mut()), userdata)
+                    callback(status, ptr, userdata)
                 }
                 BufferMapOperation::Write(_, callback, userdata) => {
-                    callback(result, ptr.unwrap_or(std::ptr::null_mut()), userdata)
+                    callback(status, ptr, userdata)
                 }
             };
         }
@@ -322,14 +326,16 @@ fn map_buffer(
     raw: &<back::Backend as hal::Backend>::Device,
     limits: &hal::Limits,
     buffer: &mut resource::Buffer<back::Backend>,
-    mut range: std::ops::Range<u64>,
+    original_range: &std::ops::Range<u64>,
     kind: HostMap,
 ) -> Result<*mut u8, hal::mapping::Error> {
+    // gfx-rs requires mapping and flushing/invalidation ranges to be done at `non_coherent_atom_size`
+    // granularity for memory types that aren't coherent. We achieve that by flooring the start offset
+    // and ceiling the end offset to those atom sizes, using bitwise operations on an `atom_mask`.
     let is_coherent = buffer.memory_properties.contains(hal::memory::Properties::COHERENT);
     let atom_mask = if is_coherent { 0 } else { limits.non_coherent_atom_size as u64 - 1 };
-    let atom_offset = range.start & atom_mask;
-    range.start &= !atom_mask;
-    range.end = ((range.end - 1) | atom_mask) + 1;
+    let atom_offset = original_range.start & atom_mask;
+    let range = (original_range.start & !atom_mask) .. ((original_range.end - 1) | atom_mask) + 1;
     let pointer = unsafe { raw.map_memory(&buffer.memory, range.clone()) }?;
 
     if !is_coherent {
@@ -345,6 +351,8 @@ fn map_buffer(
     }
 
     Ok(unsafe {
+        // Since we map with a potentially smaller offset than the user requested,
+        // we adjust the returned pointer to compensate.
         pointer.offset(atom_offset as isize)
     })
 }
@@ -548,15 +556,16 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
 
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
+    let range = 0 .. desc.size as u64;
 
-    match map_buffer(&device.raw, &device.limits, &mut buffer, 0..(desc.size as u64), HostMap::Write) {
+    match map_buffer(&device.raw, &device.limits, &mut buffer, &range, HostMap::Write) {
         Ok(ptr) => unsafe {
             *mapped_ptr_out = ptr;
         },
         Err(e) => {
             log::error!("failed to create buffer in a mapped state: {}", e);
             unsafe {
-                *mapped_ptr_out = std::ptr::null_mut();
+                *mapped_ptr_out = ptr::null_mut();
             }
         }
     }
@@ -973,13 +982,12 @@ pub fn device_create_bind_group(
                 hal::pso::Descriptor::Image(&view.raw, hal::image::Layout::ShaderReadOnlyOptimal)
             }
         };
-        let write = hal::pso::DescriptorSetWrite {
+        writes.alloc().init(hal::pso::DescriptorSetWrite {
             set: &desc_set,
             binding: b.binding,
             array_offset: 0, //TODO
             descriptors: iter::once(descriptor),
-        };
-        writes.push(write);
+        });
     }
 
     unsafe {
@@ -1205,7 +1213,7 @@ pub extern "C" fn wgpu_queue_submit(
         let last_done = destroyed.cleanup(&device.raw);
         destroyed.handle_mapping(&device.raw, &device.limits);
 
-        destroyed.active.push(ActiveSubmission {
+        destroyed.active.alloc().init(ActiveSubmission {
             index: old_submit_index + 1,
             fence,
             resources: Vec::new(),
@@ -1339,7 +1347,7 @@ pub fn device_create_render_pipeline(
         if vb_state.attributes_count == 0 {
             continue;
         }
-        vertex_buffers.push(hal::pso::VertexBufferDesc {
+        vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
             binding: i as u32,
             stride: vb_state.stride,
             rate: match vb_state.step_mode {
@@ -1350,7 +1358,7 @@ pub fn device_create_render_pipeline(
         let desc_atts =
             unsafe { slice::from_raw_parts(vb_state.attributes, vb_state.attributes_count) };
         for attribute in desc_atts {
-            attributes.push(hal::pso::AttributeDesc {
+            attributes.alloc().init(hal::pso::AttributeDesc {
                 location: attribute.attribute_index,
                 binding: i as u32,
                 element: hal::pso::Element {
@@ -1683,7 +1691,7 @@ pub fn swap_chain_populate_textures(
             .views
             .query(view_id.value, &view_id.ref_count, DummyUsage);
 
-        swap_chain.frames.push(swap_chain::Frame {
+        swap_chain.frames.alloc().init(swap_chain::Frame {
             texture_id,
             view_id,
             fence: device.raw.create_fence(true).unwrap(),

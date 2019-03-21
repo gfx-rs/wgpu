@@ -1,8 +1,11 @@
-use crate::device::RenderPassContext;
-use crate::resource;
-use crate::{ByteArray, PipelineLayoutId, ShaderModuleId};
+use crate::{
+    device::RenderPassContext,
+    resource,
+    ByteArray, PipelineLayoutId, ShaderModuleId,
+};
 
 use bitflags::bitflags;
+
 
 pub type ShaderAttributeIndex = u32;
 

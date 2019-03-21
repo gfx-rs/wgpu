@@ -1,15 +1,16 @@
-use crate::command::bind::Binder;
-use crate::device::RenderPassContext;
-use crate::hub::HUB;
-use crate::resource::BufferUsageFlags;
-use crate::track::{Stitch, TrackerSet};
 use crate::{
+    command::bind::Binder,
+    device::RenderPassContext,
+    hub::HUB,
+    resource::BufferUsageFlags,
+    track::{Stitch, TrackerSet},
     BindGroupId, BufferId, CommandBuffer, CommandBufferId, RenderPassId, RenderPipelineId, Stored,
 };
 
 use hal::command::RawCommandBuffer;
 
 use std::{iter, slice};
+
 
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
