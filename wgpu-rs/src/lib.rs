@@ -530,7 +530,7 @@ impl Buffer {
     pub fn map_read_async<T, F>(&self, start: u32, size: u32, callback: F)
     where
         T: 'static + Copy,
-        F: FnOnce(BufferMapAsyncResult<&[T]>),
+        F: FnOnce(BufferMapAsyncResult<&[T]>) + 'static,
     {
         let type_size = std::mem::size_of::<T>() as u32;
         assert_ne!(type_size, 0);
@@ -575,7 +575,7 @@ impl Buffer {
     pub fn map_write_async<T, F>(&self, start: u32, size: u32, callback: F)
     where
         T: 'static + Copy,
-        F: FnOnce(BufferMapAsyncResult<&mut [T]>),
+        F: FnOnce(BufferMapAsyncResult<&mut [T]>) + 'static,
     {
         let type_size = std::mem::size_of::<T>() as u32;
         assert_ne!(type_size, 0);
