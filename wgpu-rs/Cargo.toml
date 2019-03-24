@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.2.0"
+version = "0.2.1"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",

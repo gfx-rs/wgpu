@@ -1,15 +1,17 @@
-use crate::conv;
-use crate::device::{all_buffer_stages, all_image_stages};
-use crate::hub::HUB;
-use crate::resource::TexturePlacement;
-use crate::swap_chain::SwapChainLink;
 use crate::{
+    conv,
+    device::{all_buffer_stages, all_image_stages},
+    hub::HUB,
+    resource::TexturePlacement,
+    swap_chain::SwapChainLink,
     BufferId, BufferUsageFlags, CommandBufferId, Extent3d, Origin3d, TextureId, TextureUsageFlags,
 };
 
+use copyless::VecHelper as _;
 use hal::command::RawCommandBuffer;
 
 use std::iter;
+
 
 const BITS_PER_BYTE: u32 = 8;
 
@@ -130,7 +132,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     });
 
     if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
-        cmb.swap_chain_links.push(SwapChainLink {
+        cmb.swap_chain_links.alloc().init(SwapChainLink {
             swap_chain_id: link.swap_chain_id.clone(),
             epoch: *link.epoch.lock(),
             image_index: link.image_index,
@@ -306,7 +308,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     });
 
     if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
-        cmb.swap_chain_links.push(SwapChainLink {
+        cmb.swap_chain_links.alloc().init(SwapChainLink {
             swap_chain_id: link.swap_chain_id.clone(),
             epoch: *link.epoch.lock(),
             image_index: link.image_index,

@@ -1,15 +1,20 @@
-use crate::hub::{Epoch, Id, Index, NewId, Storage};
-use crate::resource::{BufferUsageFlags, TextureUsageFlags};
-use crate::{BufferId, RefCount, TextureId, TextureViewId};
+use crate::{
+    hub::{Epoch, Id, Index, NewId, Storage},
+    resource::{BufferUsageFlags, TextureUsageFlags},
+    BufferId, RefCount, TextureId, TextureViewId,
+};
 
 use bitflags::bitflags;
 use hal::backend::FastHashMap;
 
-use std::borrow::Borrow;
-use std::collections::hash_map::Entry;
-use std::marker::PhantomData;
-use std::mem;
-use std::ops::{BitOr, Range};
+use std::{
+    borrow::Borrow,
+    collections::hash_map::Entry,
+    marker::PhantomData,
+    mem,
+    ops::{BitOr, Range},
+};
+
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]

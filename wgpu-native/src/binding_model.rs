@@ -1,7 +1,13 @@
-use crate::track::TrackerSet;
-use crate::{BindGroupLayoutId, BufferId, LifeGuard, SamplerId, TextureViewId};
+use crate::{
+    track::TrackerSet,
+    BindGroupLayoutId, BufferId, LifeGuard, SamplerId, TextureViewId,
+};
 
+use arrayvec::ArrayVec;
 use bitflags::bitflags;
+
+
+pub const MAX_BIND_GROUPS: usize = 4;
 
 bitflags! {
     #[repr(transparent)]
@@ -22,6 +28,7 @@ pub enum BindingType {
 }
 
 #[repr(C)]
+#[derive(Clone, Debug, Hash)]
 pub struct BindGroupLayoutBinding {
     pub binding: u32,
     pub visibility: ShaderStageFlags,
@@ -36,6 +43,7 @@ pub struct BindGroupLayoutDescriptor {
 
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
+    pub(crate) bindings: Vec<BindGroupLayoutBinding>,
 }
 
 #[repr(C)]
@@ -46,7 +54,7 @@ pub struct PipelineLayoutDescriptor {
 
 pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
-    pub(crate) bind_group_layout_ids: Vec<BindGroupLayoutId>,
+    pub(crate) bind_group_layout_ids: ArrayVec<[BindGroupLayoutId; MAX_BIND_GROUPS]>,
 }
 
 #[repr(C)]

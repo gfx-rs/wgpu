@@ -13,8 +13,11 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use vec_map::VecMap;
 
-use std::ops;
-use std::sync::Arc;
+use std::{
+    ops,
+    sync::Arc,
+};
+
 
 pub(crate) type Index = u32;
 pub(crate) type Epoch = u32;

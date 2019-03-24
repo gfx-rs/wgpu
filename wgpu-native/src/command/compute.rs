@@ -1,14 +1,17 @@
-use crate::command::bind::Binder;
-use crate::hub::HUB;
-use crate::track::{Stitch, TrackerSet};
 use crate::{
+    command::bind::Binder,
+    hub::HUB,
+    track::{Stitch, TrackerSet},
     BindGroupId, CommandBuffer, CommandBufferId, ComputePassId, ComputePipelineId, Stored,
 };
 
-use hal;
-use hal::command::RawCommandBuffer;
+use hal::{
+    self,
+    command::RawCommandBuffer,
+};
 
 use std::iter;
+
 
 pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,

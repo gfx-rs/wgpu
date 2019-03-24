@@ -1,12 +1,15 @@
-use crate::hub::HUB;
-use crate::{AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
+use crate::{
+    hub::HUB,
+    AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle,
+};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
 
-use hal::{self, Instance as _Instance, PhysicalDevice as _PhysicalDevice};
+use hal::{self, Instance as _, PhysicalDevice as _};
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -173,7 +176,8 @@ pub fn adapter_create_device(adapter_id: AdapterId, _desc: &DeviceDescriptor) ->
     let adapter = &adapter_guard[adapter_id];
     let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    DeviceHandle::new(raw, adapter_id, queue_group, mem_props)
+    let limits = adapter.physical_device.limits();
+    DeviceHandle::new(raw, adapter_id, queue_group, mem_props, limits)
 }
 
 #[cfg(feature = "local")]
