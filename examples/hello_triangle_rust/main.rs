@@ -73,8 +73,8 @@ fn main() {
         &wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
             format: wgpu::TextureFormat::Bgra8Unorm,
-            width: size.width as u32,
-            height: size.height as u32,
+            width: size.width.round() as u32,
+            height: size.height.round() as u32,
         },
     );
 

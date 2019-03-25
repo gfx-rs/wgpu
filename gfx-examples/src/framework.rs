@@ -76,8 +76,8 @@ pub fn run<E: Example>(title: &str) {
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
         format: wgpu::TextureFormat::Bgra8Unorm,
-        width: size.width as u32,
-        height: size.height as u32,
+        width: size.width.round() as u32,
+        height: size.height.round() as u32,
     };
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
@@ -94,8 +94,8 @@ pub fn run<E: Example>(title: &str) {
             } => {
                 let physical = size.to_physical(window.get_hidpi_factor());
                 info!("Resizing to {:?}", physical);
-                sc_desc.width = physical.width as u32;
-                sc_desc.height = physical.height as u32;
+                sc_desc.width = physical.width.round() as u32;
+                sc_desc.height = physical.height.round() as u32;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
                 example.resize(&sc_desc, &mut device);
             }
