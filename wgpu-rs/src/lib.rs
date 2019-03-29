@@ -784,6 +784,10 @@ impl<'a> RenderPass<'a> {
         wgn::wgpu_render_pass_set_pipeline(self.id, pipeline.id);
     }
 
+    pub fn set_blend_color(&mut self, color: Color) {
+        wgn::wgpu_render_pass_set_blend_color(self.id, &color);
+    }
+
     pub fn set_index_buffer(&mut self, buffer: &Buffer, offset: u32) {
         wgn::wgpu_render_pass_set_index_buffer(self.id, buffer.id, offset);
     }
