@@ -1,6 +1,5 @@
-
 use crate::{
-    command::bind::Binder,
+    command::bind::{Binder, Expectation},
     conv,
     device::RenderPassContext,
     hub::HUB,
@@ -15,9 +14,22 @@ use hal::command::RawCommandBuffer;
 use std::{iter, slice};
 
 
+type BindGroupMask = u8;
+#[derive(Debug, PartialEq)]
+enum BlendColorStatus {
+    Unused,
+    Required,
+    Set,
+}
+
 #[derive(Debug, PartialEq)]
 enum DrawError {
     MissingBlendColor,
+    IncompatibleBindGroup {
+        index: u32,
+        //expected: BindGroupLayoutId,
+        //provided: Option<(BindGroupLayoutId, BindGroupId)>,
+    },
 }
 
 pub struct RenderPass<B: hal::Backend> {
@@ -26,7 +38,8 @@ pub struct RenderPass<B: hal::Backend> {
     context: RenderPassContext,
     binder: Binder,
     trackers: TrackerSet,
-    blend_color_set: i8,
+    incompatible_bind_group_mask: BindGroupMask,
+    blend_color_status: BlendColorStatus,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
@@ -41,14 +54,21 @@ impl<B: hal::Backend> RenderPass<B> {
             context,
             binder: Binder::default(),
             trackers: TrackerSet::new(),
-            blend_color_set: -1,
+            incompatible_bind_group_mask: 0,
+            blend_color_status: BlendColorStatus::Unused,
         }
     }
 
     fn is_ready(&self) -> Result<(), DrawError> {
         //TODO: vertex buffers
-        //TODO: bind groups
-        if self.blend_color_set == 0 {
+        if self.incompatible_bind_group_mask != 0 {
+            let index = self.incompatible_bind_group_mask.trailing_zeros() as u32;
+            //let (expected, provided) = self.binder.entries[index as usize].info();
+            return Err(DrawError::IncompatibleBindGroup {
+                index,
+            });
+        }
+        if self.blend_color_status == BlendColorStatus::Required {
             return Err(DrawError::MissingBlendColor)
         }
         Ok(())
@@ -202,6 +222,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
         pass.binder
             .provide_entry(index as usize, bind_group_id, bind_group)
     {
+        pass.incompatible_bind_group_mask &= !(1u8 << index);
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
         unsafe {
@@ -230,8 +251,8 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         "The render pipeline is not compatible with the pass!"
     );
 
-    if pipeline.flags.contains(PipelineFlags::BLEND_COLOR) && pass.blend_color_set < 0 {
-        pass.blend_color_set = 0;
+    if pipeline.flags.contains(PipelineFlags::BLEND_COLOR) && pass.blend_color_status == BlendColorStatus::Unused {
+        pass.blend_color_status = BlendColorStatus::Required;
     }
 
     unsafe {
@@ -246,6 +267,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
     let bind_group_guard = HUB.bind_groups.read();
 
+    pass.incompatible_bind_group_mask &= (1u8 << pipeline_layout.bind_group_layout_ids.len()) - 1;
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
     pass.binder
         .ensure_length(pipeline_layout.bind_group_layout_ids.len());
@@ -257,15 +279,22 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
     {
-        if let Some(bg_id) = entry.expect_layout(bgl_id) {
-            let desc_set = &bind_group_guard[bg_id].raw;
-            unsafe {
-                pass.raw.bind_graphics_descriptor_sets(
-                    &pipeline_layout.raw,
-                    index,
-                    iter::once(desc_set),
-                    &[],
-                );
+        match entry.expect_layout(bgl_id) {
+            Expectation::Unchanged => {}
+            Expectation::Mismatch => {
+                pass.incompatible_bind_group_mask |= 1u8 << index;
+            }
+            Expectation::Match(bg_id) => {
+                pass.incompatible_bind_group_mask &= !(1u8 << index);
+                let desc_set = &bind_group_guard[bg_id].raw;
+                unsafe {
+                    pass.raw.bind_graphics_descriptor_sets(
+                        &pipeline_layout.raw,
+                        index,
+                        iter::once(desc_set),
+                        &[],
+                    );
+                }
             }
         }
     }
@@ -279,7 +308,7 @@ pub extern "C" fn wgpu_render_pass_set_blend_color(
     let mut pass_guard = HUB.render_passes.write();
     let pass = &mut pass_guard[pass_id];
 
-    pass.blend_color_set = 1;
+    pass.blend_color_status = BlendColorStatus::Set;
 
     unsafe {
         pass.raw.set_blend_constants(conv::map_color(color));
