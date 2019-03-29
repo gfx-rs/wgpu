@@ -958,6 +958,7 @@ pub fn device_create_bind_group(
                     .unwrap();
                 let alignment = match decl.ty {
                     binding_model::BindingType::UniformBuffer => device.limits.min_uniform_buffer_offset_alignment,
+                    binding_model::BindingType::StorageBuffer => device.limits.min_storage_buffer_offset_alignment,
                     _ => panic!("Mismatched buffer binding for {:?}", decl),
                 };
                 assert_eq!(bb.offset as hal::buffer::Offset % alignment, 0,
@@ -966,10 +967,12 @@ pub fn device_create_bind_group(
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
             binding_model::BindingResource::Sampler(id) => {
+                assert_eq!(decl.ty, binding_model::BindingType::Sampler);
                 let sampler = &sampler_guard[id];
                 hal::pso::Descriptor::Sampler(&sampler.raw)
             }
             binding_model::BindingResource::TextureView(id) => {
+                assert_eq!(decl.ty, binding_model::BindingType::SampledTexture);
                 let view = &texture_view_guard[id];
                 used.views.query(id, &view.life_guard.ref_count, DummyUsage);
                 used.textures
