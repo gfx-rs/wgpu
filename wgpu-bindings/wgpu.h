@@ -5,6 +5,8 @@
 
 #define WGPUBITS_PER_BYTE 8
 
+#define WGPUMAX_BIND_GROUPS 4
+
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
   WGPUAddressMode_Repeat = 1,
