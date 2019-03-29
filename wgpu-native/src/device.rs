@@ -138,6 +138,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
         for i in (0..self.active.len()).rev() {
             if unsafe { device.get_fence_status(&self.active[i].fence).unwrap() } {
                 let a = self.active.swap_remove(i);
+                trace!("Active submission {} is done", a.index);
                 last_done = last_done.max(a.index);
                 self.free.extend(a.resources.into_iter().map(|(_, r)| r));
                 unsafe {
@@ -1087,7 +1088,7 @@ pub extern "C" fn wgpu_queue_submit(
     let command_buffer_ids =
         unsafe { slice::from_raw_parts(command_buffer_ptr, command_buffer_count) };
 
-    let (old_submit_index, fence) = {
+    let (submit_index, fence) = {
         let mut device_guard = HUB.devices.write();
         let device = &mut device_guard[queue_id];
 
@@ -1098,7 +1099,7 @@ pub extern "C" fn wgpu_queue_submit(
         destroyed.triage_referenced(&mut *trackers);
         destroyed.triage_framebuffers(&mut *device.framebuffers.lock());
 
-        let old_submit_index = device
+        let submit_index = 1 + device
             .life_guard
             .submission_index
             .fetch_add(1, Ordering::Relaxed);
@@ -1117,26 +1118,23 @@ pub extern "C" fn wgpu_queue_submit(
                 let comb = &mut command_buffer_guard[cmb_id];
                 swap_chain_links.extend(comb.swap_chain_links.drain(..));
                 // update submission IDs
-                comb.life_guard
-                    .submission_index
-                    .store(old_submit_index, Ordering::Release);
                 for id in comb.trackers.buffers.used() {
                     buffer_guard[id]
                         .life_guard
                         .submission_index
-                        .store(old_submit_index, Ordering::Release);
+                        .store(submit_index, Ordering::Release);
                 }
                 for id in comb.trackers.textures.used() {
                     texture_guard[id]
                         .life_guard
                         .submission_index
-                        .store(old_submit_index, Ordering::Release);
+                        .store(submit_index, Ordering::Release);
                 }
                 for id in comb.trackers.views.used() {
                     texture_view_guard[id]
                         .life_guard
                         .submission_index
-                        .store(old_submit_index, Ordering::Release);
+                        .store(submit_index, Ordering::Release);
                 }
 
                 // execute resource transitions
@@ -1201,7 +1199,7 @@ pub extern "C" fn wgpu_queue_submit(
             }
         }
 
-        (old_submit_index, fence)
+        (submit_index, fence)
     };
 
     // No need for write access to the device from here on out
@@ -1214,7 +1212,7 @@ pub extern "C" fn wgpu_queue_submit(
         destroyed.handle_mapping(&device.raw, &device.limits);
 
         destroyed.active.alloc().init(ActiveSubmission {
-            index: old_submit_index + 1,
+            index: submit_index,
             fence,
             resources: Vec::new(),
             mapped: Vec::new(),
@@ -1230,7 +1228,7 @@ pub extern "C" fn wgpu_queue_submit(
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {
         let cmd_buf = HUB.command_buffers.unregister(cmb_id);
-        device.com_allocator.after_submit(cmd_buf);
+        device.com_allocator.after_submit(cmd_buf, submit_index);
     }
 }
 
@@ -1760,10 +1758,7 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
         .com_allocator
         .allocate(buffer.device_id.clone(), &device.raw);
     // mark as used by the next submission, conservatively
-    let last_submit_index = device.life_guard.submission_index.load(Ordering::Acquire);
-    comb.life_guard
-        .submission_index
-        .store(last_submit_index + 1, Ordering::Release);
+    let submit_index = 1 + device.life_guard.submission_index.load(Ordering::Acquire);
     unsafe {
         let raw = comb.raw.last_mut().unwrap();
         raw.begin(
@@ -1792,7 +1787,7 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
             .submit::<_, _, <back::Backend as hal::Backend>::Semaphore, _, _>(submission, None);
     }
 
-    device.com_allocator.after_submit(comb);
+    device.com_allocator.after_submit(comb, submit_index);
 }
 
 #[no_mangle]
