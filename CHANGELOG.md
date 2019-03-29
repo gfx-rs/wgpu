@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.2.5 (31-03-2019)
+  - fixed submission tracking
+  - added support for blend colors
+  - fixed bind group compatibility at the gfx-hal level
+  - validating the bind groups and blend colors
+
 ## v0.2.3 (20-03-2019)
   - fixed vertex format mapping
   - fixed building with "empty" backend on Windows
