@@ -14,7 +14,6 @@ use hal::command::RawCommandBuffer;
 use std::{iter, slice};
 
 
-type BindGroupMask = u8;
 #[derive(Debug, PartialEq)]
 enum BlendColorStatus {
     Unused,
@@ -38,7 +37,6 @@ pub struct RenderPass<B: hal::Backend> {
     context: RenderPassContext,
     binder: Binder,
     trackers: TrackerSet,
-    incompatible_bind_group_mask: BindGroupMask,
     blend_color_status: BlendColorStatus,
 }
 
@@ -54,18 +52,17 @@ impl<B: hal::Backend> RenderPass<B> {
             context,
             binder: Binder::default(),
             trackers: TrackerSet::new(),
-            incompatible_bind_group_mask: 0,
             blend_color_status: BlendColorStatus::Unused,
         }
     }
 
     fn is_ready(&self) -> Result<(), DrawError> {
         //TODO: vertex buffers
-        if self.incompatible_bind_group_mask != 0 {
-            let index = self.incompatible_bind_group_mask.trailing_zeros() as u32;
+        let bind_mask = self.binder.invalid_mask();
+        if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DrawError::IncompatibleBindGroup {
-                index,
+                index: bind_mask.trailing_zeros() as u32,
             });
         }
         if self.blend_color_status == BlendColorStatus::Required {
@@ -218,22 +215,22 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
 
     pass.trackers.consume_by_extend(&bind_group.used);
 
-    if let Some(pipeline_layout_id) =
+    if let Some((pipeline_layout_id, follow_up)) =
         pass.binder
             .provide_entry(index as usize, bind_group_id, bind_group)
     {
-        pass.incompatible_bind_group_mask &= !(1u8 << index);
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
-        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+        let bind_groups = iter::once(&bind_group.raw)
+            .chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
         unsafe {
             pass.raw.bind_graphics_descriptor_sets(
-                &pipeline_layout.raw,
+                &&pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
-                iter::once(&bind_group.raw),
+                bind_groups,
                 &[],
             );
         }
-    }
+    };
 }
 
 #[no_mangle]
@@ -267,10 +264,8 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
     let bind_group_guard = HUB.bind_groups.read();
 
-    pass.incompatible_bind_group_mask &= (1u8 << pipeline_layout.bind_group_layout_ids.len()) - 1;
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder
-        .ensure_length(pipeline_layout.bind_group_layout_ids.len());
+    pass.binder.cut_expectations(pipeline_layout.bind_group_layout_ids.len());
 
     for (index, (entry, &bgl_id)) in pass
         .binder
@@ -279,22 +274,15 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
     {
-        match entry.expect_layout(bgl_id) {
-            Expectation::Unchanged => {}
-            Expectation::Mismatch => {
-                pass.incompatible_bind_group_mask |= 1u8 << index;
-            }
-            Expectation::Match(bg_id) => {
-                pass.incompatible_bind_group_mask &= !(1u8 << index);
-                let desc_set = &bind_group_guard[bg_id].raw;
-                unsafe {
-                    pass.raw.bind_graphics_descriptor_sets(
-                        &pipeline_layout.raw,
-                        index,
-                        iter::once(desc_set),
-                        &[],
-                    );
-                }
+        if let Expectation::Match(bg_id) = entry.expect_layout(bgl_id) {
+            let desc_set = &bind_group_guard[bg_id].raw;
+            unsafe {
+                pass.raw.bind_graphics_descriptor_sets(
+                    &pipeline_layout.raw,
+                    index,
+                    iter::once(desc_set),
+                    &[],
+                );
             }
         }
     }
