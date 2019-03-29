@@ -1,4 +1,4 @@
-use crate::command::bind::Binder;
+use crate::command::bind::{Binder, Expectation};
 use crate::hub::HUB;
 use crate::track::{Stitch, TrackerSet};
 use crate::{
@@ -119,7 +119,7 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
     {
-        if let Some(bg_id) = entry.expect_layout(bgl_id) {
+        if let Expectation::Match(bg_id) = entry.expect_layout(bgl_id) {
             let desc_set = &bing_group_guard[bg_id].raw;
             unsafe {
                 pass.raw.bind_compute_descriptor_sets(

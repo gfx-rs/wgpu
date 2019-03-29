@@ -1,8 +1,15 @@
 use crate::{BindGroupHandle, BindGroupId, BindGroupLayoutId, PipelineLayoutId, Stored};
 
-pub struct BindGroupPair {
+
+struct BindGroupPair {
     layout_id: BindGroupLayoutId,
     group_id: Stored<BindGroupId>,
+}
+
+pub enum Expectation {
+    Unchanged,
+    Match(BindGroupId),
+    Mismatch,
 }
 
 #[derive(Default)]
@@ -38,7 +45,7 @@ impl BindGroupEntry {
     pub fn expect_layout(
         &mut self,
         bind_group_layout_id: BindGroupLayoutId,
-    ) -> Option<BindGroupId> {
+    ) -> Expectation {
         let some = Some(bind_group_layout_id);
         if self.expected_layout_id != some {
             self.expected_layout_id = some;
@@ -46,12 +53,19 @@ impl BindGroupEntry {
                 Some(BindGroupPair {
                     layout_id,
                     ref group_id,
-                }) if layout_id == bind_group_layout_id => Some(group_id.value),
-                Some(_) | None => None,
+                }) if layout_id == bind_group_layout_id => Expectation::Match(group_id.value),
+                Some(_) | None => Expectation::Mismatch,
             }
         } else {
-            None
+            Expectation::Unchanged
         }
+    }
+
+    pub fn _info(&self) -> (BindGroupLayoutId, Option<(BindGroupLayoutId, BindGroupId)>) {
+        (
+            self.expected_layout_id.unwrap(),
+            self.provided.as_ref().map(|pair| (pair.layout_id, pair.group_id.value)),
+        )
     }
 }
 
