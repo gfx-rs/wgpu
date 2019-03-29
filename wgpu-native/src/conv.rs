@@ -571,7 +571,7 @@ pub fn map_load_store_ops(
     }
 }
 
-pub fn map_color(color: Color) -> hal::pso::ColorValue {
+pub fn map_color(color: &Color) -> hal::pso::ColorValue {
     [color.r, color.g, color.b, color.a]
 }
 

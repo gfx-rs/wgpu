@@ -1435,10 +1435,16 @@ pub fn device_create_render_pipeline(
         depth_stencil: depth_stencil_state.map(|state| state.format),
     };
 
+    let mut flags = pipeline::PipelineFlags::empty();
+    if color_states.iter().any(|state| state.color.uses_color() | state.alpha.uses_color()) {
+        flags |= pipeline::PipelineFlags::BLEND_COLOR;
+    }
+
     pipeline::RenderPipeline {
         raw: pipeline,
         layout_id: desc.layout,
         pass_context,
+        flags,
     }
 }
 

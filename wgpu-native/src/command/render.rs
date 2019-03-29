@@ -1,10 +1,13 @@
+
 use crate::{
     command::bind::Binder,
+    conv,
     device::RenderPassContext,
     hub::HUB,
+    pipeline::PipelineFlags,
     resource::BufferUsageFlags,
     track::{Stitch, TrackerSet},
-    BindGroupId, BufferId, CommandBuffer, CommandBufferId, RenderPassId, RenderPipelineId, Stored,
+    BindGroupId, BufferId, Color, CommandBuffer, CommandBufferId, RenderPassId, RenderPipelineId, Stored,
 };
 
 use hal::command::RawCommandBuffer;
@@ -12,12 +15,18 @@ use hal::command::RawCommandBuffer;
 use std::{iter, slice};
 
 
+#[derive(Debug, PartialEq)]
+enum DrawError {
+    MissingBlendColor,
+}
+
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
     context: RenderPassContext,
     binder: Binder,
     trackers: TrackerSet,
+    blend_color_set: i8,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
@@ -32,7 +41,17 @@ impl<B: hal::Backend> RenderPass<B> {
             context,
             binder: Binder::default(),
             trackers: TrackerSet::new(),
+            blend_color_set: -1,
         }
+    }
+
+    fn is_ready(&self) -> Result<(), DrawError> {
+        //TODO: vertex buffers
+        //TODO: bind groups
+        if self.blend_color_set == 0 {
+            return Err(DrawError::MissingBlendColor)
+        }
+        Ok(())
     }
 }
 
@@ -132,8 +151,12 @@ pub extern "C" fn wgpu_render_pass_draw(
     first_vertex: u32,
     first_instance: u32,
 ) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+    pass.is_ready().unwrap();
+
     unsafe {
-        HUB.render_passes.write()[pass_id].raw.draw(
+        pass.raw.draw(
             first_vertex..first_vertex + vertex_count,
             first_instance..first_instance + instance_count,
         );
@@ -149,8 +172,12 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
     base_vertex: i32,
     first_instance: u32,
 ) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+    pass.is_ready().unwrap();
+
     unsafe {
-        HUB.render_passes.write()[pass_id].raw.draw_indexed(
+        pass.raw.draw_indexed(
             first_index..first_index + index_count,
             base_vertex,
             first_instance..first_instance + instance_count,
@@ -203,6 +230,10 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         "The render pipeline is not compatible with the pass!"
     );
 
+    if pipeline.flags.contains(PipelineFlags::BLEND_COLOR) && pass.blend_color_set < 0 {
+        pass.blend_color_set = 0;
+    }
+
     unsafe {
         pass.raw.bind_graphics_pipeline(&pipeline.raw);
     }
@@ -237,5 +268,20 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
                 );
             }
         }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_blend_color(
+    pass_id: RenderPassId,
+    color: &Color,
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+
+    pass.blend_color_set = 1;
+
+    unsafe {
+        pass.raw.set_blend_constants(conv::map_color(color));
     }
 }

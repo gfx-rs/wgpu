@@ -321,7 +321,7 @@ pub fn command_encoder_begin_render_pass(
         .iter()
         .map(|at| {
             //TODO: integer types?
-            let value = hal::command::ClearColor::Float(conv::map_color(at.clear_color));
+            let value = hal::command::ClearColor::Float(conv::map_color(&at.clear_color));
             hal::command::ClearValueRaw::from(hal::command::ClearValue::Color(value))
         })
         .chain(depth_stencil_attachment.map(|at| {

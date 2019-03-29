@@ -63,6 +63,16 @@ impl BlendDescriptor {
         dst_factor: BlendFactor::Zero,
         operation: BlendOperation::Add,
     };
+
+    pub fn uses_color(&self) -> bool {
+        match (self.src_factor, self.dst_factor) {
+            (BlendFactor::BlendColor, _) |
+            (BlendFactor::OneMinusBlendColor, _) |
+            (_, BlendFactor::BlendColor)  |
+            (_, BlendFactor::OneMinusBlendColor) => true,
+            (_, _) => false,
+        }
+    }
 }
 
 #[repr(C)]
@@ -279,8 +289,16 @@ pub struct RenderPipelineDescriptor {
     pub sample_count: u32,
 }
 
+bitflags! {
+    #[repr(transparent)]
+    pub struct PipelineFlags: u32 {
+        const BLEND_COLOR = 1;
+    }
+}
+
 pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) raw: B::GraphicsPipeline,
     pub(crate) layout_id: PipelineLayoutId,
     pub(crate) pass_context: RenderPassContext,
+    pub(crate) flags: PipelineFlags,
 }
