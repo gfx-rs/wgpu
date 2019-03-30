@@ -72,6 +72,13 @@ int main() {
                                                .bindings = NULL,
                                                .bindings_length = 0,
                                            });
+  WGPUBindGroupId bind_group =
+      wgpu_device_create_bind_group(device,
+                                    &(WGPUBindGroupDescriptor){
+                                        .layout = bind_group_layout,
+                                        .bindings = NULL,
+                                        .bindings_length = 0,
+                                    });
   WGPUBindGroupLayoutId bind_group_layouts[BIND_GROUP_LAYOUTS_LENGTH] = {
       bind_group_layout};
 
@@ -208,6 +215,7 @@ int main() {
         });
 
     wgpu_render_pass_set_pipeline(rpass, render_pipeline);
+    wgpu_render_pass_set_bind_group(rpass, 0, bind_group);
     wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
     WGPUQueueId queue = wgpu_device_get_queue(device);
     WGPUCommandBufferId cmd_buf = wgpu_render_pass_end_pass(rpass);
