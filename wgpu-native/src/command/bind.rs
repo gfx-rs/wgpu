@@ -14,7 +14,7 @@ pub struct BindGroupPair {
     group_id: Stored<BindGroupId>,
 }
 
-pub enum Expectation {
+pub enum LayoutChange {
     Unchanged,
     Match(BindGroupId),
     Mismatch,
@@ -78,7 +78,7 @@ impl BindGroupEntry {
     pub fn expect_layout(
         &mut self,
         bind_group_layout_id: BindGroupLayoutId,
-    ) -> Expectation {
+    ) -> LayoutChange {
         let some = Some(bind_group_layout_id);
         if self.expected_layout_id != some {
             self.expected_layout_id = some;
@@ -86,11 +86,11 @@ impl BindGroupEntry {
                 Some(BindGroupPair {
                     layout_id,
                     ref group_id,
-                }) if layout_id == bind_group_layout_id => Expectation::Match(group_id.value),
-                Some(_) | None => Expectation::Mismatch,
+                }) if layout_id == bind_group_layout_id => LayoutChange::Match(group_id.value),
+                Some(_) | None => LayoutChange::Mismatch,
             }
         } else {
-            Expectation::Unchanged
+            LayoutChange::Unchanged
         }
     }
 
@@ -121,13 +121,13 @@ pub struct Binder {
 }
 
 impl Binder {
-    pub(crate) fn cut_expectations(&mut self, length: usize) {
+    pub(crate) fn reset_expectations(&mut self, length: usize) {
         for entry in self.entries[length ..].iter_mut() {
             entry.expected_layout_id = None;
         }
     }
 
-    /// Attemt to set the value of the specified bind group index.
+    /// Attempt to set the value of the specified bind group index.
     /// Returns Some() when the new bind group is ready to be actually bound
     /// (i.e. compatible with current expectations). Also returns an iterator
     /// of bind group IDs to be bound with it: those are compatible bind groups

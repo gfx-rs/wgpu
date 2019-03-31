@@ -1,5 +1,5 @@
 use crate::{
-    command::bind::{Binder, Expectation},
+    command::bind::{Binder, LayoutChange},
     conv,
     device::RenderPassContext,
     hub::HUB,
@@ -265,7 +265,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let bind_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder.cut_expectations(pipeline_layout.bind_group_layout_ids.len());
+    pass.binder.reset_expectations(pipeline_layout.bind_group_layout_ids.len());
 
     for (index, (entry, &bgl_id)) in pass
         .binder
@@ -274,7 +274,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
     {
-        if let Expectation::Match(bg_id) = entry.expect_layout(bgl_id) {
+        if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
             let desc_set = &bind_group_guard[bg_id].raw;
             unsafe {
                 pass.raw.bind_graphics_descriptor_sets(
