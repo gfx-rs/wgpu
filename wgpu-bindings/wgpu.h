@@ -5,6 +5,8 @@
 
 #define WGPUBITS_PER_BYTE 8
 
+#define WGPUMAX_BIND_GROUPS 4
+
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
   WGPUAddressMode_Repeat = 1,
@@ -617,6 +619,8 @@ typedef struct {
 
 #define WGPUColor_WHITE (WGPUColor){ .r = 1, .g = 1, .b = 1, .a = 1 }
 
+#define WGPUPipelineFlags_BLEND_COLOR 1
+
 #define WGPUShaderStageFlags_COMPUTE 4
 
 #define WGPUShaderStageFlags_FRAGMENT 2
@@ -791,6 +795,8 @@ WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
 void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id);
+
+void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
 
 void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
                                        WGPUBufferId buffer_id,

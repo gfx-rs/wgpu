@@ -1,4 +1,4 @@
-use crate::command::bind::Binder;
+use crate::command::bind::{Binder, LayoutChange};
 use crate::hub::HUB;
 use crate::track::{Stitch, TrackerSet};
 use crate::{
@@ -70,20 +70,22 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
         &*HUB.textures.read(),
     );
 
-    if let Some(pipeline_layout_id) =
+    if let Some((pipeline_layout_id, follow_up)) =
         pass.binder
             .provide_entry(index as usize, bind_group_id, bind_group)
     {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
+        let bind_groups = iter::once(&bind_group.raw)
+            .chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
         unsafe {
             pass.raw.bind_compute_descriptor_sets(
                 &pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
-                iter::once(&bind_group.raw),
+                bind_groups,
                 &[],
             );
         }
-    }
+    };
 }
 
 #[no_mangle]
@@ -106,11 +108,10 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
 
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
     let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-    let bing_group_guard = HUB.bind_groups.read();
+    let bind_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder
-        .ensure_length(pipeline_layout.bind_group_layout_ids.len());
+    pass.binder.reset_expectations(pipeline_layout.bind_group_layout_ids.len());
 
     for (index, (entry, &bgl_id)) in pass
         .binder
@@ -119,8 +120,8 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
     {
-        if let Some(bg_id) = entry.expect_layout(bgl_id) {
-            let desc_set = &bing_group_guard[bg_id].raw;
+        if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
+            let desc_set = &bind_group_guard[bg_id].raw;
             unsafe {
                 pass.raw.bind_compute_descriptor_sets(
                     &pipeline_layout.raw,

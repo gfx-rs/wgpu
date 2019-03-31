@@ -1,15 +1,36 @@
-use crate::command::bind::Binder;
+use crate::conv;
+use crate::command::bind::{Binder, LayoutChange};
 use crate::device::RenderPassContext;
 use crate::hub::HUB;
+use crate::pipeline::PipelineFlags;
 use crate::resource::BufferUsageFlags;
 use crate::track::{Stitch, TrackerSet};
 use crate::{
-    BindGroupId, BufferId, CommandBuffer, CommandBufferId, RenderPassId, RenderPipelineId, Stored,
+    BindGroupId, BufferId, CommandBuffer, CommandBufferId, Color,
+    RenderPassId, RenderPipelineId, Stored,
 };
 
 use hal::command::RawCommandBuffer;
 
 use std::{iter, slice};
+
+
+#[derive(Debug, PartialEq)]
+enum BlendColorStatus {
+    Unused,
+    Required,
+    Set,
+}
+
+#[derive(Debug, PartialEq)]
+enum DrawError {
+    MissingBlendColor,
+    IncompatibleBindGroup {
+        index: u32,
+        //expected: BindGroupLayoutId,
+        //provided: Option<(BindGroupLayoutId, BindGroupId)>,
+    },
+}
 
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
@@ -17,6 +38,7 @@ pub struct RenderPass<B: hal::Backend> {
     context: RenderPassContext,
     binder: Binder,
     trackers: TrackerSet,
+    blend_color_status: BlendColorStatus,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
@@ -31,7 +53,23 @@ impl<B: hal::Backend> RenderPass<B> {
             context,
             binder: Binder::default(),
             trackers: TrackerSet::new(),
+            blend_color_status: BlendColorStatus::Unused,
         }
+    }
+
+    fn is_ready(&self) -> Result<(), DrawError> {
+        //TODO: vertex buffers
+        let bind_mask = self.binder.invalid_mask();
+        if bind_mask != 0 {
+            //let (expected, provided) = self.binder.entries[index as usize].info();
+            return Err(DrawError::IncompatibleBindGroup {
+                index: bind_mask.trailing_zeros() as u32,
+            });
+        }
+        if self.blend_color_status == BlendColorStatus::Required {
+            return Err(DrawError::MissingBlendColor)
+        }
+        Ok(())
     }
 }
 
@@ -131,8 +169,12 @@ pub extern "C" fn wgpu_render_pass_draw(
     first_vertex: u32,
     first_instance: u32,
 ) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+    pass.is_ready().unwrap();
+
     unsafe {
-        HUB.render_passes.write()[pass_id].raw.draw(
+        pass.raw.draw(
             first_vertex..first_vertex + vertex_count,
             first_instance..first_instance + instance_count,
         );
@@ -148,8 +190,12 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
     base_vertex: i32,
     first_instance: u32,
 ) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+    pass.is_ready().unwrap();
+
     unsafe {
-        HUB.render_passes.write()[pass_id].raw.draw_indexed(
+        pass.raw.draw_indexed(
             first_index..first_index + index_count,
             base_vertex,
             first_instance..first_instance + instance_count,
@@ -170,21 +216,22 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
 
     pass.trackers.consume_by_extend(&bind_group.used);
 
-    if let Some(pipeline_layout_id) =
+    if let Some((pipeline_layout_id, follow_up)) =
         pass.binder
             .provide_entry(index as usize, bind_group_id, bind_group)
     {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
-        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
+        let bind_groups = iter::once(&bind_group.raw)
+            .chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
         unsafe {
             pass.raw.bind_graphics_descriptor_sets(
-                &pipeline_layout.raw,
+                &&pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
-                iter::once(&bind_group.raw),
+                bind_groups,
                 &[],
             );
         }
-    }
+    };
 }
 
 #[no_mangle]
@@ -202,6 +249,10 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         "The render pipeline is not compatible with the pass!"
     );
 
+    if pipeline.flags.contains(PipelineFlags::BLEND_COLOR) && pass.blend_color_status == BlendColorStatus::Unused {
+        pass.blend_color_status = BlendColorStatus::Required;
+    }
+
     unsafe {
         pass.raw.bind_graphics_pipeline(&pipeline.raw);
     }
@@ -215,8 +266,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let bind_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder
-        .ensure_length(pipeline_layout.bind_group_layout_ids.len());
+    pass.binder.reset_expectations(pipeline_layout.bind_group_layout_ids.len());
 
     for (index, (entry, &bgl_id)) in pass
         .binder
@@ -225,7 +275,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         .zip(&pipeline_layout.bind_group_layout_ids)
         .enumerate()
     {
-        if let Some(bg_id) = entry.expect_layout(bgl_id) {
+        if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
             let desc_set = &bind_group_guard[bg_id].raw;
             unsafe {
                 pass.raw.bind_graphics_descriptor_sets(
@@ -236,5 +286,20 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
                 );
             }
         }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_blend_color(
+    pass_id: RenderPassId,
+    color: &Color,
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+
+    pass.blend_color_status = BlendColorStatus::Set;
+
+    unsafe {
+        pass.raw.set_blend_constants(conv::map_color(color));
     }
 }
