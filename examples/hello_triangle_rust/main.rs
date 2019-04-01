@@ -21,6 +21,10 @@ fn main() {
 
     let bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { bindings: &[] });
+    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout: &bind_group_layout,
+        bindings: &[],
+    });
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[&bind_group_layout],
     });
@@ -113,6 +117,7 @@ fn main() {
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&render_pipeline);
+            rpass.set_bind_group(0, &bind_group);
             rpass.draw(0..3, 0..1);
         }
 

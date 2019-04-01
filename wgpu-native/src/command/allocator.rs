@@ -9,6 +9,7 @@ use hal::{
     pool::RawCommandPool,
     Device,
 };
+use log::trace;
 use parking_lot::Mutex;
 
 use std::{
@@ -16,6 +17,7 @@ use std::{
     sync::atomic::Ordering,
     thread,
 };
+
 
 struct CommandPool<B: hal::Backend> {
     raw: B::CommandPool,
@@ -109,7 +111,9 @@ impl<B: hal::Backend> CommandAllocator<B> {
         pool.available.pop().unwrap()
     }
 
-    pub fn after_submit(&self, cmd_buf: CommandBuffer<B>) {
+    pub fn after_submit(&self, cmd_buf: CommandBuffer<B>, submit_index: SubmissionIndex) {
+        cmd_buf.life_guard.submission_index
+            .store(submit_index, Ordering::Release);
         self.inner.lock().pending.push(cmd_buf);
     }
 
@@ -122,6 +126,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                 .load(Ordering::Acquire);
             if index <= last_done {
                 let cmd_buf = inner.pending.swap_remove(i);
+                trace!("recycling comb submitted in {} when {} is done", index, last_done);
                 inner.recycle(cmd_buf);
             }
         }
