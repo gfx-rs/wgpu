@@ -13,7 +13,7 @@ The implementation consists of the following parts:
 
 Supported platforms:
   - Vulkan on Windows and Linux
-  - D3D12 and D3D12 on Windows
+  - D3D12 and D3D11 on Windows
   - Metal on macOS and iOS
 
 ## Examples
