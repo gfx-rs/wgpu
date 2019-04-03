@@ -1120,6 +1120,7 @@ pub extern "C" fn wgpu_queue_submit(
             for &cmb_id in command_buffer_ids {
                 let comb = &mut command_buffer_guard[cmb_id];
                 swap_chain_links.extend(comb.swap_chain_links.drain(..));
+
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
                     buffer_guard[id]
@@ -1172,18 +1173,21 @@ pub extern "C" fn wgpu_queue_submit(
             let command_buffer_guard = HUB.command_buffers.read();
             let surface_guard = HUB.surfaces.read();
 
-            let wait_semaphores = swap_chain_links.into_iter().flat_map(|link| {
-                //TODO: check the epoch
-                surface_guard[link.swap_chain_id]
-                    .swap_chain
-                    .as_ref()
-                    .map(|swap_chain| {
-                        (
-                            &swap_chain.frames[link.image_index as usize].sem_available,
-                            hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                        )
-                    })
-            });
+            let wait_semaphores = swap_chain_links
+                .into_iter()
+                .flat_map(|link| {
+                    let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref()?;
+                    let frame = &swap_chain.frames[link.image_index as usize];
+                    let mut wait_for_epoch = frame.wait_for_epoch.lock();
+                    let current_epoch = *wait_for_epoch.as_ref()?;
+                    if link.epoch < current_epoch {
+                        None
+                    } else {
+                        debug_assert_eq!(link.epoch, current_epoch);
+                        *wait_for_epoch = None;
+                        Some((&frame.sem_available, hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT))
+                    }
+                });
 
             let submission =
                 hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
@@ -1704,6 +1708,7 @@ pub fn swap_chain_populate_textures(
             fence: device.raw.create_fence(true).unwrap(),
             sem_available: device.raw.create_semaphore().unwrap(),
             sem_present: device.raw.create_semaphore().unwrap(),
+            wait_for_epoch: Mutex::new(None),
             comb: swap_chain.command_pool.acquire_command_buffer(),
         });
     }
