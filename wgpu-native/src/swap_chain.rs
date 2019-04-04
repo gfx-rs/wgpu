@@ -22,8 +22,10 @@ pub(crate) struct SwapChainLink<E> {
 }
 
 impl SwapChainLink<Mutex<SwapImageEpoch>> {
-    pub fn bump_epoch(&self) {
-        *self.epoch.lock() += 1;
+    pub fn bump_epoch(&self) -> SwapImageEpoch {
+        let mut epoch = self.epoch.lock();
+        *epoch += 1;
+        *epoch
     }
 }
 
@@ -47,6 +49,7 @@ pub(crate) struct Frame<B: hal::Backend> {
     pub fence: B::Fence,
     pub sem_available: B::Semaphore,
     pub sem_present: B::Semaphore,
+    pub wait_for_epoch: Mutex<Option<SwapImageEpoch>>,
     pub comb: hal::command::CommandBuffer<B, hal::General, hal::command::MultiShot>,
 }
 
@@ -146,10 +149,12 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
     }
     mem::swap(&mut frame.sem_available, &mut swap_chain.sem_available);
 
-    HUB.textures.read()[frame.texture_id.value]
+    let frame_epoch = HUB.textures.read()[frame.texture_id.value]
         .placement
         .as_swap_chain()
         .bump_epoch();
+
+    *frame.wait_for_epoch.lock() = Some(frame_epoch);
 
     SwapChainOutput {
         texture_id: frame.texture_id.value,

@@ -7,6 +7,8 @@
 
 #define WGPUMAX_BIND_GROUPS 4
 
+#define WGPUMAX_COLOR_TARGETS 4
+
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
   WGPUAddressMode_Repeat = 1,
