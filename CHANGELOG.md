@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.2.6 (04-04-2019)
+  - fixed frame acquisition GPU waits
+
 ## v0.2.5 (31-03-2019)
   - fixed submission tracking
   - added support for blend colors
