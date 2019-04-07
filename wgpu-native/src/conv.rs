@@ -623,3 +623,10 @@ pub fn map_rasterization_state_descriptor(
         conservative: false,
     }
 }
+
+pub fn map_index_format(index_format: pipeline::IndexFormat) -> hal::IndexType {
+    match index_format {
+        pipeline::IndexFormat::Uint16 => hal::IndexType::U16,
+        pipeline::IndexFormat::Uint32 => hal::IndexType::U32,
+    }
+}

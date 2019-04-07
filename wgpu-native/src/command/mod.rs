@@ -15,6 +15,7 @@ use crate::{
         all_buffer_stages, all_image_stages, FramebufferKey, RenderPassContext, RenderPassKey,
     },
     hub::{Storage, HUB},
+    pipeline::IndexFormat,
     resource::TexturePlacement,
     swap_chain::{SwapChainLink, SwapImageEpoch},
     track::{DummyUsage, Stitch, TrackerSet},
@@ -355,6 +356,11 @@ pub fn command_encoder_begin_render_pass(
         depth_stencil: depth_stencil_attachment.map(|at| view_guard[at.attachment].format),
     };
 
+    let index_state = IndexState {
+        bound_buffer_view: None,
+        format: IndexFormat::Uint16,
+    };
+
     RenderPass::new(
         current_comb,
         Stored {
@@ -362,6 +368,7 @@ pub fn command_encoder_begin_render_pass(
             ref_count: cmb.life_guard.ref_count.clone(),
         },
         context,
+        index_state,
     )
 }
 
