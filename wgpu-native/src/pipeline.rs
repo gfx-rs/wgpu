@@ -301,4 +301,5 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) layout_id: PipelineLayoutId,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
+    pub(crate) index_format: IndexFormat,
 }

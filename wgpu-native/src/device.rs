@@ -1450,6 +1450,7 @@ pub fn device_create_render_pipeline(
         layout_id: desc.layout,
         pass_context,
         flags,
+        index_format: desc.vertex_buffer_state.index_format,
     }
 }
 

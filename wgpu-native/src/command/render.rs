@@ -3,7 +3,7 @@ use crate::{
     conv,
     device::RenderPassContext,
     hub::HUB,
-    pipeline::PipelineFlags,
+    pipeline::{IndexFormat, PipelineFlags},
     resource::BufferUsageFlags,
     track::{Stitch, TrackerSet},
     BindGroupId, BufferId, Color, CommandBuffer, CommandBufferId, RenderPassId, RenderPipelineId, Stored,
@@ -31,6 +31,12 @@ enum DrawError {
     },
 }
 
+#[derive(Debug)]
+pub struct IndexState {
+    pub(crate) bound_buffer_view: Option<(BufferId, u32)>,
+    pub(crate) format: IndexFormat,
+}
+
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
@@ -38,6 +44,7 @@ pub struct RenderPass<B: hal::Backend> {
     binder: Binder,
     trackers: TrackerSet,
     blend_color_status: BlendColorStatus,
+    index_state: IndexState,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
@@ -45,6 +52,7 @@ impl<B: hal::Backend> RenderPass<B> {
         raw: B::CommandBuffer,
         cmb_id: Stored<CommandBufferId>,
         context: RenderPassContext,
+        index_state: IndexState,
     ) -> Self {
         RenderPass {
             raw,
@@ -53,6 +61,7 @@ impl<B: hal::Backend> RenderPass<B> {
             binder: Binder::default(),
             trackers: TrackerSet::new(),
             blend_color_status: BlendColorStatus::Unused,
+            index_state,
         }
     }
 
@@ -122,12 +131,14 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
     let view = hal::buffer::IndexBufferView {
         buffer: &buffer.raw,
         offset: offset as u64,
-        index_type: hal::IndexType::U16, //TODO?
+        index_type: conv::map_index_format(pass.index_state.format),
     };
 
     unsafe {
         pass.raw.bind_index_buffer(view);
     }
+
+    pass.index_state.bound_buffer_view = Some((buffer_id, offset));
 }
 
 #[no_mangle]
@@ -283,6 +294,30 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
                     iter::once(desc_set),
                     &[],
                 );
+            }
+        }
+    }
+
+    // Rebind index buffer if the index format has changed with the pipeline switch
+    if pass.index_state.format != pipeline.index_format {
+        pass.index_state.format = pipeline.index_format;
+
+        if let Some((buffer_id, offset)) = pass.index_state.bound_buffer_view {
+            let buffer_guard = HUB.buffers.read();
+            let buffer = pass
+                .trackers
+                .buffers
+                .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsageFlags::INDEX)
+                .unwrap();
+
+            let view = hal::buffer::IndexBufferView {
+                buffer: &buffer.raw,
+                offset: offset as u64,
+                index_type: conv::map_index_format(pass.index_state.format),
+            };
+
+            unsafe {
+                pass.raw.bind_index_buffer(view);
             }
         }
     }
