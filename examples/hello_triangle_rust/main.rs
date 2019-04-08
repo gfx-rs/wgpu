@@ -80,7 +80,7 @@ fn main() {
             height: size.height.round() as u32,
         },
     );
-let mut running = true;
+    let mut running = true;
     while running {
         events_loop.poll_events(|event| match event {
             Event::WindowEvent { event, .. } => match event {
