@@ -129,6 +129,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
             value: buffer,
             ref_count,
         });
+        self.ready_to_map.push(buffer);
     }
 
     /// Returns the last submission index that is done.
