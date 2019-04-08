@@ -60,8 +60,7 @@ fn main() {
     });
 
     use wgpu::winit::{
-        ControlFlow, ElementState, Event, EventsLoop, KeyboardInput, VirtualKeyCode, Window,
-        WindowEvent,
+        ElementState, Event, EventsLoop, KeyboardInput, VirtualKeyCode, Window, WindowEvent,
     };
 
     let mut events_loop = EventsLoop::new();
@@ -81,9 +80,9 @@ fn main() {
             height: size.height.round() as u32,
         },
     );
-
-    events_loop.run_forever(|event| {
-        match event {
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|event| match event {
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
                     input:
@@ -94,14 +93,14 @@ fn main() {
                         },
                     ..
                 } => match code {
-                    VirtualKeyCode::Escape => return ControlFlow::Break,
+                    VirtualKeyCode::Escape => running = false,
                     _ => {}
                 },
-                WindowEvent::CloseRequested => return ControlFlow::Break,
+                WindowEvent::CloseRequested => running = false,
                 _ => {}
             },
             _ => {}
-        }
+        });
 
         let frame = swap_chain.get_next_texture();
         let mut encoder =
@@ -122,7 +121,5 @@ fn main() {
         }
 
         device.get_queue().submit(&[encoder.finish()]);
-
-        ControlFlow::Continue
-    });
+    }
 }
