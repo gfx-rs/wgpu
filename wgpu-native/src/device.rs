@@ -1534,7 +1534,7 @@ pub fn device_create_swap_chain(
     let mut surface_guard = HUB.surfaces.write();
     let surface = &mut surface_guard[surface_id];
 
-    let (caps, formats, _present_modes, _composite_alphas) = {
+    let (caps, formats, _present_modes, composite_alphas) = {
         let adapter_guard = HUB.adapters.read();
         let adapter = &adapter_guard[device.adapter_id];
         assert!(surface
@@ -1544,12 +1544,13 @@ pub fn device_create_swap_chain(
     };
     let num_frames = caps.image_count.start; //TODO: configure?
     let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
-    let config = hal::SwapchainConfig::new(
+    let mut config = hal::SwapchainConfig::new(
         desc.width,
         desc.height,
         conv::map_texture_format(desc.format),
         num_frames, //TODO: configure?
     );
+    config.composite_alpha = *composite_alphas.iter().next().unwrap();
 
     if let Some(formats) = formats {
         assert!(
