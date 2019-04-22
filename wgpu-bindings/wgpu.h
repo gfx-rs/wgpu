@@ -754,9 +754,11 @@ WGPUSwapChainId wgpu_device_create_swap_chain(WGPUDeviceId device_id,
 
 WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
 
-void wgpu_device_destroy(WGPUBufferId device_id);
+void wgpu_device_destroy(WGPUDeviceId device_id);
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
+
+void wgpu_device_wait_idle(WGPUDeviceId device_id);
 
 WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId instance_id,
                                                             void *layer);

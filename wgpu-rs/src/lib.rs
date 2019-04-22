@@ -493,15 +493,24 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
+        wgn::wgpu_device_wait_idle(self.id);
         //TODO: make this work in general
         #[cfg(feature = "metal-auto-capture")]
         wgn::wgpu_device_destroy(self.id);
     }
 }
 
-pub enum BufferMapAsyncResult<T> {
-    Success(T),
-    Error,
+pub struct BufferAsyncMapping<T> {
+    pub data: T,
+    buffer_id: wgn::BufferId,
+}
+//TODO: proper error type
+pub type BufferMapAsyncResult<T> = Result<BufferAsyncMapping<T>, ()>;
+
+impl<T> Drop for BufferAsyncMapping<T> {
+    fn drop(&mut self) {
+        wgn::wgpu_buffer_unmap(self.buffer_id);
+    }
 }
 
 struct BufferMapReadAsyncUserData<T, F>
@@ -510,6 +519,7 @@ where
 {
     size: u32,
     callback: F,
+    buffer_id: wgn::BufferId,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -519,6 +529,7 @@ where
 {
     size: u32,
     callback: F,
+    buffer_id: wgn::BufferId,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -539,28 +550,32 @@ impl Buffer {
         extern "C" fn buffer_map_read_callback_wrapper<T, F>(
             status: wgn::BufferMapAsyncStatus,
             data: *const u8,
-            userdata: *mut u8,
+            user_data: *mut u8,
         ) where
             F: FnOnce(BufferMapAsyncResult<&[T]>),
         {
-            let userdata =
-                unsafe { Box::from_raw(userdata as *mut BufferMapReadAsyncUserData<T, F>) };
+            let user_data =
+                unsafe { Box::from_raw(user_data as *mut BufferMapReadAsyncUserData<T, F>) };
             let data = unsafe {
                 slice::from_raw_parts(
                     data as *const T,
-                    userdata.size as usize / std::mem::size_of::<T>(),
+                    user_data.size as usize / std::mem::size_of::<T>(),
                 )
             };
             if let wgn::BufferMapAsyncStatus::Success = status {
-                (userdata.callback)(BufferMapAsyncResult::Success::<&[T]>(data));
+                (user_data.callback)(Ok(BufferAsyncMapping {
+                    data,
+                    buffer_id: user_data.buffer_id,
+                }));
             } else {
-                (userdata.callback)(BufferMapAsyncResult::Error);
+                (user_data.callback)(Err(()))
             }
         }
 
-        let userdata = Box::new(BufferMapReadAsyncUserData {
+        let user_data = Box::new(BufferMapReadAsyncUserData {
             size,
             callback,
+            buffer_id: self.id,
             phantom: std::marker::PhantomData,
         });
         wgn::wgpu_buffer_map_read_async(
@@ -568,7 +583,7 @@ impl Buffer {
             start,
             size,
             buffer_map_read_callback_wrapper::<T, F>,
-            Box::into_raw(userdata) as *mut u8,
+            Box::into_raw(user_data) as *mut u8,
         );
     }
 
@@ -584,28 +599,32 @@ impl Buffer {
         extern "C" fn buffer_map_write_callback_wrapper<T, F>(
             status: wgn::BufferMapAsyncStatus,
             data: *mut u8,
-            userdata: *mut u8,
+            user_data: *mut u8,
         ) where
             F: FnOnce(BufferMapAsyncResult<&mut [T]>),
         {
-            let userdata =
-                unsafe { Box::from_raw(userdata as *mut BufferMapWriteAsyncUserData<T, F>) };
+            let user_data =
+                unsafe { Box::from_raw(user_data as *mut BufferMapWriteAsyncUserData<T, F>) };
             let data = unsafe {
                 slice::from_raw_parts_mut(
                     data as *mut T,
-                    userdata.size as usize / std::mem::size_of::<T>(),
+                    user_data.size as usize / std::mem::size_of::<T>(),
                 )
             };
             if let wgn::BufferMapAsyncStatus::Success = status {
-                (userdata.callback)(BufferMapAsyncResult::Success::<&mut [T]>(data));
+                (user_data.callback)(Ok(BufferAsyncMapping {
+                    data,
+                    buffer_id: user_data.buffer_id,
+                }));
             } else {
-                (userdata.callback)(BufferMapAsyncResult::Error);
+                (user_data.callback)(Err(()))
             }
         }
 
-        let userdata = Box::new(BufferMapWriteAsyncUserData {
+        let user_data = Box::new(BufferMapWriteAsyncUserData {
             size,
             callback,
+            buffer_id: self.id,
             phantom: std::marker::PhantomData,
         });
         wgn::wgpu_buffer_map_write_async(
@@ -613,7 +632,7 @@ impl Buffer {
             start,
             size,
             buffer_map_write_callback_wrapper::<T, F>,
-            Box::into_raw(userdata) as *mut u8,
+            Box::into_raw(user_data) as *mut u8,
         );
     }
 

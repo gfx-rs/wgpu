@@ -141,6 +141,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
                 trace!("Active submission {} is done", a.index);
                 last_done = last_done.max(a.index);
                 self.free.extend(a.resources.into_iter().map(|(_, r)| r));
+                self.ready_to_map.extend(a.mapped);
                 unsafe {
                     device.destroy_fence(a.fence);
                 }
@@ -455,6 +456,22 @@ impl<B: hal::Backend> Device<B> {
                 free: Vec::new(),
                 ready_to_map: Vec::new(),
             }),
+        }
+    }
+}
+
+impl Device<back::Backend> {
+    fn maintain(&self) {
+        let mut destroyed = self.destroyed.lock();
+        let mut trackers = self.trackers.lock();
+
+        destroyed.triage_referenced(&mut *trackers);
+        destroyed.triage_framebuffers(&mut *self.framebuffers.lock());
+        let last_done = destroyed.cleanup(&self.raw);
+        destroyed.handle_mapping(&self.raw, &self.limits);
+
+        if last_done != 0 {
+            self.com_allocator.maintain(last_done);
         }
     }
 }
@@ -1094,13 +1111,8 @@ pub extern "C" fn wgpu_queue_submit(
     let (submit_index, fence) = {
         let mut device_guard = HUB.devices.write();
         let device = &mut device_guard[queue_id];
-
-        let mut swap_chain_links = Vec::new();
-
         let mut trackers = device.trackers.lock();
-        let mut destroyed = device.destroyed.lock();
-        destroyed.triage_referenced(&mut *trackers);
-        destroyed.triage_framebuffers(&mut *device.framebuffers.lock());
+        let mut swap_chain_links = Vec::new();
 
         let submit_index = 1 + device
             .life_guard
@@ -1213,24 +1225,13 @@ pub extern "C" fn wgpu_queue_submit(
     let device_guard = HUB.devices.read();
     let device = &device_guard[queue_id];
 
-    let last_done = {
-        let mut destroyed = device.destroyed.lock();
-        let last_done = destroyed.cleanup(&device.raw);
-        destroyed.handle_mapping(&device.raw, &device.limits);
-
-        destroyed.active.alloc().init(ActiveSubmission {
-            index: submit_index,
-            fence,
-            resources: Vec::new(),
-            mapped: Vec::new(),
-        });
-
-        last_done
-    };
-
-    if last_done != 0 {
-        device.com_allocator.maintain(last_done);
-    }
+    device.maintain();
+    device.destroyed.lock().active.alloc().init(ActiveSubmission {
+        index: submit_index,
+        fence,
+        resources: Vec::new(),
+        mapped: Vec::new(),
+    });
 
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {
@@ -1800,8 +1801,19 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_device_destroy(device_id: BufferId) {
-    HUB.devices.unregister(device_id);
+pub extern "C" fn wgpu_device_wait_idle(device_id: DeviceId) {
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[device_id];
+    device.raw.wait_idle().unwrap();
+    device.maintain();
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_destroy(device_id: DeviceId) {
+    let device = HUB.devices.unregister(device_id);
+    device.raw.wait_idle().unwrap();
+    device.maintain();
+    device.com_allocator.destroy(&device.raw);
 }
 
 pub type BufferMapReadCallback =

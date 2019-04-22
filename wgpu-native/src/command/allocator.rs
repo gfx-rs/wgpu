@@ -131,4 +131,17 @@ impl<B: hal::Backend> CommandAllocator<B> {
             }
         }
     }
+
+    pub fn destroy(self, device: &B::Device) {
+        let mut inner = self.inner.lock();
+        while let Some(cmd_buf) = inner.pending.pop() {
+            inner.recycle(cmd_buf);
+        }
+        for (_, mut pool) in inner.pools.drain() {
+            unsafe {
+                pool.raw.free(pool.available);
+                device.destroy_command_pool(pool.raw);
+            }
+        }
+    }
 }
