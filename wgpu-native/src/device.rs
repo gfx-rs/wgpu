@@ -1144,7 +1144,9 @@ pub extern "C" fn wgpu_queue_submit(
 
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
-                    buffer_guard[id]
+                    let buffer = &buffer_guard[id];
+                    assert!(buffer.pending_map_operation.is_none());
+                    buffer
                         .life_guard
                         .submission_index
                         .store(submit_index, Ordering::Release);
