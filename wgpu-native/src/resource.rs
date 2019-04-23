@@ -1,6 +1,12 @@
 use crate::{
     swap_chain::{SwapChainLink, SwapImageEpoch},
-    BufferMapReadCallback, BufferMapWriteCallback, DeviceId, Extent3d, LifeGuard, RefCount, Stored,
+    BufferMapReadCallback,
+    BufferMapWriteCallback,
+    DeviceId,
+    Extent3d,
+    LifeGuard,
+    RefCount,
+    Stored,
     TextureId,
 };
 
@@ -9,7 +15,6 @@ use hal;
 use parking_lot::Mutex;
 
 use std::borrow::Borrow;
-
 
 bitflags! {
     #[repr(transparent)]

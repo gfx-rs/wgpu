@@ -1,11 +1,7 @@
-use crate::{
-    track::TrackerSet,
-    BindGroupLayoutId, BufferId, LifeGuard, SamplerId, TextureViewId,
-};
+use crate::{track::TrackerSet, BindGroupLayoutId, BufferId, LifeGuard, SamplerId, TextureViewId};
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
-
 
 pub const MAX_BIND_GROUPS: usize = 4;
 

@@ -60,7 +60,13 @@ fn main() {
     });
 
     use wgpu::winit::{
-        ElementState, Event, EventsLoop, KeyboardInput, VirtualKeyCode, Window, WindowEvent,
+        ElementState,
+        Event,
+        EventsLoop,
+        KeyboardInput,
+        VirtualKeyCode,
+        Window,
+        WindowEvent,
     };
 
     let mut events_loop = EventsLoop::new();

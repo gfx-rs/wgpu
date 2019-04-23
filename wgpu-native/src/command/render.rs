@@ -6,13 +6,19 @@ use crate::{
     pipeline::{IndexFormat, PipelineFlags},
     resource::BufferUsageFlags,
     track::{Stitch, TrackerSet},
-    BindGroupId, BufferId, Color, CommandBuffer, CommandBufferId, RenderPassId, RenderPipelineId, Stored,
+    BindGroupId,
+    BufferId,
+    Color,
+    CommandBuffer,
+    CommandBufferId,
+    RenderPassId,
+    RenderPipelineId,
+    Stored,
 };
 
 use hal::command::RawCommandBuffer;
 
 use std::{iter, slice};
-
 
 #[derive(Debug, PartialEq)]
 enum BlendColorStatus {
@@ -75,7 +81,7 @@ impl<B: hal::Backend> RenderPass<B> {
             });
         }
         if self.blend_color_status == BlendColorStatus::Required {
-            return Err(DrawError::MissingBlendColor)
+            return Err(DrawError::MissingBlendColor);
         }
         Ok(())
     }
@@ -231,8 +237,8 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
             .provide_entry(index as usize, bind_group_id, bind_group)
     {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
-        let bind_groups = iter::once(&bind_group.raw)
-            .chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
+        let bind_groups =
+            iter::once(&bind_group.raw).chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
         unsafe {
             pass.raw.bind_graphics_descriptor_sets(
                 &&pipeline_layout_guard[pipeline_layout_id].raw,
@@ -259,7 +265,9 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         "The render pipeline is not compatible with the pass!"
     );
 
-    if pipeline.flags.contains(PipelineFlags::BLEND_COLOR) && pass.blend_color_status == BlendColorStatus::Unused {
+    if pipeline.flags.contains(PipelineFlags::BLEND_COLOR)
+        && pass.blend_color_status == BlendColorStatus::Unused
+    {
         pass.blend_color_status = BlendColorStatus::Required;
     }
 
@@ -276,7 +284,8 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let bind_group_guard = HUB.bind_groups.read();
 
     pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder.reset_expectations(pipeline_layout.bind_group_layout_ids.len());
+    pass.binder
+        .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
 
     for (index, (entry, &bgl_id)) in pass
         .binder
@@ -324,10 +333,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_set_blend_color(
-    pass_id: RenderPassId,
-    color: &Color,
-) {
+pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color: &Color) {
     let mut pass_guard = HUB.render_passes.write();
     let pass = &mut pass_guard[pass_id];
 

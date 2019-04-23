@@ -1,8 +1,21 @@
 use crate::{
-    AdapterHandle, BindGroupHandle, BindGroupLayoutHandle, BufferHandle, CommandBufferHandle,
-    ComputePassHandle, ComputePipelineHandle, DeviceHandle, InstanceHandle, PipelineLayoutHandle,
-    RenderPassHandle, RenderPipelineHandle, SamplerHandle, ShaderModuleHandle, SurfaceHandle,
-    TextureHandle, TextureViewHandle,
+    AdapterHandle,
+    BindGroupHandle,
+    BindGroupLayoutHandle,
+    BufferHandle,
+    CommandBufferHandle,
+    ComputePassHandle,
+    ComputePipelineHandle,
+    DeviceHandle,
+    InstanceHandle,
+    PipelineLayoutHandle,
+    RenderPassHandle,
+    RenderPipelineHandle,
+    SamplerHandle,
+    ShaderModuleHandle,
+    SurfaceHandle,
+    TextureHandle,
+    TextureViewHandle,
 };
 
 use lazy_static::lazy_static;
@@ -13,11 +26,7 @@ use parking_lot::RwLock;
 use serde::{Deserialize, Serialize};
 use vec_map::VecMap;
 
-use std::{
-    ops,
-    sync::Arc,
-};
-
+use std::{ops, sync::Arc};
 
 pub(crate) type Index = u32;
 pub(crate) type Epoch = u32;

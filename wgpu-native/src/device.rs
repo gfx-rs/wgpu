@@ -1,36 +1,57 @@
 use crate::{
-    binding_model, command, conv, pipeline, resource, swap_chain,
+    binding_model,
+    command,
+    conv,
     hub::HUB,
-    track::{DummyUsage, Stitch, Tracktion, TrackPermit, TrackerSet},
-    AdapterId, BindGroupId, BufferId, CommandBufferId, DeviceId, QueueId, SurfaceId, TextureId,
+    pipeline,
+    resource,
+    swap_chain,
+    track::{DummyUsage, Stitch, TrackPermit, TrackerSet, Tracktion},
+    AdapterId,
+    BindGroupId,
+    BufferId,
+    BufferMapAsyncStatus,
+    BufferMapOperation,
+    CommandBufferId,
+    DeviceId,
+    LifeGuard,
+    QueueId,
+    RefCount,
+    Stored,
+    SubmissionIndex,
+    SurfaceId,
+    TextureId,
     TextureViewId,
-    BufferMapAsyncStatus, BufferMapOperation, LifeGuard, RefCount, Stored, SubmissionIndex,
 };
 #[cfg(feature = "local")]
 use crate::{
-    BindGroupLayoutId, CommandEncoderId, ComputePipelineId, PipelineLayoutId, RenderPipelineId,
-    SamplerId, ShaderModuleId, SwapChainId,
+    BindGroupLayoutId,
+    CommandEncoderId,
+    ComputePipelineId,
+    PipelineLayoutId,
+    RenderPipelineId,
+    SamplerId,
+    ShaderModuleId,
+    SwapChainId,
 };
 
 use arrayvec::ArrayVec;
-use copyless::VecHelper as _;
 use back;
+use copyless::VecHelper as _;
 use hal::{
-    self, DescriptorPool as _, Device as _, Surface as _,
+    self,
     backend::FastHashMap,
     command::RawCommandBuffer,
     queue::RawCommandQueue,
+    DescriptorPool as _,
+    Device as _,
+    Surface as _,
 };
 use log::{info, trace};
 //use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::Mutex;
 
-use std::{
-    ffi, iter, ptr, slice,
-    collections::hash_map::Entry,
-    sync::atomic::Ordering,
-};
-
+use std::{collections::hash_map::Entry, ffi, iter, ptr, slice, sync::atomic::Ordering};
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 
@@ -151,13 +172,12 @@ impl<B: hal::Backend> PendingResources<B> {
                     hal::device::WaitFor::All,
                     !0,
                 )
-            }.unwrap();
+            }
+            .unwrap();
         }
 
         for i in (0..self.active.len()).rev() {
-            if force_wait || unsafe {
-                device.get_fence_status(&self.active[i].fence).unwrap()
-            } {
+            if force_wait || unsafe { device.get_fence_status(&self.active[i].fence).unwrap() } {
                 let a = self.active.swap_remove(i);
                 trace!("Active submission {} is done", a.index);
                 last_done = last_done.max(a.index);
@@ -248,9 +268,12 @@ impl PendingResources<back::Backend> {
             let buf = &buffer_guard[resource_id];
 
             let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-            trace!("Mapping of {:?} at submission {:?} gets assigned to active {:?}",
-                resource_id, submit_index,
-                self.active.iter().position(|a| a.index == submit_index));
+            trace!(
+                "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
+                resource_id,
+                submit_index,
+                self.active.iter().position(|a| a.index == submit_index)
+            );
 
             self.active
                 .iter_mut()
@@ -328,12 +351,8 @@ impl PendingResources<back::Backend> {
             };
 
             match operation {
-                BufferMapOperation::Read(_, callback, userdata) => {
-                    callback(status, ptr, userdata)
-                }
-                BufferMapOperation::Write(_, callback, userdata) => {
-                    callback(status, ptr, userdata)
-                }
+                BufferMapOperation::Read(_, callback, userdata) => callback(status, ptr, userdata),
+                BufferMapOperation::Write(_, callback, userdata) => callback(status, ptr, userdata),
             };
         }
     }
@@ -349,10 +368,16 @@ fn map_buffer(
     // gfx-rs requires mapping and flushing/invalidation ranges to be done at `non_coherent_atom_size`
     // granularity for memory types that aren't coherent. We achieve that by flooring the start offset
     // and ceiling the end offset to those atom sizes, using bitwise operations on an `atom_mask`.
-    let is_coherent = buffer.memory_properties.contains(hal::memory::Properties::COHERENT);
-    let atom_mask = if is_coherent { 0 } else { limits.non_coherent_atom_size as u64 - 1 };
+    let is_coherent = buffer
+        .memory_properties
+        .contains(hal::memory::Properties::COHERENT);
+    let atom_mask = if is_coherent {
+        0
+    } else {
+        limits.non_coherent_atom_size as u64 - 1
+    };
     let atom_offset = original_range.start & atom_mask;
-    let range = (original_range.start & !atom_mask) .. ((original_range.end - 1) | atom_mask) + 1;
+    let range = (original_range.start & !atom_mask)..((original_range.end - 1) | atom_mask) + 1;
     let pointer = unsafe { raw.map_memory(&buffer.memory, range.clone()) }?;
 
     if !is_coherent {
@@ -520,19 +545,14 @@ pub fn device_create_buffer(
 
     // if the memory is mapped but not coherent, round up to the atom size
     let mut mem_size = requirements.size;
-    if memory_properties.contains(hal::memory::Properties::CPU_VISIBLE) &&
-        !memory_properties.contains(hal::memory::Properties::COHERENT)
+    if memory_properties.contains(hal::memory::Properties::CPU_VISIBLE)
+        && !memory_properties.contains(hal::memory::Properties::COHERENT)
     {
         let mask = device.limits.non_coherent_atom_size as u64 - 1;
-        mem_size = ((mem_size - 1 ) | mask) + 1;
+        mem_size = ((mem_size - 1) | mask) + 1;
     }
 
-    let memory = unsafe {
-        device
-            .raw
-            .allocate_memory(device_type, mem_size)
-            .unwrap()
-    };
+    let memory = unsafe { device.raw.allocate_memory(device_type, mem_size).unwrap() };
     unsafe {
         device
             .raw
@@ -599,9 +619,15 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
 
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
-    let range = 0 .. desc.size as u64;
+    let range = 0..desc.size as u64;
 
-    match map_buffer(&device.raw, &device.limits, &mut buffer, &range, HostMap::Write) {
+    match map_buffer(
+        &device.raw,
+        &device.limits,
+        &mut buffer,
+        &range,
+        HostMap::Write,
+    ) {
         Ok(ptr) => unsafe {
             *mapped_ptr_out = ptr;
         },
@@ -999,12 +1025,20 @@ pub fn device_create_bind_group(
                     )
                     .unwrap();
                 let alignment = match decl.ty {
-                    binding_model::BindingType::UniformBuffer => device.limits.min_uniform_buffer_offset_alignment,
-                    binding_model::BindingType::StorageBuffer => device.limits.min_storage_buffer_offset_alignment,
+                    binding_model::BindingType::UniformBuffer => {
+                        device.limits.min_uniform_buffer_offset_alignment
+                    }
+                    binding_model::BindingType::StorageBuffer => {
+                        device.limits.min_storage_buffer_offset_alignment
+                    }
                     _ => panic!("Mismatched buffer binding for {:?}", decl),
                 };
-                assert_eq!(bb.offset as hal::buffer::Offset % alignment, 0,
-                    "Misaligned buffer offset {}", bb.offset);
+                assert_eq!(
+                    bb.offset as hal::buffer::Offset % alignment,
+                    0,
+                    "Misaligned buffer offset {}",
+                    bb.offset
+                );
                 let range = Some(bb.offset as u64)..Some((bb.offset + bb.size) as u64);
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
@@ -1212,21 +1246,22 @@ pub extern "C" fn wgpu_queue_submit(
             let command_buffer_guard = HUB.command_buffers.read();
             let surface_guard = HUB.surfaces.read();
 
-            let wait_semaphores = swap_chain_links
-                .into_iter()
-                .flat_map(|link| {
-                    let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref()?;
-                    let frame = &swap_chain.frames[link.image_index as usize];
-                    let mut wait_for_epoch = frame.wait_for_epoch.lock();
-                    let current_epoch = *wait_for_epoch.as_ref()?;
-                    if link.epoch < current_epoch {
-                        None
-                    } else {
-                        debug_assert_eq!(link.epoch, current_epoch);
-                        *wait_for_epoch = None;
-                        Some((&frame.sem_available, hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT))
-                    }
-                });
+            let wait_semaphores = swap_chain_links.into_iter().flat_map(|link| {
+                let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref()?;
+                let frame = &swap_chain.frames[link.image_index as usize];
+                let mut wait_for_epoch = frame.wait_for_epoch.lock();
+                let current_epoch = *wait_for_epoch.as_ref()?;
+                if link.epoch < current_epoch {
+                    None
+                } else {
+                    debug_assert_eq!(link.epoch, current_epoch);
+                    *wait_for_epoch = None;
+                    Some((
+                        &frame.sem_available,
+                        hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                    ))
+                }
+            });
 
             let submission =
                 hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
@@ -1469,7 +1504,10 @@ pub fn device_create_render_pipeline(
     };
 
     let mut flags = pipeline::PipelineFlags::empty();
-    if color_states.iter().any(|state| state.color.uses_color() | state.alpha.uses_color()) {
+    if color_states
+        .iter()
+        .any(|state| state.color.uses_color() | state.alpha.uses_color())
+    {
         flags |= pipeline::PipelineFlags::BLEND_COLOR;
     }
 
@@ -1872,7 +1910,12 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     let device = &device_guard[device_id];
 
     let usage = resource::BufferUsageFlags::MAP_READ;
-    match device.trackers.lock().buffers.transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE) {
+    match device
+        .trackers
+        .lock()
+        .buffers
+        .transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE)
+    {
         Ok(Tracktion::Keep) => {}
         Ok(Tracktion::Replace { .. }) => {
             //TODO: launch a memory barrier into `HOST_READ` access?
@@ -1880,9 +1923,7 @@ pub extern "C" fn wgpu_buffer_map_read_async(
         other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    device.pending
-        .lock()
-        .map(buffer_id, ref_count);
+    device.pending.lock().map(buffer_id, ref_count);
 }
 
 #[no_mangle]
@@ -1912,7 +1953,12 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     let device = &device_guard[device_id];
 
     let usage = resource::BufferUsageFlags::MAP_WRITE;
-    match device.trackers.lock().buffers.transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE) {
+    match device
+        .trackers
+        .lock()
+        .buffers
+        .transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE)
+    {
         Ok(Tracktion::Keep) => {}
         Ok(Tracktion::Replace { .. }) => {
             //TODO: launch a memory barrier into `HOST_WRITE` access?
@@ -1920,9 +1966,7 @@ pub extern "C" fn wgpu_buffer_map_write_async(
         other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    device.pending
-        .lock()
-        .map(buffer_id, ref_count);
+    device.pending.lock().map(buffer_id, ref_count);
 }
 
 #[no_mangle]

@@ -12,32 +12,37 @@ pub use self::transfer::*;
 use crate::{
     conv,
     device::{
-        all_buffer_stages, all_image_stages, FramebufferKey, RenderPassContext, RenderPassKey,
+        all_buffer_stages,
+        all_image_stages,
+        FramebufferKey,
+        RenderPassContext,
+        RenderPassKey,
     },
     hub::{Storage, HUB},
     pipeline::IndexFormat,
     resource::TexturePlacement,
     swap_chain::{SwapChainLink, SwapImageEpoch},
     track::{DummyUsage, Stitch, TrackerSet},
-    BufferHandle, Color, CommandBufferHandle, CommandBufferId, CommandEncoderId, DeviceId,
-    LifeGuard, Stored, TextureHandle, TextureUsageFlags, TextureViewId,
+    BufferHandle,
+    Color,
+    CommandBufferHandle,
+    CommandBufferId,
+    CommandEncoderId,
+    DeviceId,
+    LifeGuard,
+    Stored,
+    TextureHandle,
+    TextureUsageFlags,
+    TextureViewId,
 };
 #[cfg(feature = "local")]
 use crate::{ComputePassId, RenderPassId};
 
 use back::Backend;
-use hal::{
-    Device as _,
-    command::RawCommandBuffer,
-};
+use hal::{command::RawCommandBuffer, Device as _};
 use log::trace;
 
-use std::{
-    iter, slice,
-    collections::hash_map::Entry,
-    thread::ThreadId,
-};
-
+use std::{collections::hash_map::Entry, iter, slice, thread::ThreadId};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

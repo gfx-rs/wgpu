@@ -4,14 +4,19 @@ use crate::{
     hub::HUB,
     resource::TexturePlacement,
     swap_chain::SwapChainLink,
-    BufferId, BufferUsageFlags, CommandBufferId, Extent3d, Origin3d, TextureId, TextureUsageFlags,
+    BufferId,
+    BufferUsageFlags,
+    CommandBufferId,
+    Extent3d,
+    Origin3d,
+    TextureId,
+    TextureUsageFlags,
 };
 
 use copyless::VecHelper as _;
 use hal::command::RawCommandBuffer;
 
 use std::iter;
-
 
 const BITS_PER_BYTE: u32 = 8;
 
