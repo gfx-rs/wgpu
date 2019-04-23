@@ -285,6 +285,16 @@ impl Adapter {
 }
 
 impl Device {
+    /// Check for resource cleanups and mapping callbacks.
+    pub fn poll(&self) {
+        wgn::wgpu_device_poll(self.id);
+    }
+
+    /// Wait for GPU work to finish and process all the callbacks.
+    pub fn wait_idle(&self) {
+        wgn::wgpu_device_wait_idle(self.id);
+    }
+
     pub fn create_shader_module(&self, spv: &[u8]) -> ShaderModule {
         let desc = wgn::ShaderModuleDescriptor {
             code: wgn::ByteArray {

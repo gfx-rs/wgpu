@@ -100,6 +100,15 @@ struct ActiveSubmission<B: hal::Backend> {
     mapped: Vec<BufferId>,
 }
 
+/// A class responsible for tracking resource lifetimes.
+///
+/// Here is how host mapping is handled:
+///   1. When mapping is requested we add the buffer to the pending list of `mapped` buffers.
+///   2. When `triage_referenced` is called, it checks the last submission index associated with each of the mapped buffer,
+/// and register the buffer with either a submission in flight, or straight into `ready_to_map` vector.
+///   3. when `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
+///   4. Finally, `handle_mapping` issues all the callbacks.
+
 struct DestroyedResources<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<BufferId>>,
@@ -222,8 +231,8 @@ impl DestroyedResources<back::Backend> {
 
         let buffer_guard = HUB.buffers.read();
 
-        for i in (0..self.mapped.len()).rev() {
-            let resource_id = self.mapped.swap_remove(i).value;
+        for stored in self.mapped.drain(..) {
+            let resource_id = stored.value;
             let buf = &buffer_guard[resource_id];
 
             let usage = match buf.pending_map_operation {
@@ -1816,6 +1825,11 @@ pub extern "C" fn wgpu_device_wait_idle(device_id: DeviceId) {
     let device = &device_guard[device_id];
     device.raw.wait_idle().unwrap();
     device.maintain();
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_poll(device_id: DeviceId) {
+    HUB.devices.read()[device_id].maintain();
 }
 
 #[no_mangle]
