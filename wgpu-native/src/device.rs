@@ -1,7 +1,7 @@
 use crate::{
     binding_model, command, conv, pipeline, resource, swap_chain,
     hub::HUB,
-    track::{DummyUsage, Stitch, TrackPermit, TrackerSet},
+    track::{DummyUsage, Stitch, Tracktion, TrackPermit, TrackerSet},
     AdapterId, BindGroupId, BufferId, CommandBufferId, DeviceId, QueueId, SurfaceId, TextureId,
     TextureViewId,
     BufferMapAsyncStatus, BufferMapOperation, LifeGuard, RefCount, Stored, SubmissionIndex,
@@ -234,16 +234,6 @@ impl DestroyedResources<back::Backend> {
         for stored in self.mapped.drain(..) {
             let resource_id = stored.value;
             let buf = &buffer_guard[resource_id];
-
-            let usage = match buf.pending_map_operation {
-                Some(BufferMapOperation::Read(..)) => resource::BufferUsageFlags::MAP_READ,
-                Some(BufferMapOperation::Write(..)) => resource::BufferUsageFlags::MAP_WRITE,
-                _ => unreachable!(),
-            };
-            trackers
-                .buffers
-                .get_with_replaced_usage(&buffer_guard, resource_id, usage)
-                .unwrap();
 
             let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
             self.active
@@ -1853,22 +1843,36 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     callback: BufferMapReadCallback,
     userdata: *mut u8,
 ) {
-    let mut buffer_guard = HUB.buffers.write();
-    let buffer = &mut buffer_guard[buffer_id];
+    let (device_id, ref_count) = {
+        let mut buffer_guard = HUB.buffers.write();
+        let buffer = &mut buffer_guard[buffer_id];
 
-    if buffer.pending_map_operation.is_some() {
-        log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
-        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
-        return;
+        if buffer.pending_map_operation.is_some() {
+            log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
+            callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+            return;
+        }
+
+        let range = start as u64..(start + size) as u64;
+        buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
+        (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+    };
+
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[device_id];
+
+    let usage = resource::BufferUsageFlags::MAP_READ;
+    match device.trackers.lock().buffers.transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE) {
+        Ok(Tracktion::Keep) => {}
+        Ok(Tracktion::Replace { .. }) => {
+            //TODO: launch a memory barrier into `HOST_READ` access?
+        }
+        other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    let range = start as u64..(start + size) as u64;
-    buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
-
-    HUB.devices.read()[buffer.device_id.value]
-        .destroyed
+    device.destroyed
         .lock()
-        .map(buffer_id, buffer.life_guard.ref_count.clone());
+        .map(buffer_id, ref_count);
 }
 
 #[no_mangle]
@@ -1879,22 +1883,36 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     callback: BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
-    let mut buffer_guard = HUB.buffers.write();
-    let buffer = &mut buffer_guard[buffer_id];
+    let (device_id, ref_count) = {
+        let mut buffer_guard = HUB.buffers.write();
+        let buffer = &mut buffer_guard[buffer_id];
 
-    if buffer.pending_map_operation.is_some() {
-        log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
-        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
-        return;
+        if buffer.pending_map_operation.is_some() {
+            log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
+            callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+            return;
+        }
+
+        let range = start as u64..(start + size) as u64;
+        buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
+        (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+    };
+
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[device_id];
+
+    let usage = resource::BufferUsageFlags::MAP_WRITE;
+    match device.trackers.lock().buffers.transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE) {
+        Ok(Tracktion::Keep) => {}
+        Ok(Tracktion::Replace { .. }) => {
+            //TODO: launch a memory barrier into `HOST_WRITE` access?
+        }
+        other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    let range = start as u64..(start + size) as u64;
-    buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
-
-    HUB.devices.read()[buffer.device_id.value]
-        .destroyed
+    device.destroyed
         .lock()
-        .map(buffer_id, buffer.life_guard.ref_count.clone());
+        .map(buffer_id, ref_count);
 }
 
 #[no_mangle]
