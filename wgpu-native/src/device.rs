@@ -502,10 +502,20 @@ pub fn device_create_buffer(
         .unwrap()
         .into();
     // TODO: allocate with rendy
+
+    // if the memory is mapped but not coherent, round up to the atom size
+    let mut mem_size = requirements.size;
+    if memory_properties.contains(hal::memory::Properties::CPU_VISIBLE) &&
+        !memory_properties.contains(hal::memory::Properties::COHERENT)
+    {
+        let mask = device.limits.non_coherent_atom_size as u64 - 1;
+        mem_size = ((mem_size - 1 ) | mask) + 1;
+    }
+
     let memory = unsafe {
         device
             .raw
-            .allocate_memory(device_type, requirements.size)
+            .allocate_memory(device_type, mem_size)
             .unwrap()
     };
     unsafe {
