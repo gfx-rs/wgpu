@@ -100,7 +100,7 @@ struct ActiveSubmission<B: hal::Backend> {
     mapped: Vec<BufferId>,
 }
 
-/// A class responsible for tracking resource lifetimes.
+/// A struct responsible for tracking resource lifetimes.
 ///
 /// Here is how host mapping is handled:
 ///   1. When mapping is requested we add the buffer to the pending list of `mapped` buffers.
@@ -109,7 +109,7 @@ struct ActiveSubmission<B: hal::Backend> {
 ///   3. when `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
 
-struct DestroyedResources<B: hal::Backend> {
+struct PendingResources<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<BufferId>>,
     /// Resources that are destroyed by the user but still referenced by
@@ -124,10 +124,10 @@ struct DestroyedResources<B: hal::Backend> {
     ready_to_map: Vec<BufferId>,
 }
 
-unsafe impl<B: hal::Backend> Send for DestroyedResources<B> {}
-unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
+unsafe impl<B: hal::Backend> Send for PendingResources<B> {}
+unsafe impl<B: hal::Backend> Sync for PendingResources<B> {}
 
-impl<B: hal::Backend> DestroyedResources<B> {
+impl<B: hal::Backend> PendingResources<B> {
     fn destroy(&mut self, resource_id: ResourceId, ref_count: RefCount) {
         debug_assert!(!self.referenced.iter().any(|r| r.0 == resource_id));
         self.referenced.push((resource_id, ref_count));
@@ -192,7 +192,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
     }
 }
 
-impl DestroyedResources<back::Backend> {
+impl PendingResources<back::Backend> {
     fn triage_referenced(&mut self, trackers: &mut TrackerSet) {
         for i in (0..self.referenced.len()).rev() {
             let num_refs = self.referenced[i].1.load();
@@ -387,7 +387,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     desc_pool: Mutex<B::DescriptorPool>,
-    destroyed: Mutex<DestroyedResources<B>>,
+    pending: Mutex<PendingResources<B>>,
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -464,7 +464,7 @@ impl<B: hal::Backend> Device<B> {
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
             desc_pool,
-            destroyed: Mutex::new(DestroyedResources {
+            pending: Mutex::new(PendingResources {
                 mapped: Vec::new(),
                 referenced: Vec::new(),
                 active: Vec::new(),
@@ -477,13 +477,13 @@ impl<B: hal::Backend> Device<B> {
 
 impl Device<back::Backend> {
     fn maintain(&self, force_wait: bool) {
-        let mut destroyed = self.destroyed.lock();
+        let mut pending = self.pending.lock();
         let mut trackers = self.trackers.lock();
 
-        destroyed.triage_referenced(&mut *trackers);
-        destroyed.triage_framebuffers(&mut *self.framebuffers.lock());
-        let last_done = destroyed.cleanup(&self.raw, force_wait);
-        destroyed.handle_mapping(&self.raw, &self.limits);
+        pending.triage_referenced(&mut *trackers);
+        pending.triage_framebuffers(&mut *self.framebuffers.lock());
+        let last_done = pending.cleanup(&self.raw, force_wait);
+        pending.handle_mapping(&self.raw, &self.limits);
 
         if last_done != 0 {
             self.com_allocator.maintain(last_done);
@@ -629,7 +629,7 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
     let buffer_guard = HUB.buffers.read();
     let buffer = &buffer_guard[buffer_id];
     HUB.devices.read()[buffer.device_id.value]
-        .destroyed
+        .pending
         .lock()
         .destroy(
             ResourceId::Buffer(buffer_id),
@@ -827,7 +827,7 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     let texture_guard = HUB.textures.read();
     let texture = &texture_guard[texture_id];
     HUB.devices.read()[texture.device_id.value]
-        .destroyed
+        .pending
         .lock()
         .destroy(
             ResourceId::Texture(texture_id),
@@ -840,7 +840,7 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
     let texture_view_guard = HUB.texture_views.read();
     let view = &texture_view_guard[texture_view_id];
     let device_id = HUB.textures.read()[view.texture_id.value].device_id.value;
-    HUB.devices.read()[device_id].destroyed.lock().destroy(
+    HUB.devices.read()[device_id].pending.lock().destroy(
         ResourceId::TextureView(texture_view_id),
         view.life_guard.ref_count.clone(),
     );
@@ -1253,7 +1253,7 @@ pub extern "C" fn wgpu_queue_submit(
     let device = &device_guard[queue_id];
 
     device.maintain(false);
-    device.destroyed.lock().active.alloc().init(ActiveSubmission {
+    device.pending.lock().active.alloc().init(ActiveSubmission {
         index: submit_index,
         fence,
         resources: Vec::new(),
@@ -1599,14 +1599,14 @@ pub fn device_create_swap_chain(
         Some(mut old) => {
             //TODO: remove this once gfx-rs stops destroying the old swapchain
             device.raw.wait_idle().unwrap();
-            let mut destroyed = device.destroyed.lock();
+            let mut pending = device.pending.lock();
             assert_eq!(old.device_id.value, device_id);
             for frame in old.frames {
-                destroyed.destroy(
+                pending.destroy(
                     ResourceId::Texture(frame.texture_id.value),
                     frame.texture_id.ref_count,
                 );
-                destroyed.destroy(
+                pending.destroy(
                     ResourceId::TextureView(frame.view_id.value),
                     frame.view_id.ref_count,
                 );
@@ -1879,7 +1879,7 @@ pub extern "C" fn wgpu_buffer_map_read_async(
         other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    device.destroyed
+    device.pending
         .lock()
         .map(buffer_id, ref_count);
 }
@@ -1919,7 +1919,7 @@ pub extern "C" fn wgpu_buffer_map_write_async(
         other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    device.destroyed
+    device.pending
         .lock()
         .map(buffer_id, ref_count);
 }
