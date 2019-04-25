@@ -85,7 +85,7 @@ pub fn run<E: Example>(title: &str) {
     let mut example = E::init(&sc_desc, &mut device);
 
     info!("Entering render loop...");
-    let mut running = true;
+    let (mut running, mut visible) = (true, true);
     while running {
         events_loop.poll_events(|event| match event {
             Event::WindowEvent {
@@ -98,6 +98,13 @@ pub fn run<E: Example>(title: &str) {
                 sc_desc.height = physical.height.round() as u32;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
                 example.resize(&sc_desc, &mut device);
+            }
+            Event::WindowEvent {
+                event: WindowEvent::Focused(focused),
+                ..
+            } => {
+                info!("Focus = {:?}", focused);
+                visible = focused;
             }
             Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
@@ -119,8 +126,10 @@ pub fn run<E: Example>(title: &str) {
             _ => (),
         });
 
-        let frame = swap_chain.get_next_texture();
-        example.render(&frame, &mut device);
+        if visible {
+            let frame = swap_chain.get_next_texture();
+            example.render(&frame, &mut device);
+        }
         running &= !cfg!(feature = "metal-auto-capture");
     }
 }
