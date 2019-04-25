@@ -286,13 +286,8 @@ impl Adapter {
 
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
-    pub fn poll(&self) {
-        wgn::wgpu_device_poll(self.id);
-    }
-
-    /// Wait for GPU work to finish and process all the callbacks.
-    pub fn wait_idle(&self) {
-        wgn::wgpu_device_wait_idle(self.id);
+    pub fn poll(&self, force_wait: bool) {
+        wgn::wgpu_device_poll(self.id, force_wait);
     }
 
     pub fn create_shader_module(&self, spv: &[u8]) -> ShaderModule {
@@ -503,7 +498,7 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        wgn::wgpu_device_wait_idle(self.id);
+        wgn::wgpu_device_poll(self.id, true);
         //TODO: make this work in general
         #[cfg(feature = "metal-auto-capture")]
         wgn::wgpu_device_destroy(self.id);

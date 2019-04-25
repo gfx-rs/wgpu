@@ -141,11 +141,23 @@ impl<B: hal::Backend> DestroyedResources<B> {
     }
 
     /// Returns the last submission index that is done.
-    fn cleanup(&mut self, device: &B::Device) -> SubmissionIndex {
+    fn cleanup(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
         let mut last_done = 0;
 
+        if force_wait {
+            unsafe {
+                device.wait_for_fences(
+                    self.active.iter().map(|a| &a.fence),
+                    hal::device::WaitFor::All,
+                    !0,
+                )
+            }.unwrap();
+        }
+
         for i in (0..self.active.len()).rev() {
-            if unsafe { device.get_fence_status(&self.active[i].fence).unwrap() } {
+            if force_wait || unsafe {
+                device.get_fence_status(&self.active[i].fence).unwrap()
+            } {
                 let a = self.active.swap_remove(i);
                 trace!("Active submission {} is done", a.index);
                 last_done = last_done.max(a.index);
@@ -236,6 +248,10 @@ impl DestroyedResources<back::Backend> {
             let buf = &buffer_guard[resource_id];
 
             let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
+            trace!("Mapping of {:?} at submission {:?} gets assigned to active {:?}",
+                resource_id, submit_index,
+                self.active.iter().position(|a| a.index == submit_index));
+
             self.active
                 .iter_mut()
                 .find(|a| a.index == submit_index)
@@ -460,13 +476,13 @@ impl<B: hal::Backend> Device<B> {
 }
 
 impl Device<back::Backend> {
-    fn maintain(&self) {
+    fn maintain(&self, force_wait: bool) {
         let mut destroyed = self.destroyed.lock();
         let mut trackers = self.trackers.lock();
 
         destroyed.triage_referenced(&mut *trackers);
         destroyed.triage_framebuffers(&mut *self.framebuffers.lock());
-        let last_done = destroyed.cleanup(&self.raw);
+        let last_done = destroyed.cleanup(&self.raw, force_wait);
         destroyed.handle_mapping(&self.raw, &self.limits);
 
         if last_done != 0 {
@@ -1236,7 +1252,7 @@ pub extern "C" fn wgpu_queue_submit(
     let device_guard = HUB.devices.read();
     let device = &device_guard[queue_id];
 
-    device.maintain();
+    device.maintain(false);
     device.destroyed.lock().active.alloc().init(ActiveSubmission {
         index: submit_index,
         fence,
@@ -1812,23 +1828,14 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_device_wait_idle(device_id: DeviceId) {
-    let device_guard = HUB.devices.read();
-    let device = &device_guard[device_id];
-    device.raw.wait_idle().unwrap();
-    device.maintain();
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_device_poll(device_id: DeviceId) {
-    HUB.devices.read()[device_id].maintain();
+pub extern "C" fn wgpu_device_poll(device_id: DeviceId, force_wait: bool) {
+    HUB.devices.read()[device_id].maintain(force_wait);
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_destroy(device_id: DeviceId) {
     let device = HUB.devices.unregister(device_id);
-    device.raw.wait_idle().unwrap();
-    device.maintain();
+    device.maintain(true);
     device.com_allocator.destroy(&device.raw);
 }
 

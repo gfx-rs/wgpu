@@ -20,7 +20,7 @@ fn main() {
 
     let instance = wgpu::Instance::new();
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
-        power_preference: wgpu::PowerPreference::LowPower,
+        power_preference: wgpu::PowerPreference::Default,
     });
     let mut device = adapter.create_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {

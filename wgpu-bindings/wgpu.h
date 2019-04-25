@@ -758,9 +758,7 @@ void wgpu_device_destroy(WGPUDeviceId device_id);
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
-void wgpu_device_poll(WGPUDeviceId device_id);
-
-void wgpu_device_wait_idle(WGPUDeviceId device_id);
+void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
 
 WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId instance_id,
                                                             void *layer);
