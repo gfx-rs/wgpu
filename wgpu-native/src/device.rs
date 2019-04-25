@@ -1,7 +1,7 @@
 use crate::{
     binding_model, command, conv, pipeline, resource, swap_chain,
     hub::HUB,
-    track::{DummyUsage, Stitch, TrackPermit, TrackerSet},
+    track::{DummyUsage, Stitch, Tracktion, TrackPermit, TrackerSet},
     AdapterId, BindGroupId, BufferId, CommandBufferId, DeviceId, QueueId, SurfaceId, TextureId,
     TextureViewId,
     BufferMapAsyncStatus, BufferMapOperation, LifeGuard, RefCount, Stored, SubmissionIndex,
@@ -100,7 +100,16 @@ struct ActiveSubmission<B: hal::Backend> {
     mapped: Vec<BufferId>,
 }
 
-struct DestroyedResources<B: hal::Backend> {
+/// A struct responsible for tracking resource lifetimes.
+///
+/// Here is how host mapping is handled:
+///   1. When mapping is requested we add the buffer to the pending list of `mapped` buffers.
+///   2. When `triage_referenced` is called, it checks the last submission index associated with each of the mapped buffer,
+/// and register the buffer with either a submission in flight, or straight into `ready_to_map` vector.
+///   3. when `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
+///   4. Finally, `handle_mapping` issues all the callbacks.
+
+struct PendingResources<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<BufferId>>,
     /// Resources that are destroyed by the user but still referenced by
@@ -115,10 +124,10 @@ struct DestroyedResources<B: hal::Backend> {
     ready_to_map: Vec<BufferId>,
 }
 
-unsafe impl<B: hal::Backend> Send for DestroyedResources<B> {}
-unsafe impl<B: hal::Backend> Sync for DestroyedResources<B> {}
+unsafe impl<B: hal::Backend> Send for PendingResources<B> {}
+unsafe impl<B: hal::Backend> Sync for PendingResources<B> {}
 
-impl<B: hal::Backend> DestroyedResources<B> {
+impl<B: hal::Backend> PendingResources<B> {
     fn destroy(&mut self, resource_id: ResourceId, ref_count: RefCount) {
         debug_assert!(!self.referenced.iter().any(|r| r.0 == resource_id));
         self.referenced.push((resource_id, ref_count));
@@ -132,15 +141,28 @@ impl<B: hal::Backend> DestroyedResources<B> {
     }
 
     /// Returns the last submission index that is done.
-    fn cleanup(&mut self, device: &B::Device) -> SubmissionIndex {
+    fn cleanup(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
         let mut last_done = 0;
 
+        if force_wait {
+            unsafe {
+                device.wait_for_fences(
+                    self.active.iter().map(|a| &a.fence),
+                    hal::device::WaitFor::All,
+                    !0,
+                )
+            }.unwrap();
+        }
+
         for i in (0..self.active.len()).rev() {
-            if unsafe { device.get_fence_status(&self.active[i].fence).unwrap() } {
+            if force_wait || unsafe {
+                device.get_fence_status(&self.active[i].fence).unwrap()
+            } {
                 let a = self.active.swap_remove(i);
                 trace!("Active submission {} is done", a.index);
                 last_done = last_done.max(a.index);
                 self.free.extend(a.resources.into_iter().map(|(_, r)| r));
+                self.ready_to_map.extend(a.mapped);
                 unsafe {
                     device.destroy_fence(a.fence);
                 }
@@ -170,7 +192,7 @@ impl<B: hal::Backend> DestroyedResources<B> {
     }
 }
 
-impl DestroyedResources<back::Backend> {
+impl PendingResources<back::Backend> {
     fn triage_referenced(&mut self, trackers: &mut TrackerSet) {
         for i in (0..self.referenced.len()).rev() {
             let num_refs = self.referenced[i].1.load();
@@ -221,21 +243,15 @@ impl DestroyedResources<back::Backend> {
 
         let buffer_guard = HUB.buffers.read();
 
-        for i in (0..self.mapped.len()).rev() {
-            let resource_id = self.mapped.swap_remove(i).value;
+        for stored in self.mapped.drain(..) {
+            let resource_id = stored.value;
             let buf = &buffer_guard[resource_id];
 
-            let usage = match buf.pending_map_operation {
-                Some(BufferMapOperation::Read(..)) => resource::BufferUsageFlags::MAP_READ,
-                Some(BufferMapOperation::Write(..)) => resource::BufferUsageFlags::MAP_WRITE,
-                _ => unreachable!(),
-            };
-            trackers
-                .buffers
-                .get_with_replaced_usage(&buffer_guard, resource_id, usage)
-                .unwrap();
-
             let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
+            trace!("Mapping of {:?} at submission {:?} gets assigned to active {:?}",
+                resource_id, submit_index,
+                self.active.iter().position(|a| a.index == submit_index));
+
             self.active
                 .iter_mut()
                 .find(|a| a.index == submit_index)
@@ -371,7 +387,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     desc_pool: Mutex<B::DescriptorPool>,
-    destroyed: Mutex<DestroyedResources<B>>,
+    pending: Mutex<PendingResources<B>>,
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -448,13 +464,29 @@ impl<B: hal::Backend> Device<B> {
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
             desc_pool,
-            destroyed: Mutex::new(DestroyedResources {
+            pending: Mutex::new(PendingResources {
                 mapped: Vec::new(),
                 referenced: Vec::new(),
                 active: Vec::new(),
                 free: Vec::new(),
                 ready_to_map: Vec::new(),
             }),
+        }
+    }
+}
+
+impl Device<back::Backend> {
+    fn maintain(&self, force_wait: bool) {
+        let mut pending = self.pending.lock();
+        let mut trackers = self.trackers.lock();
+
+        pending.triage_referenced(&mut *trackers);
+        pending.triage_framebuffers(&mut *self.framebuffers.lock());
+        let last_done = pending.cleanup(&self.raw, force_wait);
+        pending.handle_mapping(&self.raw, &self.limits);
+
+        if last_done != 0 {
+            self.com_allocator.maintain(last_done);
         }
     }
 }
@@ -485,10 +517,20 @@ pub fn device_create_buffer(
         .unwrap()
         .into();
     // TODO: allocate with rendy
+
+    // if the memory is mapped but not coherent, round up to the atom size
+    let mut mem_size = requirements.size;
+    if memory_properties.contains(hal::memory::Properties::CPU_VISIBLE) &&
+        !memory_properties.contains(hal::memory::Properties::COHERENT)
+    {
+        let mask = device.limits.non_coherent_atom_size as u64 - 1;
+        mem_size = ((mem_size - 1 ) | mask) + 1;
+    }
+
     let memory = unsafe {
         device
             .raw
-            .allocate_memory(device_type, requirements.size)
+            .allocate_memory(device_type, mem_size)
             .unwrap()
     };
     unsafe {
@@ -587,7 +629,7 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
     let buffer_guard = HUB.buffers.read();
     let buffer = &buffer_guard[buffer_id];
     HUB.devices.read()[buffer.device_id.value]
-        .destroyed
+        .pending
         .lock()
         .destroy(
             ResourceId::Buffer(buffer_id),
@@ -785,7 +827,7 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     let texture_guard = HUB.textures.read();
     let texture = &texture_guard[texture_id];
     HUB.devices.read()[texture.device_id.value]
-        .destroyed
+        .pending
         .lock()
         .destroy(
             ResourceId::Texture(texture_id),
@@ -798,7 +840,7 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
     let texture_view_guard = HUB.texture_views.read();
     let view = &texture_view_guard[texture_view_id];
     let device_id = HUB.textures.read()[view.texture_id.value].device_id.value;
-    HUB.devices.read()[device_id].destroyed.lock().destroy(
+    HUB.devices.read()[device_id].pending.lock().destroy(
         ResourceId::TextureView(texture_view_id),
         view.life_guard.ref_count.clone(),
     );
@@ -1094,13 +1136,8 @@ pub extern "C" fn wgpu_queue_submit(
     let (submit_index, fence) = {
         let mut device_guard = HUB.devices.write();
         let device = &mut device_guard[queue_id];
-
-        let mut swap_chain_links = Vec::new();
-
         let mut trackers = device.trackers.lock();
-        let mut destroyed = device.destroyed.lock();
-        destroyed.triage_referenced(&mut *trackers);
-        destroyed.triage_framebuffers(&mut *device.framebuffers.lock());
+        let mut swap_chain_links = Vec::new();
 
         let submit_index = 1 + device
             .life_guard
@@ -1123,7 +1160,9 @@ pub extern "C" fn wgpu_queue_submit(
 
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
-                    buffer_guard[id]
+                    let buffer = &buffer_guard[id];
+                    assert!(buffer.pending_map_operation.is_none());
+                    buffer
                         .life_guard
                         .submission_index
                         .store(submit_index, Ordering::Release);
@@ -1213,24 +1252,13 @@ pub extern "C" fn wgpu_queue_submit(
     let device_guard = HUB.devices.read();
     let device = &device_guard[queue_id];
 
-    let last_done = {
-        let mut destroyed = device.destroyed.lock();
-        let last_done = destroyed.cleanup(&device.raw);
-        destroyed.handle_mapping(&device.raw, &device.limits);
-
-        destroyed.active.alloc().init(ActiveSubmission {
-            index: submit_index,
-            fence,
-            resources: Vec::new(),
-            mapped: Vec::new(),
-        });
-
-        last_done
-    };
-
-    if last_done != 0 {
-        device.com_allocator.maintain(last_done);
-    }
+    device.maintain(false);
+    device.pending.lock().active.alloc().init(ActiveSubmission {
+        index: submit_index,
+        fence,
+        resources: Vec::new(),
+        mapped: Vec::new(),
+    });
 
     // finally, return the command buffers to the allocator
     for &cmb_id in command_buffer_ids {
@@ -1572,14 +1600,14 @@ pub fn device_create_swap_chain(
         Some(mut old) => {
             //TODO: remove this once gfx-rs stops destroying the old swapchain
             device.raw.wait_idle().unwrap();
-            let mut destroyed = device.destroyed.lock();
+            let mut pending = device.pending.lock();
             assert_eq!(old.device_id.value, device_id);
             for frame in old.frames {
-                destroyed.destroy(
+                pending.destroy(
                     ResourceId::Texture(frame.texture_id.value),
                     frame.texture_id.ref_count,
                 );
-                destroyed.destroy(
+                pending.destroy(
                     ResourceId::TextureView(frame.view_id.value),
                     frame.view_id.ref_count,
                 );
@@ -1801,8 +1829,15 @@ pub extern "C" fn wgpu_buffer_set_sub_data(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_device_destroy(device_id: BufferId) {
-    HUB.devices.unregister(device_id);
+pub extern "C" fn wgpu_device_poll(device_id: DeviceId, force_wait: bool) {
+    HUB.devices.read()[device_id].maintain(force_wait);
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_device_destroy(device_id: DeviceId) {
+    let device = HUB.devices.unregister(device_id);
+    device.maintain(true);
+    device.com_allocator.destroy(&device.raw);
 }
 
 pub type BufferMapReadCallback =
@@ -1818,22 +1853,36 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     callback: BufferMapReadCallback,
     userdata: *mut u8,
 ) {
-    let mut buffer_guard = HUB.buffers.write();
-    let buffer = &mut buffer_guard[buffer_id];
+    let (device_id, ref_count) = {
+        let mut buffer_guard = HUB.buffers.write();
+        let buffer = &mut buffer_guard[buffer_id];
 
-    if buffer.pending_map_operation.is_some() {
-        log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
-        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
-        return;
+        if buffer.pending_map_operation.is_some() {
+            log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
+            callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+            return;
+        }
+
+        let range = start as u64..(start + size) as u64;
+        buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
+        (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+    };
+
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[device_id];
+
+    let usage = resource::BufferUsageFlags::MAP_READ;
+    match device.trackers.lock().buffers.transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE) {
+        Ok(Tracktion::Keep) => {}
+        Ok(Tracktion::Replace { .. }) => {
+            //TODO: launch a memory barrier into `HOST_READ` access?
+        }
+        other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    let range = start as u64..(start + size) as u64;
-    buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
-
-    HUB.devices.read()[buffer.device_id.value]
-        .destroyed
+    device.pending
         .lock()
-        .map(buffer_id, buffer.life_guard.ref_count.clone());
+        .map(buffer_id, ref_count);
 }
 
 #[no_mangle]
@@ -1844,22 +1893,36 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     callback: BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
-    let mut buffer_guard = HUB.buffers.write();
-    let buffer = &mut buffer_guard[buffer_id];
+    let (device_id, ref_count) = {
+        let mut buffer_guard = HUB.buffers.write();
+        let buffer = &mut buffer_guard[buffer_id];
 
-    if buffer.pending_map_operation.is_some() {
-        log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
-        callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
-        return;
+        if buffer.pending_map_operation.is_some() {
+            log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
+            callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+            return;
+        }
+
+        let range = start as u64..(start + size) as u64;
+        buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
+        (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+    };
+
+    let device_guard = HUB.devices.read();
+    let device = &device_guard[device_id];
+
+    let usage = resource::BufferUsageFlags::MAP_WRITE;
+    match device.trackers.lock().buffers.transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE) {
+        Ok(Tracktion::Keep) => {}
+        Ok(Tracktion::Replace { .. }) => {
+            //TODO: launch a memory barrier into `HOST_WRITE` access?
+        }
+        other => panic!("Invalid mapping transition {:?}", other),
     }
 
-    let range = start as u64..(start + size) as u64;
-    buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
-
-    HUB.devices.read()[buffer.device_id.value]
-        .destroyed
+    device.pending
         .lock()
-        .map(buffer_id, buffer.life_guard.ref_count.clone());
+        .map(buffer_id, ref_count);
 }
 
 #[no_mangle]

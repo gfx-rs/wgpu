@@ -5,6 +5,8 @@ use crate::{
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
+#[cfg(feature = "local")]
+use log::info;
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
 
@@ -168,6 +170,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
     desc: &AdapterDescriptor,
 ) -> AdapterId {
     let adapter = instance_get_adapter(instance_id, desc);
+    info!("Adapter {:?}", adapter.info);
     HUB.adapters.register_local(adapter)
 }
 
