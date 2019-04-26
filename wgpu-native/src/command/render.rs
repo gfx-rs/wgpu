@@ -224,6 +224,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     pass_id: RenderPassId,
     index: u32,
     bind_group_id: BindGroupId,
+    offsets: &[u32],
 ) {
     let mut pass_guard = HUB.render_passes.write();
     let pass = &mut pass_guard[pass_id];
@@ -234,7 +235,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
 
     if let Some((pipeline_layout_id, follow_up)) =
         pass.binder
-            .provide_entry(index as usize, bind_group_id, bind_group)
+            .provide_entry(index as usize, bind_group_id, bind_group, offsets)
     {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let bind_groups =
@@ -244,7 +245,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
                 &&pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
                 bind_groups,
-                &[],
+                offsets,
             );
         }
     };

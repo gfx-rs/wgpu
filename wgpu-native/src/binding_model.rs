@@ -21,6 +21,8 @@ pub enum BindingType {
     Sampler = 1,
     SampledTexture = 2,
     StorageBuffer = 3,
+    UniformBufferDynamic = 4,
+    StorageBufferDynamic = 5,
 }
 
 #[repr(C)]

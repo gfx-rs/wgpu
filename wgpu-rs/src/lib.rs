@@ -838,8 +838,8 @@ impl CommandEncoder {
 }
 
 impl<'a> RenderPass<'a> {
-    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
-        wgn::wgpu_render_pass_set_bind_group(self.id, index, bind_group.id);
+    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[u32]) {
+        wgn::wgpu_render_pass_set_bind_group(self.id, index, bind_group.id, offsets);
     }
 
     pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
@@ -898,8 +898,8 @@ impl<'a> Drop for RenderPass<'a> {
 }
 
 impl<'a> ComputePass<'a> {
-    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup) {
-        wgn::wgpu_compute_pass_set_bind_group(self.id, index, bind_group.id);
+    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[u32]) {
+        wgn::wgpu_compute_pass_set_bind_group(self.id, index, bind_group.id, offsets);
     }
 
     pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {

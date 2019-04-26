@@ -78,6 +78,8 @@ pub fn map_binding_type(binding_ty: binding_model::BindingType) -> hal::pso::Des
         Sampler => H::Sampler,
         SampledTexture => H::SampledImage,
         StorageBuffer => H::StorageBuffer,
+        UniformBufferDynamic => H::UniformBufferDynamic,
+        StorageBufferDynamic => H::StorageBufferDynamic,
     }
 }
 

@@ -46,13 +46,13 @@ pub struct BindGroupEntry {
 }
 
 impl BindGroupEntry {
-    fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroupHandle) -> Provision {
+    fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroupHandle, offsets: &[u32]) -> Provision {
         let was_compatible = match self.provided {
             Some(BindGroupPair {
                 layout_id,
                 ref group_id,
             }) => {
-                if group_id.value == bind_group_id {
+                if group_id.value == bind_group_id && offsets.is_empty() {
                     assert_eq!(layout_id, bind_group.layout_id);
                     return Provision::Unchanged;
                 }
@@ -135,9 +135,10 @@ impl Binder {
         index: usize,
         bind_group_id: BindGroupId,
         bind_group: &BindGroupHandle,
+        offsets: &[u32],
     ) -> Option<(PipelineLayoutId, impl 'a + Iterator<Item = BindGroupId>)> {
         trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
-        match self.entries[index].provide(bind_group_id, bind_group) {
+        match self.entries[index].provide(bind_group_id, bind_group, offsets) {
             Provision::Unchanged => None,
             Provision::Changed {
                 now_compatible: false,

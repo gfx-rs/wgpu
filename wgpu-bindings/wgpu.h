@@ -21,6 +21,8 @@ typedef enum {
   WGPUBindingType_Sampler = 1,
   WGPUBindingType_SampledTexture = 2,
   WGPUBindingType_StorageBuffer = 3,
+  WGPUBindingType_UniformBufferDynamic = 4,
+  WGPUBindingType_StorageBufferDynamic = 5,
 } WGPUBindingType;
 
 typedef enum {
