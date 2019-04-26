@@ -4,10 +4,8 @@ use log::trace;
 
 use std::convert::identity;
 
-
 pub const MAX_BIND_GROUPS: usize = 4;
 type BindGroupMask = u8;
-
 
 pub struct BindGroupPair {
     layout_id: BindGroupLayoutId,
@@ -27,7 +25,6 @@ pub enum Provision {
         now_compatible: bool,
     },
 }
-
 
 struct TakeSome<I> {
     iter: I,
@@ -51,14 +48,17 @@ pub struct BindGroupEntry {
 impl BindGroupEntry {
     fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroupHandle) -> Provision {
         let was_compatible = match self.provided {
-            Some(BindGroupPair { layout_id, ref group_id }) => {
+            Some(BindGroupPair {
+                layout_id,
+                ref group_id,
+            }) => {
                 if group_id.value == bind_group_id {
                     assert_eq!(layout_id, bind_group.layout_id);
                     return Provision::Unchanged;
                 }
                 self.expected_layout_id == Some(layout_id)
             }
-            None => true
+            None => true,
         };
 
         self.provided = Some(BindGroupPair {
@@ -75,10 +75,7 @@ impl BindGroupEntry {
         }
     }
 
-    pub fn expect_layout(
-        &mut self,
-        bind_group_layout_id: BindGroupLayoutId,
-    ) -> LayoutChange {
+    pub fn expect_layout(&mut self, bind_group_layout_id: BindGroupLayoutId) -> LayoutChange {
         let some = Some(bind_group_layout_id);
         if self.expected_layout_id != some {
             self.expected_layout_id = some;
@@ -103,14 +100,15 @@ impl BindGroupEntry {
     }
 
     fn actual_value(&self) -> Option<BindGroupId> {
-        self.expected_layout_id
-            .and_then(|layout_id| self.provided.as_ref().and_then(|pair| {
+        self.expected_layout_id.and_then(|layout_id| {
+            self.provided.as_ref().and_then(|pair| {
                 if pair.layout_id == layout_id {
                     Some(pair.group_id.value)
                 } else {
                     None
                 }
-            }))
+            })
+        })
     }
 }
 
@@ -122,7 +120,7 @@ pub struct Binder {
 
 impl Binder {
     pub(crate) fn reset_expectations(&mut self, length: usize) {
-        for entry in self.entries[length ..].iter_mut() {
+        for entry in self.entries[length..].iter_mut() {
             entry.expected_layout_id = None;
         }
     }
@@ -140,15 +138,16 @@ impl Binder {
     ) -> Option<(PipelineLayoutId, impl 'a + Iterator<Item = BindGroupId>)> {
         trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         match self.entries[index].provide(bind_group_id, bind_group) {
-            Provision::Unchanged => {
-                None
-            }
-            Provision::Changed { now_compatible: false, .. } => {
+            Provision::Unchanged => None,
+            Provision::Changed {
+                now_compatible: false,
+                ..
+            } => {
                 trace!("\t\tnot compatible");
                 None
             }
             Provision::Changed { was_compatible, .. } => {
-                if self.entries[.. index].iter().all(|entry| entry.is_valid()) {
+                if self.entries[..index].iter().all(|entry| entry.is_valid()) {
                     self.pipeline_layout_id.map(move |pipeline_layout_id| {
                         let end = if was_compatible {
                             trace!("\t\tgenerating follow-up sequence");
@@ -156,11 +155,14 @@ impl Binder {
                         } else {
                             index + 1
                         };
-                        (pipeline_layout_id, TakeSome {
-                            iter: self.entries[index + 1 .. end]
-                                .iter()
-                                .map(|entry| entry.actual_value()),
-                        })
+                        (
+                            pipeline_layout_id,
+                            TakeSome {
+                                iter: self.entries[index + 1..end]
+                                    .iter()
+                                    .map(|entry| entry.actual_value()),
+                            },
+                        )
                     })
                 } else {
                     trace!("\t\tbehind an incompatible");

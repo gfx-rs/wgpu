@@ -1,7 +1,10 @@
 use crate::{
     hub::{Epoch, Id, Index, NewId, Storage},
     resource::{BufferUsageFlags, TextureUsageFlags},
-    BufferId, RefCount, TextureId, TextureViewId,
+    BufferId,
+    RefCount,
+    TextureId,
+    TextureViewId,
 };
 
 use bitflags::bitflags;
@@ -14,7 +17,6 @@ use std::{
     mem,
     ops::{BitOr, Range},
 };
-
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]

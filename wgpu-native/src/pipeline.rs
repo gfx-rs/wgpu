@@ -1,11 +1,6 @@
-use crate::{
-    device::RenderPassContext,
-    resource,
-    ByteArray, PipelineLayoutId, ShaderModuleId,
-};
+use crate::{device::RenderPassContext, resource, ByteArray, PipelineLayoutId, ShaderModuleId};
 
 use bitflags::bitflags;
-
 
 pub type ShaderAttributeIndex = u32;
 
@@ -66,10 +61,10 @@ impl BlendDescriptor {
 
     pub fn uses_color(&self) -> bool {
         match (self.src_factor, self.dst_factor) {
-            (BlendFactor::BlendColor, _) |
-            (BlendFactor::OneMinusBlendColor, _) |
-            (_, BlendFactor::BlendColor)  |
-            (_, BlendFactor::OneMinusBlendColor) => true,
+            (BlendFactor::BlendColor, _)
+            | (BlendFactor::OneMinusBlendColor, _)
+            | (_, BlendFactor::BlendColor)
+            | (_, BlendFactor::OneMinusBlendColor) => true,
             (_, _) => false,
         }
     }

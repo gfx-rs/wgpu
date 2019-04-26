@@ -48,7 +48,13 @@ pub trait Example {
 
 pub fn run<E: Example>(title: &str) {
     use wgpu::winit::{
-        ElementState, Event, EventsLoop, KeyboardInput, VirtualKeyCode, Window, WindowEvent,
+        ElementState,
+        Event,
+        EventsLoop,
+        KeyboardInput,
+        VirtualKeyCode,
+        Window,
+        WindowEvent,
     };
 
     info!("Initializing the device...");

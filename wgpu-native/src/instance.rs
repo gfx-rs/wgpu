@@ -1,7 +1,4 @@
-use crate::{
-    hub::HUB,
-    AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle,
-};
+use crate::{hub::HUB, AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
@@ -11,7 +8,6 @@ use log::info;
 use serde::{Deserialize, Serialize};
 
 use hal::{self, Instance as _, PhysicalDevice as _};
-
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
