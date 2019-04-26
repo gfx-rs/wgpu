@@ -83,7 +83,7 @@ fn main() {
     {
         let mut cpass = encoder.begin_compute_pass();
         cpass.set_pipeline(&compute_pipeline);
-        cpass.set_bind_group(0, &bind_group);
+        cpass.set_bind_group(0, &bind_group, &[]);
         cpass.dispatch(numbers.len() as u32, 1, 1);
     }
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);

@@ -463,8 +463,16 @@ impl<B: hal::Backend> Device<B> {
                             count: 10000,
                         },
                         hal::pso::DescriptorRangeDesc {
+                            ty: hal::pso::DescriptorType::UniformBufferDynamic,
+                            count: 100,
+                        },
+                        hal::pso::DescriptorRangeDesc {
                             ty: hal::pso::DescriptorType::StorageBuffer,
                             count: 1000,
+                        },
+                        hal::pso::DescriptorRangeDesc {
+                            ty: hal::pso::DescriptorType::StorageBufferDynamic,
+                            count: 100,
                         },
                     ],
                 )
@@ -1025,13 +1033,17 @@ pub fn device_create_bind_group(
                     )
                     .unwrap();
                 let alignment = match decl.ty {
-                    binding_model::BindingType::UniformBuffer => {
+                    binding_model::BindingType::UniformBuffer
+                    | binding_model::BindingType::UniformBufferDynamic => {
                         device.limits.min_uniform_buffer_offset_alignment
                     }
-                    binding_model::BindingType::StorageBuffer => {
+                    binding_model::BindingType::StorageBuffer
+                    | binding_model::BindingType::StorageBufferDynamic => {
                         device.limits.min_storage_buffer_offset_alignment
                     }
-                    _ => panic!("Mismatched buffer binding for {:?}", decl),
+                    binding_model::BindingType::Sampler
+                    | binding_model::BindingType::SampledTexture =>
+                        panic!("Mismatched buffer binding for {:?}", decl),
                 };
                 assert_eq!(
                     bb.offset as hal::buffer::Offset % alignment,

@@ -122,7 +122,7 @@ fn main() {
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&render_pipeline);
-            rpass.set_bind_group(0, &bind_group);
+            rpass.set_bind_group(0, &bind_group, &[]);
             rpass.draw(0..3, 0..1);
         }
 
