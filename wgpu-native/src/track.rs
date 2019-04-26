@@ -276,37 +276,37 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
     }
 }
 
-impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
+impl<I: crate::ToId + NewId + Clone, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        storage: &'a Storage<T>,
-        id: Id,
+        storage: &'a Storage<T, I>,
+        id: I,
         usage: U,
         permit: TrackPermit,
     ) -> Result<(&'a T, Tracktion<U>), U> {
-        let item = &storage[id];
+        let item = &storage[id.clone()];
         self.transit(id, item.borrow(), usage, permit)
             .map(|tracktion| (item, tracktion))
     }
 
     pub(crate) fn get_with_extended_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        storage: &'a Storage<T>,
-        id: Id,
+        storage: &'a Storage<T, I>,
+        id: I,
         usage: U,
     ) -> Result<&'a T, U> {
-        let item = &storage[id];
+        let item = &storage[id.clone()];
         self.transit(id, item.borrow(), usage, TrackPermit::EXTEND)
             .map(|_tracktion| item)
     }
 
     pub(crate) fn get_with_replaced_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        storage: &'a Storage<T>,
-        id: Id,
+        storage: &'a Storage<T, I>,
+        id: I,
         usage: U,
     ) -> Result<(&'a T, Option<U>), U> {
-        let item = &storage[id];
+        let item = &storage[id.clone()];
         self.transit(id, item.borrow(), usage, TrackPermit::REPLACE)
             .map(|tracktion| {
                 (

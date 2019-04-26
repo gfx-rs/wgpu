@@ -166,46 +166,157 @@ pub struct ByteArray {
     pub length: usize,
 }
 
-pub type InstanceId = hub::Id;
+macro_rules! transparent {
+    ($i:item) => (
+        #[repr(transparent)]
+        #[derive(Clone, Copy, Debug, Hash, PartialEq)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        $i
+    )
+}
+
+pub trait ToId {
+    fn id(&self) -> hub::Id;
+}
+
+macro_rules! to_id {
+    ($i:ident) => (
+        impl ToId for $i {
+            fn id(&self) -> hub::Id {
+                self.0
+            }
+        }
+    )
+}
+
+macro_rules! from_id {
+    ($i:ident) => (
+        impl From<hub::Id> for $i {
+            fn from(id:hub::Id) -> $i {
+                $i(id)
+            }
+        }
+    )
+}
+
+use hub::{Index, Epoch, NewId, Id};
+macro_rules! new_id {
+    ($i:ident) => (
+        impl NewId for $i {
+            fn new(index: Index, epoch: Epoch) -> Self {
+                let id = Id::new(index, epoch);
+                $i(id)
+            }
+
+            fn index(&self) -> Index {
+                (self.id()).index()
+            }
+
+            fn epoch(&self) -> Epoch {
+               (self.id()).epoch()
+            }
+        }
+    )
+}
+
+transparent!(pub struct InstanceId(hub::Id););
+to_id!(InstanceId);
+from_id!(InstanceId);
 type InstanceHandle = back::Instance;
-pub type AdapterId = hub::Id;
+
+transparent!(pub struct AdapterId(hub::Id););
+to_id!(AdapterId);
+from_id!(AdapterId);
 type AdapterHandle = hal::Adapter<back::Backend>;
-pub type DeviceId = hub::Id;
+
+transparent!(pub struct DeviceId(hub::Id););
+to_id!(DeviceId);
+from_id!(DeviceId);
 type DeviceHandle = Device<back::Backend>;
+//transparent!(pub struct QueueId(DeviceId););
 pub type QueueId = DeviceId;
-pub type BufferId = hub::Id;
+
+transparent!(pub struct BufferId(hub::Id););
+to_id!(BufferId);
+from_id!(BufferId);
+new_id!(BufferId);
 type BufferHandle = Buffer<back::Backend>;
+
 // Resource
-pub type TextureViewId = hub::Id;
+transparent!(pub struct TextureViewId(hub::Id););
+to_id!(TextureViewId);
+from_id!(TextureViewId);
+new_id!(TextureViewId);
 type TextureViewHandle = TextureView<back::Backend>;
-pub type TextureId = hub::Id;
+
+transparent!(pub struct TextureId(hub::Id););
+to_id!(TextureId);
+from_id!(TextureId);
+new_id!(TextureId);
 type TextureHandle = Texture<back::Backend>;
-pub type SamplerId = hub::Id;
+
+transparent!(pub struct SamplerId(hub::Id););
+to_id!(SamplerId);
+from_id!(SamplerId);
 type SamplerHandle = Sampler<back::Backend>;
+
 // Binding model
-pub type BindGroupLayoutId = hub::Id;
+transparent!(pub struct BindGroupLayoutId(hub::Id););
+to_id!(BindGroupLayoutId);
+from_id!(BindGroupLayoutId);
 type BindGroupLayoutHandle = BindGroupLayout<back::Backend>;
-pub type PipelineLayoutId = hub::Id;
+
+transparent!(pub struct PipelineLayoutId(hub::Id););
+to_id!(PipelineLayoutId);
+from_id!(PipelineLayoutId);
 type PipelineLayoutHandle = PipelineLayout<back::Backend>;
-pub type BindGroupId = hub::Id;
+
+transparent!(pub struct BindGroupId(hub::Id););
+to_id!(BindGroupId);
+from_id!(BindGroupId);
 type BindGroupHandle = BindGroup<back::Backend>;
+
 // Pipeline
-pub type InputStateId = hub::Id;
-pub type ShaderModuleId = hub::Id;
+transparent!(pub struct InputStateId(hub::Id););
+to_id!(InputStateId);
+from_id!(InputStateId);
+transparent!(pub struct ShaderModuleId(hub::Id););
+to_id!(ShaderModuleId);
+from_id!(ShaderModuleId);
 type ShaderModuleHandle = ShaderModule<back::Backend>;
-pub type RenderPipelineId = hub::Id;
+
+transparent!(pub struct RenderPipelineId(hub::Id););
+to_id!(RenderPipelineId);
+from_id!(RenderPipelineId);
 type RenderPipelineHandle = RenderPipeline<back::Backend>;
-pub type ComputePipelineId = hub::Id;
+
+transparent!(pub struct ComputePipelineId(hub::Id););
+to_id!(ComputePipelineId);
+from_id!(ComputePipelineId);
 type ComputePipelineHandle = ComputePipeline<back::Backend>;
+
 // Command
-pub type CommandBufferId = hub::Id;
+transparent!(pub struct CommandBufferId(hub::Id););
+to_id!(CommandBufferId);
+from_id!(CommandBufferId);
 type CommandBufferHandle = CommandBuffer<back::Backend>;
+//transparent!(pub struct CommandEncoderId(CommandBufferId););
 pub type CommandEncoderId = CommandBufferId;
-pub type RenderPassId = hub::Id;
+
+transparent!(pub struct RenderPassId(hub::Id););
+to_id!(RenderPassId);
+from_id!(RenderPassId);
 type RenderPassHandle = RenderPass<back::Backend>;
-pub type ComputePassId = hub::Id;
+
+transparent!(pub struct ComputePassId(hub::Id););
+to_id!(ComputePassId);
+from_id!(ComputePassId);
 type ComputePassHandle = ComputePass<back::Backend>;
+
 // Swap chain
-pub type SurfaceId = hub::Id;
+transparent!(pub struct SurfaceId(hub::Id););
+to_id!(SurfaceId);
+from_id!(SurfaceId);
 type SurfaceHandle = Surface<back::Backend>;
+//transparent!(pub struct SwapChainId(SurfaceId););
 pub type SwapChainId = SurfaceId;

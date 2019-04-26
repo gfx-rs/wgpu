@@ -99,8 +99,8 @@ impl CommandBufferHandle {
         base: &mut TrackerSet,
         head: &TrackerSet,
         stitch: Stitch,
-        buffer_guard: &Storage<BufferHandle>,
-        texture_guard: &Storage<TextureHandle>,
+        buffer_guard: &Storage<BufferHandle, crate::BufferId>,
+        texture_guard: &Storage<TextureHandle, crate::TextureId>,
     ) {
         let buffer_barriers =
             base.buffers
