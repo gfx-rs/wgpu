@@ -343,3 +343,30 @@ pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color:
         pass.raw.set_blend_constants(conv::map_color(color));
     }
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_scissor_rect(
+    pass_id: RenderPassId,
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+
+    unsafe {
+        use std::convert::TryFrom;
+        use std::i16;
+
+        pass.raw.set_scissors(
+            0,
+            &[hal::pso::Rect {
+                x: i16::try_from(x).unwrap_or(0),
+                y: i16::try_from(y).unwrap_or(0),
+                w: i16::try_from(w).unwrap_or(i16::MAX),
+                h: i16::try_from(h).unwrap_or(i16::MAX),
+            }],
+        );
+    }
+}
