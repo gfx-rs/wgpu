@@ -1,21 +1,39 @@
 use crate::{
     AdapterHandle,
+    AdapterId,
     BindGroupHandle,
+    BindGroupId,
     BindGroupLayoutHandle,
+    BindGroupLayoutId,
     BufferHandle,
+    BufferId,
     CommandBufferHandle,
+    CommandBufferId,
     ComputePassHandle,
+    ComputePassId,
     ComputePipelineHandle,
+    ComputePipelineId,
     DeviceHandle,
+    DeviceId,
     InstanceHandle,
+    InstanceId,
     PipelineLayoutHandle,
+    PipelineLayoutId,
     RenderPassHandle,
+    RenderPassId,
     RenderPipelineHandle,
+    RenderPipelineId,
     SamplerHandle,
+    SamplerId,
     ShaderModuleHandle,
+    ShaderModuleId,
     SurfaceHandle,
+    SurfaceId,
     TextureHandle,
+    TextureId,
     TextureViewHandle,
+    TextureViewId,
+    TypedId
 };
 
 use lazy_static::lazy_static;
@@ -87,73 +105,70 @@ impl IdentityManager {
     }
 }
 
-pub struct Storage<T, I:'static + ToId> {
+pub struct Storage<T, I:'static + TypedId> {
     //TODO: consider concurrent hashmap?
     map: VecMap<(T, Epoch)>,
     _phantom: std::marker::PhantomData<&'static I>,
 }
 
-impl<T, I:ToId> ops::Index<I> for Storage<T, I> {
+impl<T, I:TypedId> ops::Index<I> for Storage<T, I> {
     type Output = T;
     fn index(&self, id: I) -> &T {
-        let (ref value, epoch) = self.map[id.id().0 as usize];
-        assert_eq!(epoch, id.id().1);
+        let (ref value, epoch) = self.map[id.raw().index() as usize];
+        assert_eq!(epoch, id.raw().1);
         value
     }
 }
 
-impl<T, I:ToId> ops::IndexMut<I> for Storage<T, I> {
+impl<T, I:TypedId> ops::IndexMut<I> for Storage<T, I> {
     fn index_mut(&mut self, id: I) -> &mut T {
-        let (ref mut value, epoch) = self.map[id.id().0 as usize];
-        assert_eq!(epoch, id.id().1);
+        let (ref mut value, epoch) = self.map[id.raw().index() as usize];
+        assert_eq!(epoch, id.raw().1);
         value
     }
 }
 
-impl<T, I:ToId> Storage<T, I> {
+impl<T, I:TypedId> Storage<T, I> {
     pub fn contains(&self, id: I) -> bool {
-        match self.map.get(id.id().0 as usize) {
-            Some(&(_, epoch)) if epoch == id.id().1 => true,
+        match self.map.get(id.raw().index() as usize) {
+            Some(&(_, epoch)) if epoch == id.raw().1 => true,
             _ => false,
         }
     }
 }
 
-use crate::ToId;
-pub struct Registry<T, I: 'static + ToId + From<Id>> {
+pub struct Registry<T, I: 'static + TypedId + From<Id>> {
     #[cfg(feature = "local")]
     identity: Mutex<IdentityManager>,
     data: RwLock<Storage<T, I>>,
-    _phantom: std::marker::PhantomData<&'static I>,
 }
 
-impl<T, I: ToId + From<Id>> Default for Registry<T, I> {
+impl<T, I: TypedId + From<Id>> Default for Registry<T, I> {
     fn default() -> Self {
         Registry {
             #[cfg(feature = "local")]
             identity: Mutex::new(IdentityManager::default()),
             data: RwLock::new(Storage { map: VecMap::new(), _phantom: std::marker::PhantomData }),
-            _phantom: std::marker::PhantomData,
         }
     }
 }
 
-impl<T, I: ToId + From<Id>> ops::Deref for Registry<T, I> {
+impl<T, I: TypedId + From<Id>> ops::Deref for Registry<T, I> {
     type Target = RwLock<Storage<T, I>>;
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
-impl<T, I: ToId + From<Id>> ops::DerefMut for Registry<T, I> {
+impl<T, I: TypedId + From<Id>> ops::DerefMut for Registry<T, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
 
-impl<T, I: ToId + From<Id> + Clone> Registry<T, I> {
+impl<T, I: TypedId + From<Id> + Clone> Registry<T, I> {
     pub fn register(&self, id: I, value: T) {
-        let old = self.data.write().map.insert(id.id().0 as usize, (value, id.id().1));
+        let old = self.data.write().map.insert(id.raw().0 as usize, (value, id.raw().1));
         assert!(old.is_none());
     }
 
@@ -167,13 +182,13 @@ impl<T, I: ToId + From<Id> + Clone> Registry<T, I> {
 
     pub fn unregister(&self, id: I) -> T {
         #[cfg(feature = "local")]
-        self.identity.lock().free(id.id());
-        let (value, epoch) = self.data.write().map.remove(id.id().0 as usize).unwrap();
-        assert_eq!(epoch, id.id().1);
+        self.identity.lock().free(id.raw());
+        let (value, epoch) = self.data.write().map.remove(id.raw().0 as usize).unwrap();
+        assert_eq!(epoch, id.raw().1);
         value
     }
 }
-use crate::*;
+
 #[derive(Default)]
 pub struct Hub {
     pub instances: Arc<Registry<InstanceHandle, InstanceId>>,

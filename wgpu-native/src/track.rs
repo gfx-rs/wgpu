@@ -1,10 +1,11 @@
 use crate::{
-    hub::{Epoch, Id, Index, NewId, Storage},
+    hub::{Epoch, Index, NewId, Storage},
     resource::{BufferUsageFlags, TextureUsageFlags},
     BufferId,
     RefCount,
     TextureId,
     TextureViewId,
+    TypedId
 };
 
 use bitflags::bitflags;
@@ -276,7 +277,7 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
     }
 }
 
-impl<I: crate::ToId + NewId + Clone, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+impl<I: TypedId + NewId + Clone, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, I>,
