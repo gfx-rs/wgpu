@@ -171,6 +171,7 @@ macro_rules! define_id {
     ($i:ident) => {
         transparent!($i);
         typed_id!($i);
+        new_id!($i);
     }
 }
 
@@ -233,16 +234,13 @@ type DeviceHandle = Device<back::Backend>;
 pub type QueueId = DeviceId;
 
 define_id!(BufferId);
-new_id!(BufferId);
 type BufferHandle = Buffer<back::Backend>;
 
 // Resource
 define_id!(TextureViewId);
-new_id!(TextureViewId);
 type TextureViewHandle = TextureView<back::Backend>;
 
 define_id!(TextureId);
-new_id!(TextureId);
 type TextureHandle = Texture<back::Backend>;
 
 define_id!(SamplerId);
