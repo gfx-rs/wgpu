@@ -499,7 +499,7 @@ impl Device {
         assert_ne!(type_size, 0);
 
         let desc = BufferDescriptor {
-            size: type_size * count as u32,
+            size: (type_size * count as u32).max(1),
             usage,
         };
         let mut ptr: *mut u8 = std::ptr::null_mut();
