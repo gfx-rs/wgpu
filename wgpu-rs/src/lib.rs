@@ -807,6 +807,10 @@ impl<'a> RenderPass<'a> {
         );
     }
 
+    pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
+        wgn::wgpu_render_pass_set_scissor_rect(self.id, x, y, w, h)
+    }
+
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         wgn::wgpu_render_pass_draw(
             self.id,
