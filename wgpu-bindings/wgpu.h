@@ -804,6 +804,12 @@ void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
 
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
 
+void wgpu_render_pass_set_scissor_rect(WGPURenderPassId pass_id,
+                                       uint32_t x,
+                                       uint32_t y,
+                                       uint32_t w,
+                                       uint32_t h);
+
 void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
                                          const WGPUBufferId *buffer_ptr,
                                          const uint32_t *offset_ptr,
