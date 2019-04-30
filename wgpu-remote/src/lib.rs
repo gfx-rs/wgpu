@@ -1,3 +1,6 @@
+//TODO: remove once `cbindgen` is smart enough
+extern crate wgpu_native as wgn;
+
 use crate::server::Server;
 
 use ipc_channel::ipc;
@@ -5,7 +8,6 @@ use lazy_static::lazy_static;
 use log::error;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
-use wgn;
 
 use std::ptr;
 
@@ -83,7 +85,7 @@ pub extern "C" fn wgpu_initialize() -> Infrastructure {
             Infrastructure {
                 client: ptr::null_mut(),
                 server: ptr::null_mut(),
-                error: ptr::null(), //TODO
+                error: ptr::null(), //TODO_remote_
             }
         }
     }
@@ -91,7 +93,7 @@ pub extern "C" fn wgpu_initialize() -> Infrastructure {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_terminate(client: *mut Client) {
+pub extern "C" fn wgpu_client_terminate(client: *mut Client) {
     let client = unsafe {
         Box::from_raw(client)
     };
@@ -100,7 +102,7 @@ pub extern "C" fn wgpu_terminate(client: *mut Client) {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_instance_get_adapter(
+pub extern "C" fn wgpu_client_get_adapter(
     client: &Client,
     desc: &wgn::AdapterDescriptor,
 ) -> wgn::AdapterId {
@@ -115,7 +117,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_adapter_create_device(
+pub extern "C" fn wgpu_client_adapter_create_device(
     client: &Client,
     adapter_id: wgn::AdapterId,
     desc: &wgn::DeviceDescriptor,

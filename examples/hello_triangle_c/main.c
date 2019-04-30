@@ -1,4 +1,4 @@
-#include "./../../wgpu-bindings/wgpu.h"
+#include "./../../ffi/wgpu.h"
 #include <stdio.h>
 
 #define WGPU_TARGET_MACOS 1

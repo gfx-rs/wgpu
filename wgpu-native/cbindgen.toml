@@ -1,0 +1,31 @@
+header = ""
+include_version = true
+braces = "SameLine"
+line_length = 100
+tab_width = 2
+language = "C"
+
+[export]
+prefix = "WGPU"
+
+[parse]
+parse_deps = false
+
+[parse.expand]
+features = ["local"]
+
+[fn]
+
+[struct]
+derive_eq = true
+
+[enum]
+prefix_with_name = true
+derive_helper_methods = true
+
+[macro_expansion]
+bitflags = true
+
+[defines]
+"feature = window-winit" = "WGPU_WINDOW_WINIT"
+"feature = remote" = "WGPU_REMOTE"

@@ -1,9 +1,11 @@
+
+
+/* Generated with cbindgen:0.8.3 */
+
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
-
-#define WGPUBITS_PER_BYTE 8
 
 #define WGPUMAX_BIND_GROUPS 4
 
@@ -251,6 +253,8 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
+typedef struct WGPUTrackPermit WGPUTrackPermit;
+
 typedef uint32_t WGPUIndex;
 
 typedef uint32_t WGPUEpoch;
@@ -260,9 +264,11 @@ typedef struct {
   WGPUEpoch _1;
 } WGPUId;
 
-typedef WGPUId WGPUDeviceId;
-
 typedef WGPUId WGPUAdapterId;
+
+typedef struct {
+  WGPUPowerPreference power_preference;
+} WGPUAdapterDescriptor;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -271,6 +277,16 @@ typedef struct {
 typedef struct {
   WGPUExtensions extensions;
 } WGPUDeviceDescriptor;
+
+#if defined(WGPU_REMOTE)
+typedef struct {
+  WGPUAdapterId adapter;
+  WGPUAdapterDescriptor adapter_desc;
+  WGPUDeviceDescriptor device_desc;
+} WGPUForcedExports;
+#endif
+
+typedef WGPUId WGPUDeviceId;
 
 typedef WGPUId WGPUBindGroupId;
 
@@ -324,6 +340,12 @@ typedef struct {
   float b;
   float a;
 } WGPUColor;
+#define WGPUColor_TRANSPARENT (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 0 }
+#define WGPUColor_BLACK (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 1 }
+#define WGPUColor_WHITE (WGPUColor){ .r = 1, .g = 1, .b = 1, .a = 1 }
+#define WGPUColor_RED (WGPUColor){ .r = 1, .g = 0, .b = 0, .a = 1 }
+#define WGPUColor_GREEN (WGPUColor){ .r = 0, .g = 1, .b = 0, .a = 1 }
+#define WGPUColor_BLUE (WGPUColor){ .r = 0, .g = 0, .b = 1, .a = 1 }
 
 typedef struct {
   WGPUTextureViewId attachment;
@@ -401,6 +423,9 @@ typedef struct {
 } WGPUBindGroupDescriptor;
 
 typedef uint32_t WGPUShaderStageFlags;
+#define WGPUShaderStageFlags_VERTEX 1
+#define WGPUShaderStageFlags_FRAGMENT 2
+#define WGPUShaderStageFlags_COMPUTE 4
 
 typedef struct {
   uint32_t binding;
@@ -414,6 +439,16 @@ typedef struct {
 } WGPUBindGroupLayoutDescriptor;
 
 typedef uint32_t WGPUBufferUsageFlags;
+#define WGPUBufferUsageFlags_MAP_READ 1
+#define WGPUBufferUsageFlags_MAP_WRITE 2
+#define WGPUBufferUsageFlags_TRANSFER_SRC 4
+#define WGPUBufferUsageFlags_TRANSFER_DST 8
+#define WGPUBufferUsageFlags_INDEX 16
+#define WGPUBufferUsageFlags_VERTEX 32
+#define WGPUBufferUsageFlags_UNIFORM 64
+#define WGPUBufferUsageFlags_STORAGE 128
+#define WGPUBufferUsageFlags_NONE 0
+#define WGPUBufferUsageFlags_WRITE_ALL 2 + 8 + 128
 
 typedef struct {
   uint32_t size;
@@ -460,6 +495,12 @@ typedef struct {
 } WGPUBlendDescriptor;
 
 typedef uint32_t WGPUColorWriteFlags;
+#define WGPUColorWriteFlags_RED 1
+#define WGPUColorWriteFlags_GREEN 2
+#define WGPUColorWriteFlags_BLUE 4
+#define WGPUColorWriteFlags_ALPHA 8
+#define WGPUColorWriteFlags_COLOR 7
+#define WGPUColorWriteFlags_ALL 15
 
 typedef struct {
   WGPUTextureFormat format;
@@ -547,6 +588,14 @@ typedef WGPUId WGPUSurfaceId;
 typedef WGPUSurfaceId WGPUSwapChainId;
 
 typedef uint32_t WGPUTextureUsageFlags;
+#define WGPUTextureUsageFlags_TRANSFER_SRC 1
+#define WGPUTextureUsageFlags_TRANSFER_DST 2
+#define WGPUTextureUsageFlags_SAMPLED 4
+#define WGPUTextureUsageFlags_STORAGE 8
+#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT 16
+#define WGPUTextureUsageFlags_NONE 0
+#define WGPUTextureUsageFlags_WRITE_ALL 2 + 8 + 16
+#define WGPUTextureUsageFlags_UNINITIALIZED 65535
 
 typedef struct {
   WGPUTextureUsageFlags usage;
@@ -566,15 +615,14 @@ typedef struct {
 typedef WGPUDeviceId WGPUQueueId;
 
 typedef struct {
-  WGPUPowerPreference power_preference;
-} WGPUAdapterDescriptor;
-
-typedef struct {
   WGPUTextureId texture_id;
   WGPUTextureViewId view_id;
 } WGPUSwapChainOutput;
 
 typedef uint32_t WGPUTextureAspectFlags;
+#define WGPUTextureAspectFlags_COLOR 1
+#define WGPUTextureAspectFlags_DEPTH 2
+#define WGPUTextureAspectFlags_STENCIL 4
 
 typedef struct {
   WGPUTextureFormat format;
@@ -586,79 +634,13 @@ typedef struct {
   uint32_t array_count;
 } WGPUTextureViewDescriptor;
 
-#define WGPUBufferUsageFlags_INDEX 16
 
-#define WGPUBufferUsageFlags_MAP_READ 1
 
-#define WGPUBufferUsageFlags_MAP_WRITE 2
 
-#define WGPUBufferUsageFlags_NONE 0
 
-#define WGPUBufferUsageFlags_STORAGE 128
-
-#define WGPUBufferUsageFlags_TRANSFER_DST 8
-
-#define WGPUBufferUsageFlags_TRANSFER_SRC 4
-
-#define WGPUBufferUsageFlags_UNIFORM 64
-
-#define WGPUBufferUsageFlags_VERTEX 32
-
-#define WGPUColorWriteFlags_ALL 15
-
-#define WGPUColorWriteFlags_ALPHA 8
-
-#define WGPUColorWriteFlags_BLUE 4
-
-#define WGPUColorWriteFlags_COLOR 7
-
-#define WGPUColorWriteFlags_GREEN 2
-
-#define WGPUColorWriteFlags_RED 1
-
-#define WGPUColor_BLACK (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 1 }
-
-#define WGPUColor_BLUE (WGPUColor){ .r = 0, .g = 0, .b = 1, .a = 1 }
-
-#define WGPUColor_GREEN (WGPUColor){ .r = 0, .g = 1, .b = 0, .a = 1 }
-
-#define WGPUColor_RED (WGPUColor){ .r = 1, .g = 0, .b = 0, .a = 1 }
-
-#define WGPUColor_TRANSPARENT (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 0 }
-
-#define WGPUColor_WHITE (WGPUColor){ .r = 1, .g = 1, .b = 1, .a = 1 }
-
-#define WGPUPipelineFlags_BLEND_COLOR 1
-
-#define WGPUShaderStageFlags_COMPUTE 4
-
-#define WGPUShaderStageFlags_FRAGMENT 2
-
-#define WGPUShaderStageFlags_VERTEX 1
-
-#define WGPUTextureAspectFlags_COLOR 1
-
-#define WGPUTextureAspectFlags_DEPTH 2
-
-#define WGPUTextureAspectFlags_STENCIL 4
-
-#define WGPUTextureUsageFlags_NONE 0
-
-#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT 16
-
-#define WGPUTextureUsageFlags_SAMPLED 4
-
-#define WGPUTextureUsageFlags_STORAGE 8
-
-#define WGPUTextureUsageFlags_TRANSFER_DST 2
-
-#define WGPUTextureUsageFlags_TRANSFER_SRC 1
-
-#define WGPUTextureUsageFlags_UNINITIALIZED 65535
-
-#define WGPUTrackPermit_EXTEND (WGPUTrackPermit){ .bits = 1 }
-
-#define WGPUTrackPermit_REPLACE (WGPUTrackPermit){ .bits = 2 }
+#if defined(WGPU_REMOTE)
+void forced_exports(WGPUForcedExports fe);
+#endif
 
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDeviceDescriptor *desc);
 
@@ -718,6 +700,12 @@ void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t 
 
 WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
+void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
+                                      uint32_t index,
+                                      WGPUBindGroupId bind_group_id,
+                                      const uint32_t *offsets_ptr,
+                                      uintptr_t offsets_count);
+
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
 
 WGPUInstanceId wgpu_create_instance(void);
@@ -769,6 +757,11 @@ WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId insta
 WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
                                                              void *hinstance,
                                                              void *hwnd);
+
+#if defined(WGPU_WINDOW_WINIT)
+WGPUSurfaceId wgpu_instance_create_surface_from_winit(WGPUInstanceId instance_id,
+                                                      const WGPUWindow *window);
+#endif
 
 WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
                                                      const void **display,

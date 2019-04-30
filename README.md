@@ -7,7 +7,6 @@ This is an experimental [WebGPU](https://www.w3.org/community/gpu/) implementati
 
 The implementation consists of the following parts:
   - `wgpu-native` - the native implementation of WebGPU as a C API library
-  - `wgpu-bindings` - automatic generator of actual C headers
   - `wgpu-remote` - remoting layer to work with WebGPU across the process boundary
   - `wgpu-rs` - idiomatic Rust wrapper of the native library
 

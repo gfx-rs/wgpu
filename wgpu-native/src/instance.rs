@@ -43,14 +43,15 @@ pub fn create_instance() -> ::back::Instance {
     ::back::Instance::create("wgpu", 1)
 }
 
-#[no_mangle]
 #[cfg(feature = "local")]
+#[no_mangle]
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
     let inst = create_instance();
     HUB.instances.register_local(inst)
 }
 
-#[cfg(all(feature = "local", feature = "window-winit"))]
+
+#[cfg(feature = "window-winit")]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,

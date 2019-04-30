@@ -12,13 +12,13 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-vulkan = ["wgn/gfx-backend-vulkan"]
-dx11 = ["wgn/gfx-backend-dx11"]
-dx12 = ["wgn/gfx-backend-dx12"]
-metal = ["wgn/gfx-backend-metal"]
+vulkan = ["wgpu-native/gfx-backend-vulkan"]
+dx11 = ["wgpu-native/gfx-backend-dx11"]
+dx12 = ["wgpu-native/gfx-backend-dx12"]
+metal = ["wgpu-native/gfx-backend-metal"]
 
 [dependencies]
-wgn = { package = "wgpu-native", path = "../wgpu-native", features = ["remote"] }
+wgpu-native = { path = "../wgpu-native", version = "0.2", features = ["remote"] }
 ipc-channel = "0.11"
 lazy_static = "1"
 log = "0.4"

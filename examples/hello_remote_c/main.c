@@ -1,5 +1,4 @@
-#include "./../../wgpu-bindings/wgpu-native.h"
-#include "./../../wgpu-bindings/wgpu-remote.h"
+#include "./../../ffi/wgpu-remote.h"
 #include <stdio.h>
 
 int main() {
@@ -12,7 +11,7 @@ int main() {
 
     //TODO: do something meaningful
 
-    wgpu_terminate(infra.client);
+    wgpu_client_terminate(infra.client);
 
     return 0;
 }
