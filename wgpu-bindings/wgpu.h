@@ -56,6 +56,13 @@ typedef enum {
 } WGPUBorderColor;
 
 typedef enum {
+  WGPUBufferMapAsyncStatus_Success,
+  WGPUBufferMapAsyncStatus_Error,
+  WGPUBufferMapAsyncStatus_Unknown,
+  WGPUBufferMapAsyncStatus_ContextLost,
+} WGPUBufferMapAsyncStatus;
+
+typedef enum {
   WGPUCompareFunction_Never = 0,
   WGPUCompareFunction_Less = 1,
   WGPUCompareFunction_Equal = 2,
@@ -243,8 +250,6 @@ typedef enum {
   WGPUVertexFormat_Int3 = 47,
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
-
-typedef struct WGPUBufferMapAsyncStatus WGPUBufferMapAsyncStatus;
 
 typedef uint32_t WGPUIndex;
 
@@ -713,10 +718,6 @@ void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t 
 
 WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
-void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
-                                      uint32_t index,
-                                      WGPUBindGroupId bind_group_id);
-
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
 
 WGPUInstanceId wgpu_create_instance(void);
@@ -797,7 +798,9 @@ WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
 
 void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uint32_t index,
-                                     WGPUBindGroupId bind_group_id);
+                                     WGPUBindGroupId bind_group_id,
+                                     const uint32_t *offsets_ptr,
+                                     uintptr_t offsets_count);
 
 void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
 

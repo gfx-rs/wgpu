@@ -30,7 +30,7 @@ else
 endif
 
 
-.PHONY: all check test doc clear lib-native lib-rust examples-native examples-rust gfx
+.PHONY: all check test doc clear lib-native lib-remote lib-rust ci-examples examples-native examples-rust examples-gfx gfx
 
 all: examples-native examples-rust examples-gfx
 
@@ -50,14 +50,23 @@ clear:
 lib-native: Cargo.lock wgpu-native/Cargo.toml $(wildcard wgpu-native/**/*.rs)
 	cargo build --manifest-path wgpu-native/Cargo.toml --features "local,$(FEATURE_NATIVE)"
 
+lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
+	cargo build --manifest-path wgpu-remote/Cargo.toml --features $(FEATURE_RUST)
+
 lib-rust: Cargo.lock wgpu-rs/Cargo.toml $(wildcard wgpu-rs/**/*.rs)
 	cargo build --manifest-path wgpu-rs/Cargo.toml --features $(FEATURE_RUST)
 
-wgpu-bindings/*.h: Cargo.lock wgpu-bindings/src/*.rs lib-native
+wgpu-bindings/*.h: Cargo.lock $(wildcard wgpu-bindings/src/*.rs) lib-native lib-remote
 	cargo +nightly run --manifest-path wgpu-bindings/Cargo.toml
 
 examples-native: lib-native wgpu-bindings/wgpu.h $(wildcard wgpu-native/**/*.c)
 	#$(MAKE) -C examples
+
+ci-examples:
+	cargo build --manifest-path wgpu-native/Cargo.toml --features=local,$(FEATURE_NATIVE)
+	cargo build --manifest-path wgpu-remote/Cargo.toml --features=$(FEATURE_RUST)
+	cd examples/hello_triangle_c && mkdir -p build && cd build && cmake .. && make
+	cd examples/hello_remote_c && mkdir -p build && cd build && cmake .. && make
 
 examples-rust: lib-rust examples/Cargo.toml $(wildcard wgpu-native/**/*.rs)
 	cargo build --manifest-path examples/Cargo.toml --features $(FEATURE_RUST)

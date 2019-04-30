@@ -19,18 +19,21 @@ pub enum PowerPreference {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 #[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct AdapterDescriptor {
     pub power_preference: PowerPreference,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 #[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 #[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,

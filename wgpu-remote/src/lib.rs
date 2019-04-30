@@ -1,18 +1,26 @@
-use ipc_channel::ipc::IpcSender;
+use crate::server::Server;
+
+use ipc_channel::ipc;
+use log::error;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
+use wgn;
 
-use wgpu_native as wgn;
+use std::ptr;
+
+mod server;
+
 
 #[derive(Serialize, Deserialize)]
-pub enum InstanceMessage {
+enum InstanceMessage {
     InstanceGetAdapter(wgn::InstanceId, wgn::AdapterDescriptor, wgn::AdapterId),
     AdapterCreateDevice(wgn::AdapterId, wgn::DeviceDescriptor, wgn::DeviceId),
+    Terminate,
 }
 
 /// A message on the timeline of devices, queues, and resources.
 #[derive(Serialize, Deserialize)]
-pub enum GlobalMessage {
+enum GlobalMessage {
     Instance(InstanceMessage),
     //Device(DeviceMessage),
     //Queue(QueueMessage),
@@ -21,34 +29,78 @@ pub enum GlobalMessage {
 }
 
 #[derive(Default)]
-pub struct IdentityHub {
+struct IdentityHub {
     adapters: wgn::IdentityManager,
     devices: wgn::IdentityManager,
 }
 
 pub struct Client {
-    channel: IpcSender<GlobalMessage>,
+    channel: ipc::IpcSender<GlobalMessage>,
+    instance_id: wgn::InstanceId,
     identity: Mutex<IdentityHub>,
 }
 
 impl Client {
-    pub fn new(channel: IpcSender<GlobalMessage>) -> Self {
+    fn new(
+        channel: ipc::IpcSender<GlobalMessage>,
+        instance_id: wgn::InstanceId,
+    ) -> Self {
         Client {
             channel,
+            instance_id,
             identity: Mutex::new(IdentityHub::default()),
         }
     }
 }
 
+#[repr(C)]
+pub struct Infrastructure {
+    pub client: *mut Client,
+    pub server: *mut Server,
+    pub error: *const u8,
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_initialize() -> Infrastructure {
+    match ipc::channel() {
+        Ok((sender, receiver)) => {
+            let instance_id = wgn::IdentityManager::default().alloc(); // TODO: static
+            let client = Client::new(sender, instance_id);
+            let server = Server::new(receiver, instance_id);
+            Infrastructure {
+                client: Box::into_raw(Box::new(client)),
+                server: Box::into_raw(Box::new(server)),
+                error: ptr::null(),
+            }
+        }
+        Err(e) => {
+            error!("WGPU initialize failed: {:?}", e);
+            Infrastructure {
+                client: ptr::null_mut(),
+                server: ptr::null_mut(),
+                error: ptr::null(), //TODO
+            }
+        }
+    }
+
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_terminate(client: *mut Client) {
+    let client = unsafe {
+        Box::from_raw(client)
+    };
+    let _ = client.channel.send(GlobalMessage::Instance(InstanceMessage::Terminate));
+}
+
 #[no_mangle]
 pub extern "C" fn wgpu_instance_get_adapter(
     client: &Client,
-    instance_id: wgn::InstanceId,
     desc: &wgn::AdapterDescriptor,
 ) -> wgn::AdapterId {
     let id = client.identity.lock().adapters.alloc();
     let msg = GlobalMessage::Instance(InstanceMessage::InstanceGetAdapter(
-        instance_id,
+        client.instance_id,
         desc.clone(),
         id,
     ));

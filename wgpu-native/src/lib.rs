@@ -35,7 +35,7 @@ pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
 #[cfg(feature = "remote")]
-pub use self::hub::{Id, IdentityManager, Registry, HUB};
+pub use self::hub::{IdentityManager, Registry, HUB};
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
@@ -45,6 +45,25 @@ use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 type SubmissionIndex = usize;
+
+//TODO: remove this structure and entry point.
+// They are currently needed to force `cbindgen` to export some of
+// the types when building with `remote` feature excluding the
+// functions export (as a `wgpu-remote.h` dependency).
+#[cfg(feature = "remote")]
+#[repr(C)]
+#[derive(Debug)]
+pub struct ForcedExports {
+    pub adapter: AdapterId,
+    pub adapter_desc: AdapterDescriptor,
+    pub device_desc: DeviceDescriptor,
+}
+#[cfg(feature = "remote")]
+#[no_mangle]
+pub extern "C" fn forced_exports(fe: ForcedExports) {
+    println!("{:?}", fe);
+}
+
 
 //TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]

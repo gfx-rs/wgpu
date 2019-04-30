@@ -1,23 +1,33 @@
 extern crate cbindgen;
 
+use cbindgen::ItemType as It;
 use std::path::PathBuf;
 
 struct Binding<'a> {
     library: &'a str,
     features: &'a [&'a str],
     output: &'a str,
+    item_types: &'a [It],
 }
 
-const BINDINGS: [Binding; 2] = [
+const BINDINGS: [Binding; 3] = [
     Binding {
         library: "wgpu-native",
         features: &["local"],
         output: "wgpu.h",
+        item_types: &[It::Enums, It::Constants, It::Structs, It::Typedefs, It::Functions],
+    },
+    Binding {
+        library: "wgpu-native",
+        features: &["remote"],
+        output: "wgpu-native.h",
+        item_types: &[It::Enums, It::Constants, It::Structs, It::Typedefs],
     },
     Binding {
         library: "wgpu-remote",
         features: &[],
         output: "wgpu-remote.h",
+        item_types: &[It::Enums, It::Constants, It::Structs, It::Typedefs, It::OpaqueItems, It::Functions],
     },
 ];
 
@@ -33,6 +43,7 @@ fn main() {
             },
             export: cbindgen::ExportConfig {
                 prefix: Some(String::from("WGPU")),
+                item_types: bind.item_types.to_vec(),
                 ..Default::default()
             },
             language: cbindgen::Language::C,

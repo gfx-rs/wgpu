@@ -39,6 +39,7 @@ pub struct BufferDescriptor {
     pub usage: BufferUsageFlags,
 }
 
+#[repr(C)]
 pub enum BufferMapAsyncStatus {
     Success,
     Error,

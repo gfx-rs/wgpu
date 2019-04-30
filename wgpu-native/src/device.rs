@@ -856,6 +856,7 @@ pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> Tex
     id
 }
 
+
 #[no_mangle]
 pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     let texture_guard = HUB.textures.read();
@@ -952,6 +953,14 @@ pub fn device_create_bind_group_layout(
     binding_model::BindGroupLayout {
         raw,
         bindings: bindings.to_vec(),
+        dynamic_count: bindings
+            .iter()
+            .filter(|b| match b.ty {
+                binding_model::BindingType::UniformBufferDynamic |
+                binding_model::BindingType::StorageBufferDynamic => true,
+                _ => false,
+            })
+            .count(),
     }
 }
 
@@ -1091,6 +1100,7 @@ pub fn device_create_bind_group(
         layout_id: desc.layout,
         life_guard: LifeGuard::new(),
         used,
+        dynamic_count: bind_group_layout.dynamic_count,
     }
 }
 

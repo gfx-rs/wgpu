@@ -1,5 +1,5 @@
 extern crate arrayvec;
-extern crate wgpu_native as wgn;
+extern crate wgn;
 
 use arrayvec::ArrayVec;
 
@@ -839,7 +839,13 @@ impl CommandEncoder {
 
 impl<'a> RenderPass<'a> {
     pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[u32]) {
-        wgn::wgpu_render_pass_set_bind_group(self.id, index, bind_group.id, offsets);
+        wgn::wgpu_render_pass_set_bind_group(
+            self.id,
+            index,
+            bind_group.id,
+            offsets.as_ptr(),
+            offsets.len(),
+        );
     }
 
     pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {

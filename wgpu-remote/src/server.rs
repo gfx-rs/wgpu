@@ -1,25 +1,29 @@
-use crate::{GlobalMessage, InstanceMessage}
+use crate::{GlobalMessage, InstanceMessage};
 
 use ipc_channel::ipc::IpcReceiver;
-
 use wgn;
 
 
-struct Server {
+pub struct Server {
     channel: IpcReceiver<GlobalMessage>,
-    instance_id: wgn::IntanceId,
 }
 
 impl Server {
-    pub fn new(channel: IpcReceiver<GlobalMessage>) -> Self {
+    pub(crate) fn new(channel: IpcReceiver<GlobalMessage>, instance_id: wgn::InstanceId) -> Self {
+        let instance = wgn::create_instance();
+        wgn::HUB.instances.register(instance_id, instance);
         Server {
             channel,
-            instance_id: wgn::wgpu_create_instance(),
         }
     }
 }
 
-pub fn process(message: GlobalMessage) {
+enum ControlFlow {
+    Continue,
+    Terminate,
+}
+
+fn process(message: GlobalMessage) -> ControlFlow {
     match message {
         GlobalMessage::Instance(msg) => match msg {
             InstanceMessage::InstanceGetAdapter(instance_id, ref desc, id) => {
@@ -30,6 +34,20 @@ pub fn process(message: GlobalMessage) {
                 let device = wgn::adapter_create_device(adapter_id, desc);
                 wgn::HUB.devices.register(id, device);
             }
+            InstanceMessage::Terminate => return ControlFlow::Terminate,
         },
+    }
+
+    ControlFlow::Continue
+}
+
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_process(server: &Server) {
+    while let Ok(message) = server.channel.try_recv() {
+        match process(message) {
+            ControlFlow::Continue => {},
+            ControlFlow::Terminate => break,
+        }
     }
 }
