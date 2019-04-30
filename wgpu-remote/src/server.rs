@@ -9,9 +9,7 @@ pub struct Server {
 }
 
 impl Server {
-    pub(crate) fn new(channel: IpcReceiver<GlobalMessage>, instance_id: wgn::InstanceId) -> Self {
-        let instance = wgn::create_instance();
-        wgn::HUB.instances.register(instance_id, instance);
+    pub(crate) fn new(channel: IpcReceiver<GlobalMessage>) -> Self {
         Server {
             channel,
         }
@@ -26,6 +24,10 @@ enum ControlFlow {
 fn process(message: GlobalMessage) -> ControlFlow {
     match message {
         GlobalMessage::Instance(msg) => match msg {
+            InstanceMessage::Create(instance_id) => {
+                let instance = wgn::create_instance();
+                wgn::HUB.instances.register(instance_id, instance);
+            }
             InstanceMessage::InstanceGetAdapter(instance_id, ref desc, id) => {
                 let adapter = wgn::instance_get_adapter(instance_id, desc);
                 wgn::HUB.adapters.register(id, adapter);
@@ -34,8 +36,11 @@ fn process(message: GlobalMessage) -> ControlFlow {
                 let device = wgn::adapter_create_device(adapter_id, desc);
                 wgn::HUB.devices.register(id, device);
             }
-            InstanceMessage::Terminate => return ControlFlow::Terminate,
+            InstanceMessage::Destroy(instance_id) => {
+                wgn::HUB.instances.unregister(instance_id);
+            }
         },
+        GlobalMessage::Terminate => return ControlFlow::Terminate,
     }
 
     ControlFlow::Continue

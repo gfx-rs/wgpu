@@ -15,6 +15,8 @@ typedef enum {
 
 typedef struct WGPUClient WGPUClient;
 
+typedef struct WGPUClientFactory WGPUClientFactory;
+
 typedef struct WGPUServer WGPUServer;
 
 typedef struct WGPUTrackPermit WGPUTrackPermit;
@@ -45,7 +47,7 @@ typedef struct {
 } WGPUAdapterDescriptor;
 
 typedef struct {
-  WGPUClient *client;
+  WGPUClientFactory *factory;
   WGPUServer *server;
   const uint8_t *error;
 } WGPUInfrastructure;
@@ -58,10 +60,14 @@ WGPUDeviceId wgpu_client_adapter_create_device(const WGPUClient *client,
                                                WGPUAdapterId adapter_id,
                                                const WGPUDeviceDescriptor *desc);
 
-WGPUAdapterId wgpu_client_get_adapter(const WGPUClient *client, const WGPUAdapterDescriptor *desc);
+WGPUClient *wgpu_client_create(const WGPUClientFactory *factory);
 
-void wgpu_client_terminate(WGPUClient *client);
+void wgpu_client_destroy(const WGPUClientFactory *factory, WGPUClient *client);
+
+WGPUAdapterId wgpu_client_get_adapter(const WGPUClient *client, const WGPUAdapterDescriptor *desc);
 
 WGPUInfrastructure wgpu_initialize(void);
 
 void wgpu_server_process(const WGPUServer *server);
+
+void wgpu_terminate(WGPUClientFactory *factory);

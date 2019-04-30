@@ -264,11 +264,9 @@ typedef struct {
   WGPUEpoch _1;
 } WGPUId;
 
-typedef WGPUId WGPUAdapterId;
+typedef WGPUId WGPUDeviceId;
 
-typedef struct {
-  WGPUPowerPreference power_preference;
-} WGPUAdapterDescriptor;
+typedef WGPUId WGPUAdapterId;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -277,16 +275,6 @@ typedef struct {
 typedef struct {
   WGPUExtensions extensions;
 } WGPUDeviceDescriptor;
-
-#if defined(WGPU_REMOTE)
-typedef struct {
-  WGPUAdapterId adapter;
-  WGPUAdapterDescriptor adapter_desc;
-  WGPUDeviceDescriptor device_desc;
-} WGPUForcedExports;
-#endif
-
-typedef WGPUId WGPUDeviceId;
 
 typedef WGPUId WGPUBindGroupId;
 
@@ -615,6 +603,10 @@ typedef struct {
 typedef WGPUDeviceId WGPUQueueId;
 
 typedef struct {
+  WGPUPowerPreference power_preference;
+} WGPUAdapterDescriptor;
+
+typedef struct {
   WGPUTextureId texture_id;
   WGPUTextureViewId view_id;
 } WGPUSwapChainOutput;
@@ -637,10 +629,6 @@ typedef struct {
 
 
 
-
-#if defined(WGPU_REMOTE)
-void forced_exports(WGPUForcedExports fe);
-#endif
 
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDeviceDescriptor *desc);
 

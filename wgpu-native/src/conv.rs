@@ -452,6 +452,7 @@ pub fn map_texture_dimension_size(
     }
 }
 
+#[cfg(feature = "local")]
 pub fn map_texture_view_dimension(
     dimension: resource::TextureViewDimension,
 ) -> hal::image::ViewKind {
@@ -467,6 +468,7 @@ pub fn map_texture_view_dimension(
     }
 }
 
+#[cfg(feature = "local")]
 pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::format::Aspects {
     use crate::resource::TextureAspectFlags as Taf;
     use hal::format::Aspects;
