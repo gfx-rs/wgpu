@@ -156,7 +156,7 @@ int main() {
         return 1;
     }
 
-    WGPUSurfaceId surface = {};
+    WGPUSurfaceId surface;
 
 #if WGPU_TARGET == WGPU_TARGET_MACOS
     {
@@ -183,6 +183,8 @@ int main() {
         surface = wgpu_instance_create_surface_from_windows_hwnd(
             instance, hinstance, hwnd);
     }
+#else
+    #error "Unsupported WGPU_TARGET"
 #endif
 
     WGPUSwapChainId swap_chain = wgpu_device_create_swap_chain(device, surface,

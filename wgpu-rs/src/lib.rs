@@ -1,6 +1,3 @@
-extern crate arrayvec;
-extern crate wgn;
-
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;

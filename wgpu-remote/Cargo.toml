@@ -20,6 +20,7 @@ metal = ["wgn/gfx-backend-metal"]
 [dependencies]
 wgn = { package = "wgpu-native", path = "../wgpu-native", features = ["remote"] }
 ipc-channel = "0.11"
+lazy_static = "1"
 log = "0.4"
 parking_lot = { version = "0.7" }
 serde = { version = "1.0", features = ["serde_derive"] }

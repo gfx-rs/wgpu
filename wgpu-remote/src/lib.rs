@@ -1,6 +1,7 @@
 use crate::server::Server;
 
 use ipc_channel::ipc;
+use lazy_static::lazy_static;
 use log::error;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
@@ -10,6 +11,10 @@ use std::ptr;
 
 mod server;
 
+
+lazy_static! {
+    static ref INSTANCE_IDENTITIES: Mutex<wgn::IdentityManager> = Mutex::new(wgn::IdentityManager::default());
+}
 
 #[derive(Serialize, Deserialize)]
 enum InstanceMessage {
@@ -64,7 +69,7 @@ pub struct Infrastructure {
 pub extern "C" fn wgpu_initialize() -> Infrastructure {
     match ipc::channel() {
         Ok((sender, receiver)) => {
-            let instance_id = wgn::IdentityManager::default().alloc(); // TODO: static
+            let instance_id = INSTANCE_IDENTITIES.lock().alloc();
             let client = Client::new(sender, instance_id);
             let server = Server::new(receiver, instance_id);
             Infrastructure {
@@ -90,6 +95,7 @@ pub extern "C" fn wgpu_terminate(client: *mut Client) {
     let client = unsafe {
         Box::from_raw(client)
     };
+    INSTANCE_IDENTITIES.lock().free(client.instance_id);
     let _ = client.channel.send(GlobalMessage::Instance(InstanceMessage::Terminate));
 }
 

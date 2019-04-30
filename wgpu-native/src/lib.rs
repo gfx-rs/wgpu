@@ -17,9 +17,6 @@ extern crate gfx_backend_metal as back;
 #[cfg(feature = "gfx-backend-vulkan")]
 extern crate gfx_backend_vulkan as back;
 
-extern crate gfx_hal as hal;
-//extern crate rendy_memory;
-
 mod binding_model;
 mod command;
 mod conv;
