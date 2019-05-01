@@ -105,10 +105,10 @@ impl IdentityManager {
     }
 }
 
-pub struct Storage<T, I:'static + TypedId> {
+pub struct Storage<T, I:TypedId> {
     //TODO: consider concurrent hashmap?
     map: VecMap<(T, Epoch)>,
-    _phantom: std::marker::PhantomData<&'static I>,
+    _phantom: std::marker::PhantomData<I>,
 }
 
 impl<T, I:TypedId> ops::Index<I> for Storage<T, I> {
@@ -137,7 +137,7 @@ impl<T, I:TypedId> Storage<T, I> {
     }
 }
 
-pub struct Registry<T, I: 'static + TypedId + From<Id>> {
+pub struct Registry<T, I:TypedId + From<Id>> {
     #[cfg(feature = "local")]
     identity: Mutex<IdentityManager>,
     data: RwLock<Storage<T, I>>,
