@@ -1,0 +1,25 @@
+header = ""
+include_version = true
+braces = "SameLine"
+line_length = 100
+tab_width = 2
+language = "C"
+
+[export]
+prefix = "WGPU"
+
+[parse]
+parse_deps = true
+include = ["wgpu_native"]
+
+[fn]
+
+[struct]
+derive_eq = true
+
+[enum]
+prefix_with_name = true
+derive_helper_methods = true
+
+[macro_expansion]
+bitflags = true

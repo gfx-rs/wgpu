@@ -17,9 +17,6 @@ extern crate gfx_backend_metal as back;
 #[cfg(feature = "gfx-backend-vulkan")]
 extern crate gfx_backend_vulkan as back;
 
-extern crate gfx_hal as hal;
-//extern crate rendy_memory;
-
 mod binding_model;
 mod command;
 mod conv;
@@ -35,7 +32,7 @@ pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
 #[cfg(feature = "remote")]
-pub use self::hub::{Id, IdentityManager, Registry, HUB};
+pub use self::hub::{IdentityManager, Registry, HUB};
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
@@ -43,6 +40,7 @@ pub use self::swap_chain::*;
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
 
 type SubmissionIndex = usize;
 

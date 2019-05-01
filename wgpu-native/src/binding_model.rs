@@ -42,6 +42,7 @@ pub struct BindGroupLayoutDescriptor {
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) bindings: Vec<BindGroupLayoutBinding>,
+    pub(crate) dynamic_count: usize,
 }
 
 #[repr(C)]
@@ -87,4 +88,5 @@ pub struct BindGroup<B: hal::Backend> {
     pub(crate) layout_id: BindGroupLayoutId,
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
+    pub(crate) dynamic_count: usize,
 }

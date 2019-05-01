@@ -39,6 +39,7 @@ pub struct BufferDescriptor {
     pub usage: BufferUsageFlags,
 }
 
+#[repr(C)]
 pub enum BufferMapAsyncStatus {
     Success,
     Error,
@@ -172,6 +173,7 @@ pub struct TextureDescriptor {
 }
 
 pub(crate) enum TexturePlacement<B: hal::Backend> {
+    #[cfg_attr(feature = "remote", allow(unused))]
     SwapChain(SwapChainLink<Mutex<SwapImageEpoch>>),
     Memory(B::Memory),
     Void,

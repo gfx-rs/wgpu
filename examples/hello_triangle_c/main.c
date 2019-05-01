@@ -1,4 +1,4 @@
-#include "./../../wgpu-bindings/wgpu.h"
+#include "./../../ffi/wgpu.h"
 #include <stdio.h>
 
 #define WGPU_TARGET_MACOS 1
@@ -156,7 +156,7 @@ int main() {
         return 1;
     }
 
-    WGPUSurfaceId surface = {};
+    WGPUSurfaceId surface;
 
 #if WGPU_TARGET == WGPU_TARGET_MACOS
     {
@@ -183,6 +183,8 @@ int main() {
         surface = wgpu_instance_create_surface_from_windows_hwnd(
             instance, hinstance, hwnd);
     }
+#else
+    #error "Unsupported WGPU_TARGET"
 #endif
 
     WGPUSwapChainId swap_chain = wgpu_device_create_swap_chain(device, surface,
@@ -219,7 +221,7 @@ int main() {
                 });
 
         wgpu_render_pass_set_pipeline(rpass, render_pipeline);
-        wgpu_render_pass_set_bind_group(rpass, 0, bind_group);
+        wgpu_render_pass_set_bind_group(rpass, 0, bind_group, NULL, 0);
         wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
         WGPUQueueId queue = wgpu_device_get_queue(device);
         WGPUCommandBufferId cmd_buf = wgpu_render_pass_end_pass(rpass);

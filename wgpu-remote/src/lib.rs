@@ -1,54 +1,126 @@
-use ipc_channel::ipc::IpcSender;
+//TODO: remove once `cbindgen` is smart enough
+extern crate wgpu_native as wgn;
+
+use crate::server::Server;
+
+use ipc_channel::ipc;
+use log::error;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
-use wgpu_native as wgn;
+use std::ptr;
+
+mod server;
+
 
 #[derive(Serialize, Deserialize)]
-pub enum InstanceMessage {
+enum InstanceMessage {
+    Create(wgn::InstanceId),
     InstanceGetAdapter(wgn::InstanceId, wgn::AdapterDescriptor, wgn::AdapterId),
     AdapterCreateDevice(wgn::AdapterId, wgn::DeviceDescriptor, wgn::DeviceId),
+    Destroy(wgn::InstanceId),
 }
 
 /// A message on the timeline of devices, queues, and resources.
 #[derive(Serialize, Deserialize)]
-pub enum GlobalMessage {
+enum GlobalMessage {
     Instance(InstanceMessage),
     //Device(DeviceMessage),
     //Queue(QueueMessage),
     //Texture(TextureMessage),
     //Command(CommandMessage),
+    Terminate,
 }
 
 #[derive(Default)]
-pub struct IdentityHub {
+struct IdentityHub {
     adapters: wgn::IdentityManager,
     devices: wgn::IdentityManager,
 }
 
 pub struct Client {
-    channel: IpcSender<GlobalMessage>,
+    channel: ipc::IpcSender<GlobalMessage>,
+    instance_id: wgn::InstanceId,
     identity: Mutex<IdentityHub>,
 }
 
-impl Client {
-    pub fn new(channel: IpcSender<GlobalMessage>) -> Self {
-        Client {
-            channel,
-            identity: Mutex::new(IdentityHub::default()),
+pub struct ClientFactory {
+    channel: ipc::IpcSender<GlobalMessage>,
+    instance_identities: Mutex<wgn::IdentityManager>,
+}
+
+#[repr(C)]
+pub struct Infrastructure {
+    pub factory: *mut ClientFactory,
+    pub server: *mut Server,
+    pub error: *const u8,
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_initialize() -> Infrastructure {
+    match ipc::channel() {
+        Ok((sender, receiver)) => {
+            let factory = ClientFactory {
+                channel: sender,
+                instance_identities: Mutex::new(wgn::IdentityManager::default()),
+            };
+            let server = Server::new(receiver);
+            Infrastructure {
+                factory: Box::into_raw(Box::new(factory)),
+                server: Box::into_raw(Box::new(server)),
+                error: ptr::null(),
+            }
+        }
+        Err(e) => {
+            error!("WGPU initialize failed: {:?}", e);
+            Infrastructure {
+                factory: ptr::null_mut(),
+                server: ptr::null_mut(),
+                error: ptr::null(), //TODO_remote_
+            }
         }
     }
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_instance_get_adapter(
+pub extern "C" fn wgpu_terminate(factory: *mut ClientFactory) {
+    let factory = unsafe {
+        Box::from_raw(factory)
+    };
+    let _ = factory.channel.send(GlobalMessage::Terminate);
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_create(factory: &ClientFactory) -> *mut Client {
+    let instance_id = factory.instance_identities.lock().alloc();
+    let msg = GlobalMessage::Instance(InstanceMessage::Create(instance_id));
+    factory.channel.send(msg).unwrap();
+    let client = Client {
+        channel: factory.channel.clone(),
+        instance_id,
+        identity: Mutex::new(IdentityHub::default()),
+    };
+    Box::into_raw(Box::new(client))
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_destroy(factory: &ClientFactory, client: *mut Client) {
+    let client = unsafe {
+        Box::from_raw(client)
+    };
+    factory.instance_identities.lock().free(client.instance_id);
+    let msg = GlobalMessage::Instance(InstanceMessage::Destroy(client.instance_id));
+    client.channel.send(msg).unwrap();
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_get_adapter(
     client: &Client,
-    instance_id: wgn::InstanceId,
     desc: &wgn::AdapterDescriptor,
 ) -> wgn::AdapterId {
     let id = client.identity.lock().adapters.alloc();
     let msg = GlobalMessage::Instance(InstanceMessage::InstanceGetAdapter(
-        instance_id,
+        client.instance_id,
         desc.clone(),
         id,
     ));
@@ -57,7 +129,7 @@ pub extern "C" fn wgpu_instance_get_adapter(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_adapter_create_device(
+pub extern "C" fn wgpu_client_adapter_create_device(
     client: &Client,
     adapter_id: wgn::AdapterId,
     desc: &wgn::DeviceDescriptor,

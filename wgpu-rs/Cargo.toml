@@ -16,12 +16,12 @@ license = "MPL-2.0"
 
 [features]
 default = []
-metal-auto-capture = ["wgpu-native/metal-auto-capture"]
-metal = ["wgpu-native/gfx-backend-metal"]
-dx11 = ["wgpu-native/gfx-backend-dx11"]
-dx12 = ["wgpu-native/gfx-backend-dx12"]
-vulkan = ["wgpu-native/gfx-backend-vulkan"]
+metal-auto-capture = ["wgn/metal-auto-capture"]
+metal = ["wgn/gfx-backend-metal"]
+dx11 = ["wgn/gfx-backend-dx11"]
+dx12 = ["wgn/gfx-backend-dx12"]
+vulkan = ["wgn/gfx-backend-vulkan"]
 
 [dependencies]
-wgpu-native = { version = "0.2.5", path = "../wgpu-native", features = ["local", "window-winit"] }
+wgn = { package = "wgpu-native", version = "0.2.5", path = "../wgpu-native", features = ["local", "window-winit"] }
 arrayvec = "0.4"

@@ -7,11 +7,18 @@ authors = [
 ]
 edition = "2018"
 
+[lib]
+crate-type = ["lib", "cdylib", "staticlib"]
+
 [features]
 default = []
+vulkan = ["wgpu-native/gfx-backend-vulkan"]
+dx11 = ["wgpu-native/gfx-backend-dx11"]
+dx12 = ["wgpu-native/gfx-backend-dx12"]
+metal = ["wgpu-native/gfx-backend-metal"]
 
 [dependencies]
-wgpu-native = { path = "../wgpu-native", features = ["remote"] }
+wgpu-native = { path = "../wgpu-native", version = "0.2", features = ["remote"] }
 ipc-channel = "0.11"
 log = "0.4"
 parking_lot = { version = "0.7" }
