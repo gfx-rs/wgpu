@@ -185,20 +185,20 @@ macro_rules! transparent {
     )
 }
 
-pub trait TypedId {
+pub trait TypedId:From<Id> {
     fn raw(&self) -> Id;
 }
 
 macro_rules! typed_id {
-    ($i:ident) => (
-        impl TypedId for $i {
-            fn raw(&self) -> Id {
-                self.0
-            }
-        } 
+    ($i:ident) => ( 
         impl From<Id> for $i {
             fn from(id:Id) -> $i {
                 $i(id)
+            }
+        }
+        impl TypedId for $i {
+            fn raw(&self) -> Id {
+                self.0
             }
         }
     )

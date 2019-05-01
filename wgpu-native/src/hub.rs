@@ -137,13 +137,13 @@ impl<T, I:TypedId> Storage<T, I> {
     }
 }
 
-pub struct Registry<T, I:TypedId + From<Id>> {
+pub struct Registry<T, I:TypedId> {
     #[cfg(feature = "local")]
     identity: Mutex<IdentityManager>,
     data: RwLock<Storage<T, I>>,
 }
 
-impl<T, I: TypedId + From<Id>> Default for Registry<T, I> {
+impl<T, I: TypedId> Default for Registry<T, I> {
     fn default() -> Self {
         Registry {
             #[cfg(feature = "local")]
@@ -153,20 +153,20 @@ impl<T, I: TypedId + From<Id>> Default for Registry<T, I> {
     }
 }
 
-impl<T, I: TypedId + From<Id>> ops::Deref for Registry<T, I> {
+impl<T, I: TypedId> ops::Deref for Registry<T, I> {
     type Target = RwLock<Storage<T, I>>;
     fn deref(&self) -> &Self::Target {
         &self.data
     }
 }
 
-impl<T, I: TypedId + From<Id>> ops::DerefMut for Registry<T, I> {
+impl<T, I: TypedId> ops::DerefMut for Registry<T, I> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.data
     }
 }
 
-impl<T, I: TypedId + From<Id> + Clone> Registry<T, I> {
+impl<T, I: TypedId + Clone> Registry<T, I> {
     pub fn register(&self, id: I, value: T) {
         let old = self.data.write().map.insert(id.raw().0 as usize, (value, id.raw().1));
         assert!(old.is_none());
