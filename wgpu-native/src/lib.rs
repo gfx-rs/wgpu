@@ -38,6 +38,8 @@ pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
 use self::hub::{Epoch, Id, Index, NewId};
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -222,7 +224,6 @@ macro_rules! new_id {
         }
     )
 }
-
 define_id!(InstanceId);
 type InstanceHandle = back::Instance;
 
