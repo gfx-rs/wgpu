@@ -1,7 +1,9 @@
 use crate::{
-    hub::{Epoch, Index, NewId, Storage},
+    hub::{Storage},
     resource::{BufferUsageFlags, TextureUsageFlags},
     BufferId,
+    Epoch,
+    Index,
     RefCount,
     TextureId,
     TextureViewId,
@@ -133,7 +135,7 @@ impl TrackerSet {
     }
 }
 
-impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     pub fn new() -> Self {
         Tracker {
             map: FastHashMap::default(),
@@ -277,7 +279,7 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
     }
 }
 
-impl<I: TypedId + NewId + Clone, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+impl<I: TypedId + Copy, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, I>,
@@ -285,7 +287,7 @@ impl<I: TypedId + NewId + Clone, U: Copy + GenericUsage + BitOr<Output = U> + Pa
         usage: U,
         permit: TrackPermit,
     ) -> Result<(&'a T, Tracktion<U>), U> {
-        let item = &storage[id.clone()];
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, permit)
             .map(|tracktion| (item, tracktion))
     }
@@ -296,7 +298,7 @@ impl<I: TypedId + NewId + Clone, U: Copy + GenericUsage + BitOr<Output = U> + Pa
         id: I,
         usage: U,
     ) -> Result<&'a T, U> {
-        let item = &storage[id.clone()];
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, TrackPermit::EXTEND)
             .map(|_tracktion| item)
     }
@@ -307,7 +309,7 @@ impl<I: TypedId + NewId + Clone, U: Copy + GenericUsage + BitOr<Output = U> + Pa
         id: I,
         usage: U,
     ) -> Result<(&'a T, Option<U>), U> {
-        let item = &storage[id.clone()];
+        let item = &storage[id];
         self.transit(id, item.borrow(), usage, TrackPermit::REPLACE)
             .map(|tracktion| {
                 (

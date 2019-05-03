@@ -1,6 +1,6 @@
 //TODO: remove once `cbindgen` is smart enough
 extern crate wgpu_native as wgn;
-use wgn::TypedId;
+use wgn::{AdapterId, DeviceId, InstanceId};
 
 use crate::server::Server;
 
@@ -35,8 +35,8 @@ enum GlobalMessage {
 
 #[derive(Default)]
 struct IdentityHub {
-    adapters: wgn::IdentityManager,
-    devices: wgn::IdentityManager,
+    adapters: wgn::IdentityManager<AdapterId>,
+    devices: wgn::IdentityManager<DeviceId>,
 }
 
 pub struct Client {
@@ -47,7 +47,7 @@ pub struct Client {
 
 pub struct ClientFactory {
     channel: ipc::IpcSender<GlobalMessage>,
-    instance_identities: Mutex<wgn::IdentityManager>,
+    instance_identities: Mutex<wgn::IdentityManager<InstanceId>>,
 }
 
 #[repr(C)]
@@ -93,8 +93,7 @@ pub extern "C" fn wgpu_terminate(factory: *mut ClientFactory) {
 
 #[no_mangle]
 pub extern "C" fn wgpu_client_create(factory: &ClientFactory) -> *mut Client {
-    let id = factory.instance_identities.lock().alloc();
-    let instance_id = id.into();
+    let instance_id = factory.instance_identities.lock().alloc();
     let msg = GlobalMessage::Instance(InstanceMessage::Create(instance_id));
     factory.channel.send(msg).unwrap();
     let client = Client {
@@ -110,7 +109,7 @@ pub extern "C" fn wgpu_client_destroy(factory: &ClientFactory, client: *mut Clie
     let client = unsafe {
         Box::from_raw(client)
     };
-    factory.instance_identities.lock().free(client.instance_id.raw());
+    factory.instance_identities.lock().free(client.instance_id);
     let msg = GlobalMessage::Instance(InstanceMessage::Destroy(client.instance_id));
     client.channel.send(msg).unwrap();
 }
@@ -120,8 +119,7 @@ pub extern "C" fn wgpu_client_get_adapter(
     client: &Client,
     desc: &wgn::AdapterDescriptor,
 ) -> wgn::AdapterId {
-    let id = client.identity.lock().adapters.alloc();
-    let adapter_id = id.into();
+    let adapter_id = client.identity.lock().adapters.alloc();
     let msg = GlobalMessage::Instance(InstanceMessage::InstanceGetAdapter(
         client.instance_id,
         desc.clone(),
@@ -137,8 +135,7 @@ pub extern "C" fn wgpu_client_adapter_create_device(
     adapter_id: wgn::AdapterId,
     desc: &wgn::DeviceDescriptor,
 ) -> wgn::DeviceId {
-    let id = client.identity.lock().devices.alloc();
-    let device_id = id.into();
+    let device_id = client.identity.lock().devices.alloc();
     let msg = GlobalMessage::Instance(InstanceMessage::AdapterCreateDevice(
         adapter_id,
         desc.clone(),

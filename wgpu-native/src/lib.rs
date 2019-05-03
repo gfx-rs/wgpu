@@ -37,7 +37,6 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-use self::hub::{Epoch, Id, Index, NewId};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -46,6 +45,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 
 type SubmissionIndex = usize;
+pub(crate) type Index = u32;
+pub(crate) type Epoch = u32;
 
 //TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]
@@ -169,14 +170,23 @@ pub struct ByteArray {
     pub length: usize,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+struct Id(Index, Epoch);
+
+pub trait TypedId {
+    fn new(index: Index, epoch: Epoch) -> Self;
+    fn index(&self) -> Index;
+    fn epoch(&self) -> Epoch;
+}
+
 macro_rules! define_id {
     ($i:ident) => {
         transparent!($i);
         typed_id!($i);
-        new_id!($i);
     }
 }
-
 
 macro_rules! transparent {
     ($i:ident) => (
@@ -187,43 +197,30 @@ macro_rules! transparent {
     )
 }
 
-pub trait TypedId:From<Id> {
-    fn raw(&self) -> Id;
-}
-
 macro_rules! typed_id {
-    ($i:ident) => ( 
-        impl From<Id> for $i {
-            fn from(id:Id) -> $i {
-                $i(id)
-            }
-        }
-        impl TypedId for $i {
+    ($i:ident) => (
+        impl $i {
             fn raw(&self) -> Id {
                 self.0
             }
         }
-    )
-}
-
-macro_rules! new_id {
-    ($i:ident) => (
-        impl NewId for $i {
+        impl TypedId for $i {
             fn new(index: Index, epoch: Epoch) -> Self {
-                let id = Id::new(index, epoch);
+                let id = Id(index, epoch);
                 $i(id)
             }
 
             fn index(&self) -> Index {
-                (self.raw()).index()
+                (self.raw()).0
             }
 
             fn epoch(&self) -> Epoch {
-               (self.raw()).epoch()
-            }
+               (self.raw()).1
+            }    
         }
     )
 }
+
 define_id!(InstanceId);
 type InstanceHandle = back::Instance;
 
