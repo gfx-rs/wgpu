@@ -51,7 +51,17 @@ use log::{info, trace};
 //use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::Mutex;
 
-use std::{collections::hash_map::Entry, ffi, iter, ptr, slice, sync::atomic::Ordering};
+use std::{
+    collections::hash_map::Entry,
+    ffi,
+    iter,
+    ptr,
+    slice,
+    sync::atomic::Ordering,
+};
+#[cfg(feature = "local")]
+use std::sync::atomic::AtomicBool;
+
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 
@@ -1271,17 +1281,17 @@ pub extern "C" fn wgpu_queue_submit(
             let wait_semaphores = swap_chain_links.into_iter().flat_map(|link| {
                 let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref()?;
                 let frame = &swap_chain.frames[link.image_index as usize];
-                let mut wait_for_epoch = frame.wait_for_epoch.lock();
-                let current_epoch = *wait_for_epoch.as_ref()?;
-                if link.epoch < current_epoch {
-                    None
-                } else {
-                    debug_assert_eq!(link.epoch, current_epoch);
-                    *wait_for_epoch = None;
+                if frame.need_waiting.swap(false, Ordering::Relaxed) {
+                    assert_eq!(frame.acquired_epoch, Some(link.epoch),
+                        "{}. Image index {} with epoch {} != current epoch {:?}",
+                        "Attempting to rendering to a swapchain output that has already been presented",
+                        link.image_index, link.epoch, frame.acquired_epoch);
                     Some((
                         &frame.sem_available,
                         hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                     ))
+                } else {
+                    None
                 }
             });
 
@@ -1798,7 +1808,8 @@ pub fn swap_chain_populate_textures(
             fence: device.raw.create_fence(true).unwrap(),
             sem_available: device.raw.create_semaphore().unwrap(),
             sem_present: device.raw.create_semaphore().unwrap(),
-            wait_for_epoch: Mutex::new(None),
+            acquired_epoch: None,
+            need_waiting: AtomicBool::new(false),
             comb: swap_chain.command_pool.acquire_command_buffer(),
         });
     }
