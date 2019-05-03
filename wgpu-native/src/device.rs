@@ -856,7 +856,6 @@ pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> Tex
     id
 }
 
-
 #[no_mangle]
 pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     let texture_guard = HUB.textures.read();
@@ -956,8 +955,8 @@ pub fn device_create_bind_group_layout(
         dynamic_count: bindings
             .iter()
             .filter(|b| match b.ty {
-                binding_model::BindingType::UniformBufferDynamic |
-                binding_model::BindingType::StorageBufferDynamic => true,
+                binding_model::BindingType::UniformBufferDynamic
+                | binding_model::BindingType::StorageBufferDynamic => true,
                 _ => false,
             })
             .count(),
@@ -1051,8 +1050,9 @@ pub fn device_create_bind_group(
                         device.limits.min_storage_buffer_offset_alignment
                     }
                     binding_model::BindingType::Sampler
-                    | binding_model::BindingType::SampledTexture =>
-                        panic!("Mismatched buffer binding for {:?}", decl),
+                    | binding_model::BindingType::SampledTexture => {
+                        panic!("Mismatched buffer binding for {:?}", decl)
+                    }
                 };
                 assert_eq!(
                     bb.offset as hal::buffer::Offset % alignment,
@@ -1814,78 +1814,6 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     let textures = device_create_swap_chain(device_id, surface_id, desc);
     swap_chain_populate_textures(surface_id, textures);
     surface_id
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_buffer_set_sub_data(
-    buffer_id: BufferId,
-    start: u32,
-    count: u32,
-    data: *const u8,
-) {
-    let buffer_guard = HUB.buffers.read();
-    let buffer = &buffer_guard[buffer_id];
-    let mut device_guard = HUB.devices.write();
-    let device = &mut device_guard[buffer.device_id.value];
-
-    //Note: this is just doing `update_buffer`, which is limited to 64KB
-
-    trace!("transit {:?} to transfer dst", buffer_id);
-    let barrier = device
-        .trackers
-        .lock()
-        .buffers
-        .transit(
-            buffer_id,
-            &buffer.life_guard.ref_count,
-            resource::BufferUsageFlags::TRANSFER_DST,
-            TrackPermit::REPLACE,
-        )
-        .unwrap()
-        .into_source()
-        .map(|old| hal::memory::Barrier::Buffer {
-            states: conv::map_buffer_state(old)..hal::buffer::State::TRANSFER_WRITE,
-            target: &buffer.raw,
-            families: None,
-            range: None..None, //TODO: could be partial
-        });
-
-    // Note: this is not pretty. If we need one-time service command buffers,
-    // we'll need to have some internal abstractions for them to be safe.
-    let mut comb = device
-        .com_allocator
-        .allocate(buffer.device_id.clone(), &device.raw);
-    // mark as used by the next submission, conservatively
-    let submit_index = 1 + device.life_guard.submission_index.load(Ordering::Acquire);
-    unsafe {
-        let raw = comb.raw.last_mut().unwrap();
-        raw.begin(
-            hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-            hal::command::CommandBufferInheritanceInfo::default(),
-        );
-        raw.pipeline_barrier(
-            all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
-            hal::memory::Dependencies::empty(),
-            barrier,
-        );
-        raw.update_buffer(
-            &buffer.raw,
-            start as hal::buffer::Offset,
-            slice::from_raw_parts(data, count as usize),
-        );
-        raw.finish();
-
-        let submission = hal::queue::Submission {
-            command_buffers: iter::once(&*raw),
-            wait_semaphores: None,
-            signal_semaphores: None,
-        };
-        device.queue_group.queues[0]
-            .as_raw_mut()
-            .submit::<_, _, <back::Backend as hal::Backend>::Semaphore, _, _>(submission, None);
-    }
-
-    device.com_allocator.after_submit(comb, submit_index);
 }
 
 #[no_mangle]

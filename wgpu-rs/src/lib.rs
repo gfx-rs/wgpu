@@ -574,10 +574,6 @@ where
 }
 
 impl Buffer {
-    pub fn set_sub_data(&self, offset: u32, data: &[u8]) {
-        wgn::wgpu_buffer_set_sub_data(self.id, offset, data.len() as u32, data.as_ptr());
-    }
-
     pub fn map_read_async<T, F>(&self, start: u32, size: u32, callback: F)
     where
         T: 'static + Copy,

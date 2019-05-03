@@ -648,11 +648,6 @@ void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
                                  WGPUBufferMapWriteCallback callback,
                                  uint8_t *userdata);
 
-void wgpu_buffer_set_sub_data(WGPUBufferId buffer_id,
-                              uint32_t start,
-                              uint32_t count,
-                              const uint8_t *data);
-
 void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
 void wgpu_command_buffer_copy_buffer_to_buffer(WGPUCommandBufferId command_buffer_id,
