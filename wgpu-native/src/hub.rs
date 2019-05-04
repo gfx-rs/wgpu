@@ -97,7 +97,7 @@ impl<T, I:TypedId> ops::Index<I> for Storage<T, I> {
     type Output = T;
     fn index(&self, id: I) -> &T {
         let (ref value, epoch) = self.map[id.index() as usize];
-        assert_eq!(epoch, id.index());
+        assert_eq!(epoch, id.epoch());
         value
     }
 }
@@ -105,7 +105,7 @@ impl<T, I:TypedId> ops::Index<I> for Storage<T, I> {
 impl<T, I:TypedId> ops::IndexMut<I> for Storage<T, I> {
     fn index_mut(&mut self, id: I) -> &mut T {
         let (ref mut value, epoch) = self.map[id.index() as usize];
-        assert_eq!(epoch, id.index());
+        assert_eq!(epoch, id.epoch());
         value
     }
 }
@@ -113,7 +113,7 @@ impl<T, I:TypedId> ops::IndexMut<I> for Storage<T, I> {
 impl<T, I:TypedId> Storage<T, I> {
     pub fn contains(&self, id: I) -> bool {
         match self.map.get(id.index() as usize) {
-            Some(&(_, epoch)) if epoch == id.index() => true,
+            Some(&(_, epoch)) if epoch == id.epoch() => true,
             _ => false,
         }
     }
