@@ -37,12 +37,16 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use std::ptr;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 
 type SubmissionIndex = usize;
+pub(crate) type Index = u32;
+pub(crate) type Epoch = u32;
 
 //TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]
@@ -166,46 +170,113 @@ pub struct ByteArray {
     pub length: usize,
 }
 
-pub type InstanceId = hub::Id;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+struct Id(Index, Epoch);
+
+pub trait TypedId {
+    fn new(index: Index, epoch: Epoch) -> Self;
+    fn index(&self) -> Index;
+    fn epoch(&self) -> Epoch;
+}
+
+macro_rules! define_id {
+    ($i:ident) => {
+        transparent!($i);
+        typed_id!($i);
+    }
+}
+
+macro_rules! transparent {
+    ($i:ident) => (
+        #[repr(transparent)]
+        #[derive(Clone, Copy, Debug, Hash, PartialEq)]
+        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+        pub struct $i(Id);
+    )
+}
+
+macro_rules! typed_id {
+    ($i:ident) => (
+        impl $i {
+            fn raw(&self) -> Id {
+                self.0
+            }
+        }
+        impl TypedId for $i {
+            fn new(index: Index, epoch: Epoch) -> Self {
+                let id = Id(index, epoch);
+                $i(id)
+            }
+
+            fn index(&self) -> Index {
+                (self.raw()).0
+            }
+
+            fn epoch(&self) -> Epoch {
+               (self.raw()).1
+            }    
+        }
+    )
+}
+
+define_id!(InstanceId);
 type InstanceHandle = back::Instance;
-pub type AdapterId = hub::Id;
+
+define_id!(AdapterId);
 type AdapterHandle = hal::Adapter<back::Backend>;
-pub type DeviceId = hub::Id;
+
+define_id!(DeviceId);
 type DeviceHandle = Device<back::Backend>;
 pub type QueueId = DeviceId;
-pub type BufferId = hub::Id;
+
+define_id!(BufferId);
 type BufferHandle = Buffer<back::Backend>;
+
 // Resource
-pub type TextureViewId = hub::Id;
+define_id!(TextureViewId);
 type TextureViewHandle = TextureView<back::Backend>;
-pub type TextureId = hub::Id;
+
+define_id!(TextureId);
 type TextureHandle = Texture<back::Backend>;
-pub type SamplerId = hub::Id;
+
+define_id!(SamplerId);
 type SamplerHandle = Sampler<back::Backend>;
+
 // Binding model
-pub type BindGroupLayoutId = hub::Id;
+define_id!(BindGroupLayoutId);
 type BindGroupLayoutHandle = BindGroupLayout<back::Backend>;
-pub type PipelineLayoutId = hub::Id;
+
+define_id!(PipelineLayoutId);
 type PipelineLayoutHandle = PipelineLayout<back::Backend>;
-pub type BindGroupId = hub::Id;
+
+define_id!(BindGroupId);
 type BindGroupHandle = BindGroup<back::Backend>;
+
 // Pipeline
-pub type InputStateId = hub::Id;
-pub type ShaderModuleId = hub::Id;
+define_id!(InputStateId);
+define_id!(ShaderModuleId);
 type ShaderModuleHandle = ShaderModule<back::Backend>;
-pub type RenderPipelineId = hub::Id;
+
+define_id!(RenderPipelineId);
 type RenderPipelineHandle = RenderPipeline<back::Backend>;
-pub type ComputePipelineId = hub::Id;
+
+define_id!(ComputePipelineId);
 type ComputePipelineHandle = ComputePipeline<back::Backend>;
+
 // Command
-pub type CommandBufferId = hub::Id;
+define_id!(CommandBufferId);
 type CommandBufferHandle = CommandBuffer<back::Backend>;
 pub type CommandEncoderId = CommandBufferId;
-pub type RenderPassId = hub::Id;
+
+define_id!(RenderPassId);
 type RenderPassHandle = RenderPass<back::Backend>;
-pub type ComputePassId = hub::Id;
+
+define_id!(ComputePassId);
 type ComputePassHandle = ComputePass<back::Backend>;
+
 // Swap chain
-pub type SurfaceId = hub::Id;
+define_id!(SurfaceId);
 type SurfaceHandle = Surface<back::Backend>;
 pub type SwapChainId = SurfaceId;

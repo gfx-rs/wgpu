@@ -1,10 +1,13 @@
 use crate::{
-    hub::{Epoch, Id, Index, NewId, Storage},
+    hub::{Storage},
     resource::{BufferUsageFlags, TextureUsageFlags},
     BufferId,
+    Epoch,
+    Index,
     RefCount,
     TextureId,
     TextureViewId,
+    TypedId
 };
 
 use bitflags::bitflags;
@@ -132,7 +135,7 @@ impl TrackerSet {
     }
 }
 
-impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     pub fn new() -> Self {
         Tracker {
             map: FastHashMap::default(),
@@ -276,11 +279,11 @@ impl<I: NewId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I
     }
 }
 
-impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
+impl<I: TypedId + Copy, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
     fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        storage: &'a Storage<T>,
-        id: Id,
+        storage: &'a Storage<T, I>,
+        id: I,
         usage: U,
         permit: TrackPermit,
     ) -> Result<(&'a T, Tracktion<U>), U> {
@@ -291,8 +294,8 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
 
     pub(crate) fn get_with_extended_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        storage: &'a Storage<T>,
-        id: Id,
+        storage: &'a Storage<T, I>,
+        id: I,
         usage: U,
     ) -> Result<&'a T, U> {
         let item = &storage[id];
@@ -302,8 +305,8 @@ impl<U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<Id, U> {
 
     pub(crate) fn get_with_replaced_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
-        storage: &'a Storage<T>,
-        id: Id,
+        storage: &'a Storage<T, I>,
+        id: I,
         usage: U,
     ) -> Result<(&'a T, Option<U>), U> {
         let item = &storage[id];

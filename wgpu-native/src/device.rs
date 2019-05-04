@@ -802,7 +802,7 @@ pub fn texture_create_view(
     }
 }
 
-pub fn device_track_view(texture_id: TextureId, view_id: BufferId, ref_count: RefCount) {
+pub fn device_track_view(texture_id: TextureId, view_id: TextureViewId, ref_count: RefCount) {
     let device_id = HUB.textures.read()[texture_id].device_id.value;
     let query = HUB.devices.read()[device_id]
         .trackers

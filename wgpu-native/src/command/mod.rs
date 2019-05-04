@@ -23,6 +23,7 @@ use crate::{
     resource::TexturePlacement,
     swap_chain::{SwapChainLink, SwapImageEpoch},
     track::{DummyUsage, Stitch, TrackerSet},
+    BufferId,
     BufferHandle,
     Color,
     CommandBufferHandle,
@@ -32,6 +33,7 @@ use crate::{
     LifeGuard,
     Stored,
     TextureHandle,
+    TextureId,
     TextureUsageFlags,
     TextureViewId,
 };
@@ -99,8 +101,8 @@ impl CommandBufferHandle {
         base: &mut TrackerSet,
         head: &TrackerSet,
         stitch: Stitch,
-        buffer_guard: &Storage<BufferHandle>,
-        texture_guard: &Storage<TextureHandle>,
+        buffer_guard: &Storage<BufferHandle, BufferId>,
+        texture_guard: &Storage<TextureHandle, TextureId>,
     ) {
         let buffer_barriers =
             base.buffers
