@@ -16,7 +16,9 @@ use hal::{self, Device as _, Swapchain as _};
 use log::{trace, warn};
 use parking_lot::Mutex;
 
-use std::{iter, mem};
+use std::{
+    iter, mem, sync::atomic::{AtomicBool, Ordering},
+};
 
 pub type SwapImageEpoch = u16;
 
@@ -54,7 +56,8 @@ pub(crate) struct Frame<B: hal::Backend> {
     pub fence: B::Fence,
     pub sem_available: B::Semaphore,
     pub sem_present: B::Semaphore,
-    pub wait_for_epoch: Mutex<Option<SwapImageEpoch>>,
+    pub acquired_epoch: Option<SwapImageEpoch>,
+    pub need_waiting: AtomicBool,
     pub comb: hal::command::CommandBuffer<B, hal::General, hal::command::MultiShot>,
 }
 
@@ -153,13 +156,15 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
         device.raw.wait_for_fence(&frame.fence, !0).unwrap();
     }
     mem::swap(&mut frame.sem_available, &mut swap_chain.sem_available);
+    frame.need_waiting.store(true, Ordering::Release);
 
     let frame_epoch = HUB.textures.read()[frame.texture_id.value]
         .placement
         .as_swap_chain()
         .bump_epoch();
 
-    *frame.wait_for_epoch.lock() = Some(frame_epoch);
+    assert_eq!(frame.acquired_epoch, None, "Last swapchain output hasn't been presented");
+    frame.acquired_epoch =Some(frame_epoch);
 
     SwapChainOutput {
         texture_id: frame.texture_id.value,
@@ -174,6 +179,10 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
 
     let image_index = swap_chain.acquired.remove(0);
     let frame = &mut swap_chain.frames[image_index as usize];
+    let epoch = frame.acquired_epoch.take();
+    assert!(epoch.is_some(), "Presented frame (image {}) was not acquired", image_index);
+    assert!(!frame.need_waiting.load(Ordering::Acquire),
+        "No rendering work has been submitted for the presented frame (image {})", image_index);
 
     let mut device_guard = HUB.devices.write();
     let device = &mut device_guard[swap_chain.device_id.value];

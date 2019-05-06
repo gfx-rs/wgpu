@@ -157,6 +157,7 @@ pub struct CommandEncoderDescriptor {
 pub extern "C" fn wgpu_command_encoder_finish(
     command_encoder_id: CommandEncoderId,
 ) -> CommandBufferId {
+    //TODO: actually close the last recorded command buffer
     HUB.command_buffers.write()[command_encoder_id].is_recording = false; //TODO: check for the old value
     command_encoder_id
 }
