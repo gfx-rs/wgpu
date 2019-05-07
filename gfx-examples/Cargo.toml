@@ -27,6 +27,6 @@ vulkan = ["wgpu/vulkan"]
 [dependencies]
 wgpu = { path = "../wgpu-rs" }
 cgmath = "0.17"
-env_logger = "0.5"
+env_logger = "0.6"
 glsl-to-spirv = "0.1"
 log = "0.4"

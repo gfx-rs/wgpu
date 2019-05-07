@@ -5,6 +5,7 @@ authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",
 ]
+edition = "2018"
 publish = false
 
 [[bin]]
@@ -26,4 +27,4 @@ vulkan = ["wgpu/vulkan"]
 [dependencies]
 wgpu-native = { path = "../wgpu-native" }
 wgpu = { path = "../wgpu-rs" }
-env_logger = "0.5"
+env_logger = "0.6"
