@@ -28,7 +28,7 @@ bitflags = "1.0"
 copyless = "0.1"
 lazy_static = "1.1.0"
 log = "0.4"
-parking_lot = { version = "0.7" }
+parking_lot = { version = "0.8" }
 hal = { package = "gfx-hal", version = "0.1" }
 gfx-backend-empty = { version = "0.1.1" }
 gfx-backend-vulkan = { version = "0.1", optional = true }

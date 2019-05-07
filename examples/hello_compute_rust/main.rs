@@ -1,7 +1,3 @@
-extern crate env_logger;
-extern crate wgpu;
-extern crate wgpu_native;
-
 use std::str::FromStr;
 
 fn main() {
