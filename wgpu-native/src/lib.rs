@@ -216,7 +216,7 @@ macro_rules! typed_id {
 
             fn epoch(&self) -> Epoch {
                (self.raw()).1
-            }    
+            }
         }
     )
 }

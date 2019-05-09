@@ -63,6 +63,7 @@ use std::{
 use std::sync::atomic::AtomicBool;
 
 
+const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
@@ -148,6 +149,7 @@ struct PendingResources<B: hal::Backend> {
     referenced: Vec<(ResourceId, RefCount)>,
     /// Resources that are not referenced any more but still used by GPU.
     /// Grouped by submissions associated with a fence and a submission index.
+    /// The active submissions have to be stored in FIFO order: oldest come first.
     active: Vec<ActiveSubmission<B>>,
     /// Resources that are neither referenced or used, just pending
     /// actual deletion.
@@ -173,29 +175,37 @@ impl<B: hal::Backend> PendingResources<B> {
 
     /// Returns the last submission index that is done.
     fn cleanup(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
-        let mut last_done = 0;
-
         if force_wait {
-            unsafe {
+            let status = unsafe {
                 device.wait_for_fences(
                     self.active.iter().map(|a| &a.fence),
                     hal::device::WaitFor::All,
-                    !0,
+                    CLEANUP_WAIT_MS * 1_000_000,
                 )
-            }
-            .unwrap();
+            };
+            assert_eq!(status, Ok(true), "GPU got stuck :(");
         }
 
-        for i in (0..self.active.len()).rev() {
-            if force_wait || unsafe { device.get_fence_status(&self.active[i].fence).unwrap() } {
-                let a = self.active.swap_remove(i);
-                trace!("Active submission {} is done", a.index);
-                last_done = last_done.max(a.index);
-                self.free.extend(a.resources.into_iter().map(|(_, r)| r));
-                self.ready_to_map.extend(a.mapped);
-                unsafe {
-                    device.destroy_fence(a.fence);
-                }
+        //TODO: enable when `is_sorted_by_key` is stable
+        //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
+        let done_count = self.active
+            .iter()
+            .position(|a| unsafe {
+                !device.get_fence_status(&a.fence).unwrap()
+            })
+            .unwrap_or(self.active.len());
+        let last_done = if done_count != 0 {
+            self.active[done_count - 1].index
+        } else {
+            0
+        };
+
+        for a in self.active.drain(..done_count) {
+            trace!("Active submission {} is done", a.index);
+            self.free.extend(a.resources.into_iter().map(|(_, r)| r));
+            self.ready_to_map.extend(a.mapped);
+            unsafe {
+                device.destroy_fence(a.fence);
             }
         }
 
