@@ -30,9 +30,9 @@ else
 endif
 
 
-.PHONY: all check test doc clear lib-native lib-remote lib-rust examples-rust examples-gfx gfx ffi-examples
+.PHONY: all check test doc clear lib-native lib-remote examples-native examples-remote
 
-all: examples-rust examples-gfx ffi-examples
+all: examples-native examples-remote
 
 check:
 	cargo check --all
@@ -45,7 +45,7 @@ doc:
 
 clear:
 	cargo clean
-	rm wgpu-bindings/wgpu.h
+	rm wgpu-bindings/wgpu.h wgpu-bindings/wgpu-remote.h
 
 lib-native: Cargo.lock wgpu-native/Cargo.toml $(wildcard wgpu-native/**/*.rs)
 	cargo build --manifest-path wgpu-native/Cargo.toml --features "local,$(FEATURE_NATIVE)"
@@ -53,27 +53,14 @@ lib-native: Cargo.lock wgpu-native/Cargo.toml $(wildcard wgpu-native/**/*.rs)
 lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
 	cargo build --manifest-path wgpu-remote/Cargo.toml --features $(FEATURE_RUST)
 
-lib-rust: Cargo.lock wgpu-rs/Cargo.toml $(wildcard wgpu-rs/**/*.rs)
-	cargo build --manifest-path wgpu-rs/Cargo.toml --features $(FEATURE_RUST)
-
 ffi/wgpu.h: wgpu-native/cbindgen.toml $(wildcard wgpu-native/**/*.rs)
 	cbindgen wgpu-native >ffi/wgpu.h
 
 ffi/wgpu-remote.h:  wgpu-remote/cbindgen.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
 	cbindgen wgpu-remote >ffi/wgpu-remote.h
 
-wgpu-bindings/*.h: Cargo.lock $(wildcard wgpu-bindings/src/*.rs) lib-native lib-remote
-	cargo +nightly run --manifest-path wgpu-bindings/Cargo.toml
-
-ffi-examples: lib-native lib-remote ffi/wgpu.h ffi/wgpu-remote.h
+examples-native: lib-native ffi/wgpu.h examples/hello_triangle_c/main.c
 	cd examples/hello_triangle_c && mkdir -p build && cd build && cmake .. && make
+
+examples-remote: lib-remote ffi/wgpu-remote.h examples/hello_remote_c/main.c
 	cd examples/hello_remote_c && mkdir -p build && cd build && cmake .. && make
-
-examples-rust: examples/Cargo.toml $(wildcard wgpu-native/**/*.rs wgpu-rs/**/*.rs)
-	cargo build --manifest-path examples/Cargo.toml --features $(FEATURE_RUST)
-
-examples-gfx: examples-rust gfx-examples/Cargo.toml $(wildcard gfx-examples/*.rs)
-	cargo build --manifest-path gfx-examples/Cargo.toml --features $(FEATURE_RUST)
-
-gfx:
-	cargo run --manifest-path gfx-examples/Cargo.toml --bin $(name) --features $(FEATURE_RUST)

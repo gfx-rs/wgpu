@@ -7,6 +7,8 @@ language = "C"
 
 [export]
 prefix = "WGPU"
+#TODO: figure out why cbindgen even tries to export a private type...
+exclude = ["BufferMapResult"]
 
 [parse]
 parse_deps = false
@@ -28,4 +30,5 @@ bitflags = true
 
 [defines]
 "feature = window-winit" = "WGPU_WINDOW_WINIT"
+"feature = local" = "WGPU_LOCAL"
 "feature = remote" = "WGPU_REMOTE"

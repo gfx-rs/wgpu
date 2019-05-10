@@ -2,7 +2,4 @@
 members = [
     "wgpu-native",
     "wgpu-remote",
-    "wgpu-rs",
-    "examples",
-    "gfx-examples",
 ]
