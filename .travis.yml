@@ -1,0 +1,10 @@
+language: rust
+sudo: false
+os:
+  - linux
+  - osx
+  - windows
+
+branches:
+  except:
+  - staging.tmp
