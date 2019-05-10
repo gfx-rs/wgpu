@@ -1,4 +1,4 @@
-header = ""
+header = "#define WGPU_LOCAL"
 include_version = true
 braces = "SameLine"
 line_length = 100
@@ -14,6 +14,7 @@ exclude = ["BufferMapResult"]
 parse_deps = false
 
 [parse.expand]
+crates = ["wgpu-native"]
 features = ["local"]
 
 [fn]

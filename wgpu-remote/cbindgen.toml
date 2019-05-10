@@ -7,10 +7,14 @@ language = "C"
 
 [export]
 prefix = "WGPU"
+exclude = ["BufferMapResult"]
 
 [parse]
 parse_deps = true
 include = ["wgpu_native"]
+
+[parse.expand]
+crates = ["wgpu-native"]
 
 [fn]
 

@@ -1,6 +1,6 @@
+#define WGPU_LOCAL
 
-
-/* Generated with cbindgen:0.8.3 */
+/* Generated with cbindgen:0.8.6 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -630,7 +630,9 @@ typedef struct {
 
 
 
+#if defined(WGPU_LOCAL)
 WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDeviceDescriptor *desc);
+#endif
 
 void wgpu_bind_group_destroy(WGPUBindGroupId bind_group_id);
 
@@ -672,10 +674,14 @@ void wgpu_command_buffer_copy_texture_to_texture(WGPUCommandBufferId command_buf
                                                  const WGPUTextureCopyView *destination,
                                                  WGPUExtent3d copy_size);
 
+#if defined(WGPU_LOCAL)
 WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId command_encoder_id);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId command_encoder_id,
                                                         WGPURenderPassDescriptor desc);
+#endif
 
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_encoder_id);
 
@@ -691,42 +697,68 @@ void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
 
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
 
+#if defined(WGPU_LOCAL)
 WGPUInstanceId wgpu_create_instance(void);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUBindGroupId wgpu_device_create_bind_group(WGPUDeviceId device_id,
                                               const WGPUBindGroupDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_id,
                                                            const WGPUBindGroupLayoutDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUBufferId wgpu_device_create_buffer(WGPUDeviceId device_id, const WGPUBufferDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUBufferId wgpu_device_create_buffer_mapped(WGPUDeviceId device_id,
                                               const WGPUBufferDescriptor *desc,
                                               uint8_t **mapped_ptr_out);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUCommandEncoderId wgpu_device_create_command_encoder(WGPUDeviceId device_id,
                                                         const WGPUCommandEncoderDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUComputePipelineId wgpu_device_create_compute_pipeline(WGPUDeviceId device_id,
                                                           const WGPUComputePipelineDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUPipelineLayoutId wgpu_device_create_pipeline_layout(WGPUDeviceId device_id,
                                                         const WGPUPipelineLayoutDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
                                                         const WGPURenderPipelineDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUSamplerId wgpu_device_create_sampler(WGPUDeviceId device_id, const WGPUSamplerDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
                                                     const WGPUShaderModuleDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUSwapChainId wgpu_device_create_swap_chain(WGPUDeviceId device_id,
                                               WGPUSurfaceId surface_id,
                                               const WGPUSwapChainDescriptor *desc);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
+#endif
 
 void wgpu_device_destroy(WGPUDeviceId device_id);
 
@@ -734,24 +766,27 @@ WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
 void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
 
+#if defined(WGPU_LOCAL)
 WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId instance_id,
                                                             void *layer);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
                                                              void *hinstance,
                                                              void *hwnd);
-
-#if defined(WGPU_WINDOW_WINIT)
-WGPUSurfaceId wgpu_instance_create_surface_from_winit(WGPUInstanceId instance_id,
-                                                      const WGPUWindow *window);
 #endif
 
+#if defined(WGPU_LOCAL)
 WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
                                                      const void **display,
                                                      uint64_t window);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id,
                                         const WGPUAdapterDescriptor *desc);
+#endif
 
 void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffer_ptr,
@@ -801,10 +836,14 @@ WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_
 
 void wgpu_swap_chain_present(WGPUSwapChainId swap_chain_id);
 
+#if defined(WGPU_LOCAL)
 WGPUTextureViewId wgpu_texture_create_default_view(WGPUTextureId texture_id);
+#endif
 
+#if defined(WGPU_LOCAL)
 WGPUTextureViewId wgpu_texture_create_view(WGPUTextureId texture_id,
                                            const WGPUTextureViewDescriptor *desc);
+#endif
 
 void wgpu_texture_destroy(WGPUTextureId texture_id);
 
