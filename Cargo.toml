@@ -1,0 +1,33 @@
+[package]
+name = "wgpu"
+version = "0.2.2"
+authors = [
+	"Dzmitry Malyshau <kvark@mozilla.com>",
+	"Joshua Groves <josh@joshgroves.com>",
+]
+edition = "2018"
+description = "Rusty wgpu API wrapper"
+homepage = "https://github.com/gfx-rs/wgpu-rs"
+repository = "https://github.com/gfx-rs/wgpu-rs"
+keywords = ["graphics"]
+license = "MPL-2.0"
+
+[lib]
+
+[features]
+default = []
+metal = ["wgn/gfx-backend-metal"]
+dx11 = ["wgn/gfx-backend-dx11"]
+dx12 = ["wgn/gfx-backend-dx12"]
+vulkan = ["wgn/gfx-backend-vulkan"]
+
+[dependencies]
+#TODO: only depend on the published version
+wgn = { package = "wgpu-native", features = ["local", "window-winit"], git = "https://github.com/gfx-rs/wgpu", rev = "0edf927e5bb13d78d804e5ff58dce952f81e5832" }
+arrayvec = "0.4"
+
+[dev-dependencies]
+cgmath = "0.17"
+env_logger = "0.6"
+glsl-to-spirv = "0.1"
+log = "0.4"
