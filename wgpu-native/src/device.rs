@@ -337,9 +337,10 @@ impl PendingResources<back::Backend> {
         &mut self,
         raw: &<back::Backend as hal::Backend>::Device,
         limits: &hal::Limits,
-    ) {
-        for buffer_id in self.ready_to_map.drain(..) {
-            let (operation, status, ptr) = {
+    ) -> Vec<BufferMapPendingCallback> {
+        self.ready_to_map
+            .drain(..)
+            .map(|buffer_id| {
                 let mut buffer_guard = HUB.buffers.write();
                 let mut buffer = &mut buffer_guard[buffer_id];
                 let operation = buffer.pending_map_operation.take().unwrap();
@@ -351,22 +352,14 @@ impl PendingResources<back::Backend> {
                         map_buffer(raw, limits, &mut buffer, range, HostMap::Write)
                     }
                 };
-                match result {
-                    Ok(ptr) => (operation, BufferMapAsyncStatus::Success, ptr),
-                    Err(e) => {
-                        log::error!("failed to map buffer: {}", e);
-                        (operation, BufferMapAsyncStatus::Error, ptr::null_mut())
-                    }
-                }
-            };
-
-            match operation {
-                BufferMapOperation::Read(_, callback, userdata) => callback(status, ptr, userdata),
-                BufferMapOperation::Write(_, callback, userdata) => callback(status, ptr, userdata),
-            };
-        }
+                (operation, result)
+            })
+            .collect()
     }
 }
+
+type BufferMapResult = Result<*mut u8, hal::mapping::Error>;
+type BufferMapPendingCallback = (BufferMapOperation, BufferMapResult);
 
 fn map_buffer(
     raw: &<back::Backend as hal::Backend>::Device,
@@ -374,7 +367,7 @@ fn map_buffer(
     buffer: &mut resource::Buffer<back::Backend>,
     original_range: &std::ops::Range<u64>,
     kind: HostMap,
-) -> Result<*mut u8, hal::mapping::Error> {
+) -> BufferMapResult {
     // gfx-rs requires mapping and flushing/invalidation ranges to be done at `non_coherent_atom_size`
     // granularity for memory types that aren't coherent. We achieve that by flooring the start offset
     // and ceiling the end offset to those atom sizes, using bitwise operations on an `atom_mask`.
@@ -519,17 +512,39 @@ impl<B: hal::Backend> Device<B> {
 }
 
 impl Device<back::Backend> {
-    fn maintain(&self, force_wait: bool) {
+    fn maintain(
+        &self, force_wait: bool
+    ) -> Vec<BufferMapPendingCallback> {
         let mut pending = self.pending.lock();
         let mut trackers = self.trackers.lock();
 
         pending.triage_referenced(&mut *trackers);
         pending.triage_framebuffers(&mut *self.framebuffers.lock());
         let last_done = pending.cleanup(&self.raw, force_wait);
-        pending.handle_mapping(&self.raw, &self.limits);
+        let callbacks = pending.handle_mapping(&self.raw, &self.limits);
 
         if last_done != 0 {
             self.com_allocator.maintain(last_done);
+        }
+
+        callbacks
+    }
+
+    //Note: this logic is specifically moved out of `handle_mapping()` in order to
+    // have nothing locked by the time we execute users callback code.
+    fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callbacks: I) {
+        for (operation, result) in callbacks {
+            let (status, ptr) = match result {
+                Ok(ptr) => (BufferMapAsyncStatus::Success, ptr),
+                Err(e) => {
+                    log::error!("failed to map buffer: {}", e);
+                    (BufferMapAsyncStatus::Error, ptr::null_mut())
+                }
+            };
+            match operation {
+                BufferMapOperation::Read(_, on_read, userdata) => on_read(status, ptr, userdata),
+                BufferMapOperation::Write(_, on_write, userdata) => on_write(status, ptr, userdata),
+            }
         }
     }
 }
@@ -635,24 +650,26 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
     desc.usage |= resource::BufferUsageFlags::MAP_WRITE;
     let mut buffer = device_create_buffer(device_id, &desc);
 
-    let device_guard = HUB.devices.read();
-    let device = &device_guard[device_id];
-    let range = 0..desc.size as u64;
+    {
+        let device_guard = HUB.devices.read();
+        let device = &device_guard[device_id];
+        let range = 0..desc.size as u64;
 
-    match map_buffer(
-        &device.raw,
-        &device.limits,
-        &mut buffer,
-        &range,
-        HostMap::Write,
-    ) {
-        Ok(ptr) => unsafe {
-            *mapped_ptr_out = ptr;
-        },
-        Err(e) => {
-            log::error!("failed to create buffer in a mapped state: {}", e);
-            unsafe {
-                *mapped_ptr_out = ptr::null_mut();
+        match map_buffer(
+            &device.raw,
+            &device.limits,
+            &mut buffer,
+            &range,
+            HostMap::Write,
+        ) {
+            Ok(ptr) => unsafe {
+                *mapped_ptr_out = ptr;
+            },
+            Err(e) => {
+                log::error!("failed to create buffer in a mapped state: {}", e);
+                unsafe {
+                    *mapped_ptr_out = ptr::null_mut();
+                }
             }
         }
     }
@@ -670,9 +687,10 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
 
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
+    let device_guard = HUB.devices.read();
     let buffer_guard = HUB.buffers.read();
     let buffer = &buffer_guard[buffer_id];
-    HUB.devices.read()[buffer.device_id.value]
+    device_guard[buffer.device_id.value]
         .pending
         .lock()
         .destroy(
@@ -987,6 +1005,7 @@ pub fn device_create_pipeline_layout(
     device_id: DeviceId,
     desc: &binding_model::PipelineLayoutDescriptor,
 ) -> binding_model::PipelineLayout<back::Backend> {
+    let device_guard = HUB.devices.read();
     let bind_group_layout_ids =
         unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) };
     let bind_group_layout_guard = HUB.bind_group_layouts.read();
@@ -996,7 +1015,7 @@ pub fn device_create_pipeline_layout(
 
     // TODO: push constants
     let pipeline_layout = unsafe {
-        HUB.devices.read()[device_id]
+        device_guard[device_id]
             .raw
             .create_pipeline_layout(descriptor_set_layouts, &[])
     }
@@ -1316,22 +1335,28 @@ pub extern "C" fn wgpu_queue_submit(
     };
 
     // No need for write access to the device from here on out
-    let device_guard = HUB.devices.read();
-    let device = &device_guard[queue_id];
+    let callbacks = {
+        let device_guard = HUB.devices.read();
+        let device = &device_guard[queue_id];
 
-    device.maintain(false);
-    device.pending.lock().active.alloc().init(ActiveSubmission {
-        index: submit_index,
-        fence,
-        resources: Vec::new(),
-        mapped: Vec::new(),
-    });
+        let callbacks = device.maintain(false);
+        device.pending.lock().active.alloc().init(ActiveSubmission {
+            index: submit_index,
+            fence,
+            resources: Vec::new(),
+            mapped: Vec::new(),
+        });
 
-    // finally, return the command buffers to the allocator
-    for &cmb_id in command_buffer_ids {
-        let cmd_buf = HUB.command_buffers.unregister(cmb_id);
-        device.com_allocator.after_submit(cmd_buf, submit_index);
-    }
+        // finally, return the command buffers to the allocator
+        for &cmb_id in command_buffer_ids {
+            let cmd_buf = HUB.command_buffers.unregister(cmb_id);
+            device.com_allocator.after_submit(cmd_buf, submit_index);
+        }
+
+        callbacks
+    };
+
+    Device::fire_map_callbacks(callbacks);
 }
 
 pub fn device_create_render_pipeline(
@@ -1829,7 +1854,8 @@ pub extern "C" fn wgpu_device_create_swap_chain(
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_poll(device_id: DeviceId, force_wait: bool) {
-    HUB.devices.read()[device_id].maintain(force_wait);
+    let callbacks = HUB.devices.read()[device_id].maintain(force_wait);
+    Device::fire_map_callbacks(callbacks);
 }
 
 #[no_mangle]
@@ -1932,15 +1958,16 @@ pub extern "C" fn wgpu_buffer_map_write_async(
 
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_unmap(buffer_id: BufferId) {
+    // get the device ID first in order to have a clean locking order
+    let device_id = HUB.buffers.read()[buffer_id].device_id.value;
+    let device_guard = HUB.devices.read();
+    let device_raw = &device_guard[device_id].raw;
     let mut buffer_guard = HUB.buffers.write();
     let buffer = &mut buffer_guard[buffer_id];
-    let device_guard = HUB.devices.read();
-    let device = &device_guard[buffer.device_id.value];
 
     if !buffer.mapped_write_ranges.is_empty() {
         unsafe {
-            device
-                .raw
+            device_raw
                 .flush_mapped_memory_ranges(
                     buffer
                         .mapped_write_ranges
@@ -1952,5 +1979,5 @@ pub extern "C" fn wgpu_buffer_unmap(buffer_id: BufferId) {
         buffer.mapped_write_ranges.clear();
     }
 
-    unsafe { device.raw.unmap_memory(&buffer.memory) };
+    unsafe { device_raw.unmap_memory(&buffer.memory) };
 }
