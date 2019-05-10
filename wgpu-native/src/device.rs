@@ -810,11 +810,12 @@ pub fn texture_create_view(
     view_kind: hal::image::ViewKind,
     range: hal::image::SubresourceRange,
 ) -> resource::TextureView<back::Backend> {
+    let device_guard = HUB.devices.read();
     let texture_guard = HUB.textures.read();
     let texture = &texture_guard[texture_id];
 
     let raw = unsafe {
-        HUB.devices.read()[texture.device_id.value]
+        device_guard[texture.device_id.value]
             .raw
             .create_image_view(
                 &texture.raw,
@@ -896,9 +897,10 @@ pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> Tex
 
 #[no_mangle]
 pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
+    let device_guard = HUB.devices.read();
     let texture_guard = HUB.textures.read();
     let texture = &texture_guard[texture_id];
-    HUB.devices.read()[texture.device_id.value]
+    device_guard[texture.device_id.value]
         .pending
         .lock()
         .destroy(
@@ -909,10 +911,12 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
 
 #[no_mangle]
 pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
+    let device_guard = HUB.devices.read();
+    let texture_guard = HUB.textures.read();
     let texture_view_guard = HUB.texture_views.read();
     let view = &texture_view_guard[texture_view_id];
-    let device_id = HUB.textures.read()[view.texture_id.value].device_id.value;
-    HUB.devices.read()[device_id].pending.lock().destroy(
+    let device_id = texture_guard[view.texture_id.value].device_id.value;
+    device_guard[device_id].pending.lock().destroy(
         ResourceId::TextureView(texture_view_id),
         view.life_guard.ref_count.clone(),
     );
