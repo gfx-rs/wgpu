@@ -22,6 +22,8 @@ use std::{
 
 pub type SwapImageEpoch = u16;
 
+const FRAME_TIMEOUT_MS: u64 = 1000;
+
 pub(crate) struct SwapChainLink<E> {
     pub swap_chain_id: SwapChainId, //TODO: strongly
     pub epoch: E,
@@ -152,9 +154,10 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
     swap_chain.acquired.push(image_index);
 
     let frame = &mut swap_chain.frames[image_index as usize];
-    unsafe {
-        device.raw.wait_for_fence(&frame.fence, !0).unwrap();
-    }
+    let status = unsafe {
+        device.raw.wait_for_fence(&frame.fence, FRAME_TIMEOUT_MS * 1_000_000)
+    };
+    assert_eq!(status, Ok(true), "GPU got stuck on a frame (image {}) :(", image_index);
     mem::swap(&mut frame.sem_available, &mut swap_chain.sem_available);
     frame.need_waiting.store(true, Ordering::Release);
 
