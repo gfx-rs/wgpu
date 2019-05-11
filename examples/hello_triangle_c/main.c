@@ -1,5 +1,6 @@
 #include "./../../ffi/wgpu.h"
 #include <stdio.h>
+#include <stdlib.h>
 
 #define WGPU_TARGET_MACOS 1
 #define WGPU_TARGET_LINUX 2

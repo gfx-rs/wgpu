@@ -1,6 +1,6 @@
 
 
-/* Generated with cbindgen:0.8.3 */
+/* Generated with cbindgen:0.8.6 */
 
 #include <stdarg.h>
 #include <stdbool.h>

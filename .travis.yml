@@ -1,4 +1,6 @@
 language: rust
+sudo: false
+dist: xenial
 
 matrix:
   include:
@@ -6,9 +8,11 @@ matrix:
     - os: linux
       rust: stable
       compiler: gcc
-    - os: linux
-      rust: nightly
-      compiler: gcc
+    #TODO: unlock when libglfw3 on Ubuntu comes with Vulkan support
+    # or when we add a GL backend.
+    #- os: linux
+    #  rust: nightly
+    #  compiler: gcc
     # Windows 64bit
     - os: windows
       rust: stable
@@ -19,11 +23,11 @@ matrix:
       rust: stable
       osx_image: xcode9.4
       compiler: clang
-    #- env: MACOSX_DEPLOYMENT_TARGET=10.9
-    #  os: osx
-    #  rust: nightly
-    #  osx_image: xcode9.4
-    #  compiler: clang
+    - env: MACOSX_DEPLOYMENT_TARGET=10.9
+      os: osx
+      rust: nightly
+      osx_image: xcode9.4
+      compiler: clang
 
     # iPhoneOS 64bit
     #- env: TARGET=aarch64-apple-ios
@@ -31,16 +35,27 @@ matrix:
     #  osx_image: xcode9.4
     #  rust: nightly
 
+addons:
+  apt:
+    packages:
+    - cmake
+    - libglfw3-dev
+  homebrew:
+    update: true
+    packages:
+    - cmake
+    - glfw3
+  choco:
+    packages:
+    - make
+
 branches:
   except:
   - staging.tmp
 
 before_install:
-  # Do not run bors builds against the nightly compiler.
-  # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
-  - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
   - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
 
 script:
   - cargo test
-  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then (brew update && brew upgrade cmake && brew install glfw3 && cargo install cbindgen && make ffi-examples); fi
+  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen && make VERBOSE=1; fi
