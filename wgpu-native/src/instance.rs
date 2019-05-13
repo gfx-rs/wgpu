@@ -95,7 +95,8 @@ pub fn instance_create_surface_from_macos_layer(
     unimplemented!();
 
     #[cfg(feature = "gfx-backend-metal")]
-    SurfaceHandle::new(HUB.instances.read()[instance_id].create_surface_from_layer(layer as *mut _))
+    SurfaceHandle::new(HUB.instances.read()[instance_id]
+        .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)))
 }
 
 #[cfg(feature = "local")]

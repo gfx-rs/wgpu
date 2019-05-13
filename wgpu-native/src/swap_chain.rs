@@ -111,8 +111,13 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
     let (image_index, device_id, descriptor) = {
         let mut surface_guard = HUB.surfaces.write();
         let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
-        let sync = hal::FrameSync::Semaphore(&swap_chain.sem_available);
-        let result = unsafe { swap_chain.raw.acquire_image(!0, sync) };
+        let result = unsafe {
+            swap_chain.raw.acquire_image(
+                !0,
+                Some(&swap_chain.sem_available),
+                None,
+            )
+        };
         (
             result.ok(),
             swap_chain.device_id.value,
@@ -136,11 +141,22 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
     let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
 
     let image_index = match image_index {
-        Some(index) => index,
-        None => {
-            let sync = hal::FrameSync::Semaphore(&swap_chain.sem_available);
-            unsafe { swap_chain.raw.acquire_image(!0, sync) }.unwrap()
+        Some((index, suboptimal)) => {
+            if suboptimal.is_some() {
+                warn!("acquire_image: sub-optimal");
+            }
+            index
         }
+        None => unsafe {
+            swap_chain.raw
+                .acquire_image(
+                    !0,
+                    Some(&swap_chain.sem_available),
+                    None,
+                )
+                .unwrap()
+                .0
+        },
     };
 
     let device_guard = HUB.devices.read();
