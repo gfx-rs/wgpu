@@ -488,6 +488,7 @@ impl<B: hal::Backend> Device<B> {
                             count: 100,
                         },
                     ],
+                    hal::pso::DescriptorPoolCreateFlags::empty(),
                 )
             }
             .unwrap(),
@@ -1446,11 +1447,7 @@ pub fn device_create_render_pipeline(
             .to_owned()
             .unwrap(), // TODO
         module: &shader_module_guard[desc.vertex_stage.module].raw,
-        specialization: hal::pso::Specialization {
-            // TODO
-            constants: &[],
-            data: &[],
-        },
+        specialization: hal::pso::Specialization::EMPTY,
     };
     let fragment = hal::pso::EntryPoint::<back::Backend> {
         entry: unsafe { ffi::CStr::from_ptr(desc.fragment_stage.entry_point) }
@@ -1458,11 +1455,7 @@ pub fn device_create_render_pipeline(
             .to_owned()
             .unwrap(), // TODO
         module: &shader_module_guard[desc.fragment_stage.module].raw,
-        specialization: hal::pso::Specialization {
-            // TODO
-            constants: &[],
-            data: &[],
-        },
+        specialization: hal::pso::Specialization::EMPTY,
     };
 
     let shaders = hal::pso::GraphicsShaderSet {
@@ -1490,8 +1483,8 @@ pub fn device_create_render_pipeline(
             binding: i as u32,
             stride: vb_state.stride,
             rate: match vb_state.step_mode {
-                pipeline::InputStepMode::Vertex => 0,
-                pipeline::InputStepMode::Instance => 1,
+                pipeline::InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
+                pipeline::InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
             },
         });
         let desc_atts =
@@ -1618,11 +1611,7 @@ pub fn device_create_compute_pipeline(
             .to_owned()
             .unwrap(), // TODO
         module: &shader_module_guard[pipeline_stage.module].raw,
-        specialization: hal::pso::Specialization {
-            // TODO
-            constants: &[],
-            data: &[],
-        },
+        specialization: hal::pso::Specialization::EMPTY,
     };
 
     // TODO
@@ -1671,7 +1660,7 @@ pub fn device_create_swap_chain(
     let mut surface_guard = HUB.surfaces.write();
     let surface = &mut surface_guard[surface_id];
 
-    let (caps, formats, _present_modes, composite_alphas) = {
+    let (caps, formats, _present_modes) = {
         let adapter_guard = HUB.adapters.read();
         let adapter = &adapter_guard[device.adapter_id];
         assert!(surface
@@ -1687,7 +1676,8 @@ pub fn device_create_swap_chain(
         conv::map_texture_format(desc.format),
         num_frames, //TODO: configure?
     );
-    config.composite_alpha = *composite_alphas.iter().next().unwrap();
+    //TODO: check for supported
+    config.composite_alpha = hal::window::CompositeAlpha::OPAQUE;
 
     if let Some(formats) = formats {
         assert!(
@@ -1737,7 +1727,7 @@ pub fn device_create_swap_chain(
         },
     };
 
-    let (raw, backbuffer) = unsafe {
+    let (raw, images) = unsafe {
         device
             .raw
             .create_swapchain(&mut surface.raw, config.with_image_usage(usage), old_raw)
@@ -1755,11 +1745,6 @@ pub fn device_create_swap_chain(
         sem_available,
         command_pool,
     });
-
-    let images = match backbuffer {
-        hal::Backbuffer::Images(images) => images,
-        hal::Backbuffer::Framebuffer(_) => panic!("Deprecated API detected!"),
-    };
 
     images
         .into_iter()
