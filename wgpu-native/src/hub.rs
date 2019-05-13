@@ -162,10 +162,11 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     }
 
     pub fn unregister(&self, id: I) -> T {
-        #[cfg(feature = "local")]
-        self.identity.lock().free(id);
         let (value, epoch) = self.data.write().map.remove(id.index() as usize).unwrap();
         assert_eq!(epoch, id.epoch());
+        //Note: careful about the order here!
+        #[cfg(feature = "local")]
+        self.identity.lock().free(id);
         value
     }
 }
