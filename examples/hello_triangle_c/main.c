@@ -188,15 +188,35 @@ int main() {
     #error "Unsupported WGPU_TARGET"
 #endif
 
+    int prev_width = 0;
+    int prev_height = 0;
+    glfwGetWindowSize(window, &prev_width, &prev_height);
+
     WGPUSwapChainId swap_chain = wgpu_device_create_swap_chain(device, surface,
         &(WGPUSwapChainDescriptor){
             .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT,
             .format = WGPUTextureFormat_Bgra8Unorm,
-            .width = 640,
-            .height = 480,
+            .width = prev_width,
+            .height = prev_height,
         });
 
     while (!glfwWindowShouldClose(window)) {
+        int width = 0;
+        int height = 0;
+        glfwGetWindowSize(window, &width, &height);
+        if (width != prev_width || height != prev_height) {
+            prev_width = width;
+            prev_height = height;
+
+            swap_chain = wgpu_device_create_swap_chain(device, surface,
+                &(WGPUSwapChainDescriptor){
+                    .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT,
+                    .format = WGPUTextureFormat_Bgra8Unorm,
+                    .width = width,
+                    .height = height,
+                });
+        }
+
         WGPUSwapChainOutput next_texture =
             wgpu_swap_chain_get_next_texture(swap_chain);
 
