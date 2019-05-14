@@ -20,6 +20,14 @@ Supported platforms:
 
 ## Usage
 
-This repository contains C-language examples that link to the native library targets and perform basic rendering and computation. You can test them with `make`.
+This repository contains C-language examples that link to the native library targets and perform basic rendering and computation.
+To run the C triangle example, install a C compiler + glfw 3, then run these commands at the root of the repo:
+```
+rustup toolchain install nightly
+cargo install cbindgen
+make examples-native
+cd examples/hello_triangle_c/build
+./hello_triangle
+```
 
 The idiomatic Rust wrapper lives in https://github.com/gfx-rs/wgpu-rs and provides a number of more complex examples to get a feel of the API.
