@@ -3,16 +3,13 @@ use crate::{GlobalMessage, InstanceMessage};
 use ipc_channel::ipc::IpcReceiver;
 use wgn;
 
-
 pub struct Server {
     channel: IpcReceiver<GlobalMessage>,
 }
 
 impl Server {
     pub(crate) fn new(channel: IpcReceiver<GlobalMessage>) -> Self {
-        Server {
-            channel,
-        }
+        Server { channel }
     }
 }
 
@@ -46,12 +43,11 @@ fn process(message: GlobalMessage) -> ControlFlow {
     ControlFlow::Continue
 }
 
-
 #[no_mangle]
 pub extern "C" fn wgpu_server_process(server: &Server) {
     while let Ok(message) = server.channel.try_recv() {
         match process(message) {
-            ControlFlow::Continue => {},
+            ControlFlow::Continue => {}
             ControlFlow::Terminate => break,
         }
     }

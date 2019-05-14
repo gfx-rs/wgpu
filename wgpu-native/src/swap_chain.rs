@@ -17,7 +17,9 @@ use log::{trace, warn};
 use parking_lot::Mutex;
 
 use std::{
-    iter, mem, sync::atomic::{AtomicBool, Ordering},
+    iter,
+    mem,
+    sync::atomic::{AtomicBool, Ordering},
 };
 
 pub type SwapImageEpoch = u16;
@@ -114,11 +116,9 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
         let mut surface_guard = HUB.surfaces.write();
         let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
         let result = unsafe {
-            swap_chain.raw.acquire_image(
-                !0,
-                Some(&swap_chain.sem_available),
-                None,
-            )
+            swap_chain
+                .raw
+                .acquire_image(!0, Some(&swap_chain.sem_available), None)
         };
         (
             result.ok(),
@@ -150,12 +150,9 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
             index
         }
         None => unsafe {
-            swap_chain.raw
-                .acquire_image(
-                    !0,
-                    Some(&swap_chain.sem_available),
-                    None,
-                )
+            swap_chain
+                .raw
+                .acquire_image(!0, Some(&swap_chain.sem_available), None)
                 .unwrap()
                 .0
         },
@@ -173,9 +170,16 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
 
     let frame = &mut swap_chain.frames[image_index as usize];
     let status = unsafe {
-        device.raw.wait_for_fence(&frame.fence, FRAME_TIMEOUT_MS * 1_000_000)
+        device
+            .raw
+            .wait_for_fence(&frame.fence, FRAME_TIMEOUT_MS * 1_000_000)
     };
-    assert_eq!(status, Ok(true), "GPU got stuck on a frame (image {}) :(", image_index);
+    assert_eq!(
+        status,
+        Ok(true),
+        "GPU got stuck on a frame (image {}) :(",
+        image_index
+    );
     mem::swap(&mut frame.sem_available, &mut swap_chain.sem_available);
     frame.need_waiting.store(true, Ordering::Release);
 
@@ -184,8 +188,11 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
         .as_swap_chain()
         .bump_epoch();
 
-    assert_eq!(frame.acquired_epoch, None, "Last swapchain output hasn't been presented");
-    frame.acquired_epoch =Some(frame_epoch);
+    assert_eq!(
+        frame.acquired_epoch, None,
+        "Last swapchain output hasn't been presented"
+    );
+    frame.acquired_epoch = Some(frame_epoch);
 
     SwapChainOutput {
         texture_id: frame.texture_id.value,
@@ -201,9 +208,16 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
     let image_index = swap_chain.acquired.remove(0);
     let frame = &mut swap_chain.frames[image_index as usize];
     let epoch = frame.acquired_epoch.take();
-    assert!(epoch.is_some(), "Presented frame (image {}) was not acquired", image_index);
-    assert!(!frame.need_waiting.load(Ordering::Acquire),
-        "No rendering work has been submitted for the presented frame (image {})", image_index);
+    assert!(
+        epoch.is_some(),
+        "Presented frame (image {}) was not acquired",
+        image_index
+    );
+    assert!(
+        !frame.need_waiting.load(Ordering::Acquire),
+        "No rendering work has been submitted for the presented frame (image {})",
+        image_index
+    );
 
     let mut device_guard = HUB.devices.write();
     let device = &mut device_guard[swap_chain.device_id.value];
@@ -229,7 +243,7 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
         .into_source()
         .map(|old| hal::memory::Barrier::Image {
             states: conv::map_texture_state(old, hal::format::Aspects::COLOR)
-                ..(
+                .. (
                     hal::image::Access::COLOR_ATTACHMENT_WRITE,
                     hal::image::Layout::Present,
                 ),
@@ -241,7 +255,7 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
     let err = unsafe {
         frame.comb.begin(false);
         frame.comb.pipeline_barrier(
-            all_image_stages()..hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+            all_image_stages() .. hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
             hal::memory::Dependencies::empty(),
             barrier,
         );

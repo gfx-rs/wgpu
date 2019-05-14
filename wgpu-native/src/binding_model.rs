@@ -1,4 +1,12 @@
-use crate::{track::TrackerSet, BindGroupLayoutId, BufferId, LifeGuard, SamplerId, TextureViewId, BufferAddress};
+use crate::{
+    track::TrackerSet,
+    BindGroupLayoutId,
+    BufferAddress,
+    BufferId,
+    LifeGuard,
+    SamplerId,
+    TextureViewId,
+};
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;

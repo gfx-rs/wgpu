@@ -1,4 +1,12 @@
-use crate::{device::RenderPassContext, resource, BufferAddress, ByteArray, PipelineLayoutId, ShaderModuleId, RawString};
+use crate::{
+    device::RenderPassContext,
+    resource,
+    BufferAddress,
+    ByteArray,
+    PipelineLayoutId,
+    RawString,
+    ShaderModuleId,
+};
 
 use bitflags::bitflags;
 
@@ -124,8 +132,7 @@ pub struct DepthStencilStateDescriptor {
 
 impl DepthStencilStateDescriptor {
     pub fn needs_stencil_reference(&self) -> bool {
-        !self.stencil_front.compare.is_trivial() ||
-        !self.stencil_back.compare.is_trivial()
+        !self.stencil_front.compare.is_trivial() || !self.stencil_back.compare.is_trivial()
     }
 }
 

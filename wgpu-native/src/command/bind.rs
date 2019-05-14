@@ -46,7 +46,12 @@ pub struct BindGroupEntry {
 }
 
 impl BindGroupEntry {
-    fn provide(&mut self, bind_group_id: BindGroupId, bind_group: &BindGroupHandle, offsets: &[u32]) -> Provision {
+    fn provide(
+        &mut self,
+        bind_group_id: BindGroupId,
+        bind_group: &BindGroupHandle,
+        offsets: &[u32],
+    ) -> Provision {
         let was_compatible = match self.provided {
             Some(BindGroupPair {
                 layout_id,
@@ -120,7 +125,7 @@ pub struct Binder {
 
 impl Binder {
     pub(crate) fn reset_expectations(&mut self, length: usize) {
-        for entry in self.entries[length..].iter_mut() {
+        for entry in self.entries[length ..].iter_mut() {
             entry.expected_layout_id = None;
         }
     }
@@ -148,7 +153,7 @@ impl Binder {
                 None
             }
             Provision::Changed { was_compatible, .. } => {
-                if self.entries[..index].iter().all(|entry| entry.is_valid()) {
+                if self.entries[.. index].iter().all(|entry| entry.is_valid()) {
                     self.pipeline_layout_id.map(move |pipeline_layout_id| {
                         let end = if was_compatible {
                             trace!("\t\tgenerating follow-up sequence");
@@ -159,7 +164,7 @@ impl Binder {
                         (
                             pipeline_layout_id,
                             TakeSome {
-                                iter: self.entries[index + 1..end]
+                                iter: self.entries[index + 1 .. end]
                                     .iter()
                                     .map(|entry| entry.actual_value()),
                             },

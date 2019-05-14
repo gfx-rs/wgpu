@@ -15,7 +15,6 @@ use hal::{self, command::RawCommandBuffer};
 
 use std::{iter, slice};
 
-
 pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
@@ -63,9 +62,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
 
     assert_eq!(bind_group.dynamic_count, offsets_count);
     let offsets = if offsets_count != 0 {
-        unsafe {
-            slice::from_raw_parts(offsets_ptr, offsets_count)
-        }
+        unsafe { slice::from_raw_parts(offsets_ptr, offsets_count) }
     } else {
         &[]
     };
@@ -101,17 +98,12 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_compute_pass_push_debug_group(
-    _pass_id: ComputePassId,
-    _label: RawString,
-) {
+pub extern "C" fn wgpu_compute_pass_push_debug_group(_pass_id: ComputePassId, _label: RawString) {
     //TODO
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_compute_pass_pop_debug_group(
-    _pass_id: ComputePassId,
-) {
+pub extern "C" fn wgpu_compute_pass_pop_debug_group(_pass_id: ComputePassId) {
     //TODO
 }
 

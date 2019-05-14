@@ -46,7 +46,6 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-
 type SubmissionIndex = usize;
 pub(crate) type Index = u32;
 pub(crate) type Epoch = u32;
@@ -199,20 +198,20 @@ macro_rules! define_id {
     ($i:ident) => {
         transparent!($i);
         typed_id!($i);
-    }
+    };
 }
 
 macro_rules! transparent {
-    ($i:ident) => (
+    ($i:ident) => {
         #[repr(transparent)]
         #[derive(Clone, Copy, Debug, Hash, PartialEq)]
         #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
         pub struct $i(Id);
-    )
+    };
 }
 
 macro_rules! typed_id {
-    ($i:ident) => (
+    ($i:ident) => {
         impl $i {
             fn raw(&self) -> Id {
                 self.0
@@ -229,10 +228,10 @@ macro_rules! typed_id {
             }
 
             fn epoch(&self) -> Epoch {
-               (self.raw()).1
+                (self.raw()).1
             }
         }
-    )
+    };
 }
 
 define_id!(InstanceId);

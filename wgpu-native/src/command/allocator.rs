@@ -109,7 +109,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
     pub fn maintain(&self, last_done: SubmissionIndex) {
         let mut inner = self.inner.lock();
-        for i in (0..inner.pending.len()).rev() {
+        for i in (0 .. inner.pending.len()).rev() {
             let index = inner.pending[i]
                 .life_guard
                 .submission_index

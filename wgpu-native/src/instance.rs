@@ -1,4 +1,12 @@
-use crate::{binding_model::MAX_BIND_GROUPS, hub::HUB, AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
+use crate::{
+    binding_model::MAX_BIND_GROUPS,
+    hub::HUB,
+    AdapterHandle,
+    AdapterId,
+    DeviceHandle,
+    InstanceId,
+    SurfaceHandle,
+};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
@@ -66,7 +74,6 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     HUB.instances.register_local(inst)
 }
 
-
 #[cfg(feature = "window-winit")]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_winit(
@@ -111,8 +118,10 @@ pub fn instance_create_surface_from_macos_layer(
     unimplemented!();
 
     #[cfg(feature = "gfx-backend-metal")]
-    SurfaceHandle::new(HUB.instances.read()[instance_id]
-        .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)))
+    SurfaceHandle::new(
+        HUB.instances.read()[instance_id]
+            .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
+    )
 }
 
 #[cfg(feature = "local")]

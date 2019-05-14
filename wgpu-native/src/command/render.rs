@@ -151,9 +151,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
 
     assert_eq!(bind_group.dynamic_count, offsets_count);
     let offsets = if offsets_count != 0 {
-        unsafe {
-            slice::from_raw_parts(offsets_ptr, offsets_count)
-        }
+        unsafe { slice::from_raw_parts(offsets_ptr, offsets_count) }
     } else {
         &[]
     };
@@ -179,25 +177,17 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_push_debug_group(
-    _pass_id: RenderPassId,
-    _label: RawString,
-) {
+pub extern "C" fn wgpu_render_pass_push_debug_group(_pass_id: RenderPassId, _label: RawString) {
     //TODO
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_pop_debug_group(
-    _pass_id: RenderPassId,
-) {
+pub extern "C" fn wgpu_render_pass_pop_debug_group(_pass_id: RenderPassId) {
     //TODO
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_insert_debug_marker(
-    _pass_id: RenderPassId,
-    _label: RawString,
-) {
+pub extern "C" fn wgpu_render_pass_insert_debug_marker(_pass_id: RenderPassId, _label: RawString) {
     //TODO
 }
 
@@ -276,8 +266,8 @@ pub extern "C" fn wgpu_render_pass_draw(
 
     unsafe {
         pass.raw.draw(
-            first_vertex..first_vertex + vertex_count,
-            first_instance..first_instance + instance_count,
+            first_vertex .. first_vertex + vertex_count,
+            first_instance .. first_instance + instance_count,
         );
     }
 }
@@ -297,9 +287,9 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
 
     unsafe {
         pass.raw.draw_indexed(
-            first_index..first_index + index_count,
+            first_index .. first_index + index_count,
             base_vertex,
-            first_instance..first_instance + instance_count,
+            first_instance .. first_instance + instance_count,
         );
     }
 }
@@ -319,8 +309,10 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         "The render pipeline is not compatible with the pass!"
     );
 
-    pass.blend_color_status.require(pipeline.flags.contains(PipelineFlags::BLEND_COLOR));
-    pass.stencil_reference_status.require(pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE));
+    pass.blend_color_status
+        .require(pipeline.flags.contains(PipelineFlags::BLEND_COLOR));
+    pass.stencil_reference_status
+        .require(pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE));
 
     unsafe {
         pass.raw.bind_graphics_pipeline(&pipeline.raw);

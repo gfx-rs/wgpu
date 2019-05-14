@@ -1,5 +1,5 @@
 use crate::{
-    hub::{Storage},
+    hub::Storage,
     resource::{BufferUsage, TextureUsage},
     BufferId,
     Epoch,
@@ -7,7 +7,7 @@ use crate::{
     RefCount,
     TextureId,
     TextureViewId,
-    TypedId
+    TypedId,
 };
 
 use bitflags::bitflags;
@@ -240,7 +240,7 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
                             Stitch::Init => new.init,
                             Stitch::Last => new.last,
                         };
-                        Some((I::new(index, new.epoch), old..state))
+                        Some((I::new(index, new.epoch), old .. state))
                     }
                 }
             })
@@ -261,7 +261,7 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
                         let extended = old | new.last;
                         if extended.is_exclusive() {
                             let id = I::new(index, new.epoch);
-                            return Err((id, old..new.last));
+                            return Err((id, old .. new.last));
                         }
                         e.get_mut().last = extended;
                     }

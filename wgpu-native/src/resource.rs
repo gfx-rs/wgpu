@@ -283,8 +283,7 @@ pub enum CompareFunction {
 impl CompareFunction {
     pub fn is_trivial(&self) -> bool {
         match *self {
-            CompareFunction::Never |
-            CompareFunction::Always => true,
+            CompareFunction::Never | CompareFunction::Always => true,
             _ => false,
         }
     }
