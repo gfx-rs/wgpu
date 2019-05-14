@@ -40,13 +40,19 @@ pub use self::swap_chain::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use std::ptr;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::{
+    os::raw::c_char,
+    ptr,
+    sync::atomic::{AtomicUsize, Ordering},
+};
 
 
 type SubmissionIndex = usize;
 pub(crate) type Index = u32;
 pub(crate) type Epoch = u32;
+
+pub type BufferAddress = u64;
+pub type RawString = *const c_char;
 
 //TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]
@@ -154,6 +160,14 @@ pub struct Origin3d {
     pub x: f32,
     pub y: f32,
     pub z: f32,
+}
+
+impl Origin3d {
+    pub const ZERO: Self = Origin3d {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+    };
 }
 
 #[repr(C)]

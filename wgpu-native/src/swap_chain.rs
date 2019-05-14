@@ -78,7 +78,7 @@ pub struct SwapChain<B: hal::Backend> {
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct SwapChainDescriptor {
-    pub usage: resource::TextureUsageFlags,
+    pub usage: resource::TextureUsage,
     pub format: resource::TextureFormat,
     pub width: u32,
     pub height: u32,
@@ -92,7 +92,9 @@ impl SwapChainDescriptor {
                 height: self.height,
                 depth: 1,
             },
-            array_size: 1,
+            mip_level_count: 1,
+            array_layer_count: 1,
+            sample_count: 1,
             dimension: resource::TextureDimension::D2,
             format: self.format,
             usage: self.usage,
@@ -220,7 +222,7 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
         .transit(
             frame.texture_id.value,
             &texture.life_guard.ref_count,
-            resource::TextureUsageFlags::UNINITIALIZED,
+            resource::TextureUsage::UNINITIALIZED,
             TrackPermit::REPLACE,
         )
         .unwrap()

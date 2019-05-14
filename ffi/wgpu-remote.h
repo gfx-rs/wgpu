@@ -39,7 +39,12 @@ typedef struct {
 } WGPUExtensions;
 
 typedef struct {
+  uint32_t max_bind_groups;
+} WGPULimits;
+
+typedef struct {
   WGPUExtensions extensions;
+  WGPULimits limits;
 } WGPUDeviceDescriptor;
 
 typedef struct {

@@ -1,6 +1,6 @@
 use crate::{
     hub::{Storage},
-    resource::{BufferUsageFlags, TextureUsageFlags},
+    resource::{BufferUsage, TextureUsage},
     BufferId,
     Epoch,
     Index,
@@ -69,14 +69,14 @@ impl BitOr for DummyUsage {
     }
 }
 
-impl GenericUsage for BufferUsageFlags {
+impl GenericUsage for BufferUsage {
     fn is_exclusive(&self) -> bool {
-        BufferUsageFlags::WRITE_ALL.intersects(*self)
+        BufferUsage::WRITE_ALL.intersects(*self)
     }
 }
-impl GenericUsage for TextureUsageFlags {
+impl GenericUsage for TextureUsage {
     fn is_exclusive(&self) -> bool {
-        TextureUsageFlags::WRITE_ALL.intersects(*self)
+        TextureUsage::WRITE_ALL.intersects(*self)
     }
 }
 impl GenericUsage for DummyUsage {
@@ -98,8 +98,8 @@ pub struct Tracker<I, U> {
     map: FastHashMap<Index, Track<U>>,
     _phantom: PhantomData<I>,
 }
-pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
-pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
+pub type BufferTracker = Tracker<BufferId, BufferUsage>;
+pub type TextureTracker = Tracker<TextureId, TextureUsage>;
 pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
 
 //TODO: make this a generic parameter.

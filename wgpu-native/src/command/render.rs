@@ -4,7 +4,7 @@ use crate::{
     device::RenderPassContext,
     hub::HUB,
     pipeline::{IndexFormat, PipelineFlags},
-    resource::BufferUsageFlags,
+    resource::BufferUsage,
     track::{Stitch, TrackerSet},
     BindGroupId,
     BufferId,
@@ -131,7 +131,7 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
     let buffer = pass
         .trackers
         .buffers
-        .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsageFlags::INDEX)
+        .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsage::INDEX)
         .unwrap();
 
     let view = hal::buffer::IndexBufferView {
@@ -163,7 +163,7 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     for &id in buffers {
         pass.trackers
             .buffers
-            .get_with_extended_usage(&*buffer_guard, id, BufferUsageFlags::VERTEX)
+            .get_with_extended_usage(&*buffer_guard, id, BufferUsage::VERTEX)
             .unwrap();
     }
 
@@ -327,7 +327,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
             let buffer = pass
                 .trackers
                 .buffers
-                .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsageFlags::INDEX)
+                .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsage::INDEX)
                 .unwrap();
 
             let view = hal::buffer::IndexBufferView {
@@ -352,6 +352,19 @@ pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color:
 
     unsafe {
         pass.raw.set_blend_constants(conv::map_color(color));
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass_id: RenderPassId, value: u32) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+
+    //TODO
+    //pass.blend_color_status = BlendColorStatus::Set;
+
+    unsafe {
+        pass.raw.set_stencil_reference(hal::pso::Face::all(), value);
     }
 }
 

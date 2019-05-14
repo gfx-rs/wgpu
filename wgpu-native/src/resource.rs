@@ -1,5 +1,6 @@
 use crate::{
     swap_chain::{SwapChainLink, SwapImageEpoch},
+    BufferAddress,
     BufferMapReadCallback,
     BufferMapWriteCallback,
     DeviceId,
@@ -18,7 +19,7 @@ use std::borrow::Borrow;
 
 bitflags! {
     #[repr(transparent)]
-    pub struct BufferUsageFlags: u32 {
+    pub struct BufferUsage: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
         const TRANSFER_SRC = 4;
@@ -35,8 +36,8 @@ bitflags! {
 #[repr(C)]
 #[derive(Clone)]
 pub struct BufferDescriptor {
-    pub size: u32,
-    pub usage: BufferUsageFlags,
+    pub size: BufferAddress,
+    pub usage: BufferUsage,
 }
 
 #[repr(C)]
@@ -151,7 +152,7 @@ pub enum TextureFormat {
 
 bitflags! {
     #[repr(transparent)]
-    pub struct TextureUsageFlags: u32 {
+    pub struct TextureUsage: u32 {
         const TRANSFER_SRC = 1;
         const TRANSFER_DST = 2;
         const SAMPLED = 4;
@@ -166,10 +167,12 @@ bitflags! {
 #[repr(C)]
 pub struct TextureDescriptor {
     pub size: Extent3d,
-    pub array_size: u32,
+    pub array_layer_count: u32,
+    pub mip_level_count: u32,
+    pub sample_count: u32,
     pub dimension: TextureDimension,
     pub format: TextureFormat,
-    pub usage: TextureUsageFlags,
+    pub usage: TextureUsage,
 }
 
 pub(crate) enum TexturePlacement<B: hal::Backend> {
@@ -255,7 +258,6 @@ pub enum AddressMode {
     ClampToEdge = 0,
     Repeat = 1,
     MirrorRepeat = 2,
-    ClampToBorderColor = 3,
 }
 
 #[repr(C)]
@@ -279,26 +281,16 @@ pub enum CompareFunction {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum BorderColor {
-    TransparentBlack = 0,
-    OpaqueBlack = 1,
-    OpaqueWhite = 2,
-}
-
-#[repr(C)]
 pub struct SamplerDescriptor {
-    pub r_address_mode: AddressMode,
-    pub s_address_mode: AddressMode,
-    pub t_address_mode: AddressMode,
+    pub address_mode_u: AddressMode,
+    pub address_mode_v: AddressMode,
+    pub address_mode_w: AddressMode,
     pub mag_filter: FilterMode,
     pub min_filter: FilterMode,
     pub mipmap_filter: FilterMode,
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
-    pub max_anisotropy: u32,
     pub compare_function: CompareFunction,
-    pub border_color: BorderColor,
 }
 
 pub struct Sampler<B: hal::Backend> {

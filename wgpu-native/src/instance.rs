@@ -1,4 +1,4 @@
-use crate::{hub::HUB, AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
+use crate::{binding_model::MAX_BIND_GROUPS, hub::HUB, AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
@@ -26,7 +26,7 @@ pub struct AdapterDescriptor {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
@@ -35,8 +35,24 @@ pub struct Extensions {
 #[repr(C)]
 #[derive(Debug)]
 #[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
+pub struct Limits {
+    pub max_bind_groups: u32,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Limits {
+            max_bind_groups: MAX_BIND_GROUPS as u32,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
+    pub limits: Limits,
 }
 
 pub fn create_instance() -> ::back::Instance {
@@ -186,7 +202,7 @@ pub fn adapter_create_device(adapter_id: AdapterId, _desc: &DeviceDescriptor) ->
 
 #[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_adapter_create_device(
+pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: AdapterId,
     desc: &DeviceDescriptor,
 ) -> DeviceId {

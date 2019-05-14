@@ -49,7 +49,7 @@ int main() {
             .power_preference = WGPUPowerPreference_LowPower,
         });
 
-    WGPUDeviceId device = wgpu_adapter_create_device(adapter,
+    WGPUDeviceId device = wgpu_adapter_request_device(adapter,
         &(WGPUDeviceDescriptor){
             .extensions =
                 {
@@ -102,7 +102,7 @@ int main() {
                         .entry_point = "main",
                     },
                 .fragment_stage =
-                    (WGPUPipelineStageDescriptor){
+                    &(WGPUPipelineStageDescriptor){
                         .module = fragment_shader,
                         .entry_point = "main",
                     },
@@ -118,24 +118,24 @@ int main() {
                 .color_states =
                     &(WGPUColorStateDescriptor){
                         .format = WGPUTextureFormat_Bgra8Unorm,
-                        .alpha =
+                        .alpha_blend =
                             (WGPUBlendDescriptor){
                                 .src_factor = WGPUBlendFactor_One,
                                 .dst_factor = WGPUBlendFactor_Zero,
                                 .operation = WGPUBlendOperation_Add,
                             },
-                        .color =
+                        .color_blend =
                             (WGPUBlendDescriptor){
                                 .src_factor = WGPUBlendFactor_One,
                                 .dst_factor = WGPUBlendFactor_Zero,
                                 .operation = WGPUBlendOperation_Add,
                             },
-                        .write_mask = WGPUColorWriteFlags_ALL,
+                        .write_mask = WGPUColorWrite_ALL,
                     },
                 .color_states_length = 1,
                 .depth_stencil_state = NULL,
-                .vertex_buffer_state =
-                    (WGPUVertexBufferStateDescriptor){
+                .vertex_input =
+                    (WGPUVertexInputDescriptor){
                         .index_format = WGPUIndexFormat_Uint16,
                         .vertex_buffers = NULL,
                         .vertex_buffers_count = 0,
@@ -194,7 +194,7 @@ int main() {
 
     WGPUSwapChainId swap_chain = wgpu_device_create_swap_chain(device, surface,
         &(WGPUSwapChainDescriptor){
-            .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT,
+            .usage = WGPUTextureUsage_OUTPUT_ATTACHMENT,
             .format = WGPUTextureFormat_Bgra8Unorm,
             .width = prev_width,
             .height = prev_height,

@@ -34,7 +34,7 @@ use crate::{
     Stored,
     TextureHandle,
     TextureId,
-    TextureUsageFlags,
+    TextureUsage,
     TextureViewId,
 };
 #[cfg(feature = "local")]
@@ -62,6 +62,7 @@ pub enum StoreOp {
 #[repr(C)]
 pub struct RenderPassColorAttachmentDescriptor<T> {
     pub attachment: T,
+    pub resolve_target: *const TextureViewId,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
@@ -202,7 +203,7 @@ pub fn command_encoder_begin_render_pass(
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,
-                TextureUsageFlags::empty(),
+                TextureUsage::empty(),
             );
             let (_, layout) = conv::map_texture_state(
                 query.usage,
@@ -243,7 +244,7 @@ pub fn command_encoder_begin_render_pass(
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,
-                TextureUsageFlags::empty(),
+                TextureUsage::empty(),
             );
             let (_, layout) = conv::map_texture_state(query.usage, hal::format::Aspects::COLOR);
             hal::pass::Attachment {
