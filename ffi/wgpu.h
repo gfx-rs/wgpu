@@ -342,6 +342,8 @@ typedef struct {
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
 
+typedef const char *WGPURawString;
+
 typedef WGPUId WGPUComputePipelineId;
 
 typedef WGPUId WGPUInstanceId;
@@ -435,8 +437,6 @@ typedef struct {
 typedef WGPUId WGPUPipelineLayoutId;
 
 typedef WGPUId WGPUShaderModuleId;
-
-typedef const char *WGPURawString;
 
 typedef struct {
   WGPUShaderModuleId module;
@@ -677,6 +677,12 @@ void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t 
 
 WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
+void wgpu_compute_pass_insert_debug_marker(WGPUComputePassId _pass_id, WGPURawString _label);
+
+void wgpu_compute_pass_pop_debug_group(WGPUComputePassId _pass_id);
+
+void wgpu_compute_pass_push_debug_group(WGPUComputePassId _pass_id, WGPURawString _label);
+
 void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
                                       uint32_t index,
                                       WGPUBindGroupId bind_group_id,
@@ -794,6 +800,12 @@ void wgpu_render_pass_draw_indexed(WGPURenderPassId pass_id,
                                    uint32_t first_instance);
 
 WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
+
+void wgpu_render_pass_insert_debug_marker(WGPURenderPassId _pass_id, WGPURawString _label);
+
+void wgpu_render_pass_pop_debug_group(WGPURenderPassId _pass_id);
+
+void wgpu_render_pass_push_debug_group(WGPURenderPassId _pass_id, WGPURawString _label);
 
 void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uint32_t index,

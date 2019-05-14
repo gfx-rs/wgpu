@@ -11,6 +11,7 @@ use crate::{
     Color,
     CommandBuffer,
     CommandBufferId,
+    RawString,
     RenderPassId,
     RenderPipelineId,
     Stored,
@@ -101,6 +102,8 @@ impl<B: hal::Backend> RenderPass<B> {
     }
 }
 
+// Common routines between render/compute
+
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBufferId {
     let mut pass = HUB.render_passes.unregister(pass_id);
@@ -131,6 +134,73 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
     cmb.raw.push(pass.raw);
     pass.cmb_id.value
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_bind_group(
+    pass_id: RenderPassId,
+    index: u32,
+    bind_group_id: BindGroupId,
+    offsets_ptr: *const u32,
+    offsets_count: usize,
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+    let bind_group_guard = HUB.bind_groups.read();
+    let bind_group = &bind_group_guard[bind_group_id];
+
+    assert_eq!(bind_group.dynamic_count, offsets_count);
+    let offsets = if offsets_count != 0 {
+        unsafe {
+            slice::from_raw_parts(offsets_ptr, offsets_count)
+        }
+    } else {
+        &[]
+    };
+
+    pass.trackers.consume_by_extend(&bind_group.used);
+
+    if let Some((pipeline_layout_id, follow_up)) =
+        pass.binder
+            .provide_entry(index as usize, bind_group_id, bind_group, offsets)
+    {
+        let pipeline_layout_guard = HUB.pipeline_layouts.read();
+        let bind_groups =
+            iter::once(&bind_group.raw).chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
+        unsafe {
+            pass.raw.bind_graphics_descriptor_sets(
+                &&pipeline_layout_guard[pipeline_layout_id].raw,
+                index as usize,
+                bind_groups,
+                offsets,
+            );
+        }
+    };
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_push_debug_group(
+    _pass_id: RenderPassId,
+    _label: RawString,
+) {
+    //TODO
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_pop_debug_group(
+    _pass_id: RenderPassId,
+) {
+    //TODO
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_insert_debug_marker(
+    _pass_id: RenderPassId,
+    _label: RawString,
+) {
+    //TODO
+}
+
+// Render-specific routines
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_index_buffer(
@@ -231,48 +301,6 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
             first_instance..first_instance + instance_count,
         );
     }
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_render_pass_set_bind_group(
-    pass_id: RenderPassId,
-    index: u32,
-    bind_group_id: BindGroupId,
-    offsets_ptr: *const u32,
-    offsets_count: usize,
-) {
-    let mut pass_guard = HUB.render_passes.write();
-    let pass = &mut pass_guard[pass_id];
-    let bind_group_guard = HUB.bind_groups.read();
-    let bind_group = &bind_group_guard[bind_group_id];
-
-    assert_eq!(bind_group.dynamic_count, offsets_count);
-    let offsets = if offsets_count != 0 {
-        unsafe {
-            slice::from_raw_parts(offsets_ptr, offsets_count)
-        }
-    } else {
-        &[]
-    };
-
-    pass.trackers.consume_by_extend(&bind_group.used);
-
-    if let Some((pipeline_layout_id, follow_up)) =
-        pass.binder
-            .provide_entry(index as usize, bind_group_id, bind_group, offsets)
-    {
-        let pipeline_layout_guard = HUB.pipeline_layouts.read();
-        let bind_groups =
-            iter::once(&bind_group.raw).chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
-        unsafe {
-            pass.raw.bind_graphics_descriptor_sets(
-                &&pipeline_layout_guard[pipeline_layout_id].raw,
-                index as usize,
-                bind_groups,
-                offsets,
-            );
-        }
-    };
 }
 
 #[no_mangle]
