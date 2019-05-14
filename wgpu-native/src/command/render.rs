@@ -89,12 +89,11 @@ impl<B: hal::Backend> RenderPass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBufferId {
+    let mut cmb_guard = HUB.command_buffers.write();
     let mut pass = HUB.render_passes.unregister(pass_id);
     unsafe {
         pass.raw.end_render_pass();
     }
-
-    let mut cmb_guard = HUB.command_buffers.write();
     let cmb = &mut cmb_guard[pass.cmb_id.value];
 
     match cmb.raw.last_mut() {

@@ -1234,6 +1234,7 @@ pub extern "C" fn wgpu_queue_submit(
         unsafe { slice::from_raw_parts(command_buffer_ptr, command_buffer_count) };
 
     let (submit_index, fence) = {
+        let surface_guard = HUB.surfaces.read();
         let mut device_guard = HUB.devices.write();
         let device = &mut device_guard[queue_id];
         let mut trackers = device.trackers.lock();
@@ -1310,7 +1311,6 @@ pub extern "C" fn wgpu_queue_submit(
         let fence = device.raw.create_fence(false).unwrap();
         {
             let command_buffer_guard = HUB.command_buffers.read();
-            let surface_guard = HUB.surfaces.read();
 
             let wait_semaphores = swap_chain_links.into_iter().flat_map(|link| {
                 let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref()?;
@@ -1655,9 +1655,9 @@ pub fn device_create_swap_chain(
 ) -> Vec<resource::Texture<back::Backend>> {
     info!("creating swap chain {:?}", desc);
 
+    let mut surface_guard = HUB.surfaces.write();
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
-    let mut surface_guard = HUB.surfaces.write();
     let surface = &mut surface_guard[surface_id];
 
     let (caps, formats, _present_modes) = {

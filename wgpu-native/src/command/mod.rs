@@ -166,9 +166,9 @@ pub fn command_encoder_begin_render_pass(
     command_encoder_id: CommandEncoderId,
     desc: RenderPassDescriptor,
 ) -> RenderPass<Backend> {
+    let device_guard = HUB.devices.read();
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = &mut cmb_guard[command_encoder_id];
-    let device_guard = HUB.devices.read();
     let device = &device_guard[cmb.device_id.value];
     let view_guard = HUB.texture_views.read();
 

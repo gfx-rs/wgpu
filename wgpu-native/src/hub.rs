@@ -174,6 +174,7 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
 #[derive(Default)]
 pub struct Hub {
     pub instances: Arc<Registry<InstanceHandle, InstanceId>>,
+    pub surfaces: Arc<Registry<SurfaceHandle, SurfaceId>>,
     pub adapters: Arc<Registry<AdapterHandle, AdapterId>>,
     pub devices: Arc<Registry<DeviceHandle, DeviceId>>,
     pub pipeline_layouts: Arc<Registry<PipelineLayoutHandle, PipelineLayoutId>>,
@@ -189,7 +190,6 @@ pub struct Hub {
     pub textures: Arc<Registry<TextureHandle, TextureId>>,
     pub texture_views: Arc<Registry<TextureViewHandle, TextureViewId>>,
     pub samplers: Arc<Registry<SamplerHandle, SamplerId>>,
-    pub surfaces: Arc<Registry<SurfaceHandle, SurfaceId>>,
 }
 
 lazy_static! {

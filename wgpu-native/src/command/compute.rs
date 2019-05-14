@@ -35,11 +35,12 @@ impl<B: hal::Backend> ComputePass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
+    let mut command_buffer_guard = HUB.command_buffers.write();
     let pass = HUB.compute_passes.unregister(pass_id);
 
     //TODO: transitions?
 
-    HUB.command_buffers.write()[pass.cmb_id.value]
+    command_buffer_guard[pass.cmb_id.value]
         .raw
         .push(pass.raw);
     pass.cmb_id.value
