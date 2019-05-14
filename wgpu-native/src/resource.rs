@@ -280,6 +280,16 @@ pub enum CompareFunction {
     Always = 7,
 }
 
+impl CompareFunction {
+    pub fn is_trivial(&self) -> bool {
+        match *self {
+            CompareFunction::Never |
+            CompareFunction::Always => true,
+            _ => false,
+        }
+    }
+}
+
 #[repr(C)]
 pub struct SamplerDescriptor {
     pub address_mode_u: AddressMode,

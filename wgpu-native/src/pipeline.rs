@@ -122,6 +122,13 @@ pub struct DepthStencilStateDescriptor {
     pub stencil_write_mask: u32,
 }
 
+impl DepthStencilStateDescriptor {
+    pub fn needs_stencil_reference(&self) -> bool {
+        !self.stencil_front.compare.is_trivial() ||
+        !self.stencil_back.compare.is_trivial()
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum IndexFormat {
@@ -269,6 +276,7 @@ bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
         const BLEND_COLOR = 1;
+        const STENCIL_REFERENCE = 2;
     }
 }
 

@@ -21,15 +21,24 @@ use hal::command::RawCommandBuffer;
 use std::{iter, slice};
 
 #[derive(Debug, PartialEq)]
-enum BlendColorStatus {
+enum OptionalState {
     Unused,
     Required,
     Set,
 }
 
+impl OptionalState {
+    fn require(&mut self, require: bool) {
+        if require && *self == OptionalState::Unused {
+            *self = OptionalState::Required;
+        }
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum DrawError {
     MissingBlendColor,
+    MissingStencilReference,
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
@@ -49,7 +58,8 @@ pub struct RenderPass<B: hal::Backend> {
     context: RenderPassContext,
     binder: Binder,
     trackers: TrackerSet,
-    blend_color_status: BlendColorStatus,
+    blend_color_status: OptionalState,
+    stencil_reference_status: OptionalState,
     index_state: IndexState,
 }
 
@@ -66,7 +76,8 @@ impl<B: hal::Backend> RenderPass<B> {
             context,
             binder: Binder::default(),
             trackers: TrackerSet::new(),
-            blend_color_status: BlendColorStatus::Unused,
+            blend_color_status: OptionalState::Unused,
+            stencil_reference_status: OptionalState::Unused,
             index_state,
         }
     }
@@ -80,8 +91,11 @@ impl<B: hal::Backend> RenderPass<B> {
                 index: bind_mask.trailing_zeros() as u32,
             });
         }
-        if self.blend_color_status == BlendColorStatus::Required {
+        if self.blend_color_status == OptionalState::Required {
             return Err(DrawError::MissingBlendColor);
+        }
+        if self.stencil_reference_status == OptionalState::Required {
+            return Err(DrawError::MissingStencilReference);
         }
         Ok(())
     }
@@ -276,11 +290,8 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         "The render pipeline is not compatible with the pass!"
     );
 
-    if pipeline.flags.contains(PipelineFlags::BLEND_COLOR)
-        && pass.blend_color_status == BlendColorStatus::Unused
-    {
-        pass.blend_color_status = BlendColorStatus::Required;
-    }
+    pass.blend_color_status.require(pipeline.flags.contains(PipelineFlags::BLEND_COLOR));
+    pass.stencil_reference_status.require(pipeline.flags.contains(PipelineFlags::STENCIL_REFERENCE));
 
     unsafe {
         pass.raw.bind_graphics_pipeline(&pipeline.raw);
@@ -348,7 +359,7 @@ pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color:
     let mut pass_guard = HUB.render_passes.write();
     let pass = &mut pass_guard[pass_id];
 
-    pass.blend_color_status = BlendColorStatus::Set;
+    pass.blend_color_status = OptionalState::Set;
 
     unsafe {
         pass.raw.set_blend_constants(conv::map_color(color));
@@ -360,8 +371,7 @@ pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass_id: RenderPassId, 
     let mut pass_guard = HUB.render_passes.write();
     let pass = &mut pass_guard[pass_id];
 
-    //TODO
-    //pass.blend_color_status = BlendColorStatus::Set;
+    pass.stencil_reference_status = OptionalState::Set;
 
     unsafe {
         pass.raw.set_stencil_reference(hal::pso::Face::all(), value);

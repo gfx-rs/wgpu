@@ -210,7 +210,7 @@ int main() {
 
             swap_chain = wgpu_device_create_swap_chain(device, surface,
                 &(WGPUSwapChainDescriptor){
-                    .usage = WGPUTextureUsageFlags_OUTPUT_ATTACHMENT,
+                    .usage = WGPUTextureUsage_OUTPUT_ATTACHMENT,
                     .format = WGPUTextureFormat_Bgra8Unorm,
                     .width = width,
                     .height = height,

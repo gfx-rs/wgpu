@@ -1568,11 +1568,15 @@ pub fn device_create_render_pipeline(
     };
 
     let mut flags = pipeline::PipelineFlags::empty();
-    if color_states
-        .iter()
-        .any(|state| state.color_blend.uses_color() | state.alpha_blend.uses_color())
-    {
-        flags |= pipeline::PipelineFlags::BLEND_COLOR;
+    for state in color_states {
+        if state.color_blend.uses_color() | state.alpha_blend.uses_color() {
+            flags |= pipeline::PipelineFlags::BLEND_COLOR;
+        }
+    }
+    if let Some(ds) = depth_stencil_state {
+        if ds.needs_stencil_reference() {
+            flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
+        }
     }
 
     pipeline::RenderPipeline {
