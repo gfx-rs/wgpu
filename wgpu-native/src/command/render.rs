@@ -7,6 +7,7 @@ use crate::{
     resource::BufferUsage,
     track::{Stitch, TrackerSet},
     BindGroupId,
+    BufferAddress,
     BufferId,
     Color,
     CommandBuffer,
@@ -49,7 +50,7 @@ enum DrawError {
 
 #[derive(Debug)]
 pub struct IndexState {
-    pub(crate) bound_buffer_view: Option<(BufferId, u32)>,
+    pub(crate) bound_buffer_view: Option<(BufferId, BufferAddress)>,
     pub(crate) format: IndexFormat,
 }
 
@@ -206,7 +207,7 @@ pub extern "C" fn wgpu_render_pass_insert_debug_marker(
 pub extern "C" fn wgpu_render_pass_set_index_buffer(
     pass_id: RenderPassId,
     buffer_id: BufferId,
-    offset: u32,
+    offset: BufferAddress,
 ) {
     let mut pass_guard = HUB.render_passes.write();
     let buffer_guard = HUB.buffers.read();
@@ -220,7 +221,7 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
 
     let view = hal::buffer::IndexBufferView {
         buffer: &buffer.raw,
-        offset: offset as u64,
+        offset,
         index_type: conv::map_index_format(pass.index_state.format),
     };
 
@@ -371,7 +372,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
 
             let view = hal::buffer::IndexBufferView {
                 buffer: &buffer.raw,
-                offset: offset as u64,
+                offset,
                 index_type: conv::map_index_format(pass.index_state.format),
             };
 
@@ -403,6 +404,38 @@ pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass_id: RenderPassId, 
 
     unsafe {
         pass.raw.set_stencil_reference(hal::pso::Face::all(), value);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_set_viewport(
+    pass_id: RenderPassId,
+    x: f32,
+    y: f32,
+    w: f32,
+    h: f32,
+    min_depth: f32,
+    max_depth: f32,
+) {
+    let mut pass_guard = HUB.render_passes.write();
+    let pass = &mut pass_guard[pass_id];
+
+    unsafe {
+        use std::convert::TryFrom;
+        use std::i16;
+
+        pass.raw.set_viewports(
+            0,
+            &[hal::pso::Viewport {
+                rect: hal::pso::Rect {
+                    x: i16::try_from(x.round() as i64).unwrap_or(0),
+                    y: i16::try_from(y.round() as i64).unwrap_or(0),
+                    w: i16::try_from(w.round() as i64).unwrap_or(i16::MAX),
+                    h: i16::try_from(h.round() as i64).unwrap_or(i16::MAX),
+                },
+                depth: min_depth .. max_depth,
+            }],
+        );
     }
 }
 

@@ -817,7 +817,7 @@ void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor 
 
 void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
                                        WGPUBufferId buffer_id,
-                                       uint32_t offset);
+                                       WGPUBufferAddress offset);
 
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
 
@@ -833,6 +833,14 @@ void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
                                          const WGPUBufferId *buffer_ptr,
                                          const uint32_t *offset_ptr,
                                          uintptr_t count);
+
+void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
+                                   float x,
+                                   float y,
+                                   float w,
+                                   float h,
+                                   float min_depth,
+                                   float max_depth);
 
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 
