@@ -1,13 +1,13 @@
 use crate::{
-    hub::{Storage},
-    resource::{BufferUsageFlags, TextureUsageFlags},
+    hub::Storage,
+    resource::{BufferUsage, TextureUsage},
     BufferId,
     Epoch,
     Index,
     RefCount,
     TextureId,
     TextureViewId,
-    TypedId
+    TypedId,
 };
 
 use bitflags::bitflags;
@@ -69,14 +69,14 @@ impl BitOr for DummyUsage {
     }
 }
 
-impl GenericUsage for BufferUsageFlags {
+impl GenericUsage for BufferUsage {
     fn is_exclusive(&self) -> bool {
-        BufferUsageFlags::WRITE_ALL.intersects(*self)
+        BufferUsage::WRITE_ALL.intersects(*self)
     }
 }
-impl GenericUsage for TextureUsageFlags {
+impl GenericUsage for TextureUsage {
     fn is_exclusive(&self) -> bool {
-        TextureUsageFlags::WRITE_ALL.intersects(*self)
+        TextureUsage::WRITE_ALL.intersects(*self)
     }
 }
 impl GenericUsage for DummyUsage {
@@ -98,8 +98,8 @@ pub struct Tracker<I, U> {
     map: FastHashMap<Index, Track<U>>,
     _phantom: PhantomData<I>,
 }
-pub type BufferTracker = Tracker<BufferId, BufferUsageFlags>;
-pub type TextureTracker = Tracker<TextureId, TextureUsageFlags>;
+pub type BufferTracker = Tracker<BufferId, BufferUsage>;
+pub type TextureTracker = Tracker<TextureId, TextureUsage>;
 pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
 
 //TODO: make this a generic parameter.
@@ -240,7 +240,7 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
                             Stitch::Init => new.init,
                             Stitch::Last => new.last,
                         };
-                        Some((I::new(index, new.epoch), old..state))
+                        Some((I::new(index, new.epoch), old .. state))
                     }
                 }
             })
@@ -261,7 +261,7 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
                         let extended = old | new.last;
                         if extended.is_exclusive() {
                             let id = I::new(index, new.epoch);
-                            return Err((id, old..new.last));
+                            return Err((id, old .. new.last));
                         }
                         e.get_mut().last = extended;
                     }

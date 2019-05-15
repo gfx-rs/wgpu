@@ -53,10 +53,10 @@ lib-native: Cargo.lock wgpu-native/Cargo.toml $(wildcard wgpu-native/**/*.rs)
 lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
 	cargo build --manifest-path wgpu-remote/Cargo.toml --features $(FEATURE_RUST)
 
-ffi/wgpu.h: wgpu-native/cbindgen.toml $(wildcard wgpu-native/**/*.rs)
+ffi/wgpu.h: wgpu-native/cbindgen.toml $(wildcard wgpu-native/src/**/*.rs)
 	rustup run nightly cbindgen wgpu-native >ffi/wgpu.h
 
-ffi/wgpu-remote.h:  wgpu-remote/cbindgen.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
+ffi/wgpu-remote.h:  wgpu-remote/cbindgen.toml $(wildcard wgpu-native/src/**/*.rs wgpu-remote/src/**/*.rs)
 	rustup run nightly cbindgen wgpu-remote >ffi/wgpu-remote.h
 
 examples-native: lib-native ffi/wgpu.h examples/hello_triangle_c/main.c

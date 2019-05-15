@@ -13,7 +13,6 @@ use std::ptr;
 
 mod server;
 
-
 #[derive(Serialize, Deserialize)]
 enum InstanceMessage {
     Create(wgn::InstanceId),
@@ -85,9 +84,7 @@ pub extern "C" fn wgpu_initialize() -> Infrastructure {
 
 #[no_mangle]
 pub extern "C" fn wgpu_terminate(factory: *mut ClientFactory) {
-    let factory = unsafe {
-        Box::from_raw(factory)
-    };
+    let factory = unsafe { Box::from_raw(factory) };
     let _ = factory.channel.send(GlobalMessage::Terminate);
 }
 
@@ -106,9 +103,7 @@ pub extern "C" fn wgpu_client_create(factory: &ClientFactory) -> *mut Client {
 
 #[no_mangle]
 pub extern "C" fn wgpu_client_destroy(factory: &ClientFactory, client: *mut Client) {
-    let client = unsafe {
-        Box::from_raw(client)
-    };
+    let client = unsafe { Box::from_raw(client) };
     factory.instance_identities.lock().free(client.instance_id);
     let msg = GlobalMessage::Instance(InstanceMessage::Destroy(client.instance_id));
     client.channel.send(msg).unwrap();

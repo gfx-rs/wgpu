@@ -35,7 +35,7 @@ use crate::{
     TextureId,
     TextureViewHandle,
     TextureViewId,
-    TypedId
+    TypedId,
 };
 use lazy_static::lazy_static;
 #[cfg(feature = "local")]
@@ -46,7 +46,7 @@ use vec_map::VecMap;
 use std::{ops, sync::Arc};
 
 /// A simple structure to manage identities of objects.
-pub struct IdentityManager<I:TypedId> {
+pub struct IdentityManager<I: TypedId> {
     free: Vec<Index>,
     epochs: Vec<Epoch>,
     phantom: std::marker::PhantomData<I>,
@@ -87,13 +87,13 @@ impl<I: TypedId> IdentityManager<I> {
     }
 }
 
-pub struct Storage<T, I:TypedId> {
+pub struct Storage<T, I: TypedId> {
     //TODO: consider concurrent hashmap?
     map: VecMap<(T, Epoch)>,
     _phantom: std::marker::PhantomData<I>,
 }
 
-impl<T, I:TypedId> ops::Index<I> for Storage<T, I> {
+impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
     type Output = T;
     fn index(&self, id: I) -> &T {
         let (ref value, epoch) = self.map[id.index() as usize];
@@ -102,7 +102,7 @@ impl<T, I:TypedId> ops::Index<I> for Storage<T, I> {
     }
 }
 
-impl<T, I:TypedId> ops::IndexMut<I> for Storage<T, I> {
+impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
     fn index_mut(&mut self, id: I) -> &mut T {
         let (ref mut value, epoch) = self.map[id.index() as usize];
         assert_eq!(epoch, id.epoch());
@@ -110,7 +110,7 @@ impl<T, I:TypedId> ops::IndexMut<I> for Storage<T, I> {
     }
 }
 
-impl<T, I:TypedId> Storage<T, I> {
+impl<T, I: TypedId> Storage<T, I> {
     pub fn contains(&self, id: I) -> bool {
         match self.map.get(id.index() as usize) {
             Some(&(_, epoch)) if epoch == id.epoch() => true,
@@ -119,7 +119,7 @@ impl<T, I:TypedId> Storage<T, I> {
     }
 }
 
-pub struct Registry<T, I:TypedId> {
+pub struct Registry<T, I: TypedId> {
     #[cfg(feature = "local")]
     identity: Mutex<IdentityManager<I>>,
     data: RwLock<Storage<T, I>>,
@@ -130,7 +130,10 @@ impl<T, I: TypedId> Default for Registry<T, I> {
         Registry {
             #[cfg(feature = "local")]
             identity: Mutex::new(IdentityManager::default()),
-            data: RwLock::new(Storage { map: VecMap::new(), _phantom: std::marker::PhantomData }),
+            data: RwLock::new(Storage {
+                map: VecMap::new(),
+                _phantom: std::marker::PhantomData,
+            }),
         }
     }
 }
@@ -150,7 +153,11 @@ impl<T, I: TypedId> ops::DerefMut for Registry<T, I> {
 
 impl<T, I: TypedId + Copy> Registry<T, I> {
     pub fn register(&self, id: I, value: T) {
-        let old = self.data.write().map.insert(id.index() as usize, (value, id.epoch()));
+        let old = self
+            .data
+            .write()
+            .map
+            .insert(id.index() as usize, (value, id.epoch()));
         assert!(old.is_none());
     }
 

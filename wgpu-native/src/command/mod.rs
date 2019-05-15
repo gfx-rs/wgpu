@@ -23,8 +23,8 @@ use crate::{
     resource::TexturePlacement,
     swap_chain::{SwapChainLink, SwapImageEpoch},
     track::{DummyUsage, Stitch, TrackerSet},
-    BufferId,
     BufferHandle,
+    BufferId,
     Color,
     CommandBufferHandle,
     CommandBufferId,
@@ -34,7 +34,7 @@ use crate::{
     Stored,
     TextureHandle,
     TextureId,
-    TextureUsageFlags,
+    TextureUsage,
     TextureViewId,
 };
 #[cfg(feature = "local")]
@@ -62,6 +62,7 @@ pub enum StoreOp {
 #[repr(C)]
 pub struct RenderPassColorAttachmentDescriptor<T> {
     pub attachment: T,
+    pub resolve_target: *const TextureViewId,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
@@ -112,9 +113,9 @@ impl CommandBufferHandle {
                     trace!("transit buffer {:?} {:?}", id, transit);
                     hal::memory::Barrier::Buffer {
                         states: conv::map_buffer_state(transit.start)
-                            ..conv::map_buffer_state(transit.end),
+                            .. conv::map_buffer_state(transit.end),
                         target: &b.raw,
-                        range: None..None,
+                        range: None .. None,
                         families: None,
                     }
                 });
@@ -127,7 +128,7 @@ impl CommandBufferHandle {
                 let aspects = t.full_range.aspects;
                 hal::memory::Barrier::Image {
                     states: conv::map_texture_state(transit.start, aspects)
-                        ..conv::map_texture_state(transit.end, aspects),
+                        .. conv::map_texture_state(transit.end, aspects),
                     target: &t.raw,
                     range: t.full_range.clone(), //TODO?
                     families: None,
@@ -138,7 +139,7 @@ impl CommandBufferHandle {
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             raw.pipeline_barrier(
-                stages..stages,
+                stages .. stages,
                 hal::memory::Dependencies::empty(),
                 buffer_barriers.chain(texture_barriers),
             );
@@ -202,7 +203,7 @@ pub fn command_encoder_begin_render_pass(
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,
-                TextureUsageFlags::empty(),
+                TextureUsage::empty(),
             );
             let (_, layout) = conv::map_texture_state(
                 query.usage,
@@ -213,7 +214,7 @@ pub fn command_encoder_begin_render_pass(
                 samples: view.samples,
                 ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
                 stencil_ops: conv::map_load_store_ops(at.stencil_load_op, at.stencil_store_op),
-                layouts: layout..layout,
+                layouts: layout .. layout,
             }
         });
 
@@ -243,7 +244,7 @@ pub fn command_encoder_begin_render_pass(
             let query = trackers.textures.query(
                 view.texture_id.value,
                 &view.texture_id.ref_count,
-                TextureUsageFlags::empty(),
+                TextureUsage::empty(),
             );
             let (_, layout) = conv::map_texture_state(query.usage, hal::format::Aspects::COLOR);
             hal::pass::Attachment {
@@ -251,7 +252,7 @@ pub fn command_encoder_begin_render_pass(
                 samples: view.samples,
                 ops: conv::map_load_store_ops(at.load_op, at.store_op),
                 stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                layouts: layout..layout,
+                layouts: layout .. layout,
             }
         });
 
@@ -277,7 +278,7 @@ pub fn command_encoder_begin_render_pass(
             );
 
             let subpass = hal::pass::SubpassDesc {
-                colors: &color_ids[..color_attachments.len()],
+                colors: &color_ids[.. color_attachments.len()],
                 depth_stencil: depth_stencil_attachment.map(|_| &depth_id),
                 inputs: &[],
                 resolves: &[],
@@ -351,7 +352,7 @@ pub fn command_encoder_begin_render_pass(
             0,
             iter::once(hal::pso::Viewport {
                 rect,
-                depth: 0.0..1.0,
+                depth: 0.0 .. 1.0,
             }),
         );
     }

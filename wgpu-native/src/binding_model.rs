@@ -1,4 +1,12 @@
-use crate::{track::TrackerSet, BindGroupLayoutId, BufferId, LifeGuard, SamplerId, TextureViewId};
+use crate::{
+    track::TrackerSet,
+    BindGroupLayoutId,
+    BufferAddress,
+    BufferId,
+    LifeGuard,
+    SamplerId,
+    TextureViewId,
+};
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
@@ -7,7 +15,8 @@ pub const MAX_BIND_GROUPS: usize = 4;
 
 bitflags! {
     #[repr(transparent)]
-    pub struct ShaderStageFlags: u32 {
+    pub struct ShaderStage: u32 {
+        const NONE = 0;
         const VERTEX = 1;
         const FRAGMENT = 2;
         const COMPUTE = 4;
@@ -23,13 +32,14 @@ pub enum BindingType {
     StorageBuffer = 3,
     UniformBufferDynamic = 4,
     StorageBufferDynamic = 5,
+    StorageTexture = 10,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash)]
 pub struct BindGroupLayoutBinding {
     pub binding: u32,
-    pub visibility: ShaderStageFlags,
+    pub visibility: ShaderStage,
     pub ty: BindingType,
 }
 
@@ -59,8 +69,8 @@ pub struct PipelineLayout<B: hal::Backend> {
 #[repr(C)]
 pub struct BufferBinding {
     pub buffer: BufferId,
-    pub offset: u32,
-    pub size: u32,
+    pub offset: BufferAddress,
+    pub size: BufferAddress,
 }
 
 #[repr(C)]
@@ -71,7 +81,7 @@ pub enum BindingResource {
 }
 
 #[repr(C)]
-pub struct Binding {
+pub struct BindGroupBinding {
     pub binding: u32,
     pub resource: BindingResource,
 }
@@ -79,7 +89,7 @@ pub struct Binding {
 #[repr(C)]
 pub struct BindGroupDescriptor {
     pub layout: BindGroupLayoutId,
-    pub bindings: *const Binding,
+    pub bindings: *const BindGroupBinding,
     pub bindings_length: usize,
 }
 

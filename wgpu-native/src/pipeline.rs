@@ -1,8 +1,16 @@
-use crate::{device::RenderPassContext, resource, ByteArray, PipelineLayoutId, ShaderModuleId};
+use crate::{
+    device::RenderPassContext,
+    resource,
+    BufferAddress,
+    ByteArray,
+    PipelineLayoutId,
+    RawString,
+    ShaderModuleId,
+};
 
 use bitflags::bitflags;
 
-pub type ShaderAttributeIndex = u32;
+pub type ShaderLocation = u32;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -34,7 +42,7 @@ pub enum BlendOperation {
 
 bitflags! {
     #[repr(transparent)]
-    pub struct ColorWriteFlags: u32 {
+    pub struct ColorWrite: u32 {
         const RED = 1;
         const GREEN = 2;
         const BLUE = 4;
@@ -74,9 +82,9 @@ impl BlendDescriptor {
 #[derive(Clone, Debug)]
 pub struct ColorStateDescriptor {
     pub format: resource::TextureFormat,
-    pub alpha: BlendDescriptor,
-    pub color: BlendDescriptor,
-    pub write_mask: ColorWriteFlags,
+    pub alpha_blend: BlendDescriptor,
+    pub color_blend: BlendDescriptor,
+    pub write_mask: ColorWrite,
 }
 
 #[repr(C)]
@@ -122,6 +130,12 @@ pub struct DepthStencilStateDescriptor {
     pub stencil_write_mask: u32,
 }
 
+impl DepthStencilStateDescriptor {
+    pub fn needs_stencil_reference(&self) -> bool {
+        !self.stencil_front.compare.is_trivial() || !self.stencil_back.compare.is_trivial()
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum IndexFormat {
@@ -132,42 +146,23 @@ pub enum IndexFormat {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum VertexFormat {
-    Uchar = 0,
     Uchar2 = 1,
-    Uchar3 = 2,
     Uchar4 = 3,
-    Char = 4,
     Char2 = 5,
-    Char3 = 6,
     Char4 = 7,
-    UcharNorm = 8,
     Uchar2Norm = 9,
-    Uchar3Norm = 10,
     Uchar4Norm = 11,
-    Uchar4NormBgra = 12,
-    CharNorm = 13,
     Char2Norm = 14,
-    Char3Norm = 15,
     Char4Norm = 16,
-    Ushort = 17,
     Ushort2 = 18,
-    Ushort3 = 19,
     Ushort4 = 20,
-    Short = 21,
     Short2 = 22,
-    Short3 = 23,
     Short4 = 24,
-    UshortNorm = 25,
     Ushort2Norm = 26,
-    Ushort3Norm = 27,
     Ushort4Norm = 28,
-    ShortNorm = 29,
     Short2Norm = 30,
-    Short3Norm = 31,
     Short4Norm = 32,
-    Half = 33,
     Half2 = 34,
-    Half3 = 35,
     Half4 = 36,
     Float = 37,
     Float2 = 38,
@@ -193,21 +188,21 @@ pub enum InputStepMode {
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct VertexAttributeDescriptor {
-    pub offset: u32,
+    pub offset: BufferAddress,
     pub format: VertexFormat,
-    pub attribute_index: ShaderAttributeIndex,
+    pub shader_location: ShaderLocation,
 }
 
 #[repr(C)]
 pub struct VertexBufferDescriptor {
-    pub stride: u32,
+    pub stride: BufferAddress,
     pub step_mode: InputStepMode,
     pub attributes: *const VertexAttributeDescriptor,
     pub attributes_count: usize,
 }
 
 #[repr(C)]
-pub struct VertexBufferStateDescriptor {
+pub struct VertexInputDescriptor {
     pub index_format: IndexFormat,
     pub vertex_buffers: *const VertexBufferDescriptor,
     pub vertex_buffers_count: usize,
@@ -221,7 +216,7 @@ pub struct ShaderModuleDescriptor {
 #[repr(C)]
 pub struct PipelineStageDescriptor {
     pub module: ShaderModuleId,
-    pub entry_point: *const ::std::os::raw::c_char,
+    pub entry_point: RawString,
 }
 
 #[repr(C)]
@@ -274,13 +269,13 @@ pub struct RasterizationStateDescriptor {
 pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
     pub vertex_stage: PipelineStageDescriptor,
-    pub fragment_stage: PipelineStageDescriptor,
+    pub fragment_stage: *const PipelineStageDescriptor,
     pub primitive_topology: PrimitiveTopology,
     pub rasterization_state: RasterizationStateDescriptor,
     pub color_states: *const ColorStateDescriptor,
     pub color_states_length: usize,
     pub depth_stencil_state: *const DepthStencilStateDescriptor,
-    pub vertex_buffer_state: VertexBufferStateDescriptor,
+    pub vertex_input: VertexInputDescriptor,
     pub sample_count: u32,
 }
 
@@ -288,6 +283,7 @@ bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
         const BLEND_COLOR = 1;
+        const STENCIL_REFERENCE = 2;
     }
 }
 

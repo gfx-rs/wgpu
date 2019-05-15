@@ -1,4 +1,12 @@
-use crate::{hub::HUB, AdapterHandle, AdapterId, DeviceHandle, InstanceId, SurfaceHandle};
+use crate::{
+    binding_model::MAX_BIND_GROUPS,
+    hub::HUB,
+    AdapterHandle,
+    AdapterId,
+    DeviceHandle,
+    InstanceId,
+    SurfaceHandle,
+};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
@@ -26,7 +34,7 @@ pub struct AdapterDescriptor {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Default)]
 #[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
@@ -35,8 +43,24 @@ pub struct Extensions {
 #[repr(C)]
 #[derive(Debug)]
 #[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
+pub struct Limits {
+    pub max_bind_groups: u32,
+}
+
+impl Default for Limits {
+    fn default() -> Self {
+        Limits {
+            max_bind_groups: MAX_BIND_GROUPS as u32,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
+    pub limits: Limits,
 }
 
 pub fn create_instance() -> ::back::Instance {
@@ -49,7 +73,6 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     let inst = create_instance();
     HUB.instances.register_local(inst)
 }
-
 
 #[cfg(feature = "window-winit")]
 #[no_mangle]
@@ -95,8 +118,10 @@ pub fn instance_create_surface_from_macos_layer(
     unimplemented!();
 
     #[cfg(feature = "gfx-backend-metal")]
-    SurfaceHandle::new(HUB.instances.read()[instance_id]
-        .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)))
+    SurfaceHandle::new(
+        HUB.instances.read()[instance_id]
+            .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
+    )
 }
 
 #[cfg(feature = "local")]
@@ -186,7 +211,7 @@ pub fn adapter_create_device(adapter_id: AdapterId, _desc: &DeviceDescriptor) ->
 
 #[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_adapter_create_device(
+pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: AdapterId,
     desc: &DeviceDescriptor,
 ) -> DeviceId {

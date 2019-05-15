@@ -7,13 +7,13 @@ use crate::{
     CommandBufferId,
     ComputePassId,
     ComputePipelineId,
+    RawString,
     Stored,
 };
 
 use hal::{self, command::RawCommandBuffer};
 
 use std::{iter, slice};
-
 
 pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,
@@ -33,6 +33,8 @@ impl<B: hal::Backend> ComputePass<B> {
     }
 }
 
+// Common routines between render/compute
+
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
     let mut command_buffer_guard = HUB.command_buffers.write();
@@ -44,13 +46,6 @@ pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandB
         .raw
         .push(pass.raw);
     pass.cmb_id.value
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
-    unsafe {
-        HUB.compute_passes.write()[pass_id].raw.dispatch([x, y, z]);
-    }
 }
 
 #[no_mangle]
@@ -68,9 +63,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
 
     assert_eq!(bind_group.dynamic_count, offsets_count);
     let offsets = if offsets_count != 0 {
-        unsafe {
-            slice::from_raw_parts(offsets_ptr, offsets_count)
-        }
+        unsafe { slice::from_raw_parts(offsets_ptr, offsets_count) }
     } else {
         &[]
     };
@@ -103,6 +96,33 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
             );
         }
     };
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_compute_pass_push_debug_group(_pass_id: ComputePassId, _label: RawString) {
+    //TODO
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_compute_pass_pop_debug_group(_pass_id: ComputePassId) {
+    //TODO
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_compute_pass_insert_debug_marker(
+    _pass_id: ComputePassId,
+    _label: RawString,
+) {
+    //TODO
+}
+
+// Compute-specific routines
+
+#[no_mangle]
+pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
+    unsafe {
+        HUB.compute_passes.write()[pass_id].raw.dispatch([x, y, z]);
+    }
 }
 
 #[no_mangle]

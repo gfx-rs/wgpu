@@ -9,6 +9,7 @@ use crate::{
     track::{DummyUsage, Stitch, TrackPermit, TrackerSet, Tracktion},
     AdapterId,
     BindGroupId,
+    BufferAddress,
     BufferId,
     BufferMapAsyncStatus,
     BufferMapOperation,
@@ -51,17 +52,9 @@ use log::{info, trace};
 //use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::Mutex;
 
-use std::{
-    collections::hash_map::Entry,
-    ffi,
-    iter,
-    ptr,
-    slice,
-    sync::atomic::Ordering,
-};
 #[cfg(feature = "local")]
 use std::sync::atomic::AtomicBool;
-
+use std::{collections::hash_map::Entry, ffi, iter, ptr, slice, sync::atomic::Ordering};
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
@@ -188,11 +181,10 @@ impl<B: hal::Backend> PendingResources<B> {
 
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
-        let done_count = self.active
+        let done_count = self
+            .active
             .iter()
-            .position(|a| unsafe {
-                !device.get_fence_status(&a.fence).unwrap()
-            })
+            .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
             .unwrap_or(self.active.len());
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
@@ -200,7 +192,7 @@ impl<B: hal::Backend> PendingResources<B> {
             0
         };
 
-        for a in self.active.drain(..done_count) {
+        for a in self.active.drain(.. done_count) {
             trace!("Active submission {} is done", a.index);
             self.free.extend(a.resources.into_iter().map(|(_, r)| r));
             self.ready_to_map.extend(a.mapped);
@@ -234,7 +226,7 @@ impl<B: hal::Backend> PendingResources<B> {
 
 impl PendingResources<back::Backend> {
     fn triage_referenced(&mut self, trackers: &mut TrackerSet) {
-        for i in (0..self.referenced.len()).rev() {
+        for i in (0 .. self.referenced.len()).rev() {
             let num_refs = self.referenced[i].1.load();
             // Before destruction, a resource is expected to have the following strong refs:
             //  1. in resource itself
@@ -375,7 +367,7 @@ fn map_buffer(
     raw: &<back::Backend as hal::Backend>::Device,
     limits: &hal::Limits,
     buffer: &mut resource::Buffer<back::Backend>,
-    original_range: &std::ops::Range<u64>,
+    original_range: &std::ops::Range<BufferAddress>,
     kind: HostMap,
 ) -> BufferMapResult {
     // gfx-rs requires mapping and flushing/invalidation ranges to be done at `non_coherent_atom_size`
@@ -390,7 +382,7 @@ fn map_buffer(
         limits.non_coherent_atom_size as u64 - 1
     };
     let atom_offset = original_range.start & atom_mask;
-    let range = (original_range.start & !atom_mask)..((original_range.end - 1) | atom_mask) + 1;
+    let range = (original_range.start & !atom_mask) .. ((original_range.end - 1) | atom_mask) + 1;
     let pointer = unsafe { raw.map_memory(&buffer.memory, range.clone()) }?;
 
     if !is_coherent {
@@ -523,9 +515,7 @@ impl<B: hal::Backend> Device<B> {
 }
 
 impl Device<back::Backend> {
-    fn maintain(
-        &self, force_wait: bool
-    ) -> Vec<BufferMapPendingCallback> {
+    fn maintain(&self, force_wait: bool) -> Vec<BufferMapPendingCallback> {
         let mut pending = self.pending.lock();
         let mut trackers = self.trackers.lock();
 
@@ -572,7 +562,7 @@ pub fn device_create_buffer(
     let device = &device_guard[device_id];
     let (usage, memory_properties) = conv::map_buffer_usage(desc.usage);
 
-    let mut buffer = unsafe { device.raw.create_buffer(desc.size as u64, usage).unwrap() };
+    let mut buffer = unsafe { device.raw.create_buffer(desc.size, usage).unwrap() };
     let requirements = unsafe { device.raw.get_buffer_requirements(&buffer) };
     let device_type = device
         .mem_props
@@ -622,7 +612,7 @@ pub fn device_track_buffer(
     device_id: DeviceId,
     buffer_id: BufferId,
     ref_count: RefCount,
-    flags: resource::BufferUsageFlags,
+    flags: resource::BufferUsage,
 ) {
     let query = HUB.devices.read()[device_id]
         .trackers
@@ -641,12 +631,7 @@ pub extern "C" fn wgpu_device_create_buffer(
     let buffer = device_create_buffer(device_id, desc);
     let ref_count = buffer.life_guard.ref_count.clone();
     let id = HUB.buffers.register_local(buffer);
-    device_track_buffer(
-        device_id,
-        id,
-        ref_count,
-        resource::BufferUsageFlags::empty(),
-    );
+    device_track_buffer(device_id, id, ref_count, resource::BufferUsage::empty());
     id
 }
 
@@ -658,13 +643,13 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
     mapped_ptr_out: *mut *mut u8,
 ) -> BufferId {
     let mut desc = desc.clone();
-    desc.usage |= resource::BufferUsageFlags::MAP_WRITE;
+    desc.usage |= resource::BufferUsage::MAP_WRITE;
     let mut buffer = device_create_buffer(device_id, &desc);
 
     {
         let device_guard = HUB.devices.read();
         let device = &device_guard[device_id];
-        let range = 0..desc.size as u64;
+        let range = 0 .. desc.size;
 
         match map_buffer(
             &device.raw,
@@ -687,12 +672,7 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
 
     let ref_count = buffer.life_guard.ref_count.clone();
     let id = HUB.buffers.register_local(buffer);
-    device_track_buffer(
-        device_id,
-        id,
-        ref_count,
-        resource::BufferUsageFlags::MAP_WRITE,
-    );
+    device_track_buffer(device_id, id, ref_count, resource::BufferUsage::MAP_WRITE);
     id
 }
 
@@ -701,20 +681,17 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
     let device_guard = HUB.devices.read();
     let buffer_guard = HUB.buffers.read();
     let buffer = &buffer_guard[buffer_id];
-    device_guard[buffer.device_id.value]
-        .pending
-        .lock()
-        .destroy(
-            ResourceId::Buffer(buffer_id),
-            buffer.life_guard.ref_count.clone(),
-        );
+    device_guard[buffer.device_id.value].pending.lock().destroy(
+        ResourceId::Buffer(buffer_id),
+        buffer.life_guard.ref_count.clone(),
+    );
 }
 
 pub fn device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
 ) -> resource::Texture<back::Backend> {
-    let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.array_size);
+    let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.array_layer_count);
     let format = conv::map_texture_format(desc.format);
     let aspects = format.surface_desc().aspects;
     let usage = conv::map_texture_usage(desc.usage, aspects);
@@ -724,9 +701,9 @@ pub fn device_create_texture(
     let mut image = unsafe {
         device.raw.create_image(
             kind,
-            1, // TODO: mips
+            desc.mip_level_count as hal::image::Level,
             format,
-            hal::image::Tiling::Optimal, // TODO: linear
+            hal::image::Tiling::Optimal,
             usage,
             hal::image::ViewCapabilities::empty(), // TODO: format, 2d array, cube
         )
@@ -771,8 +748,8 @@ pub fn device_create_texture(
         format: desc.format,
         full_range: hal::image::SubresourceRange {
             aspects,
-            levels: 0..1, //TODO: mips
-            layers: 0..desc.array_size as u16,
+            levels: 0 .. desc.mip_level_count as hal::image::Level,
+            layers: 0 .. desc.array_layer_count as hal::image::Layer,
         },
         placement: resource::TexturePlacement::Memory(memory),
         life_guard: LifeGuard::new(),
@@ -787,7 +764,7 @@ pub fn device_track_texture(device_id: DeviceId, texture_id: TextureId, ref_coun
         .query(
             texture_id,
             &ref_count,
-            resource::TextureUsageFlags::UNINITIALIZED,
+            resource::TextureUsage::UNINITIALIZED,
         );
     assert!(query.initialized);
 }
@@ -864,8 +841,9 @@ pub extern "C" fn wgpu_texture_create_view(
         conv::map_texture_view_dimension(desc.dimension),
         hal::image::SubresourceRange {
             aspects: conv::map_texture_aspect_flags(desc.aspect),
-            levels: desc.base_mip_level as u8..(desc.base_mip_level + desc.level_count) as u8,
-            layers: desc.base_array_layer as u16..(desc.base_array_layer + desc.array_count) as u16,
+            levels: desc.base_mip_level as u8 .. (desc.base_mip_level + desc.level_count) as u8,
+            layers: desc.base_array_layer as u16
+                .. (desc.base_array_layer + desc.array_count) as u16,
         },
     );
     let ref_count = view.life_guard.ref_count.clone();
@@ -935,22 +913,18 @@ pub fn device_create_sampler(
         mag_filter: conv::map_filter(desc.mag_filter),
         mip_filter: conv::map_filter(desc.mipmap_filter),
         wrap_mode: (
-            conv::map_wrap(desc.r_address_mode),
-            conv::map_wrap(desc.s_address_mode),
-            conv::map_wrap(desc.t_address_mode),
+            conv::map_wrap(desc.address_mode_u),
+            conv::map_wrap(desc.address_mode_v),
+            conv::map_wrap(desc.address_mode_w),
         ),
         lod_bias: 0.0.into(),
-        lod_range: desc.lod_min_clamp.into()..desc.lod_max_clamp.into(),
+        lod_range: desc.lod_min_clamp.into() .. desc.lod_max_clamp.into(),
         comparison: if desc.compare_function == resource::CompareFunction::Always {
             None
         } else {
             Some(conv::map_compare_function(desc.compare_function))
         },
-        border: hal::image::PackedColor(match desc.border_color {
-            resource::BorderColor::TransparentBlack => 0x00000000,
-            resource::BorderColor::OpaqueBlack => 0x000000FF,
-            resource::BorderColor::OpaqueWhite => 0xFFFFFFFF,
-        }),
+        border: hal::image::PackedColor(0),
         anisotropic: hal::image::Anisotropic::Off, //TODO
     };
     let raw = unsafe { device.raw.create_sampler(info).unwrap() };
@@ -1081,7 +1055,7 @@ pub fn device_create_bind_group(
                     .get_with_extended_usage(
                         &*buffer_guard,
                         bb.buffer,
-                        resource::BufferUsageFlags::UNIFORM,
+                        resource::BufferUsage::UNIFORM,
                     )
                     .unwrap();
                 let alignment = match decl.ty {
@@ -1094,7 +1068,8 @@ pub fn device_create_bind_group(
                         device.limits.min_storage_buffer_offset_alignment
                     }
                     binding_model::BindingType::Sampler
-                    | binding_model::BindingType::SampledTexture => {
+                    | binding_model::BindingType::SampledTexture
+                    | binding_model::BindingType::StorageTexture => {
                         panic!("Mismatched buffer binding for {:?}", decl)
                     }
                 };
@@ -1104,7 +1079,7 @@ pub fn device_create_bind_group(
                     "Misaligned buffer offset {}",
                     bb.offset
                 );
-                let range = Some(bb.offset as u64)..Some((bb.offset + bb.size) as u64);
+                let range = Some(bb.offset) .. Some(bb.offset + bb.size);
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
             binding_model::BindingResource::Sampler(id) => {
@@ -1120,7 +1095,7 @@ pub fn device_create_bind_group(
                     .transit(
                         view.texture_id.value,
                         &view.texture_id.ref_count,
-                        resource::TextureUsageFlags::SAMPLED,
+                        resource::TextureUsage::SAMPLED,
                         TrackPermit::EXTEND,
                     )
                     .unwrap();
@@ -1396,7 +1371,7 @@ pub fn device_create_render_pipeline(
                 samples: desc.sample_count as u8,
                 ops: hal::pass::AttachmentOps::PRESERVE,
                 stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                layouts: hal::image::Layout::General..hal::image::Layout::General,
+                layouts: hal::image::Layout::General .. hal::image::Layout::General,
             })
             .collect(),
         depth_stencil: depth_stencil_state.map(|at| hal::pass::Attachment {
@@ -1404,7 +1379,7 @@ pub fn device_create_render_pipeline(
             samples: desc.sample_count as u8,
             ops: hal::pass::AttachmentOps::PRESERVE,
             stencil_ops: hal::pass::AttachmentOps::PRESERVE,
-            layouts: hal::image::Layout::General..hal::image::Layout::General,
+            layouts: hal::image::Layout::General .. hal::image::Layout::General,
         }),
     };
 
@@ -1424,7 +1399,7 @@ pub fn device_create_render_pipeline(
             );
 
             let subpass = hal::pass::SubpassDesc {
-                colors: &color_ids[..desc.color_states_length],
+                colors: &color_ids[.. desc.color_states_length],
                 depth_stencil: depth_stencil_state.map(|_| &depth_id),
                 inputs: &[],
                 resolves: &[],
@@ -1449,28 +1424,30 @@ pub fn device_create_render_pipeline(
         module: &shader_module_guard[desc.vertex_stage.module].raw,
         specialization: hal::pso::Specialization::EMPTY,
     };
-    let fragment = hal::pso::EntryPoint::<back::Backend> {
-        entry: unsafe { ffi::CStr::from_ptr(desc.fragment_stage.entry_point) }
+    let fragment = unsafe { desc.fragment_stage.as_ref() }.map(|stage| hal::pso::EntryPoint::<
+        back::Backend,
+    > {
+        entry: unsafe { ffi::CStr::from_ptr(stage.entry_point) }
             .to_str()
             .to_owned()
             .unwrap(), // TODO
-        module: &shader_module_guard[desc.fragment_stage.module].raw,
+        module: &shader_module_guard[stage.module].raw,
         specialization: hal::pso::Specialization::EMPTY,
-    };
+    });
 
     let shaders = hal::pso::GraphicsShaderSet {
         vertex,
         hull: None,
         domain: None,
         geometry: None,
-        fragment: Some(fragment),
+        fragment,
     };
     let rasterizer = conv::map_rasterization_state_descriptor(&desc.rasterization_state);
 
     let desc_vbs = unsafe {
         slice::from_raw_parts(
-            desc.vertex_buffer_state.vertex_buffers,
-            desc.vertex_buffer_state.vertex_buffers_count,
+            desc.vertex_input.vertex_buffers,
+            desc.vertex_input.vertex_buffers_count,
         )
     };
     let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
@@ -1481,7 +1458,7 @@ pub fn device_create_render_pipeline(
         }
         vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
             binding: i as u32,
-            stride: vb_state.stride,
+            stride: vb_state.stride as u32,
             rate: match vb_state.step_mode {
                 pipeline::InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
                 pipeline::InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
@@ -1490,12 +1467,13 @@ pub fn device_create_render_pipeline(
         let desc_atts =
             unsafe { slice::from_raw_parts(vb_state.attributes, vb_state.attributes_count) };
         for attribute in desc_atts {
+            assert_eq!(0, attribute.offset >> 32);
             attributes.alloc().init(hal::pso::AttributeDesc {
-                location: attribute.attribute_index,
+                location: attribute.shader_location,
                 binding: i as u32,
                 element: hal::pso::Element {
                     format: conv::map_vertex_format(attribute.format),
-                    offset: attribute.offset,
+                    offset: attribute.offset as u32,
                 },
             });
         }
@@ -1568,11 +1546,15 @@ pub fn device_create_render_pipeline(
     };
 
     let mut flags = pipeline::PipelineFlags::empty();
-    if color_states
-        .iter()
-        .any(|state| state.color.uses_color() | state.alpha.uses_color())
-    {
-        flags |= pipeline::PipelineFlags::BLEND_COLOR;
+    for state in color_states {
+        if state.color_blend.uses_color() | state.alpha_blend.uses_color() {
+            flags |= pipeline::PipelineFlags::BLEND_COLOR;
+        }
+    }
+    if let Some(ds) = depth_stencil_state {
+        if ds.needs_stencil_reference() {
+            flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
+        }
     }
 
     pipeline::RenderPipeline {
@@ -1580,7 +1562,7 @@ pub fn device_create_render_pipeline(
         layout_id: desc.layout,
         pass_context,
         flags,
-        index_format: desc.vertex_buffer_state.index_format,
+        index_format: desc.vertex_input.index_format,
     }
 }
 
@@ -1758,8 +1740,8 @@ pub fn device_create_swap_chain(
             format: desc.format,
             full_range: hal::image::SubresourceRange {
                 aspects: hal::format::Aspects::COLOR,
-                levels: 0..1,
-                layers: 0..1,
+                levels: 0 .. 1,
+                layers: 0 .. 1,
             },
             placement: resource::TexturePlacement::Void,
             life_guard: LifeGuard::new(),
@@ -1806,7 +1788,7 @@ pub fn swap_chain_populate_textures(
         trackers.textures.query(
             texture_id.value,
             &texture_id.ref_count,
-            resource::TextureUsageFlags::UNINITIALIZED,
+            resource::TextureUsage::UNINITIALIZED,
         );
 
         let view = resource::TextureView {
@@ -1872,8 +1854,8 @@ pub type BufferMapWriteCallback =
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_map_read_async(
     buffer_id: BufferId,
-    start: u32,
-    size: u32,
+    start: BufferAddress,
+    size: BufferAddress,
     callback: BufferMapReadCallback,
     userdata: *mut u8,
 ) {
@@ -1887,7 +1869,7 @@ pub extern "C" fn wgpu_buffer_map_read_async(
             return;
         }
 
-        let range = start as u64..(start + size) as u64;
+        let range = start .. start + size;
         buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
         (buffer.device_id.value, buffer.life_guard.ref_count.clone())
     };
@@ -1895,7 +1877,7 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
 
-    let usage = resource::BufferUsageFlags::MAP_READ;
+    let usage = resource::BufferUsage::MAP_READ;
     match device
         .trackers
         .lock()
@@ -1915,8 +1897,8 @@ pub extern "C" fn wgpu_buffer_map_read_async(
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_map_write_async(
     buffer_id: BufferId,
-    start: u32,
-    size: u32,
+    start: BufferAddress,
+    size: BufferAddress,
     callback: BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
@@ -1930,7 +1912,7 @@ pub extern "C" fn wgpu_buffer_map_write_async(
             return;
         }
 
-        let range = start as u64..(start + size) as u64;
+        let range = start .. start + size;
         buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
         (buffer.device_id.value, buffer.life_guard.ref_count.clone())
     };
@@ -1938,7 +1920,7 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
 
-    let usage = resource::BufferUsageFlags::MAP_WRITE;
+    let usage = resource::BufferUsage::MAP_WRITE;
     match device
         .trackers
         .lock()

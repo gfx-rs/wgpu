@@ -1,9 +1,9 @@
 use crate::{binding_model, command, pipeline, resource, Color, Extent3d, Origin3d};
 
 pub fn map_buffer_usage(
-    usage: resource::BufferUsageFlags,
+    usage: resource::BufferUsage,
 ) -> (hal::buffer::Usage, hal::memory::Properties) {
-    use crate::resource::BufferUsageFlags as W;
+    use crate::resource::BufferUsage as W;
     use hal::buffer::Usage as U;
     use hal::memory::Properties as P;
 
@@ -39,10 +39,10 @@ pub fn map_buffer_usage(
 }
 
 pub fn map_texture_usage(
-    usage: resource::TextureUsageFlags,
+    usage: resource::TextureUsage,
     aspects: hal::format::Aspects,
 ) -> hal::image::Usage {
-    use crate::resource::TextureUsageFlags as W;
+    use crate::resource::TextureUsage as W;
     use hal::image::Usage as U;
 
     let mut value = U::empty();
@@ -65,7 +65,7 @@ pub fn map_texture_usage(
             value |= U::COLOR_ATTACHMENT;
         }
     }
-    // Note: TextureUsageFlags::Present does not need to be handled explicitly
+    // Note: TextureUsage::Present does not need to be handled explicitly
     // TODO: HAL Transient Attachment, HAL Input Attachment
     value
 }
@@ -77,6 +77,7 @@ pub fn map_binding_type(binding_ty: binding_model::BindingType) -> hal::pso::Des
         UniformBuffer => H::UniformBuffer,
         Sampler => H::Sampler,
         SampledTexture => H::SampledImage,
+        StorageTexture => H::StorageImage,
         StorageBuffer => H::StorageBuffer,
         UniformBufferDynamic => H::UniformBufferDynamic,
         StorageBufferDynamic => H::StorageBufferDynamic,
@@ -84,19 +85,19 @@ pub fn map_binding_type(binding_ty: binding_model::BindingType) -> hal::pso::Des
 }
 
 pub fn map_shader_stage_flags(
-    shader_stage_flags: binding_model::ShaderStageFlags,
+    shader_stage_flags: binding_model::ShaderStage,
 ) -> hal::pso::ShaderStageFlags {
-    use crate::binding_model::ShaderStageFlags as F;
+    use crate::binding_model::ShaderStage as Ss;
     use hal::pso::ShaderStageFlags as H;
 
     let mut value = H::empty();
-    if shader_stage_flags.contains(F::VERTEX) {
+    if shader_stage_flags.contains(Ss::VERTEX) {
         value |= H::VERTEX;
     }
-    if shader_stage_flags.contains(F::FRAGMENT) {
+    if shader_stage_flags.contains(Ss::FRAGMENT) {
         value |= H::FRAGMENT;
     }
-    if shader_stage_flags.contains(F::COMPUTE) {
+    if shader_stage_flags.contains(Ss::COMPUTE) {
         value |= H::COMPUTE;
     }
     value
@@ -134,12 +135,12 @@ pub fn map_color_state_descriptor(
     desc: &pipeline::ColorStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.color != pipeline::BlendDescriptor::REPLACE
-        || desc.alpha != pipeline::BlendDescriptor::REPLACE
+    let blend_state = if desc.color_blend != pipeline::BlendDescriptor::REPLACE
+        || desc.alpha_blend != pipeline::BlendDescriptor::REPLACE
     {
         hal::pso::BlendState::On {
-            color: map_blend_descriptor(&desc.color),
-            alpha: map_blend_descriptor(&desc.alpha),
+            color: map_blend_descriptor(&desc.color_blend),
+            alpha: map_blend_descriptor(&desc.alpha_blend),
         }
     } else {
         hal::pso::BlendState::Off
@@ -147,21 +148,21 @@ pub fn map_color_state_descriptor(
     hal::pso::ColorBlendDesc(map_color_write_flags(color_mask), blend_state)
 }
 
-fn map_color_write_flags(flags: pipeline::ColorWriteFlags) -> hal::pso::ColorMask {
-    use crate::pipeline::ColorWriteFlags as F;
+fn map_color_write_flags(flags: pipeline::ColorWrite) -> hal::pso::ColorMask {
+    use crate::pipeline::ColorWrite as Cw;
     use hal::pso::ColorMask as H;
 
     let mut value = H::empty();
-    if flags.contains(F::RED) {
+    if flags.contains(Cw::RED) {
         value |= H::RED;
     }
-    if flags.contains(F::GREEN) {
+    if flags.contains(Cw::GREEN) {
         value |= H::GREEN;
     }
-    if flags.contains(F::BLUE) {
+    if flags.contains(Cw::BLUE) {
         value |= H::BLUE;
     }
-    if flags.contains(F::ALPHA) {
+    if flags.contains(Cw::ALPHA) {
         value |= H::ALPHA;
     }
     value
@@ -367,42 +368,23 @@ pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::
     use crate::pipeline::VertexFormat::*;
     use hal::format::Format as H;
     match vertex_format {
-        Uchar => H::R8Uint,
         Uchar2 => H::Rg8Uint,
-        Uchar3 => H::Rgb8Uint,
         Uchar4 => H::Rgba8Uint,
-        Char => H::R8Sint,
         Char2 => H::Rg8Sint,
-        Char3 => H::Rgb8Sint,
         Char4 => H::Rgba8Sint,
-        UcharNorm => H::R8Unorm,
         Uchar2Norm => H::Rg8Unorm,
-        Uchar3Norm => H::Rgb8Unorm,
         Uchar4Norm => H::Rgba8Unorm,
-        Uchar4NormBgra => H::Bgra8Unorm,
-        CharNorm => H::R8Snorm,
         Char2Norm => H::Rg8Snorm,
-        Char3Norm => H::Rgb8Snorm,
         Char4Norm => H::Rgba8Snorm,
-        Ushort => H::R16Uint,
         Ushort2 => H::Rg16Uint,
-        Ushort3 => H::Rgb16Uint,
         Ushort4 => H::Rgba16Uint,
-        Short => H::R16Sint,
         Short2 => H::Rg16Sint,
-        Short3 => H::Rgb16Sint,
         Short4 => H::Rgba16Sint,
-        UshortNorm => H::R16Unorm,
         Ushort2Norm => H::Rg16Unorm,
-        Ushort3Norm => H::Rgb16Unorm,
         Ushort4Norm => H::Rgba16Unorm,
-        ShortNorm => H::R16Snorm,
         Short2Norm => H::Rg16Snorm,
-        Short3Norm => H::Rgb16Snorm,
         Short4Norm => H::Rgba16Snorm,
-        Half => H::R16Sfloat,
         Half2 => H::Rg16Sfloat,
-        Half3 => H::Rgb16Sfloat,
         Half4 => H::Rgba16Sfloat,
         Float => H::R32Sfloat,
         Float2 => H::Rg32Sfloat,
@@ -486,8 +468,8 @@ pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::fo
     flags
 }
 
-pub fn map_buffer_state(usage: resource::BufferUsageFlags) -> hal::buffer::State {
-    use crate::resource::BufferUsageFlags as W;
+pub fn map_buffer_state(usage: resource::BufferUsage) -> hal::buffer::State {
+    use crate::resource::BufferUsage as W;
     use hal::buffer::Access as A;
 
     let mut access = A::empty();
@@ -514,10 +496,10 @@ pub fn map_buffer_state(usage: resource::BufferUsageFlags) -> hal::buffer::State
 }
 
 pub fn map_texture_state(
-    usage: resource::TextureUsageFlags,
+    usage: resource::TextureUsage,
     aspects: hal::format::Aspects,
 ) -> hal::image::State {
-    use crate::resource::TextureUsageFlags as W;
+    use crate::resource::TextureUsage as W;
     use hal::image::{Access as A, Layout as L};
 
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
@@ -589,7 +571,6 @@ pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
         Am::ClampToEdge => W::Clamp,
         Am::Repeat => W::Tile,
         Am::MirrorRepeat => W::Mirror,
-        Am::ClampToBorderColor => W::Border,
     }
 }
 

@@ -4,13 +4,14 @@ use crate::{
     hub::HUB,
     resource::TexturePlacement,
     swap_chain::SwapChainLink,
+    BufferAddress,
     BufferId,
-    BufferUsageFlags,
+    BufferUsage,
     CommandBufferId,
     Extent3d,
     Origin3d,
     TextureId,
-    TextureUsageFlags,
+    TextureUsage,
 };
 
 use copyless::VecHelper as _;
@@ -23,7 +24,7 @@ const BITS_PER_BYTE: u32 = 8;
 #[repr(C)]
 pub struct BufferCopyView {
     pub buffer: BufferId,
-    pub offset: u32,
+    pub offset: BufferAddress,
     pub row_pitch: u32,
     pub image_height: u32,
 }
@@ -31,20 +32,19 @@ pub struct BufferCopyView {
 #[repr(C)]
 pub struct TextureCopyView {
     pub texture: TextureId,
-    pub level: u32,
-    pub slice: u32,
+    pub mip_level: u32,
+    pub array_layer: u32,
     pub origin: Origin3d,
-    //TODO: pub aspect: TextureAspect,
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     command_buffer_id: CommandBufferId,
     src: BufferId,
-    src_offset: u32,
+    src_offset: BufferAddress,
     dst: BufferId,
-    dst_offset: u32,
-    size: u32,
+    dst_offset: BufferAddress,
+    size: BufferAddress,
 ) {
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = &mut cmb_guard[command_buffer_id];
@@ -53,36 +53,36 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let (src_buffer, src_usage) = cmb
         .trackers
         .buffers
-        .get_with_replaced_usage(&*buffer_guard, src, BufferUsageFlags::TRANSFER_SRC)
+        .get_with_replaced_usage(&*buffer_guard, src, BufferUsage::TRANSFER_SRC)
         .unwrap();
     let src_barrier = src_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old)..hal::buffer::Access::TRANSFER_READ,
+        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
         target: &src_buffer.raw,
         families: None,
-        range: None..None,
+        range: None .. None,
     });
 
     let (dst_buffer, dst_usage) = cmb
         .trackers
         .buffers
-        .get_with_replaced_usage(&*buffer_guard, dst, BufferUsageFlags::TRANSFER_DST)
+        .get_with_replaced_usage(&*buffer_guard, dst, BufferUsage::TRANSFER_DST)
         .unwrap();
     let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old)..hal::buffer::Access::TRANSFER_WRITE,
+        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
         target: &dst_buffer.raw,
         families: None,
-        range: None..None,
+        range: None .. None,
     });
 
     let region = hal::command::BufferCopy {
-        src: src_offset as hal::buffer::Offset,
-        dst: dst_offset as hal::buffer::Offset,
-        size: size as hal::buffer::Offset,
+        src: src_offset,
+        dst: dst_offset,
+        size,
     };
     let cmb_raw = cmb.raw.last_mut().unwrap();
     unsafe {
         cmb_raw.pipeline_barrier(
-            all_buffer_stages()..all_buffer_stages(),
+            all_buffer_stages() .. all_buffer_stages(),
             hal::memory::Dependencies::empty(),
             src_barrier.into_iter().chain(dst_barrier),
         );
@@ -105,17 +105,13 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let (src_buffer, src_usage) = cmb
         .trackers
         .buffers
-        .get_with_replaced_usage(
-            &*buffer_guard,
-            source.buffer,
-            BufferUsageFlags::TRANSFER_SRC,
-        )
+        .get_with_replaced_usage(&*buffer_guard, source.buffer, BufferUsage::TRANSFER_SRC)
         .unwrap();
     let src_barrier = src_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old)..hal::buffer::Access::TRANSFER_READ,
+        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
         target: &src_buffer.raw,
         families: None,
-        range: None..None,
+        range: None .. None,
     });
 
     let (dst_texture, dst_usage) = cmb
@@ -124,13 +120,13 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         .get_with_replaced_usage(
             &*texture_guard,
             destination.texture,
-            TextureUsageFlags::TRANSFER_DST,
+            TextureUsage::TRANSFER_DST,
         )
         .unwrap();
     let aspects = dst_texture.full_range.aspects;
-    let dst_texture_state = conv::map_texture_state(TextureUsageFlags::TRANSFER_DST, aspects);
+    let dst_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_DST, aspects);
     let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects)..dst_texture_state,
+        states: conv::map_texture_state(old, aspects) .. dst_texture_state,
         target: &dst_texture.raw,
         families: None,
         range: dst_texture.full_range.clone(),
@@ -151,13 +147,13 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let buffer_width = source.row_pitch / bytes_per_texel;
     assert_eq!(source.row_pitch % bytes_per_texel, 0);
     let region = hal::command::BufferImageCopy {
-        buffer_offset: source.offset as hal::buffer::Offset,
+        buffer_offset: source.offset,
         buffer_width,
         buffer_height: source.image_height,
         image_layers: hal::image::SubresourceLayers {
             aspects, //TODO
-            level: destination.level as hal::image::Level,
-            layers: destination.slice as u16..destination.slice as u16 + 1,
+            level: destination.mip_level as hal::image::Level,
+            layers: destination.array_layer as u16 .. destination.array_layer as u16 + 1,
         },
         image_offset: conv::map_origin(destination.origin),
         image_extent: conv::map_extent(copy_size),
@@ -166,7 +162,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let stages = all_buffer_stages() | all_image_stages();
     unsafe {
         cmb_raw.pipeline_barrier(
-            stages..stages,
+            stages .. stages,
             hal::memory::Dependencies::empty(),
             src_barrier.into_iter().chain(dst_barrier),
         );
@@ -194,16 +190,12 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     let (src_texture, src_usage) = cmb
         .trackers
         .textures
-        .get_with_replaced_usage(
-            &*texture_guard,
-            source.texture,
-            TextureUsageFlags::TRANSFER_SRC,
-        )
+        .get_with_replaced_usage(&*texture_guard, source.texture, TextureUsage::TRANSFER_SRC)
         .unwrap();
     let aspects = src_texture.full_range.aspects;
-    let src_texture_state = conv::map_texture_state(TextureUsageFlags::TRANSFER_SRC, aspects);
+    let src_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_SRC, aspects);
     let src_barrier = src_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects)..src_texture_state,
+        states: conv::map_texture_state(old, aspects) .. src_texture_state,
         target: &src_texture.raw,
         families: None,
         range: src_texture.full_range.clone(),
@@ -220,14 +212,14 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         .get_with_replaced_usage(
             &*buffer_guard,
             destination.buffer,
-            BufferUsageFlags::TRANSFER_DST,
+            BufferUsage::TRANSFER_DST,
         )
         .unwrap();
     let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old)..hal::buffer::Access::TRANSFER_WRITE,
+        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
         target: &dst_buffer.raw,
         families: None,
-        range: None..None,
+        range: None .. None,
     });
 
     let bytes_per_texel = conv::map_texture_format(src_texture.format)
@@ -237,13 +229,13 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     let buffer_width = destination.row_pitch / bytes_per_texel;
     assert_eq!(destination.row_pitch % bytes_per_texel, 0);
     let region = hal::command::BufferImageCopy {
-        buffer_offset: destination.offset as hal::buffer::Offset,
+        buffer_offset: destination.offset,
         buffer_width,
         buffer_height: destination.image_height,
         image_layers: hal::image::SubresourceLayers {
             aspects, //TODO
-            level: source.level as hal::image::Level,
-            layers: source.slice as u16..source.slice as u16 + 1,
+            level: source.mip_level as hal::image::Level,
+            layers: source.array_layer as u16 .. source.array_layer as u16 + 1,
         },
         image_offset: conv::map_origin(source.origin),
         image_extent: conv::map_extent(copy_size),
@@ -252,7 +244,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     let stages = all_buffer_stages() | all_image_stages();
     unsafe {
         cmb_raw.pipeline_barrier(
-            stages..stages,
+            stages .. stages,
             hal::memory::Dependencies::empty(),
             src_barrier.into_iter().chain(dst_barrier),
         );
@@ -279,11 +271,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     let (src_texture, src_usage) = cmb
         .trackers
         .textures
-        .get_with_replaced_usage(
-            &*texture_guard,
-            source.texture,
-            TextureUsageFlags::TRANSFER_SRC,
-        )
+        .get_with_replaced_usage(&*texture_guard, source.texture, TextureUsage::TRANSFER_SRC)
         .unwrap();
     let (dst_texture, dst_usage) = cmb
         .trackers
@@ -291,22 +279,22 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
         .get_with_replaced_usage(
             &*texture_guard,
             destination.texture,
-            TextureUsageFlags::TRANSFER_DST,
+            TextureUsage::TRANSFER_DST,
         )
         .unwrap();
 
     let aspects = src_texture.full_range.aspects & dst_texture.full_range.aspects;
-    let src_texture_state = conv::map_texture_state(TextureUsageFlags::TRANSFER_SRC, aspects);
-    let dst_texture_state = conv::map_texture_state(TextureUsageFlags::TRANSFER_DST, aspects);
+    let src_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_SRC, aspects);
+    let dst_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_DST, aspects);
 
     let src_barrier = src_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects)..src_texture_state,
+        states: conv::map_texture_state(old, aspects) .. src_texture_state,
         target: &src_texture.raw,
         families: None,
         range: src_texture.full_range.clone(),
     });
     let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects)..dst_texture_state,
+        states: conv::map_texture_state(old, aspects) .. dst_texture_state,
         target: &dst_texture.raw,
         families: None,
         range: dst_texture.full_range.clone(),
@@ -323,14 +311,14 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     let region = hal::command::ImageCopy {
         src_subresource: hal::image::SubresourceLayers {
             aspects,
-            level: source.level as hal::image::Level,
-            layers: source.slice as u16..source.slice as u16 + 1,
+            level: source.mip_level as hal::image::Level,
+            layers: source.array_layer as u16 .. source.array_layer as u16 + 1,
         },
         src_offset: conv::map_origin(source.origin),
         dst_subresource: hal::image::SubresourceLayers {
             aspects,
-            level: destination.level as hal::image::Level,
-            layers: destination.slice as u16..destination.slice as u16 + 1,
+            level: destination.mip_level as hal::image::Level,
+            layers: destination.array_layer as u16 .. destination.array_layer as u16 + 1,
         },
         dst_offset: conv::map_origin(destination.origin),
         extent: conv::map_extent(copy_size),
@@ -338,7 +326,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     let cmb_raw = cmb.raw.last_mut().unwrap();
     unsafe {
         cmb_raw.pipeline_barrier(
-            all_image_stages()..all_image_stages(),
+            all_image_stages() .. all_image_stages(),
             hal::memory::Dependencies::empty(),
             src_barrier.into_iter().chain(dst_barrier),
         );

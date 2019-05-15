@@ -15,7 +15,6 @@ typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
   WGPUAddressMode_Repeat = 1,
   WGPUAddressMode_MirrorRepeat = 2,
-  WGPUAddressMode_ClampToBorderColor = 3,
 } WGPUAddressMode;
 
 typedef enum {
@@ -25,6 +24,7 @@ typedef enum {
   WGPUBindingType_StorageBuffer = 3,
   WGPUBindingType_UniformBufferDynamic = 4,
   WGPUBindingType_StorageBufferDynamic = 5,
+  WGPUBindingType_StorageTexture = 10,
 } WGPUBindingType;
 
 typedef enum {
@@ -50,12 +50,6 @@ typedef enum {
   WGPUBlendOperation_Min = 3,
   WGPUBlendOperation_Max = 4,
 } WGPUBlendOperation;
-
-typedef enum {
-  WGPUBorderColor_TransparentBlack = 0,
-  WGPUBorderColor_OpaqueBlack = 1,
-  WGPUBorderColor_OpaqueWhite = 2,
-} WGPUBorderColor;
 
 typedef enum {
   WGPUBufferMapAsyncStatus_Success,
@@ -202,42 +196,23 @@ typedef enum {
 } WGPUTextureViewDimension;
 
 typedef enum {
-  WGPUVertexFormat_Uchar = 0,
   WGPUVertexFormat_Uchar2 = 1,
-  WGPUVertexFormat_Uchar3 = 2,
   WGPUVertexFormat_Uchar4 = 3,
-  WGPUVertexFormat_Char = 4,
   WGPUVertexFormat_Char2 = 5,
-  WGPUVertexFormat_Char3 = 6,
   WGPUVertexFormat_Char4 = 7,
-  WGPUVertexFormat_UcharNorm = 8,
   WGPUVertexFormat_Uchar2Norm = 9,
-  WGPUVertexFormat_Uchar3Norm = 10,
   WGPUVertexFormat_Uchar4Norm = 11,
-  WGPUVertexFormat_Uchar4NormBgra = 12,
-  WGPUVertexFormat_CharNorm = 13,
   WGPUVertexFormat_Char2Norm = 14,
-  WGPUVertexFormat_Char3Norm = 15,
   WGPUVertexFormat_Char4Norm = 16,
-  WGPUVertexFormat_Ushort = 17,
   WGPUVertexFormat_Ushort2 = 18,
-  WGPUVertexFormat_Ushort3 = 19,
   WGPUVertexFormat_Ushort4 = 20,
-  WGPUVertexFormat_Short = 21,
   WGPUVertexFormat_Short2 = 22,
-  WGPUVertexFormat_Short3 = 23,
   WGPUVertexFormat_Short4 = 24,
-  WGPUVertexFormat_UshortNorm = 25,
   WGPUVertexFormat_Ushort2Norm = 26,
-  WGPUVertexFormat_Ushort3Norm = 27,
   WGPUVertexFormat_Ushort4Norm = 28,
-  WGPUVertexFormat_ShortNorm = 29,
   WGPUVertexFormat_Short2Norm = 30,
-  WGPUVertexFormat_Short3Norm = 31,
   WGPUVertexFormat_Short4Norm = 32,
-  WGPUVertexFormat_Half = 33,
   WGPUVertexFormat_Half2 = 34,
-  WGPUVertexFormat_Half3 = 35,
   WGPUVertexFormat_Half4 = 36,
   WGPUVertexFormat_Float = 37,
   WGPUVertexFormat_Float2 = 38,
@@ -273,12 +248,19 @@ typedef struct {
 } WGPUExtensions;
 
 typedef struct {
+  uint32_t max_bind_groups;
+} WGPULimits;
+
+typedef struct {
   WGPUExtensions extensions;
+  WGPULimits limits;
 } WGPUDeviceDescriptor;
 
 typedef WGPUId WGPUBindGroupId;
 
 typedef WGPUId WGPUBufferId;
+
+typedef uint64_t WGPUBufferAddress;
 
 typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const uint8_t *data, uint8_t *userdata);
 
@@ -288,7 +270,7 @@ typedef WGPUId WGPUCommandBufferId;
 
 typedef struct {
   WGPUBufferId buffer;
-  uint32_t offset;
+  WGPUBufferAddress offset;
   uint32_t row_pitch;
   uint32_t image_height;
 } WGPUBufferCopyView;
@@ -300,11 +282,12 @@ typedef struct {
   float y;
   float z;
 } WGPUOrigin3d;
+#define WGPUOrigin3d_ZERO (WGPUOrigin3d){ .x = 0, .y = 0, .z = 0 }
 
 typedef struct {
   WGPUTextureId texture;
-  uint32_t level;
-  uint32_t slice;
+  uint32_t mip_level;
+  uint32_t array_layer;
   WGPUOrigin3d origin;
 } WGPUTextureCopyView;
 
@@ -337,6 +320,7 @@ typedef struct {
 
 typedef struct {
   WGPUTextureViewId attachment;
+  const WGPUTextureViewId *resolve_target;
   WGPULoadOp load_op;
   WGPUStoreOp store_op;
   WGPUColor clear_color;
@@ -358,6 +342,8 @@ typedef struct {
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
 
+typedef const char *WGPURawString;
+
 typedef WGPUId WGPUComputePipelineId;
 
 typedef WGPUId WGPUInstanceId;
@@ -366,8 +352,8 @@ typedef WGPUId WGPUBindGroupLayoutId;
 
 typedef struct {
   WGPUBufferId buffer;
-  uint32_t offset;
-  uint32_t size;
+  WGPUBufferAddress offset;
+  WGPUBufferAddress size;
 } WGPUBufferBinding;
 
 typedef WGPUId WGPUSamplerId;
@@ -402,22 +388,23 @@ typedef struct {
 typedef struct {
   uint32_t binding;
   WGPUBindingResource resource;
-} WGPUBinding;
+} WGPUBindGroupBinding;
 
 typedef struct {
   WGPUBindGroupLayoutId layout;
-  const WGPUBinding *bindings;
+  const WGPUBindGroupBinding *bindings;
   uintptr_t bindings_length;
 } WGPUBindGroupDescriptor;
 
-typedef uint32_t WGPUShaderStageFlags;
-#define WGPUShaderStageFlags_VERTEX 1
-#define WGPUShaderStageFlags_FRAGMENT 2
-#define WGPUShaderStageFlags_COMPUTE 4
+typedef uint32_t WGPUShaderStage;
+#define WGPUShaderStage_NONE 0
+#define WGPUShaderStage_VERTEX 1
+#define WGPUShaderStage_FRAGMENT 2
+#define WGPUShaderStage_COMPUTE 4
 
 typedef struct {
   uint32_t binding;
-  WGPUShaderStageFlags visibility;
+  WGPUShaderStage visibility;
   WGPUBindingType ty;
 } WGPUBindGroupLayoutBinding;
 
@@ -426,21 +413,21 @@ typedef struct {
   uintptr_t bindings_length;
 } WGPUBindGroupLayoutDescriptor;
 
-typedef uint32_t WGPUBufferUsageFlags;
-#define WGPUBufferUsageFlags_MAP_READ 1
-#define WGPUBufferUsageFlags_MAP_WRITE 2
-#define WGPUBufferUsageFlags_TRANSFER_SRC 4
-#define WGPUBufferUsageFlags_TRANSFER_DST 8
-#define WGPUBufferUsageFlags_INDEX 16
-#define WGPUBufferUsageFlags_VERTEX 32
-#define WGPUBufferUsageFlags_UNIFORM 64
-#define WGPUBufferUsageFlags_STORAGE 128
-#define WGPUBufferUsageFlags_NONE 0
-#define WGPUBufferUsageFlags_WRITE_ALL 2 + 8 + 128
+typedef uint32_t WGPUBufferUsage;
+#define WGPUBufferUsage_MAP_READ 1
+#define WGPUBufferUsage_MAP_WRITE 2
+#define WGPUBufferUsage_TRANSFER_SRC 4
+#define WGPUBufferUsage_TRANSFER_DST 8
+#define WGPUBufferUsage_INDEX 16
+#define WGPUBufferUsage_VERTEX 32
+#define WGPUBufferUsage_UNIFORM 64
+#define WGPUBufferUsage_STORAGE 128
+#define WGPUBufferUsage_NONE 0
+#define WGPUBufferUsage_WRITE_ALL 2 + 8 + 128
 
 typedef struct {
-  uint32_t size;
-  WGPUBufferUsageFlags usage;
+  WGPUBufferAddress size;
+  WGPUBufferUsage usage;
 } WGPUBufferDescriptor;
 
 typedef struct {
@@ -453,7 +440,7 @@ typedef WGPUId WGPUShaderModuleId;
 
 typedef struct {
   WGPUShaderModuleId module;
-  const char *entry_point;
+  WGPURawString entry_point;
 } WGPUPipelineStageDescriptor;
 
 typedef struct {
@@ -482,19 +469,19 @@ typedef struct {
   WGPUBlendOperation operation;
 } WGPUBlendDescriptor;
 
-typedef uint32_t WGPUColorWriteFlags;
-#define WGPUColorWriteFlags_RED 1
-#define WGPUColorWriteFlags_GREEN 2
-#define WGPUColorWriteFlags_BLUE 4
-#define WGPUColorWriteFlags_ALPHA 8
-#define WGPUColorWriteFlags_COLOR 7
-#define WGPUColorWriteFlags_ALL 15
+typedef uint32_t WGPUColorWrite;
+#define WGPUColorWrite_RED 1
+#define WGPUColorWrite_GREEN 2
+#define WGPUColorWrite_BLUE 4
+#define WGPUColorWrite_ALPHA 8
+#define WGPUColorWrite_COLOR 7
+#define WGPUColorWrite_ALL 15
 
 typedef struct {
   WGPUTextureFormat format;
-  WGPUBlendDescriptor alpha;
-  WGPUBlendDescriptor color;
-  WGPUColorWriteFlags write_mask;
+  WGPUBlendDescriptor alpha_blend;
+  WGPUBlendDescriptor color_blend;
+  WGPUColorWrite write_mask;
 } WGPUColorStateDescriptor;
 
 typedef struct {
@@ -514,16 +501,16 @@ typedef struct {
   uint32_t stencil_write_mask;
 } WGPUDepthStencilStateDescriptor;
 
-typedef uint32_t WGPUShaderAttributeIndex;
+typedef uint32_t WGPUShaderLocation;
 
 typedef struct {
-  uint32_t offset;
+  WGPUBufferAddress offset;
   WGPUVertexFormat format;
-  WGPUShaderAttributeIndex attribute_index;
+  WGPUShaderLocation shader_location;
 } WGPUVertexAttributeDescriptor;
 
 typedef struct {
-  uint32_t stride;
+  WGPUBufferAddress stride;
   WGPUInputStepMode step_mode;
   const WGPUVertexAttributeDescriptor *attributes;
   uintptr_t attributes_count;
@@ -533,33 +520,31 @@ typedef struct {
   WGPUIndexFormat index_format;
   const WGPUVertexBufferDescriptor *vertex_buffers;
   uintptr_t vertex_buffers_count;
-} WGPUVertexBufferStateDescriptor;
+} WGPUVertexInputDescriptor;
 
 typedef struct {
   WGPUPipelineLayoutId layout;
   WGPUPipelineStageDescriptor vertex_stage;
-  WGPUPipelineStageDescriptor fragment_stage;
+  const WGPUPipelineStageDescriptor *fragment_stage;
   WGPUPrimitiveTopology primitive_topology;
   WGPURasterizationStateDescriptor rasterization_state;
   const WGPUColorStateDescriptor *color_states;
   uintptr_t color_states_length;
   const WGPUDepthStencilStateDescriptor *depth_stencil_state;
-  WGPUVertexBufferStateDescriptor vertex_buffer_state;
+  WGPUVertexInputDescriptor vertex_input;
   uint32_t sample_count;
 } WGPURenderPipelineDescriptor;
 
 typedef struct {
-  WGPUAddressMode r_address_mode;
-  WGPUAddressMode s_address_mode;
-  WGPUAddressMode t_address_mode;
+  WGPUAddressMode address_mode_u;
+  WGPUAddressMode address_mode_v;
+  WGPUAddressMode address_mode_w;
   WGPUFilterMode mag_filter;
   WGPUFilterMode min_filter;
   WGPUFilterMode mipmap_filter;
   float lod_min_clamp;
   float lod_max_clamp;
-  uint32_t max_anisotropy;
   WGPUCompareFunction compare_function;
-  WGPUBorderColor border_color;
 } WGPUSamplerDescriptor;
 
 typedef struct {
@@ -575,18 +560,18 @@ typedef WGPUId WGPUSurfaceId;
 
 typedef WGPUSurfaceId WGPUSwapChainId;
 
-typedef uint32_t WGPUTextureUsageFlags;
-#define WGPUTextureUsageFlags_TRANSFER_SRC 1
-#define WGPUTextureUsageFlags_TRANSFER_DST 2
-#define WGPUTextureUsageFlags_SAMPLED 4
-#define WGPUTextureUsageFlags_STORAGE 8
-#define WGPUTextureUsageFlags_OUTPUT_ATTACHMENT 16
-#define WGPUTextureUsageFlags_NONE 0
-#define WGPUTextureUsageFlags_WRITE_ALL 2 + 8 + 16
-#define WGPUTextureUsageFlags_UNINITIALIZED 65535
+typedef uint32_t WGPUTextureUsage;
+#define WGPUTextureUsage_TRANSFER_SRC 1
+#define WGPUTextureUsage_TRANSFER_DST 2
+#define WGPUTextureUsage_SAMPLED 4
+#define WGPUTextureUsage_STORAGE 8
+#define WGPUTextureUsage_OUTPUT_ATTACHMENT 16
+#define WGPUTextureUsage_NONE 0
+#define WGPUTextureUsage_WRITE_ALL 2 + 8 + 16
+#define WGPUTextureUsage_UNINITIALIZED 65535
 
 typedef struct {
-  WGPUTextureUsageFlags usage;
+  WGPUTextureUsage usage;
   WGPUTextureFormat format;
   uint32_t width;
   uint32_t height;
@@ -594,10 +579,12 @@ typedef struct {
 
 typedef struct {
   WGPUExtent3d size;
-  uint32_t array_size;
+  uint32_t array_layer_count;
+  uint32_t mip_level_count;
+  uint32_t sample_count;
   WGPUTextureDimension dimension;
   WGPUTextureFormat format;
-  WGPUTextureUsageFlags usage;
+  WGPUTextureUsage usage;
 } WGPUTextureDescriptor;
 
 typedef WGPUDeviceId WGPUQueueId;
@@ -631,7 +618,8 @@ typedef struct {
 
 
 #if defined(WGPU_LOCAL)
-WGPUDeviceId wgpu_adapter_create_device(WGPUAdapterId adapter_id, const WGPUDeviceDescriptor *desc);
+WGPUDeviceId wgpu_adapter_request_device(WGPUAdapterId adapter_id,
+                                         const WGPUDeviceDescriptor *desc);
 #endif
 
 void wgpu_bind_group_destroy(WGPUBindGroupId bind_group_id);
@@ -639,14 +627,14 @@ void wgpu_bind_group_destroy(WGPUBindGroupId bind_group_id);
 void wgpu_buffer_destroy(WGPUBufferId buffer_id);
 
 void wgpu_buffer_map_read_async(WGPUBufferId buffer_id,
-                                uint32_t start,
-                                uint32_t size,
+                                WGPUBufferAddress start,
+                                WGPUBufferAddress size,
                                 WGPUBufferMapReadCallback callback,
                                 uint8_t *userdata);
 
 void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
-                                 uint32_t start,
-                                 uint32_t size,
+                                 WGPUBufferAddress start,
+                                 WGPUBufferAddress size,
                                  WGPUBufferMapWriteCallback callback,
                                  uint8_t *userdata);
 
@@ -654,10 +642,10 @@ void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
 void wgpu_command_buffer_copy_buffer_to_buffer(WGPUCommandBufferId command_buffer_id,
                                                WGPUBufferId src,
-                                               uint32_t src_offset,
+                                               WGPUBufferAddress src_offset,
                                                WGPUBufferId dst,
-                                               uint32_t dst_offset,
-                                               uint32_t size);
+                                               WGPUBufferAddress dst_offset,
+                                               WGPUBufferAddress size);
 
 void wgpu_command_buffer_copy_buffer_to_texture(WGPUCommandBufferId command_buffer_id,
                                                 const WGPUBufferCopyView *source,
@@ -688,6 +676,12 @@ WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_enc
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 
 WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
+
+void wgpu_compute_pass_insert_debug_marker(WGPUComputePassId _pass_id, WGPURawString _label);
+
+void wgpu_compute_pass_pop_debug_group(WGPUComputePassId _pass_id);
+
+void wgpu_compute_pass_push_debug_group(WGPUComputePassId _pass_id, WGPURawString _label);
 
 void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
                                       uint32_t index,
@@ -807,6 +801,12 @@ void wgpu_render_pass_draw_indexed(WGPURenderPassId pass_id,
 
 WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
 
+void wgpu_render_pass_insert_debug_marker(WGPURenderPassId _pass_id, WGPURawString _label);
+
+void wgpu_render_pass_pop_debug_group(WGPURenderPassId _pass_id);
+
+void wgpu_render_pass_push_debug_group(WGPURenderPassId _pass_id, WGPURawString _label);
+
 void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
@@ -817,7 +817,7 @@ void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor 
 
 void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
                                        WGPUBufferId buffer_id,
-                                       uint32_t offset);
+                                       WGPUBufferAddress offset);
 
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
 
@@ -827,10 +827,20 @@ void wgpu_render_pass_set_scissor_rect(WGPURenderPassId pass_id,
                                        uint32_t w,
                                        uint32_t h);
 
+void wgpu_render_pass_set_stencil_reference(WGPURenderPassId pass_id, uint32_t value);
+
 void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
                                          const WGPUBufferId *buffer_ptr,
                                          const uint32_t *offset_ptr,
                                          uintptr_t count);
+
+void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
+                                   float x,
+                                   float y,
+                                   float w,
+                                   float h,
+                                   float min_depth,
+                                   float max_depth);
 
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 
