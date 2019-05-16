@@ -25,7 +25,7 @@ fn multithreaded_compute() {
                 },
             });
 
-            let cs_bytes = include_bytes!("../examples/hello_compute/shader.comp.spv");
+            let cs_bytes = include_bytes!("../examples/hello-compute/shader.comp.spv");
             let cs_module = device.create_shader_module(cs_bytes);
 
             let staging_buffer = device
