@@ -14,13 +14,13 @@ pub use wgn::{
     BlendDescriptor,
     BlendFactor,
     BlendOperation,
-    BorderColor,
+    BufferAddress,
     BufferDescriptor,
     BufferMapAsyncStatus,
-    BufferUsageFlags,
+    BufferUsage,
     Color,
     ColorStateDescriptor,
-    ColorWriteFlags,
+    ColorWrite,
     CommandEncoderDescriptor,
     CompareFunction,
     CullMode,
@@ -32,17 +32,17 @@ pub use wgn::{
     FrontFace,
     IndexFormat,
     InputStepMode,
+    Limits,
     LoadOp,
     Origin3d,
     PowerPreference,
     PrimitiveTopology,
     RasterizationStateDescriptor,
-    RenderPassColorAttachmentDescriptor,
     RenderPassDepthStencilAttachmentDescriptor,
     SamplerDescriptor,
-    ShaderAttributeIndex,
+    ShaderLocation,
     ShaderModuleDescriptor,
-    ShaderStageFlags,
+    ShaderStage,
     StencilOperation,
     StencilStateFaceDescriptor,
     StoreOp,
@@ -51,7 +51,7 @@ pub use wgn::{
     TextureDescriptor,
     TextureDimension,
     TextureFormat,
-    TextureUsageFlags,
+    TextureUsage,
     TextureViewDescriptor,
     TextureViewDimension,
     VertexAttributeDescriptor,
@@ -161,7 +161,7 @@ pub struct Queue<'a> {
 pub enum BindingResource<'a> {
     Buffer {
         buffer: &'a Buffer,
-        range: Range<u32>,
+        range: Range<BufferAddress>,
     },
     Sampler(&'a Sampler),
     TextureView(&'a TextureView),
@@ -192,7 +192,7 @@ pub struct PipelineStageDescriptor<'a> {
 
 #[derive(Clone, Debug)]
 pub struct VertexBufferDescriptor<'a> {
-    pub stride: u32,
+    pub stride: BufferAddress,
     pub step_mode: InputStepMode,
     pub attributes: &'a [VertexAttributeDescriptor],
 }
@@ -200,7 +200,7 @@ pub struct VertexBufferDescriptor<'a> {
 pub struct RenderPipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
     pub vertex_stage: PipelineStageDescriptor<'a>,
-    pub fragment_stage: PipelineStageDescriptor<'a>,
+    pub fragment_stage: Option<PipelineStageDescriptor<'a>>,
     pub rasterization_state: RasterizationStateDescriptor,
     pub primitive_topology: PrimitiveTopology,
     pub color_states: &'a [ColorStateDescriptor],
@@ -216,9 +216,17 @@ pub struct ComputePipelineDescriptor<'a> {
 }
 
 pub struct RenderPassDescriptor<'a> {
-    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<&'a TextureView>],
+    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<'a>],
     pub depth_stencil_attachment:
         Option<RenderPassDepthStencilAttachmentDescriptor<&'a TextureView>>,
+}
+
+pub struct RenderPassColorAttachmentDescriptor<'a> {
+    pub attachment: &'a TextureView,
+    pub resolve_target: Option<&'a TextureView>,
+    pub load_op: LoadOp,
+    pub store_op: StoreOp,
+    pub clear_color: Color,
 }
 
 pub struct SwapChainOutput<'a> {
@@ -229,7 +237,7 @@ pub struct SwapChainOutput<'a> {
 
 pub struct BufferCopyView<'a> {
     pub buffer: &'a Buffer,
-    pub offset: u32,
+    pub offset: BufferAddress,
     pub row_pitch: u32,
     pub image_height: u32,
 }
@@ -247,8 +255,8 @@ impl<'a> BufferCopyView<'a> {
 
 pub struct TextureCopyView<'a> {
     pub texture: &'a Texture,
-    pub level: u32,
-    pub slice: u32,
+    pub mip_level: u32,
+    pub array_layer: u32,
     pub origin: Origin3d,
 }
 
@@ -256,8 +264,8 @@ impl<'a> TextureCopyView<'a> {
     fn into_native(self) -> wgn::TextureCopyView {
         wgn::TextureCopyView {
             texture: self.texture.id,
-            level: self.level,
-            slice: self.slice,
+            mip_level: self.mip_level,
+            array_layer: self.array_layer,
             origin: self.origin,
         }
     }
@@ -311,9 +319,9 @@ impl Instance {
 }
 
 impl Adapter {
-    pub fn create_device(&self, desc: &DeviceDescriptor) -> Device {
+    pub fn request_device(&self, desc: &DeviceDescriptor) -> Device {
         Device {
-            id: wgn::wgpu_adapter_create_device(self.id, desc),
+            id: wgn::wgpu_adapter_request_device(self.id, desc),
             temp: Temp::default(),
         }
     }
@@ -354,7 +362,7 @@ impl Device {
         let bindings = desc
             .bindings
             .into_iter()
-            .map(|binding| wgn::Binding {
+            .map(|binding| wgn::BindGroupBinding {
                 binding: binding.binding,
                 resource: match binding.resource {
                     BindingResource::Buffer {
@@ -418,7 +426,20 @@ impl Device {
 
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
         let vertex_entry_point = CString::new(desc.vertex_stage.entry_point).unwrap();
-        let fragment_entry_point = CString::new(desc.fragment_stage.entry_point).unwrap();
+        let vertex_stage = wgn::PipelineStageDescriptor {
+            module: desc.vertex_stage.module.id,
+            entry_point: vertex_entry_point.as_ptr(),
+        };
+        let (_fragment_entry_point, fragment_stage) = if let Some(fragment_stage) = &desc.fragment_stage {
+            let fragment_entry_point = CString::new(fragment_stage.entry_point).unwrap();
+            let fragment_stage = wgn::PipelineStageDescriptor {
+                module: fragment_stage.module.id,
+                entry_point: fragment_entry_point.as_ptr(),
+            };
+            (fragment_entry_point, Some(fragment_stage))
+        } else {
+            (CString::default(), None)
+        };
 
         let temp_color_states = desc.color_states.to_vec();
         let temp_vertex_buffers = desc
@@ -437,14 +458,8 @@ impl Device {
                 self.id,
                 &wgn::RenderPipelineDescriptor {
                     layout: desc.layout.id,
-                    vertex_stage: wgn::PipelineStageDescriptor {
-                        module: desc.vertex_stage.module.id,
-                        entry_point: vertex_entry_point.as_ptr(),
-                    },
-                    fragment_stage: wgn::PipelineStageDescriptor {
-                        module: desc.fragment_stage.module.id,
-                        entry_point: fragment_entry_point.as_ptr(),
-                    },
+                    vertex_stage,
+                    fragment_stage: fragment_stage.as_ref().map_or(ptr::null(), |fs| fs as *const _),
                     rasterization_state: desc.rasterization_state.clone(),
                     primitive_topology: desc.primitive_topology,
                     color_states: temp_color_states.as_ptr(),
@@ -453,7 +468,7 @@ impl Device {
                         .depth_stencil_state
                         .as_ref()
                         .map_or(ptr::null(), |p| p as *const _),
-                    vertex_buffer_state: wgn::VertexBufferStateDescriptor {
+                    vertex_input: wgn::VertexInputDescriptor {
                         index_format: desc.index_format,
                         vertex_buffers: temp_vertex_buffers.as_ptr(),
                         vertex_buffers_count: temp_vertex_buffers.len(),
@@ -490,16 +505,16 @@ impl Device {
     pub fn create_buffer_mapped<'a, T>(
         &self,
         count: usize,
-        usage: BufferUsageFlags,
+        usage: BufferUsage,
     ) -> CreateBufferMapped<'a, T>
     where
         T: 'static + Copy,
     {
-        let type_size = std::mem::size_of::<T>() as u32;
+        let type_size = std::mem::size_of::<T>() as BufferAddress;
         assert_ne!(type_size, 0);
 
         let desc = BufferDescriptor {
-            size: (type_size * count as u32).max(1),
+            size: (type_size * count as BufferAddress).max(1),
             usage,
         };
         let mut ptr: *mut u8 = std::ptr::null_mut();
@@ -557,7 +572,7 @@ struct BufferMapReadAsyncUserData<T, F>
 where
     F: FnOnce(BufferMapAsyncResult<&[T]>),
 {
-    size: u32,
+    size: BufferAddress,
     callback: F,
     buffer_id: wgn::BufferId,
     phantom: std::marker::PhantomData<T>,
@@ -567,19 +582,19 @@ struct BufferMapWriteAsyncUserData<T, F>
 where
     F: FnOnce(BufferMapAsyncResult<&mut [T]>),
 {
-    size: u32,
+    size: BufferAddress,
     callback: F,
     buffer_id: wgn::BufferId,
     phantom: std::marker::PhantomData<T>,
 }
 
 impl Buffer {
-    pub fn map_read_async<T, F>(&self, start: u32, size: u32, callback: F)
+    pub fn map_read_async<T, F>(&self, start: BufferAddress, size: BufferAddress, callback: F)
     where
         T: 'static + Copy,
         F: FnOnce(BufferMapAsyncResult<&[T]>) + 'static,
     {
-        let type_size = std::mem::size_of::<T>() as u32;
+        let type_size = std::mem::size_of::<T>() as BufferAddress;
         assert_ne!(type_size, 0);
         assert_eq!(size % type_size, 0);
 
@@ -623,12 +638,12 @@ impl Buffer {
         );
     }
 
-    pub fn map_write_async<T, F>(&self, start: u32, size: u32, callback: F)
+    pub fn map_write_async<T, F>(&self, start: BufferAddress, size: BufferAddress, callback: F)
     where
         T: 'static + Copy,
         F: FnOnce(BufferMapAsyncResult<&mut [T]>) + 'static,
     {
-        let type_size = std::mem::size_of::<T>() as u32;
+        let type_size = std::mem::size_of::<T>() as BufferAddress;
         assert_ne!(type_size, 0);
         assert_eq!(size % type_size, 0);
 
@@ -726,8 +741,9 @@ impl CommandEncoder {
         let colors = desc
             .color_attachments
             .iter()
-            .map(|ca| RenderPassColorAttachmentDescriptor {
+            .map(|ca| wgn::RenderPassColorAttachmentDescriptor {
                 attachment: ca.attachment.id,
+                resolve_target: ca.resolve_target.map_or(ptr::null(), |v| &v.id as *const _),
                 load_op: ca.load_op,
                 store_op: ca.store_op,
                 clear_color: ca.clear_color,
@@ -772,10 +788,10 @@ impl CommandEncoder {
     pub fn copy_buffer_to_buffer(
         &mut self,
         source: &Buffer,
-        source_offset: u32,
+        source_offset: BufferAddress,
         destination: &Buffer,
-        destination_offset: u32,
-        copy_size: u32,
+        destination_offset: BufferAddress,
+        copy_size: BufferAddress,
     ) {
         wgn::wgpu_command_buffer_copy_buffer_to_buffer(
             self.id,
@@ -849,7 +865,7 @@ impl<'a> RenderPass<'a> {
         wgn::wgpu_render_pass_set_blend_color(self.id, &color);
     }
 
-    pub fn set_index_buffer(&mut self, buffer: &Buffer, offset: u32) {
+    pub fn set_index_buffer(&mut self, buffer: &Buffer, offset: BufferAddress) {
         wgn::wgpu_render_pass_set_index_buffer(self.id, buffer.id, offset);
     }
 
