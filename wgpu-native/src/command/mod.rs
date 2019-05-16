@@ -60,8 +60,8 @@ pub enum StoreOp {
 }
 
 #[repr(C)]
-pub struct RenderPassColorAttachmentDescriptor<T> {
-    pub attachment: T,
+pub struct RenderPassColorAttachmentDescriptor {
+    pub attachment: TextureViewId,
     pub resolve_target: *const TextureViewId,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
@@ -81,7 +81,7 @@ pub struct RenderPassDepthStencilAttachmentDescriptor<T> {
 
 #[repr(C)]
 pub struct RenderPassDescriptor {
-    pub color_attachments: *const RenderPassColorAttachmentDescriptor<TextureViewId>,
+    pub color_attachments: *const RenderPassColorAttachmentDescriptor,
     pub color_attachments_length: usize,
     pub depth_stencil_attachment: *const RenderPassDepthStencilAttachmentDescriptor<TextureViewId>,
 }

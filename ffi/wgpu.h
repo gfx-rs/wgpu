@@ -324,7 +324,7 @@ typedef struct {
   WGPULoadOp load_op;
   WGPUStoreOp store_op;
   WGPUColor clear_color;
-} WGPURenderPassColorAttachmentDescriptor_TextureViewId;
+} WGPURenderPassColorAttachmentDescriptor;
 
 typedef struct {
   WGPUTextureViewId attachment;
@@ -337,7 +337,7 @@ typedef struct {
 } WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId;
 
 typedef struct {
-  const WGPURenderPassColorAttachmentDescriptor_TextureViewId *color_attachments;
+  const WGPURenderPassColorAttachmentDescriptor *color_attachments;
   uintptr_t color_attachments_length;
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
