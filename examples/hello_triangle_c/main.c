@@ -223,7 +223,7 @@ int main() {
         WGPUCommandEncoderId cmd_encoder = wgpu_device_create_command_encoder(
             device, &(WGPUCommandEncoderDescriptor){.todo = 0});
 
-        WGPURenderPassColorAttachmentDescriptor_TextureViewId
+        WGPURenderPassColorAttachmentDescriptor
             color_attachments[ATTACHMENTS_LENGTH] = {
                 {
                     .attachment = next_texture.view_id,
