@@ -5,10 +5,11 @@ fn main() {
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
     });
-    let mut device = adapter.create_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
+        limits: wgpu::Limits::default(),
     });
 
     let vs_bytes = include_bytes!("shader.vert.spv");
@@ -32,10 +33,10 @@ fn main() {
             module: &vs_module,
             entry_point: "main",
         },
-        fragment_stage: wgpu::PipelineStageDescriptor {
+        fragment_stage: Some(wgpu::PipelineStageDescriptor {
             module: &fs_module,
             entry_point: "main",
-        },
+        }),
         rasterization_state: wgpu::RasterizationStateDescriptor {
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: wgpu::CullMode::None,
@@ -46,9 +47,9 @@ fn main() {
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         color_states: &[wgpu::ColorStateDescriptor {
             format: wgpu::TextureFormat::Bgra8Unorm,
-            color: wgpu::BlendDescriptor::REPLACE,
-            alpha: wgpu::BlendDescriptor::REPLACE,
-            write_mask: wgpu::ColorWriteFlags::ALL,
+            color_blend: wgpu::BlendDescriptor::REPLACE,
+            alpha_blend: wgpu::BlendDescriptor::REPLACE,
+            write_mask: wgpu::ColorWrite::ALL,
         }],
         depth_stencil_state: None,
         index_format: wgpu::IndexFormat::Uint16,
@@ -77,7 +78,7 @@ fn main() {
     let mut swap_chain = device.create_swap_chain(
         &surface,
         &wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             format: wgpu::TextureFormat::Bgra8Unorm,
             width: size.width.round() as u32,
             height: size.height.round() as u32,
@@ -112,6 +113,7 @@ fn main() {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
+                    resolve_target: None,
                     load_op: wgpu::LoadOp::Clear,
                     store_op: wgpu::StoreOp::Store,
                     clear_color: wgpu::Color::GREEN,

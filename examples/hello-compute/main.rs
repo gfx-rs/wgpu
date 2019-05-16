@@ -12,16 +12,17 @@ fn main() {
         .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
         .collect();
 
-    let size = (numbers.len() * std::mem::size_of::<u32>()) as u32;
+    let size = (numbers.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
 
     let instance = wgpu::Instance::new();
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::Default,
     });
-    let mut device = adapter.create_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
+        limits: wgpu::Limits::default(),
     });
 
     let cs_bytes = include_bytes!("shader.comp.spv");
@@ -30,23 +31,23 @@ fn main() {
     let staging_buffer = device
         .create_buffer_mapped(
             numbers.len(),
-            wgpu::BufferUsageFlags::MAP_READ
-                | wgpu::BufferUsageFlags::TRANSFER_DST
-                | wgpu::BufferUsageFlags::TRANSFER_SRC,
+            wgpu::BufferUsage::MAP_READ
+                | wgpu::BufferUsage::TRANSFER_DST
+                | wgpu::BufferUsage::TRANSFER_SRC,
         )
         .fill_from_slice(&numbers);
 
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         size,
-        usage: wgpu::BufferUsageFlags::STORAGE
-            | wgpu::BufferUsageFlags::TRANSFER_DST
-            | wgpu::BufferUsageFlags::TRANSFER_SRC,
+        usage: wgpu::BufferUsage::STORAGE
+            | wgpu::BufferUsage::TRANSFER_DST
+            | wgpu::BufferUsage::TRANSFER_SRC,
     });
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         bindings: &[wgpu::BindGroupLayoutBinding {
             binding: 0,
-            visibility: wgpu::ShaderStageFlags::COMPUTE,
+            visibility: wgpu::ShaderStage::COMPUTE,
             ty: wgpu::BindingType::StorageBuffer,
         }],
     });

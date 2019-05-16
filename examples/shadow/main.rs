@@ -189,36 +189,36 @@ impl framework::Example for Example {
         let (cube_vertex_data, cube_index_data) = create_cube();
         let cube_vertex_buf = Rc::new(
             device
-                .create_buffer_mapped(cube_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
+                .create_buffer_mapped(cube_vertex_data.len(), wgpu::BufferUsage::VERTEX)
                 .fill_from_slice(&cube_vertex_data),
         );
 
         let cube_index_buf = Rc::new(
             device
-                .create_buffer_mapped(cube_index_data.len(), wgpu::BufferUsageFlags::INDEX)
+                .create_buffer_mapped(cube_index_data.len(), wgpu::BufferUsage::INDEX)
                 .fill_from_slice(&cube_index_data),
         );
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
         let plane_vertex_buf = device
-            .create_buffer_mapped(plane_vertex_data.len(), wgpu::BufferUsageFlags::VERTEX)
+            .create_buffer_mapped(plane_vertex_data.len(), wgpu::BufferUsage::VERTEX)
             .fill_from_slice(&plane_vertex_data);
 
         let plane_index_buf = device
-            .create_buffer_mapped(plane_index_data.len(), wgpu::BufferUsageFlags::INDEX)
+            .create_buffer_mapped(plane_index_data.len(), wgpu::BufferUsage::INDEX)
             .fill_from_slice(&plane_index_data);
 
-        let entity_uniform_size = mem::size_of::<EntityUniforms>() as u32;
+        let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: entity_uniform_size,
-            usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::TRANSFER_DST,
         });
 
         let local_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 bindings: &[wgpu::BindGroupLayoutBinding {
                     binding: 0,
-                    visibility: wgpu::ShaderStageFlags::VERTEX | wgpu::ShaderStageFlags::FRAGMENT,
+                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer,
                 }],
             });
@@ -291,7 +291,7 @@ impl framework::Example for Example {
             };
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
                 size: entity_uniform_size,
-                usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::TRANSFER_DST,
             });
             entities.push(Entity {
                 mx_world: cgmath::Matrix4::from(transform),
@@ -316,25 +316,25 @@ impl framework::Example for Example {
 
         // Create other resources
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            r_address_mode: wgpu::AddressMode::ClampToEdge,
-            s_address_mode: wgpu::AddressMode::ClampToEdge,
-            t_address_mode: wgpu::AddressMode::ClampToEdge,
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            max_anisotropy: 0,
             compare_function: wgpu::CompareFunction::LessEqual,
-            border_color: wgpu::BorderColor::TransparentBlack,
         });
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: Self::SHADOW_SIZE,
-            array_size: Self::MAX_LIGHTS as u32,
+            array_layer_count: Self::MAX_LIGHTS as u32,
+            mip_level_count: 1,
+            sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::SHADOW_FORMAT,
-            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT | wgpu::TextureUsageFlags::SAMPLED,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
         });
         let shadow_view = shadow_texture.create_default_view();
 
@@ -377,27 +377,27 @@ impl framework::Example for Example {
                 target_view: shadow_target_views[1].take().unwrap(),
             },
         ];
-        let light_uniform_size = (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as u32;
+        let light_uniform_size = (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as wgpu::BufferAddress;
         let light_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: light_uniform_size,
-            usage: wgpu::BufferUsageFlags::UNIFORM
-                | wgpu::BufferUsageFlags::TRANSFER_SRC
-                | wgpu::BufferUsageFlags::TRANSFER_DST,
+            usage: wgpu::BufferUsage::UNIFORM
+                | wgpu::BufferUsage::TRANSFER_SRC
+                | wgpu::BufferUsage::TRANSFER_DST,
         });
 
         let vb_desc = wgpu::VertexBufferDescriptor {
-            stride: vertex_size as u32,
+            stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
             attributes: &[
                 wgpu::VertexAttributeDescriptor {
-                    attribute_index: 0,
                     format: wgpu::VertexFormat::Char4,
                     offset: 0,
+                    shader_location: 0,
                 },
                 wgpu::VertexAttributeDescriptor {
-                    attribute_index: 1,
                     format: wgpu::VertexFormat::Char4,
                     offset: 4 * 1,
+                    shader_location: 1,
                 },
             ],
         };
@@ -408,7 +408,7 @@ impl framework::Example for Example {
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     bindings: &[wgpu::BindGroupLayoutBinding {
                         binding: 0, // global
-                        visibility: wgpu::ShaderStageFlags::VERTEX,
+                        visibility: wgpu::ShaderStage::VERTEX,
                         ty: wgpu::BindingType::UniformBuffer,
                     }],
                 });
@@ -416,10 +416,10 @@ impl framework::Example for Example {
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
             });
 
-            let uniform_size = mem::size_of::<ShadowUniforms>() as u32;
+            let uniform_size = mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress;
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
                 size: uniform_size,
-                usage: wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::TRANSFER_DST,
             });
 
             // Create bind group
@@ -452,10 +452,10 @@ impl framework::Example for Example {
                     module: &vs_module,
                     entry_point: "main",
                 },
-                fragment_stage: wgpu::PipelineStageDescriptor {
+                fragment_stage: Some(wgpu::PipelineStageDescriptor {
                     module: &fs_module,
                     entry_point: "main",
-                },
+                }),
                 rasterization_state: wgpu::RasterizationStateDescriptor {
                     front_face: wgpu::FrontFace::Cw,
                     cull_mode: wgpu::CullMode::Back,
@@ -493,24 +493,24 @@ impl framework::Example for Example {
                     bindings: &[
                         wgpu::BindGroupLayoutBinding {
                             binding: 0, // global
-                            visibility: wgpu::ShaderStageFlags::VERTEX
-                                | wgpu::ShaderStageFlags::FRAGMENT,
+                            visibility: wgpu::ShaderStage::VERTEX
+                                | wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::UniformBuffer,
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 1, // lights
-                            visibility: wgpu::ShaderStageFlags::VERTEX
-                                | wgpu::ShaderStageFlags::FRAGMENT,
+                            visibility: wgpu::ShaderStage::VERTEX
+                                | wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::UniformBuffer,
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 2,
-                            visibility: wgpu::ShaderStageFlags::FRAGMENT,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::SampledTexture,
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 3,
-                            visibility: wgpu::ShaderStageFlags::FRAGMENT,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::Sampler,
                         },
                     ],
@@ -524,11 +524,11 @@ impl framework::Example for Example {
                 proj: *mx_total.as_ref(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
-            let uniform_size = mem::size_of::<ForwardUniforms>() as u32;
+            let uniform_size = mem::size_of::<ForwardUniforms>() as wgpu::BufferAddress;
             let uniform_buf = device
                 .create_buffer_mapped(
                     1,
-                    wgpu::BufferUsageFlags::UNIFORM | wgpu::BufferUsageFlags::TRANSFER_DST,
+                    wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::TRANSFER_DST,
                 )
                 .fill_from_slice(&[forward_uniforms]);
 
@@ -579,10 +579,10 @@ impl framework::Example for Example {
                     module: &vs_module,
                     entry_point: "main",
                 },
-                fragment_stage: wgpu::PipelineStageDescriptor {
+                fragment_stage: Some(wgpu::PipelineStageDescriptor {
                     module: &fs_module,
                     entry_point: "main",
-                },
+                }),
                 rasterization_state: wgpu::RasterizationStateDescriptor {
                     front_face: wgpu::FrontFace::Cw,
                     cull_mode: wgpu::CullMode::Back,
@@ -593,9 +593,9 @@ impl framework::Example for Example {
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
                 color_states: &[wgpu::ColorStateDescriptor {
                     format: sc_desc.format,
-                    color: wgpu::BlendDescriptor::REPLACE,
-                    alpha: wgpu::BlendDescriptor::REPLACE,
-                    write_mask: wgpu::ColorWriteFlags::ALL,
+                    color_blend: wgpu::BlendDescriptor::REPLACE,
+                    alpha_blend: wgpu::BlendDescriptor::REPLACE,
+                    write_mask: wgpu::ColorWrite::ALL,
                 }],
                 depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                     format: Self::DEPTH_FORMAT,
@@ -624,10 +624,12 @@ impl framework::Example for Example {
                 height: sc_desc.height,
                 depth: 1,
             },
-            array_size: 1,
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         });
 
         Example {
@@ -650,7 +652,7 @@ impl framework::Example for Example {
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let mx_ref: &[f32; 16] = mx_total.as_ref();
             let temp_buf = device
-                .create_buffer_mapped(16, wgpu::BufferUsageFlags::TRANSFER_SRC)
+                .create_buffer_mapped(16, wgpu::BufferUsage::TRANSFER_SRC)
                 .fill_from_slice(mx_ref);
 
             let mut encoder =
@@ -665,10 +667,12 @@ impl framework::Example for Example {
                 height: sc_desc.height,
                 depth: 1,
             },
-            array_size: 1,
+            array_layer_count: 1,
+            mip_level_count: 1,
+            sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
-            usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         });
         self.forward_depth = depth_texture.create_default_view();
     }
@@ -678,9 +682,9 @@ impl framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
         {
-            let size = mem::size_of::<EntityUniforms>() as u32;
+            let size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
             let temp_buf_data = device
-                .create_buffer_mapped(self.entities.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
+                .create_buffer_mapped(self.entities.len(), wgpu::BufferUsage::TRANSFER_SRC);
 
             for (i, entity) in self.entities.iter_mut().enumerate() {
                 if entity.rotation_speed != 0.0 {
@@ -704,7 +708,7 @@ impl framework::Example for Example {
             for (i, entity) in self.entities.iter().enumerate() {
                 encoder.copy_buffer_to_buffer(
                     &temp_buf,
-                    i as u32 * size,
+                    i as wgpu::BufferAddress * size,
                     &entity.uniform_buf,
                     0,
                     size,
@@ -714,9 +718,9 @@ impl framework::Example for Example {
 
         if self.lights_are_dirty {
             self.lights_are_dirty = false;
-            let size = (self.lights.len() * mem::size_of::<LightRaw>()) as u32;
+            let size = (self.lights.len() * mem::size_of::<LightRaw>()) as wgpu::BufferAddress;
             let temp_buf_data = device
-                .create_buffer_mapped(self.lights.len(), wgpu::BufferUsageFlags::TRANSFER_SRC);
+                .create_buffer_mapped(self.lights.len(), wgpu::BufferUsage::TRANSFER_SRC);
             for (i, light) in self.lights.iter().enumerate() {
                 temp_buf_data.data[i] = light.to_raw();
             }
@@ -734,7 +738,7 @@ impl framework::Example for Example {
             // let's just copy it over to the shadow uniform buffer.
             encoder.copy_buffer_to_buffer(
                 &self.light_uniform_buf,
-                (i * mem::size_of::<LightRaw>()) as u32,
+                (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
                 &self.shadow_pass.uniform_buf,
                 0,
                 64,
@@ -768,6 +772,7 @@ impl framework::Example for Example {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
+                    resolve_target: None,
                     load_op: wgpu::LoadOp::Clear,
                     store_op: wgpu::StoreOp::Store,
                     clear_color: wgpu::Color {

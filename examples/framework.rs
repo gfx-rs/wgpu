@@ -54,10 +54,11 @@ pub fn run<E: Example>(title: &str) {
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
     });
-    let mut device = adapter.create_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
+        limits: wgpu::Limits::default(),
     });
 
     info!("Initializing the window...");
@@ -71,7 +72,7 @@ pub fn run<E: Example>(title: &str) {
 
     let surface = instance.create_surface(&window);
     let mut sc_desc = wgpu::SwapChainDescriptor {
-        usage: wgpu::TextureUsageFlags::OUTPUT_ATTACHMENT,
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         format: wgpu::TextureFormat::Bgra8Unorm,
         width: size.width.round() as u32,
         height: size.height.round() as u32,
