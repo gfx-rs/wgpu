@@ -47,3 +47,20 @@ pub extern "C" fn wgpu_server_process(server: &Server) {
         }
     }
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_loop(server: *mut Server) {
+    assert!(!server.is_null());
+    log::info!("WGPU server loop started");
+    while let Ok(message) = unsafe { server.as_ref() }
+        .unwrap().channel.recv()
+    {
+        match process(message) {
+            ControlFlow::Continue => {}
+            ControlFlow::Terminate => break,
+        }
+    }
+    // drop the server
+    log::info!("WGPU server loop finished");
+    let _ = unsafe { Box::from_raw(server) };
+}
