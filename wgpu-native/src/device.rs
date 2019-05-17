@@ -1213,7 +1213,7 @@ pub extern "C" fn wgpu_queue_submit(
         let mut device_guard = HUB.devices.write();
         let device = &mut device_guard[queue_id];
         let mut trackers = device.trackers.lock();
-        let mut swap_chain_links = Vec::new();
+        let mut wait_semaphores = Vec::new();
 
         let submit_index = 1 + device
             .life_guard
@@ -1232,7 +1232,20 @@ pub extern "C" fn wgpu_queue_submit(
             // finish all the command buffers first
             for &cmb_id in command_buffer_ids {
                 let comb = &mut command_buffer_guard[cmb_id];
-                swap_chain_links.extend(comb.swap_chain_links.drain(..));
+                for link in comb.swap_chain_links.drain(..) {
+                    let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref().unwrap();
+                    let frame = &swap_chain.frames[link.image_index as usize];
+                    if frame.need_waiting.swap(false, Ordering::AcqRel) {
+                        assert_eq!(frame.acquired_epoch, Some(link.epoch),
+                            "{}. Image index {} with epoch {} != current epoch {:?}",
+                            "Attempting to rendering to a swapchain output that has already been presented",
+                            link.image_index, link.epoch, frame.acquired_epoch);
+                        wait_semaphores.push((
+                            &frame.sem_available,
+                            hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                        ));
+                    }
+                }
 
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
@@ -1286,24 +1299,6 @@ pub extern "C" fn wgpu_queue_submit(
         let fence = device.raw.create_fence(false).unwrap();
         {
             let command_buffer_guard = HUB.command_buffers.read();
-
-            let wait_semaphores = swap_chain_links.into_iter().flat_map(|link| {
-                let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref()?;
-                let frame = &swap_chain.frames[link.image_index as usize];
-                if frame.need_waiting.swap(false, Ordering::Relaxed) {
-                    assert_eq!(frame.acquired_epoch, Some(link.epoch),
-                        "{}. Image index {} with epoch {} != current epoch {:?}",
-                        "Attempting to rendering to a swapchain output that has already been presented",
-                        link.image_index, link.epoch, frame.acquired_epoch);
-                    Some((
-                        &frame.sem_available,
-                        hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                    ))
-                } else {
-                    None
-                }
-            });
-
             let submission =
                 hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
                     //TODO: may `OneShot` be enough?
