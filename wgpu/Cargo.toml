@@ -20,6 +20,7 @@ metal = ["wgn/gfx-backend-metal"]
 dx11 = ["wgn/gfx-backend-dx11"]
 dx12 = ["wgn/gfx-backend-dx12"]
 vulkan = ["wgn/gfx-backend-vulkan"]
+gl = ["wgn/gfx-backend-gl"]
 
 [dependencies]
 #TODO: only depend on the published version
