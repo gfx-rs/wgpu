@@ -4,9 +4,10 @@ use crate::{
     AdapterHandle,
     AdapterId,
     DeviceHandle,
-    InstanceId,
     SurfaceHandle,
 };
+#[cfg(not(feature = "gfx-backend-gl"))]
+use crate::{InstanceId};
 #[cfg(feature = "local")]
 use crate::{DeviceId, SurfaceId};
 
@@ -63,18 +64,19 @@ pub struct DeviceDescriptor {
     pub limits: Limits,
 }
 
+#[cfg(not(feature = "gfx-backend-gl"))]
 pub fn create_instance() -> ::back::Instance {
     ::back::Instance::create("wgpu", 1)
 }
 
-#[cfg(feature = "local")]
+#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
     let inst = create_instance();
     HUB.instances.register_local(inst)
 }
 
-#[cfg(feature = "window-winit")]
+#[cfg(all(feature = "window-winit", not(feature = "gfx-backend-gl")))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
@@ -85,6 +87,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
     HUB.surfaces.register_local(surface)
 }
 
+#[cfg(not(feature = "gfx-backend-gl"))]
 #[allow(unused_variables)]
 pub fn instance_create_surface_from_xlib(
     instance_id: InstanceId,
@@ -98,7 +101,7 @@ pub fn instance_create_surface_from_xlib(
     SurfaceHandle::new(HUB.instances.read()[instance_id].create_surface_from_xlib(display, window))
 }
 
-#[cfg(feature = "local")]
+#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_xlib(
     instance_id: InstanceId,
@@ -109,6 +112,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_xlib(
     HUB.surfaces.register_local(surface)
 }
 
+#[cfg(not(feature = "gfx-backend-gl"))]
 #[allow(unused_variables)]
 pub fn instance_create_surface_from_macos_layer(
     instance_id: InstanceId,
@@ -124,6 +128,7 @@ pub fn instance_create_surface_from_macos_layer(
     )
 }
 
+#[cfg(not(feature = "gfx-backend-gl"))]
 #[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
@@ -134,6 +139,7 @@ pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
     HUB.surfaces.register_local(surface)
 }
 
+#[cfg(not(feature = "gfx-backend-gl"))]
 #[allow(unused_variables)]
 pub fn instance_create_surface_from_windows_hwnd(
     instance_id: InstanceId,
@@ -157,6 +163,7 @@ pub fn instance_create_surface_from_windows_hwnd(
     SurfaceHandle::new(raw)
 }
 
+#[cfg(not(feature = "gfx-backend-gl"))]
 #[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
@@ -168,11 +175,12 @@ pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
     HUB.surfaces.register_local(surface)
 }
 
-pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -> AdapterHandle {
-    let instance_guard = HUB.instances.read();
-    let instance = &instance_guard[instance_id];
+fn get_adapter(
+    adapters: Vec<hal::Adapter<back::Backend>>,
+    desc: &AdapterDescriptor
+) -> AdapterHandle {
     let (mut low, mut high, mut other) = (None, None, None);
-    for adapter in instance.enumerate_adapters() {
+    for adapter in adapters {
         match adapter.info.device_type {
             hal::adapter::DeviceType::IntegratedGpu => low = Some(adapter),
             hal::adapter::DeviceType::DiscreteGpu => high = Some(adapter),
@@ -186,16 +194,43 @@ pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -
     };
     some
         .or(other)
-        .expect("No adapters found. Please enable the feature for one of the graphics backends: vulkan, metal, dx12, dx11")
+        .expect("No adapters found. Please enable the feature for one of the graphics backends: vulkan, metal, dx12, dx11, gl")
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "gfx-backend-gl"))]
+pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -> AdapterHandle {
+    let instance_guard = HUB.instances.read();
+    let instance = &instance_guard[instance_id];
+    get_adapter(instance.enumerate_adapters(), desc)
+}
+
+#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_get_adapter(
     instance_id: InstanceId,
     desc: &AdapterDescriptor,
 ) -> AdapterId {
     let adapter = instance_get_adapter(instance_id, desc);
+    info!("Adapter {:?}", adapter.info);
+    HUB.adapters.register_local(adapter)
+}
+
+#[cfg(all(feature = "local", feature = "gfx-backend-gl"))]
+pub fn wgpu_gl_create_surface(windowed_context: back::glutin::WindowedContext) -> SurfaceId {
+    let raw = back::Surface::from_window(windowed_context);
+    let surface = SurfaceHandle::new(raw);
+    HUB.surfaces.register_local(surface)
+}
+
+#[cfg(feature = "gfx-backend-gl")]
+#[no_mangle]
+pub extern "C" fn wgpu_gl_surface_get_adapter(
+    surface_id: SurfaceId,
+    desc: &AdapterDescriptor
+) -> AdapterId {
+    let surface_guard = HUB.surfaces.read();
+    let surface = &surface_guard[surface_id];
+    let adapter = get_adapter(surface.raw.enumerate_adapters(), desc);
     info!("Adapter {:?}", adapter.info);
     HUB.adapters.register_local(adapter)
 }
