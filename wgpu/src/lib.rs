@@ -75,7 +75,6 @@ struct Temp {
 ///
 /// An `Instance` represents the entire context of a running `wgpu` instance. The `Instance`
 /// allows the querying of [`Adapter`] objects and the creation of [`Surface`] objects.
-#[cfg(not(feature = "gl"))]
 pub struct Instance {
     id: wgn::InstanceId,
 }
@@ -457,9 +456,9 @@ where
     }
 }
 
-#[cfg(not(feature = "gl"))]
 impl Instance {
     /// Create a new `Instance` object.
+    #[cfg(not(feature = "gl"))]
     pub fn new() -> Self {
         Instance {
             id: wgn::wgpu_create_instance(),
@@ -475,6 +474,13 @@ impl Instance {
     ///
     /// Panics if there are no available adapters. This will occur if none of the graphics backends
     /// are enabled.
+    #[cfg(feature = "gl")]
+    pub fn new(windowed_context: wgn::glutin::WindowedContext) -> Self {
+        Instance {
+            id: wgn::wgpu_create_gl_instance(windowed_context)
+        }
+    }
+
     pub fn get_adapter(&self, desc: &AdapterDescriptor) -> Adapter {
         Adapter {
             id: wgn::wgpu_instance_get_adapter(self.id, desc),
@@ -482,9 +488,17 @@ impl Instance {
     }
 
     /// Creates a surface from a window.
+    #[cfg(not(feature = "gl"))]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         Surface {
             id: wgn::wgpu_instance_create_surface_from_winit(self.id, window),
+        }
+    }
+
+    #[cfg(feature = "gl")]
+    pub fn get_surface(&self) -> Surface {
+        Surface {
+            id: wgn::wgpu_instance_get_gl_surface(self.id),
         }
     }
 
@@ -492,21 +506,6 @@ impl Instance {
     pub fn create_surface_with_metal_layer(&self, window: *mut std::ffi::c_void) -> Surface {
         Surface {
             id: wgn::wgpu_instance_create_surface_from_macos_layer(self.id, window),
-        }
-    }
-}
-
-#[cfg(feature = "gl")]
-impl Surface {
-    pub fn create(windowed_context: wgn::glutin::WindowedContext) -> Surface {
-        Surface {
-            id: wgn::wgpu_gl_create_surface(windowed_context)
-        }
-    }
-
-    pub fn get_adapter(&self, desc: &AdapterDescriptor) -> Adapter {
-        Adapter {
-            id: wgn::wgpu_gl_surface_get_adapter(self.id, desc),
         }
     }
 }

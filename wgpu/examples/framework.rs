@@ -54,7 +54,7 @@ pub fn run<E: Example>(title: &str) {
     info!("Initializing the window...");
 
     #[cfg(not(feature = "gl"))]
-    let (_instance, _window, hidpi_factor, size, surface, adapter) = {
+    let (_window, instance, hidpi_factor, size, surface) = {
         use wgpu::winit::Window;
 
         let instance = wgpu::Instance::new();
@@ -69,15 +69,11 @@ pub fn run<E: Example>(title: &str) {
 
         let surface = instance.create_surface(&window);
 
-        let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
-            power_preference: wgpu::PowerPreference::LowPower,
-        });
-
-        (instance, window, hidpi_factor, size, surface, adapter)
+        (window, instance, hidpi_factor, size, surface)
     };
 
     #[cfg(feature = "gl")]
-    let (hidpi_factor, size, surface, adapter) = {
+    let (instance, hidpi_factor, size, surface) = {
         let wb = wgpu::winit::WindowBuilder::new();
         let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
         let context = wgpu::glutin::WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
@@ -90,15 +86,15 @@ pub fn run<E: Example>(title: &str) {
             .unwrap()
             .to_physical(hidpi_factor);
 
-        let surface = wgpu::Surface::create(context);
+        let instance = wgpu::Instance::new(context);
+        let surface = instance.get_surface();
 
-        let adapter = surface.get_adapter(&wgpu::AdapterDescriptor {
-            power_preference: wgpu::PowerPreference::LowPower,
-        });
-
-        (hidpi_factor, size, surface, adapter)
+        (instance, hidpi_factor, size, surface)
     };
 
+    let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
+        power_preference: wgpu::PowerPreference::LowPower,
+    });
 
     let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
