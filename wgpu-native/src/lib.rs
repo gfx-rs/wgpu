@@ -244,6 +244,8 @@ macro_rules! typed_id {
 define_id!(InstanceId);
 #[cfg(not(feature = "gfx-backend-gl"))]
 type InstanceHandle = back::Instance;
+#[cfg(feature = "gfx-backend-gl")]
+pub type InstanceId = SurfaceId;
 
 define_id!(AdapterId);
 type AdapterHandle = hal::Adapter<back::Backend>;
