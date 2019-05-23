@@ -140,7 +140,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     pass_id: RenderPassId,
     index: u32,
     bind_group_id: BindGroupId,
-    offsets_ptr: *const u32,
+    offsets_ptr: *const BufferAddress,
     offsets_count: usize,
 ) {
     let mut pass_guard = HUB.render_passes.write();
@@ -169,7 +169,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
                 &&pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
                 bind_groups,
-                offsets,
+                offsets.iter().map(|&off| off as hal::command::DescriptorSetOffset),
             );
         }
     };
@@ -225,7 +225,7 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
 pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     pass_id: RenderPassId,
     buffer_ptr: *const BufferId,
-    offset_ptr: *const u32,
+    offset_ptr: *const BufferAddress,
     count: usize,
 ) {
     let mut pass_guard = HUB.render_passes.write();
@@ -244,7 +244,7 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     let buffers = buffers
         .iter()
         .map(|&id| &buffer_guard[id].raw)
-        .zip(offsets.iter().map(|&off| off as u64));
+        .zip(offsets.iter().cloned());
 
     unsafe {
         pass.raw.bind_vertex_buffers(0, buffers);

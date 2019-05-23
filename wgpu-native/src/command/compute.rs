@@ -3,6 +3,7 @@ use crate::{
     hub::HUB,
     track::{Stitch, TrackerSet},
     BindGroupId,
+    BufferAddress,
     CommandBuffer,
     CommandBufferId,
     ComputePassId,
@@ -53,7 +54,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     pass_id: ComputePassId,
     index: u32,
     bind_group_id: BindGroupId,
-    offsets_ptr: *const u32,
+    offsets_ptr: *const BufferAddress,
     offsets_count: usize,
 ) {
     let mut pass_guard = HUB.compute_passes.write();
@@ -92,7 +93,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
                 &pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
                 bind_groups,
-                offsets,
+                offsets.iter().map(|&off| off as hal::command::DescriptorSetOffset),
             );
         }
     };
