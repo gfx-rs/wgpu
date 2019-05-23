@@ -382,7 +382,7 @@ pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color:
     pass.blend_color_status = OptionalState::Set;
 
     unsafe {
-        pass.raw.set_blend_constants(conv::map_color(color));
+        pass.raw.set_blend_constants(conv::map_color_f32(color));
     }
 }
 

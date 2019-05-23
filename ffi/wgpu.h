@@ -1,6 +1,6 @@
 #define WGPU_LOCAL
 
-/* Generated with cbindgen:0.8.6 */
+/* Generated with cbindgen:0.8.7 */
 
 #include <stdarg.h>
 #include <stdbool.h>

@@ -553,8 +553,16 @@ pub fn map_load_store_ops(
     }
 }
 
-pub fn map_color(color: &Color) -> hal::pso::ColorValue {
+pub fn map_color_f32(color: &Color) -> hal::pso::ColorValue {
     [color.r, color.g, color.b, color.a]
+}
+
+pub fn map_color_i32(color: &Color) -> [i32; 4] {
+    [color.r as i32, color.g as i32, color.b as i32, color.a as i32]
+}
+
+pub fn map_color_u32(color: &Color) -> [u32; 4] {
+    [color.r as u32, color.g as u32, color.b as u32, color.a as u32]
 }
 
 pub fn map_filter(filter: resource::FilterMode) -> hal::image::Filter {

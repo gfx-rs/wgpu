@@ -263,7 +263,7 @@ pub fn command_encoder_begin_render_pass(
     };
 
     let mut render_pass_cache = device.render_passes.lock();
-    let render_pass = match render_pass_cache.entry(rp_key) {
+    let render_pass = match render_pass_cache.entry(rp_key.clone()) {
         Entry::Occupied(e) => e.into_mut(),
         Entry::Vacant(e) => {
             let color_ids = [
@@ -329,14 +329,42 @@ pub fn command_encoder_begin_render_pass(
 
     let clear_values = color_attachments
         .iter()
-        .map(|at| {
-            //TODO: integer types?
-            let value = hal::command::ClearColor::Float(conv::map_color(&at.clear_color));
-            hal::command::ClearValueRaw::from(hal::command::ClearValue::Color(value))
+        .zip(&rp_key.colors)
+        .flat_map(|(at, key)| {
+            match at.load_op {
+                LoadOp::Load => None,
+                LoadOp::Clear => {
+                    use hal::format::ChannelType;
+                    //TODO: validate sign/unsign and normalized ranges of the color values
+                    let value = match key.format.unwrap().base_format().1 {
+                        ChannelType::Unorm |
+                        ChannelType::Snorm |
+                        ChannelType::Ufloat |
+                        ChannelType::Sfloat |
+                        ChannelType::Uscaled |
+                        ChannelType::Sscaled |
+                        ChannelType::Srgb => {
+                            hal::command::ClearColor::Float(conv::map_color_f32(&at.clear_color))
+                        }
+                        ChannelType::Sint => {
+                            hal::command::ClearColor::Int(conv::map_color_i32(&at.clear_color))
+                        }
+                        ChannelType::Uint => {
+                            hal::command::ClearColor::Uint(conv::map_color_u32(&at.clear_color))
+                        }
+                    };
+                    Some(hal::command::ClearValueRaw::from(hal::command::ClearValue::Color(value)))
+                }
+            }
         })
-        .chain(depth_stencil_attachment.map(|at| {
-            let value = hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
-            hal::command::ClearValueRaw::from(hal::command::ClearValue::DepthStencil(value))
+        .chain(depth_stencil_attachment.and_then(|at| {
+            match (at.depth_load_op, at.stencil_load_op) {
+                (LoadOp::Load, LoadOp::Load) => None,
+                (LoadOp::Clear, _) | (_, LoadOp::Clear) => {
+                    let value = hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
+                    Some(hal::command::ClearValueRaw::from(hal::command::ClearValue::DepthStencil(value)))
+                }
+            }
         }));
 
     unsafe {
