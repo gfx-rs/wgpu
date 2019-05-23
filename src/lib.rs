@@ -315,7 +315,7 @@ pub struct RenderPipelineDescriptor<'a> {
     /// The effect of draw calls on the color aspect of the output target.
     pub color_states: &'a [ColorStateDescriptor],
 
-    /// The effect of draw calls on the depth and stencil aspects of the target surface, if any.
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
 
     /// The format of any index buffers used with this pipeline.
