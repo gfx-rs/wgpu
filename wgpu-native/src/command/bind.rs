@@ -1,4 +1,4 @@
-use crate::{BindGroupHandle, BindGroupId, BindGroupLayoutId, PipelineLayoutId, Stored};
+use crate::{BindGroupHandle, BindGroupId, BindGroupLayoutId, BufferAddress, PipelineLayoutId, Stored};
 
 use log::trace;
 
@@ -50,7 +50,7 @@ impl BindGroupEntry {
         &mut self,
         bind_group_id: BindGroupId,
         bind_group: &BindGroupHandle,
-        offsets: &[u32],
+        offsets: &[BufferAddress],
     ) -> Provision {
         let was_compatible = match self.provided {
             Some(BindGroupPair {
@@ -140,7 +140,7 @@ impl Binder {
         index: usize,
         bind_group_id: BindGroupId,
         bind_group: &BindGroupHandle,
-        offsets: &[u32],
+        offsets: &[BufferAddress],
     ) -> Option<(PipelineLayoutId, impl 'a + Iterator<Item = BindGroupId>)> {
         trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         match self.entries[index].provide(bind_group_id, bind_group, offsets) {
