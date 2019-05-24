@@ -10,7 +10,7 @@
   - fixed vertex format mapping
   - fixed building with "empty" backend on Windows
   - bumped the default descriptor pool size
-  - fixed host mapping aligments
+  - fixed host mapping alignments
   - validating the uniform buffer offset
 
 ## v0.2 (06-03-2019)
