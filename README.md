@@ -1,4 +1,4 @@
-This is an active Github mirror of the WebGPU native implementation in Rust, which now lives in [Mozilla-central](https://hg.mozilla.org/mozilla-central). Issues and pull requests are accepted, but we merge them in m-c manually and then sync to Github instead of landing directly here.
+This is an active GitHub mirror of the WebGPU native implementation in Rust, which now lives in [Mozilla-central](https://hg.mozilla.org/mozilla-central). Issues and pull requests are accepted, but we merge them in m-c manually and then sync to GitHub instead of landing directly here.
 
 ---
 # WebGPU
