@@ -17,8 +17,6 @@ use crate::{
     DeviceId,
     Epoch,
     Index,
-    InstanceHandle,
-    InstanceId,
     PipelineLayoutHandle,
     PipelineLayoutId,
     RenderPassHandle,
@@ -37,6 +35,8 @@ use crate::{
     TextureViewId,
     TypedId,
 };
+#[cfg(not(feature = "gfx-backend-gl"))]
+use crate::{InstanceHandle, InstanceId};
 use lazy_static::lazy_static;
 #[cfg(feature = "local")]
 use parking_lot::Mutex;
@@ -180,7 +180,9 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
 
 #[derive(Default)]
 pub struct Hub {
+    #[cfg(not(feature = "gfx-backend-gl"))]
     pub instances: Arc<Registry<InstanceHandle, InstanceId>>,
+
     pub surfaces: Arc<Registry<SurfaceHandle, SurfaceId>>,
     pub adapters: Arc<Registry<AdapterHandle, AdapterId>>,
     pub devices: Arc<Registry<DeviceHandle, DeviceId>>,

@@ -10,12 +10,15 @@ extern crate gfx_backend_dx12 as back;
     feature = "gfx-backend-dx11",
     feature = "gfx-backend-dx12",
     feature = "gfx-backend-metal",
+    feature = "gfx-backend-gl",
 )))]
 extern crate gfx_backend_empty as back;
 #[cfg(feature = "gfx-backend-metal")]
 extern crate gfx_backend_metal as back;
 #[cfg(feature = "gfx-backend-vulkan")]
 extern crate gfx_backend_vulkan as back;
+#[cfg(feature = "gfx-backend-gl")]
+extern crate gfx_backend_gl as back;
 
 mod binding_model;
 mod command;
@@ -39,6 +42,9 @@ pub use self::resource::*;
 pub use self::swap_chain::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "gfx-backend-gl")]
+pub use back::glutin;
 
 use std::{
     os::raw::c_char,
@@ -234,8 +240,12 @@ macro_rules! typed_id {
     };
 }
 
+#[cfg(not(feature = "gfx-backend-gl"))]
 define_id!(InstanceId);
+#[cfg(not(feature = "gfx-backend-gl"))]
 type InstanceHandle = back::Instance;
+#[cfg(feature = "gfx-backend-gl")]
+pub type InstanceId = SurfaceId;
 
 define_id!(AdapterId);
 type AdapterHandle = hal::Adapter<back::Backend>;
