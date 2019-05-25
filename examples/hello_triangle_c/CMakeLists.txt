@@ -3,13 +3,20 @@ cmake_minimum_required(VERSION 3.11b)
 project(hello_triangle)
 
 set(TARGET_NAME hello_triangle)
-
+set(feature-native)
 add_executable(hello_triangle main.c)
 
 if(MSVC)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_WINDOWS)
     target_compile_options(${TARGET_NAME} PRIVATE /W4)
     set(GLFW_LIBRARY glfw3)
+
+    target_link_libraries(${TARGET_NAME} userenv ws2_32 Dwmapi)
+    
+    if ("${feature-native}" STREQUAL "dx12")
+        target_link_libraries(${TARGET_NAME} d3dcompiler D3D12 DXGI)
+    endif()
+
 elseif(APPLE)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_MACOS)
     set(OS_LIBRARIES "-framework Cocoa" "-framework CoreVideo" "-framework IOKit" "-framework QuartzCore")
