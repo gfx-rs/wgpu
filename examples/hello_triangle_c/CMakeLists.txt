@@ -21,7 +21,7 @@ else(MSVC)
     set(GLFW_LIBRARY glfw)
 endif(MSVC)
 
-find_package(glfw3)
+find_package(glfw3 REQUIRED)
 
 find_library(WGPU_LIBRARY wgpu_native
     HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../../target/debug"
