@@ -465,6 +465,13 @@ impl Instance {
         }
     }
 
+    #[cfg(feature = "gl")]
+    pub fn new(windowed_context: wgn::glutin::WindowedContext) -> Self {
+        Instance {
+            id: wgn::wgpu_create_gl_instance(windowed_context)
+        }
+    }
+
     /// Retrieves an [`Adapter`] which matches the given descriptor.
     ///
     /// If there are no available adapters matching `desc`, this function will return another
@@ -474,13 +481,6 @@ impl Instance {
     ///
     /// Panics if there are no available adapters. This will occur if none of the graphics backends
     /// are enabled.
-    #[cfg(feature = "gl")]
-    pub fn new(windowed_context: wgn::glutin::WindowedContext) -> Self {
-        Instance {
-            id: wgn::wgpu_create_gl_instance(windowed_context)
-        }
-    }
-
     pub fn get_adapter(&self, desc: &AdapterDescriptor) -> Adapter {
         Adapter {
             id: wgn::wgpu_instance_get_adapter(self.id, desc),
