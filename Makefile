@@ -71,7 +71,7 @@ ffi/wgpu-remote.h:  wgpu-remote/cbindgen.toml $(wildcard wgpu-native/**/*.rs wgp
 	rustup run nightly cbindgen wgpu-remote >$(FFI_DIR)/wgpu-remote.h
 
 examples-native: lib-native $(FFI_DIR)/wgpu.h examples/hello_triangle_c/main.c
-	cd examples/hello_triangle_c && $(CREATE_BUILD_DIR) && cd build && cmake .. && make
+	cd examples/hello_triangle_c && $(CREATE_BUILD_DIR) && cd build && cmake .. -DBACKEND=$(FEATURE_RUST) && make
 
 examples-remote: lib-remote $(FFI_DIR)/wgpu-remote.h examples/hello_remote_c/main.c
 	cd examples/hello_remote_c && $(CREATE_BUILD_DIR) && cd build && cmake .. && make
