@@ -44,7 +44,7 @@ use back::Backend;
 use hal::{command::RawCommandBuffer, Device as _};
 use log::trace;
 
-use std::{collections::hash_map::Entry, iter, slice, thread::ThreadId};
+use std::{collections::hash_map::Entry, iter, mem, slice, thread::ThreadId};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -426,12 +426,13 @@ pub fn command_encoder_begin_compute_pass(
     let cmb = &mut cmb_guard[command_encoder_id];
 
     let raw = cmb.raw.pop().unwrap();
+    let trackers = mem::replace(&mut cmb.trackers, TrackerSet::new());
     let stored = Stored {
         value: command_encoder_id,
         ref_count: cmb.life_guard.ref_count.clone(),
     };
 
-    ComputePass::new(raw, stored)
+    ComputePass::new(raw, stored, trackers)
 }
 
 #[cfg(feature = "local")]
