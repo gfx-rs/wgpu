@@ -99,7 +99,8 @@ impl<B: hal::Backend> CommandAllocator<B> {
         pool.available.pop().unwrap()
     }
 
-    pub fn after_submit(&self, cmd_buf: CommandBuffer<B>, submit_index: SubmissionIndex) {
+    pub fn after_submit(&self, mut cmd_buf: CommandBuffer<B>, submit_index: SubmissionIndex) {
+        cmd_buf.trackers.clear();
         cmd_buf
             .life_guard
             .submission_index

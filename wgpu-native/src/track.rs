@@ -128,6 +128,12 @@ impl TrackerSet {
         }
     }
 
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.textures.clear();
+        self.views.clear();
+    }
+
     pub fn consume_by_extend(&mut self, other: &Self) {
         self.buffers.consume_by_extend(&other.buffers).unwrap();
         self.textures.consume_by_extend(&other.textures).unwrap();
@@ -280,6 +286,10 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
 }
 
 impl<I: TypedId + Copy, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+    fn clear(&mut self) {
+        self.map.clear();
+    }
+
     fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, I>,
