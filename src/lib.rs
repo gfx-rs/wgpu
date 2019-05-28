@@ -1063,7 +1063,7 @@ impl CommandEncoder {
 
 impl<'a> RenderPass<'a> {
     /// Sets the active bind group for a given bind group index.
-    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[u32]) {
+    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[BufferAddress]) {
         wgn::wgpu_render_pass_set_bind_group(
             self.id,
             index,
@@ -1096,8 +1096,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// Each element of `buffer_pairs` describes a vertex buffer and an offset in bytes into that
     /// buffer. The offset must be aligned to a multiple of 4 bytes.
-    // TODO: buffer_pairs should be a &[(&Buffer, BufferAddress)]
-    pub fn set_vertex_buffers(&mut self, buffer_pairs: &[(&Buffer, u32)]) {
+    pub fn set_vertex_buffers(&mut self, buffer_pairs: &[(&Buffer, BufferAddress)]) {
         let mut buffers = Vec::new();
         let mut offsets = Vec::new();
         for &(buffer, offset) in buffer_pairs {
@@ -1156,7 +1155,7 @@ impl<'a> Drop for RenderPass<'a> {
 
 impl<'a> ComputePass<'a> {
     /// Sets the active bind group for a given bind group index.
-    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[u32]) {
+    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[BufferAddress]) {
         wgn::wgpu_compute_pass_set_bind_group(
             self.id,
             index,
