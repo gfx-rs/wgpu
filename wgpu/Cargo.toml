@@ -23,7 +23,7 @@ vulkan = ["wgn/gfx-backend-vulkan"]
 
 [dependencies]
 #TODO: only depend on the published version
-wgn = { package = "wgpu-native", features = ["local", "window-winit"], git = "https://github.com/gfx-rs/wgpu", rev = "5b6549febccdc93f344a2b776b9a548b17afcf2f" }
+wgn = { package = "wgpu-native", features = ["local", "window-winit"], git = "https://github.com/gfx-rs/wgpu", rev = "ce4ef375c342446d3019a12c10203042d3f5ba11" }
 arrayvec = "0.4"
 
 [dev-dependencies]
