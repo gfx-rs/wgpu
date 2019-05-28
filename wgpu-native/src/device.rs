@@ -58,6 +58,7 @@ use std::{collections::hash_map::Entry, ffi, iter, ptr, slice, sync::atomic::Ord
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
+pub const MAX_VERTEX_BUFFERS: usize = 8;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -602,6 +603,7 @@ pub fn device_create_buffer(
         },
         memory_properties,
         memory,
+        size: desc.size,
         mapped_write_ranges: Vec::new(),
         pending_map_operation: None,
         life_guard: LifeGuard::new(),
@@ -1445,9 +1447,11 @@ pub fn device_create_render_pipeline(
             desc.vertex_input.vertex_buffers_count,
         )
     };
+    let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
     let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
     let mut attributes = Vec::new();
     for (i, vb_state) in desc_vbs.iter().enumerate() {
+        vertex_strides.alloc().init((vb_state.stride, vb_state.step_mode));
         if vb_state.attributes_count == 0 {
             continue;
         }
@@ -1558,6 +1562,7 @@ pub fn device_create_render_pipeline(
         pass_context,
         flags,
         index_format: desc.vertex_input.index_format,
+        vertex_strides,
     }
 }
 
