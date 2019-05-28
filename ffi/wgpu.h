@@ -686,7 +686,7 @@ void wgpu_compute_pass_push_debug_group(WGPUComputePassId _pass_id, WGPURawStrin
 void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
                                       uint32_t index,
                                       WGPUBindGroupId bind_group_id,
-                                      const uint32_t *offsets_ptr,
+                                      const WGPUBufferAddress *offsets_ptr,
                                       uintptr_t offsets_count);
 
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
@@ -810,7 +810,7 @@ void wgpu_render_pass_push_debug_group(WGPURenderPassId _pass_id, WGPURawString 
 void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
-                                     const uint32_t *offsets_ptr,
+                                     const WGPUBufferAddress *offsets_ptr,
                                      uintptr_t offsets_count);
 
 void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
@@ -831,7 +831,7 @@ void wgpu_render_pass_set_stencil_reference(WGPURenderPassId pass_id, uint32_t v
 
 void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
                                          const WGPUBufferId *buffer_ptr,
-                                         const uint32_t *offset_ptr,
+                                         const WGPUBufferAddress *offset_ptr,
                                          uintptr_t count);
 
 void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,

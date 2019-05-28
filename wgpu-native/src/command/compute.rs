@@ -24,12 +24,16 @@ pub struct ComputePass<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> ComputePass<B> {
-    pub(crate) fn new(raw: B::CommandBuffer, cmb_id: Stored<CommandBufferId>) -> Self {
+    pub(crate) fn new(
+        raw: B::CommandBuffer,
+        cmb_id: Stored<CommandBufferId>,
+        trackers: TrackerSet,
+    ) -> Self {
         ComputePass {
             raw,
             cmb_id,
             binder: Binder::default(),
-            trackers: TrackerSet::new(),
+            trackers,
         }
     }
 }
@@ -38,14 +42,14 @@ impl<B: hal::Backend> ComputePass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
-    let mut command_buffer_guard = HUB.command_buffers.write();
+    let mut cmb_guard = HUB.command_buffers.write();
     let pass = HUB.compute_passes.unregister(pass_id);
+    let cmb = &mut cmb_guard[pass.cmb_id.value];
 
-    //TODO: transitions?
-
-    command_buffer_guard[pass.cmb_id.value]
-        .raw
-        .push(pass.raw);
+    // There are no transitions to be made: we've already been inserting barriers
+    // into the parent command buffer while recording this compute pass.
+    cmb.trackers = pass.trackers;
+    cmb.raw.push(pass.raw);
     pass.cmb_id.value
 }
 
