@@ -242,6 +242,9 @@ impl PendingResources<back::Backend> {
                 );
                 let (life_guard, resource) = match resource_id {
                     ResourceId::Buffer(id) => {
+                        if HUB.buffers.read()[id].pending_map_operation.is_some() {
+                            continue
+                        }
                         trackers.buffers.remove(id);
                         let buf = HUB.buffers.unregister(id);
                         (buf.life_guard, NativeResource::Buffer(buf.raw, buf.memory))
@@ -345,14 +348,14 @@ impl PendingResources<back::Backend> {
             .drain(..)
             .map(|buffer_id| {
                 let mut buffer_guard = HUB.buffers.write();
-                let mut buffer = &mut buffer_guard[buffer_id];
+                let buffer = &mut buffer_guard[buffer_id];
                 let operation = buffer.pending_map_operation.take().unwrap();
                 let result = match operation {
                     BufferMapOperation::Read(ref range, ..) => {
-                        map_buffer(raw, limits, &mut buffer, range, HostMap::Read)
+                        map_buffer(raw, limits, buffer, range, HostMap::Read)
                     }
                     BufferMapOperation::Write(ref range, ..) => {
-                        map_buffer(raw, limits, &mut buffer, range, HostMap::Write)
+                        map_buffer(raw, limits, buffer, range, HostMap::Write)
                     }
                 };
                 (operation, result)
