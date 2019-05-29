@@ -44,13 +44,13 @@ use hal::{
     backend::FastHashMap,
     command::RawCommandBuffer,
     queue::RawCommandQueue,
-    DescriptorPool as _,
     Device as _,
     Surface as _,
 };
 use log::{info, trace};
-//use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::Mutex;
+//use rendy_memory::{allocator, Config, Heaps};
+use rendy_descriptor::{DescriptorAllocator, DescriptorRanges};
 
 #[cfg(feature = "local")]
 use std::sync::atomic::AtomicBool;
@@ -420,7 +420,7 @@ pub struct Device<B: hal::Backend> {
     limits: hal::Limits,
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
-    desc_pool: Mutex<B::DescriptorPool>,
+    desc_allocator: Mutex<DescriptorAllocator<B>>,
     pending: Mutex<PendingResources<B>>,
 }
 
@@ -453,43 +453,6 @@ impl<B: hal::Backend> Device<B> {
             )
         };*/
 
-        //TODO: generic allocator for descriptors
-        let desc_pool = Mutex::new(
-            unsafe {
-                raw.create_descriptor_pool(
-                    10000,
-                    &[
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::Sampler,
-                            count: 100,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::SampledImage,
-                            count: 1000,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::UniformBuffer,
-                            count: 10000,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::UniformBufferDynamic,
-                            count: 100,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::StorageBuffer,
-                            count: 1000,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::StorageBufferDynamic,
-                            count: 100,
-                        },
-                    ],
-                    hal::pso::DescriptorPoolCreateFlags::empty(),
-                )
-            }
-            .unwrap(),
-        );
-
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
         life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
@@ -506,7 +469,7 @@ impl<B: hal::Backend> Device<B> {
             limits,
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
-            desc_pool,
+            desc_allocator: Mutex::new(DescriptorAllocator::new()),
             pending: Mutex::new(PendingResources {
                 mapped: Vec::new(),
                 referenced: Vec::new(),
@@ -953,27 +916,28 @@ pub fn device_create_bind_group_layout(
 ) -> binding_model::BindGroupLayout<back::Backend> {
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
 
+    let raw_bindings = bindings
+        .iter()
+        .map(|binding| hal::pso::DescriptorSetLayoutBinding {
+            binding: binding.binding,
+            ty: conv::map_binding_type(binding.ty),
+            count: 1, //TODO: consolidate
+            stage_flags: conv::map_shader_stage_flags(binding.visibility),
+            immutable_samplers: false, // TODO
+        })
+        .collect::<Vec<_>>(); //TODO: avoid heap allocation
+
     let raw = unsafe {
         HUB.devices.read()[device_id]
             .raw
-            .create_descriptor_set_layout(
-                bindings.iter().map(|binding| {
-                    hal::pso::DescriptorSetLayoutBinding {
-                        binding: binding.binding,
-                        ty: conv::map_binding_type(binding.ty),
-                        count: 1, //TODO: consolidate
-                        stage_flags: conv::map_shader_stage_flags(binding.visibility),
-                        immutable_samplers: false, // TODO
-                    }
-                }),
-                &[],
-            )
+            .create_descriptor_set_layout(&raw_bindings, &[])
             .unwrap()
     };
 
     binding_model::BindGroupLayout {
         raw,
         bindings: bindings.to_vec(),
+        desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
         dynamic_count: bindings
             .iter()
             .filter(|b| match b.ty {
@@ -1042,8 +1006,20 @@ pub fn device_create_bind_group(
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length as usize) };
     assert_eq!(bindings.len(), bind_group_layout.bindings.len());
 
-    let mut desc_pool = device.desc_pool.lock();
-    let desc_set = unsafe { desc_pool.allocate_set(&bind_group_layout.raw).unwrap() };
+    let desc_set = unsafe {
+        let mut desc_sets = ArrayVec::<[_; 1]>::new();
+        device.desc_allocator
+            .lock()
+            .allocate(
+                &device.raw,
+                &bind_group_layout.raw,
+                bind_group_layout.desc_ranges,
+                1,
+                &mut desc_sets,
+            )
+            .unwrap();
+        desc_sets.pop().unwrap()
+    };
 
     let buffer_guard = HUB.buffers.read();
     let sampler_guard = HUB.samplers.read();
@@ -1116,7 +1092,7 @@ pub fn device_create_bind_group(
             }
         };
         writes.alloc().init(hal::pso::DescriptorSetWrite {
-            set: &desc_set,
+            set: desc_set.raw(),
             binding: b.binding,
             array_offset: 0, //TODO
             descriptors: iter::once(descriptor),

@@ -10,6 +10,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
+use rendy_descriptor::{DescriptorRanges, DescriptorSet};
 
 pub const MAX_BIND_GROUPS: usize = 4;
 
@@ -52,6 +53,7 @@ pub struct BindGroupLayoutDescriptor {
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) bindings: Vec<BindGroupLayoutBinding>,
+    pub(crate) desc_ranges: DescriptorRanges,
     pub(crate) dynamic_count: usize,
 }
 
@@ -94,7 +96,7 @@ pub struct BindGroupDescriptor {
 }
 
 pub struct BindGroup<B: hal::Backend> {
-    pub(crate) raw: B::DescriptorSet,
+    pub(crate) raw: DescriptorSet<B>,
     pub(crate) layout_id: BindGroupLayoutId,
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
