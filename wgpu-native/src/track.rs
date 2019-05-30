@@ -15,7 +15,7 @@ use hal::backend::FastHashMap;
 
 use std::{
     borrow::Borrow,
-    collections::hash_map::Entry,
+    collections::hash_map::{Entry, Iter},
     marker::PhantomData,
     mem,
     ops::{BitOr, Range},
@@ -112,6 +112,46 @@ pub enum Stitch {
     Last,
 }
 
+//TODO: consider rewriting this without any iterators that have side effects.
+pub struct ConsumeIterator<'a, I: TypedId, U: Copy + PartialEq> {
+    src: Iter<'a, Index, Track<U>>,
+    dst: &'a mut FastHashMap<Index, Track<U>>,
+    stitch: Stitch,
+    _marker: PhantomData<I>,
+}
+
+impl<'a, I: TypedId, U: Copy + PartialEq> Iterator for ConsumeIterator<'a, I, U> {
+    type Item = (I, Range<U>);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (&index, new) = self.src.next()?;
+            match self.dst.entry(index) {
+                Entry::Vacant(e) => {
+                    e.insert(new.clone());
+                }
+                Entry::Occupied(mut e) => {
+                    assert_eq!(e.get().epoch, new.epoch);
+                    let old = mem::replace(&mut e.get_mut().last, new.last);
+                    if old != new.init {
+                        let state = match self.stitch {
+                            Stitch::Init => new.init,
+                            Stitch::Last => new.last,
+                        };
+                        return Some((I::new(index, new.epoch), old .. state))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Make sure to finish all side effects on drop
+impl<'a, I: TypedId, U: Copy + PartialEq> Drop for ConsumeIterator<'a, I, U> {
+    fn drop(&mut self) {
+        self.for_each(drop)
+    }
+}
+
 pub struct TrackerSet {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
@@ -126,6 +166,12 @@ impl TrackerSet {
             textures: TextureTracker::new(),
             views: TextureViewTracker::new(),
         }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.textures.clear();
+        self.views.clear();
     }
 
     pub fn consume_by_extend(&mut self, other: &Self) {
@@ -221,29 +267,13 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
         &'a mut self,
         other: &'a Self,
         stitch: Stitch,
-    ) -> impl 'a + Iterator<Item = (I, Range<U>)> {
-        other
-            .map
-            .iter()
-            .flat_map(move |(&index, new)| match self.map.entry(index) {
-                Entry::Vacant(e) => {
-                    e.insert(new.clone());
-                    None
-                }
-                Entry::Occupied(mut e) => {
-                    assert_eq!(e.get().epoch, new.epoch);
-                    let old = mem::replace(&mut e.get_mut().last, new.last);
-                    if old == new.init {
-                        None
-                    } else {
-                        let state = match stitch {
-                            Stitch::Init => new.init,
-                            Stitch::Last => new.last,
-                        };
-                        Some((I::new(index, new.epoch), old .. state))
-                    }
-                }
-            })
+    ) -> ConsumeIterator<'a, I, U> {
+        ConsumeIterator {
+            src: other.map.iter(),
+            dst: &mut self.map,
+            stitch,
+            _marker: PhantomData,
+        }
     }
 
     /// Consume another tacker, adding it's transitions to `self`.
@@ -280,6 +310,10 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
 }
 
 impl<I: TypedId + Copy, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+    fn clear(&mut self) {
+        self.map.clear();
+    }
+
     fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, I>,

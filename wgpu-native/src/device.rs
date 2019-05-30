@@ -58,6 +58,7 @@ use std::{collections::hash_map::Entry, ffi, iter, ptr, slice, sync::atomic::Ord
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
+pub const MAX_VERTEX_BUFFERS: usize = 8;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -241,6 +242,9 @@ impl PendingResources<back::Backend> {
                 );
                 let (life_guard, resource) = match resource_id {
                     ResourceId::Buffer(id) => {
+                        if HUB.buffers.read()[id].pending_map_operation.is_some() {
+                            continue
+                        }
                         trackers.buffers.remove(id);
                         let buf = HUB.buffers.unregister(id);
                         (buf.life_guard, NativeResource::Buffer(buf.raw, buf.memory))
@@ -344,14 +348,14 @@ impl PendingResources<back::Backend> {
             .drain(..)
             .map(|buffer_id| {
                 let mut buffer_guard = HUB.buffers.write();
-                let mut buffer = &mut buffer_guard[buffer_id];
+                let buffer = &mut buffer_guard[buffer_id];
                 let operation = buffer.pending_map_operation.take().unwrap();
                 let result = match operation {
                     BufferMapOperation::Read(ref range, ..) => {
-                        map_buffer(raw, limits, &mut buffer, range, HostMap::Read)
+                        map_buffer(raw, limits, buffer, range, HostMap::Read)
                     }
                     BufferMapOperation::Write(ref range, ..) => {
-                        map_buffer(raw, limits, &mut buffer, range, HostMap::Write)
+                        map_buffer(raw, limits, buffer, range, HostMap::Write)
                     }
                 };
                 (operation, result)
@@ -602,6 +606,7 @@ pub fn device_create_buffer(
         },
         memory_properties,
         memory,
+        size: desc.size,
         mapped_write_ranges: Vec::new(),
         pending_map_operation: None,
         life_guard: LifeGuard::new(),
@@ -1050,23 +1055,17 @@ pub fn device_create_bind_group(
     for (b, decl) in bindings.iter().zip(&bind_group_layout.bindings) {
         let descriptor = match b.resource {
             binding_model::BindingResource::Buffer(ref bb) => {
-                let buffer = used
-                    .buffers
-                    .get_with_extended_usage(
-                        &*buffer_guard,
-                        bb.buffer,
-                        resource::BufferUsage::UNIFORM,
-                    )
-                    .unwrap();
-                let alignment = match decl.ty {
+                let (alignment, usage) = match decl.ty {
                     binding_model::BindingType::UniformBuffer
-                    | binding_model::BindingType::UniformBufferDynamic => {
-                        device.limits.min_uniform_buffer_offset_alignment
-                    }
+                    | binding_model::BindingType::UniformBufferDynamic => (
+                        device.limits.min_uniform_buffer_offset_alignment,
+                        resource::BufferUsage::UNIFORM,
+                    ),
                     binding_model::BindingType::StorageBuffer
-                    | binding_model::BindingType::StorageBufferDynamic => {
-                        device.limits.min_storage_buffer_offset_alignment
-                    }
+                    | binding_model::BindingType::StorageBufferDynamic => (
+                        device.limits.min_storage_buffer_offset_alignment,
+                        resource::BufferUsage::STORAGE,
+                    ),
                     binding_model::BindingType::Sampler
                     | binding_model::BindingType::SampledTexture
                     | binding_model::BindingType::StorageTexture => {
@@ -1079,6 +1078,10 @@ pub fn device_create_bind_group(
                     "Misaligned buffer offset {}",
                     bb.offset
                 );
+                let buffer = used
+                    .buffers
+                    .get_with_extended_usage(&*buffer_guard, bb.buffer, usage)
+                    .unwrap();
                 let range = Some(bb.offset) .. Some(bb.offset + bb.size);
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
@@ -1088,18 +1091,28 @@ pub fn device_create_bind_group(
                 hal::pso::Descriptor::Sampler(&sampler.raw)
             }
             binding_model::BindingResource::TextureView(id) => {
-                assert_eq!(decl.ty, binding_model::BindingType::SampledTexture);
+                let (usage, image_layout) = match decl.ty {
+                    binding_model::BindingType::SampledTexture => (
+                        resource::TextureUsage::SAMPLED,
+                        hal::image::Layout::ShaderReadOnlyOptimal,
+                    ),
+                    binding_model::BindingType::StorageTexture => (
+                        resource::TextureUsage::STORAGE,
+                        hal::image::Layout::General,
+                    ),
+                    _ => panic!("Missmatched texture binding for {:?}", decl),
+                };
                 let view = &texture_view_guard[id];
                 used.views.query(id, &view.life_guard.ref_count, DummyUsage);
                 used.textures
                     .transit(
                         view.texture_id.value,
                         &view.texture_id.ref_count,
-                        resource::TextureUsage::SAMPLED,
+                        usage,
                         TrackPermit::EXTEND,
                     )
                     .unwrap();
-                hal::pso::Descriptor::Image(&view.raw, hal::image::Layout::ShaderReadOnlyOptimal)
+                hal::pso::Descriptor::Image(&view.raw, image_layout)
             }
         };
         writes.alloc().init(hal::pso::DescriptorSetWrite {
@@ -1445,9 +1458,11 @@ pub fn device_create_render_pipeline(
             desc.vertex_input.vertex_buffers_count,
         )
     };
+    let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
     let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
     let mut attributes = Vec::new();
     for (i, vb_state) in desc_vbs.iter().enumerate() {
+        vertex_strides.alloc().init((vb_state.stride, vb_state.step_mode));
         if vb_state.attributes_count == 0 {
             continue;
         }
@@ -1558,6 +1573,7 @@ pub fn device_create_render_pipeline(
         pass_context,
         flags,
         index_format: desc.vertex_input.index_format,
+        vertex_strides,
     }
 }
 

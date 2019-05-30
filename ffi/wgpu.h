@@ -1,6 +1,6 @@
 #define WGPU_LOCAL
 
-/* Generated with cbindgen:0.8.7 */
+/* Generated with cbindgen:0.8.6 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -10,6 +10,8 @@
 #define WGPUMAX_BIND_GROUPS 4
 
 #define WGPUMAX_COLOR_TARGETS 4
+
+#define WGPUMAX_VERTEX_BUFFERS 8
 
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,

@@ -62,6 +62,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) memory_properties: hal::memory::Properties,
     pub(crate) memory: B::Memory,
+    pub(crate) size: BufferAddress,
     pub(crate) mapped_write_ranges: Vec<std::ops::Range<u64>>,
     pub(crate) pending_map_operation: Option<BufferMapOperation>,
     pub(crate) life_guard: LifeGuard,

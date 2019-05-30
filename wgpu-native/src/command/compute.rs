@@ -144,34 +144,33 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
         pass.raw.bind_compute_pipeline(&pipeline.raw);
     }
 
-    if pass.binder.pipeline_layout_id == Some(pipeline.layout_id.clone()) {
-        return;
-    }
+    // Rebind resources
+    if pass.binder.pipeline_layout_id != Some(pipeline.layout_id.clone()) {
+        let pipeline_layout_guard = HUB.pipeline_layouts.read();
+        let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
+        let bind_group_guard = HUB.bind_groups.read();
 
-    let pipeline_layout_guard = HUB.pipeline_layouts.read();
-    let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-    let bind_group_guard = HUB.bind_groups.read();
+        pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
+        pass.binder
+            .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
 
-    pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
-    pass.binder
-        .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
-
-    for (index, (entry, &bgl_id)) in pass
-        .binder
-        .entries
-        .iter_mut()
-        .zip(&pipeline_layout.bind_group_layout_ids)
-        .enumerate()
-    {
-        if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
-            let desc_set = &bind_group_guard[bg_id].raw;
-            unsafe {
-                pass.raw.bind_compute_descriptor_sets(
-                    &pipeline_layout.raw,
-                    index,
-                    iter::once(desc_set),
-                    &[],
-                );
+        for (index, (entry, &bgl_id)) in pass
+            .binder
+            .entries
+            .iter_mut()
+            .zip(&pipeline_layout.bind_group_layout_ids)
+            .enumerate()
+        {
+            if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
+                let desc_set = &bind_group_guard[bg_id].raw;
+                unsafe {
+                    pass.raw.bind_compute_descriptor_sets(
+                        &pipeline_layout.raw,
+                        index,
+                        iter::once(desc_set),
+                        &[],
+                    );
+                }
             }
         }
     }
