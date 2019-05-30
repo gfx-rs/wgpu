@@ -1055,23 +1055,17 @@ pub fn device_create_bind_group(
     for (b, decl) in bindings.iter().zip(&bind_group_layout.bindings) {
         let descriptor = match b.resource {
             binding_model::BindingResource::Buffer(ref bb) => {
-                let buffer = used
-                    .buffers
-                    .get_with_extended_usage(
-                        &*buffer_guard,
-                        bb.buffer,
-                        resource::BufferUsage::UNIFORM,
-                    )
-                    .unwrap();
-                let alignment = match decl.ty {
+                let (alignment, usage) = match decl.ty {
                     binding_model::BindingType::UniformBuffer
-                    | binding_model::BindingType::UniformBufferDynamic => {
-                        device.limits.min_uniform_buffer_offset_alignment
-                    }
+                    | binding_model::BindingType::UniformBufferDynamic => (
+                        device.limits.min_uniform_buffer_offset_alignment,
+                        resource::BufferUsage::UNIFORM,
+                    ),
                     binding_model::BindingType::StorageBuffer
-                    | binding_model::BindingType::StorageBufferDynamic => {
-                        device.limits.min_storage_buffer_offset_alignment
-                    }
+                    | binding_model::BindingType::StorageBufferDynamic => (
+                        device.limits.min_storage_buffer_offset_alignment,
+                        resource::BufferUsage::STORAGE,
+                    ),
                     binding_model::BindingType::Sampler
                     | binding_model::BindingType::SampledTexture
                     | binding_model::BindingType::StorageTexture => {
@@ -1084,6 +1078,10 @@ pub fn device_create_bind_group(
                     "Misaligned buffer offset {}",
                     bb.offset
                 );
+                let buffer = used
+                    .buffers
+                    .get_with_extended_usage(&*buffer_guard, bb.buffer, usage)
+                    .unwrap();
                 let range = Some(bb.offset) .. Some(bb.offset + bb.size);
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
@@ -1093,18 +1091,28 @@ pub fn device_create_bind_group(
                 hal::pso::Descriptor::Sampler(&sampler.raw)
             }
             binding_model::BindingResource::TextureView(id) => {
-                assert_eq!(decl.ty, binding_model::BindingType::SampledTexture);
+                let (usage, image_layout) = match decl.ty {
+                    binding_model::BindingType::SampledTexture => (
+                        resource::TextureUsage::SAMPLED,
+                        hal::image::Layout::ShaderReadOnlyOptimal,
+                    ),
+                    binding_model::BindingType::StorageTexture => (
+                        resource::TextureUsage::STORAGE,
+                        hal::image::Layout::General,
+                    ),
+                    _ => panic!("Missmatched texture binding for {:?}", decl),
+                };
                 let view = &texture_view_guard[id];
                 used.views.query(id, &view.life_guard.ref_count, DummyUsage);
                 used.textures
                     .transit(
                         view.texture_id.value,
                         &view.texture_id.ref_count,
-                        resource::TextureUsage::SAMPLED,
+                        usage,
                         TrackPermit::EXTEND,
                     )
                     .unwrap();
-                hal::pso::Descriptor::Image(&view.raw, hal::image::Layout::ShaderReadOnlyOptimal)
+                hal::pso::Descriptor::Image(&view.raw, image_layout)
             }
         };
         writes.alloc().init(hal::pso::DescriptorSetWrite {
