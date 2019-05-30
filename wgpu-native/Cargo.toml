@@ -36,7 +36,7 @@ gfx-backend-dx12 = { version = "0.2", optional = true }
 gfx-backend-metal = { version = "0.2", optional = true }
 gfx-backend-gl = { version = "0.2", optional = true }
 parking_lot = { version = "0.8" }
-#rendy-memory = "0.2"
+rendy-memory = "0.2"
 rendy-descriptor = "0.2"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 vec_map = "0.8"
