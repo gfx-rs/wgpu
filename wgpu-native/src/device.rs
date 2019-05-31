@@ -44,17 +44,17 @@ use hal::{
     backend::FastHashMap,
     command::RawCommandBuffer,
     queue::RawCommandQueue,
-    DescriptorPool as _,
     Device as _,
     Surface as _,
 };
 use log::{info, trace};
-//use rendy_memory::{allocator, Config, Heaps};
 use parking_lot::Mutex;
+use rendy_descriptor::{DescriptorAllocator, DescriptorRanges};
+use rendy_memory::{Block, Heaps, MemoryBlock};
 
 #[cfg(feature = "local")]
 use std::sync::atomic::AtomicBool;
-use std::{collections::hash_map::Entry, ffi, iter, ptr, slice, sync::atomic::Ordering};
+use std::{collections::hash_map::Entry, ffi, iter, ptr, ops::Range, slice, sync::atomic::Ordering};
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
@@ -111,8 +111,8 @@ enum ResourceId {
 }
 
 enum NativeResource<B: hal::Backend> {
-    Buffer(B::Buffer, B::Memory),
-    Image(B::Image, B::Memory),
+    Buffer(B::Buffer, MemoryBlock<B>),
+    Image(B::Image, MemoryBlock<B>),
     ImageView(B::ImageView),
     Framebuffer(B::Framebuffer),
 }
@@ -168,7 +168,12 @@ impl<B: hal::Backend> PendingResources<B> {
     }
 
     /// Returns the last submission index that is done.
-    fn cleanup(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
+    fn cleanup(
+        &mut self,
+        device: &B::Device,
+        heaps_mutex: &Mutex<Heaps<B>>,
+        force_wait: bool,
+    ) -> SubmissionIndex {
         if force_wait {
             let status = unsafe {
                 device.wait_for_fences(
@@ -190,7 +195,7 @@ impl<B: hal::Backend> PendingResources<B> {
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
         } else {
-            0
+            return 0
         };
 
         for a in self.active.drain(.. done_count) {
@@ -202,15 +207,16 @@ impl<B: hal::Backend> PendingResources<B> {
             }
         }
 
+        let mut heaps = heaps_mutex.lock();
         for resource in self.free.drain(..) {
             match resource {
                 NativeResource::Buffer(raw, memory) => unsafe {
                     device.destroy_buffer(raw);
-                    device.free_memory(memory);
+                    heaps.free(device, memory);
                 },
                 NativeResource::Image(raw, memory) => unsafe {
                     device.destroy_image(raw);
-                    device.free_memory(memory);
+                    heaps.free(device, memory);
                 },
                 NativeResource::ImageView(raw) => unsafe {
                     device.destroy_image_view(raw);
@@ -342,7 +348,6 @@ impl PendingResources<back::Backend> {
     fn handle_mapping(
         &mut self,
         raw: &<back::Backend as hal::Backend>::Device,
-        limits: &hal::Limits,
     ) -> Vec<BufferMapPendingCallback> {
         self.ready_to_map
             .drain(..)
@@ -352,10 +357,10 @@ impl PendingResources<back::Backend> {
                 let operation = buffer.pending_map_operation.take().unwrap();
                 let result = match operation {
                     BufferMapOperation::Read(ref range, ..) => {
-                        map_buffer(raw, limits, buffer, range, HostMap::Read)
+                        map_buffer(raw, buffer, range.clone(), HostMap::Read)
                     }
                     BufferMapOperation::Write(ref range, ..) => {
-                        map_buffer(raw, limits, buffer, range, HostMap::Write)
+                        map_buffer(raw, buffer, range.clone(), HostMap::Write)
                     }
                 };
                 (operation, result)
@@ -369,58 +374,47 @@ type BufferMapPendingCallback = (BufferMapOperation, BufferMapResult);
 
 fn map_buffer(
     raw: &<back::Backend as hal::Backend>::Device,
-    limits: &hal::Limits,
     buffer: &mut resource::Buffer<back::Backend>,
-    original_range: &std::ops::Range<BufferAddress>,
+    buffer_range: Range<BufferAddress>,
     kind: HostMap,
 ) -> BufferMapResult {
-    // gfx-rs requires mapping and flushing/invalidation ranges to be done at `non_coherent_atom_size`
-    // granularity for memory types that aren't coherent. We achieve that by flooring the start offset
-    // and ceiling the end offset to those atom sizes, using bitwise operations on an `atom_mask`.
-    let is_coherent = buffer
-        .memory_properties
+    let is_coherent = buffer.memory
+        .properties()
         .contains(hal::memory::Properties::COHERENT);
-    let atom_mask = if is_coherent {
-        0
-    } else {
-        limits.non_coherent_atom_size as u64 - 1
+    let (ptr, mapped_range) = {
+        let mapped = buffer.memory.map(raw, buffer_range)?;
+        (mapped.ptr(), mapped.range())
     };
-    let atom_offset = original_range.start & atom_mask;
-    let range = (original_range.start & !atom_mask) .. ((original_range.end - 1) | atom_mask) + 1;
-    let pointer = unsafe { raw.map_memory(&buffer.memory, range.clone()) }?;
 
     if !is_coherent {
         match kind {
             HostMap::Read => unsafe {
-                raw.invalidate_mapped_memory_ranges(iter::once((&buffer.memory, range)))
+                raw.invalidate_mapped_memory_ranges(
+                    iter::once((buffer.memory.memory(), mapped_range)),
+                    )
                     .unwrap();
             },
             HostMap::Write => {
-                buffer.mapped_write_ranges.push(range);
+                buffer.mapped_write_ranges.push(mapped_range);
             }
         }
     }
 
-    Ok(unsafe {
-        // Since we map with a potentially smaller offset than the user requested,
-        // we adjust the returned pointer to compensate.
-        pointer.offset(atom_offset as isize)
-    })
+    Ok(ptr.as_ptr())
 }
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     adapter_id: AdapterId,
+    limits: hal::Limits,
     pub(crate) queue_group: hal::QueueGroup<B, hal::General>,
-    //mem_allocator: Heaps<B::Memory>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
+    mem_allocator: Mutex<Heaps<B>>,
+    desc_allocator: Mutex<DescriptorAllocator<B>>,
     life_guard: LifeGuard,
     pub(crate) trackers: Mutex<TrackerSet>,
-    mem_props: hal::MemoryProperties,
-    limits: hal::Limits,
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
-    desc_pool: Mutex<B::DescriptorPool>,
     pending: Mutex<PendingResources<B>>,
 }
 
@@ -432,81 +426,48 @@ impl<B: hal::Backend> Device<B> {
         mem_props: hal::MemoryProperties,
         limits: hal::Limits,
     ) -> Self {
-        // TODO: These values are just taken from rendy's test
-        // Need to set reasonable values per memory type instead
-        /*let arena = Some(allocator::ArenaConfig {
-            arena_size: 32 * 1024,
-        });
-        let dynamic = Some(allocator::DynamicConfig {
-            blocks_per_chunk: 64,
-            block_size_granularity: 256,
-            max_block_size: 32 * 1024,
-        });
-        let config = Config { arena, dynamic };
-        let mem_allocator = unsafe {
-            Heaps::new(
-                mem_props
-                    .memory_types
-                    .iter()
-                    .map(|mt| (mt.properties.into(), mt.heap_index as u32, config)),
-                mem_props.memory_heaps.clone(),
-            )
-        };*/
-
-        //TODO: generic allocator for descriptors
-        let desc_pool = Mutex::new(
-            unsafe {
-                raw.create_descriptor_pool(
-                    10000,
-                    &[
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::Sampler,
-                            count: 100,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::SampledImage,
-                            count: 1000,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::UniformBuffer,
-                            count: 10000,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::UniformBufferDynamic,
-                            count: 100,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::StorageBuffer,
-                            count: 1000,
-                        },
-                        hal::pso::DescriptorRangeDesc {
-                            ty: hal::pso::DescriptorType::StorageBufferDynamic,
-                            count: 100,
-                        },
-                    ],
-                    hal::pso::DescriptorPoolCreateFlags::empty(),
-                )
-            }
-            .unwrap(),
-        );
-
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
         life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
 
+        let heaps = {
+            let types = mem_props.memory_types
+                .iter()
+                .map(|mt| {
+                    use rendy_memory::{HeapsConfig, LinearConfig, DynamicConfig};
+                    let config = HeapsConfig {
+                        linear: if mt.properties.contains(hal::memory::Properties::CPU_VISIBLE) {
+                            Some(LinearConfig {
+                                linear_size: 0x10_00_00,
+                            })
+                        } else {
+                            None
+                        },
+                        dynamic: Some(DynamicConfig {
+                            block_size_granularity: 0x1_00,
+                            max_chunk_size: 0x1_00_00_00,
+                            min_device_allocation: 0x1_00_00,
+                        }),
+                    };
+                    (mt.properties.into(), mt.heap_index as u32, config)
+                });
+            unsafe {
+                Heaps::new(types, mem_props.memory_heaps.iter().cloned())
+            }
+        };
+
         Device {
             raw,
             adapter_id,
-            //mem_allocator,
+            limits,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
+            mem_allocator: Mutex::new(heaps),
+            desc_allocator: Mutex::new(DescriptorAllocator::new()),
             queue_group,
             life_guard,
             trackers: Mutex::new(TrackerSet::new()),
-            mem_props,
-            limits,
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
-            desc_pool,
             pending: Mutex::new(PendingResources {
                 mapped: Vec::new(),
                 referenced: Vec::new(),
@@ -525,8 +486,8 @@ impl Device<back::Backend> {
 
         pending.triage_referenced(&mut *trackers);
         pending.triage_framebuffers(&mut *self.framebuffers.lock());
-        let last_done = pending.cleanup(&self.raw, force_wait);
-        let callbacks = pending.handle_mapping(&self.raw, &self.limits);
+        let last_done = pending.cleanup(&self.raw, &self.mem_allocator, force_wait);
+        let callbacks = pending.handle_mapping(&self.raw);
 
         if last_done != 0 {
             self.com_allocator.maintain(last_done);
@@ -564,37 +525,39 @@ pub fn device_create_buffer(
 ) -> resource::Buffer<back::Backend> {
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
-    let (usage, memory_properties) = conv::map_buffer_usage(desc.usage);
+    let (usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
+
+    let rendy_usage = {
+        use resource::BufferUsage as Bu;
+        use rendy_memory::MemoryUsageValue as Muv;
+
+        if (Bu::MAP_WRITE | Bu::TRANSFER_SRC).contains(desc.usage) {
+            Muv::Upload
+        } else if (Bu::MAP_READ | Bu::TRANSFER_DST).contains(desc.usage) {
+            Muv::Download
+        } else if !desc.usage.contains(Bu::MAP_READ | Bu::MAP_WRITE) {
+            Muv::Data
+        } else {
+            Muv::Dynamic
+        }
+    };
 
     let mut buffer = unsafe { device.raw.create_buffer(desc.size, usage).unwrap() };
     let requirements = unsafe { device.raw.get_buffer_requirements(&buffer) };
-    let device_type = device
-        .mem_props
-        .memory_types
-        .iter()
-        .enumerate()
-        .position(|(id, memory_type)| {
-            requirements.type_mask & (1 << id) != 0
-                && memory_type.properties.contains(memory_properties)
-        })
-        .unwrap()
-        .into();
-    // TODO: allocate with rendy
+    let memory = device.mem_allocator
+        .lock()
+        .allocate(
+            &device.raw,
+            requirements.type_mask as u32,
+            rendy_usage,
+            requirements.size,
+            requirements.alignment,
+        )
+        .unwrap();
 
-    // if the memory is mapped but not coherent, round up to the atom size
-    let mut mem_size = requirements.size;
-    if memory_properties.contains(hal::memory::Properties::CPU_VISIBLE)
-        && !memory_properties.contains(hal::memory::Properties::COHERENT)
-    {
-        let mask = device.limits.non_coherent_atom_size as u64 - 1;
-        mem_size = ((mem_size - 1) | mask) + 1;
-    }
-
-    let memory = unsafe { device.raw.allocate_memory(device_type, mem_size).unwrap() };
     unsafe {
-        device
-            .raw
-            .bind_buffer_memory(&memory, 0, &mut buffer)
+        device.raw
+            .bind_buffer_memory(memory.memory(), memory.range().start, &mut buffer)
             .unwrap()
     };
 
@@ -604,7 +567,6 @@ pub fn device_create_buffer(
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
         },
-        memory_properties,
         memory,
         size: desc.size,
         mapped_write_ranges: Vec::new(),
@@ -654,13 +616,11 @@ pub extern "C" fn wgpu_device_create_buffer_mapped(
     {
         let device_guard = HUB.devices.read();
         let device = &device_guard[device_id];
-        let range = 0 .. desc.size;
 
         match map_buffer(
             &device.raw,
-            &device.limits,
             &mut buffer,
-            &range,
+            0 .. desc.size,
             HostMap::Write,
         ) {
             Ok(ptr) => unsafe {
@@ -715,31 +675,21 @@ pub fn device_create_texture(
     }
     .unwrap();
     let requirements = unsafe { device.raw.get_image_requirements(&image) };
-    let device_type = device
-        .mem_props
-        .memory_types
-        .iter()
-        .enumerate()
-        .position(|(id, memory_type)| {
-            // TODO
-            requirements.type_mask & (1 << id) != 0
-                && memory_type
-                    .properties
-                    .contains(hal::memory::Properties::DEVICE_LOCAL)
-        })
-        .unwrap()
-        .into();
-    // TODO: allocate with rendy
-    let memory = unsafe {
-        device
-            .raw
-            .allocate_memory(device_type, requirements.size)
-            .unwrap()
-    };
+
+    let memory = device.mem_allocator
+        .lock()
+        .allocate(
+            &device.raw,
+            requirements.type_mask as u32,
+            rendy_memory::Data,
+            requirements.size,
+            requirements.alignment,
+        )
+        .unwrap();
+
     unsafe {
-        device
-            .raw
-            .bind_image_memory(&memory, 0, &mut image)
+        device.raw
+            .bind_image_memory(memory.memory(), memory.range().start, &mut image)
             .unwrap()
     };
 
@@ -953,27 +903,28 @@ pub fn device_create_bind_group_layout(
 ) -> binding_model::BindGroupLayout<back::Backend> {
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
 
+    let raw_bindings = bindings
+        .iter()
+        .map(|binding| hal::pso::DescriptorSetLayoutBinding {
+            binding: binding.binding,
+            ty: conv::map_binding_type(binding.ty),
+            count: 1, //TODO: consolidate
+            stage_flags: conv::map_shader_stage_flags(binding.visibility),
+            immutable_samplers: false, // TODO
+        })
+        .collect::<Vec<_>>(); //TODO: avoid heap allocation
+
     let raw = unsafe {
         HUB.devices.read()[device_id]
             .raw
-            .create_descriptor_set_layout(
-                bindings.iter().map(|binding| {
-                    hal::pso::DescriptorSetLayoutBinding {
-                        binding: binding.binding,
-                        ty: conv::map_binding_type(binding.ty),
-                        count: 1, //TODO: consolidate
-                        stage_flags: conv::map_shader_stage_flags(binding.visibility),
-                        immutable_samplers: false, // TODO
-                    }
-                }),
-                &[],
-            )
+            .create_descriptor_set_layout(&raw_bindings, &[])
             .unwrap()
     };
 
     binding_model::BindGroupLayout {
         raw,
         bindings: bindings.to_vec(),
+        desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
         dynamic_count: bindings
             .iter()
             .filter(|b| match b.ty {
@@ -1042,8 +993,20 @@ pub fn device_create_bind_group(
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length as usize) };
     assert_eq!(bindings.len(), bind_group_layout.bindings.len());
 
-    let mut desc_pool = device.desc_pool.lock();
-    let desc_set = unsafe { desc_pool.allocate_set(&bind_group_layout.raw).unwrap() };
+    let desc_set = unsafe {
+        let mut desc_sets = ArrayVec::<[_; 1]>::new();
+        device.desc_allocator
+            .lock()
+            .allocate(
+                &device.raw,
+                &bind_group_layout.raw,
+                bind_group_layout.desc_ranges,
+                1,
+                &mut desc_sets,
+            )
+            .unwrap();
+        desc_sets.pop().unwrap()
+    };
 
     let buffer_guard = HUB.buffers.read();
     let sampler_guard = HUB.samplers.read();
@@ -1116,7 +1079,7 @@ pub fn device_create_bind_group(
             }
         };
         writes.alloc().init(hal::pso::DescriptorSetWrite {
-            set: &desc_set,
+            set: desc_set.raw(),
             binding: b.binding,
             array_offset: 0, //TODO
             descriptors: iter::once(descriptor),
@@ -1964,12 +1927,12 @@ pub extern "C" fn wgpu_buffer_unmap(buffer_id: BufferId) {
                     buffer
                         .mapped_write_ranges
                         .iter()
-                        .map(|r| (&buffer.memory, r.clone())),
+                        .map(|r| (buffer.memory.memory(), r.clone())),
                 )
                 .unwrap()
-        }; // TODO
+        };
         buffer.mapped_write_ranges.clear();
     }
 
-    unsafe { device_raw.unmap_memory(&buffer.memory) };
+    buffer.memory.unmap(device_raw);
 }

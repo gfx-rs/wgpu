@@ -14,6 +14,7 @@ use crate::{
 use bitflags::bitflags;
 use hal;
 use parking_lot::Mutex;
+use rendy_memory::MemoryBlock;
 
 use std::borrow::Borrow;
 
@@ -60,8 +61,7 @@ unsafe impl Sync for BufferMapOperation {}
 pub struct Buffer<B: hal::Backend> {
     pub(crate) raw: B::Buffer,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) memory_properties: hal::memory::Properties,
-    pub(crate) memory: B::Memory,
+    pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: BufferAddress,
     pub(crate) mapped_write_ranges: Vec<std::ops::Range<u64>>,
     pub(crate) pending_map_operation: Option<BufferMapOperation>,
@@ -179,7 +179,7 @@ pub struct TextureDescriptor {
 pub(crate) enum TexturePlacement<B: hal::Backend> {
     #[cfg_attr(feature = "remote", allow(unused))]
     SwapChain(SwapChainLink<Mutex<SwapImageEpoch>>),
-    Memory(B::Memory),
+    Memory(MemoryBlock<B>),
     Void,
 }
 

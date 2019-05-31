@@ -227,7 +227,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     {
         let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let bind_groups =
-            iter::once(&bind_group.raw).chain(follow_up.map(|bg_id| &bind_group_guard[bg_id].raw));
+            iter::once(bind_group.raw.raw()).chain(follow_up.map(|bg_id| bind_group_guard[bg_id].raw.raw()));
         unsafe {
             pass.raw.bind_graphics_descriptor_sets(
                 &&pipeline_layout_guard[pipeline_layout_id].raw,
@@ -414,7 +414,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
             .enumerate()
         {
             if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
-                let desc_set = &bind_group_guard[bg_id].raw;
+                let desc_set = bind_group_guard[bg_id].raw.raw();
                 unsafe {
                     pass.raw.bind_graphics_descriptor_sets(
                         &pipeline_layout.raw,
