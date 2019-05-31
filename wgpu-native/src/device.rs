@@ -531,12 +531,12 @@ pub fn device_create_buffer(
         use resource::BufferUsage as Bu;
         use rendy_memory::MemoryUsageValue as Muv;
 
-        if (Bu::MAP_WRITE | Bu::TRANSFER_SRC).contains(desc.usage) {
+        if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
+            Muv::Data
+        } else if (Bu::MAP_WRITE | Bu::TRANSFER_SRC).contains(desc.usage) {
             Muv::Upload
         } else if (Bu::MAP_READ | Bu::TRANSFER_DST).contains(desc.usage) {
             Muv::Download
-        } else if !desc.usage.contains(Bu::MAP_READ | Bu::MAP_WRITE) {
-            Muv::Data
         } else {
             Muv::Dynamic
         }
