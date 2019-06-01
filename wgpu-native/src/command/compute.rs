@@ -8,6 +8,7 @@ use crate::{
     CommandBufferId,
     ComputePassId,
     ComputePipelineId,
+    BIND_BUFFER_ALIGNMENT,
     RawString,
     Stored,
 };
@@ -72,6 +73,18 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     } else {
         &[]
     };
+
+    if cfg!(debug_assertions) {
+        for off in offsets {
+            assert_eq!(
+                *off % BIND_BUFFER_ALIGNMENT,
+                0,
+                "Misaligned dynamic buffer offset: {} does not align with {}",
+                off,
+                BIND_BUFFER_ALIGNMENT
+            );
+        }
+    }
 
     //Note: currently, WebGPU compute passes have synchronization defined
     // at a dispatch granularity, so we insert the necessary barriers here.

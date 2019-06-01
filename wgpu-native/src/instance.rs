@@ -1,5 +1,6 @@
 use crate::{
     binding_model::MAX_BIND_GROUPS,
+    device::BIND_BUFFER_ALIGNMENT,
     hub::HUB,
     AdapterHandle,
     AdapterId,
@@ -225,7 +226,19 @@ pub extern "C" fn wgpu_instance_get_adapter(
     desc: &AdapterDescriptor,
 ) -> AdapterId {
     let adapter = instance_get_adapter(instance_id, desc);
+    let limits = adapter.physical_device.limits();
+
     info!("Adapter {:?}", adapter.info);
+
+    assert!(
+        BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment == 0,
+        "Adapter storage buffer offset alignment not compatible with WGPU"
+    );
+    assert!(
+        BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment == 0,
+        "Adapter uniform buffer offset alignment not compatible with WGPU"
+    );
+
     HUB.adapters.register_local(adapter)
 }
 
@@ -234,8 +247,8 @@ pub fn adapter_create_device(adapter_id: AdapterId, _desc: &DeviceDescriptor) ->
     let adapter = &adapter_guard[adapter_id];
     let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
-    let limits = adapter.physical_device.limits();
-    DeviceHandle::new(raw, adapter_id, queue_group, mem_props, limits)
+
+    DeviceHandle::new(raw, adapter_id, queue_group, mem_props)
 }
 
 #[cfg(feature = "local")]
