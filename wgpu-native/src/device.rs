@@ -60,6 +60,9 @@ const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_VERTEX_BUFFERS: usize = 8;
 
+/// Bound uniform/storage buffer offsets must be aligned to this number.
+pub const BIND_BUFFER_ALIGNMENT: hal::buffer::Offset = 256;
+
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
     Ps::DRAW_INDIRECT
@@ -406,7 +409,6 @@ fn map_buffer(
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     adapter_id: AdapterId,
-    limits: hal::Limits,
     pub(crate) queue_group: hal::QueueGroup<B, hal::General>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<Heaps<B>>,
@@ -424,7 +426,6 @@ impl<B: hal::Backend> Device<B> {
         adapter_id: AdapterId,
         queue_group: hal::QueueGroup<B, hal::General>,
         mem_props: hal::MemoryProperties,
-        limits: hal::Limits,
     ) -> Self {
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
@@ -459,7 +460,6 @@ impl<B: hal::Backend> Device<B> {
         Device {
             raw,
             adapter_id,
-            limits,
             com_allocator: command::CommandAllocator::new(queue_group.family()),
             mem_allocator: Mutex::new(heaps),
             desc_allocator: Mutex::new(DescriptorAllocator::new()),
@@ -1020,15 +1020,13 @@ pub fn device_create_bind_group(
             binding_model::BindingResource::Buffer(ref bb) => {
                 let (alignment, usage) = match decl.ty {
                     binding_model::BindingType::UniformBuffer
-                    | binding_model::BindingType::UniformBufferDynamic => (
-                        device.limits.min_uniform_buffer_offset_alignment,
-                        resource::BufferUsage::UNIFORM,
-                    ),
+                    | binding_model::BindingType::UniformBufferDynamic => {
+                        (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::UNIFORM)
+                    }
                     binding_model::BindingType::StorageBuffer
-                    | binding_model::BindingType::StorageBufferDynamic => (
-                        device.limits.min_storage_buffer_offset_alignment,
-                        resource::BufferUsage::STORAGE,
-                    ),
+                    | binding_model::BindingType::StorageBufferDynamic => {
+                        (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE)
+                    }
                     binding_model::BindingType::Sampler
                     | binding_model::BindingType::SampledTexture
                     | binding_model::BindingType::StorageTexture => {
