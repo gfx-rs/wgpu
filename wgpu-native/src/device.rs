@@ -135,7 +135,7 @@ struct ActiveSubmission<B: hal::Backend> {
 ///   1. When mapping is requested we add the buffer to the pending list of `mapped` buffers.
 ///   2. When `triage_referenced` is called, it checks the last submission index associated with each of the mapped buffer,
 /// and register the buffer with either a submission in flight, or straight into `ready_to_map` vector.
-///   3. when `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
+///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
 
 struct PendingResources<B: hal::Backend> {
@@ -1061,7 +1061,7 @@ pub fn device_create_bind_group(
                         resource::TextureUsage::STORAGE,
                         hal::image::Layout::General,
                     ),
-                    _ => panic!("Missmatched texture binding for {:?}", decl),
+                    _ => panic!("Mismatched texture binding for {:?}", decl),
                 };
                 let view = &texture_view_guard[id];
                 used.views.query(id, &view.life_guard.ref_count, DummyUsage);
