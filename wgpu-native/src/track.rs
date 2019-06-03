@@ -108,7 +108,7 @@ pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
 pub enum Stitch {
     /// Stitch to the init state of the other resource.
     Init,
-    /// Stitch to the last sttate of the other resource.
+    /// Stitch to the last state of the other resource.
     Last,
 }
 
