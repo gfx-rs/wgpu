@@ -177,7 +177,7 @@ impl<B: hal::Backend> PendingResources<B> {
         heaps_mutex: &Mutex<Heaps<B>>,
         force_wait: bool,
     ) -> SubmissionIndex {
-        if force_wait {
+        if force_wait && !self.active.is_empty() {
             let status = unsafe {
                 device.wait_for_fences(
                     self.active.iter().map(|a| &a.fence),
