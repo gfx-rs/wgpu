@@ -515,13 +515,13 @@ typedef struct {
   WGPUBufferAddress stride;
   WGPUInputStepMode step_mode;
   const WGPUVertexAttributeDescriptor *attributes;
-  uintptr_t attributes_count;
+  uintptr_t attributes_length;
 } WGPUVertexBufferDescriptor;
 
 typedef struct {
   WGPUIndexFormat index_format;
   const WGPUVertexBufferDescriptor *vertex_buffers;
-  uintptr_t vertex_buffers_count;
+  uintptr_t vertex_buffers_length;
 } WGPUVertexInputDescriptor;
 
 typedef struct {
@@ -688,8 +688,8 @@ void wgpu_compute_pass_push_debug_group(WGPUComputePassId _pass_id, WGPURawStrin
 void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
                                       uint32_t index,
                                       WGPUBindGroupId bind_group_id,
-                                      const WGPUBufferAddress *offsets_ptr,
-                                      uintptr_t offsets_count);
+                                      const WGPUBufferAddress *offsets,
+                                      uintptr_t offsets_length);
 
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
 
@@ -785,8 +785,8 @@ WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id,
 #endif
 
 void wgpu_queue_submit(WGPUQueueId queue_id,
-                       const WGPUCommandBufferId *command_buffer_ptr,
-                       uintptr_t command_buffer_count);
+                       const WGPUCommandBufferId *command_buffers,
+                       uintptr_t command_buffers_length);
 
 void wgpu_render_pass_draw(WGPURenderPassId pass_id,
                            uint32_t vertex_count,
@@ -812,8 +812,8 @@ void wgpu_render_pass_push_debug_group(WGPURenderPassId _pass_id, WGPURawString 
 void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
-                                     const WGPUBufferAddress *offsets_ptr,
-                                     uintptr_t offsets_count);
+                                     const WGPUBufferAddress *offsets,
+                                     uintptr_t offsets_length);
 
 void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
 
@@ -832,9 +832,9 @@ void wgpu_render_pass_set_scissor_rect(WGPURenderPassId pass_id,
 void wgpu_render_pass_set_stencil_reference(WGPURenderPassId pass_id, uint32_t value);
 
 void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
-                                         const WGPUBufferId *buffer_ptr,
-                                         const WGPUBufferAddress *offset_ptr,
-                                         uintptr_t count);
+                                         const WGPUBufferId *buffers,
+                                         const WGPUBufferAddress *offsets,
+                                         uintptr_t length);
 
 void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
                                    float x,

@@ -59,17 +59,17 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     pass_id: ComputePassId,
     index: u32,
     bind_group_id: BindGroupId,
-    offsets_ptr: *const BufferAddress,
-    offsets_count: usize,
+    offsets: *const BufferAddress,
+    offsets_length: usize,
 ) {
     let mut pass_guard = HUB.compute_passes.write();
     let pass = &mut pass_guard[pass_id];
     let bind_group_guard = HUB.bind_groups.read();
     let bind_group = &bind_group_guard[bind_group_id];
 
-    assert_eq!(bind_group.dynamic_count, offsets_count);
-    let offsets = if offsets_count != 0 {
-        unsafe { slice::from_raw_parts(offsets_ptr, offsets_count) }
+    assert_eq!(bind_group.dynamic_count, offsets_length);
+    let offsets = if offsets_length != 0 {
+        unsafe { slice::from_raw_parts(offsets, offsets_length) }
     } else {
         &[]
     };
