@@ -670,7 +670,7 @@ WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId c
 
 #if defined(WGPU_LOCAL)
 WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId command_encoder_id,
-                                                        WGPURenderPassDescriptor desc);
+                                                        const WGPURenderPassDescriptor *desc);
 #endif
 
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_encoder_id);
