@@ -234,7 +234,7 @@ int main() {
 
         WGPURenderPassId rpass =
             wgpu_command_encoder_begin_render_pass(cmd_encoder,
-                (WGPURenderPassDescriptor){
+                &(WGPURenderPassDescriptor){
                     .color_attachments = color_attachments,
                     .color_attachments_length = RENDER_PASS_ATTACHMENTS_LENGTH,
                     .depth_stencil_attachment = NULL,

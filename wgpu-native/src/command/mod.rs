@@ -164,7 +164,7 @@ pub extern "C" fn wgpu_command_encoder_finish(
 
 pub fn command_encoder_begin_render_pass(
     command_encoder_id: CommandEncoderId,
-    desc: RenderPassDescriptor,
+    desc: &RenderPassDescriptor,
 ) -> RenderPass<Backend> {
     let device_guard = HUB.devices.read();
     let mut cmb_guard = HUB.command_buffers.write();
@@ -406,7 +406,7 @@ pub fn command_encoder_begin_render_pass(
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_begin_render_pass(
     command_encoder_id: CommandEncoderId,
-    desc: RenderPassDescriptor,
+    desc: &RenderPassDescriptor,
 ) -> RenderPassId {
     let pass = command_encoder_begin_render_pass(command_encoder_id, desc);
     HUB.render_passes.register_local(pass)
