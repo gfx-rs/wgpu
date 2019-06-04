@@ -204,17 +204,17 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     pass_id: RenderPassId,
     index: u32,
     bind_group_id: BindGroupId,
-    offsets_ptr: *const BufferAddress,
-    offsets_count: usize,
+    offsets: *const BufferAddress,
+    offsets_length: usize,
 ) {
     let mut pass_guard = HUB.render_passes.write();
     let pass = &mut pass_guard[pass_id];
     let bind_group_guard = HUB.bind_groups.read();
     let bind_group = &bind_group_guard[bind_group_id];
 
-    assert_eq!(bind_group.dynamic_count, offsets_count);
-    let offsets = if offsets_count != 0 {
-        unsafe { slice::from_raw_parts(offsets_ptr, offsets_count) }
+    assert_eq!(bind_group.dynamic_count, offsets_length);
+    let offsets = if offsets_length != 0 {
+        unsafe { slice::from_raw_parts(offsets, offsets_length) }
     } else {
         &[]
     };
@@ -302,14 +302,14 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     pass_id: RenderPassId,
-    buffer_ptr: *const BufferId,
-    offset_ptr: *const BufferAddress,
-    count: usize,
+    buffers: *const BufferId,
+    offsets: *const BufferAddress,
+    length: usize,
 ) {
     let mut pass_guard = HUB.render_passes.write();
     let buffer_guard = HUB.buffers.read();
-    let buffers = unsafe { slice::from_raw_parts(buffer_ptr, count) };
-    let offsets = unsafe { slice::from_raw_parts(offset_ptr, count) };
+    let buffers = unsafe { slice::from_raw_parts(buffers, length) };
+    let offsets = unsafe { slice::from_raw_parts(offsets, length) };
 
     let pass = &mut pass_guard[pass_id];
     for (vbs, (&id, &offset)) in pass.vertex_state.inputs.iter_mut().zip(buffers.iter().zip(offsets)) {
@@ -319,7 +319,7 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
             .unwrap();
         vbs.total_size = buffer.size - offset;
     }
-    for vbs in pass.vertex_state.inputs[count..].iter_mut() {
+    for vbs in pass.vertex_state.inputs[length..].iter_mut() {
         vbs.total_size = 0;
     }
 

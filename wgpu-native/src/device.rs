@@ -1176,11 +1176,11 @@ pub extern "C" fn wgpu_device_get_queue(device_id: DeviceId) -> QueueId {
 #[no_mangle]
 pub extern "C" fn wgpu_queue_submit(
     queue_id: QueueId,
-    command_buffer_ptr: *const CommandBufferId,
-    command_buffer_count: usize,
+    command_buffers: *const CommandBufferId,
+    command_buffers_length: usize,
 ) {
     let command_buffer_ids =
-        unsafe { slice::from_raw_parts(command_buffer_ptr, command_buffer_count) };
+        unsafe { slice::from_raw_parts(command_buffers, command_buffers_length) };
 
     let (submit_index, fence) = {
         let surface_guard = HUB.surfaces.read();
@@ -1416,7 +1416,7 @@ pub fn device_create_render_pipeline(
     let desc_vbs = unsafe {
         slice::from_raw_parts(
             desc.vertex_input.vertex_buffers,
-            desc.vertex_input.vertex_buffers_count,
+            desc.vertex_input.vertex_buffers_length,
         )
     };
     let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
@@ -1424,7 +1424,7 @@ pub fn device_create_render_pipeline(
     let mut attributes = Vec::new();
     for (i, vb_state) in desc_vbs.iter().enumerate() {
         vertex_strides.alloc().init((vb_state.stride, vb_state.step_mode));
-        if vb_state.attributes_count == 0 {
+        if vb_state.attributes_length == 0 {
             continue;
         }
         vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
@@ -1436,7 +1436,7 @@ pub fn device_create_render_pipeline(
             },
         });
         let desc_atts =
-            unsafe { slice::from_raw_parts(vb_state.attributes, vb_state.attributes_count) };
+            unsafe { slice::from_raw_parts(vb_state.attributes, vb_state.attributes_length) };
         for attribute in desc_atts {
             assert_eq!(0, attribute.offset >> 32);
             attributes.alloc().init(hal::pso::AttributeDesc {

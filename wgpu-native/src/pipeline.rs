@@ -198,14 +198,14 @@ pub struct VertexBufferDescriptor {
     pub stride: BufferAddress,
     pub step_mode: InputStepMode,
     pub attributes: *const VertexAttributeDescriptor,
-    pub attributes_count: usize,
+    pub attributes_length: usize,
 }
 
 #[repr(C)]
 pub struct VertexInputDescriptor {
     pub index_format: IndexFormat,
     pub vertex_buffers: *const VertexBufferDescriptor,
-    pub vertex_buffers_count: usize,
+    pub vertex_buffers_length: usize,
 }
 
 #[repr(C)]

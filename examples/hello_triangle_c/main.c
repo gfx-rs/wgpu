@@ -138,7 +138,7 @@ int main() {
                     (WGPUVertexInputDescriptor){
                         .index_format = WGPUIndexFormat_Uint16,
                         .vertex_buffers = NULL,
-                        .vertex_buffers_count = 0,
+                        .vertex_buffers_length = 0,
                     },
                 .sample_count = 1,
             });
