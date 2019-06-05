@@ -16,6 +16,8 @@ matrix:
     # Windows 64bit
     - os: windows
       rust: stable
+    - os: windows
+      rust: nightly
 
     # macOS 64bit
     - env: MACOSX_DEPLOYMENT_TARGET=10.9
@@ -45,19 +47,28 @@ addons:
     packages:
     - cmake
     - glfw3
-  choco:
-    packages:
-    - make
 
 branches:
   except:
   - staging.tmp
 
 before_install:
-  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
+- if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
 
 script:
   - cargo test
-  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen && make VERBOSE=1; fi
+  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then
+      wget -nc -O glfw.zip https://github.com/glfw/glfw/archive/3.3.zip &&
+      7z x glfw.zip -oglfw &&
+      cd glfw/glfw-3.3 &&
+      export GLFW3_INCLUDE_DIR=`pwd`/include &&
+      export GLFW3_INSTALL_DIR=`pwd`/install &&
+      cmake . -DCMAKE_INSTALL_PREFIX=$GLFW3_INSTALL_DIR -DCMAKE_GENERATOR_PLATFORM=x64 &&
+      cmake --build . --target install &&
+      cd ../.. &&
+      export CMAKE_PREFIX_PATH=$GLFW3_INSTALL_DIR &&
+      make examples-native VERBOSE=1;
+    fi
+  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then cargo +nightly install cbindgen && make VERBOSE=1; fi
   # TODO: Temporarily only test building the gl backend, properly test when it is usable from C
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cd wgpu-native && cargo build --features local,gfx-backend-gl; fi
