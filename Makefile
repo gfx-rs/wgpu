@@ -3,6 +3,8 @@ EXCLUDES:=
 FEATURE_RUST:=
 FEATURE_NATIVE:=
 
+GENERATOR_PLATFORM:=
+
 FFI_DIR:=ffi
 BUILD_DIR:=build
 CLEAN_FFI_DIR:=
@@ -17,6 +19,7 @@ endif
 ifeq ($(OS),Windows_NT)
 	CLEAN_FFI_DIR=del $(FFI_DIR)\*.* /Q /S
 	CREATE_BUILD_DIR=mkdir $(BUILD_DIR)
+	GENERATOR_PLATFORM=-DCMAKE_GENERATOR_PLATFORM=x64
 
 	ifeq ($(TARGET),x86_64-pc-windows-gnu)
 		FEATURE_RUST=vulkan
@@ -71,7 +74,7 @@ ffi/wgpu-remote.h:  wgpu-remote/cbindgen.toml $(wildcard wgpu-native/**/*.rs wgp
 	rustup run nightly cbindgen wgpu-remote >$(FFI_DIR)/wgpu-remote.h
 
 examples-native: lib-native $(FFI_DIR)/wgpu.h examples/hello_triangle_c/main.c
-	cd examples/hello_triangle_c && $(CREATE_BUILD_DIR) && cd build && cmake .. -DBACKEND=$(FEATURE_RUST) && make
+	cd examples/hello_triangle_c && $(CREATE_BUILD_DIR) && cd build && cmake .. -DBACKEND=$(FEATURE_RUST) $(GENERATOR_PLATFORM) && cmake --build .
 
 examples-remote: lib-remote $(FFI_DIR)/wgpu-remote.h examples/hello_remote_c/main.c
-	cd examples/hello_remote_c && $(CREATE_BUILD_DIR) && cd build && cmake .. && make
+	cd examples/hello_remote_c && $(CREATE_BUILD_DIR) && cd build && cmake .. && cmake --build .
