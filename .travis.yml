@@ -57,6 +57,7 @@ before_install:
 
 script:
   - cargo test
+  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then
       wget -nc -O glfw.zip https://github.com/glfw/glfw/archive/3.3.zip &&
       7z x glfw.zip -oglfw &&
@@ -69,6 +70,6 @@ script:
       export CMAKE_PREFIX_PATH=$GLFW3_INSTALL_DIR &&
       make examples-native VERBOSE=1;
     fi
-  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then cargo +nightly install cbindgen && make VERBOSE=1; fi
+  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then make VERBOSE=1; fi
   # TODO: Temporarily only test building the gl backend, properly test when it is usable from C
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cd wgpu-native && cargo build --features local,gfx-backend-gl; fi
