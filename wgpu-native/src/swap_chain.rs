@@ -22,7 +22,7 @@ use std::{
     sync::atomic::{AtomicBool, Ordering},
 };
 
-pub type SwapImageEpoch = u16;
+pub type SwapImageEpoch = u64;
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
 
