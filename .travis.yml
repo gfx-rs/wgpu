@@ -8,3 +8,8 @@ os:
 branches:
   except:
   - staging.tmp
+
+script:
+  - cargo test
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo test --no-run --features vulkan; fi
+  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then cargo test --no-run --features vulkan; fi
