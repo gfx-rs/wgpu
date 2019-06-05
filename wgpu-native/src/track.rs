@@ -22,6 +22,51 @@ use std::{
     ops::{BitOr, Range},
 };
 
+#[derive(Clone, Debug)]
+pub struct RangedStates<I, T> {
+    ranges: Vec<(Range<I>, T)>,
+}
+
+pub type TextureLayerStates = RangedStates<hal::image::Layer, TextureUsage>;
+pub type TextureStates = RangedStates<hal::image::Level, TextureLayerStates>;
+
+impl<I: Copy + PartialOrd, T: Clone> RangedStates<I, T> {
+    fn isolate(&mut self, index: Range<I>) -> &mut T {
+        let mut pos = self.ranges
+            .iter()
+            .position(|&(ref range, _)| index.start >= range.start)
+            .unwrap();
+        let base_range = self.ranges[pos].0.clone();
+        assert!(index.end <= base_range.end);
+        if base_range.start < index.start {
+            let value = ((base_range.start .. index.start), self.ranges[pos].1.clone());
+            self.ranges.insert(pos, value);
+            pos += 1;
+            self.ranges[pos].0.start = index.start;
+        }
+        if base_range.end > index.end {
+            let value = ((index.end .. base_range.end), self.ranges[pos].1.clone());
+            self.ranges.insert(pos + 1, value);
+            self.ranges[pos].0.end = index.end;
+        }
+        &mut self.ranges[pos].1
+    }
+}
+
+impl TextureStates {
+    fn change_state(
+        &mut self, level: hal::image::Level, layer: hal::image::Layer, usage: TextureUsage
+    ) -> Option<TextureUsage> {
+        let layer_states = self.isolate(level .. level + 1);
+        let cur_usage = layer_states.isolate(layer .. layer + 1);
+        if *cur_usage != usage {
+            Some(mem::replace(cur_usage, usage))
+        } else {
+            None
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
 pub enum Tracktion<T> {

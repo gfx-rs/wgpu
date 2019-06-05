@@ -1,6 +1,5 @@
 use crate::{
     binding_model::MAX_BIND_GROUPS,
-    device::BIND_BUFFER_ALIGNMENT,
     hub::HUB,
     AdapterHandle,
     AdapterId,
@@ -9,7 +8,7 @@ use crate::{
     SurfaceHandle,
 };
 #[cfg(feature = "local")]
-use crate::{DeviceId, SurfaceId};
+use crate::{device::BIND_BUFFER_ALIGNMENT, DeviceId, SurfaceId};
 
 #[cfg(feature = "local")]
 use log::info;
