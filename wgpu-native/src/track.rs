@@ -1,5 +1,6 @@
 use crate::{
     hub::Storage,
+    device::MAX_MIP_LEVELS,
     resource::{BufferUsage, TextureUsage},
     BufferId,
     Epoch,
@@ -11,6 +12,7 @@ use crate::{
     BindGroupId,
 };
 
+use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use hal::backend::FastHashMap;
 
@@ -28,7 +30,7 @@ pub struct RangedStates<I, T> {
 }
 
 pub type TextureLayerStates = RangedStates<hal::image::Layer, TextureUsage>;
-pub type TextureStates = RangedStates<hal::image::Level, TextureLayerStates>;
+pub type TextureStates2 = RangedStates<hal::image::Level, TextureLayerStates>;
 
 impl<I: Copy + PartialOrd, T: Clone> RangedStates<I, T> {
     fn isolate(&mut self, index: Range<I>) -> &mut T {
@@ -53,7 +55,7 @@ impl<I: Copy + PartialOrd, T: Clone> RangedStates<I, T> {
     }
 }
 
-impl TextureStates {
+impl TextureStates2 {
     fn change_state(
         &mut self, level: hal::image::Level, layer: hal::image::Layer, usage: TextureUsage
     ) -> Option<TextureUsage> {
@@ -66,6 +68,61 @@ impl TextureStates {
         }
     }
 }
+
+
+pub enum PlaneStates<T> {
+    Single(T),
+    Multi(Vec<(Range<hal::image::Layer>, T)>),
+}
+
+impl<T> Default for PlaneStates<T> {
+    fn default() -> Self {
+        PlaneStates::Multi(Vec::new())
+    }
+}
+
+pub struct DepthStencilState {
+    depth: TextureUsage,
+    stencil: TextureUsage,
+}
+
+pub struct TextureStates {
+    color_mips: ArrayVec<[PlaneStates<TextureUsage>; MAX_MIP_LEVELS]>,
+    depth_stencil: PlaneStates<DepthStencilState>,
+}
+
+impl TextureStates {
+    fn change<'a>(
+        &mut self,
+        what: hal::image::SubresourceRange,
+        usage: TextureUsage,
+        permit: TrackPermit,
+        fun: impl FnMut(hal::image::SubresourceRange, Tracktion<TextureUsage>),
+    ) {
+        /*if what.aspects.contains(hal::format::Aspects::COLOR) {
+            for level in what.levels.clone() {
+                match self.color_mips[level as usize] {
+                    PlaneStates::Single(ref mut cur_usage) => {
+                        assert_eq!(what.layers, 0 .. 1);
+                        if *cur_usage != usage {
+                            let sub = hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::COLOR,
+                                levels: level .. level + 1,
+                                layers: 0 .. 1,
+                            };
+                            fun(sub, *cur_usage);
+                            *cur_usage = usage;
+                        }
+                    }
+                    PlaneStates::Multi(ref mut layers) => {
+                        let pos =
+                    }
+                }
+            }
+        }*/
+    }
+}
+
 
 #[derive(Clone, Debug, PartialEq)]
 #[allow(unused)]
@@ -131,24 +188,60 @@ impl GenericUsage for DummyUsage {
     }
 }
 
+/// A single unit of state tracking.
 #[derive(Clone, Debug)]
-struct Track<U> {
-    ref_count: RefCount,
+pub struct Unit<U> {
     init: U,
     last: U,
+}
+
+impl<U: Copy> Unit<U> {
+    fn new(usage: U) -> Self {
+        Unit {
+            init: usage,
+            last: usage,
+        }
+    }
+
+    fn select(&self, stitch: Stitch) -> U {
+        match stitch {
+            Stitch::Init => self.init,
+            Stitch::Last => self.last,
+        }
+    }
+}
+
+impl<U: Copy + BitOr<Output=U> + PartialEq + GenericUsage> Unit<U> {
+    fn transit(&mut self, usage: U, permit: TrackPermit) -> Result<Tracktion<U>, U> {
+        let old = self.last;
+        if usage == old {
+            Ok(Tracktion::Keep)
+        } else if permit.contains(TrackPermit::EXTEND) && !(old | usage).is_exclusive() {
+            self.last = old | usage;
+            Ok(Tracktion::Extend { old })
+        } else if permit.contains(TrackPermit::REPLACE) {
+            self.last = usage;
+            Ok(Tracktion::Replace { old })
+        } else {
+            Err(old)
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+struct Resource<S> {
+    ref_count: RefCount,
+    state: S,
     epoch: Epoch,
 }
 
 //TODO: consider having `I` as an associated type of `U`?
 #[derive(Debug)]
-pub struct Tracker<I, U> {
-    map: FastHashMap<Index, Track<U>>,
+pub struct Tracker<I, S> {
+    /// An association of known resource indices with their tracked states.
+    map: FastHashMap<Index, Resource<S>>,
     _phantom: PhantomData<I>,
 }
-pub type BufferTracker = Tracker<BufferId, BufferUsage>;
-pub type TextureTracker = Tracker<TextureId, TextureUsage>;
-pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
-pub type BindGroupTracker = Tracker<BindGroupId, DummyUsage>;
 
 //TODO: make this a generic parameter.
 /// Mode of stitching to states together.
@@ -163,8 +256,8 @@ pub enum Stitch {
 //TODO: consider rewriting this without any iterators that have side effects.
 #[derive(Debug)]
 pub struct ConsumeIterator<'a, I: TypedId, U: Copy + PartialEq> {
-    src: Iter<'a, Index, Track<U>>,
-    dst: &'a mut FastHashMap<Index, Track<U>>,
+    src: Iter<'a, Index, Resource<Unit<U>>>,
+    dst: &'a mut FastHashMap<Index, Resource<Unit<U>>>,
     stitch: Stitch,
     _marker: PhantomData<I>,
 }
@@ -180,13 +273,10 @@ impl<'a, I: TypedId, U: Copy + PartialEq> Iterator for ConsumeIterator<'a, I, U>
                 }
                 Entry::Occupied(mut e) => {
                     assert_eq!(e.get().epoch, new.epoch);
-                    let old = mem::replace(&mut e.get_mut().last, new.last);
-                    if old != new.init {
-                        let state = match self.stitch {
-                            Stitch::Init => new.init,
-                            Stitch::Last => new.last,
-                        };
-                        return Some((I::new(index, new.epoch), old .. state))
+                    let old = mem::replace(&mut e.get_mut().state.last, new.state.last);
+                    if old != new.state.init {
+                        let states = old .. new.state.select(self.stitch);
+                        return Some((I::new(index, new.epoch), states))
                     }
                 }
             }
@@ -201,41 +291,7 @@ impl<'a, I: TypedId, U: Copy + PartialEq> Drop for ConsumeIterator<'a, I, U> {
     }
 }
 
-#[derive(Debug)]
-pub struct TrackerSet {
-    pub buffers: BufferTracker,
-    pub textures: TextureTracker,
-    pub views: TextureViewTracker,
-    pub bind_groups: BindGroupTracker,
-    //TODO: samplers
-}
-
-impl TrackerSet {
-    pub fn new() -> Self {
-        TrackerSet {
-            buffers: BufferTracker::new(),
-            textures: TextureTracker::new(),
-            views: TextureViewTracker::new(),
-            bind_groups: BindGroupTracker::new(),
-        }
-    }
-
-    pub fn clear(&mut self) {
-        self.buffers.clear();
-        self.textures.clear();
-        self.views.clear();
-        self.bind_groups.clear();
-    }
-
-    pub fn consume_by_extend(&mut self, other: &Self) {
-        self.buffers.consume_by_extend(&other.buffers).unwrap();
-        self.textures.consume_by_extend(&other.textures).unwrap();
-        self.views.consume_by_extend(&other.views).unwrap();
-        self.bind_groups.consume_by_extend(&other.bind_groups).unwrap();
-    }
-}
-
-impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
+impl<I: TypedId, S> Tracker<I, S> {
     pub fn new() -> Self {
         Tracker {
             map: FastHashMap::default(),
@@ -246,22 +302,34 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
     /// Remove an id from the tracked map.
     pub(crate) fn remove(&mut self, id: I) -> bool {
         match self.map.remove(&id.index()) {
-            Some(track) => {
-                assert_eq!(track.epoch, id.epoch());
+            Some(resource) => {
+                assert_eq!(resource.epoch, id.epoch());
                 true
             }
             None => false,
         }
     }
 
+    /// Return an iterator over used resources keys.
+    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
+        self.map
+            .iter()
+            .map(|(&index, resource)| I::new(index, resource.epoch))
+    }
+
+    fn clear(&mut self) {
+        self.map.clear();
+    }
+}
+
+impl<I: Copy + TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, Unit<U>> {
     /// Get the last usage on a resource.
     pub(crate) fn query(&mut self, id: I, ref_count: &RefCount, default: U) -> Query<U> {
         match self.map.entry(id.index()) {
             Entry::Vacant(e) => {
-                e.insert(Track {
+                e.insert(Resource {
                     ref_count: ref_count.clone(),
-                    init: default,
-                    last: default,
+                    state: Unit::new(default),
                     epoch: id.epoch(),
                 });
                 Query {
@@ -272,7 +340,7 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
             Entry::Occupied(e) => {
                 assert_eq!(e.get().epoch, id.epoch());
                 Query {
-                    usage: e.get().last,
+                    usage: e.get().state.last,
                     initialized: false,
                 }
             }
@@ -289,28 +357,16 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
     ) -> Result<Tracktion<U>, U> {
         match self.map.entry(id.index()) {
             Entry::Vacant(e) => {
-                e.insert(Track {
+                e.insert(Resource {
                     ref_count: ref_count.clone(),
-                    init: usage,
-                    last: usage,
+                    state: Unit::new(usage),
                     epoch: id.epoch(),
                 });
                 Ok(Tracktion::Init)
             }
             Entry::Occupied(mut e) => {
                 assert_eq!(e.get().epoch, id.epoch());
-                let old = e.get().last;
-                if usage == old {
-                    Ok(Tracktion::Keep)
-                } else if permit.contains(TrackPermit::EXTEND) && !(old | usage).is_exclusive() {
-                    e.get_mut().last = old | usage;
-                    Ok(Tracktion::Extend { old })
-                } else if permit.contains(TrackPermit::REPLACE) {
-                    e.get_mut().last = usage;
-                    Ok(Tracktion::Replace { old })
-                } else {
-                    Err(old)
-                }
+                e.get_mut().state.transit(usage, permit)
             }
         }
     }
@@ -340,32 +396,19 @@ impl<I: TypedId, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker
                 }
                 Entry::Occupied(mut e) => {
                     assert_eq!(e.get().epoch, new.epoch);
-                    let old = e.get().last;
-                    if old != new.last {
-                        let extended = old | new.last;
+                    let old = e.get().state.last;
+                    if old != new.state.last {
+                        let extended = old | new.state.last;
                         if extended.is_exclusive() {
                             let id = I::new(index, new.epoch);
-                            return Err((id, old .. new.last));
+                            return Err((id, old .. new.state.last));
                         }
-                        e.get_mut().last = extended;
+                        e.get_mut().state.last = extended;
                     }
                 }
             }
         }
         Ok(())
-    }
-
-    /// Return an iterator over used resources keys.
-    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = I> {
-        self.map
-            .iter()
-            .map(|(&index, track)| I::new(index, track.epoch))
-    }
-}
-
-impl<I: TypedId + Copy, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> Tracker<I, U> {
-    fn clear(&mut self) {
-        self.map.clear();
     }
 
     fn _get_with_usage<'a, T: 'a + Borrow<RefCount>>(
@@ -409,5 +452,45 @@ impl<I: TypedId + Copy, U: Copy + GenericUsage + BitOr<Output = U> + PartialEq> 
                     },
                 )
             })
+    }
+}
+
+
+pub type BufferTracker = Tracker<BufferId, Unit<BufferUsage>>;
+pub type TextureTracker = Tracker<TextureId, Unit<TextureUsage>>;
+pub type TextureViewTracker = Tracker<TextureViewId, Unit<DummyUsage>>;
+pub type BindGroupTracker = Tracker<BindGroupId, Unit<DummyUsage>>;
+
+#[derive(Debug)]
+pub struct TrackerSet {
+    pub buffers: BufferTracker,
+    pub textures: TextureTracker,
+    pub views: TextureViewTracker,
+    pub bind_groups: BindGroupTracker,
+    //TODO: samplers
+}
+
+impl TrackerSet {
+    pub fn new() -> Self {
+        TrackerSet {
+            buffers: BufferTracker::new(),
+            textures: TextureTracker::new(),
+            views: TextureViewTracker::new(),
+            bind_groups: BindGroupTracker::new(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.textures.clear();
+        self.views.clear();
+        self.bind_groups.clear();
+    }
+
+    pub fn consume_by_extend(&mut self, other: &Self) {
+        self.buffers.consume_by_extend(&other.buffers).unwrap();
+        self.textures.consume_by_extend(&other.textures).unwrap();
+        self.views.consume_by_extend(&other.views).unwrap();
+        self.bind_groups.consume_by_extend(&other.bind_groups).unwrap();
     }
 }

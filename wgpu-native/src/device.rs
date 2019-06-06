@@ -58,6 +58,7 @@ use std::{collections::hash_map::Entry, ffi, iter, ptr, ops::Range, slice, sync:
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
+pub const MAX_MIP_LEVELS: usize = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 8;
 
 /// Bound uniform/storage buffer offsets must be aligned to this number.
@@ -685,6 +686,8 @@ pub fn device_create_texture(
     let usage = conv::map_texture_usage(desc.usage, aspects);
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
+
+    assert!((desc.mip_level_count as usize) < MAX_MIP_LEVELS);
 
     let mut image = unsafe {
         device.raw.create_image(
