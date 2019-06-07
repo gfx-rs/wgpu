@@ -13,7 +13,7 @@ use std::ptr;
 
 mod server;
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 enum InstanceMessage {
     Create(wgn::InstanceId),
     InstanceGetAdapter(wgn::InstanceId, wgn::AdapterDescriptor, wgn::AdapterId),
@@ -22,7 +22,7 @@ enum InstanceMessage {
 }
 
 /// A message on the timeline of devices, queues, and resources.
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Debug)]
 enum GlobalMessage {
     Instance(InstanceMessage),
     //Device(DeviceMessage),
@@ -32,24 +32,27 @@ enum GlobalMessage {
     Terminate,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct IdentityHub {
     adapters: wgn::IdentityManager<AdapterId>,
     devices: wgn::IdentityManager<DeviceId>,
 }
 
+#[derive(Debug)]
 pub struct Client {
     channel: ipc::IpcSender<GlobalMessage>,
     instance_id: wgn::InstanceId,
     identity: Mutex<IdentityHub>,
 }
 
+#[derive(Debug)]
 pub struct ClientFactory {
     channel: ipc::IpcSender<GlobalMessage>,
     instance_identities: Mutex<wgn::IdentityManager<InstanceId>>,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct Infrastructure {
     pub factory: *mut ClientFactory,
     pub server: *mut Server,

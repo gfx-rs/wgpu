@@ -90,6 +90,7 @@ impl Drop for RefCount {
     }
 }
 
+#[derive(Debug)]
 struct LifeGuard {
     ref_count: RefCount,
     submission_index: AtomicUsize,
@@ -184,6 +185,7 @@ pub struct Extent3d {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct ByteArray {
     pub bytes: *const u8,
     pub length: usize,

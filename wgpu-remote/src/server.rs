@@ -3,6 +3,7 @@ use crate::{GlobalMessage, InstanceMessage};
 use ipc_channel::ipc::IpcReceiver;
 use wgn;
 
+#[derive(Debug)]
 pub struct Server {
     channel: IpcReceiver<GlobalMessage>,
 }

@@ -85,7 +85,7 @@ impl GenericUsage for DummyUsage {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Track<U> {
     ref_count: RefCount,
     init: U,
@@ -94,6 +94,7 @@ struct Track<U> {
 }
 
 //TODO: consider having `I` as an associated type of `U`?
+#[derive(Debug)]
 pub struct Tracker<I, U> {
     map: FastHashMap<Index, Track<U>>,
     _phantom: PhantomData<I>,
@@ -113,6 +114,7 @@ pub enum Stitch {
 }
 
 //TODO: consider rewriting this without any iterators that have side effects.
+#[derive(Debug)]
 pub struct ConsumeIterator<'a, I: TypedId, U: Copy + PartialEq> {
     src: Iter<'a, Index, Track<U>>,
     dst: &'a mut FastHashMap<Index, Track<U>>,
@@ -152,6 +154,7 @@ impl<'a, I: TypedId, U: Copy + PartialEq> Drop for ConsumeIterator<'a, I, U> {
     }
 }
 
+#[derive(Debug)]
 pub struct TrackerSet {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,

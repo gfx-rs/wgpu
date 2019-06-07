@@ -26,6 +26,7 @@ pub type SwapImageEpoch = u64;
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
 
+#[derive(Debug)]
 pub(crate) struct SwapChainLink<E> {
     pub swap_chain_id: SwapChainId, //TODO: strongly
     pub epoch: E,
@@ -105,6 +106,7 @@ impl SwapChainDescriptor {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct SwapChainOutput {
     pub texture_id: TextureId,
     pub view_id: TextureViewId,

@@ -46,6 +46,7 @@ use vec_map::VecMap;
 use std::{ops, sync::Arc};
 
 /// A simple structure to manage identities of objects.
+#[derive(Debug)]
 pub struct IdentityManager<I: TypedId> {
     free: Vec<Index>,
     epochs: Vec<Epoch>,
@@ -87,6 +88,7 @@ impl<I: TypedId> IdentityManager<I> {
     }
 }
 
+#[derive(Debug)]
 pub struct Storage<T, I: TypedId> {
     //TODO: consider concurrent hashmap?
     map: VecMap<(T, Epoch)>,
@@ -119,6 +121,7 @@ impl<T, I: TypedId> Storage<T, I> {
     }
 }
 
+#[derive(Debug)]
 pub struct Registry<T, I: TypedId> {
     #[cfg(feature = "local")]
     identity: Mutex<IdentityManager<I>>,

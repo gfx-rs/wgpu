@@ -22,6 +22,7 @@ use std::iter;
 const BITS_PER_BYTE: u32 = 8;
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BufferCopyView {
     pub buffer: BufferId,
     pub offset: BufferAddress,
@@ -30,6 +31,7 @@ pub struct BufferCopyView {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TextureCopyView {
     pub texture: TextureId,
     pub mip_level: u32,
