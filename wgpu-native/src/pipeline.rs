@@ -194,6 +194,7 @@ pub struct VertexAttributeDescriptor {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct VertexBufferDescriptor {
     pub stride: BufferAddress,
     pub step_mode: InputStepMode,
@@ -202,6 +203,7 @@ pub struct VertexBufferDescriptor {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct VertexInputDescriptor {
     pub index_format: IndexFormat,
     pub vertex_buffers: *const VertexBufferDescriptor,
@@ -209,22 +211,26 @@ pub struct VertexInputDescriptor {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct ShaderModuleDescriptor {
     pub code: ByteArray,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct PipelineStageDescriptor {
     pub module: ShaderModuleId,
     pub entry_point: RawString,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
     pub compute_stage: PipelineStageDescriptor,
 }
 
+#[derive(Debug)]
 pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) raw: B::ComputePipeline,
     pub(crate) layout_id: PipelineLayoutId,
@@ -266,6 +272,7 @@ pub struct RasterizationStateDescriptor {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
     pub vertex_stage: PipelineStageDescriptor,
@@ -287,6 +294,7 @@ bitflags! {
     }
 }
 
+#[derive(Debug)]
 pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) raw: B::GraphicsPipeline,
     pub(crate) layout_id: PipelineLayoutId,

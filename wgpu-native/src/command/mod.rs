@@ -59,6 +59,7 @@ pub enum StoreOp {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct RenderPassColorAttachmentDescriptor {
     pub attachment: TextureViewId,
     pub resolve_target: *const TextureViewId,
@@ -68,6 +69,7 @@ pub struct RenderPassColorAttachmentDescriptor {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct RenderPassDepthStencilAttachmentDescriptor<T> {
     pub attachment: T,
     pub depth_load_op: LoadOp,
@@ -79,12 +81,14 @@ pub struct RenderPassDepthStencilAttachmentDescriptor<T> {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct RenderPassDescriptor {
     pub color_attachments: *const RenderPassColorAttachmentDescriptor,
     pub color_attachments_length: usize,
     pub depth_stencil_attachment: *const RenderPassDepthStencilAttachmentDescriptor<TextureViewId>,
 }
 
+#[derive(Debug)]
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
     is_recording: bool,
@@ -147,6 +151,7 @@ impl CommandBufferHandle {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct CommandEncoderDescriptor {
     // MSVC doesn't allow zero-sized structs
     // We can remove this when we actually have a field

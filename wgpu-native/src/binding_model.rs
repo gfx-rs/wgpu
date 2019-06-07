@@ -45,11 +45,13 @@ pub struct BindGroupLayoutBinding {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BindGroupLayoutDescriptor {
     pub bindings: *const BindGroupLayoutBinding,
     pub bindings_length: usize,
 }
 
+#[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) bindings: Vec<BindGroupLayoutBinding>,
@@ -58,17 +60,20 @@ pub struct BindGroupLayout<B: hal::Backend> {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct PipelineLayoutDescriptor {
     pub bind_group_layouts: *const BindGroupLayoutId,
     pub bind_group_layouts_length: usize,
 }
 
+#[derive(Debug)]
 pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
     pub(crate) bind_group_layout_ids: ArrayVec<[BindGroupLayoutId; MAX_BIND_GROUPS]>,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BufferBinding {
     pub buffer: BufferId,
     pub offset: BufferAddress,
@@ -76,6 +81,7 @@ pub struct BufferBinding {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub enum BindingResource {
     Buffer(BufferBinding),
     Sampler(SamplerId),
@@ -83,18 +89,21 @@ pub enum BindingResource {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BindGroupBinding {
     pub binding: u32,
     pub resource: BindingResource,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct BindGroupDescriptor {
     pub layout: BindGroupLayoutId,
     pub bindings: *const BindGroupBinding,
     pub bindings_length: usize,
 }
 
+#[derive(Debug)]
 pub struct BindGroup<B: hal::Backend> {
     pub(crate) raw: DescriptorSet<B>,
     pub(crate) layout_id: BindGroupLayoutId,

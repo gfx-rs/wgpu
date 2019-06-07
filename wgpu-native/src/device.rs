@@ -113,6 +113,7 @@ enum ResourceId {
     TextureView(TextureViewId),
 }
 
+#[derive(Debug)]
 enum NativeResource<B: hal::Backend> {
     Buffer(B::Buffer, MemoryBlock<B>),
     Image(B::Image, MemoryBlock<B>),
@@ -120,6 +121,7 @@ enum NativeResource<B: hal::Backend> {
     Framebuffer(B::Framebuffer),
 }
 
+#[derive(Debug)]
 struct ActiveSubmission<B: hal::Backend> {
     index: SubmissionIndex,
     fence: B::Fence,
@@ -138,6 +140,7 @@ struct ActiveSubmission<B: hal::Backend> {
 ///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
 
+#[derive(Debug)]
 struct PendingResources<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<BufferId>>,
@@ -515,6 +518,7 @@ impl Device<back::Backend> {
     }
 }
 
+#[derive(Debug)]
 pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
 }

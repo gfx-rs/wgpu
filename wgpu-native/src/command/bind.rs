@@ -7,17 +7,20 @@ use std::convert::identity;
 pub const MAX_BIND_GROUPS: usize = 4;
 type BindGroupMask = u8;
 
+#[derive(Debug)]
 pub struct BindGroupPair {
     layout_id: BindGroupLayoutId,
     group_id: Stored<BindGroupId>,
 }
 
+#[derive(Debug)]
 pub enum LayoutChange {
     Unchanged,
     Match(BindGroupId),
     Mismatch,
 }
 
+#[derive(Debug)]
 pub enum Provision {
     Unchanged,
     Changed {
@@ -39,7 +42,7 @@ where
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct BindGroupEntry {
     expected_layout_id: Option<BindGroupLayoutId>,
     provided: Option<BindGroupPair>,
@@ -117,7 +120,7 @@ impl BindGroupEntry {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Binder {
     pub(crate) pipeline_layout_id: Option<PipelineLayoutId>, //TODO: strongly `Stored`
     pub(crate) entries: [BindGroupEntry; MAX_BIND_GROUPS],

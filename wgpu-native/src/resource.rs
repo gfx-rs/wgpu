@@ -35,13 +35,14 @@ bitflags! {
 }
 
 #[repr(C)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BufferDescriptor {
     pub size: BufferAddress,
     pub usage: BufferUsage,
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub enum BufferMapAsyncStatus {
     Success,
     Error,
@@ -49,7 +50,7 @@ pub enum BufferMapAsyncStatus {
     ContextLost,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum BufferMapOperation {
     Read(std::ops::Range<u64>, BufferMapReadCallback, *mut u8),
     Write(std::ops::Range<u64>, BufferMapWriteCallback, *mut u8),
@@ -58,6 +59,7 @@ pub(crate) enum BufferMapOperation {
 unsafe impl Send for BufferMapOperation {}
 unsafe impl Sync for BufferMapOperation {}
 
+#[derive(Debug)]
 pub struct Buffer<B: hal::Backend> {
     pub(crate) raw: B::Buffer,
     pub(crate) device_id: Stored<DeviceId>,
@@ -166,6 +168,7 @@ bitflags! {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TextureDescriptor {
     pub size: Extent3d,
     pub array_layer_count: u32,
@@ -176,6 +179,7 @@ pub struct TextureDescriptor {
     pub usage: TextureUsage,
 }
 
+#[derive(Debug)]
 pub(crate) enum TexturePlacement<B: hal::Backend> {
     #[cfg_attr(feature = "remote", allow(unused))]
     SwapChain(SwapChainLink<Mutex<SwapImageEpoch>>),
@@ -194,6 +198,7 @@ impl<B: hal::Backend> TexturePlacement<B> {
     }
 }
 
+#[derive(Debug)]
 pub struct Texture<B: hal::Backend> {
     pub(crate) raw: B::Image,
     pub(crate) device_id: Stored<DeviceId>,
@@ -231,6 +236,7 @@ pub enum TextureViewDimension {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct TextureViewDescriptor {
     pub format: TextureFormat,
     pub dimension: TextureViewDimension,
@@ -241,6 +247,7 @@ pub struct TextureViewDescriptor {
     pub array_count: u32,
 }
 
+#[derive(Debug)]
 pub struct TextureView<B: hal::Backend> {
     pub(crate) raw: B::ImageView,
     pub(crate) texture_id: Stored<TextureId>,
@@ -291,6 +298,7 @@ impl CompareFunction {
 }
 
 #[repr(C)]
+#[derive(Debug)]
 pub struct SamplerDescriptor {
     pub address_mode_u: AddressMode,
     pub address_mode_v: AddressMode,
@@ -303,6 +311,7 @@ pub struct SamplerDescriptor {
     pub compare_function: CompareFunction,
 }
 
+#[derive(Debug)]
 pub struct Sampler<B: hal::Backend> {
     pub(crate) raw: B::Sampler,
 }
