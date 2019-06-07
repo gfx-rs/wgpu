@@ -634,7 +634,7 @@ impl Device {
                 stride: vbuf.stride,
                 step_mode: vbuf.step_mode,
                 attributes: vbuf.attributes.as_ptr(),
-                attributes_count: vbuf.attributes.len(),
+                attributes_length: vbuf.attributes.len(),
             })
             .collect::<Vec<_>>();
 
@@ -656,7 +656,7 @@ impl Device {
                     vertex_input: wgn::VertexInputDescriptor {
                         index_format: desc.index_format,
                         vertex_buffers: temp_vertex_buffers.as_ptr(),
-                        vertex_buffers_count: temp_vertex_buffers.len(),
+                        vertex_buffers_length: temp_vertex_buffers.len(),
                     },
                     sample_count: desc.sample_count,
                 },
@@ -973,7 +973,7 @@ impl CommandEncoder {
         RenderPass {
             id: wgn::wgpu_command_encoder_begin_render_pass(
                 self.id,
-                wgn::RenderPassDescriptor {
+                &wgn::RenderPassDescriptor {
                     color_attachments: colors.as_ptr(),
                     color_attachments_length: colors.len(),
                     depth_stencil_attachment: depth_stencil
