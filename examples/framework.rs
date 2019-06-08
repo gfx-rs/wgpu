@@ -44,16 +44,58 @@ pub fn run<E: Example>(title: &str) {
         EventsLoop,
         KeyboardInput,
         VirtualKeyCode,
-        Window,
         WindowEvent,
     };
 
-    info!("Initializing the device...");
     env_logger::init();
-    let instance = wgpu::Instance::new();
+
+    let mut events_loop = EventsLoop::new();
+
+    info!("Initializing the window...");
+
+    #[cfg(not(feature = "gl"))]
+    let (_window, instance, hidpi_factor, size, surface) = {
+        use wgpu::winit::Window;
+
+        let instance = wgpu::Instance::new();
+
+        let window = Window::new(&events_loop).unwrap();
+        window.set_title(title);
+        let hidpi_factor = window.get_hidpi_factor();
+        let size = window
+            .get_inner_size()
+            .unwrap()
+            .to_physical(hidpi_factor);
+
+        let surface = instance.create_surface(&window);
+
+        (window, instance, hidpi_factor, size, surface)
+    };
+
+    #[cfg(feature = "gl")]
+    let (instance, hidpi_factor, size, surface) = {
+        let wb = wgpu::winit::WindowBuilder::new();
+        let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
+        let context = wgpu::glutin::WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
+        context.window().set_title(title);
+
+        let hidpi_factor = context.window().get_hidpi_factor();
+        let size = context
+            .window()
+            .get_inner_size()
+            .unwrap()
+            .to_physical(hidpi_factor);
+
+        let instance = wgpu::Instance::new(context);
+        let surface = instance.get_surface();
+
+        (instance, hidpi_factor, size, surface)
+    };
+
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
     });
+
     let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
@@ -61,16 +103,6 @@ pub fn run<E: Example>(title: &str) {
         limits: wgpu::Limits::default(),
     });
 
-    info!("Initializing the window...");
-    let mut events_loop = EventsLoop::new();
-    let window = Window::new(&events_loop).unwrap();
-    window.set_title(title);
-    let size = window
-        .get_inner_size()
-        .unwrap()
-        .to_physical(window.get_hidpi_factor());
-
-    let surface = instance.create_surface(&window);
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         format: wgpu::TextureFormat::Bgra8Unorm,
@@ -90,7 +122,7 @@ pub fn run<E: Example>(title: &str) {
                 event: WindowEvent::Resized(size),
                 ..
             } => {
-                let physical = size.to_physical(window.get_hidpi_factor());
+                let physical = size.to_physical(hidpi_factor);
                 info!("Resizing to {:?}", physical);
                 sc_desc.width = physical.width.round() as u32;
                 sc_desc.height = physical.height.round() as u32;

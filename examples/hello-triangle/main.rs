@@ -1,10 +1,56 @@
 fn main() {
+    use wgpu::winit::{
+        ElementState,
+        Event,
+        EventsLoop,
+        KeyboardInput,
+        VirtualKeyCode,
+        WindowEvent,
+    };
+
     env_logger::init();
 
-    let instance = wgpu::Instance::new();
+    let mut events_loop = EventsLoop::new();
+
+    #[cfg(not(feature = "gl"))]
+    let (_window, instance, size, surface) = {
+        use wgpu::winit::Window;
+
+        let instance = wgpu::Instance::new();
+
+        let window = Window::new(&events_loop).unwrap();
+        let size = window
+            .get_inner_size()
+            .unwrap()
+            .to_physical(window.get_hidpi_factor());
+
+        let surface = instance.create_surface(&window);
+
+        (window, instance, size, surface)
+    };
+
+    #[cfg(feature = "gl")]
+    let (instance, size, surface) = {
+        let wb = wgpu::winit::WindowBuilder::new();
+        let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
+        let context = wgpu::glutin::WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
+
+        let size = context
+            .window()
+            .get_inner_size()
+            .unwrap()
+            .to_physical(context.window().get_hidpi_factor());
+
+        let instance = wgpu::Instance::new(context);
+        let surface = instance.get_surface();
+
+        (instance, size, surface)
+    };
+
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
         power_preference: wgpu::PowerPreference::LowPower,
     });
+
     let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
@@ -57,24 +103,6 @@ fn main() {
         sample_count: 1,
     });
 
-    use wgpu::winit::{
-        ElementState,
-        Event,
-        EventsLoop,
-        KeyboardInput,
-        VirtualKeyCode,
-        Window,
-        WindowEvent,
-    };
-
-    let mut events_loop = EventsLoop::new();
-    let window = Window::new(&events_loop).unwrap();
-    let size = window
-        .get_inner_size()
-        .unwrap()
-        .to_physical(window.get_hidpi_factor());
-
-    let surface = instance.create_surface(&window);
     let mut swap_chain = device.create_swap_chain(
         &surface,
         &wgpu::SwapChainDescriptor {
