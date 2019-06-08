@@ -60,6 +60,9 @@ pub use wgn::{
     VertexFormat,
 };
 
+#[cfg(feature = "gl")]
+pub use wgn::glutin;
+
 //TODO: avoid heap allocating vectors during resource creation.
 #[derive(Default)]
 struct Temp {
@@ -455,9 +458,17 @@ where
 
 impl Instance {
     /// Create a new `Instance` object.
+    #[cfg(not(feature = "gl"))]
     pub fn new() -> Self {
         Instance {
             id: wgn::wgpu_create_instance(),
+        }
+    }
+
+    #[cfg(feature = "gl")]
+    pub fn new(windowed_context: wgn::glutin::WindowedContext) -> Self {
+        Instance {
+            id: wgn::wgpu_create_gl_instance(windowed_context)
         }
     }
 
@@ -477,9 +488,17 @@ impl Instance {
     }
 
     /// Creates a surface from a window.
+    #[cfg(not(feature = "gl"))]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         Surface {
             id: wgn::wgpu_instance_create_surface_from_winit(self.id, window),
+        }
+    }
+
+    #[cfg(feature = "gl")]
+    pub fn get_surface(&self) -> Surface {
+        Surface {
+            id: wgn::wgpu_instance_get_gl_surface(self.id),
         }
     }
 
