@@ -54,7 +54,16 @@ use rendy_memory::{Block, Heaps, MemoryBlock};
 
 #[cfg(feature = "local")]
 use std::sync::atomic::AtomicBool;
-use std::{collections::hash_map::Entry, ffi, iter, ptr, ops::Range, slice, sync::atomic::Ordering};
+use std::{
+    collections::hash_map::Entry,
+    ffi,
+    fmt,
+    iter,
+    ptr,
+    ops::Range,
+    slice,
+    sync::atomic::Ordering,
+};
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
@@ -515,6 +524,23 @@ impl Device<back::Backend> {
                 BufferMapOperation::Write(_, on_write, userdata) => on_write(status, ptr, userdata),
             }
         }
+    }
+}
+
+impl<B: hal::Backend> fmt::Debug for Device<B> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Device")
+            .field("raw", &self.raw)
+            .field("adapter_id", &self.adapter_id)
+            .field("com_allocator", &self.com_allocator)
+            .field("mem_allocator", &self.mem_allocator)
+            .field("desc_allocator", &self.desc_allocator)
+            .field("life_guard", &self.life_guard)
+            .field("trackers", &self.trackers)
+            .field("render_passes", &self.render_passes)
+            .field("framebuffers", &self.framebuffers)
+            .field("pending", &self.pending)
+            .finish()
     }
 }
 

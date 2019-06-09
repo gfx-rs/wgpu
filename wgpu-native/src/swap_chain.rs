@@ -18,6 +18,7 @@ use parking_lot::Mutex;
 
 use std::{
     iter,
+    fmt,
     mem,
     sync::atomic::{AtomicBool, Ordering},
 };
@@ -41,6 +42,7 @@ impl SwapChainLink<Mutex<SwapImageEpoch>> {
     }
 }
 
+#[derive(Debug)]
 pub struct Surface<B: hal::Backend> {
     pub(crate) raw: B::Surface,
     pub(crate) swap_chain: Option<SwapChain<B>>,
@@ -76,6 +78,18 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) sem_available: B::Semaphore,
     #[cfg_attr(not(feature = "local"), allow(dead_code))] //TODO: remove
     pub(crate) command_pool: hal::CommandPool<B, hal::General>,
+}
+
+impl<B: hal::Backend> fmt::Debug for SwapChain<B> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("SwapChain")
+            .field("raw", &self.raw)
+            .field("device_id", &self.device_id)
+            .field("desc", &self.desc)
+            .field("acquired", &self.acquired)
+            .field("sem_available", &self.sem_available)
+            .finish()
+    }
 }
 
 #[repr(C)]

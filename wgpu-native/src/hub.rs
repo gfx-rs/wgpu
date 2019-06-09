@@ -43,7 +43,7 @@ use parking_lot::Mutex;
 use parking_lot::RwLock;
 use vec_map::VecMap;
 
-use std::{ops, sync::Arc};
+use std::{fmt, ops, sync::Arc};
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
@@ -206,4 +206,26 @@ pub struct Hub {
 
 lazy_static! {
     pub static ref HUB: Hub = Hub::default();
+}
+
+impl fmt::Debug for Hub {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Hub")
+            .field("surfaces", &self.surfaces)
+            .field("devices", &self.devices)
+            .field("pipeline_layouts", &self.pipeline_layouts)
+            .field("bind_group_layouts", &self.bind_group_layouts)
+            .field("bind_groups", &self.bind_groups)
+            .field("shader_modules", &self.shader_modules)
+            .field("command_buffers", &self.command_buffers)
+            .field("render_pipelines", &self.render_pipelines)
+            .field("compute_pipelines", &self.compute_pipelines)
+            .field("render_passes", &self.render_passes)
+            .field("compute_passes", &self.compute_passes)
+            .field("buffers", &self.buffers)
+            .field("textures", &self.textures)
+            .field("texture_views", &self.texture_views)
+            .field("samplers", &self.samplers)
+            .finish()
+    }
 }
