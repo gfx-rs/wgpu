@@ -49,7 +49,7 @@ use hal::{
 };
 use log::{info, trace};
 use parking_lot::Mutex;
-use rendy_descriptor::{DescriptorAllocator, DescriptorRanges};
+use rendy_descriptor::{DescriptorSet, DescriptorAllocator, DescriptorRanges};
 use rendy_memory::{Block, Heaps, MemoryBlock};
 
 #[cfg(feature = "local")]
@@ -111,6 +111,7 @@ enum ResourceId {
     Buffer(BufferId),
     Texture(TextureId),
     TextureView(TextureViewId),
+    BindGroup(BindGroupId),
 }
 
 #[derive(Debug)]
@@ -119,6 +120,7 @@ enum NativeResource<B: hal::Backend> {
     Image(B::Image, MemoryBlock<B>),
     ImageView(B::ImageView),
     Framebuffer(B::Framebuffer),
+    DescriptorSet(DescriptorSet<B>),
 }
 
 #[derive(Debug)]
@@ -178,6 +180,7 @@ impl<B: hal::Backend> PendingResources<B> {
         &mut self,
         device: &B::Device,
         heaps_mutex: &Mutex<Heaps<B>>,
+        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
         force_wait: bool,
     ) -> SubmissionIndex {
         if force_wait && !self.active.is_empty() {
@@ -214,6 +217,7 @@ impl<B: hal::Backend> PendingResources<B> {
         }
 
         let mut heaps = heaps_mutex.lock();
+        let mut descriptor_allocator = descriptor_allocator_mutex.lock();
         for resource in self.free.drain(..) {
             match resource {
                 NativeResource::Buffer(raw, memory) => unsafe {
@@ -229,6 +233,9 @@ impl<B: hal::Backend> PendingResources<B> {
                 },
                 NativeResource::Framebuffer(raw) => unsafe {
                     device.destroy_framebuffer(raw);
+                },
+                NativeResource::DescriptorSet(raw) => unsafe {
+                    descriptor_allocator.free(Some(raw).into_iter());
                 },
             }
         }
@@ -276,6 +283,11 @@ impl PendingResources<back::Backend> {
                         trackers.views.remove(id);
                         let view = HUB.texture_views.unregister(id);
                         (view.life_guard, NativeResource::ImageView(view.raw))
+                    }
+                    ResourceId::BindGroup(id) => {
+                        trackers.bind_groups.remove(id);
+                        let bind_group = HUB.bind_groups.unregister(id);
+                        (bind_group.life_guard, NativeResource::DescriptorSet(bind_group.raw))
                     }
                 };
 
@@ -458,6 +470,7 @@ impl<B: hal::Backend> Device<B> {
             unsafe {
                 Heaps::new(types, mem_props.memory_heaps.iter().cloned())
             }
+
         };
 
         Device {
@@ -489,8 +502,14 @@ impl Device<back::Backend> {
 
         pending.triage_referenced(&mut *trackers);
         pending.triage_framebuffers(&mut *self.framebuffers.lock());
-        let last_done = pending.cleanup(&self.raw, &self.mem_allocator, force_wait);
+        let last_done = pending.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator, force_wait);
         let callbacks = pending.handle_mapping(&self.raw);
+
+        unsafe {
+            self.desc_allocator
+                .lock()
+                .cleanup(&self.raw);
+        }
 
         if last_done != 0 {
             self.com_allocator.maintain(last_done);
@@ -1094,11 +1113,28 @@ pub fn device_create_bind_group(
 
     binding_model::BindGroup {
         raw: desc_set,
+        device_id: Stored {
+            value: device_id,
+            ref_count: device.life_guard.ref_count.clone(),
+        },
         layout_id: desc.layout,
         life_guard: LifeGuard::new(),
         used,
         dynamic_count: bind_group_layout.dynamic_count,
     }
+}
+
+pub fn device_track_bind_group(
+    device_id: DeviceId,
+    buffer_id: BindGroupId,
+    ref_count: RefCount,
+) {
+    let query = HUB.devices.read()[device_id]
+        .trackers
+        .lock()
+        .bind_groups
+        .query(buffer_id, &ref_count, DummyUsage);
+    assert!(query.initialized);
 }
 
 #[cfg(feature = "local")]
@@ -1108,12 +1144,22 @@ pub extern "C" fn wgpu_device_create_bind_group(
     desc: &binding_model::BindGroupDescriptor,
 ) -> BindGroupId {
     let bind_group = device_create_bind_group(device_id, desc);
-    HUB.bind_groups.register_local(bind_group)
+    let ref_count = bind_group.life_guard.ref_count.clone();
+    let id = HUB.bind_groups.register_local(bind_group);
+    device_track_bind_group(device_id, id, ref_count);
+
+    id
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_bind_group_destroy(bind_group_id: BindGroupId) {
-    HUB.bind_groups.unregister(bind_group_id);
+    let device_guard = HUB.devices.read();
+    let bind_group_guard = HUB.bind_groups.read();
+    let bind_group = &bind_group_guard[bind_group_id];
+    device_guard[bind_group.device_id.value].pending.lock().destroy(
+        ResourceId::BindGroup(bind_group_id),
+        bind_group.life_guard.ref_count.clone(),
+    );
 }
 
 pub fn device_create_shader_module(

@@ -3,8 +3,10 @@ use crate::{
     BindGroupLayoutId,
     BufferAddress,
     BufferId,
+    DeviceId,
     LifeGuard,
     SamplerId,
+    Stored,
     TextureViewId,
 };
 
@@ -106,6 +108,7 @@ pub struct BindGroupDescriptor {
 #[derive(Debug)]
 pub struct BindGroup<B: hal::Backend> {
     pub(crate) raw: DescriptorSet<B>,
+    pub(crate) device_id: Stored<DeviceId>,
     pub(crate) layout_id: BindGroupLayoutId,
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
