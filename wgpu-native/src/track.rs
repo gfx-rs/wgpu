@@ -8,6 +8,7 @@ use crate::{
     TextureId,
     TextureViewId,
     TypedId,
+    BindGroupId,
 };
 
 use bitflags::bitflags;
@@ -101,6 +102,7 @@ pub struct Tracker<I, U> {
 pub type BufferTracker = Tracker<BufferId, BufferUsage>;
 pub type TextureTracker = Tracker<TextureId, TextureUsage>;
 pub type TextureViewTracker = Tracker<TextureViewId, DummyUsage>;
+pub type BindGroupTracker = Tracker<BindGroupId, DummyUsage>;
 
 //TODO: make this a generic parameter.
 /// Mode of stitching to states together.
@@ -156,6 +158,7 @@ pub struct TrackerSet {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
     pub views: TextureViewTracker,
+    pub bind_groups: BindGroupTracker,
     //TODO: samplers
 }
 
@@ -165,6 +168,7 @@ impl TrackerSet {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
             views: TextureViewTracker::new(),
+            bind_groups: BindGroupTracker::new(),
         }
     }
 
@@ -172,12 +176,14 @@ impl TrackerSet {
         self.buffers.clear();
         self.textures.clear();
         self.views.clear();
+        self.bind_groups.clear();
     }
 
     pub fn consume_by_extend(&mut self, other: &Self) {
         self.buffers.consume_by_extend(&other.buffers).unwrap();
         self.textures.consume_by_extend(&other.textures).unwrap();
         self.views.consume_by_extend(&other.views).unwrap();
+        self.bind_groups.consume_by_extend(&other.bind_groups).unwrap();
     }
 }
 
