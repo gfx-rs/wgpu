@@ -133,8 +133,7 @@ pub trait ResourceState: Clone + Default {
 
 /// Structure wrapping the abstract tracking state with the relevant resource
 /// data, such as the reference count and the epoch.
-#[derive(Clone)]
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Clone, Debug)]
 struct Resource<S> {
     ref_count: RefCount,
     state: S,
@@ -152,7 +151,7 @@ pub struct PendingTransition<S: ResourceState> {
 }
 
 /// A tracker for all resources of a given type.
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug)]
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
@@ -407,7 +406,7 @@ impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
 
 
 /// A set of trackers for all relevant resources.
-#[cfg_attr(debug_assertions, derive(Debug))]
+#[derive(Debug)]
 pub struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
     pub textures: ResourceTracker<TextureState>,

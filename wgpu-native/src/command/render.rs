@@ -109,6 +109,7 @@ impl VertexState {
     }
 }
 
+#[derive(Debug)]
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,

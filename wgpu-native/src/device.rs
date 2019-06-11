@@ -430,6 +430,7 @@ fn map_buffer(
     Ok(ptr.as_ptr())
 }
 
+#[derive(Debug)]
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     pub(crate) adapter_id: AdapterId,
