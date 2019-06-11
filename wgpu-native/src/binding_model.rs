@@ -5,6 +5,7 @@ use crate::{
     BufferId,
     DeviceId,
     LifeGuard,
+    RefCount,
     SamplerId,
     Stored,
     TextureViewId,
@@ -13,6 +14,8 @@ use crate::{
 use arrayvec::ArrayVec;
 use bitflags::bitflags;
 use rendy_descriptor::{DescriptorRanges, DescriptorSet};
+
+use std::borrow::Borrow;
 
 pub const MAX_BIND_GROUPS: usize = 4;
 
@@ -112,4 +115,10 @@ pub struct BindGroup<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
     pub(crate) dynamic_count: usize,
+}
+
+impl<B: hal::Backend> Borrow<RefCount> for BindGroup<B> {
+    fn borrow(&self) -> &RefCount {
+        &self.life_guard.ref_count
+    }
 }

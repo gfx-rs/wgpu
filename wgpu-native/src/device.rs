@@ -236,7 +236,7 @@ impl<B: hal::Backend> PendingResources<B> {
                     device.destroy_framebuffer(raw);
                 },
                 NativeResource::DescriptorSet(raw) => unsafe {
-                    descriptor_allocator.free(Some(raw).into_iter());
+                    descriptor_allocator.free(iter::once(raw));
                 },
             }
         }
@@ -1264,6 +1264,7 @@ pub extern "C" fn wgpu_queue_submit(
             let buffer_guard = HUB.buffers.read();
             let texture_guard = HUB.textures.read();
             let texture_view_guard = HUB.texture_views.read();
+            let bind_group_guard = HUB.bind_groups.read();
 
             // finish all the command buffers first
             for &cmb_id in command_buffer_ids {
@@ -1274,7 +1275,7 @@ pub extern "C" fn wgpu_queue_submit(
                     if frame.need_waiting.swap(false, Ordering::AcqRel) {
                         assert_eq!(frame.acquired_epoch, Some(link.epoch),
                             "{}. Image index {} with epoch {} != current epoch {:?}",
-                            "Attempting to rendering to a swapchain output that has already been presented",
+                            "Attempting to render to a swapchain output that has already been presented",
                             link.image_index, link.epoch, frame.acquired_epoch);
                         wait_semaphores.push((
                             &frame.sem_available,
@@ -1303,6 +1304,12 @@ pub extern "C" fn wgpu_queue_submit(
                 }
                 for id in comb.trackers.views.used() {
                     texture_view_guard[id]
+                        .life_guard
+                        .submission_index
+                        .store(submit_index, Ordering::Release);
+                }
+                for id in comb.trackers.bind_groups.used() {
+                    bind_group_guard[id]
                         .life_guard
                         .submission_index
                         .store(submit_index, Ordering::Release);

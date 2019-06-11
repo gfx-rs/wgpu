@@ -211,7 +211,12 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     let mut pass_guard = HUB.render_passes.write();
     let pass = &mut pass_guard[pass_id];
     let bind_group_guard = HUB.bind_groups.read();
-    let bind_group = &bind_group_guard[bind_group_id];
+
+    let bind_group = pass
+        .trackers
+        .bind_groups
+        .use_extend(&*bind_group_guard, bind_group_id, (), ())
+        .unwrap();
 
     assert_eq!(bind_group.dynamic_count, offsets_length);
     let offsets = if offsets_length != 0 {
