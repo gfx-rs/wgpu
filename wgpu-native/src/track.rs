@@ -18,10 +18,13 @@ use hal::backend::FastHashMap;
 
 use std::{
     borrow::Borrow,
+    cmp::Ordering,
     collections::hash_map::{Entry, Iter},
+    iter::Peekable,
     marker::PhantomData,
     mem,
     ops::{BitOr, Range},
+    slice,
     vec::Drain,
 };
 
@@ -91,7 +94,7 @@ impl GenericUsage for DummyUsage {
 }
 
 /// A single unit of state tracking.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Unit<U> {
     init: U,
     last: U,
@@ -551,7 +554,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Merge another tacker into `self` by extending the current states
     /// without any transitions.
     pub fn merge_extend(
-        &mut self, other: &Self
+        &mut self, other: &Self,
     ) -> Result<(), PendingTransition<S>> {
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
@@ -696,7 +699,7 @@ impl<I, T> Default for RangedStates<I, T> {
     }
 }
 
-impl<I: Copy + PartialOrd, T: Copy> RangedStates<I, T> {
+impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     fn isolate(&mut self, index: &Range<I>, default: T) -> &mut [(Range<I>, T)] {
         let start_pos = match self.ranges
             .iter()
@@ -741,11 +744,99 @@ impl<I: Copy + PartialOrd, T: Copy> RangedStates<I, T> {
 
         &mut self.ranges[start_pos .. pos]
     }
+
+    fn coalesce(&mut self) {
+        let mut num_removed = 0;
+        let mut iter = self.ranges.iter_mut();
+        let mut cur = match iter.next() {
+            Some(elem) => elem,
+            None => return,
+        };
+        while let Some(next) = iter.next() {
+            if cur.0.end == next.0.start && cur.1 == next.1 {
+                num_removed += 1;
+                cur.0.end = next.0.end;
+                next.0.end = next.0.start;
+            } else {
+                cur = next;
+            }
+        }
+        if num_removed != 0 {
+            self.ranges.retain(|pair| pair.0.start != pair.0.end);
+        }
+    }
+}
+
+struct Merge<'a, I, T> {
+    base: I,
+    sa: Peekable<slice::Iter<'a, (Range<I>, T)>>,
+    sb: Peekable<slice::Iter<'a, (Range<I>, T)>>,
+}
+
+impl<'a, I: Copy + Ord, T: Copy> Iterator for Merge<'a, I, T> {
+    type Item = (Range<I>, Range<T>);
+    fn next(&mut self) -> Option<Self::Item> {
+        match (self.sa.peek(), self.sb.peek()) {
+            // we have both streams
+            (Some(&(ref ra, va)), Some(&(ref rb, vb))) => {
+                let (range, usage) = if ra.start < self.base { // in the middle of the left stream
+                    if self.base == rb.start { // right stream is starting
+                        debug_assert!(self.base < ra.end);
+                        (self.base .. ra.end.min(rb.end), *va .. *vb)
+                    } else { // right hasn't started yet
+                        debug_assert!(self.base < rb.start);
+                        (self.base .. rb.start, *va .. *va)
+                    }
+                } else if rb.start < self.base { // in the middle of the right stream
+                    if self.base == ra.start { // left stream is starting
+                        debug_assert!(self.base < rb.end);
+                        (self.base .. ra.end.min(rb.end), *va .. *vb)
+                    } else { // left hasn't started yet
+                        debug_assert!(self.base < ra.start);
+                        (self.base .. ra.start, *vb .. *vb)
+                    }
+                } else { // no active streams
+                    match ra.start.cmp(&rb.start) {
+                        // both are starting
+                        Ordering::Equal => (ra.start .. ra.end.min(rb.end), *va .. *vb),
+                        // only left is starting
+                        Ordering::Less => (ra.start .. rb.start, *va .. *va),
+                        // only right is starting
+                        Ordering::Greater => (rb.start .. ra.start, *vb .. *vb),
+                    }
+                };
+                self.base = range.end;
+                if ra.end == range.end {
+                    let _ = self.sa.next();
+                }
+                if rb.end == range.end {
+                    let _ = self.sb.next();
+                }
+                Some((range, usage))
+            }
+            // only right stream
+            (None, Some(&(ref rb, vb))) => {
+                let range = self.base.max(rb.start) .. rb.end;
+                self.base = rb.end;
+                let _ = self.sb.next();
+                Some((range, *vb .. *vb))
+            }
+            // only left stream
+            (Some(&(ref ra, va)), None) => {
+                let range = self.base.max(ra.start) .. ra.end;
+                self.base = ra.end;
+                let _ = self.sa.next();
+                Some((range, *va .. *va))
+            }
+            // done
+            (None, None) => None,
+        }
+    }
 }
 
 type PlaneStates<T> = RangedStates<hal::image::Layer, T>;
 
-#[derive(Clone)]
+#[derive(Clone, Copy, PartialEq)]
 struct DepthStencilState {
     depth: Unit<TextureUsage>,
     stencil: Unit<TextureUsage>,
@@ -848,18 +939,161 @@ impl ResourceState for TextureStates {
             }
         }
         if selector.aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
-            unimplemented!() //TODO
+            for level in selector.levels.clone() {
+                let ds_state = DepthStencilState {
+                    depth: Unit::new(usage),
+                    stencil: Unit::new(usage),
+                };
+                for &mut (ref range, ref mut unit) in self.depth_stencil
+                    .isolate(&selector.layers, ds_state)
+                {
+                    //TODO: check if anything needs to be done when only one of the depth/stencil
+                    // is selected?
+                    if unit.depth.last != usage && selector.aspects.contains(hal::format::Aspects::DEPTH) {
+                        let old = unit.depth.last;
+                        let pending = PendingTransition {
+                            id,
+                            selector: hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::DEPTH,
+                                levels: level .. level + 1,
+                                layers: range.clone(),
+                            },
+                            usage: old .. usage,
+                        };
+                        unit.depth.last = match output.as_mut() {
+                            Some(out) => {
+                                out.push(pending);
+                                usage
+                            }
+                            None => {
+                                if !old.is_empty() && TextureUsage::WRITE_ALL.intersects(old | usage) {
+                                    return Err(pending);
+                                }
+                                old | usage
+                            }
+                        };
+                    }
+                    if unit.stencil.last != usage && selector.aspects.contains(hal::format::Aspects::STENCIL) {
+                        let old = unit.stencil.last;
+                        let pending = PendingTransition {
+                            id,
+                            selector: hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::STENCIL,
+                                levels: level .. level + 1,
+                                layers: range.clone(),
+                            },
+                            usage: old .. usage,
+                        };
+                        unit.stencil.last = match output.as_mut() {
+                            Some(out) => {
+                                out.push(pending);
+                                usage
+                            }
+                            None => {
+                                if !old.is_empty() && TextureUsage::WRITE_ALL.intersects(old | usage) {
+                                    return Err(pending);
+                                }
+                                old | usage
+                            }
+                        };
+                    }
+                }
+            }
         }
         Ok(())
     }
 
     fn merge(
         &mut self,
-        _id: Self::Id,
-        _other: &Self,
-        _stitch: Stitch,
-        _output: Option<&mut Vec<PendingTransition<Self>>>,
+        id: Self::Id,
+        other: &Self,
+        stitch: Stitch,
+        mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
+        let mut temp_color = Vec::new();
+        while self.color_mips.len() < other.color_mips.len() {
+            self.color_mips.push(PlaneStates::default());
+        }
+        for (mip_id, (mip_self, mip_other)) in self.color_mips
+            .iter_mut()
+            .zip(&other.color_mips)
+            .enumerate()
+        {
+            temp_color.extend(Merge {
+                base: 0,
+                sa: mip_self.ranges.iter().peekable(),
+                sb: mip_other.ranges.iter().peekable(),
+            });
+            mip_self.ranges.clear();
+            for (layers, states) in temp_color.drain(..) {
+                let color_usage = states.start.last .. states.end.select(stitch);
+                if let Some(out) = output.as_mut() {
+                    if color_usage.start != color_usage.end {
+                        let level = mip_id as hal::image::Level;
+                        out.push(PendingTransition {
+                            id,
+                            selector: hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::COLOR,
+                                levels: level .. level + 1,
+                                layers: layers.clone(),
+                            },
+                            usage: color_usage.clone(),
+                        });
+                    }
+                }
+                mip_self.ranges.push((layers, Unit {
+                    init: states.start.init,
+                    last: color_usage.end,
+                }));
+            }
+        }
+
+        let mut temp_ds = Vec::new();
+        temp_ds.extend(Merge {
+            base: 0,
+            sa: self.depth_stencil.ranges.iter().peekable(),
+            sb: other.depth_stencil.ranges.iter().peekable(),
+        });
+        self.depth_stencil.ranges.clear();
+        for (layers, states) in temp_ds.drain(..) {
+            let usage_depth = states.start.depth.last .. states.end.depth.select(stitch);
+            let usage_stencil = states.start.stencil.last .. states.end.stencil.select(stitch);
+            if let Some(out) = output.as_mut() {
+                if usage_depth.start != usage_depth.end {
+                    out.push(PendingTransition {
+                        id,
+                        selector: hal::image::SubresourceRange {
+                            aspects: hal::format::Aspects::DEPTH,
+                            levels: 0 .. 1,
+                            layers: layers.clone(),
+                        },
+                        usage: usage_depth.clone(),
+                    });
+                }
+                if usage_stencil.start != usage_stencil.end {
+                    out.push(PendingTransition {
+                        id,
+                        selector: hal::image::SubresourceRange {
+                            aspects: hal::format::Aspects::STENCIL,
+                            levels: 0 .. 1,
+                            layers: layers.clone(),
+                        },
+                        usage: usage_stencil.clone(),
+                    });
+                }
+            }
+            self.depth_stencil.ranges.push((layers, DepthStencilState {
+                depth: Unit {
+                    init: states.start.depth.init,
+                    last: usage_depth.end,
+                },
+                stencil: Unit {
+                    init: states.start.stencil.init,
+                    last: usage_stencil.end,
+                },
+            }));
+        }
+
         Ok(())
     }
 }
