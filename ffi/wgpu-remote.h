@@ -19,8 +19,6 @@ typedef struct WGPUClientFactory WGPUClientFactory;
 
 typedef struct WGPUServer WGPUServer;
 
-typedef struct WGPUTrackPermit WGPUTrackPermit;
-
 typedef uint32_t WGPUIndex;
 
 typedef uint32_t WGPUEpoch;
@@ -56,10 +54,6 @@ typedef struct {
   WGPUServer *server;
   const uint8_t *error;
 } WGPUInfrastructure;
-
-
-
-
 
 WGPUDeviceId wgpu_client_adapter_create_device(const WGPUClient *client,
                                                WGPUAdapterId adapter_id,

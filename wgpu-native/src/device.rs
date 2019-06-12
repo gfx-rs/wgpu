@@ -764,7 +764,7 @@ pub extern "C" fn wgpu_device_create_texture(
 ) -> TextureId {
     let texture = device_create_texture(device_id, desc);
     let ref_count = texture.life_guard.ref_count.clone();
-    let range = texture.full_range;
+    let range = texture.full_range.clone();
     let id = HUB.textures.register_local(texture);
     device_track_texture(device_id, id, ref_count, range);
     id
@@ -1797,6 +1797,7 @@ pub fn swap_chain_populate_textures(
     for (i, mut texture) in textures.into_iter().enumerate() {
         let format = texture.format;
         let kind = texture.kind;
+        let range = texture.full_range.clone();
 
         let view_raw = unsafe {
             device
@@ -1806,7 +1807,7 @@ pub fn swap_chain_populate_textures(
                     hal::image::ViewKind::D2,
                     conv::map_texture_format(format),
                     hal::format::Swizzle::NO,
-                    texture.full_range.clone(),
+                    range.clone(),
                 )
                 .unwrap()
         };
@@ -1819,9 +1820,10 @@ pub fn swap_chain_populate_textures(
             ref_count: texture.life_guard.ref_count.clone(),
             value: HUB.textures.register_local(texture),
         };
-        trackers.textures.query(
+        trackers.textures.init(
             texture_id.value,
             &texture_id.ref_count,
+            range.clone(),
             resource::TextureUsage::UNINITIALIZED,
         );
 
@@ -1831,6 +1833,7 @@ pub fn swap_chain_populate_textures(
             format,
             extent: kind.extent(),
             samples: kind.num_samples(),
+            range,
             is_owned_by_swap_chain: true,
             life_guard: LifeGuard::new(),
         };
@@ -1840,7 +1843,7 @@ pub fn swap_chain_populate_textures(
         };
         trackers
             .views
-            .query(view_id.value, &view_id.ref_count, DummyUsage);
+            .init(view_id.value, &view_id.ref_count, (), ());
 
         swap_chain.frames.alloc().init(swap_chain::Frame {
             texture_id,
