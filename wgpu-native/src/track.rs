@@ -1,6 +1,7 @@
 use crate::{
-    hub::Storage,
+    conv,
     device::MAX_MIP_LEVELS,
+    hub::Storage,
     resource::{BufferUsage, TextureUsage},
     BufferId,
     Epoch,
@@ -359,7 +360,7 @@ pub type TextureViewTracker = Tracker<TextureViewId, Unit<DummyUsage>>;
 pub type BindGroupTracker = Tracker<BindGroupId, Unit<DummyUsage>>;
 
 #[derive(Debug)]
-pub struct TrackerSet {
+pub struct TrackerSetOld {
     pub buffers: BufferTracker,
     pub textures: TextureTracker,
     pub views: TextureViewTracker,
@@ -367,9 +368,9 @@ pub struct TrackerSet {
     //TODO: samplers
 }
 
-impl TrackerSet {
+impl TrackerSetOld {
     pub fn new() -> Self {
-        TrackerSet {
+        TrackerSetOld {
             buffers: BufferTracker::new(),
             textures: TextureTracker::new(),
             views: TextureViewTracker::new(),
@@ -427,13 +428,14 @@ struct Resource<S> {
     epoch: Epoch,
 }
 
+#[derive(Debug)]
 pub struct PendingTransition<S: ResourceState> {
     pub id: S::Id,
     pub selector: S::Selector,
     pub usage: Range<S::Usage>,
 }
 
-struct ResourceTracker<S: ResourceState> {
+pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
     /// Temporary storage for collecting transitions.
@@ -620,7 +622,15 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 }
 
+//TODO: store `hal::buffer::State` here to avoid extra conversions
 pub type BufferState = Unit<BufferUsage>;
+
+impl PendingTransition<BufferState> {
+    pub fn to_states(&self) -> Range<hal::buffer::State> {
+        conv::map_buffer_state(self.usage.start) ..
+        conv::map_buffer_state(self.usage.end)
+    }
+}
 
 impl Default for BufferState {
     fn default() -> Self {
@@ -745,7 +755,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         &mut self.ranges[start_pos .. pos]
     }
 
-    fn coalesce(&mut self) {
+    fn _coalesce(&mut self) {
         let mut num_removed = 0;
         let mut iter = self.ranges.iter_mut();
         let mut cur = match iter.next() {
@@ -836,16 +846,24 @@ impl<'a, I: Copy + Ord, T: Copy> Iterator for Merge<'a, I, T> {
 
 type PlaneStates<T> = RangedStates<hal::image::Layer, T>;
 
-#[derive(Clone, Copy, PartialEq)]
+//TODO: store `hal::image::State` here to avoid extra conversions
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct DepthStencilState {
     depth: Unit<TextureUsage>,
     stencil: Unit<TextureUsage>,
 }
 
-#[derive(Clone, Default)]
-struct TextureStates {
+#[derive(Clone, Debug, Default)]
+pub struct TextureStates {
     color_mips: ArrayVec<[PlaneStates<Unit<TextureUsage>>; MAX_MIP_LEVELS]>,
     depth_stencil: PlaneStates<DepthStencilState>,
+}
+
+impl PendingTransition<TextureStates> {
+    pub fn to_states(&self) -> Range<hal::image::State> {
+        conv::map_texture_state(self.usage.start, self.selector.aspects) ..
+        conv::map_texture_state(self.usage.end, self.selector.aspects)
+    }
 }
 
 impl ResourceState for TextureStates {
@@ -1132,5 +1150,74 @@ impl ResourceState for TextureViewState {
         _output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct BindGroupState;
+
+impl ResourceState for BindGroupState {
+    type Id = BindGroupId;
+    type Selector = ();
+    type Usage = ();
+
+    fn query(
+        &self,
+        _selector: Self::Selector,
+    ) -> Option<Self::Usage> {
+        Some(())
+    }
+
+    fn change(
+        &mut self,
+        _id: Self::Id,
+        _selector: Self::Selector,
+        _usage: Self::Usage,
+        _output: Option<&mut Vec<PendingTransition<Self>>>,
+    ) -> Result<(), PendingTransition<Self>> {
+        Ok(())
+    }
+
+    fn merge(
+        &mut self,
+        _id: Self::Id,
+        _other: &Self,
+        _stitch: Stitch,
+        _output: Option<&mut Vec<PendingTransition<Self>>>,
+    ) -> Result<(), PendingTransition<Self>> {
+        Ok(())
+    }
+}
+
+pub struct TrackerSet {
+    pub buffers: ResourceTracker<BufferState>,
+    pub textures: ResourceTracker<TextureStates>,
+    pub views: ResourceTracker<TextureViewState>,
+    pub bind_groups: ResourceTracker<BindGroupState>,
+    //TODO: samplers
+}
+
+impl TrackerSet {
+    pub fn new() -> Self {
+        TrackerSet {
+            buffers: ResourceTracker::new(),
+            textures: ResourceTracker::new(),
+            views: ResourceTracker::new(),
+            bind_groups: ResourceTracker::new(),
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.textures.clear();
+        self.views.clear();
+        self.bind_groups.clear();
+    }
+
+    pub fn merge_extend(&mut self, other: &Self) {
+        self.buffers.merge_extend(&other.buffers).unwrap();
+        self.textures.merge_extend(&other.textures).unwrap();
+        self.views.merge_extend(&other.views).unwrap();
+        self.bind_groups.merge_extend(&other.bind_groups).unwrap();
     }
 }

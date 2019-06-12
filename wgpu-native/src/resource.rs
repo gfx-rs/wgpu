@@ -255,9 +255,16 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) format: TextureFormat,
     pub(crate) extent: hal::image::Extent,
     pub(crate) samples: hal::image::NumSamples,
+    pub(crate) range: hal::image::SubresourceRange,
     pub(crate) is_owned_by_swap_chain: bool,
     #[cfg_attr(not(feature = "local"), allow(dead_code))]
     pub(crate) life_guard: LifeGuard,
+}
+
+impl<B: hal::Backend> Borrow<RefCount> for TextureView<B> {
+    fn borrow(&self) -> &RefCount {
+        &self.life_guard.ref_count
+    }
 }
 
 #[repr(C)]

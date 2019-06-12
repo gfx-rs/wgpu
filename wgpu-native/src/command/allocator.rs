@@ -24,7 +24,6 @@ impl<B: hal::Backend> CommandPool<B> {
     }
 }
 
-#[derive(Debug)]
 struct Inner<B: hal::Backend> {
     pools: HashMap<thread::ThreadId, CommandPool<B>>,
     pending: Vec<CommandBuffer<B>>,
@@ -42,7 +41,6 @@ impl<B: hal::Backend> Inner<B> {
     }
 }
 
-#[derive(Debug)]
 pub struct CommandAllocator<B: hal::Backend> {
     queue_family: hal::queue::QueueFamilyId,
     inner: Mutex<Inner<B>>,

@@ -6,7 +6,7 @@ use crate::{
     pipeline,
     resource,
     swap_chain,
-    track::{DummyUsage, Stitch, TrackPermit, TrackerSet, Tracktion},
+    track::{Stitch, TrackerSet},
     AdapterId,
     BindGroupId,
     BufferAddress,
@@ -605,12 +605,12 @@ pub fn device_track_buffer(
     ref_count: RefCount,
     flags: resource::BufferUsage,
 ) {
-    let query = HUB.devices.read()[device_id]
+    let ok = HUB.devices.read()[device_id]
         .trackers
         .lock()
         .buffers
-        .query(buffer_id, &ref_count, flags);
-    assert!(query.initialized);
+        .init(buffer_id, &ref_count, (), flags);
+    assert!(ok);
 }
 
 #[cfg(feature = "local")]
@@ -737,17 +737,23 @@ pub fn device_create_texture(
     }
 }
 
-pub fn device_track_texture(device_id: DeviceId, texture_id: TextureId, ref_count: RefCount) {
-    let query = HUB.devices.read()[device_id]
+pub fn device_track_texture(
+    device_id: DeviceId,
+    texture_id: TextureId,
+    ref_count: RefCount,
+    full_range: hal::image::SubresourceRange,
+) {
+    let ok = HUB.devices.read()[device_id]
         .trackers
         .lock()
         .textures
-        .query(
+        .init(
             texture_id,
             &ref_count,
+            full_range,
             resource::TextureUsage::UNINITIALIZED,
         );
-    assert!(query.initialized);
+    assert!(ok);
 }
 
 #[cfg(feature = "local")]
@@ -758,8 +764,9 @@ pub extern "C" fn wgpu_device_create_texture(
 ) -> TextureId {
     let texture = device_create_texture(device_id, desc);
     let ref_count = texture.life_guard.ref_count.clone();
+    let range = texture.full_range;
     let id = HUB.textures.register_local(texture);
-    device_track_texture(device_id, id, ref_count);
+    device_track_texture(device_id, id, ref_count, range);
     id
 }
 
@@ -781,7 +788,7 @@ pub fn texture_create_view(
                 view_kind,
                 conv::map_texture_format(format),
                 hal::format::Swizzle::NO,
-                range,
+                range.clone(),
             )
             .unwrap()
     };
@@ -795,6 +802,7 @@ pub fn texture_create_view(
         format: texture.format,
         extent: texture.kind.extent(),
         samples: texture.kind.num_samples(),
+        range,
         is_owned_by_swap_chain: false,
         life_guard: LifeGuard::new(),
     }
@@ -802,12 +810,12 @@ pub fn texture_create_view(
 
 pub fn device_track_view(texture_id: TextureId, view_id: TextureViewId, ref_count: RefCount) {
     let device_id = HUB.textures.read()[texture_id].device_id.value;
-    let query = HUB.devices.read()[device_id]
+    let ok = HUB.devices.read()[device_id]
         .trackers
         .lock()
         .views
-        .query(view_id, &ref_count, DummyUsage);
-    assert!(query.initialized);
+        .init(view_id, &ref_count, (), ());
+    assert!(ok);
 }
 
 #[cfg(feature = "local")]
@@ -1067,7 +1075,7 @@ pub fn device_create_bind_group(
                 );
                 let buffer = used
                     .buffers
-                    .get_with_extended_usage(&*buffer_guard, bb.buffer, usage)
+                    .use_extend(&*buffer_guard, bb.buffer, (), usage)
                     .unwrap();
                 let range = Some(bb.offset) .. Some(bb.offset + bb.size);
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
@@ -1089,14 +1097,15 @@ pub fn device_create_bind_group(
                     ),
                     _ => panic!("Mismatched texture binding for {:?}", decl),
                 };
-                let view = &texture_view_guard[id];
-                used.views.query(id, &view.life_guard.ref_count, DummyUsage);
+                let view = used.views
+                    .use_extend(&*texture_view_guard, id, (), ())
+                    .unwrap();
                 used.textures
-                    .transit(
+                    .change_extend(
                         view.texture_id.value,
                         &view.texture_id.ref_count,
+                        view.range.clone(),
                         usage,
-                        TrackPermit::EXTEND,
                     )
                     .unwrap();
                 hal::pso::Descriptor::Image(&view.raw, image_layout)
@@ -1129,15 +1138,15 @@ pub fn device_create_bind_group(
 
 pub fn device_track_bind_group(
     device_id: DeviceId,
-    buffer_id: BindGroupId,
+    bind_group_id: BindGroupId,
     ref_count: RefCount,
 ) {
-    let query = HUB.devices.read()[device_id]
+    let ok = HUB.devices.read()[device_id]
         .trackers
         .lock()
         .bind_groups
-        .query(buffer_id, &ref_count, DummyUsage);
-    assert!(query.initialized);
+        .init(bind_group_id, &ref_count, (), ());
+    assert!(ok);
 }
 
 #[cfg(feature = "local")]
@@ -1902,19 +1911,12 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
 
-    let usage = resource::BufferUsage::MAP_READ;
-    match device
+    device
         .trackers
         .lock()
         .buffers
-        .transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE)
-    {
-        Ok(Tracktion::Keep) => {}
-        Ok(Tracktion::Replace { .. }) => {
-            //TODO: launch a memory barrier into `HOST_READ` access?
-        }
-        other => panic!("Invalid mapping transition {:?}", other),
-    }
+        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_READ)
+        .unwrap();
 
     device.pending.lock().map(buffer_id, ref_count);
 }
@@ -1945,19 +1947,12 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
 
-    let usage = resource::BufferUsage::MAP_WRITE;
-    match device
+    device
         .trackers
         .lock()
         .buffers
-        .transit(buffer_id, &ref_count, usage, TrackPermit::REPLACE)
-    {
-        Ok(Tracktion::Keep) => {}
-        Ok(Tracktion::Replace { .. }) => {
-            //TODO: launch a memory barrier into `HOST_WRITE` access?
-        }
-        other => panic!("Invalid mapping transition {:?}", other),
-    }
+        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_WRITE)
+        .unwrap();
 
     device.pending.lock().map(buffer_id, ref_count);
 }

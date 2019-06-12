@@ -39,6 +39,27 @@ pub struct TextureCopyView {
     pub origin: Origin3d,
 }
 
+impl TextureCopyView {
+    fn to_selector(&self) -> hal::image::SubresourceRange {
+        let level = self.mip_level as hal::image::Level;
+        let layer = self.array_layer as hal::image::Layer;
+        hal::image::SubresourceRange {
+            aspects: hal::format::Aspects::all(), //TODO
+            levels: level .. level + 1,
+            layers: layer .. layer + 1,
+        }
+    }
+
+    fn to_sub_layers(&self) -> hal::image::SubresourceLayers {
+        let layer = self.array_layer as hal::image::Layer;
+        hal::image::SubresourceLayers {
+            aspects: hal::format::Aspects::all(), //TODO
+            level: self.mip_level as hal::image::Level,
+            layers: layer .. layer + 1,
+        }
+    }
+}
+
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     command_buffer_id: CommandBufferId,
@@ -51,30 +72,33 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = &mut cmb_guard[command_buffer_id];
     let buffer_guard = HUB.buffers.read();
+    // we can't hold both src_pending and dst_pending in scope because they
+    // borrow the buffer tracker mutably...
+    let mut barriers = Vec::new();
 
-    let (src_buffer, src_usage) = cmb
+    let (src_buffer, src_pending) = cmb
         .trackers
         .buffers
-        .get_with_replaced_usage(&*buffer_guard, src, BufferUsage::TRANSFER_SRC)
+        .use_replace(&*buffer_guard, src, (), BufferUsage::TRANSFER_SRC)
         .unwrap();
-    let src_barrier = src_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
+    barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Buffer {
+        states: pending.to_states(),
         target: &src_buffer.raw,
         families: None,
         range: None .. None,
-    });
+    }));
 
-    let (dst_buffer, dst_usage) = cmb
+    let (dst_buffer, dst_pending) = cmb
         .trackers
         .buffers
-        .get_with_replaced_usage(&*buffer_guard, dst, BufferUsage::TRANSFER_DST)
+        .use_replace(&*buffer_guard, dst, (), BufferUsage::TRANSFER_DST)
         .unwrap();
-    let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
+    barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Buffer {
+        states: pending.to_states(),
         target: &dst_buffer.raw,
         families: None,
         range: None .. None,
-    });
+    }));
 
     let region = hal::command::BufferCopy {
         src: src_offset,
@@ -86,7 +110,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
         cmb_raw.pipeline_barrier(
             all_buffer_stages() .. all_buffer_stages(),
             hal::memory::Dependencies::empty(),
-            src_barrier.into_iter().chain(dst_barrier),
+            barriers,
         );
         cmb_raw.copy_buffer(&src_buffer.raw, &dst_buffer.raw, iter::once(region));
     }
@@ -104,34 +128,33 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
-    let (src_buffer, src_usage) = cmb
+    let (src_buffer, src_pending) = cmb
         .trackers
         .buffers
-        .get_with_replaced_usage(&*buffer_guard, source.buffer, BufferUsage::TRANSFER_SRC)
+        .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::TRANSFER_SRC)
         .unwrap();
-    let src_barrier = src_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_READ,
+    let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
+        states: pending.to_states(),
         target: &src_buffer.raw,
         families: None,
         range: None .. None,
     });
 
-    let (dst_texture, dst_usage) = cmb
+    let (dst_texture, dst_pending) = cmb
         .trackers
         .textures
-        .get_with_replaced_usage(
+        .use_replace(
             &*texture_guard,
             destination.texture,
+            destination.to_selector(),
             TextureUsage::TRANSFER_DST,
         )
         .unwrap();
-    let aspects = dst_texture.full_range.aspects;
-    let dst_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_DST, aspects);
-    let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects) .. dst_texture_state,
+    let dst_barriers = dst_pending.map(|pending| hal::memory::Barrier::Image {
+        states: pending.to_states(),
         target: &dst_texture.raw,
         families: None,
-        range: dst_texture.full_range.clone(),
+        range: pending.selector,
     });
 
     if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
@@ -152,11 +175,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         buffer_offset: source.offset,
         buffer_width,
         buffer_height: source.image_height,
-        image_layers: hal::image::SubresourceLayers {
-            aspects, //TODO
-            level: destination.mip_level as hal::image::Level,
-            layers: destination.array_layer as u16 .. destination.array_layer as u16 + 1,
-        },
+        image_layers: destination.to_sub_layers(),
         image_offset: conv::map_origin(destination.origin),
         image_extent: conv::map_extent(copy_size),
     };
@@ -166,12 +185,12 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         cmb_raw.pipeline_barrier(
             stages .. stages,
             hal::memory::Dependencies::empty(),
-            src_barrier.into_iter().chain(dst_barrier),
+            src_barriers.chain(dst_barriers),
         );
         cmb_raw.copy_buffer_to_image(
             &src_buffer.raw,
             &dst_texture.raw,
-            dst_texture_state.1,
+            hal::image::Layout::TransferDstOptimal,
             iter::once(region),
         );
     }
@@ -189,18 +208,21 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
-    let (src_texture, src_usage) = cmb
+    let (src_texture, src_pending) = cmb
         .trackers
         .textures
-        .get_with_replaced_usage(&*texture_guard, source.texture, TextureUsage::TRANSFER_SRC)
+        .use_replace(
+            &*texture_guard,
+            source.texture,
+            source.to_selector(),
+            TextureUsage::TRANSFER_SRC,
+        )
         .unwrap();
-    let aspects = src_texture.full_range.aspects;
-    let src_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_SRC, aspects);
-    let src_barrier = src_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects) .. src_texture_state,
+    let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Image {
+        states: pending.to_states(),
         target: &src_texture.raw,
         families: None,
-        range: src_texture.full_range.clone(),
+        range: pending.selector,
     });
     match src_texture.placement {
         TexturePlacement::SwapChain(_) => unimplemented!(),
@@ -208,17 +230,18 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         TexturePlacement::Memory(_) => (),
     }
 
-    let (dst_buffer, dst_usage) = cmb
+    let (dst_buffer, dst_barriers) = cmb
         .trackers
         .buffers
-        .get_with_replaced_usage(
+        .use_replace(
             &*buffer_guard,
             destination.buffer,
+            (),
             BufferUsage::TRANSFER_DST,
         )
         .unwrap();
-    let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Buffer {
-        states: conv::map_buffer_state(old) .. hal::buffer::Access::TRANSFER_WRITE,
+    let dst_barrier = dst_barriers.map(|pending| hal::memory::Barrier::Buffer {
+        states: pending.to_states(),
         target: &dst_buffer.raw,
         families: None,
         range: None .. None,
@@ -234,11 +257,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         buffer_offset: destination.offset,
         buffer_width,
         buffer_height: destination.image_height,
-        image_layers: hal::image::SubresourceLayers {
-            aspects, //TODO
-            level: source.mip_level as hal::image::Level,
-            layers: source.array_layer as u16 .. source.array_layer as u16 + 1,
-        },
+        image_layers: source.to_sub_layers(),
         image_offset: conv::map_origin(source.origin),
         image_extent: conv::map_extent(copy_size),
     };
@@ -248,11 +267,11 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         cmb_raw.pipeline_barrier(
             stages .. stages,
             hal::memory::Dependencies::empty(),
-            src_barrier.into_iter().chain(dst_barrier),
+            src_barriers.chain(dst_barrier),
         );
         cmb_raw.copy_image_to_buffer(
             &src_texture.raw,
-            src_texture_state.1,
+            hal::image::Layout::TransferSrcOptimal,
             &dst_buffer.raw,
             iter::once(region),
         );
@@ -269,38 +288,43 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     let mut cmb_guard = HUB.command_buffers.write();
     let cmb = &mut cmb_guard[command_buffer_id];
     let texture_guard = HUB.textures.read();
+    // we can't hold both src_pending and dst_pending in scope because they
+    // borrow the buffer tracker mutably...
+    let mut barriers = Vec::new();
 
-    let (src_texture, src_usage) = cmb
+    let (src_texture, src_pending) = cmb
         .trackers
         .textures
-        .get_with_replaced_usage(&*texture_guard, source.texture, TextureUsage::TRANSFER_SRC)
+        .use_replace(
+            &*texture_guard,
+            source.texture,
+            source.to_selector(),
+            TextureUsage::TRANSFER_SRC,
+        )
         .unwrap();
-    let (dst_texture, dst_usage) = cmb
+    barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Image {
+        states: pending.to_states(),
+        target: &src_texture.raw,
+        families: None,
+        range: pending.selector,
+    }));
+
+    let (dst_texture, dst_pending) = cmb
         .trackers
         .textures
-        .get_with_replaced_usage(
+        .use_replace(
             &*texture_guard,
             destination.texture,
+            destination.to_selector(),
             TextureUsage::TRANSFER_DST,
         )
         .unwrap();
-
-    let aspects = src_texture.full_range.aspects & dst_texture.full_range.aspects;
-    let src_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_SRC, aspects);
-    let dst_texture_state = conv::map_texture_state(TextureUsage::TRANSFER_DST, aspects);
-
-    let src_barrier = src_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects) .. src_texture_state,
-        target: &src_texture.raw,
-        families: None,
-        range: src_texture.full_range.clone(),
-    });
-    let dst_barrier = dst_usage.map(|old| hal::memory::Barrier::Image {
-        states: conv::map_texture_state(old, aspects) .. dst_texture_state,
+    barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Image {
+        states: pending.to_states(),
         target: &dst_texture.raw,
         families: None,
-        range: dst_texture.full_range.clone(),
-    });
+        range: pending.selector,
+    }));
 
     if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
         cmb.swap_chain_links.alloc().init(SwapChainLink {
@@ -311,17 +335,9 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     }
 
     let region = hal::command::ImageCopy {
-        src_subresource: hal::image::SubresourceLayers {
-            aspects,
-            level: source.mip_level as hal::image::Level,
-            layers: source.array_layer as u16 .. source.array_layer as u16 + 1,
-        },
+        src_subresource: source.to_sub_layers(),
         src_offset: conv::map_origin(source.origin),
-        dst_subresource: hal::image::SubresourceLayers {
-            aspects,
-            level: destination.mip_level as hal::image::Level,
-            layers: destination.array_layer as u16 .. destination.array_layer as u16 + 1,
-        },
+        dst_subresource: destination.to_sub_layers(),
         dst_offset: conv::map_origin(destination.origin),
         extent: conv::map_extent(copy_size),
     };
@@ -330,13 +346,13 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
         cmb_raw.pipeline_barrier(
             all_image_stages() .. all_image_stages(),
             hal::memory::Dependencies::empty(),
-            src_barrier.into_iter().chain(dst_barrier),
+            barriers,
         );
         cmb_raw.copy_image(
             &src_texture.raw,
-            src_texture_state.1,
+            hal::image::Layout::TransferSrcOptimal,
             &dst_texture.raw,
-            dst_texture_state.1,
+            hal::image::Layout::TransferDstOptimal,
             iter::once(region),
         );
     }
