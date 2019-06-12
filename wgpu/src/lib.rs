@@ -502,10 +502,29 @@ impl Instance {
         }
     }
 
-    #[cfg(feature = "metal")]
-    pub fn create_surface_with_metal_layer(&self, window: *mut std::ffi::c_void) -> Surface {
+    pub fn create_surface_from_xlib(
+        &self,
+        display: *mut *const std::ffi::c_void,
+        window: u64,
+    ) -> Surface {
         Surface {
-            id: wgn::wgpu_instance_create_surface_from_macos_layer(self.id, window),
+            id: wgn::wgpu_instance_create_surface_from_xlib(self.id, display, window),
+        }
+    }
+
+    pub fn create_surface_from_macos_layer(&self, layer: *mut std::ffi::c_void) -> Surface {
+        Surface {
+            id: wgn::wgpu_instance_create_surface_from_macos_layer(self.id, layer),
+        }
+    }
+
+    pub fn create_surface_from_windows_hwnd(
+        &self,
+        hinstance: *mut std::ffi::c_void,
+        hwnd: *mut std::ffi::c_void,
+    ) -> Surface {
+        Surface {
+            id: wgn::wgpu_instance_create_surface_from_windows_hwnd(self.id, hinstance, hwnd),
         }
     }
 }
