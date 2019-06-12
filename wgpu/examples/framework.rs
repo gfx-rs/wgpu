@@ -62,10 +62,7 @@ pub fn run<E: Example>(title: &str) {
         let window = Window::new(&events_loop).unwrap();
         window.set_title(title);
         let hidpi_factor = window.get_hidpi_factor();
-        let size = window
-            .get_inner_size()
-            .unwrap()
-            .to_physical(hidpi_factor);
+        let size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
 
         let surface = instance.create_surface(&window);
 

@@ -468,7 +468,7 @@ impl Instance {
     #[cfg(feature = "gl")]
     pub fn new(windowed_context: wgn::glutin::WindowedContext) -> Self {
         Instance {
-            id: wgn::wgpu_create_gl_instance(windowed_context)
+            id: wgn::wgpu_create_gl_instance(windowed_context),
         }
     }
 
@@ -653,16 +653,17 @@ impl Device {
             module: desc.vertex_stage.module.id,
             entry_point: vertex_entry_point.as_ptr(),
         };
-        let (_fragment_entry_point, fragment_stage) = if let Some(fragment_stage) = &desc.fragment_stage {
-            let fragment_entry_point = CString::new(fragment_stage.entry_point).unwrap();
-            let fragment_stage = wgn::PipelineStageDescriptor {
-                module: fragment_stage.module.id,
-                entry_point: fragment_entry_point.as_ptr(),
+        let (_fragment_entry_point, fragment_stage) =
+            if let Some(fragment_stage) = &desc.fragment_stage {
+                let fragment_entry_point = CString::new(fragment_stage.entry_point).unwrap();
+                let fragment_stage = wgn::PipelineStageDescriptor {
+                    module: fragment_stage.module.id,
+                    entry_point: fragment_entry_point.as_ptr(),
+                };
+                (fragment_entry_point, Some(fragment_stage))
+            } else {
+                (CString::default(), None)
             };
-            (fragment_entry_point, Some(fragment_stage))
-        } else {
-            (CString::default(), None)
-        };
 
         let temp_color_states = desc.color_states.to_vec();
         let temp_vertex_buffers = desc
@@ -682,7 +683,9 @@ impl Device {
                 &wgn::RenderPipelineDescriptor {
                     layout: desc.layout.id,
                     vertex_stage,
-                    fragment_stage: fragment_stage.as_ref().map_or(ptr::null(), |fs| fs as *const _),
+                    fragment_stage: fragment_stage
+                        .as_ref()
+                        .map_or(ptr::null(), |fs| fs as *const _),
                     rasterization_state: desc.rasterization_state.clone(),
                     primitive_topology: desc.primitive_topology,
                     color_states: temp_color_states.as_ptr(),
@@ -1101,7 +1104,12 @@ impl CommandEncoder {
 
 impl<'a> RenderPass<'a> {
     /// Sets the active bind group for a given bind group index.
-    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[BufferAddress]) {
+    pub fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: &BindGroup,
+        offsets: &[BufferAddress],
+    ) {
         wgn::wgpu_render_pass_set_bind_group(
             self.id,
             index,
@@ -1193,7 +1201,12 @@ impl<'a> Drop for RenderPass<'a> {
 
 impl<'a> ComputePass<'a> {
     /// Sets the active bind group for a given bind group index.
-    pub fn set_bind_group(&mut self, index: u32, bind_group: &BindGroup, offsets: &[BufferAddress]) {
+    pub fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: &BindGroup,
+        offsets: &[BufferAddress],
+    ) {
         wgn::wgpu_compute_pass_set_bind_group(
             self.id,
             index,
