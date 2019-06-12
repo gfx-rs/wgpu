@@ -58,7 +58,7 @@ fn main() {
             binding: 0,
             resource: wgpu::BindingResource::Buffer {
                 buffer: &storage_buffer,
-                range: 0..size,
+                range: 0 .. size,
             },
         }],
     });

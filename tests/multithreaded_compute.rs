@@ -1,17 +1,17 @@
 #[test]
 #[cfg(any(feature = "vulkan", feature = "metal", feature = "dx12"))]
 fn multithreaded_compute() {
+    use std::sync::mpsc;
     use std::thread;
     use std::time::Duration;
-    use std::sync::mpsc;
 
     let thread_count = 8;
 
     let (tx, rx) = mpsc::channel();
-    for _ in 0..thread_count {
+    for _ in 0 .. thread_count {
         let tx = tx.clone();
         thread::spawn(move || {
-            let numbers = vec!(100, 100, 100);
+            let numbers = vec![100, 100, 100];
 
             let size = (numbers.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
 
@@ -45,13 +45,14 @@ fn multithreaded_compute() {
                     | wgpu::BufferUsage::TRANSFER_SRC,
             });
 
-            let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[wgpu::BindGroupLayoutBinding {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::COMPUTE,
-                    ty: wgpu::BindingType::StorageBuffer,
-                }],
-            });
+            let bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    bindings: &[wgpu::BindGroupLayoutBinding {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::COMPUTE,
+                        ty: wgpu::BindingType::StorageBuffer,
+                    }],
+                });
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
@@ -59,7 +60,7 @@ fn multithreaded_compute() {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer {
                         buffer: &storage_buffer,
-                        range: 0..size,
+                        range: 0 .. size,
                     },
                 }],
             });
@@ -68,15 +69,17 @@ fn multithreaded_compute() {
                 bind_group_layouts: &[&bind_group_layout],
             });
 
-            let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                layout: &pipeline_layout,
-                compute_stage: wgpu::PipelineStageDescriptor {
-                    module: &cs_module,
-                    entry_point: "main",
-                },
-            });
+            let compute_pipeline =
+                device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                    layout: &pipeline_layout,
+                    compute_stage: wgpu::PipelineStageDescriptor {
+                        module: &cs_module,
+                        entry_point: "main",
+                    },
+                });
 
-            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            let mut encoder =
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
             encoder.copy_buffer_to_buffer(&staging_buffer, 0, &storage_buffer, 0, size);
             {
                 let mut cpass = encoder.begin_compute_pass();
@@ -95,7 +98,8 @@ fn multithreaded_compute() {
         });
     }
 
-    for _ in 0..thread_count {
-        rx.recv_timeout(Duration::from_secs(10)).expect("A thread never completed.");
+    for _ in 0 .. thread_count {
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("A thread never completed.");
     }
 }
