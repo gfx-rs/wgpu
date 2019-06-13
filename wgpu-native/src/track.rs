@@ -376,6 +376,36 @@ impl<I, T> Default for RangedStates<I, T> {
 }
 
 impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
+    fn _check_sanity(&self) {
+        for a in self.ranges.iter() {
+            assert!(a.0.start < a.0.end);
+        }
+        for (a, b) in self.ranges.iter().zip(self.ranges[1..].iter()) {
+            assert!(a.0.end <= b.0.start);
+        }
+    }
+
+    fn _coalesce(&mut self) {
+        let mut num_removed = 0;
+        let mut iter = self.ranges.iter_mut();
+        let mut cur = match iter.next() {
+            Some(elem) => elem,
+            None => return,
+        };
+        while let Some(next) = iter.next() {
+            if cur.0.end == next.0.start && cur.1 == next.1 {
+                num_removed += 1;
+                cur.0.end = next.0.end;
+                next.0.end = next.0.start;
+            } else {
+                cur = next;
+            }
+        }
+        if num_removed != 0 {
+            self.ranges.retain(|pair| pair.0.start != pair.0.end);
+        }
+    }
+
     fn isolate(&mut self, index: &Range<I>, default: T) -> &mut [(Range<I>, T)] {
         let start_pos = match self.ranges
             .iter()
@@ -419,27 +449,6 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         }
 
         &mut self.ranges[start_pos .. pos]
-    }
-
-    fn _coalesce(&mut self) {
-        let mut num_removed = 0;
-        let mut iter = self.ranges.iter_mut();
-        let mut cur = match iter.next() {
-            Some(elem) => elem,
-            None => return,
-        };
-        while let Some(next) = iter.next() {
-            if cur.0.end == next.0.start && cur.1 == next.1 {
-                num_removed += 1;
-                cur.0.end = next.0.end;
-                next.0.end = next.0.start;
-            } else {
-                cur = next;
-            }
-        }
-        if num_removed != 0 {
-            self.ranges.retain(|pair| pair.0.start != pair.0.end);
-        }
     }
 }
 
@@ -846,5 +855,81 @@ impl TrackerSet {
         self.textures.merge_extend(&other.textures).unwrap();
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod test_range {
+    use super::RangedStates;
+
+    #[test]
+    fn test_sane0() {
+        let rs = RangedStates { ranges: vec![
+            (1..4, 9u8),
+            (4..5, 9),
+        ]};
+        rs._check_sanity();
+    }
+
+    #[test(must_fail)]
+    fn test_sane1() {
+        let rs = RangedStates { ranges: vec![
+            (1..4, 9u8),
+            (5..5, 9),
+        ]};
+        rs._check_sanity();
+    }
+
+    #[test(must_fail)]
+    fn test_sane2() {
+        let rs = RangedStates { ranges: vec![
+            (1..4, 9u8),
+            (3..5, 9),
+        ]};
+        rs._check_sanity();
+    }
+
+    #[test]
+    fn test_coalesce() {
+        let mut rs = RangedStates { ranges: vec![
+            (1..4, 9u8),
+            (4..5, 9),
+            (5..7, 1),
+            (8..9, 1),
+        ]};
+        rs._coalesce();
+        assert_eq!(rs.ranges, vec![
+            (1..5, 9),
+            (5..7, 1),
+            (8..9, 1),
+        ]);
+    }
+
+    #[test]
+    fn test_isolate() {
+        let rs = RangedStates { ranges: vec![
+            (1..4, 9u8),
+            (4..5, 9),
+            (5..7, 1),
+            (8..9, 1),
+        ]};
+        assert_eq!(rs.clone().isolate(&(4..5), 0), [
+            (4..5, 9u8),
+        ]);
+        assert_eq!(rs.clone().isolate(&(0..6), 0), [
+            (0..1, 0),
+            (1..4, 9u8),
+            (4..5, 9),
+            (5..6, 1),
+        ]);
+        assert_eq!(rs.clone().isolate(&(8..10), 1), [
+            (8..9, 1),
+            (9..10, 1),
+        ]);
+        assert_eq!(rs.clone().isolate(&(6..8), 0), [
+            (6..7, 1),
+            (7..8, 0),
+            (8..9, 1),
+        ]);
     }
 }
