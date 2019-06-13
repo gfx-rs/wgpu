@@ -181,7 +181,7 @@ pub struct TextureDescriptor {
 
 #[derive(Debug)]
 pub(crate) enum TexturePlacement<B: hal::Backend> {
-    #[cfg_attr(feature = "remote", allow(unused))]
+    #[cfg_attr(not(feature = "local"), allow(unused))]
     SwapChain(SwapChainLink<Mutex<SwapImageEpoch>>),
     Memory(MemoryBlock<B>),
     Void,
