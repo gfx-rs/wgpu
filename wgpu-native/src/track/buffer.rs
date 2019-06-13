@@ -10,6 +10,7 @@ use std::ops::Range;
 pub type BufferState = Unit<BufferUsage>;
 
 impl PendingTransition<BufferState> {
+    /// Produce the gfx-hal buffer states corresponding to the transition.
     pub fn to_states(&self) -> Range<hal::buffer::State> {
         conv::map_buffer_state(self.usage.start) ..
         conv::map_buffer_state(self.usage.end)

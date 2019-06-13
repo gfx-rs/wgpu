@@ -181,7 +181,6 @@ pub struct Merge<'a, I, T> {
 impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
     type Item = (Range<I>, Range<T>);
     fn next(&mut self) -> Option<Self::Item> {
-        println!("Peek {:?} {:?} base = {:?}", self.sa.peek(), self.sb.peek(), self.base);
         match (self.sa.peek(), self.sb.peek()) {
             // we have both streams
             (Some(&(ref ra, va)), Some(&(ref rb, vb))) => {
