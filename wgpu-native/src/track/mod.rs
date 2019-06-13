@@ -1,11 +1,11 @@
+mod buffer;
 mod range;
 
 use crate::{
     conv,
     device::MAX_MIP_LEVELS,
     hub::Storage,
-    resource::{BufferUsage, TextureUsage},
-    BufferId,
+    resource::{TextureUsage},
     Epoch,
     Index,
     RefCount,
@@ -26,6 +26,7 @@ use std::{
     vec::Drain,
 };
 
+use buffer::BufferState;
 use range::RangedStates;
 
 
@@ -286,79 +287,6 @@ impl<S: ResourceState> ResourceTracker<S> {
         self.change_replace(id, item.borrow(), selector, usage)
             .map(|drain| (item, drain))
             .map_err(|pending| pending.usage.start)
-    }
-}
-
-//TODO: store `hal::buffer::State` here to avoid extra conversions
-pub type BufferState = Unit<BufferUsage>;
-
-impl PendingTransition<BufferState> {
-    pub fn to_states(&self) -> Range<hal::buffer::State> {
-        conv::map_buffer_state(self.usage.start) ..
-        conv::map_buffer_state(self.usage.end)
-    }
-}
-
-impl Default for BufferState {
-    fn default() -> Self {
-        BufferState {
-            init: BufferUsage::empty(),
-            last: BufferUsage::empty(),
-        }
-    }
-}
-
-impl ResourceState for BufferState {
-    type Id = BufferId;
-    type Selector = ();
-    type Usage = BufferUsage;
-
-    fn query(
-        &self,
-        _selector: Self::Selector,
-    ) -> Option<Self::Usage> {
-        Some(self.last)
-    }
-
-    fn change(
-        &mut self,
-        id: Self::Id,
-        _selector: Self::Selector,
-        usage: Self::Usage,
-        output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        let old = self.last;
-        if usage != old {
-            let pending = PendingTransition {
-                id,
-                selector: (),
-                usage: old .. usage,
-            };
-            self.last = match output {
-                Some(transitions) => {
-                    transitions.push(pending);
-                    usage
-                }
-                None =>  {
-                    if !old.is_empty() && BufferUsage::WRITE_ALL.intersects(old | usage) {
-                        return Err(pending);
-                    }
-                    old | usage
-                }
-            };
-        }
-        Ok(())
-    }
-
-    fn merge(
-        &mut self,
-        id: Self::Id,
-        other: &Self,
-        stitch: Stitch,
-        output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        let usage = other.select(stitch);
-        self.change(id, (), usage, output)
     }
 }
 
