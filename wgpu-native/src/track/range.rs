@@ -1,5 +1,6 @@
 use std::{
     cmp::Ordering,
+    fmt::Debug,
     iter::Peekable,
     ops::Range,
     slice::Iter,
@@ -122,6 +123,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         &mut self.ranges[start_pos .. pos]
     }
 
+
     #[cfg(test)]
     pub fn sanely_isolated(&self, index: Range<I>, default: T) -> Vec<(Range<I>, T)> {
         let mut clone = self.clone();
@@ -145,9 +147,10 @@ pub struct Merge<'a, I, T> {
     sb: Peekable<Iter<'a, (Range<I>, T)>>,
 }
 
-impl<'a, I: Copy + Ord, T: Copy> Iterator for Merge<'a, I, T> {
+impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
     type Item = (Range<I>, Range<T>);
     fn next(&mut self) -> Option<Self::Item> {
+        println!("Peek {:?} {:?} base = {:?}", self.sa.peek(), self.sb.peek(), self.base);
         match (self.sa.peek(), self.sb.peek()) {
             // we have both streams
             (Some(&(ref ra, va)), Some(&(ref rb, vb))) => {
@@ -172,9 +175,9 @@ impl<'a, I: Copy + Ord, T: Copy> Iterator for Merge<'a, I, T> {
                         // both are starting
                         Ordering::Equal => (ra.start .. ra.end.min(rb.end), *va .. *vb),
                         // only left is starting
-                        Ordering::Less => (ra.start .. rb.start, *va .. *va),
+                        Ordering::Less => (ra.start .. rb.start.min(ra.end), *va .. *va),
                         // only right is starting
-                        Ordering::Greater => (rb.start .. ra.start, *vb .. *vb),
+                        Ordering::Greater => (rb.start .. ra.start.min(rb.end), *vb .. *vb),
                     }
                 };
                 self.base = range.end;
@@ -208,10 +211,18 @@ impl<'a, I: Copy + Ord, T: Copy> Iterator for Merge<'a, I, T> {
 
 #[cfg(test)]
 mod test {
+    //TODO: randomized/fuzzy testing
     use super::RangedStates;
+    use std::{ fmt::Debug, ops::Range };
+
+    fn easy_merge<T: PartialEq + Copy + Debug>(
+        ra: Vec<(Range<usize>, T)>, rb: Vec<(Range<usize>, T)>
+    ) -> Vec<(Range<usize>, Range<T>)> {
+        RangedStates { ranges: ra }.merge(&RangedStates { ranges: rb }, 0).collect()
+    }
 
     #[test]
-    fn test_sane0() {
+    fn sane_good() {
         let rs = RangedStates { ranges: vec![
             (1..4, 9u8),
             (4..5, 9),
@@ -221,7 +232,7 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn test_sane1() {
+    fn sane_empty() {
         let rs = RangedStates { ranges: vec![
             (1..4, 9u8),
             (5..5, 9),
@@ -231,7 +242,7 @@ mod test {
 
     #[test]
     #[should_panic]
-    fn test_sane2() {
+    fn sane_intersect() {
         let rs = RangedStates { ranges: vec![
             (1..4, 9u8),
             (3..5, 9),
@@ -240,7 +251,7 @@ mod test {
     }
 
     #[test]
-    fn test_coalesce() {
+    fn coalesce() {
         let mut rs = RangedStates { ranges: vec![
             (1..4, 9u8),
             (4..5, 9),
@@ -257,7 +268,7 @@ mod test {
     }
 
     #[test]
-    fn test_isolate() {
+    fn isolate() {
         let rs = RangedStates { ranges: vec![
             (1..4, 9u8),
             (4..5, 9),
@@ -282,5 +293,128 @@ mod test {
             (7..8, 0),
             (8..9, 1),
         ]);
+    }
+
+    #[test]
+    fn merge_same() {
+        assert_eq!(
+            easy_merge(
+                vec![
+                    (1..4, 0u8),
+                ],
+                vec![
+                    (1..4, 2u8),
+                ],
+            ),
+            vec![
+                (1..4, 0..2),
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_empty() {
+        assert_eq!(
+            easy_merge(
+                vec![
+                    (1..2, 0u8),
+                ],
+                vec![
+                ],
+            ),
+            vec![
+                (1..2, 0..0),
+            ]
+        );
+        assert_eq!(
+            easy_merge(
+                vec![
+                ],
+                vec![
+                    (3..4, 1u8),
+                ],
+            ),
+            vec![
+                (3..4, 1..1),
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_separate() {
+        assert_eq!(
+            easy_merge(
+                vec![
+                    (1..2, 0u8),
+                    (5..6, 1u8),
+                ],
+                vec![
+                    (2..4, 2u8),
+                ],
+            ),
+            vec![
+                (1..2, 0..0),
+                (2..4, 2..2),
+                (5..6, 1..1),
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_subset() {
+        assert_eq!(
+            easy_merge(
+                vec![
+                    (1..6, 0u8),
+                ],
+                vec![
+                    (2..4, 2u8),
+                ],
+            ),
+            vec![
+                (1..2, 0..0),
+                (2..4, 0..2),
+                (4..6, 0..0),
+            ]
+        );
+        assert_eq!(
+            easy_merge(
+                vec![
+                    (2..4, 0u8),
+                ],
+                vec![
+                    (1..4, 2u8),
+                ],
+            ),
+            vec![
+                (1..2, 2..2),
+                (2..4, 0..2),
+            ]
+        );
+    }
+
+    #[test]
+    fn merge_all() {
+        assert_eq!(
+            easy_merge(
+                vec![
+                    (1..4, 0u8),
+                    (5..8, 1u8),
+                ],
+                vec![
+                    (2..6, 2u8),
+                    (7..9, 3u8),
+                ],
+            ),
+            vec![
+                (1..2, 0..0),
+                (2..4, 0..2),
+                (4..5, 2..2),
+                (5..6, 1..2),
+                (6..7, 1..1),
+                (7..8, 1..3),
+                (8..9, 3..3),
+            ]
+        );
     }
 }
