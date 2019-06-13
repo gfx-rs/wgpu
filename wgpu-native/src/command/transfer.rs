@@ -44,16 +44,19 @@ impl TextureCopyView {
         let level = self.mip_level as hal::image::Level;
         let layer = self.array_layer as hal::image::Layer;
         hal::image::SubresourceRange {
-            aspects: hal::format::Aspects::all(), //TODO
+            //TODO: detect the aspects in transfer ops
+            aspects: hal::format::Aspects::COLOR,
             levels: level .. level + 1,
             layers: layer .. layer + 1,
         }
     }
 
-    fn to_sub_layers(&self) -> hal::image::SubresourceLayers {
+    fn to_sub_layers(
+        &self, aspects: hal::format::Aspects
+    ) -> hal::image::SubresourceLayers {
         let layer = self.array_layer as hal::image::Layer;
         hal::image::SubresourceLayers {
-            aspects: hal::format::Aspects::all(), //TODO
+            aspects,
             level: self.mip_level as hal::image::Level,
             layers: layer .. layer + 1,
         }
@@ -158,6 +161,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         });
     }
 
+    let aspects = dst_texture.full_range.aspects;
     let bytes_per_texel = conv::map_texture_format(dst_texture.format)
         .surface_desc()
         .bits as u32
@@ -168,7 +172,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         buffer_offset: source.offset,
         buffer_width,
         buffer_height: source.image_height,
-        image_layers: destination.to_sub_layers(),
+        image_layers: destination.to_sub_layers(aspects),
         image_offset: conv::map_origin(destination.origin),
         image_extent: conv::map_extent(copy_size),
     };
@@ -232,6 +236,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         range: None .. None,
     });
 
+    let aspects = src_texture.full_range.aspects;
     let bytes_per_texel = conv::map_texture_format(src_texture.format)
         .surface_desc()
         .bits as u32
@@ -242,7 +247,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         buffer_offset: destination.offset,
         buffer_width,
         buffer_height: destination.image_height,
-        image_layers: source.to_sub_layers(),
+        image_layers: source.to_sub_layers(aspects),
         image_offset: conv::map_origin(source.origin),
         image_extent: conv::map_extent(copy_size),
     };
@@ -311,10 +316,11 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
         });
     }
 
+    let aspects = src_texture.full_range.aspects & dst_texture.full_range.aspects;
     let region = hal::command::ImageCopy {
-        src_subresource: source.to_sub_layers(),
+        src_subresource: source.to_sub_layers(aspects),
         src_offset: conv::map_origin(source.origin),
-        dst_subresource: destination.to_sub_layers(),
+        dst_subresource: destination.to_sub_layers(aspects),
         dst_offset: conv::map_origin(destination.origin),
         extent: conv::map_extent(copy_size),
     };
