@@ -21,6 +21,7 @@ use std::{
     cmp::Ordering,
     collections::hash_map::Entry,
     iter::Peekable,
+    marker::PhantomData,
     ops::Range,
     slice,
     vec::Drain,
@@ -781,12 +782,8 @@ impl ResourceState for TextureStates {
     }
 }
 
-
-#[derive(Clone, Debug, Default)]
-pub struct TextureViewState;
-
-impl ResourceState for TextureViewState {
-    type Id = TextureViewId;
+impl<I: Copy + TypedId> ResourceState for PhantomData<I> {
+    type Id = I;
     type Selector = ();
     type Usage = ();
 
@@ -818,47 +815,12 @@ impl ResourceState for TextureViewState {
     }
 }
 
-#[derive(Clone, Debug, Default)]
-pub struct BindGroupState;
-
-impl ResourceState for BindGroupState {
-    type Id = BindGroupId;
-    type Selector = ();
-    type Usage = ();
-
-    fn query(
-        &self,
-        _selector: Self::Selector,
-    ) -> Option<Self::Usage> {
-        Some(())
-    }
-
-    fn change(
-        &mut self,
-        _id: Self::Id,
-        _selector: Self::Selector,
-        _usage: Self::Usage,
-        _output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        Ok(())
-    }
-
-    fn merge(
-        &mut self,
-        _id: Self::Id,
-        _other: &Self,
-        _stitch: Stitch,
-        _output: Option<&mut Vec<PendingTransition<Self>>>,
-    ) -> Result<(), PendingTransition<Self>> {
-        Ok(())
-    }
-}
 
 pub struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
     pub textures: ResourceTracker<TextureStates>,
-    pub views: ResourceTracker<TextureViewState>,
-    pub bind_groups: ResourceTracker<BindGroupState>,
+    pub views: ResourceTracker<PhantomData<TextureViewId>>,
+    pub bind_groups: ResourceTracker<PhantomData<BindGroupId>>,
     //TODO: samplers
 }
 
