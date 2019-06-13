@@ -274,3 +274,71 @@ impl ResourceState for TextureStates {
         Ok(())
     }
 }
+
+
+#[cfg(test)]
+mod test {
+    //TODO: change() and merge() tests
+    //use crate::TypedId;
+    use super::*;
+    use hal::{
+        format::Aspects,
+        image::SubresourceRange,
+    };
+
+    #[test]
+    fn query() {
+        let mut ts = TextureStates::default();
+        ts.color_mips.push(PlaneStates::default());
+        ts.color_mips.push(PlaneStates::new(&[
+            (1..3, Unit::new(TextureUsage::SAMPLED)),
+            (3..5, Unit::new(TextureUsage::SAMPLED)),
+            (5..6, Unit::new(TextureUsage::STORAGE)),
+        ]));
+        assert_eq!(
+            ts.query(SubresourceRange {
+                aspects: Aspects::COLOR,
+                levels: 1..2,
+                layers: 2..5,
+            }),
+            // level 1 matches
+            Some(TextureUsage::SAMPLED),
+        );
+        assert_eq!(
+            ts.query(SubresourceRange {
+                aspects: Aspects::DEPTH,
+                levels: 1..2,
+                layers: 2..5,
+            }),
+            // no depth found
+            None,
+        );
+        assert_eq!(
+            ts.query(SubresourceRange {
+                aspects: Aspects::COLOR,
+                levels: 0..2,
+                layers: 2..5,
+            }),
+            // level 0 is empty, level 1 matches
+            Some(TextureUsage::SAMPLED),
+        );
+        assert_eq!(
+            ts.query(SubresourceRange {
+                aspects: Aspects::COLOR,
+                levels: 1..2,
+                layers: 1..5,
+            }),
+            // level 1 matches with gaps
+            Some(TextureUsage::SAMPLED),
+        );
+        assert_eq!(
+            ts.query(SubresourceRange {
+                aspects: Aspects::COLOR,
+                levels: 1..2,
+                layers: 4..6,
+            }),
+            // level 1 doesn't match
+            None,
+        );
+    }
+}

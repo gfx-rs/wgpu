@@ -20,6 +20,13 @@ impl<I, T> Default for RangedStates<I, T> {
 }
 
 impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
+    #[cfg(test)]
+    pub fn new(values: &[(Range<I>, T)]) -> Self {
+        RangedStates {
+            ranges: values.to_vec(),
+        }
+    }
+
     pub fn clear(&mut self) {
         self.ranges.clear();
     }
