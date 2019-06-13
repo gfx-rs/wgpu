@@ -122,6 +122,14 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         &mut self.ranges[start_pos .. pos]
     }
 
+    #[cfg(test)]
+    pub fn sanely_isolated(&self, index: Range<I>, default: T) -> Vec<(Range<I>, T)> {
+        let mut clone = self.clone();
+        let result = clone.isolate(&index, default).to_vec();
+        clone.check_sanity();
+        result
+    }
+
     pub fn merge<'a>(&'a self, other: &'a Self, base: I) -> Merge<'a, I, T> {
         Merge {
             base,
@@ -256,20 +264,20 @@ mod test {
             (5..7, 1),
             (8..9, 1),
         ]};
-        assert_eq!(rs.clone().isolate(&(4..5), 0), [
+        assert_eq!(&rs.sanely_isolated(4..5, 0), &[
             (4..5, 9u8),
         ]);
-        assert_eq!(rs.clone().isolate(&(0..6), 0), [
+        assert_eq!(&rs.sanely_isolated(0..6, 0), &[
             (0..1, 0),
             (1..4, 9u8),
             (4..5, 9),
             (5..6, 1),
         ]);
-        assert_eq!(rs.clone().isolate(&(8..10), 1), [
+        assert_eq!(&rs.sanely_isolated(8..10, 1), &[
             (8..9, 1),
             (9..10, 1),
         ]);
-        assert_eq!(rs.clone().isolate(&(6..9), 0), [
+        assert_eq!(&rs.sanely_isolated(6..9, 0), &[
             (6..7, 1),
             (7..8, 0),
             (8..9, 1),
