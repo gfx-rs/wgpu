@@ -6,6 +6,9 @@ use std::{
     slice::Iter,
 };
 
+/// Structure that keeps track of a I -> T mapping,
+/// optimized for a case where keys of the same values
+/// are often grouped together linearly.
 #[derive(Clone, Debug)]
 pub struct RangedStates<I, T> {
     ranges: Vec<(Range<I>, T)>,
@@ -20,6 +23,7 @@ impl<I, T> Default for RangedStates<I, T> {
 }
 
 impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
+    /// Construct a new instance from a slice of ranges.
     #[cfg(test)]
     pub fn new(values: &[(Range<I>, T)]) -> Self {
         RangedStates {
@@ -27,18 +31,26 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         }
     }
 
+    /// Clear all the ranges.
     pub fn clear(&mut self) {
         self.ranges.clear();
     }
 
+    /// Append a range.
     pub fn append(&mut self, index: Range<I>, value: T) {
+        if let Some(last) = self.ranges.last() {
+            debug_assert!(last.0.end <= index.start);
+        }
         self.ranges.push((index, value));
     }
 
+    /// Iterate through the stored ranges immutably.
     pub fn iter(&self) -> Iter<(Range<I>, T)> {
         self.ranges.iter()
     }
 
+    /// Check that all the ranges are non-intersecting and ordered.
+    /// Panics otherwise.
     #[cfg(test)]
     fn check_sanity(&self) {
         for a in self.ranges.iter() {
@@ -49,6 +61,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         }
     }
 
+    /// Merge the neighboring ranges together, where possible.
     #[cfg(test)]
     fn coalesce(&mut self) {
         let mut num_removed = 0;
@@ -71,6 +84,10 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         }
     }
 
+    /// Split the storage ranges in such a way that there is a linear subset of
+    /// them occuping exactly `index` range, which is returned mutably.
+    ///
+    /// Gaps in the ranges are filled with `default` value.
     pub fn isolate(&mut self, index: &Range<I>, default: T) -> &mut [(Range<I>, T)] {
         //TODO: implement this in 2 passes:
         // 1. scan the ranges to figure out how many extra ones need to be inserted
@@ -131,6 +148,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     }
 
 
+    /// Helper method for isolation that checks the sanity of the results.
     #[cfg(test)]
     pub fn sanely_isolated(&self, index: Range<I>, default: T) -> Vec<(Range<I>, T)> {
         let mut clone = self.clone();
@@ -139,6 +157,10 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         result
     }
 
+    /// Produce an iterator that merges two instances together.
+    ///
+    /// Each range in the returned iterator is a subset of a range in either
+    /// `self` or `other`, and the value returned as a `Range` from `self` to `other`.
     pub fn merge<'a>(&'a self, other: &'a Self, base: I) -> Merge<'a, I, T> {
         Merge {
             base,
@@ -148,6 +170,8 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     }
 }
 
+
+/// A custom iterator that goes through two `RangedStates` and proces a merge.
 pub struct Merge<'a, I, T> {
     base: I,
     sa: Peekable<Iter<'a, (Range<I>, T)>>,

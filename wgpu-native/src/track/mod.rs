@@ -26,7 +26,8 @@ use buffer::BufferState;
 use texture::TextureStates;
 
 
-/// A single unit of state tracking.
+/// A single unit of state tracking. It keeps an initial
+/// usage as well as the last/current one, similar to `Range`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Unit<U> {
     init: U,
@@ -34,6 +35,7 @@ pub struct Unit<U> {
 }
 
 impl<U: Copy> Unit<U> {
+    /// Create a new unit from a given usage.
     fn new(usage: U) -> Self {
         Unit {
             init: usage,
@@ -41,6 +43,12 @@ impl<U: Copy> Unit<U> {
         }
     }
 
+    /// Select one of the ends of the usage, based on the
+    /// given `Stitch`.
+    ///
+    /// In some scenarios, when merging two trackers
+    /// A and B for a resource, we want to connect A to the initial state
+    /// of B. In other scenarios, we want to reach the last state of B.
     fn select(&self, stitch: Stitch) -> U {
         match stitch {
             Stitch::Init => self.init,
@@ -58,16 +66,38 @@ pub enum Stitch {
     Last,
 }
 
+/// The main trait that abstracts away the tracking logic of
+/// a particular resource type, like a buffer or a texture.
 pub trait ResourceState: Clone + Default {
+    /// Corresponding `HUB` identifier.
     type Id: Copy + TypedId;
+    /// A type specifying the sub-resources.
     type Selector;
+    /// Usage type for a `Unit` of a sub-resource.
     type Usage;
 
+    /// Check if all the selected sub-resources have the same
+    /// usage, and return it.
+    ///
+    /// Returns `None` if no sub-resources
+    /// are intersecting with the selector, or their usage
+    /// isn't consistent.
     fn query(
         &self,
         selector: Self::Selector,
     ) -> Option<Self::Usage>;
 
+    /// Change the last usage of the selected sub-resources.
+    ///
+    /// If `output` is specified, it's filled with the
+    /// `PendingTransition` objects cooresponding to smaller
+    /// sub-resource transitions. The old usage is replaced by
+    /// the new one.
+    ///
+    /// If `output` is `None`, the old usage is extended with
+    /// the new usage. The error is returned if it's not possible,
+    /// specifying the conflicting transition. Extension can only
+    /// be done for read-only usages.
     fn change(
         &mut self,
         id: Self::Id,
@@ -76,6 +106,14 @@ pub trait ResourceState: Clone + Default {
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>>;
 
+    /// Merge the state of this resource tracked by a different instance
+    /// with the current one.
+    ///
+    /// Same rules for `output` apply as with `change()`: last usage state
+    /// is either replaced (when `output` is provided) with a
+    /// `PendingTransition` pushed to this vector, or extended with the
+    /// other read-only usage, unless there is a usage conflict, and
+    /// the error is generated (returning the conflict).
     fn merge(
         &mut self,
         id: Self::Id,
@@ -85,6 +123,8 @@ pub trait ResourceState: Clone + Default {
     ) -> Result<(), PendingTransition<Self>>;
 }
 
+/// Structure wrapping the abstract tracking state with the relevant resource
+/// data, such as the reference count and the epoch.
 #[derive(Clone, Debug)]
 struct Resource<S> {
     ref_count: RefCount,
@@ -92,6 +132,9 @@ struct Resource<S> {
     epoch: Epoch,
 }
 
+/// A structure containing all the information about a particular resource
+/// transition. User code should be able to generate a pipeline barrier
+/// based on the contents.
 #[derive(Debug)]
 pub struct PendingTransition<S: ResourceState> {
     pub id: S::Id,
@@ -99,6 +142,7 @@ pub struct PendingTransition<S: ResourceState> {
     pub usage: Range<S::Usage>,
 }
 
+/// A tracker for all resources of a given tyope.
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
@@ -107,6 +151,7 @@ pub struct ResourceTracker<S: ResourceState> {
 }
 
 impl<S: ResourceState> ResourceTracker<S> {
+    /// Create a new empty tracker.
     pub fn new() -> Self {
         ResourceTracker {
             map: FastHashMap::default(),
@@ -132,11 +177,14 @@ impl<S: ResourceState> ResourceTracker<S> {
             .map(|(&index, resource)| S::Id::new(index, resource.epoch))
     }
 
+    /// Clear the tracked contents.
     fn clear(&mut self) {
         self.map.clear();
     }
 
     /// Initialize a resource to be used.
+    ///
+    /// Returns `false` if the resource is already tracked.
     pub fn init(
         &mut self,
         id: S::Id,
@@ -160,8 +208,10 @@ impl<S: ResourceState> ResourceTracker<S> {
             .is_none()
     }
 
-    /// Query a resource selector. Returns `Some(Usage)` only if
-    /// this usage is consistent across the given selector.
+    /// Query the usage of a resource selector.
+    ///
+    /// Returns `Some(Usage)` only if this usage is consistent
+    /// across the given selector.
     pub fn query(
         &mut self,
         id: S::Id,
@@ -172,6 +222,8 @@ impl<S: ResourceState> ResourceTracker<S> {
         res.state.query(selector)
     }
 
+    /// Make sure that a resource is tracked, and return a mutable
+    /// reference to it.
     fn grab<'a>(
         map: &'a mut FastHashMap<Index, Resource<S>>,
         id: S::Id,
@@ -193,6 +245,8 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Extend the usage of a specified resource.
+    ///
+    /// Returns conflicting transition as an error.
     pub fn change_extend(
         &mut self,
         id: S::Id,
@@ -211,10 +265,11 @@ impl<S: ResourceState> ResourceTracker<S> {
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
-    ) -> Result<Drain<PendingTransition<S>>, PendingTransition<S>> {
+    ) -> Drain<PendingTransition<S>> {
         let res = Self::grab(&mut self.map, id, ref_count);
-        res.state.change(id, selector, usage, Some(&mut self.temp))?;
-        Ok(self.temp.drain(..))
+        res.state.change(id, selector, usage, Some(&mut self.temp))
+            .ok(); //TODO: unwrap?
+        self.temp.drain(..)
     }
 
     /// Merge another tacker into `self` by extending the current states
@@ -243,7 +298,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         &'a mut self,
         other: &'a Self,
         stitch: Stitch,
-    ) -> Result<Drain<PendingTransition<S>>, PendingTransition<S>> {
+    ) -> Drain<PendingTransition<S>> {
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
                 Entry::Vacant(e) => {
@@ -252,13 +307,20 @@ impl<S: ResourceState> ResourceTracker<S> {
                 Entry::Occupied(e) => {
                     assert_eq!(e.get().epoch, new.epoch);
                     let id = S::Id::new(index, new.epoch);
-                    e.into_mut().state.merge(id, &new.state, stitch, Some(&mut self.temp))?;
+                    e.into_mut().state
+                        .merge(id, &new.state, stitch, Some(&mut self.temp))
+                        .ok(); //TODO: unwrap?
                 }
             }
         }
-        Ok(self.temp.drain(..))
+        self.temp.drain(..)
     }
 
+    /// Use a given resource provided by an `Id` with the specified usage.
+    /// Combines storage access by 'Id' with the transition that extends
+    /// the last read-only usage, if possible.
+    ///
+    /// Returns the old usage as an error if there is a conflict.
     pub fn use_extend<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
@@ -272,17 +334,20 @@ impl<S: ResourceState> ResourceTracker<S> {
             .map_err(|pending| pending.usage.start)
     }
 
+    /// Use a given resource provided by an `Id` with the specified usage.
+    /// Combines storage access by 'Id' with the transition that replaces
+    /// the last usage with a new one, returning an iterator over these
+    /// transitions.
     pub fn use_replace<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
         selector: S::Selector,
         usage: S::Usage,
-    ) -> Result<(&'a T, Drain<PendingTransition<S>>), S::Usage> {
+    ) -> (&'a T, Drain<PendingTransition<S>>) {
         let item = &storage[id];
-        self.change_replace(id, item.borrow(), selector, usage)
-            .map(|drain| (item, drain))
-            .map_err(|pending| pending.usage.start)
+        let drain = self.change_replace(id, item.borrow(), selector, usage);
+        (item, drain)
     }
 }
 
@@ -321,6 +386,7 @@ impl<I: Copy + TypedId> ResourceState for PhantomData<I> {
 }
 
 
+/// A set of trackers for all relevant resources.
 pub struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
     pub textures: ResourceTracker<TextureStates>,
@@ -330,6 +396,7 @@ pub struct TrackerSet {
 }
 
 impl TrackerSet {
+    /// Create an emtpy set.
     pub fn new() -> Self {
         TrackerSet {
             buffers: ResourceTracker::new(),
@@ -339,6 +406,7 @@ impl TrackerSet {
         }
     }
 
+    /// Clear all the trackers.
     pub fn clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
@@ -346,6 +414,8 @@ impl TrackerSet {
         self.bind_groups.clear();
     }
 
+    /// Merge all the trackers of another instance by extending
+    /// the usage. Panics on a conflict.
     pub fn merge_extend(&mut self, other: &Self) {
         self.buffers.merge_extend(&other.buffers).unwrap();
         self.textures.merge_extend(&other.textures).unwrap();

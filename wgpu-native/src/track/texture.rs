@@ -195,6 +195,7 @@ impl ResourceState for TextureStates {
         stitch: Stitch,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
+        //TODO: extend the logic to error out properly
         let mut temp_color = Vec::new();
         while self.color_mips.len() < other.color_mips.len() {
             self.color_mips.push(PlaneStates::default());

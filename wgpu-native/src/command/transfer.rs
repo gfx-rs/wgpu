@@ -79,8 +79,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let (src_buffer, src_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, src, (), BufferUsage::TRANSFER_SRC)
-        .unwrap();
+        .use_replace(&*buffer_guard, src, (), BufferUsage::TRANSFER_SRC);
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -91,8 +90,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let (dst_buffer, dst_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, dst, (), BufferUsage::TRANSFER_DST)
-        .unwrap();
+        .use_replace(&*buffer_guard, dst, (), BufferUsage::TRANSFER_DST);
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -131,8 +129,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let (src_buffer, src_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::TRANSFER_SRC)
-        .unwrap();
+        .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::TRANSFER_SRC);
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -140,16 +137,12 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         range: None .. None,
     });
 
-    let (dst_texture, dst_pending) = cmb
-        .trackers
-        .textures
-        .use_replace(
-            &*texture_guard,
-            destination.texture,
-            destination.to_selector(),
-            TextureUsage::TRANSFER_DST,
-        )
-        .unwrap();
+    let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
+        &*texture_guard,
+        destination.texture,
+        destination.to_selector(),
+        TextureUsage::TRANSFER_DST,
+    );
     let dst_barriers = dst_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &dst_texture.raw,
@@ -208,16 +201,12 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
 
-    let (src_texture, src_pending) = cmb
-        .trackers
-        .textures
-        .use_replace(
-            &*texture_guard,
-            source.texture,
-            source.to_selector(),
-            TextureUsage::TRANSFER_SRC,
-        )
-        .unwrap();
+    let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
+        &*texture_guard,
+        source.texture,
+        source.to_selector(),
+        TextureUsage::TRANSFER_SRC,
+    );
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &src_texture.raw,
@@ -230,16 +219,12 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         TexturePlacement::Memory(_) => (),
     }
 
-    let (dst_buffer, dst_barriers) = cmb
-        .trackers
-        .buffers
-        .use_replace(
-            &*buffer_guard,
-            destination.buffer,
-            (),
-            BufferUsage::TRANSFER_DST,
-        )
-        .unwrap();
+    let (dst_buffer, dst_barriers) = cmb.trackers.buffers.use_replace(
+        &*buffer_guard,
+        destination.buffer,
+        (),
+        BufferUsage::TRANSFER_DST,
+    );
     let dst_barrier = dst_barriers.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -292,16 +277,12 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
 
-    let (src_texture, src_pending) = cmb
-        .trackers
-        .textures
-        .use_replace(
-            &*texture_guard,
-            source.texture,
-            source.to_selector(),
-            TextureUsage::TRANSFER_SRC,
-        )
-        .unwrap();
+    let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
+        &*texture_guard,
+        source.texture,
+        source.to_selector(),
+        TextureUsage::TRANSFER_SRC,
+    );
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &src_texture.raw,
@@ -309,16 +290,12 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
         range: pending.selector,
     }));
 
-    let (dst_texture, dst_pending) = cmb
-        .trackers
-        .textures
-        .use_replace(
-            &*texture_guard,
-            destination.texture,
-            destination.to_selector(),
-            TextureUsage::TRANSFER_DST,
-        )
-        .unwrap();
+    let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
+        &*texture_guard,
+        destination.texture,
+        destination.to_selector(),
+        TextureUsage::TRANSFER_DST,
+    );
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &dst_texture.raw,

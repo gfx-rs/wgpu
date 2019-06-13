@@ -1918,8 +1918,7 @@ pub extern "C" fn wgpu_buffer_map_read_async(
         .trackers
         .lock()
         .buffers
-        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_READ)
-        .unwrap();
+        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_READ);
 
     device.pending.lock().map(buffer_id, ref_count);
 }
@@ -1954,8 +1953,7 @@ pub extern "C" fn wgpu_buffer_map_write_async(
         .trackers
         .lock()
         .buffers
-        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_WRITE)
-        .unwrap();
+        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_WRITE);
 
     device.pending.lock().map(buffer_id, ref_count);
 }

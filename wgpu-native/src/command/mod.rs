@@ -110,7 +110,6 @@ impl CommandBufferHandle {
         let buffer_barriers =
             base.buffers
                 .merge_replace(&head.buffers, stitch)
-                .unwrap()
                 .map(|pending| {
                     trace!("transit buffer {:?}", pending);
                     hal::memory::Barrier::Buffer {
@@ -123,7 +122,6 @@ impl CommandBufferHandle {
         let texture_barriers = base
             .textures
             .merge_replace(&head.textures, stitch)
-            .unwrap()
             .map(|pending| {
                 trace!("transit texture {:?}", pending);
                 hal::memory::Barrier::Image {
@@ -214,14 +212,12 @@ pub fn command_encoder_begin_render_pass(
                 None => {
                     // Required sub-resources have inconsistent states, we need to
                     // issue individual barriers instead of relying on the render pass.
-                    let (texture, pending) = trackers.textures
-                        .use_replace(
-                            &*texture_guard,
-                            view.texture_id.value,
-                            view.range.clone(),
-                            TextureUsage::OUTPUT_ATTACHMENT,
-                        )
-                        .unwrap();
+                    let (texture, pending) = trackers.textures.use_replace(
+                        &*texture_guard,
+                        view.texture_id.value,
+                        view.range.clone(),
+                        TextureUsage::OUTPUT_ATTACHMENT,
+                    );
                     barriers.extend(pending.map(|pending| hal::memory::Barrier::Image {
                         states: pending.to_states(),
                         target: &texture.raw,
@@ -272,14 +268,12 @@ pub fn command_encoder_begin_render_pass(
                 None => {
                     // Required sub-resources have inconsistent states, we need to
                     // issue individual barriers instead of relying on the render pass.
-                    let (texture, pending) = trackers.textures
-                        .use_replace(
-                            &*texture_guard,
-                            view.texture_id.value,
-                            view.range.clone(),
-                            TextureUsage::OUTPUT_ATTACHMENT,
-                        )
-                        .unwrap();
+                    let (texture, pending) = trackers.textures.use_replace(
+                        &*texture_guard,
+                        view.texture_id.value,
+                        view.range.clone(),
+                        TextureUsage::OUTPUT_ATTACHMENT,
+                    );
                     barriers.extend(pending.map(|pending| hal::memory::Barrier::Image {
                         states: pending.to_states(),
                         target: &texture.raw,

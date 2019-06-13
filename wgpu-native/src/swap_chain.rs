@@ -238,7 +238,6 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
             texture.full_range.clone(),
             resource::TextureUsage::UNINITIALIZED,
         )
-        .unwrap()
         .map(|pending| hal::memory::Barrier::Image {
             states: conv::map_texture_state(pending.usage.start, hal::format::Aspects::COLOR)
                 .. (
