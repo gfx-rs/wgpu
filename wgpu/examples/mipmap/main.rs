@@ -1,7 +1,7 @@
 #[path = "../framework.rs"]
 mod framework;
 
-const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
+const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -26,14 +26,25 @@ fn create_vertices() -> Vec<Vertex> {
     ]
 }
 
-fn create_texels(size: usize) -> Vec<u8> {
+fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
+    use std::iter;
+
     (0 .. size * size)
-        .map(|id| {
-            if (id + id / size) % 2 == 1 {
-                0xFF
-            } else {
-                0
+        .flat_map(|id| {
+            // get high five for recognizing this ;)
+            let mut x = 4.0 * (id % size) as f32 / (size - 1) as f32 - 2.0;
+            let mut y = 2.0 * (id / size) as f32 / (size - 1) as f32 - 1.0;
+            let mut count = 0;
+            while count < 0xFF && x * x + y * y < 4.0 {
+                let old_x = x;
+                x = x * x - y * y + cx;
+                y = 2.0 * old_x * y + cy;
+                count += 1;
             }
+            iter::once(0xFF - (count * 2) as u8)
+                .chain(iter::once(0xFF - (count * 5) as u8))
+                .chain(iter::once(0xFF - (count * 13) as u8))
+                .chain(iter::once(1))
         })
         .collect()
 }
@@ -50,7 +61,7 @@ impl Example {
         let mx_projection = cgmath::perspective(cgmath::Deg(45f32), aspect_ratio, 1.0, 1000.0);
         let mx_view = cgmath::Matrix4::look_at(
             cgmath::Point3::new(0f32, 0.0, 10.0),
-            cgmath::Point3::new(0f32, 100.0, 0.0),
+            cgmath::Point3::new(0f32, 50.0, 0.0),
             -cgmath::Vector3::unit_z(),
         );
         mx_projection * mx_view
@@ -123,7 +134,7 @@ impl Example {
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
             mag_filter: wgpu::FilterMode::Nearest,
-            min_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
@@ -219,9 +230,9 @@ impl framework::Example for Example {
         });
 
         // Create the texture
-        let mip_level_count = 10;
+        let mip_level_count = 9;
         let size = 1 << mip_level_count;
-        let texels = create_texels(size as usize);
+        let texels = create_texels(size as usize, -0.8, 0.156);
         let texture_extent = wgpu::Extent3d {
             width: size,
             height: size,
@@ -244,7 +255,7 @@ impl framework::Example for Example {
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
                 offset: 0,
-                row_pitch: 1 * size,
+                row_pitch: 4 * size,
                 image_height: size,
             },
             wgpu::TextureCopyView {
