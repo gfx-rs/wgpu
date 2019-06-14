@@ -426,5 +426,5 @@ impl framework::Example for Example {
 }
 
 fn main() {
-    framework::run::<Example>("cube");
+    framework::run::<Example>("mipmap");
 }
