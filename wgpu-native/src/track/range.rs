@@ -179,7 +179,7 @@ pub struct Merge<'a, I, T> {
 }
 
 impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
-    type Item = (Range<I>, Range<T>);
+    type Item = (Range<I>, Range<Option<T>>);
     fn next(&mut self) -> Option<Self::Item> {
         match (self.sa.peek(), self.sb.peek()) {
             // we have both streams
@@ -187,27 +187,27 @@ impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
                 let (range, usage) = if ra.start < self.base { // in the middle of the left stream
                     if self.base == rb.start { // right stream is starting
                         debug_assert!(self.base < ra.end);
-                        (self.base .. ra.end.min(rb.end), *va .. *vb)
+                        (self.base .. ra.end.min(rb.end), Some(*va) .. Some(*vb))
                     } else { // right hasn't started yet
                         debug_assert!(self.base < rb.start);
-                        (self.base .. rb.start, *va .. *va)
+                        (self.base .. rb.start, Some(*va) .. None)
                     }
                 } else if rb.start < self.base { // in the middle of the right stream
                     if self.base == ra.start { // left stream is starting
                         debug_assert!(self.base < rb.end);
-                        (self.base .. ra.end.min(rb.end), *va .. *vb)
+                        (self.base .. ra.end.min(rb.end), Some(*va) .. Some(*vb))
                     } else { // left hasn't started yet
                         debug_assert!(self.base < ra.start);
-                        (self.base .. ra.start, *vb .. *vb)
+                        (self.base .. ra.start, None .. Some(*vb))
                     }
                 } else { // no active streams
                     match ra.start.cmp(&rb.start) {
                         // both are starting
-                        Ordering::Equal => (ra.start .. ra.end.min(rb.end), *va .. *vb),
+                        Ordering::Equal => (ra.start .. ra.end.min(rb.end), Some(*va) .. Some(*vb)),
                         // only left is starting
-                        Ordering::Less => (ra.start .. rb.start.min(ra.end), *va .. *va),
+                        Ordering::Less => (ra.start .. rb.start.min(ra.end), Some(*va) .. None),
                         // only right is starting
-                        Ordering::Greater => (rb.start .. ra.start.min(rb.end), *vb .. *vb),
+                        Ordering::Greater => (rb.start .. ra.start.min(rb.end), None .. Some(*vb)),
                     }
                 };
                 self.base = range.end;
@@ -224,14 +224,14 @@ impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
                 let range = self.base.max(rb.start) .. rb.end;
                 self.base = rb.end;
                 let _ = self.sb.next();
-                Some((range, *vb .. *vb))
+                Some((range, None .. Some(*vb)))
             }
             // only left stream
             (Some(&(ref ra, va)), None) => {
                 let range = self.base.max(ra.start) .. ra.end;
                 self.base = ra.end;
                 let _ = self.sa.next();
-                Some((range, *va .. *va))
+                Some((range, Some(*va) .. None))
             }
             // done
             (None, None) => None,
@@ -247,7 +247,7 @@ mod test {
 
     fn easy_merge<T: PartialEq + Copy + Debug>(
         ra: Vec<(Range<usize>, T)>, rb: Vec<(Range<usize>, T)>
-    ) -> Vec<(Range<usize>, Range<T>)> {
+    ) -> Vec<(Range<usize>, Range<Option<T>>)> {
         RangedStates { ranges: ra }.merge(&RangedStates { ranges: rb }, 0).collect()
     }
 
@@ -337,7 +337,7 @@ mod test {
                 ],
             ),
             vec![
-                (1..4, 0..2),
+                (1..4, Some(0)..Some(2)),
             ]
         );
     }
@@ -353,7 +353,7 @@ mod test {
                 ],
             ),
             vec![
-                (1..2, 0..0),
+                (1..2, Some(0)..None),
             ]
         );
         assert_eq!(
@@ -365,7 +365,7 @@ mod test {
                 ],
             ),
             vec![
-                (3..4, 1..1),
+                (3..4, None..Some(1)),
             ]
         );
     }
@@ -383,9 +383,9 @@ mod test {
                 ],
             ),
             vec![
-                (1..2, 0..0),
-                (2..4, 2..2),
-                (5..6, 1..1),
+                (1..2, Some(0)..None),
+                (2..4, None..Some(2)),
+                (5..6, Some(1)..None),
             ]
         );
     }
@@ -402,9 +402,9 @@ mod test {
                 ],
             ),
             vec![
-                (1..2, 0..0),
-                (2..4, 0..2),
-                (4..6, 0..0),
+                (1..2, Some(0)..None),
+                (2..4, Some(0)..Some(2)),
+                (4..6, Some(0)..None),
             ]
         );
         assert_eq!(
@@ -417,8 +417,8 @@ mod test {
                 ],
             ),
             vec![
-                (1..2, 2..2),
-                (2..4, 0..2),
+                (1..2, None..Some(2)),
+                (2..4, Some(0)..Some(2)),
             ]
         );
     }
@@ -437,13 +437,13 @@ mod test {
                 ],
             ),
             vec![
-                (1..2, 0..0),
-                (2..4, 0..2),
-                (4..5, 2..2),
-                (5..6, 1..2),
-                (6..7, 1..1),
-                (7..8, 1..3),
-                (8..9, 3..3),
+                (1..2, Some(0)..None),
+                (2..4, Some(0)..Some(2)),
+                (4..5, None..Some(2)),
+                (5..6, Some(1)..Some(2)),
+                (6..7, Some(1)..None),
+                (7..8, Some(1)..Some(3)),
+                (8..9, None..Some(3)),
             ]
         );
     }

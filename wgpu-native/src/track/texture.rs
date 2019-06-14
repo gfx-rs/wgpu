@@ -135,16 +135,21 @@ impl ResourceState for TextureStates {
         }
         if selector.aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
             for level in selector.levels.clone() {
+                //TODO: improve this, it's currently not tested enough and not sound
                 let ds_state = DepthStencilState {
-                    depth: Unit::new(usage),
-                    stencil: Unit::new(usage),
+                    depth: Unit::new(
+                        if selector.aspects.contains(hal::format::Aspects::DEPTH) { usage } else { TextureUsage::empty() }
+                    ),
+                    stencil: Unit::new(
+                        if selector.aspects.contains(hal::format::Aspects::STENCIL) { usage } else { TextureUsage::empty() }
+                    ),
                 };
-                for &mut (ref range, ref mut unit) in self.depth_stencil
+                for &mut (ref range, ref mut ds) in self.depth_stencil
                     .isolate(&selector.layers, ds_state)
                 {
                     //TODO: check if anything needs to be done when only one of the depth/stencil
                     // is selected?
-                    if unit.depth.last != usage && selector.aspects.contains(hal::format::Aspects::DEPTH) {
+                    if ds.depth.last != usage && selector.aspects.contains(hal::format::Aspects::DEPTH) {
                         let pending = PendingTransition {
                             id,
                             selector: hal::image::SubresourceRange {
@@ -152,11 +157,11 @@ impl ResourceState for TextureStates {
                                 levels: level .. level + 1,
                                 layers: range.clone(),
                             },
-                            usage: unit.depth.last .. usage,
+                            usage: ds.depth.last .. usage,
                         };
-                        unit.depth.last = pending.record(output.as_mut())?;
+                        ds.depth.last = pending.record(output.as_mut())?;
                     }
-                    if unit.stencil.last != usage && selector.aspects.contains(hal::format::Aspects::STENCIL) {
+                    if ds.stencil.last != usage && selector.aspects.contains(hal::format::Aspects::STENCIL) {
                         let pending = PendingTransition {
                             id,
                             selector: hal::image::SubresourceRange {
@@ -164,9 +169,9 @@ impl ResourceState for TextureStates {
                                 levels: level .. level + 1,
                                 layers: range.clone(),
                             },
-                            usage: unit.stencil.last .. usage,
+                            usage: ds.stencil.last .. usage,
                         };
-                        unit.stencil.last = pending.record(output.as_mut())?;
+                        ds.stencil.last = pending.record(output.as_mut())?;
                     }
                 }
             }
@@ -193,24 +198,32 @@ impl ResourceState for TextureStates {
             temp_color.extend(mip_self.merge(mip_other, 0));
             mip_self.clear();
             for (layers, states) in temp_color.drain(..) {
-                let mut color_usage = states.start.last .. states.end.select(stitch);
-                if color_usage.start != color_usage.end {
-                    let level = mip_id as hal::image::Level;
-                    let pending = PendingTransition {
-                        id,
-                        selector: hal::image::SubresourceRange {
-                            aspects: hal::format::Aspects::COLOR,
-                            levels: level .. level + 1,
-                            layers: layers.clone(),
-                        },
-                        usage: color_usage.clone(),
-                    };
-                    color_usage.end = pending.record(output.as_mut())?;
-                }
-                mip_self.append(layers, Unit {
-                    init: states.start.init,
-                    last: color_usage.end,
-                });
+                let unit = match states {
+                    Range { start: None, end: None } => unreachable!(),
+                    Range { start: Some(start), end: None } => start,
+                    Range { start: None, end: Some(end) } => Unit::new(end.select(stitch)),
+                    Range { start: Some(start), end: Some(end) } => {
+                        let mut final_usage = end.select(stitch);
+                        if start.last != final_usage {
+                            let level = mip_id as hal::image::Level;
+                            let pending = PendingTransition {
+                                id,
+                                selector: hal::image::SubresourceRange {
+                                    aspects: hal::format::Aspects::COLOR,
+                                    levels: level .. level + 1,
+                                    layers: layers.clone(),
+                                },
+                                usage: start.last .. final_usage,
+                            };
+                            final_usage = pending.record(output.as_mut())?;
+                        }
+                        Unit {
+                            init: start.init,
+                            last: final_usage,
+                        }
+                    }
+                };
+                mip_self.append(layers, unit);
             }
         }
 
@@ -218,42 +231,53 @@ impl ResourceState for TextureStates {
         temp_ds.extend(self.depth_stencil.merge(&other.depth_stencil, 0));
         self.depth_stencil.clear();
         for (layers, states) in temp_ds.drain(..) {
-            let mut usage_depth = states.start.depth.last .. states.end.depth.select(stitch);
-            let mut usage_stencil = states.start.stencil.last .. states.end.stencil.select(stitch);
-            if usage_depth.start != usage_depth.end {
-                let pending = PendingTransition {
-                    id,
-                    selector: hal::image::SubresourceRange {
-                        aspects: hal::format::Aspects::DEPTH,
-                        levels: 0 .. 1,
-                        layers: layers.clone(),
-                    },
-                    usage: usage_depth.clone(),
-                };
-                usage_depth.end = pending.record(output.as_mut())?;
-            }
-            if usage_stencil.start != usage_stencil.end {
-                let pending = PendingTransition {
-                    id,
-                    selector: hal::image::SubresourceRange {
-                        aspects: hal::format::Aspects::STENCIL,
-                        levels: 0 .. 1,
-                        layers: layers.clone(),
-                    },
-                    usage: usage_stencil.clone(),
-                };
-                usage_stencil.end = pending.record(output.as_mut())?;
-            }
-            self.depth_stencil.append(layers, DepthStencilState {
-                depth: Unit {
-                    init: states.start.depth.init,
-                    last: usage_depth.end,
+            let ds = match states {
+                Range { start: None, end: None } => unreachable!(),
+                Range { start: Some(start), end: None } => start,
+                Range { start: None, end: Some(end) } => DepthStencilState {
+                    depth: Unit::new(end.depth.select(stitch)),
+                    stencil: Unit::new(end.stencil.select(stitch)),
                 },
-                stencil: Unit {
-                    init: states.start.stencil.init,
-                    last: usage_stencil.end,
-                },
-            });
+                Range { start: Some(start), end: Some(end) } => {
+                    let mut final_depth = end.depth.select(stitch);
+                    let mut final_stencil = end.stencil.select(stitch);
+                    if start.depth.last != final_depth {
+                        let pending = PendingTransition {
+                            id,
+                            selector: hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::DEPTH,
+                                levels: 0 .. 1,
+                                layers: layers.clone(),
+                            },
+                            usage: start.depth.last .. final_depth,
+                        };
+                        final_depth = pending.record(output.as_mut())?;
+                    }
+                    if start.stencil.last != final_stencil {
+                        let pending = PendingTransition {
+                            id,
+                            selector: hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::STENCIL,
+                                levels: 0 .. 1,
+                                layers: layers.clone(),
+                            },
+                            usage: start.stencil.last .. final_stencil,
+                        };
+                        final_stencil = pending.record(output.as_mut())?;
+                    }
+                    DepthStencilState {
+                        depth: Unit {
+                            init: start.depth.init,
+                            last: final_depth,
+                        },
+                        stencil: Unit {
+                            init: start.stencil.init,
+                            last: final_stencil,
+                        },
+                    }
+                }
+            };
+            self.depth_stencil.append(layers, ds);
         }
 
         Ok(())
