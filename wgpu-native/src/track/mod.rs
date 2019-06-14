@@ -17,6 +17,7 @@ use hal::backend::FastHashMap;
 use std::{
     borrow::Borrow,
     collections::hash_map::Entry,
+    fmt::Debug,
     marker::PhantomData,
     ops::Range,
     vec::Drain,
@@ -70,11 +71,11 @@ pub enum Stitch {
 /// a particular resource type, like a buffer or a texture.
 pub trait ResourceState: Clone + Default {
     /// Corresponding `HUB` identifier.
-    type Id: Copy + TypedId;
+    type Id: Copy + Debug + TypedId;
     /// A type specifying the sub-resources.
-    type Selector;
+    type Selector: Debug;
     /// Usage type for a `Unit` of a sub-resource.
-    type Usage;
+    type Usage: Debug;
 
     /// Check if all the selected sub-resources have the same
     /// usage, and return it.
@@ -121,11 +122,15 @@ pub trait ResourceState: Clone + Default {
         stitch: Stitch,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>>;
+
+    /// Try to optimize the internal representation.
+    fn optimize(&mut self);
 }
 
 /// Structure wrapping the abstract tracking state with the relevant resource
 /// data, such as the reference count and the epoch.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
+#[cfg_attr(debug_assertions, derive(Debug))]
 struct Resource<S> {
     ref_count: RefCount,
     state: S,
@@ -143,6 +148,7 @@ pub struct PendingTransition<S: ResourceState> {
 }
 
 /// A tracker for all resources of a given type.
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
@@ -167,6 +173,13 @@ impl<S: ResourceState> ResourceTracker<S> {
                 true
             }
             None => false,
+        }
+    }
+
+    /// Try to optimize the internal representation.
+    pub fn optimize(&mut self) {
+        for resource in self.map.values_mut() {
+            resource.state.optimize();
         }
     }
 
@@ -352,7 +365,7 @@ impl<S: ResourceState> ResourceTracker<S> {
 }
 
 
-impl<I: Copy + TypedId> ResourceState for PhantomData<I> {
+impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
     type Id = I;
     type Selector = ();
     type Usage = ();
@@ -383,10 +396,14 @@ impl<I: Copy + TypedId> ResourceState for PhantomData<I> {
     ) -> Result<(), PendingTransition<Self>> {
         Ok(())
     }
+
+    fn optimize(&mut self) {
+    }
 }
 
 
 /// A set of trackers for all relevant resources.
+#[cfg_attr(debug_assertions, derive(Debug))]
 pub struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
     pub textures: ResourceTracker<TextureState>,
@@ -412,6 +429,14 @@ impl TrackerSet {
         self.textures.clear();
         self.views.clear();
         self.bind_groups.clear();
+    }
+
+    /// Try to optimize the tracking representation.
+    pub fn optimize(&mut self) {
+        self.buffers.optimize();
+        self.textures.optimize();
+        self.views.optimize();
+        self.bind_groups.optimize();
     }
 
     /// Merge all the trackers of another instance by extending

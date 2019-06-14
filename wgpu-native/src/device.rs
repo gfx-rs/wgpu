@@ -1283,6 +1283,9 @@ pub extern "C" fn wgpu_queue_submit(
                     }
                 }
 
+                // optimize the tracked states
+                comb.trackers.optimize();
+
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
                     let buffer = &buffer_guard[id];

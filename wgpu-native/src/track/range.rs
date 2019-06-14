@@ -62,8 +62,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     }
 
     /// Merge the neighboring ranges together, where possible.
-    #[cfg(test)]
-    fn coalesce(&mut self) {
+    pub fn coalesce(&mut self) {
         let mut num_removed = 0;
         let mut iter = self.ranges.iter_mut();
         let mut cur = match iter.next() {

@@ -78,6 +78,9 @@ impl ResourceState for BufferState {
         let usage = other.select(stitch);
         self.change(id, (), usage, output)
     }
+
+    fn optimize(&mut self) {
+    }
 }
 
 #[cfg(test)]

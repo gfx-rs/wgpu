@@ -195,6 +195,14 @@ impl ResourceState for TextureState {
 
         Ok(())
     }
+
+    fn optimize(&mut self) {
+        for mip in self.mips.iter_mut() {
+            mip.color.coalesce();
+            mip.depth.coalesce();
+            mip.stencil.coalesce();
+        }
+    }
 }
 
 

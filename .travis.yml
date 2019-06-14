@@ -57,6 +57,7 @@ before_install:
 
 script:
   - cargo test
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo check --release; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then
       wget -nc -O glfw.zip https://github.com/glfw/glfw/archive/3.3.zip &&

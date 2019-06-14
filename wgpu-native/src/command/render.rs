@@ -176,6 +176,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
     unsafe {
         pass.raw.end_render_pass();
     }
+    pass.trackers.optimize();
     let cmb = &mut cmb_guard[pass.cmb_id.value];
 
     match cmb.raw.last_mut() {
