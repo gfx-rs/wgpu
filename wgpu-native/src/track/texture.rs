@@ -34,16 +34,21 @@ impl PendingTransition<TextureState> {
         conv::map_texture_state(self.usage.end, self.selector.aspects)
     }
 
+    //TODO: make this less awkward!
     /// Check for the validity of `self` with regards to the presense of `output`.
     ///
     /// Return the end usage if the `output` is provided and pushes self to it.
     /// Otherwise, return the extended usage, or an error if extension is impossible.
-    fn record(self, output: Option<&mut &mut Vec<Self>>) -> Result<TextureUsage, Self> {
+    ///
+    /// When a transition is generated, returns the specified `replace` usage.
+    fn record(
+        self, output: Option<&mut &mut Vec<Self>>, replace: TextureUsage
+    ) -> Result<TextureUsage, Self> {
         let u = self.usage.clone();
         match output {
             Some(out) => {
                 out.push(self);
-                Ok(u.end)
+                Ok(replace)
             }
             None => {
                 if !u.start.is_empty() && TextureUsage::WRITE_ALL.intersects(u.start | u.end) {
@@ -130,7 +135,7 @@ impl ResourceState for TextureState {
                         },
                         usage: unit.last .. usage,
                     };
-                    unit.last = pending.record(output.as_mut())?;
+                    unit.last = pending.record(output.as_mut(), usage)?;
                 }
             }
         }
@@ -180,7 +185,7 @@ impl ResourceState for TextureState {
                                     },
                                     usage: start.last .. final_usage,
                                 };
-                                final_usage = pending.record(output.as_mut())?;
+                                final_usage = pending.record(output.as_mut(), end.last)?;
                             }
                             Unit {
                                 init: start.init,

@@ -115,6 +115,10 @@ pub trait ResourceState: Clone + Default {
     /// `PendingTransition` pushed to this vector, or extended with the
     /// other read-only usage, unless there is a usage conflict, and
     /// the error is generated (returning the conflict).
+    ///
+    /// `stitch` only defines the end points of generated transitions.
+    /// Last states of `self` are nevertheless updated to the *last* states
+    /// of `other`, if `output` is provided.
     fn merge(
         &mut self,
         id: Self::Id,

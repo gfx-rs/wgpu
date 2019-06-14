@@ -75,8 +75,30 @@ impl ResourceState for BufferState {
         stitch: Stitch,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
-        let usage = other.select(stitch);
-        self.change(id, (), usage, output)
+        let old = self.last;
+        let new = other.select(stitch);
+        self.last = if old == new {
+            other.last
+        } else {
+            let pending = PendingTransition {
+                id,
+                selector: (),
+                usage: old .. new,
+            };
+            match output {
+                Some(transitions) => {
+                    transitions.push(pending);
+                    other.last
+                }
+                None =>  {
+                    if !old.is_empty() && BufferUsage::WRITE_ALL.intersects(old | new) {
+                        return Err(pending);
+                    }
+                    old | new
+                }
+            }
+        };
+        Ok(())
     }
 
     fn optimize(&mut self) {
