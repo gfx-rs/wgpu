@@ -800,7 +800,7 @@ pub fn texture_create_view(
             ref_count: texture.life_guard.ref_count.clone(),
         },
         format: texture.format,
-        extent: texture.kind.extent(),
+        extent: texture.kind.extent().at_level(range.levels.start),
         samples: texture.kind.num_samples(),
         range,
         is_owned_by_swap_chain: false,

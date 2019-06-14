@@ -90,7 +90,7 @@ pub trait ResourceState: Clone + Default {
     /// Change the last usage of the selected sub-resources.
     ///
     /// If `output` is specified, it's filled with the
-    /// `PendingTransition` objects cooresponding to smaller
+    /// `PendingTransition` objects corresponding to smaller
     /// sub-resource transitions. The old usage is replaced by
     /// the new one.
     ///
@@ -142,7 +142,7 @@ pub struct PendingTransition<S: ResourceState> {
     pub usage: Range<S::Usage>,
 }
 
-/// A tracker for all resources of a given tyope.
+/// A tracker for all resources of a given type.
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
@@ -396,7 +396,7 @@ pub struct TrackerSet {
 }
 
 impl TrackerSet {
-    /// Create an emtpy set.
+    /// Create an empty set.
     pub fn new() -> Self {
         TrackerSet {
             buffers: ResourceTracker::new(),

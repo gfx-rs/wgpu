@@ -11,6 +11,8 @@ use std::{
 /// are often grouped together linearly.
 #[derive(Clone, Debug)]
 pub struct RangedStates<I, T> {
+    /// List of ranges, each associated with a singe value.
+    /// Ranges of keys have to be non-intersecting and ordered.
     ranges: Vec<(Range<I>, T)>,
 }
 
@@ -37,6 +39,9 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     }
 
     /// Append a range.
+    ///
+    /// Assumes that the object is being constructed from a set of
+    /// ranges, and they are given in the ascending order of their keys.
     pub fn append(&mut self, index: Range<I>, value: T) {
         if let Some(last) = self.ranges.last() {
             debug_assert!(last.0.end <= index.start);
@@ -171,7 +176,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
 }
 
 
-/// A custom iterator that goes through two `RangedStates` and proces a merge.
+/// A custom iterator that goes through two `RangedStates` and process a merge.
 pub struct Merge<'a, I, T> {
     base: I,
     sa: Peekable<Iter<'a, (Range<I>, T)>>,
