@@ -40,12 +40,13 @@ pub struct TextureCopyView {
 }
 
 impl TextureCopyView {
-    fn to_selector(&self) -> hal::image::SubresourceRange {
+    //TODO: we currently access each texture twice for a transer,
+    // once only to get the aspect flags, which is unfortunate.
+    fn to_selector(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceRange {
         let level = self.mip_level as hal::image::Level;
         let layer = self.array_layer as hal::image::Layer;
         hal::image::SubresourceRange {
-            //TODO: detect the aspects in transfer ops
-            aspects: hal::format::Aspects::COLOR,
+            aspects,
             levels: level .. level + 1,
             layers: layer .. layer + 1,
         }
@@ -128,6 +129,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let cmb = &mut cmb_guard[command_buffer_id];
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
+    let aspects = texture_guard[destination.texture].full_range.aspects;
 
     let (src_buffer, src_pending) = cmb
         .trackers
@@ -143,7 +145,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
         &*texture_guard,
         destination.texture,
-        destination.to_selector(),
+        destination.to_selector(aspects),
         TextureUsage::TRANSFER_DST,
     );
     let dst_barriers = dst_pending.map(|pending| hal::memory::Barrier::Image {
@@ -204,11 +206,12 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     let cmb = &mut cmb_guard[command_buffer_id];
     let buffer_guard = HUB.buffers.read();
     let texture_guard = HUB.textures.read();
+    let aspects = texture_guard[source.texture].full_range.aspects;
 
     let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
         &*texture_guard,
         source.texture,
-        source.to_selector(),
+        source.to_selector(aspects),
         TextureUsage::TRANSFER_SRC,
     );
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Image {
@@ -281,11 +284,13 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     // we can't hold both src_pending and dst_pending in scope because they
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
+    let aspects = texture_guard[source.texture].full_range.aspects &
+        texture_guard[destination.texture].full_range.aspects;
 
     let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
         &*texture_guard,
         source.texture,
-        source.to_selector(),
+        source.to_selector(aspects),
         TextureUsage::TRANSFER_SRC,
     );
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Image {
@@ -298,7 +303,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
         &*texture_guard,
         destination.texture,
-        destination.to_selector(),
+        destination.to_selector(aspects),
         TextureUsage::TRANSFER_DST,
     );
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Image {
