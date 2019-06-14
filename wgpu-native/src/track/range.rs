@@ -49,11 +49,6 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         self.ranges.push((index, value));
     }
 
-    /// Iterate through the stored ranges immutably.
-    pub fn iter(&self) -> Iter<(Range<I>, T)> {
-        self.ranges.iter()
-    }
-
     /// Check that all the ranges are non-intersecting and ordered.
     /// Panics otherwise.
     #[cfg(test)]
@@ -87,6 +82,25 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         if num_removed != 0 {
             self.ranges.retain(|pair| pair.0.start != pair.0.end);
         }
+    }
+
+    /// Check if all intersecting ranges have the same value, which is returned.
+    ///
+    /// Returns `None` if no intersections are detected.
+    /// Returns `Some(Err)` if the intersected values are inconsistent.
+    pub fn query<U: PartialEq>(
+        &self, index: &Range<I>, fun: impl Fn(&T) -> U
+    ) -> Option<Result<U, ()>> {
+        let mut result = None;
+        for &(ref range, ref value) in self.ranges.iter() {
+            if range.end > index.start && range.start < index.end {
+                let old = result.replace(fun(value));
+                if old.is_some() && old != result {
+                    return Some(Err(()))
+                }
+            }
+        }
+        result.map(Ok)
     }
 
     /// Split the storage ranges in such a way that there is a linear subset of
@@ -300,6 +314,17 @@ mod test {
             (5..7, 1),
             (8..9, 1),
         ]);
+    }
+
+    #[test]
+    fn query() {
+        let rs = RangedStates { ranges: vec![
+            (1..4, 1u8),
+            (5..7, 2),
+        ]};
+        assert_eq!(rs.query(&(0..1), |v| *v), None);
+        assert_eq!(rs.query(&(1..3), |v| *v), Some(Ok(1)));
+        assert_eq!(rs.query(&(1..6), |v| *v), Some(Err(())));
     }
 
     #[test]

@@ -23,7 +23,7 @@ use std::{
 };
 
 use buffer::BufferState;
-use texture::TextureStates;
+use texture::TextureState;
 
 
 /// A single unit of state tracking. It keeps an initial
@@ -389,7 +389,7 @@ impl<I: Copy + TypedId> ResourceState for PhantomData<I> {
 /// A set of trackers for all relevant resources.
 pub struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
-    pub textures: ResourceTracker<TextureStates>,
+    pub textures: ResourceTracker<TextureState>,
     pub views: ResourceTracker<PhantomData<TextureViewId>>,
     pub bind_groups: ResourceTracker<PhantomData<BindGroupId>>,
     //TODO: samplers

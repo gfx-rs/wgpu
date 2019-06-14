@@ -11,22 +11,23 @@ use arrayvec::ArrayVec;
 use std::ops::Range;
 
 
-type PlaneStates<T> = RangedStates<hal::image::Layer, T>;
+type PlaneStates = RangedStates<hal::image::Layer, Unit<TextureUsage>>;
+
 
 //TODO: store `hal::image::State` here to avoid extra conversions
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct DepthStencilState {
-    depth: Unit<TextureUsage>,
-    stencil: Unit<TextureUsage>,
+#[derive(Clone, Debug, Default)]
+struct MipState {
+    color: PlaneStates,
+    depth: PlaneStates,
+    stencil: PlaneStates,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct TextureStates {
-    color_mips: ArrayVec<[PlaneStates<Unit<TextureUsage>>; MAX_MIP_LEVELS]>,
-    depth_stencil: PlaneStates<DepthStencilState>,
+pub struct TextureState {
+    mips: ArrayVec<[MipState; MAX_MIP_LEVELS]>,
 }
 
-impl PendingTransition<TextureStates> {
+impl PendingTransition<TextureState> {
     /// Produce the gfx-hal image states corresponding to the transition.
     pub fn to_states(&self) -> Range<hal::image::State> {
         conv::map_texture_state(self.usage.start, self.selector.aspects) ..
@@ -55,7 +56,7 @@ impl PendingTransition<TextureStates> {
     }
 }
 
-impl ResourceState for TextureStates {
+impl ResourceState for TextureState {
     type Id = TextureId;
     type Selector = hal::image::SubresourceRange;
     type Usage = TextureUsage;
@@ -64,41 +65,31 @@ impl ResourceState for TextureStates {
         &self,
         selector: Self::Selector,
     ) -> Option<Self::Usage> {
-        let mut usage = None;
-        if selector.aspects.contains(hal::format::Aspects::COLOR) {
-            let num_levels = self.color_mips.len();
-            let layer_start = num_levels.min(selector.levels.start as usize);
-            let layer_end = num_levels.min(selector.levels.end as usize);
-            for layer in self.color_mips[layer_start .. layer_end].iter() {
-                for &(ref range, ref unit) in layer.iter() {
-                    if range.end > selector.layers.start && range.start < selector.layers.end {
-                        let old = usage.replace(unit.last);
-                        if old.is_some() && old != usage {
-                            return None
-                        }
+        let mut result = None;
+        let num_levels = self.mips.len();
+        let mip_start = num_levels.min(selector.levels.start as usize);
+        let mip_end = num_levels.min(selector.levels.end as usize);
+        for mip in self.mips[mip_start .. mip_end].iter() {
+            for &(aspect, plane_states) in &[
+                (hal::format::Aspects::COLOR, &mip.color),
+                (hal::format::Aspects::DEPTH, &mip.depth),
+                (hal::format::Aspects::STENCIL, &mip.stencil),
+            ] {
+                if !selector.aspects.contains(aspect) {
+                    continue
+                }
+                match plane_states.query(&selector.layers, |unit| unit.last) {
+                    None => {}
+                    Some(Ok(usage)) if result == Some(usage) => {}
+                    Some(Ok(usage)) if result.is_none() => {
+                        result = Some(usage);
                     }
+                    Some(Ok(_)) |
+                    Some(Err(())) => return None,
                 }
             }
         }
-        if selector.aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
-            for &(ref range, ref ds) in self.depth_stencil.iter() {
-                if range.end > selector.layers.start && range.start < selector.layers.end {
-                    if selector.aspects.contains(hal::format::Aspects::DEPTH) {
-                        let old = usage.replace(ds.depth.last);
-                        if old.is_some() && old != usage {
-                            return None
-                        }
-                    }
-                    if selector.aspects.contains(hal::format::Aspects::STENCIL) {
-                        let old = usage.replace(ds.stencil.last);
-                        if old.is_some() && old != usage {
-                            return None
-                        }
-                    }
-                }
-            }
-        }
-        usage
+        result
     }
 
     fn change(
@@ -108,14 +99,24 @@ impl ResourceState for TextureStates {
         usage: Self::Usage,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
-        if selector.aspects.contains(hal::format::Aspects::COLOR) {
-            while self.color_mips.len() < selector.levels.end as usize {
-                self.color_mips.push(PlaneStates::default());
-            }
-            for level in selector.levels.clone() {
-                let layers = self
-                    .color_mips[level as usize]
-                    .isolate(&selector.layers, Unit::new(usage));
+        while self.mips.len() < selector.levels.end as usize {
+            self.mips.push(MipState::default());
+        }
+        for (mip_id, mip) in self
+            .mips[selector.levels.start as usize .. selector.levels.end as usize]
+            .iter_mut()
+            .enumerate()
+        {
+            let level = selector.levels.start + mip_id as hal::image::Level;
+            for &mut (aspect, ref mut plane_states) in &mut [
+                (hal::format::Aspects::COLOR, &mut mip.color),
+                (hal::format::Aspects::DEPTH, &mut mip.depth),
+                (hal::format::Aspects::STENCIL, &mut mip.stencil),
+            ] {
+                if !selector.aspects.contains(aspect) {
+                    continue
+                }
+                let layers = plane_states.isolate(&selector.layers, Unit::new(usage));
                 for &mut (ref range, ref mut unit) in layers {
                     if unit.last == usage {
                         continue
@@ -133,49 +134,6 @@ impl ResourceState for TextureStates {
                 }
             }
         }
-        if selector.aspects.intersects(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL) {
-            for level in selector.levels.clone() {
-                //TODO: improve this, it's currently not tested enough and not sound
-                let ds_state = DepthStencilState {
-                    depth: Unit::new(
-                        if selector.aspects.contains(hal::format::Aspects::DEPTH) { usage } else { TextureUsage::empty() }
-                    ),
-                    stencil: Unit::new(
-                        if selector.aspects.contains(hal::format::Aspects::STENCIL) { usage } else { TextureUsage::empty() }
-                    ),
-                };
-                for &mut (ref range, ref mut ds) in self.depth_stencil
-                    .isolate(&selector.layers, ds_state)
-                {
-                    //TODO: check if anything needs to be done when only one of the depth/stencil
-                    // is selected?
-                    if ds.depth.last != usage && selector.aspects.contains(hal::format::Aspects::DEPTH) {
-                        let pending = PendingTransition {
-                            id,
-                            selector: hal::image::SubresourceRange {
-                                aspects: hal::format::Aspects::DEPTH,
-                                levels: level .. level + 1,
-                                layers: range.clone(),
-                            },
-                            usage: ds.depth.last .. usage,
-                        };
-                        ds.depth.last = pending.record(output.as_mut())?;
-                    }
-                    if ds.stencil.last != usage && selector.aspects.contains(hal::format::Aspects::STENCIL) {
-                        let pending = PendingTransition {
-                            id,
-                            selector: hal::image::SubresourceRange {
-                                aspects: hal::format::Aspects::STENCIL,
-                                levels: level .. level + 1,
-                                layers: range.clone(),
-                            },
-                            usage: ds.stencil.last .. usage,
-                        };
-                        ds.stencil.last = pending.record(output.as_mut())?;
-                    }
-                }
-            }
-        }
         Ok(())
     }
 
@@ -186,98 +144,53 @@ impl ResourceState for TextureStates {
         stitch: Stitch,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
-        let mut temp_color = Vec::new();
-        while self.color_mips.len() < other.color_mips.len() {
-            self.color_mips.push(PlaneStates::default());
-        }
-        for (mip_id, (mip_self, mip_other)) in self.color_mips
-            .iter_mut()
-            .zip(&other.color_mips)
-            .enumerate()
-        {
-            temp_color.extend(mip_self.merge(mip_other, 0));
-            mip_self.clear();
-            for (layers, states) in temp_color.drain(..) {
-                let unit = match states {
-                    Range { start: None, end: None } => unreachable!(),
-                    Range { start: Some(start), end: None } => start,
-                    Range { start: None, end: Some(end) } => Unit::new(end.select(stitch)),
-                    Range { start: Some(start), end: Some(end) } => {
-                        let mut final_usage = end.select(stitch);
-                        if start.last != final_usage {
-                            let level = mip_id as hal::image::Level;
-                            let pending = PendingTransition {
-                                id,
-                                selector: hal::image::SubresourceRange {
-                                    aspects: hal::format::Aspects::COLOR,
-                                    levels: level .. level + 1,
-                                    layers: layers.clone(),
-                                },
-                                usage: start.last .. final_usage,
-                            };
-                            final_usage = pending.record(output.as_mut())?;
-                        }
-                        Unit {
-                            init: start.init,
-                            last: final_usage,
-                        }
-                    }
-                };
-                mip_self.append(layers, unit);
-            }
+        let mut temp = Vec::new();
+        while self.mips.len() < other.mips.len() as usize {
+            self.mips.push(MipState::default());
         }
 
-        let mut temp_ds = Vec::new();
-        temp_ds.extend(self.depth_stencil.merge(&other.depth_stencil, 0));
-        self.depth_stencil.clear();
-        for (layers, states) in temp_ds.drain(..) {
-            let ds = match states {
-                Range { start: None, end: None } => unreachable!(),
-                Range { start: Some(start), end: None } => start,
-                Range { start: None, end: Some(end) } => DepthStencilState {
-                    depth: Unit::new(end.depth.select(stitch)),
-                    stencil: Unit::new(end.stencil.select(stitch)),
-                },
-                Range { start: Some(start), end: Some(end) } => {
-                    let mut final_depth = end.depth.select(stitch);
-                    let mut final_stencil = end.stencil.select(stitch);
-                    if start.depth.last != final_depth {
-                        let pending = PendingTransition {
-                            id,
-                            selector: hal::image::SubresourceRange {
-                                aspects: hal::format::Aspects::DEPTH,
-                                levels: 0 .. 1,
-                                layers: layers.clone(),
-                            },
-                            usage: start.depth.last .. final_depth,
-                        };
-                        final_depth = pending.record(output.as_mut())?;
-                    }
-                    if start.stencil.last != final_stencil {
-                        let pending = PendingTransition {
-                            id,
-                            selector: hal::image::SubresourceRange {
-                                aspects: hal::format::Aspects::STENCIL,
-                                levels: 0 .. 1,
-                                layers: layers.clone(),
-                            },
-                            usage: start.stencil.last .. final_stencil,
-                        };
-                        final_stencil = pending.record(output.as_mut())?;
-                    }
-                    DepthStencilState {
-                        depth: Unit {
-                            init: start.depth.init,
-                            last: final_depth,
-                        },
-                        stencil: Unit {
-                            init: start.stencil.init,
-                            last: final_stencil,
-                        },
-                    }
+        for (mip_id, (mip_self, mip_other)) in self.mips
+            .iter_mut()
+            .zip(&other.mips)
+            .enumerate()
+        {
+            let level = mip_id as hal::image::Level;
+            for &mut (aspects, ref mut planes_self, planes_other) in &mut [
+                (hal::format::Aspects::COLOR, &mut mip_self.color, &mip_other.color),
+                (hal::format::Aspects::DEPTH, &mut mip_self.depth, &mip_other.depth),
+                (hal::format::Aspects::STENCIL, &mut mip_self.stencil, &mip_other.stencil),
+            ] {
+                temp.extend(planes_self.merge(planes_other, 0));
+                planes_self.clear();
+
+                for (layers, states) in temp.drain(..) {
+                    let unit = match states {
+                        Range { start: None, end: None } => unreachable!(),
+                        Range { start: Some(start), end: None } => start,
+                        Range { start: None, end: Some(end) } => Unit::new(end.select(stitch)),
+                        Range { start: Some(start), end: Some(end) } => {
+                            let mut final_usage = end.select(stitch);
+                            if start.last != final_usage {
+                                let pending = PendingTransition {
+                                    id,
+                                    selector: hal::image::SubresourceRange {
+                                        aspects,
+                                        levels: level .. level + 1,
+                                        layers: layers.clone(),
+                                    },
+                                    usage: start.last .. final_usage,
+                                };
+                                final_usage = pending.record(output.as_mut())?;
+                            }
+                            Unit {
+                                init: start.init,
+                                last: final_usage,
+                            }
+                        }
+                    };
+                    planes_self.append(layers, unit);
                 }
-            };
-            self.depth_stencil.append(layers, ds);
+            }
         }
 
         Ok(())
@@ -297,13 +210,14 @@ mod test {
 
     #[test]
     fn query() {
-        let mut ts = TextureStates::default();
-        ts.color_mips.push(PlaneStates::default());
-        ts.color_mips.push(PlaneStates::new(&[
+        let mut ts = TextureState::default();
+        ts.mips.push(MipState::default());
+        ts.mips.push(MipState::default());
+        ts.mips[1].color = PlaneStates::new(&[
             (1..3, Unit::new(TextureUsage::SAMPLED)),
             (3..5, Unit::new(TextureUsage::SAMPLED)),
             (5..6, Unit::new(TextureUsage::STORAGE)),
-        ]));
+        ]);
         assert_eq!(
             ts.query(SubresourceRange {
                 aspects: Aspects::COLOR,
