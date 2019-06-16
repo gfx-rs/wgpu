@@ -109,7 +109,6 @@ impl VertexState {
     }
 }
 
-#[derive(Debug)]
 pub struct RenderPass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,
@@ -177,6 +176,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
     unsafe {
         pass.raw.end_render_pass();
     }
+    pass.trackers.optimize();
     let cmb = &mut cmb_guard[pass.cmb_id.value];
 
     match cmb.raw.last_mut() {
@@ -192,7 +192,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
             unsafe { last.finish() };
         }
         None => {
-            cmb.trackers.consume_by_extend(&pass.trackers);
+            cmb.trackers.merge_extend(&pass.trackers);
         }
     }
 
@@ -232,7 +232,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
         }
     }
 
-    pass.trackers.consume_by_extend(&bind_group.used);
+    pass.trackers.merge_extend(&bind_group.used);
 
     if let Some((pipeline_layout_id, follow_up)) =
         pass.binder
@@ -282,7 +282,7 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
     let buffer = pass
         .trackers
         .buffers
-        .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsage::INDEX)
+        .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
         .unwrap();
 
     let range = offset .. buffer.size;
@@ -316,7 +316,7 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     for (vbs, (&id, &offset)) in pass.vertex_state.inputs.iter_mut().zip(buffers.iter().zip(offsets)) {
         let buffer = pass.trackers
             .buffers
-            .get_with_extended_usage(&*buffer_guard, id, BufferUsage::VERTEX)
+            .use_extend(&*buffer_guard, id, (), BufferUsage::VERTEX)
             .unwrap();
         vbs.total_size = buffer.size - offset;
     }
@@ -450,7 +450,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
             let buffer = pass
                 .trackers
                 .buffers
-                .get_with_extended_usage(&*buffer_guard, buffer_id, BufferUsage::INDEX)
+                .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
                 .unwrap();
 
             let view = hal::buffer::IndexBufferView {

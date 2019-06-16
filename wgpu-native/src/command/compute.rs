@@ -17,7 +17,6 @@ use hal::{self, command::RawCommandBuffer};
 
 use std::{iter, slice};
 
-#[derive(Debug)]
 pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,
     cmb_id: Stored<CommandBufferId>,

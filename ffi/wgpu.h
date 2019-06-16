@@ -11,6 +11,8 @@
 
 #define WGPUMAX_COLOR_TARGETS 4
 
+#define WGPUMAX_MIP_LEVELS 16
+
 #define WGPUMAX_VERTEX_BUFFERS 8
 
 typedef enum {
@@ -229,8 +231,6 @@ typedef enum {
   WGPUVertexFormat_Int3 = 47,
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
-
-typedef struct WGPUTrackPermit WGPUTrackPermit;
 
 typedef uint32_t WGPUIndex;
 
@@ -614,10 +614,6 @@ typedef struct {
   uint32_t base_array_layer;
   uint32_t array_count;
 } WGPUTextureViewDescriptor;
-
-
-
-
 
 #if defined(WGPU_LOCAL)
 WGPUDeviceId wgpu_adapter_request_device(WGPUAdapterId adapter_id,
