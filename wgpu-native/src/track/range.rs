@@ -103,7 +103,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     }
 
     /// Split the storage ranges in such a way that there is a linear subset of
-    /// them occuping exactly `index` range, which is returned mutably.
+    /// them occupying exactly `index` range, which is returned mutably.
     ///
     /// Gaps in the ranges are filled with `default` value.
     pub fn isolate(&mut self, index: &Range<I>, default: T) -> &mut [(Range<I>, T)] {

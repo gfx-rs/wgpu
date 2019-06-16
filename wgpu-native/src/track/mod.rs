@@ -241,7 +241,7 @@ impl<S: ResourceState> ResourceTracker<S> {
 
     /// Make sure that a resource is tracked, and return a mutable
     /// reference to it.
-    fn grab<'a>(
+    fn get_or_insert<'a>(
         map: &'a mut FastHashMap<Index, Resource<S>>,
         id: S::Id,
         ref_count: &RefCount,
@@ -271,7 +271,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         selector: S::Selector,
         usage: S::Usage,
     ) -> Result<(), PendingTransition<S>> {
-        Self::grab(&mut self.map, id, ref_count)
+        Self::get_or_insert(&mut self.map, id, ref_count)
             .state.change(id, selector, usage, None)
     }
 
@@ -283,13 +283,13 @@ impl<S: ResourceState> ResourceTracker<S> {
         selector: S::Selector,
         usage: S::Usage,
     ) -> Drain<PendingTransition<S>> {
-        let res = Self::grab(&mut self.map, id, ref_count);
+        let res = Self::get_or_insert(&mut self.map, id, ref_count);
         res.state.change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
         self.temp.drain(..)
     }
 
-    /// Merge another tacker into `self` by extending the current states
+    /// Merge another tracker into `self` by extending the current states
     /// without any transitions.
     pub fn merge_extend(
         &mut self, other: &Self,
@@ -309,7 +309,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         Ok(())
     }
 
-    /// Merge another tacker, adding it's transitions to `self`.
+    /// Merge another tracker, adding it's transitions to `self`.
     /// Transitions the current usage to the new one.
     pub fn merge_replace<'a>(
         &'a mut self,

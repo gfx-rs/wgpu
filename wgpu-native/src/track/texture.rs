@@ -35,7 +35,7 @@ impl PendingTransition<TextureState> {
     }
 
     //TODO: make this less awkward!
-    /// Check for the validity of `self` with regards to the presense of `output`.
+    /// Check for the validity of `self` with regards to the presence of `output`.
     ///
     /// Return the end usage if the `output` is provided and pushes self to it.
     /// Otherwise, return the extended usage, or an error if extension is impossible.

@@ -40,7 +40,7 @@ pub struct TextureCopyView {
 }
 
 impl TextureCopyView {
-    //TODO: we currently access each texture twice for a transer,
+    //TODO: we currently access each texture twice for a transfer,
     // once only to get the aspect flags, which is unfortunate.
     fn to_selector(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceRange {
         let level = self.mip_level as hal::image::Level;
