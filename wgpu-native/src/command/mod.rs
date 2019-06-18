@@ -39,11 +39,16 @@ use crate::{
 #[cfg(feature = "local")]
 use crate::{ComputePassId, RenderPassId};
 
+use arrayvec::ArrayVec;
 use back::Backend;
-use hal::{command::RawCommandBuffer, Device as _};
+use hal::{
+    adapter::PhysicalDevice,
+    command::RawCommandBuffer,
+    Device as _
+};
 use log::trace;
 
-use std::{collections::hash_map::Entry, iter, mem, slice, thread::ThreadId};
+use std::{collections::hash_map::Entry, iter, mem, slice, ptr, thread::ThreadId};
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -183,9 +188,23 @@ pub fn command_encoder_begin_render_pass(
     let mut extent = None;
     let mut barriers = Vec::new();
 
+    let limits = HUB.adapters.read()[device.adapter_id].physical_device.limits();
+    let samples_count_limit = limits.framebuffer_color_samples_count;
+
     let color_attachments =
         unsafe { slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length) };
     let depth_stencil_attachment = unsafe { desc.depth_stencil_attachment.as_ref() };
+
+    let sample_count = color_attachments.get(0).map(|at| view_guard[at.attachment].samples).unwrap_or(1);
+    assert!(sample_count & samples_count_limit != 0, "Attachment sample_count must be supported by physical device limits");
+    for at in color_attachments.iter() {
+        let sample_count_check = view_guard[at.attachment].samples;
+        assert_eq!(sample_count_check, sample_count, "All attachments must have the same sample_count");
+
+        if let Some(resolve) = unsafe { at.resolve_target.as_ref() } {
+            assert_eq!(view_guard[*resolve].samples, 1, "All target_resolves must have a sample_count of 1");
+        }
+    }
 
     let rp_key = {
         let trackers = &mut cmb.trackers;
@@ -237,7 +256,10 @@ pub fn command_encoder_begin_render_pass(
             }
         });
 
-        let color_keys = color_attachments.iter().map(|at| {
+        let mut colors = ArrayVec::new();
+        let mut resolves = ArrayVec::new();
+
+        for at in color_attachments {
             let view = trackers.views
                 .use_extend(&*view_guard, at.attachment, (), ())
                 .unwrap();
@@ -284,17 +306,76 @@ pub fn command_encoder_begin_render_pass(
                     hal::image::Layout::ColorAttachmentOptimal
                 }
             };
-            hal::pass::Attachment {
+
+            colors.push(hal::pass::Attachment {
                 format: Some(conv::map_texture_format(view.format)),
                 samples: view.samples,
                 ops: conv::map_load_store_ops(at.load_op, at.store_op),
                 stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
                 layouts: old_layout .. hal::image::Layout::ColorAttachmentOptimal,
+            });
+
+            if let Some(resolve_target) = unsafe { at.resolve_target.as_ref() } {
+                let view = trackers.views
+                    .use_extend(&*view_guard, *resolve_target, (), ())
+                    .unwrap();
+                if let Some(ex) = extent {
+                    assert_eq!(ex, view.extent);
+                } else {
+                    extent = Some(view.extent);
+                }
+
+                if view.is_owned_by_swap_chain {
+                    let link = match texture_guard[view.texture_id.value].placement {
+                        TexturePlacement::SwapChain(ref link) => SwapChainLink {
+                            swap_chain_id: link.swap_chain_id.clone(),
+                            epoch: *link.epoch.lock(),
+                            image_index: link.image_index,
+                        },
+                        TexturePlacement::Memory(_) | TexturePlacement::Void => unreachable!(),
+                    };
+                    swap_chain_links.push(link);
+                }
+
+                let old_layout = match trackers.textures.query(
+                    view.texture_id.value,
+                    view.range.clone(),
+                ) {
+                    Some(usage) => {
+                        conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
+                    }
+                    None => {
+                        // Required sub-resources have inconsistent states, we need to
+                        // issue individual barriers instead of relying on the render pass.
+                        let (texture, pending) = trackers.textures.use_replace(
+                            &*texture_guard,
+                            view.texture_id.value,
+                            view.range.clone(),
+                            TextureUsage::OUTPUT_ATTACHMENT,
+                        );
+                        barriers.extend(pending.map(|pending| hal::memory::Barrier::Image {
+                            states: pending.to_states(),
+                            target: &texture.raw,
+                            families: None,
+                            range: pending.selector,
+                        }));
+                        hal::image::Layout::ColorAttachmentOptimal
+                    }
+                };
+
+                resolves.push(hal::pass::Attachment {
+                    format: Some(conv::map_texture_format(view.format)),
+                    samples: view.samples,
+                    ops: hal::pass::AttachmentOps::new(hal::pass::AttachmentLoadOp::DontCare, hal::pass::AttachmentStoreOp::Store),
+                    stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+                    layouts: old_layout .. hal::image::Layout::ColorAttachmentOptimal,
+                });
             }
-        });
+        }
 
         RenderPassKey {
-            colors: color_keys.collect(),
+            colors,
+            resolves,
             depth_stencil,
         }
     };
@@ -313,22 +394,40 @@ pub fn command_encoder_begin_render_pass(
     let render_pass = match render_pass_cache.entry(rp_key.clone()) {
         Entry::Occupied(e) => e.into_mut(),
         Entry::Vacant(e) => {
+            let attachment_unused: u32 = !0; // TODO: Get from ash or expose in gfx-hal. Very important this remains a u32.
+
             let color_ids = [
                 (0, hal::image::Layout::ColorAttachmentOptimal),
                 (1, hal::image::Layout::ColorAttachmentOptimal),
                 (2, hal::image::Layout::ColorAttachmentOptimal),
                 (3, hal::image::Layout::ColorAttachmentOptimal),
             ];
+
+            let mut resolve_ids = ArrayVec::<[_; crate::device::MAX_COLOR_TARGETS]>::new();
+            let mut attachment_index = color_attachments.len();
+            if color_attachments.iter().any(|at| at.resolve_target != ptr::null()) {
+                for (i, at) in color_attachments.iter().enumerate() {
+                    if at.resolve_target == ptr::null() {
+                        resolve_ids.push((attachment_unused as usize, hal::image::Layout::ColorAttachmentOptimal));
+                    } else {
+                        let sample_count_check = view_guard[color_attachments[i].attachment].samples;
+                        assert!(sample_count_check > 1, "RenderPassColorAttachmentDescriptor with a resolve_target must have an attachment with sample_count > 1");
+                        resolve_ids.push((attachment_index, hal::image::Layout::ColorAttachmentOptimal));
+                        attachment_index += 1;
+                    }
+                }
+            }
+
             let depth_id = (
-                color_attachments.len(),
+                attachment_index,
                 hal::image::Layout::DepthStencilAttachmentOptimal,
             );
 
             let subpass = hal::pass::SubpassDesc {
                 colors: &color_ids[.. color_attachments.len()],
+                resolves: &resolve_ids,
                 depth_stencil: depth_stencil_attachment.map(|_| &depth_id),
                 inputs: &[],
-                resolves: &[],
                 preserves: &[],
             };
 
@@ -345,6 +444,9 @@ pub fn command_encoder_begin_render_pass(
     let mut framebuffer_cache = device.framebuffers.lock();
     let fb_key = FramebufferKey {
         colors: color_attachments.iter().map(|at| at.attachment).collect(),
+        resolves: color_attachments.iter().filter_map(|at|
+            unsafe { at.resolve_target.as_ref() }.cloned()
+        ).collect(),
         depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
     };
     let framebuffer = match framebuffer_cache.entry(fb_key) {
@@ -437,6 +539,11 @@ pub fn command_encoder_begin_render_pass(
             .iter()
             .map(|at| view_guard[at.attachment].format)
             .collect(),
+        resolves: color_attachments
+            .iter()
+            .filter_map(|at| unsafe { at.resolve_target.as_ref() })
+            .map(|resolve| view_guard[*resolve].format)
+            .collect(),
         depth_stencil: depth_stencil_attachment.map(|at| view_guard[at.attachment].format),
     };
 
@@ -447,6 +554,7 @@ pub fn command_encoder_begin_render_pass(
             ref_count: cmb.life_guard.ref_count.clone(),
         },
         context,
+        sample_count,
     )
 }
 

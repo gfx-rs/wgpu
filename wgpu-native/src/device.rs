@@ -94,12 +94,20 @@ enum HostMap {
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub(crate) struct AttachmentData<T> {
     pub colors: ArrayVec<[T; MAX_COLOR_TARGETS]>,
+    pub resolves: ArrayVec<[T; MAX_COLOR_TARGETS]>,
     pub depth_stencil: Option<T>,
 }
 impl<T: PartialEq> Eq for AttachmentData<T> {}
 impl<T> AttachmentData<T> {
     pub(crate) fn all(&self) -> impl Iterator<Item = &T> {
-        self.colors.iter().chain(&self.depth_stencil)
+        self.colors.iter().chain(&self.resolves).chain(&self.depth_stencil)
+    }
+}
+
+impl RenderPassContext {
+    // Assumed the renderpass only contains one subpass
+    pub(crate) fn compatible(&self, other: &RenderPassContext) -> bool {
+        self.colors == other.colors && self.depth_stencil == other.depth_stencil
     }
 }
 
@@ -424,7 +432,7 @@ fn map_buffer(
 
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
-    adapter_id: AdapterId,
+    pub(crate) adapter_id: AdapterId,
     pub(crate) queue_group: hal::QueueGroup<B, hal::General>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<Heaps<B>>,
@@ -1394,6 +1402,11 @@ pub fn device_create_render_pipeline(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> pipeline::RenderPipeline<back::Backend> {
+    let sc = desc.sample_count;
+    assert!(sc == 1 || sc == 2 || sc == 4 || sc == 8 || sc == 16 || sc == 32,
+        "Invalid sample_count of {}", sc);
+    let sc = sc as u8;
+
     let device_guard = HUB.devices.read();
     let device = &device_guard[device_id];
     let pipeline_layout_guard = HUB.pipeline_layouts.read();
@@ -1409,15 +1422,20 @@ pub fn device_create_render_pipeline(
             .iter()
             .map(|at| hal::pass::Attachment {
                 format: Some(conv::map_texture_format(at.format)),
-                samples: desc.sample_count as u8,
+                samples: sc,
                 ops: hal::pass::AttachmentOps::PRESERVE,
                 stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
                 layouts: hal::image::Layout::General .. hal::image::Layout::General,
             })
             .collect(),
+        // We can ignore the resolves as the vulkan specs says:
+        // As an additional special case, if two render passes have a single subpass,
+        // they are compatible even if they have different resolve attachment references
+        // or depth/stencil resolve modes but satisfy the other compatibility conditions.
+        resolves: ArrayVec::new(),
         depth_stencil: depth_stencil_state.map(|at| hal::pass::Attachment {
             format: Some(conv::map_texture_format(at.format)),
-            samples: desc.sample_count as u8,
+            samples: sc,
             ops: hal::pass::AttachmentOps::PRESERVE,
             stencil_ops: hal::pass::AttachmentOps::PRESERVE,
             layouts: hal::image::Layout::General .. hal::image::Layout::General,
@@ -1434,6 +1452,7 @@ pub fn device_create_render_pipeline(
                 (2, hal::image::Layout::ColorAttachmentOptimal),
                 (3, hal::image::Layout::ColorAttachmentOptimal),
             ];
+
             let depth_id = (
                 desc.color_states_length,
                 hal::image::Layout::DepthStencilAttachmentOptimal,
@@ -1538,8 +1557,17 @@ pub fn device_create_render_pipeline(
         .map(conv::map_depth_stencil_state_descriptor)
         .unwrap_or_default();
 
-    // TODO
-    let multisampling: Option<hal::pso::Multisampling> = None;
+    let multisampling: Option<hal::pso::Multisampling> = if sc == 1 {
+        None
+    } else {
+        Some(hal::pso::Multisampling {
+            rasterization_samples: sc,
+            sample_shading: None,
+            sample_mask: !0,
+            alpha_coverage: false,
+            alpha_to_one: false,
+        })
+    };
 
     // TODO
     let baked_states = hal::pso::BakedStates {
@@ -1585,6 +1613,7 @@ pub fn device_create_render_pipeline(
 
     let pass_context = RenderPassContext {
         colors: color_states.iter().map(|state| state.format).collect(),
+        resolves: ArrayVec::new(),
         depth_stencil: depth_stencil_state.map(|state| state.format),
     };
 
@@ -1607,6 +1636,7 @@ pub fn device_create_render_pipeline(
         flags,
         index_format: desc.vertex_input.index_format,
         vertex_strides,
+        sample_count: sc,
     }
 }
 

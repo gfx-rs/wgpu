@@ -301,5 +301,6 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) index_format: IndexFormat,
+    pub(crate) sample_count: u8,
     pub(crate) vertex_strides: Vec<(BufferAddress, InputStepMode)>,
 }

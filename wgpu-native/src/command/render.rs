@@ -119,6 +119,7 @@ pub struct RenderPass<B: hal::Backend> {
     stencil_reference_status: OptionalState,
     index_state: IndexState,
     vertex_state: VertexState,
+    sample_count: u8,
 }
 
 impl<B: hal::Backend> RenderPass<B> {
@@ -126,6 +127,7 @@ impl<B: hal::Backend> RenderPass<B> {
         raw: B::CommandBuffer,
         cmb_id: Stored<CommandBufferId>,
         context: RenderPassContext,
+        sample_count: u8,
     ) -> Self {
         RenderPass {
             raw,
@@ -145,6 +147,7 @@ impl<B: hal::Backend> RenderPass<B> {
                 vertex_limit: 0,
                 instance_limit: 0,
             },
+            sample_count,
         }
     }
 
@@ -400,10 +403,11 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     let pipeline_guard = HUB.render_pipelines.read();
     let pipeline = &pipeline_guard[pipeline_id];
 
-    assert_eq!(
-        pass.context, pipeline.pass_context,
+    assert!(
+        pass.context.compatible(&pipeline.pass_context),
         "The render pipeline is not compatible with the pass!"
     );
+    assert_eq!(pipeline.sample_count, pass.sample_count, "The render pipeline and renderpass have mismatching sample_count");
 
     pass.blend_color_status
         .require(pipeline.flags.contains(PipelineFlags::BLEND_COLOR));
