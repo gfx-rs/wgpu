@@ -680,7 +680,7 @@ pub fn device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
 ) -> resource::Texture<back::Backend> {
-    let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.array_layer_count);
+    let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.array_layer_count, desc.sample_count);
     let format = conv::map_texture_format(desc.format);
     let aspects = format.surface_desc().aspects;
     let usage = conv::map_texture_usage(desc.usage, aspects);
