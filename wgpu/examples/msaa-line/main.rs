@@ -208,5 +208,5 @@ impl framework::Example for Example {
 }
 
 fn main() {
-    framework::run::<Example>("MSAA and LineList");
+    framework::run::<Example>("msaa-line");
 }
