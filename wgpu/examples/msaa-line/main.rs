@@ -183,19 +183,32 @@ impl framework::Example for Example {
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
         if self.rebuild_pipeline {
             self.pipeline = Example::create_pipeline(device, &self.sc_desc, &self.vs_module, &self.fs_module, &self.pipeline_layout, self.sample_count);
+            self.multisampled_framebuffer = Example::create_multisampled_framebuffer(device, &self.sc_desc, self.sample_count);
             self.rebuild_pipeline = false;
         }
 
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+            let rpass_color_attachment = if self.sample_count == 1 {
+                wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
+                    resolve_target: None,
+                    load_op: wgpu::LoadOp::Clear,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color::BLACK,
+                }
+            } else {
+                wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &self.multisampled_framebuffer,
                     resolve_target: Some(&frame.view),
                     load_op: wgpu::LoadOp::Clear,
                     store_op: wgpu::StoreOp::Store,
                     clear_color: wgpu::Color::BLACK,
-                }],
+                }
+            };
+
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                color_attachments: &[rpass_color_attachment],
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&self.pipeline);
