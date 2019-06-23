@@ -40,6 +40,7 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
+pub use hal::memory::Pod as Pod;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
