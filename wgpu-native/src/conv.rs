@@ -428,7 +428,7 @@ pub fn map_texture_dimension_size(
         D2 => {
             assert_eq!(depth, 1);
             assert!(sample_size == 1 || sample_size == 2 || sample_size == 4
-                || sample_size == 8 || sample_size == 16 || sample_size == 32 || sample_size == 64,
+                || sample_size == 8 || sample_size == 16 || sample_size == 32,
                 "Invalid sample_count of {}", sample_size);
             H::D2(width, height, checked_u32_as_u16(array_size), sample_size as u8)
         }
