@@ -258,9 +258,9 @@ type DeviceToken<'a> = Token<'a, Device<back::Backend>>;
 impl PendingResources<back::Backend> {
     fn triage_referenced(&mut self, trackers: &mut TrackerSet, mut token: &mut DeviceToken) {
         // Before destruction, a resource is expected to have the following strong refs:
-        //  1. in resource itself
-        //  2. in the device tracker
-        //  3. in this list
+        //  - in resource itself
+        //  - in the device tracker
+        //  - in this list
         const MIN_REFS: usize = 4;
 
         if self.referenced.iter().all(|r| r.1.load() >= MIN_REFS) {

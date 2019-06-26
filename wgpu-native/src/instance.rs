@@ -207,15 +207,14 @@ pub fn instance_get_adapter(
     desc: &AdapterDescriptor,
     token: &mut Token<Root>,
 ) -> AdapterHandle {
-    let (instance_guard, mut token) = HUB.instances.read(token);
     #[cfg(not(feature = "gfx-backend-gl"))]
     let adapters = {
-        let _ = &mut token;
+        let (instance_guard, _) = HUB.instances.read(token);
         instance_guard[instance_id].enumerate_adapters()
     };
     #[cfg(feature = "gfx-backend-gl")]
     let adapters = {
-        let (surface_guard, _) = HUB.surfaces.read(&mut token);
+        let (surface_guard, _) = HUB.surfaces.read(token);
         surface_guard[instance_id].raw.enumerate_adapters()
     };
 

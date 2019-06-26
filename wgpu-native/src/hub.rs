@@ -136,15 +136,22 @@ impl<T, I: TypedId> Storage<T, I> {
 
 
 /// Type system for enforcing the lock order on shared HUB structures.
-/// The main property we are trying to establish is that each type
-/// of resources have only a single path from Root{} to reach by,
-/// when locking multiple resources types.
+/// If type A implements `Access<B>`, that means we are allowed to proceed
+/// with locking resource `B` after we lock `A`.
+///
+/// The implenentations basically describe the edges in a directed graph
+/// of lock transitions. As long as it doesn't have loops, we can have
+/// multiple concurrent paths on this graph (from multiple threads) without
+/// deadlocks, i.e. there is always a path whose next resource is not locked
+/// by some other path, at any time.
 pub trait Access<B> {}
 
 pub enum Root {}
 //TODO: establish an order instead of declaring all the pairs.
+#[cfg(not(feature = "gfx-backend-gl"))]
 impl Access<InstanceHandle> for Root {}
 impl Access<SurfaceHandle> for Root {}
+#[cfg(not(feature = "gfx-backend-gl"))]
 impl Access<SurfaceHandle> for InstanceHandle {}
 impl Access<AdapterHandle> for Root {}
 impl Access<AdapterHandle> for SurfaceHandle {}
@@ -195,6 +202,11 @@ thread_local! {
     static ACTIVE_TOKEN: Cell<bool> = Cell::new(false);
 }
 
+/// A permission token to lock resource `T` or anything after it,
+/// as defined by the `Access` implementations.
+///
+/// Note: there can only be one non-borrowed `Token` alive on a thread
+/// at a time, which is enforced by `ACTIVE_TOKEN`.
 pub struct Token<'a, T: 'a> {
     level: PhantomData<&'a T>,
     is_root: bool,
