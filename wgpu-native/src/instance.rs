@@ -1,6 +1,6 @@
 use crate::{
     binding_model::MAX_BIND_GROUPS,
-    hub::HUB,
+    hub::{HUB, Root, Token},
     AdapterHandle,
     AdapterId,
     DeviceHandle,
@@ -72,14 +72,14 @@ pub fn create_instance() -> ::back::Instance {
 #[no_mangle]
 pub extern "C" fn wgpu_create_instance() -> InstanceId {
     let inst = create_instance();
-    HUB.instances.register_local(inst)
+    HUB.instances.register_local(inst, &mut Token::root())
 }
 
 #[cfg(all(feature = "local", feature = "gfx-backend-gl"))]
 pub fn wgpu_create_gl_instance(windowed_context: back::glutin::WindowedContext) -> InstanceId {
     let raw = back::Surface::from_window(windowed_context);
     let surface = SurfaceHandle::new(raw);
-    HUB.surfaces.register_local(surface)
+    HUB.surfaces.register_local(surface, &mut Token::root())
 }
 
 #[cfg(all(feature = "window-winit", not(feature = "gfx-backend-gl")))]
@@ -88,9 +88,11 @@ pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
     window: &winit::Window,
 ) -> SurfaceId {
-    let raw = HUB.instances.read()[instance_id].create_surface(window);
+    let mut token = Token::root();
+    let (instance_guard, mut token) = HUB.instances.read(&mut token);
+    let raw = instance_guard[instance_id].create_surface(window);
     let surface = SurfaceHandle::new(raw);
-    HUB.surfaces.register_local(surface)
+    HUB.surfaces.register_local(surface, &mut token)
 }
 
 #[cfg(not(feature = "gfx-backend-gl"))]
@@ -99,12 +101,16 @@ pub fn instance_create_surface_from_xlib(
     instance_id: InstanceId,
     display: *mut *const std::ffi::c_void,
     window: u64,
+    token: &mut Token<Root>,
 ) -> SurfaceHandle {
     #[cfg(not(all(unix, feature = "gfx-backend-vulkan")))]
     unimplemented!();
 
     #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
-    SurfaceHandle::new(HUB.instances.read()[instance_id].create_surface_from_xlib(display, window))
+    {
+        let (instance_guard, _) = HUB.instances.read(token);
+        SurfaceHandle::new(instance_guard[instance_id].create_surface_from_xlib(display, window))
+    }
 }
 
 #[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
@@ -114,8 +120,9 @@ pub extern "C" fn wgpu_instance_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
     window: u64,
 ) -> SurfaceId {
-    let surface = instance_create_surface_from_xlib(instance_id, display, window);
-    HUB.surfaces.register_local(surface)
+    let mut token = Token::root();
+    let surface = instance_create_surface_from_xlib(instance_id, display, window, &mut token);
+    HUB.surfaces.register_local(surface, &mut token)
 }
 
 #[cfg(not(feature = "gfx-backend-gl"))]
@@ -123,15 +130,19 @@ pub extern "C" fn wgpu_instance_create_surface_from_xlib(
 pub fn instance_create_surface_from_macos_layer(
     instance_id: InstanceId,
     layer: *mut std::ffi::c_void,
+    token: &mut Token<Root>,
 ) -> SurfaceHandle {
     #[cfg(not(feature = "gfx-backend-metal"))]
     unimplemented!();
 
     #[cfg(feature = "gfx-backend-metal")]
-    SurfaceHandle::new(
-        HUB.instances.read()[instance_id]
-            .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
-    )
+    {
+        let (instance_guard, _) = HUB.instances.read(token);
+        SurfaceHandle::new(
+            instance_guard[instance_id]
+                .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
+        )
+    }
 }
 
 #[cfg(not(feature = "gfx-backend-gl"))]
@@ -141,8 +152,9 @@ pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
     instance_id: InstanceId,
     layer: *mut std::ffi::c_void,
 ) -> SurfaceId {
-    let surface = instance_create_surface_from_macos_layer(instance_id, layer);
-    HUB.surfaces.register_local(surface)
+    let mut token = Token::root();
+    let surface = instance_create_surface_from_macos_layer(instance_id, layer, &mut token);
+    HUB.surfaces.register_local(surface, &mut token)
 }
 
 #[cfg(not(feature = "gfx-backend-gl"))]
@@ -151,7 +163,10 @@ pub fn instance_create_surface_from_windows_hwnd(
     instance_id: InstanceId,
     hinstance: *mut std::ffi::c_void,
     hwnd: *mut std::ffi::c_void,
+    token: &mut Token<Root>,
 ) -> SurfaceHandle {
+    let (instance_guard, _) = HUB.instances.read(token);
+
     #[cfg(not(any(
         feature = "gfx-backend-dx11",
         feature = "gfx-backend-dx12",
@@ -160,10 +175,10 @@ pub fn instance_create_surface_from_windows_hwnd(
     let raw = unimplemented!();
 
     #[cfg(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12"))]
-    let raw = HUB.instances.read()[instance_id].create_surface_from_hwnd(hwnd);
+    let raw = instance_guard[instance_id].create_surface_from_hwnd(hwnd);
 
     #[cfg(all(target_os = "windows", feature = "gfx-backend-vulkan"))]
-    let raw = HUB.instances.read()[instance_id].create_surface_from_hwnd(hinstance, hwnd);
+    let raw = instance_guard[instance_id].create_surface_from_hwnd(hinstance, hwnd);
 
     #[allow(unreachable_code)]
     SurfaceHandle::new(raw)
@@ -177,8 +192,9 @@ pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
     hinstance: *mut std::ffi::c_void,
     hwnd: *mut std::ffi::c_void,
 ) -> SurfaceId {
-    let surface = instance_create_surface_from_windows_hwnd(instance_id, hinstance, hwnd);
-    HUB.surfaces.register_local(surface)
+    let mut token = Token::root();
+    let surface = instance_create_surface_from_windows_hwnd(instance_id, hinstance, hwnd, &mut token);
+    HUB.surfaces.register_local(surface, &mut token)
 }
 
 #[cfg(all(feature = "local", feature = "gfx-backend-gl"))]
@@ -186,18 +202,21 @@ pub fn wgpu_instance_get_gl_surface(instance_id: InstanceId) -> SurfaceId {
     instance_id
 }
 
-pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -> AdapterHandle {
+pub fn instance_get_adapter(
+    instance_id: InstanceId,
+    desc: &AdapterDescriptor,
+    token: &mut Token<Root>,
+) -> AdapterHandle {
+    let (instance_guard, mut token) = HUB.instances.read(token);
     #[cfg(not(feature = "gfx-backend-gl"))]
     let adapters = {
-        let instance_guard = HUB.instances.read();
-        let instance = &instance_guard[instance_id];
-        instance.enumerate_adapters()
+        let _ = &mut token;
+        instance_guard[instance_id].enumerate_adapters()
     };
     #[cfg(feature = "gfx-backend-gl")]
     let adapters = {
-        let surface_guard = HUB.surfaces.read();
-        let surface = &surface_guard[instance_id];
-        surface.raw.enumerate_adapters()
+        let (surface_guard, _) = HUB.surfaces.read(&mut token);
+        surface_guard[instance_id].raw.enumerate_adapters()
     };
 
     let (mut integrated_first, mut discrete_first, mut discrete_last, mut alternative) =
@@ -242,7 +261,8 @@ pub extern "C" fn wgpu_instance_get_adapter(
     instance_id: InstanceId,
     desc: &AdapterDescriptor,
 ) -> AdapterId {
-    let adapter = instance_get_adapter(instance_id, desc);
+    let mut token = Token::root();
+    let adapter = instance_get_adapter(instance_id, desc, &mut token);
     let limits = adapter.physical_device.limits();
 
     info!("Adapter {:?}", adapter.info);
@@ -256,11 +276,15 @@ pub extern "C" fn wgpu_instance_get_adapter(
         "Adapter uniform buffer offset alignment not compatible with WGPU"
     );
 
-    HUB.adapters.register_local(adapter)
+    HUB.adapters.register_local(adapter, &mut token)
 }
 
-pub fn adapter_create_device(adapter_id: AdapterId, _desc: &DeviceDescriptor) -> DeviceHandle {
-    let adapter_guard = HUB.adapters.read();
+pub fn adapter_create_device(
+    adapter_id: AdapterId,
+    _desc: &DeviceDescriptor,
+    token: &mut Token<Root>,
+) -> DeviceHandle {
+    let (adapter_guard, _) = HUB.adapters.read(token);
     let adapter = &adapter_guard[adapter_id];
     let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
     let mem_props = adapter.physical_device.memory_properties();
@@ -274,6 +298,7 @@ pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: AdapterId,
     desc: &DeviceDescriptor,
 ) -> DeviceId {
-    let device = adapter_create_device(adapter_id, desc);
-    HUB.devices.register_local(device)
+    let mut token = Token::root();
+    let device = adapter_create_device(adapter_id, desc, &mut token);
+    HUB.devices.register_local(device, &mut token)
 }

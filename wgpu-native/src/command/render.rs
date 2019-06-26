@@ -2,7 +2,7 @@ use crate::{
     command::bind::{Binder, LayoutChange},
     conv,
     device::{RenderPassContext, BIND_BUFFER_ALIGNMENT, MAX_VERTEX_BUFFERS},
-    hub::HUB,
+    hub::{Token, HUB},
     pipeline::{IndexFormat, InputStepMode, PipelineFlags},
     resource::BufferUsage,
     track::{Stitch, TrackerSet},
@@ -174,13 +174,16 @@ impl<B: hal::Backend> RenderPass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBufferId {
-    let mut cmb_guard = HUB.command_buffers.write();
-    let mut pass = HUB.render_passes.unregister(pass_id);
+    let mut token = Token::root();
+    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
+    let (mut pass, mut token) = HUB.render_passes.unregister(pass_id, &mut token);
     unsafe {
         pass.raw.end_render_pass();
     }
     pass.trackers.optimize();
     let cmb = &mut cmb_guard[pass.cmb_id.value];
+    let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
+    let (texture_guard, _) = HUB.textures.read(&mut token);
 
     match cmb.raw.last_mut() {
         Some(ref mut last) => {
@@ -189,8 +192,8 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
                 &mut cmb.trackers,
                 &pass.trackers,
                 Stitch::Last,
-                &*HUB.buffers.read(),
-                &*HUB.textures.read(),
+                &*buffer_guard,
+                &*texture_guard,
             );
             unsafe { last.finish() };
         }
@@ -211,9 +214,12 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     offsets: *const BufferAddress,
     offsets_length: usize,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (pipeline_layout_guard, mut token) = HUB.pipeline_layouts.read(&mut token);
+    let (bind_group_guard, mut token) = HUB.bind_groups.read(&mut token);
+
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
-    let bind_group_guard = HUB.bind_groups.read();
 
     let bind_group = pass
         .trackers
@@ -246,7 +252,6 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
         pass.binder
             .provide_entry(index as usize, bind_group_id, bind_group, offsets)
     {
-        let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let bind_groups =
             iter::once(bind_group.raw.raw()).chain(follow_up.map(|bg_id| bind_group_guard[bg_id].raw.raw()));
         unsafe {
@@ -283,8 +288,9 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
     buffer_id: BufferId,
     offset: BufferAddress,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
-    let buffer_guard = HUB.buffers.read();
+    let mut token = Token::root();
+    let (mut pass_guard, mut token) = HUB.render_passes.write(&mut token);
+    let (buffer_guard, _) = HUB.buffers.read(&mut token);
 
     let pass = &mut pass_guard[pass_id];
     let buffer = pass
@@ -315,8 +321,9 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     offsets: *const BufferAddress,
     length: usize,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
-    let buffer_guard = HUB.buffers.read();
+    let mut token = Token::root();
+    let (mut pass_guard, mut token) = HUB.render_passes.write(&mut token);
+    let (buffer_guard, _) = HUB.buffers.read(&mut token);
     let buffers = unsafe { slice::from_raw_parts(buffers, length) };
     let offsets = unsafe { slice::from_raw_parts(offsets, length) };
 
@@ -352,7 +359,8 @@ pub extern "C" fn wgpu_render_pass_draw(
     first_vertex: u32,
     first_instance: u32,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
     pass.is_ready().unwrap();
 
@@ -376,7 +384,8 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
     base_vertex: i32,
     first_instance: u32,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
     pass.is_ready().unwrap();
 
@@ -398,9 +407,12 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
     pass_id: RenderPassId,
     pipeline_id: RenderPipelineId,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (pipeline_layout_guard, mut token) = HUB.pipeline_layouts.read(&mut token);
+    let (bind_group_guard, mut token) = HUB.bind_groups.read(&mut token);
+    let (mut pass_guard, mut token) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
-    let pipeline_guard = HUB.render_pipelines.read();
+    let (pipeline_guard, mut token) = HUB.render_pipelines.read(&mut token);
     let pipeline = &pipeline_guard[pipeline_id];
 
     assert!(
@@ -420,10 +432,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
 
     // Rebind resource
     if pass.binder.pipeline_layout_id != Some(pipeline.layout_id.clone()) {
-        let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-        let bind_group_guard = HUB.bind_groups.read();
-
         pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
         pass.binder
             .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
@@ -455,7 +464,7 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
         pass.index_state.update_limit();
 
         if let Some((buffer_id, ref range)) = pass.index_state.bound_buffer_view {
-            let buffer_guard = HUB.buffers.read();
+            let (buffer_guard, _) = HUB.buffers.read(&mut token);
             let buffer = pass
                 .trackers
                 .buffers
@@ -487,7 +496,8 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color: &Color) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
 
     pass.blend_color_status = OptionalState::Set;
@@ -499,7 +509,8 @@ pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color:
 
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass_id: RenderPassId, value: u32) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
 
     pass.stencil_reference_status = OptionalState::Set;
@@ -519,7 +530,8 @@ pub extern "C" fn wgpu_render_pass_set_viewport(
     min_depth: f32,
     max_depth: f32,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
 
     unsafe {
@@ -549,7 +561,8 @@ pub extern "C" fn wgpu_render_pass_set_scissor_rect(
     w: u32,
     h: u32,
 ) {
-    let mut pass_guard = HUB.render_passes.write();
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
 
     unsafe {

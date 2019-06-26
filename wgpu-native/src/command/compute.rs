@@ -1,6 +1,6 @@
 use crate::{
     command::bind::{Binder, LayoutChange},
-    hub::HUB,
+    hub::{HUB, Token},
     track::{Stitch, TrackerSet},
     BindGroupId,
     BufferAddress,
@@ -43,8 +43,9 @@ impl<B: hal::Backend> ComputePass<B> {
 
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
-    let mut cmb_guard = HUB.command_buffers.write();
-    let pass = HUB.compute_passes.unregister(pass_id);
+    let mut token = Token::root();
+    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
+    let (pass, _) = HUB.compute_passes.unregister(pass_id, &mut token);
     let cmb = &mut cmb_guard[pass.cmb_id.value];
 
     // There are no transitions to be made: we've already been inserting barriers
@@ -62,9 +63,11 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     offsets: *const BufferAddress,
     offsets_length: usize,
 ) {
-    let mut pass_guard = HUB.compute_passes.write();
+    let mut token = Token::root();
+    let (pipeline_layout_guard, mut token) = HUB.pipeline_layouts.read(&mut token);
+    let (bind_group_guard, mut token) = HUB.bind_groups.read(&mut token);
+    let (mut pass_guard, mut token) = HUB.compute_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
-    let bind_group_guard = HUB.bind_groups.read();
 
     let bind_group = pass
         .trackers
@@ -93,21 +96,22 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
 
     //Note: currently, WebGPU compute passes have synchronization defined
     // at a dispatch granularity, so we insert the necessary barriers here.
+    let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
+    let (texture_guard, _) = HUB.textures.read(&mut token);
 
     CommandBuffer::insert_barriers(
         &mut pass.raw,
         &mut pass.trackers,
         &bind_group.used,
         Stitch::Last,
-        &*HUB.buffers.read(),
-        &*HUB.textures.read(),
+        &*buffer_guard,
+        &*texture_guard,
     );
 
     if let Some((pipeline_layout_id, follow_up)) =
         pass.binder
             .provide_entry(index as usize, bind_group_id, bind_group, offsets)
     {
-        let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let bind_groups =
             iter::once(bind_group.raw.raw()).chain(follow_up.map(|bg_id| bind_group_guard[bg_id].raw.raw()));
         unsafe {
@@ -143,8 +147,10 @@ pub extern "C" fn wgpu_compute_pass_insert_debug_marker(
 
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.compute_passes.write(&mut token);
     unsafe {
-        HUB.compute_passes.write()[pass_id].raw.dispatch([x, y, z]);
+        pass_guard[pass_id].raw.dispatch([x, y, z]);
     }
 }
 
@@ -153,9 +159,12 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
     pass_id: ComputePassId,
     pipeline_id: ComputePipelineId,
 ) {
-    let mut pass_guard = HUB.compute_passes.write();
+    let mut token = Token::root();
+    let (pipeline_layout_guard, mut token) = HUB.pipeline_layouts.read(&mut token);
+    let (bind_group_guard, mut token) = HUB.bind_groups.read(&mut token);
+    let (mut pass_guard, mut token) = HUB.compute_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
-    let pipeline_guard = HUB.compute_pipelines.read();
+    let (pipeline_guard, _) = HUB.compute_pipelines.read(&mut token);
     let pipeline = &pipeline_guard[pipeline_id];
 
     unsafe {
@@ -164,10 +173,7 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
 
     // Rebind resources
     if pass.binder.pipeline_layout_id != Some(pipeline.layout_id.clone()) {
-        let pipeline_layout_guard = HUB.pipeline_layouts.read();
         let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-        let bind_group_guard = HUB.bind_groups.read();
-
         pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
         pass.binder
             .reset_expectations(pipeline_layout.bind_group_layout_ids.len());

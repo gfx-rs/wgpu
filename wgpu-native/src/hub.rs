@@ -37,20 +37,27 @@ use crate::{
 };
 #[cfg(not(feature = "gfx-backend-gl"))]
 use crate::{InstanceHandle, InstanceId};
+
 use lazy_static::lazy_static;
 #[cfg(feature = "local")]
 use parking_lot::Mutex;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use vec_map::VecMap;
 
-use std::{ops, sync::Arc};
+use std::{
+    cell::Cell,
+    marker::PhantomData,
+    ops,
+    sync::Arc,
+};
+
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
 pub struct IdentityManager<I: TypedId> {
     free: Vec<Index>,
     epochs: Vec<Epoch>,
-    phantom: std::marker::PhantomData<I>,
+    phantom: PhantomData<I>,
 }
 
 impl<I: TypedId> Default for IdentityManager<I> {
@@ -58,7 +65,7 @@ impl<I: TypedId> Default for IdentityManager<I> {
         IdentityManager {
             free: Default::default(),
             epochs: Default::default(),
-            phantom: std::marker::PhantomData,
+            phantom: PhantomData,
         }
     }
 }
@@ -92,7 +99,7 @@ impl<I: TypedId> IdentityManager<I> {
 pub struct Storage<T, I: TypedId> {
     //TODO: consider concurrent hashmap?
     map: VecMap<(T, Epoch)>,
-    _phantom: std::marker::PhantomData<I>,
+    _phantom: PhantomData<I>,
 }
 
 impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
@@ -119,12 +126,117 @@ impl<T, I: TypedId> Storage<T, I> {
             _ => false,
         }
     }
+
+    pub fn remove(&mut self, id: I) -> T {
+        let (value, epoch) = self.map.remove(id.index() as usize).unwrap();
+        assert_eq!(epoch, id.epoch());
+        value
+    }
 }
+
+
+/// Type system for enforcing the lock order on shared HUB structures.
+/// The main property we are trying to establish is that each type
+/// of resources have only a single path from Root{} to reach by,
+/// when locking multiple resources types.
+pub trait Access<B> {}
+
+pub enum Root {}
+//TODO: establish an order instead of declaring all the pairs.
+impl Access<InstanceHandle> for Root {}
+impl Access<SurfaceHandle> for Root {}
+impl Access<SurfaceHandle> for InstanceHandle {}
+impl Access<AdapterHandle> for Root {}
+impl Access<AdapterHandle> for SurfaceHandle {}
+impl Access<DeviceHandle> for Root {}
+impl Access<DeviceHandle> for SurfaceHandle {}
+impl Access<DeviceHandle> for AdapterHandle {}
+impl Access<PipelineLayoutHandle> for Root {}
+impl Access<PipelineLayoutHandle> for DeviceHandle {}
+impl Access<BindGroupLayoutHandle> for Root {}
+impl Access<BindGroupLayoutHandle> for DeviceHandle {}
+impl Access<BindGroupHandle> for Root {}
+impl Access<BindGroupHandle> for DeviceHandle {}
+impl Access<BindGroupHandle> for PipelineLayoutHandle {}
+impl Access<BindGroupHandle> for CommandBufferHandle {}
+impl Access<CommandBufferHandle> for Root {}
+impl Access<CommandBufferHandle> for DeviceHandle {}
+impl Access<ComputePassHandle> for Root {}
+impl Access<ComputePassHandle> for BindGroupHandle {}
+impl Access<ComputePassHandle> for CommandBufferHandle {}
+impl Access<RenderPassHandle> for Root {}
+impl Access<RenderPassHandle> for BindGroupHandle {}
+impl Access<RenderPassHandle> for CommandBufferHandle {}
+impl Access<ComputePipelineHandle> for Root {}
+impl Access<ComputePipelineHandle> for ComputePassHandle {}
+impl Access<RenderPipelineHandle> for Root {}
+impl Access<RenderPipelineHandle> for RenderPassHandle {}
+impl Access<ShaderModuleHandle> for Root {}
+impl Access<ShaderModuleHandle> for PipelineLayoutHandle {}
+impl Access<BufferHandle> for Root {}
+impl Access<BufferHandle> for DeviceHandle {}
+impl Access<BufferHandle> for BindGroupLayoutHandle {}
+impl Access<BufferHandle> for BindGroupHandle {}
+impl Access<BufferHandle> for CommandBufferHandle {}
+impl Access<BufferHandle> for ComputePassHandle {}
+impl Access<BufferHandle> for ComputePipelineHandle {}
+impl Access<BufferHandle> for RenderPassHandle {}
+impl Access<BufferHandle> for RenderPipelineHandle {}
+impl Access<TextureHandle> for Root {}
+impl Access<TextureHandle> for DeviceHandle {}
+impl Access<TextureHandle> for BufferHandle {}
+impl Access<TextureViewHandle> for Root {}
+impl Access<TextureViewHandle> for DeviceHandle {}
+impl Access<TextureViewHandle> for TextureHandle {}
+impl Access<SamplerHandle> for Root {}
+impl Access<SamplerHandle> for TextureViewHandle {}
+
+thread_local! {
+    static ACTIVE_TOKEN: Cell<bool> = Cell::new(false);
+}
+
+pub struct Token<'a, T: 'a> {
+    level: PhantomData<&'a T>,
+    is_root: bool,
+}
+
+impl<'a, T> Token<'a, T> {
+    fn new() -> Self {
+        Token {
+            level: PhantomData,
+            is_root: false,
+        }
+    }
+}
+
+impl Token<'static, Root> {
+    pub fn root() -> Self {
+        ACTIVE_TOKEN.with(|active| {
+            assert!(!active.replace(true));
+        });
+
+        Token {
+            level: PhantomData,
+            is_root: true,
+        }
+    }
+}
+
+impl<'a, T> Drop for Token<'a, T> {
+    fn drop(&mut self) {
+        if self.is_root {
+            ACTIVE_TOKEN.with(|active| {
+                assert!(active.replace(false));
+            });
+        }
+    }
+}
+
 
 #[derive(Debug)]
 pub struct Registry<T, I: TypedId> {
     #[cfg(feature = "local")]
-    identity: Mutex<IdentityManager<I>>,
+    pub identity: Mutex<IdentityManager<I>>,
     data: RwLock<Storage<T, I>>,
 }
 
@@ -135,27 +247,16 @@ impl<T, I: TypedId> Default for Registry<T, I> {
             identity: Mutex::new(IdentityManager::default()),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
-                _phantom: std::marker::PhantomData,
+                _phantom: PhantomData,
             }),
         }
     }
 }
 
-impl<T, I: TypedId> ops::Deref for Registry<T, I> {
-    type Target = RwLock<Storage<T, I>>;
-    fn deref(&self) -> &Self::Target {
-        &self.data
-    }
-}
-
-impl<T, I: TypedId> ops::DerefMut for Registry<T, I> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.data
-    }
-}
-
 impl<T, I: TypedId + Copy> Registry<T, I> {
-    pub fn register(&self, id: I, value: T) {
+    pub fn register<A: Access<T>>(
+        &self, id: I, value: T, _token: &mut Token<A>
+    ) {
         let old = self
             .data
             .write()
@@ -165,19 +266,34 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     }
 
     #[cfg(feature = "local")]
-    pub fn register_local(&self, value: T) -> I {
+    pub fn register_local<A: Access<T>>(
+        &self, value: T, token: &mut Token<A>
+    ) -> I {
         let id = self.identity.lock().alloc();
-        self.register(id, value);
+        self.register(id, value, token);
         id
     }
 
-    pub fn unregister(&self, id: I) -> T {
-        let (value, epoch) = self.data.write().map.remove(id.index() as usize).unwrap();
-        assert_eq!(epoch, id.epoch());
+    pub fn unregister<A: Access<T>>(
+        &self, id: I, _token: &mut Token<A>
+    ) -> (T, Token<T>) {
+        let value = self.data.write().remove(id);
         //Note: careful about the order here!
         #[cfg(feature = "local")]
         self.identity.lock().free(id);
-        value
+        (value, Token::new())
+    }
+
+    pub fn read<A: Access<T>>(
+        &self, _token: &mut Token<A>
+    ) -> (RwLockReadGuard<Storage<T, I>>, Token<T>) {
+        (self.data.read(), Token::new())
+    }
+
+    pub fn write<A: Access<T>>(
+        &self, _token: &mut Token<A>
+    ) -> (RwLockWriteGuard<Storage<T, I>>, Token<T>) {
+        (self.data.write(), Token::new())
     }
 }
 
@@ -185,19 +301,18 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
 pub struct Hub {
     #[cfg(not(feature = "gfx-backend-gl"))]
     pub instances: Arc<Registry<InstanceHandle, InstanceId>>,
-
     pub surfaces: Arc<Registry<SurfaceHandle, SurfaceId>>,
     pub adapters: Arc<Registry<AdapterHandle, AdapterId>>,
     pub devices: Arc<Registry<DeviceHandle, DeviceId>>,
     pub pipeline_layouts: Arc<Registry<PipelineLayoutHandle, PipelineLayoutId>>,
+    pub shader_modules: Arc<Registry<ShaderModuleHandle, ShaderModuleId>>,
     pub bind_group_layouts: Arc<Registry<BindGroupLayoutHandle, BindGroupLayoutId>>,
     pub bind_groups: Arc<Registry<BindGroupHandle, BindGroupId>>,
-    pub shader_modules: Arc<Registry<ShaderModuleHandle, ShaderModuleId>>,
     pub command_buffers: Arc<Registry<CommandBufferHandle, CommandBufferId>>,
-    pub render_pipelines: Arc<Registry<RenderPipelineHandle, RenderPipelineId>>,
-    pub compute_pipelines: Arc<Registry<ComputePipelineHandle, ComputePipelineId>>,
     pub render_passes: Arc<Registry<RenderPassHandle, RenderPassId>>,
+    pub render_pipelines: Arc<Registry<RenderPipelineHandle, RenderPipelineId>>,
     pub compute_passes: Arc<Registry<ComputePassHandle, ComputePassId>>,
+    pub compute_pipelines: Arc<Registry<ComputePipelineHandle, ComputePipelineId>>,
     pub buffers: Arc<Registry<BufferHandle, BufferId>>,
     pub textures: Arc<Registry<TextureHandle, TextureId>>,
     pub texture_views: Arc<Registry<TextureViewHandle, TextureViewId>>,
