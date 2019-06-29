@@ -201,10 +201,23 @@ pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -
     };
 
     let (mut low, mut high, mut other) = (None, None, None);
+    // On Windows > 1803, dx12 enumerate_adapters returns the adapters in order from highest to
+    // lowest performance. Therefore, the first found adapter in each category is selected.
+    //
+    // TODO: move power/performance policy querying into gfx, which has more context into
+    // performance policy than wgpu
     for adapter in adapters {
         match adapter.info.device_type {
-            hal::adapter::DeviceType::IntegratedGpu => low = Some(adapter),
-            hal::adapter::DeviceType::DiscreteGpu => high = Some(adapter),
+            hal::adapter::DeviceType::IntegratedGpu => low = low.or(Some(adapter)),
+            hal::adapter::DeviceType::DiscreteGpu => {
+                high = match desc.power_preference {
+                    // If `LowPower`, prefer lowest power `DiscreteGPU`
+                    PowerPreference::LowPower => Some(adapter),
+                    PowerPreference::HighPerformance | PowerPreference::Default => {
+                        high.or(Some(adapter))
+                    }
+                }
+            }
             _ => other = Some(adapter),
         }
     }
