@@ -200,35 +200,40 @@ pub fn instance_get_adapter(instance_id: InstanceId, desc: &AdapterDescriptor) -
         surface.raw.enumerate_adapters()
     };
 
-    let (mut low, mut high, mut other) = (None, None, None);
+    let (mut integrated_first, mut discrete_first, mut discrete_last, mut alternative) =
+        (None, None, None, None);
+        
     // On Windows > 1803, dx12 enumerate_adapters returns the adapters in order from highest to
     // lowest performance. Therefore, the first found adapter in each category is selected.
     //
     // TODO: move power/performance policy querying into gfx, which has more context into
     // performance policy than wgpu
-    for adapter in adapters {
+    for (i, adapter) in adapters.iter().enumerate() {
         match adapter.info.device_type {
-            hal::adapter::DeviceType::IntegratedGpu => low = low.or(Some(adapter)),
-            hal::adapter::DeviceType::DiscreteGpu => {
-                high = match desc.power_preference {
-                    // If `LowPower`, prefer lowest power `DiscreteGPU`
-                    PowerPreference::LowPower => Some(adapter),
-                    PowerPreference::HighPerformance | PowerPreference::Default => {
-                        high.or(Some(adapter))
-                    }
-                }
+            hal::adapter::DeviceType::IntegratedGpu => {
+                integrated_first = integrated_first.or(Some(i));
             }
-            _ => other = Some(adapter),
+            hal::adapter::DeviceType::DiscreteGpu => {
+                discrete_first = discrete_first.or(Some(i));
+                discrete_last = Some(i);
+            }
+            _ => alternative = Some(i),
         }
     }
 
-    let some = match desc.power_preference {
-        PowerPreference::LowPower => low.or(high),
-        PowerPreference::HighPerformance | PowerPreference::Default => high.or(low),
+    let preferred_gpu = match desc.power_preference {
+        // If `LowPower`, prefer lowest power `DiscreteGPU`
+        PowerPreference::LowPower => integrated_first.or(discrete_last),
+        PowerPreference::HighPerformance | PowerPreference::Default => {
+            discrete_first.or(integrated_first)
+        }
     };
-    some
-        .or(other)
-        .expect("No adapters found. Please enable the feature for one of the graphics backends: vulkan, metal, dx12, dx11, gl")
+
+    let selected = preferred_gpu
+        .or(alternative)
+        .expect("No adapters found. Please enable the feature for one of the graphics backends: vulkan, metal, dx12, dx11, gl");
+
+    adapters.into_iter().nth(selected).unwrap()
 }
 
 #[cfg(feature = "local")]
