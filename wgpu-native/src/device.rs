@@ -1734,6 +1734,10 @@ pub fn device_create_swap_chain(
     );
     //TODO: check for supported
     config.composite_alpha = hal::window::CompositeAlpha::OPAQUE;
+    config.present_mode = match desc.present_mode {
+        swap_chain::PresentMode::NoVsync => hal::PresentMode::Immediate,
+        swap_chain::PresentMode::Vsync => hal::PresentMode::Fifo,
+    };
 
     if let Some(formats) = formats {
         assert!(

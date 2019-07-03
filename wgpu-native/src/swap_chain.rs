@@ -78,12 +78,20 @@ pub struct SwapChain<B: hal::Backend> {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub enum PresentMode {
+    NoVsync = 0,
+    Vsync = 1,
+}
+
+#[repr(C)]
 #[derive(Clone, Debug)]
 pub struct SwapChainDescriptor {
     pub usage: resource::TextureUsage,
     pub format: resource::TextureFormat,
     pub width: u32,
     pub height: u32,
+    pub present_mode: PresentMode,
 }
 
 impl SwapChainDescriptor {
