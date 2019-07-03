@@ -113,6 +113,7 @@ pub fn run<E: Example>(title: &str) {
         format: wgpu::TextureFormat::Bgra8Unorm,
         width: size.width.round() as u32,
         height: size.height.round() as u32,
+        present_mode: wgpu::PresentMode::Vsync,
     };
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 

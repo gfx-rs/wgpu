@@ -110,6 +110,7 @@ fn main() {
             format: wgpu::TextureFormat::Bgra8Unorm,
             width: size.width.round() as u32,
             height: size.height.round() as u32,
+            present_mode: wgpu::PresentMode::Vsync,
         },
     );
     let mut running = true;
