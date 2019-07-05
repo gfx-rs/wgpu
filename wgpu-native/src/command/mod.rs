@@ -18,7 +18,7 @@ use crate::{
         RenderPassContext,
         RenderPassKey,
     },
-    hub::{Storage, HUB},
+    hub::{HUB, Storage, Token},
     resource::TexturePlacement,
     swap_chain::{SwapChainLink, SwapImageEpoch},
     track::{Stitch, TrackerSet},
@@ -163,8 +163,10 @@ pub struct CommandEncoderDescriptor {
 pub extern "C" fn wgpu_command_encoder_finish(
     command_encoder_id: CommandEncoderId,
 ) -> CommandBufferId {
+    let mut token = Token::root();
     //TODO: actually close the last recorded command buffer
-    HUB.command_buffers.write()[command_encoder_id].is_recording = false; //TODO: check for the old value
+    let (mut comb_guard, _) = HUB.command_buffers.write(&mut token);
+    comb_guard[command_encoder_id].is_recording = false; //TODO: check for the old value
     command_encoder_id
 }
 
@@ -172,12 +174,16 @@ pub fn command_encoder_begin_render_pass(
     command_encoder_id: CommandEncoderId,
     desc: &RenderPassDescriptor,
 ) -> RenderPass<Backend> {
-    let device_guard = HUB.devices.read();
-    let mut cmb_guard = HUB.command_buffers.write();
+    let mut token = Token::root();
+    let (adapter_guard, mut token) = HUB.adapters.read(&mut token);
+    let (device_guard, mut token) = HUB.devices.read(&mut token);
+    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
     let device = &device_guard[cmb.device_id.value];
-    let texture_guard = HUB.textures.read();
-    let view_guard = HUB.texture_views.read();
+
+    let (_, mut token) = HUB.buffers.read(&mut token); //skip token
+    let (texture_guard, mut token) = HUB.textures.read(&mut token);
+    let (view_guard, _) = HUB.texture_views.read(&mut token);
 
     let mut current_comb = device.com_allocator.extend(cmb);
     unsafe {
@@ -189,7 +195,7 @@ pub fn command_encoder_begin_render_pass(
     let mut extent = None;
     let mut barriers = Vec::new();
 
-    let limits = HUB.adapters.read()[device.adapter_id].physical_device.limits();
+    let limits = adapter_guard[device.adapter_id].physical_device.limits();
     let samples_count_limit = limits.framebuffer_color_samples_count;
 
     let color_attachments =
@@ -566,13 +572,14 @@ pub extern "C" fn wgpu_command_encoder_begin_render_pass(
     desc: &RenderPassDescriptor,
 ) -> RenderPassId {
     let pass = command_encoder_begin_render_pass(command_encoder_id, desc);
-    HUB.render_passes.register_local(pass)
+    HUB.render_passes.register_local(pass, &mut Token::root())
 }
 
 pub fn command_encoder_begin_compute_pass(
     command_encoder_id: CommandEncoderId,
 ) -> ComputePass<Backend> {
-    let mut cmb_guard = HUB.command_buffers.write();
+    let mut token = Token::root();
+    let (mut cmb_guard, _) = HUB.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
 
     let raw = cmb.raw.pop().unwrap();
@@ -591,5 +598,5 @@ pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
     command_encoder_id: CommandEncoderId,
 ) -> ComputePassId {
     let pass = command_encoder_begin_compute_pass(command_encoder_id);
-    HUB.compute_passes.register_local(pass)
+    HUB.compute_passes.register_local(pass, &mut Token::root())
 }

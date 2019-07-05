@@ -20,22 +20,23 @@ enum ControlFlow {
 }
 
 fn process(message: GlobalMessage) -> ControlFlow {
+    let mut token = &mut wgn::Token::root();
     match message {
         GlobalMessage::Instance(msg) => match msg {
             InstanceMessage::Create(instance_id) => {
                 let instance = wgn::create_instance();
-                wgn::HUB.instances.register(instance_id, instance);
+                wgn::HUB.instances.register(instance_id, instance, &mut token);
             }
             InstanceMessage::InstanceGetAdapter(instance_id, ref desc, id) => {
-                let adapter = wgn::instance_get_adapter(instance_id, desc);
-                wgn::HUB.adapters.register(id, adapter);
+                let adapter = wgn::instance_get_adapter(instance_id, desc, &mut token);
+                wgn::HUB.adapters.register(id, adapter, &mut token);
             }
             InstanceMessage::AdapterCreateDevice(adapter_id, ref desc, id) => {
-                let device = wgn::adapter_create_device(adapter_id, desc);
-                wgn::HUB.devices.register(id, device);
+                let device = wgn::adapter_create_device(adapter_id, desc, &mut token);
+                wgn::HUB.devices.register(id, device, &mut token);
             }
             InstanceMessage::Destroy(instance_id) => {
-                wgn::HUB.instances.unregister(instance_id);
+                wgn::HUB.instances.unregister(instance_id, &mut token);
             }
         },
         GlobalMessage::Terminate => return ControlFlow::Terminate,

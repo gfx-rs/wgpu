@@ -1,7 +1,7 @@
 use crate::{
     conv,
     device::{all_buffer_stages, all_image_stages},
-    hub::HUB,
+    hub::{HUB, Token},
     resource::TexturePlacement,
     swap_chain::SwapChainLink,
     BufferAddress,
@@ -73,9 +73,10 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     dst_offset: BufferAddress,
     size: BufferAddress,
 ) {
-    let mut cmb_guard = HUB.command_buffers.write();
+    let mut token = Token::root();
+    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_buffer_id];
-    let buffer_guard = HUB.buffers.read();
+    let (buffer_guard, _) = HUB.buffers.read(&mut token);
     // we can't hold both src_pending and dst_pending in scope because they
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
@@ -125,10 +126,11 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
-    let mut cmb_guard = HUB.command_buffers.write();
+    let mut token = Token::root();
+    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_buffer_id];
-    let buffer_guard = HUB.buffers.read();
-    let texture_guard = HUB.textures.read();
+    let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
+    let (texture_guard, _) = HUB.textures.read(&mut token);
     let aspects = texture_guard[destination.texture].full_range.aspects;
 
     let (src_buffer, src_pending) = cmb
@@ -202,10 +204,11 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
     destination: &BufferCopyView,
     copy_size: Extent3d,
 ) {
-    let mut cmb_guard = HUB.command_buffers.write();
+    let mut token = Token::root();
+    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_buffer_id];
-    let buffer_guard = HUB.buffers.read();
-    let texture_guard = HUB.textures.read();
+    let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
+    let (texture_guard, _) = HUB.textures.read(&mut token);
     let aspects = texture_guard[source.texture].full_range.aspects;
 
     let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
@@ -278,9 +281,11 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
-    let mut cmb_guard = HUB.command_buffers.write();
+    let mut token = Token::root();
+    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_buffer_id];
-    let texture_guard = HUB.textures.read();
+    let (_, mut token) = HUB.buffers.read(&mut token); // skip token
+    let (texture_guard, _) = HUB.textures.read(&mut token);
     // we can't hold both src_pending and dst_pending in scope because they
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
