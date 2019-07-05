@@ -113,7 +113,8 @@ impl Light {
             near: self.depth.start,
             far: self.depth.end,
         };
-        let mx_view_proj = cgmath::Matrix4::from(projection.to_perspective()) * mx_view;
+        let mx_correction = framework::opengl_to_wgpu_matrix();
+        let mx_view_proj = mx_correction * cgmath::Matrix4::from(projection.to_perspective()) * mx_view;
         LightRaw {
             proj: *mx_view_proj.as_ref(),
             pos: [self.pos.x, self.pos.y, self.pos.z, 1.0],

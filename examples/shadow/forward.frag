@@ -39,7 +39,8 @@ void main() {
         // project into the light space
         vec4 light_local = light.proj * v_Position;
         // compute texture coordinates for shadow lookup
-        light_local.xyw = (light_local.xyz/light_local.w + 1.0) / 2.0;
+        light_local.xy = (light_local.xy/light_local.w + 1.0) / 2.0;
+        light_local.w = light_local.z / light_local.w;
         light_local.z = i;
         // do the lookup, using HW PCF and comparison
         float shadow = texture(sampler2DArrayShadow(t_Shadow, s_Shadow), light_local);
