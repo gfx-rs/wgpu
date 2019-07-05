@@ -62,9 +62,10 @@ impl Example {
         let mx_view = cgmath::Matrix4::look_at(
             cgmath::Point3::new(0f32, 0.0, 10.0),
             cgmath::Point3::new(0f32, 50.0, 0.0),
-            -cgmath::Vector3::unit_z(),
+            cgmath::Vector3::unit_z(),
         );
-        mx_projection * mx_view
+        let mx_correction = framework::opengl_to_wgpu_matrix();
+        mx_correction * mx_projection * mx_view
     }
 
     fn generate_mipmaps(
@@ -110,7 +111,7 @@ impl Example {
                 entry_point: "main",
             }),
             rasterization_state: wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Cw,
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::None,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
@@ -337,7 +338,7 @@ impl framework::Example for Example {
                 entry_point: "main",
             }),
             rasterization_state: wgpu::RasterizationStateDescriptor {
-                front_face: wgpu::FrontFace::Cw,
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::Back,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,

@@ -30,6 +30,14 @@ pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u8> {
     spv
 }
 
+pub fn opengl_to_wgpu_matrix() -> cgmath::Matrix4<f32> {
+    // converts from -1,1 Z to 0,1 Z and flips Y
+    cgmath::Matrix4::new(1.0, 0.0, 0.0, 0.0,
+                         0.0, -1.0, 0.0, 0.0,
+                         0.0, 0.0, 0.5, 0.0,
+                         0.0, 0.0, 0.5, 1.0)
+}
+
 pub trait Example {
     fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self;
     fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device);
