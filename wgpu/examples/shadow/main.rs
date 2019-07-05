@@ -106,7 +106,7 @@ impl Light {
     fn to_raw(&self) -> LightRaw {
         use cgmath::{Deg, EuclideanSpace, Matrix4, PerspectiveFov, Point3, Vector3};
 
-        let mx_view = Matrix4::look_at(self.pos, Point3::origin(), -Vector3::unit_z());
+        let mx_view = Matrix4::look_at(self.pos, Point3::origin(), Vector3::unit_z());
         let projection = PerspectiveFov {
             fovy: Deg(self.fov).into(),
             aspect: 1.0,
@@ -172,9 +172,10 @@ impl Example {
         let mx_view = cgmath::Matrix4::look_at(
             cgmath::Point3::new(3.0f32, -10.0, 6.0),
             cgmath::Point3::new(0f32, 0.0, 0.0),
-            -cgmath::Vector3::unit_z(),
+            cgmath::Vector3::unit_z(),
         );
-        mx_projection * mx_view
+        let mx_correction = framework::opengl_to_wgpu_matrix();
+        mx_correction * mx_projection * mx_view
     }
 }
 
@@ -450,7 +451,7 @@ impl framework::Example for Example {
                     entry_point: "main",
                 }),
                 rasterization_state: wgpu::RasterizationStateDescriptor {
-                    front_face: wgpu::FrontFace::Cw,
+                    front_face: wgpu::FrontFace::Ccw,
                     cull_mode: wgpu::CullMode::Back,
                     depth_bias: 2, // corresponds to bilinear filtering
                     depth_bias_slope_scale: 2.0,
@@ -573,7 +574,7 @@ impl framework::Example for Example {
                     entry_point: "main",
                 }),
                 rasterization_state: wgpu::RasterizationStateDescriptor {
-                    front_face: wgpu::FrontFace::Cw,
+                    front_face: wgpu::FrontFace::Ccw,
                     cull_mode: wgpu::CullMode::Back,
                     depth_bias: 0,
                     depth_bias_slope_scale: 0.0,
