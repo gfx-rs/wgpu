@@ -40,6 +40,7 @@ impl SwapChainLink<Mutex<SwapImageEpoch>> {
     }
 }
 
+#[derive(Debug)]
 pub struct Surface<B: hal::Backend> {
     pub(crate) raw: B::Surface,
     pub(crate) swap_chain: Option<SwapChain<B>>,
@@ -54,6 +55,7 @@ impl<B: hal::Backend> Surface<B> {
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct Frame<B: hal::Backend> {
     pub texture_id: Stored<TextureId>,
     pub view_id: Stored<TextureViewId>,
@@ -66,6 +68,7 @@ pub(crate) struct Frame<B: hal::Backend> {
 }
 
 //TODO: does it need a ref-counted lifetime?
+#[derive(Debug)]
 pub struct SwapChain<B: hal::Backend> {
     pub(crate) raw: B::Swapchain,
     pub(crate) device_id: Stored<DeviceId>,

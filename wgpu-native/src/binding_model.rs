@@ -108,6 +108,7 @@ pub struct BindGroupDescriptor {
     pub bindings_length: usize,
 }
 
+#[derive(Debug)]
 pub struct BindGroup<B: hal::Backend> {
     pub(crate) raw: DescriptorSet<B>,
     pub(crate) device_id: Stored<DeviceId>,

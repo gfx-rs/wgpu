@@ -181,7 +181,7 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Hub {
     #[cfg(not(feature = "gfx-backend-gl"))]
     pub instances: Arc<Registry<InstanceHandle, InstanceId>>,

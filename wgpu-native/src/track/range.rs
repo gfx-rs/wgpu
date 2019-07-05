@@ -190,6 +190,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
 
 
 /// A custom iterator that goes through two `RangedStates` and process a merge.
+#[derive(Debug)]
 pub struct Merge<'a, I, T> {
     base: I,
     sa: Peekable<Iter<'a, (Range<I>, T)>>,

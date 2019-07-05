@@ -93,6 +93,7 @@ pub struct RenderPassDescriptor {
     pub depth_stencil_attachment: *const RenderPassDepthStencilAttachmentDescriptor<TextureViewId>,
 }
 
+#[derive(Debug)]
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
     is_recording: bool,
