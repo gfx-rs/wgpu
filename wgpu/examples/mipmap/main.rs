@@ -64,7 +64,7 @@ impl Example {
             cgmath::Point3::new(0f32, 50.0, 0.0),
             cgmath::Vector3::unit_z(),
         );
-        let mx_correction = framework::opengl_to_wgpu_matrix();
+        let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
         mx_correction * mx_projection * mx_view
     }
 
