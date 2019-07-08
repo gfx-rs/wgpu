@@ -1,5 +1,13 @@
 use log::info;
 
+#[cfg_attr(rustfmt, rustfmt_skip)]
+pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
+    1.0, 0.0, 0.0, 0.0,
+    0.0, -1.0, 0.0, 0.0,
+    0.0, 0.0, 0.5, 0.0,
+    0.0, 0.0, 0.5, 1.0,
+);
+
 #[allow(dead_code)]
 pub fn cast_slice<T>(data: &[T]) -> &[u8] {
     use std::mem::size_of;
@@ -28,14 +36,6 @@ pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u8> {
     let mut spv = Vec::new();
     output.read_to_end(&mut spv).unwrap();
     spv
-}
-
-pub fn opengl_to_wgpu_matrix() -> cgmath::Matrix4<f32> {
-    // converts from -1,1 Z to 0,1 Z and flips Y
-    cgmath::Matrix4::new(1.0, 0.0, 0.0, 0.0,
-                         0.0, -1.0, 0.0, 0.0,
-                         0.0, 0.0, 0.5, 0.0,
-                         0.0, 0.0, 0.5, 1.0)
 }
 
 pub trait Example {

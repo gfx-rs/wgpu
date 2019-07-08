@@ -113,7 +113,7 @@ impl Light {
             near: self.depth.start,
             far: self.depth.end,
         };
-        let mx_correction = framework::opengl_to_wgpu_matrix();
+        let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
         let mx_view_proj = mx_correction * cgmath::Matrix4::from(projection.to_perspective()) * mx_view;
         LightRaw {
             proj: *mx_view_proj.as_ref(),
@@ -175,7 +175,7 @@ impl Example {
             cgmath::Point3::new(0f32, 0.0, 0.0),
             cgmath::Vector3::unit_z(),
         );
-        let mx_correction = framework::opengl_to_wgpu_matrix();
+        let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
         mx_correction * mx_projection * mx_view
     }
 }
