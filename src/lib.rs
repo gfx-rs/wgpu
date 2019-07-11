@@ -1169,6 +1169,13 @@ impl<'a> RenderPass<'a> {
         wgn::wgpu_render_pass_set_scissor_rect(self.id, x, y, w, h)
     }
 
+    /// Sets the stencil reference.
+    /// 
+    /// Subsequent stencil tests will test against this value.
+    pub fn set_stencil_reference(&mut self, reference: u32) {
+        wgn::wgpu_render_pass_set_stencil_reference(self.id, reference)
+    }
+
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
