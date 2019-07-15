@@ -377,6 +377,34 @@ pub extern "C" fn wgpu_render_pass_draw(
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_render_pass_draw_indirect(
+    pass_id: RenderPassId,
+    indirect_buffer_id: BufferId,
+    indirect_offset: BufferAddress,
+) {
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
+    let (buffer_guard, _) = HUB.buffers.read(&mut token);
+    let pass = &mut pass_guard[pass_id];
+    pass.is_ready().unwrap();
+
+    let buffer = pass
+        .trackers
+        .buffers
+        .use_extend(&*buffer_guard, indirect_buffer_id, (), BufferUsage::INDIRECT)
+        .unwrap();
+
+    unsafe {
+        pass.raw.draw_indirect(
+            &buffer.raw,
+            indirect_offset,
+            1,
+            0
+        );
+    }
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_render_pass_draw_indexed(
     pass_id: RenderPassId,
     index_count: u32,
@@ -399,6 +427,34 @@ pub extern "C" fn wgpu_render_pass_draw_indexed(
             first_index .. first_index + index_count,
             base_vertex,
             first_instance .. first_instance + instance_count,
+        );
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_draw_indexed_indirect(
+    pass_id: RenderPassId,
+    indirect_buffer_id: BufferId,
+    indirect_offset: BufferAddress,
+) {
+    let mut token = Token::root();
+    let (mut pass_guard, _) = HUB.render_passes.write(&mut token);
+    let (buffer_guard, _) = HUB.buffers.read(&mut token);
+    let pass = &mut pass_guard[pass_id];
+    pass.is_ready().unwrap();
+
+    let buffer = pass
+        .trackers
+        .buffers
+        .use_extend(&*buffer_guard, indirect_buffer_id, (), BufferUsage::INDIRECT)
+        .unwrap();
+
+    unsafe {
+        pass.raw.draw_indexed_indirect(
+            &buffer.raw,
+            indirect_offset,
+            1,
+            0
         );
     }
 }

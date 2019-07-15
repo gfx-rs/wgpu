@@ -29,6 +29,7 @@ bitflags! {
         const VERTEX = 32;
         const UNIFORM = 64;
         const STORAGE = 128;
+        const INDIRECT = 256;
         const NONE = 0;
         const WRITE_ALL = 2 + 8 + 128;
     }
