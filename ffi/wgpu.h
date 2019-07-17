@@ -1,6 +1,6 @@
 #define WGPU_LOCAL
 
-/* Generated with cbindgen:0.8.7 */
+/* Generated with cbindgen:0.9.0 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -109,6 +109,11 @@ typedef enum {
   WGPUPowerPreference_LowPower = 1,
   WGPUPowerPreference_HighPerformance = 2,
 } WGPUPowerPreference;
+
+typedef enum {
+  WGPUPresentMode_NoVsync = 0,
+  WGPUPresentMode_Vsync = 1,
+} WGPUPresentMode;
 
 typedef enum {
   WGPUPrimitiveTopology_PointList = 0,
@@ -577,6 +582,7 @@ typedef struct {
   WGPUTextureFormat format;
   uint32_t width;
   uint32_t height;
+  WGPUPresentMode present_mode;
 } WGPUSwapChainDescriptor;
 
 typedef struct {
