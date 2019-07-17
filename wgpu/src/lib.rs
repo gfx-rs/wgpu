@@ -59,6 +59,7 @@ pub use wgn::{
     TextureViewDimension,
     VertexAttributeDescriptor,
     VertexFormat,
+    PresentMode,
 };
 
 #[cfg(feature = "gl")]
@@ -503,6 +504,7 @@ impl Instance {
         }
     }
 
+    #[cfg(not(feature = "gl"))]
     pub fn create_surface_from_xlib(
         &self,
         display: *mut *const std::ffi::c_void,
@@ -513,12 +515,14 @@ impl Instance {
         }
     }
 
+    #[cfg(not(feature = "gl"))]
     pub fn create_surface_from_macos_layer(&self, layer: *mut std::ffi::c_void) -> Surface {
         Surface {
             id: wgn::wgpu_instance_create_surface_from_macos_layer(self.id, layer),
         }
     }
 
+    #[cfg(not(feature = "gl"))]
     pub fn create_surface_from_windows_hwnd(
         &self,
         hinstance: *mut std::ffi::c_void,
