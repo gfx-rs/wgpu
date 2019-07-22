@@ -109,18 +109,21 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
         &*texture_guard,
     );
 
-    if let Some((pipeline_layout_id, follow_up)) =
+    if let Some((pipeline_layout_id, follow_up_sets, follow_up_offsets)) =
         pass.binder
             .provide_entry(index as usize, bind_group_id, bind_group, offsets)
     {
-        let bind_groups =
-            iter::once(bind_group.raw.raw()).chain(follow_up.map(|bg_id| bind_group_guard[bg_id].raw.raw()));
+        let bind_groups = iter::once(bind_group.raw.raw())
+            .chain(follow_up_sets.map(|bg_id| bind_group_guard[bg_id].raw.raw()));
         unsafe {
             pass.raw.bind_compute_descriptor_sets(
                 &pipeline_layout_guard[pipeline_layout_id].raw,
                 index as usize,
                 bind_groups,
-                offsets.iter().map(|&off| off as hal::command::DescriptorSetOffset),
+                offsets
+                    .iter()
+                    .chain(follow_up_offsets)
+                    .map(|&off| off as hal::command::DescriptorSetOffset),
             );
         }
     };
