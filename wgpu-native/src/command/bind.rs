@@ -46,6 +46,7 @@ where
 pub struct BindGroupEntry {
     expected_layout_id: Option<BindGroupLayoutId>,
     provided: Option<BindGroupPair>,
+    dynamic_offsets: Vec<BufferAddress>,
 }
 
 impl BindGroupEntry {
@@ -60,7 +61,7 @@ impl BindGroupEntry {
                 layout_id,
                 ref group_id,
             }) => {
-                if group_id.value == bind_group_id && offsets.is_empty() {
+                if group_id.value == bind_group_id && offsets == self.dynamic_offsets.as_slice() {
                     assert_eq!(layout_id, bind_group.layout_id);
                     return Provision::Unchanged;
                 }
@@ -76,6 +77,9 @@ impl BindGroupEntry {
                 ref_count: bind_group.life_guard.ref_count.clone(),
             },
         });
+        //TODO: validate the count of dynamic offsets to match the layout
+        self.dynamic_offsets.clear();
+        self.dynamic_offsets.copy_from_slice(offsets);
 
         Provision::Changed {
             was_compatible,
@@ -144,7 +148,11 @@ impl Binder {
         bind_group_id: BindGroupId,
         bind_group: &BindGroupHandle,
         offsets: &[BufferAddress],
-    ) -> Option<(PipelineLayoutId, impl 'a + Iterator<Item = BindGroupId>)> {
+    ) -> Option<(
+        PipelineLayoutId,
+        impl 'a + Iterator<Item = BindGroupId>,
+        impl 'a + Iterator<Item = &'a BufferAddress>,
+    )> {
         trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         match self.entries[index].provide(bind_group_id, bind_group, offsets) {
             Provision::Unchanged => None,
@@ -171,6 +179,9 @@ impl Binder {
                                     .iter()
                                     .map(|entry| entry.actual_value()),
                             },
+                            self.entries[index + 1 ..]
+                                .iter()
+                                .flat_map(|entry| entry.dynamic_offsets.as_slice())
                         )
                     })
                 } else {
