@@ -40,7 +40,6 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-pub use hal::memory::Pod as Pod;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -48,6 +47,7 @@ use serde::{Deserialize, Serialize};
 pub use back::glutin;
 
 use std::{
+    mem,
     os::raw::c_char,
     ptr,
     sync::atomic::{AtomicUsize, Ordering},
@@ -59,6 +59,36 @@ pub(crate) type Epoch = u32;
 
 pub type BufferAddress = u64;
 pub type RawString = *const c_char;
+
+/// A trait for plain-old-data types.
+///
+/// A POD type does not have invalid bit patterns and can be safely
+/// created from arbitrary bit pattern.
+/// The `Pod` trait is implemented for standard integer and floating point numbers as well as
+/// common arrays of them (for example `[f32; 2]`).
+pub unsafe trait Pod: Copy {}
+
+macro_rules! impl_pod {
+    ( ty = $($ty:ty)* ) => { $( unsafe impl Pod for $ty {} )* };
+    ( ar = $($tt:expr)* ) => { $( unsafe impl<T: Pod> Pod for [T; $tt] {} )* };
+}
+
+impl_pod! { ty = isize usize i8 u8 i16 u16 i32 u32 i64 u64 f32 f64 }
+impl_pod! { ar =
+    0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32
+}
+
+unsafe impl<T: Pod, U: Pod> Pod for (T, U) {}
+
+/// Cast a slice from one POD type to another.
+pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
+    use std::slice;
+
+    let raw_len = mem::size_of::<A>().wrapping_mul(slice.len());
+    let len = raw_len / mem::size_of::<B>();
+    assert_eq!(raw_len, mem::size_of::<B>().wrapping_mul(len));
+    unsafe { slice::from_raw_parts(slice.as_ptr() as *const B, len) }
+}
 
 //TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]
