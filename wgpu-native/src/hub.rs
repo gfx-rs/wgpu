@@ -198,8 +198,9 @@ impl Access<TextureViewHandle> for TextureHandle {}
 impl Access<SamplerHandle> for Root {}
 impl Access<SamplerHandle> for TextureViewHandle {}
 
+#[cfg(debug_assertions)]
 thread_local! {
-    static ACTIVE_TOKEN: Cell<bool> = Cell::new(false);
+    static ACTIVE_TOKEN: Cell<u8> = Cell::new(0);
 }
 
 /// A permission token to lock resource `T` or anything after it,
@@ -209,38 +210,42 @@ thread_local! {
 /// at a time, which is enforced by `ACTIVE_TOKEN`.
 pub struct Token<'a, T: 'a> {
     level: PhantomData<&'a T>,
-    is_root: bool,
 }
 
 impl<'a, T> Token<'a, T> {
     fn new() -> Self {
+        #[cfg(debug_assertions)]
+        ACTIVE_TOKEN.with(|active| {
+            let old = active.get();
+            assert_ne!(old, 0, "Root token was dropped");
+            active.set(old + 1);
+        });
         Token {
             level: PhantomData,
-            is_root: false,
         }
     }
 }
 
 impl Token<'static, Root> {
     pub fn root() -> Self {
+        #[cfg(debug_assertions)]
         ACTIVE_TOKEN.with(|active| {
-            assert!(!active.replace(true));
+            assert_eq!(0, active.replace(1), "Root token is already active");
         });
 
         Token {
             level: PhantomData,
-            is_root: true,
         }
     }
 }
 
 impl<'a, T> Drop for Token<'a, T> {
     fn drop(&mut self) {
-        if self.is_root {
-            ACTIVE_TOKEN.with(|active| {
-                assert!(active.replace(false));
-            });
-        }
+        #[cfg(debug_assertions)]
+        ACTIVE_TOKEN.with(|active| {
+            let old = active.get();
+            active.set(old - 1);
+        });
     }
 }
 

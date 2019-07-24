@@ -2000,8 +2000,10 @@ pub extern "C" fn wgpu_device_create_swap_chain(
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_poll(device_id: DeviceId, force_wait: bool) {
-    let (device_guard, mut token) = HUB.devices.read(&mut Token::root());
-    let callbacks = device_guard[device_id].maintain(force_wait, &mut token);
+    let callbacks = {
+        let (device_guard, mut token) = HUB.devices.read(&mut Token::root());
+        device_guard[device_id].maintain(force_wait, &mut token)
+    };
     Device::fire_map_callbacks(callbacks);
 }
 
