@@ -70,11 +70,14 @@ lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(wildcard wgpu-native/**/*.rs wgp
 ffi/wgpu.h: wgpu-native/cbindgen.toml $(wildcard wgpu-native/**/*.rs)
 	rustup run nightly cbindgen wgpu-native > $(FFI_DIR)/wgpu.h
 
-ffi/wgpu-remote.h:  wgpu-remote/cbindgen.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
-	rustup run nightly cbindgen wgpu-remote >$(FFI_DIR)/wgpu-remote.h
+ffi/wgpu-remote.h: wgpu-remote/cbindgen.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
+	rustup run nightly cbindgen wgpu-remote > $(FFI_DIR)/wgpu-remote.h
 
-examples-native: lib-native $(FFI_DIR)/wgpu.h examples/hello_triangle_c/main.c
-	cd examples/hello_triangle_c && $(CREATE_BUILD_DIR) && cd build && cmake .. -DBACKEND=$(FEATURE_RUST) $(GENERATOR_PLATFORM) && cmake --build .
+example-compute: lib-native $(FFI_DIR)/wgpu.h examples/compute/main.c
+	cd examples/compute && $(CREATE_BUILD_DIR) && cd build && cmake .. -DBACKEND=$(FEATURE_RUST) $(GENERATOR_PLATFORM) && cmake --build .
 
-examples-remote: lib-remote $(FFI_DIR)/wgpu-remote.h examples/hello_remote_c/main.c
-	cd examples/hello_remote_c && $(CREATE_BUILD_DIR) && cd build && cmake .. && cmake --build .
+example-triangle: lib-native $(FFI_DIR)/wgpu.h examples/triangle/main.c
+	cd examples/triangle && $(CREATE_BUILD_DIR) && cd build && cmake .. -DBACKEND=$(FEATURE_RUST) $(GENERATOR_PLATFORM) && cmake --build .
+
+example-remote: lib-remote $(FFI_DIR)/wgpu-remote.h examples/remote/main.c
+	cd examples/remote && $(CREATE_BUILD_DIR) && cd build && cmake .. && cmake --build .

@@ -14,11 +14,11 @@ if(NOT DEFINED BACKEND OR NOT "${BACKEND}" IN_LIST AVAILABLE_BACKENDS)
     message(FATAL_ERROR "BACKEND invalid or undefined, available backends: ${AVAILABLE_BACKENDS}")
 endif()
 
-project(hello_triangle)
+project(compute)
 
-set(TARGET_NAME hello_triangle)
+set(TARGET_NAME compute)
 
-add_executable(hello_triangle main.c)
+add_executable(compute main.c)
 
 if(MSVC)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_WINDOWS)

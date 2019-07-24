@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.11b)
 
-project(hello_remote)
+project(remote)
 
-set(TARGET_NAME hello_remote)
+set(TARGET_NAME remote)
 
-add_executable(hello_remote main.c)
+add_executable(remote main.c)
 
 find_package(glfw3)
 
