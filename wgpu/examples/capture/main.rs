@@ -43,9 +43,7 @@ fn main() {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8Unorm,
-        usage: wgpu::TextureUsage::STORAGE
-            | wgpu::TextureUsage::OUTPUT_ATTACHMENT
-            | wgpu::TextureUsage::TRANSFER_SRC,
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::TRANSFER_SRC,
     });
 
     // Set the background to be red
