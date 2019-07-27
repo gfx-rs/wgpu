@@ -1,4 +1,9 @@
-#include "./../../ffi/wgpu.h"
+#ifndef WGPU_H
+#define WGPU_H
+#include "wgpu.h"
+#endif
+
+#include "framework.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -26,20 +31,6 @@
 #define ATTACHMENTS_LENGTH (1)
 #define RENDER_PASS_ATTACHMENTS_LENGTH (1)
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
-
-WGPUByteArray read_file(const char *name) {
-    FILE *file = fopen(name, "rb");
-    fseek(file, 0, SEEK_END);
-    long length = ftell(file);
-    unsigned char *bytes = malloc(length);
-    fseek(file, 0, SEEK_SET);
-    fread(bytes, 1, length, file);
-    fclose(file);
-    return (WGPUByteArray){
-        .bytes = bytes,
-        .length = length,
-    };
-}
 
 int main() {
     WGPUInstanceId instance = wgpu_create_instance();

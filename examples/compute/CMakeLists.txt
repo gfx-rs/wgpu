@@ -18,7 +18,7 @@ project(compute)
 
 set(TARGET_NAME compute)
 
-add_executable(compute main.c)
+add_executable(compute main.c ../framework.c)
 
 if(MSVC)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_WINDOWS)
@@ -47,5 +47,7 @@ find_library(WGPU_LIBRARY wgpu_native
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC $ENV{GLFW3_INCLUDE_DIR})
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../ffi)
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../)
 
 target_link_libraries(${TARGET_NAME} glfw ${WGPU_LIBRARY} ${OS_LIBRARIES})

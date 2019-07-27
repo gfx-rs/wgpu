@@ -1,43 +1,22 @@
-#include "./../../ffi/wgpu.h"
+#ifndef WGPU_H
+#define WGPU_H
+#include "wgpu.h"
+#endif
+
+#include "framework.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 
 #define BINDINGS_LENGTH (1)
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
 
-WGPUByteArray read_file(const char *name) {
-    FILE *file = fopen(name, "rb");
-    fseek(file, 0, SEEK_END);
-    long length = ftell(file);
-    unsigned char *bytes = malloc(length);
-    fseek(file, 0, SEEK_SET);
-    fread(bytes, 1, length, file);
-    fclose(file);
-    return (WGPUByteArray){
-        .bytes = bytes,
-        .length = length,
-    };
-}
-
-void read_buffer_map(
-    WGPUBufferMapAsyncStatus status, 
-    const uint8_t *data, 
-    uint8_t *userdata) {
-    if (status == WGPUBufferMapAsyncStatus_Success) {
-        uint32_t *times = (uint32_t *) data;
-        printf("Times: [%d, %d, %d, %d]",
-            times[0], 
-            times[1], 
-            times[2], 
-            times[3]);
-    }
-}
-
 int main(
     int argc, 
     char *argv[]) {
 
     if (argc != 5) {
+        printf("You must pass 4 positive integers!");
         return 0;
     }
 
@@ -61,18 +40,15 @@ int main(
 
     WGPUDeviceId device = wgpu_adapter_request_device(adapter,
         &(WGPUDeviceDescriptor){
-            .extensions = {
-				.anisotropic_filtering = false,
-            },
+            .extensions = NULL
         });
 
 	uint8_t *staging_memory;
 
     WGPUBufferId staging_buffer = wgpu_device_create_buffer_mapped(device,
-        &(WGPUBufferDescriptor){
-			.size = size,
-            .usage = WGPUBufferUsage_MAP_READ | WGPUBufferUsage_TRANSFER_DST |
-                WGPUBufferUsage_TRANSFER_SRC},
+            &(WGPUBufferDescriptor){
+                .size = size, 
+				.usage = WGPUBufferUsage_MAP_READ},
             &staging_memory);
 
 	memcpy((uint32_t *) staging_memory, numbers, size);
@@ -82,8 +58,7 @@ int main(
     WGPUBufferId storage_buffer = wgpu_device_create_buffer(device,
         &(WGPUBufferDescriptor){
 			.size = size,
-            .usage = WGPUBufferUsage_STORAGE | WGPUBufferUsage_TRANSFER_DST |
-                WGPUBufferUsage_TRANSFER_SRC});
+            .usage = WGPUBufferUsage_STORAGE});
 
     WGPUBindGroupLayoutId bind_group_layout =
         wgpu_device_create_bind_group_layout(device,
@@ -91,49 +66,35 @@ int main(
                 .bindings = &(WGPUBindGroupLayoutBinding){
 					.binding = 0,
                     .visibility = WGPUShaderStage_COMPUTE,
-                    .ty = WGPUBindingType_StorageBuffer
-                },
-				.bindings_length = BINDINGS_LENGTH
-            }
-        );
+                    .ty = WGPUBindingType_StorageBuffer},
+                .bindings_length = BINDINGS_LENGTH});
 
 	WGPUBindingResource resource = {
-        .tag = WGPUBindingResource_Buffer,
+		.tag = WGPUBindingResource_Buffer,
         .buffer = (WGPUBufferBinding){
-			.buffer = storage_buffer, 
+            .buffer = storage_buffer, 
 			.size = size, 
-			.offset = 0
-		}
-	};
+			.offset = 0}};
 
     WGPUBindGroupId bind_group = wgpu_device_create_bind_group(device,
-        &(WGPUBindGroupDescriptor){
-            .layout = bind_group_layout,
-            .bindings =
-                &(WGPUBindGroupBinding){
-                    .binding = 0, 
-                    .resource = resource
-            },
-            .bindings_length = BINDINGS_LENGTH
-        }
-    );
+            &(WGPUBindGroupDescriptor){.layout = bind_group_layout,
+                .bindings = &(WGPUBindGroupBinding){
+					.binding = 0, 
+					.resource = resource},
+                .bindings_length = BINDINGS_LENGTH});
 
 	WGPUBindGroupLayoutId bind_group_layouts[BIND_GROUP_LAYOUTS_LENGTH] = {
-        bind_group_layout
-    };
+        bind_group_layout};
 
     WGPUPipelineLayoutId pipeline_layout =
-        wgpu_device_create_pipeline_layout(device,
-            &(WGPUPipelineLayoutDescriptor){
-                .bind_group_layouts = bind_group_layouts,
-                .bind_group_layouts_length = BIND_GROUP_LAYOUTS_LENGTH
-		});
+            wgpu_device_create_pipeline_layout(device,
+                &(WGPUPipelineLayoutDescriptor){
+                    .bind_group_layouts = bind_group_layouts,
+                    .bind_group_layouts_length = BIND_GROUP_LAYOUTS_LENGTH});
 
     WGPUShaderModuleId shader_module = wgpu_device_create_shader_module(device,
         &(WGPUShaderModuleDescriptor){
-            .code = read_file("./../../data/collatz.comp.spv")
-        }
-    );
+            .code = read_file("./../../data/collatz.comp.spv")});
 
     WGPUComputePipelineId compute_pipeline =
         wgpu_device_create_compute_pipeline(device,
@@ -142,15 +103,12 @@ int main(
                 .compute_stage = (WGPUPipelineStageDescriptor){
                     .module = shader_module,
 					.entry_point = "main"
-                }
-            }
-        );
+                }});
 
     WGPUCommandEncoderId encoder = wgpu_device_create_command_encoder(
         device, &(WGPUCommandEncoderDescriptor){
             .todo = 0
-        }
-    );
+        });
 
     wgpu_command_buffer_copy_buffer_to_buffer(
         encoder, staging_buffer, 0, storage_buffer, 0, size);

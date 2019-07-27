@@ -20,7 +20,20 @@ Supported platforms:
 
 ## Usage
 
-This repository contains C-language examples that link to the native library targets and perform basic rendering and computation. The prerequisites are a C compiler and GLFW 3 for running the examples.
+This repository contains C-language examples that link to the native library targets and perform basic rendering and computation. 
+
+### Prerequisites
+  - C compiler
+  - GLFW 3
+  - Rust nightly toolchain
+    ```bash
+      rustup toolchain install nightly  
+    ```
+  - [Cbindgen](https://github.com/eqrion/cbindgen)
+    ```bash
+      cargo install cbindgen 
+    ```
+
 
 ### Running an example
 The examples are located under the [examples](examples) directory. We are using a [Makefile](Makefile) for running the examples.
