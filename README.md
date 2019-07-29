@@ -51,3 +51,13 @@ Shout out to the following projects that work best with wgpu-rs:
   - [wgpu_glyph](https://github.com/hecrj/wgpu_glyph) - for your text-y rendering needs
   - [coffee](https://github.com/hecrj/coffee) - a whole 2D engine
   - [imgui-wgpu](https://github.com/unconed/imgui-wgpu-rs) - Dear ImGui interfacing
+
+## Development
+
+If you need to test local fixes to gfx-rs or other dependencies, the simplest way is to add a Cargo patch. For example, when working on DX12 backend on Windows, you can check out the "hal-0.2" branch of gfx-rs repo and add this to the end of "Cargo.toml":
+```toml
+[patch.crates-io]
+gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
+gfx-hal = { path = "../gfx/src/hal" }
+```
+If a version needs to be changed, you need to to do `cargo update -p gfx-backend-dx12`.
