@@ -34,3 +34,7 @@ env_logger = "0.6"
 glsl-to-spirv = "0.1"
 log = "0.4"
 png = "0.15"
+
+[patch.crates-io]
+#gfx-hal = { path = "../gfx/src/hal" }
+#gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
