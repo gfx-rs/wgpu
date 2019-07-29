@@ -14,11 +14,11 @@ if(NOT DEFINED BACKEND OR NOT "${BACKEND}" IN_LIST AVAILABLE_BACKENDS)
     message(FATAL_ERROR "BACKEND invalid or undefined, available backends: ${AVAILABLE_BACKENDS}")
 endif()
 
-project(hello_triangle)
+project(triangle)
 
-set(TARGET_NAME hello_triangle)
+set(TARGET_NAME triangle)
 
-add_executable(hello_triangle main.c)
+add_executable(triangle main.c ../framework.c)
 
 if(MSVC)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_WINDOWS)
@@ -47,5 +47,7 @@ find_library(WGPU_LIBRARY wgpu_native
 )
 
 target_include_directories(${TARGET_NAME} PUBLIC $ENV{GLFW3_INCLUDE_DIR})
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../../ffi)
+target_include_directories(${TARGET_NAME} PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/../)
 
 target_link_libraries(${TARGET_NAME} glfw ${WGPU_LIBRARY} ${OS_LIBRARIES})
