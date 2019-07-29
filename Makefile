@@ -10,6 +10,9 @@ BUILD_DIR:=build
 CLEAN_FFI_DIR:=
 CREATE_BUILD_DIR:=
 
+WILDCARD_WGPU_NATIVE:=$(wildcard wgpu-native/**/*.rs)
+WILDCARD_WGPU_NATIVE_AND_REMOTE:=$(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
+
 ifeq (,$(TARGET))
 	CHECK_TARGET_FLAG=
 else
@@ -43,7 +46,6 @@ else
 	endif
 endif
 
-
 .PHONY: all check test doc clear lib-native lib-remote examples-native examples-remote
 
 all: examples-native examples-remote
@@ -61,16 +63,16 @@ clear:
 	cargo clean
 	$(CLEAN_FFI_DIR)
 
-lib-native: Cargo.lock wgpu-native/Cargo.toml $(wildcard wgpu-native/**/*.rs)
+lib-native: Cargo.lock wgpu-native/Cargo.toml $(WILDCARD_WGPU_NATIVE)
 	cargo build --manifest-path wgpu-native/Cargo.toml --features "local,$(FEATURE_NATIVE)"
 
-lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
+lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
 	cargo build --manifest-path wgpu-remote/Cargo.toml --features $(FEATURE_RUST)
 
-ffi/wgpu.h: wgpu-native/cbindgen.toml $(wildcard wgpu-native/**/*.rs)
+ffi/wgpu.h: wgpu-native/cbindgen.toml $(WILDCARD_WGPU_NATIVE)
 	rustup run nightly cbindgen wgpu-native > $(FFI_DIR)/wgpu.h
 
-ffi/wgpu-remote.h: wgpu-remote/cbindgen.toml $(wildcard wgpu-native/**/*.rs wgpu-remote/**/*.rs)
+ffi/wgpu-remote.h: wgpu-remote/cbindgen.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
 	rustup run nightly cbindgen wgpu-remote > $(FFI_DIR)/wgpu-remote.h
 
 example-compute: lib-native $(FFI_DIR)/wgpu.h examples/compute/main.c
