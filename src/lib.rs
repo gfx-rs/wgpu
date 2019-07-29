@@ -1172,6 +1172,13 @@ impl<'a> RenderPass<'a> {
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
         wgn::wgpu_render_pass_set_scissor_rect(self.id, x, y, w, h)
     }
+    
+    /// Sets the viewport region.
+    ///
+    /// Subsequent draw calls will draw any fragments in this region.
+    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
+        wgn::wgpu_render_pass_set_viewport(self.id, x, y, w, h, min_depth, max_depth) 
+    }
 
     /// Sets the stencil reference.
     /// 
