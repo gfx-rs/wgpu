@@ -1,7 +1,9 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
 use arrayvec::ArrayVec;
+use zerocopy::{AsBytes, FromBytes, LayoutVerified};
 
+use std::convert::TryFrom;
 use std::ffi::CString;
 use std::ops::Range;
 use std::ptr;
@@ -37,8 +39,8 @@ pub use wgn::{
     Limits,
     LoadOp,
     Origin3d,
-    Pod,
     PowerPreference,
+    PresentMode,
     PrimitiveTopology,
     RasterizationStateDescriptor,
     RenderPassDepthStencilAttachmentDescriptor,
@@ -59,7 +61,6 @@ pub use wgn::{
     TextureViewDimension,
     VertexAttributeDescriptor,
     VertexFormat,
-    PresentMode,
 };
 
 #[cfg(feature = "gl")]
@@ -814,7 +815,7 @@ impl<T> Drop for BufferAsyncMapping<T> {
 
 struct BufferMapReadAsyncUserData<T, F>
 where
-    T: Pod,
+    T: FromBytes,
     F: FnOnce(BufferMapAsyncResult<&[T]>),
 {
     size: BufferAddress,
@@ -825,7 +826,7 @@ where
 
 struct BufferMapWriteAsyncUserData<T, F>
 where
-    T: Pod,
+    T: AsBytes + FromBytes,
     F: FnOnce(BufferMapAsyncResult<&mut [T]>),
 {
     size: BufferAddress,
@@ -837,29 +838,25 @@ where
 impl Buffer {
     pub fn map_read_async<T, F>(&self, start: BufferAddress, size: BufferAddress, callback: F)
     where
-        T: 'static + Pod,
+        T: 'static + FromBytes,
         F: FnOnce(BufferMapAsyncResult<&[T]>) + 'static,
     {
-        let type_size = std::mem::size_of::<T>() as BufferAddress;
-        assert_ne!(type_size, 0);
-        assert_eq!(size % type_size, 0);
-
         extern "C" fn buffer_map_read_callback_wrapper<T, F>(
             status: wgn::BufferMapAsyncStatus,
             data: *const u8,
             user_data: *mut u8,
         ) where
-            T: Pod,
+            T: FromBytes,
             F: FnOnce(BufferMapAsyncResult<&[T]>),
         {
             let user_data =
                 unsafe { Box::from_raw(user_data as *mut BufferMapReadAsyncUserData<T, F>) };
-            let data = unsafe {
-                slice::from_raw_parts(
-                    data as *const T,
-                    user_data.size as usize / std::mem::size_of::<T>(),
-                )
+            let data: &[u8] = unsafe {
+                slice::from_raw_parts(data as *const u8, usize::try_from(user_data.size).unwrap())
             };
+            let data = LayoutVerified::new_slice(data)
+                .expect("could not interpret bytes as &[T]")
+                .into_slice();
             if let wgn::BufferMapAsyncStatus::Success = status {
                 (user_data.callback)(Ok(BufferAsyncMapping {
                     data,
@@ -887,29 +884,25 @@ impl Buffer {
 
     pub fn map_write_async<T, F>(&self, start: BufferAddress, size: BufferAddress, callback: F)
     where
-        T: 'static + Pod,
+        T: 'static + AsBytes + FromBytes,
         F: FnOnce(BufferMapAsyncResult<&mut [T]>) + 'static,
     {
-        let type_size = std::mem::size_of::<T>() as BufferAddress;
-        assert_ne!(type_size, 0);
-        assert_eq!(size % type_size, 0);
-
         extern "C" fn buffer_map_write_callback_wrapper<T, F>(
             status: wgn::BufferMapAsyncStatus,
             data: *mut u8,
             user_data: *mut u8,
         ) where
-            T: Pod,
+            T: AsBytes + FromBytes,
             F: FnOnce(BufferMapAsyncResult<&mut [T]>),
         {
             let user_data =
                 unsafe { Box::from_raw(user_data as *mut BufferMapWriteAsyncUserData<T, F>) };
             let data = unsafe {
-                slice::from_raw_parts_mut(
-                    data as *mut T,
-                    user_data.size as usize / std::mem::size_of::<T>(),
-                )
+                slice::from_raw_parts_mut(data as *mut u8, usize::try_from(user_data.size).unwrap())
             };
+            let data = LayoutVerified::new_slice(data)
+                .expect("could not interpret bytes as &mut [T]")
+                .into_mut_slice();
             if let wgn::BufferMapAsyncStatus::Success = status {
                 (user_data.callback)(Ok(BufferAsyncMapping {
                     data,
