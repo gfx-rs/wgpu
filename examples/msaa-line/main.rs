@@ -101,7 +101,7 @@ impl Example {
 impl framework::Example for Example {
     fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
         println!("Press left/right arrow keys to change sample_count.");
-        let sample_count = 2;
+        let sample_count = 4;
 
         let vs_bytes = framework::load_glsl(include_str!("shader.vert"), framework::ShaderStage::Vertex);
         let fs_bytes = framework::load_glsl(include_str!("shader.frag"), framework::ShaderStage::Fragment);
