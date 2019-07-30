@@ -1,9 +1,12 @@
 use crate::{
     command::bind::{Binder, LayoutChange},
+    device::all_buffer_stages,
     hub::{HUB, Token},
     track::{Stitch, TrackerSet},
     BindGroupId,
     BufferAddress,
+    BufferId,
+    BufferUsage,
     CommandBuffer,
     CommandBufferId,
     ComputePassId,
@@ -155,6 +158,39 @@ pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: 
     let (mut pass_guard, _) = HUB.compute_passes.write(&mut token);
     unsafe {
         pass_guard[pass_id].raw.dispatch([x, y, z]);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_compute_pass_dispatch_indirect(
+    pass_id: ComputePassId,
+    indirect_buffer_id: BufferId,
+    indirect_offset: BufferAddress,
+) {
+    let mut token = Token::root();
+    let (buffer_guard, _) = HUB.buffers.read(&mut token);
+    let (mut pass_guard, _) = HUB.compute_passes.write(&mut token);
+    let pass = &mut pass_guard[pass_id];
+
+    let (src_buffer, src_pending) = pass
+        .trackers
+        .buffers
+        .use_replace(&*buffer_guard, indirect_buffer_id, (), BufferUsage::INDIRECT);
+
+    let barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
+        states: pending.to_states(),
+        target: &src_buffer.raw,
+        families: None,
+        range: None .. None,
+    });
+
+    unsafe {
+        pass.raw.pipeline_barrier(
+            all_buffer_stages() .. all_buffer_stages(),
+            hal::memory::Dependencies::empty(),
+            barriers,
+        );
+        pass.raw.dispatch_indirect(&src_buffer.raw, indirect_offset);
     }
 }
 
