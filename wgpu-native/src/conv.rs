@@ -34,6 +34,9 @@ pub fn map_buffer_usage(
     if usage.contains(W::STORAGE) {
         hal_usage |= U::STORAGE;
     }
+    if usage.contains(W::INDIRECT) {
+        hal_usage |= U::INDIRECT;
+    }
 
     (hal_usage, hal_memory)
 }
