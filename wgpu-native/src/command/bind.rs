@@ -79,7 +79,7 @@ impl BindGroupEntry {
         });
         //TODO: validate the count of dynamic offsets to match the layout
         self.dynamic_offsets.clear();
-        self.dynamic_offsets.copy_from_slice(offsets);
+        self.dynamic_offsets.extend_from_slice(offsets);
 
         Provision::Changed {
             was_compatible,
