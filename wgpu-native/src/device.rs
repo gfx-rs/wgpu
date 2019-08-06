@@ -1152,7 +1152,23 @@ pub fn device_create_bind_group(
                     .buffers
                     .use_extend(&*buffer_guard, bb.buffer, (), usage)
                     .unwrap();
-                let range = Some(bb.offset) .. Some(bb.offset + bb.size);
+
+                let start = bb.offset;
+                let end = bb.offset + bb.size;
+                assert!(
+                    start < buffer.size,
+                    "Start of bound buffer range {:?} does not fit in buffer size {}",
+                    start .. end,
+                    buffer.size
+                );
+                assert!(
+                    end <= buffer.size,
+                    "End of bound buffer range {:?} does not fit in buffer size {}",
+                    start .. end,
+                    buffer.size
+                );
+
+                let range = Some(start) .. Some(end);
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
             binding_model::BindingResource::Sampler(id) => {
