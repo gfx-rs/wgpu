@@ -1156,14 +1156,8 @@ pub fn device_create_bind_group(
                 let start = bb.offset;
                 let end = bb.offset + bb.size;
                 assert!(
-                    start < buffer.size,
-                    "Start of bound buffer range {:?} does not fit in buffer size {}",
-                    start .. end,
-                    buffer.size
-                );
-                assert!(
                     end <= buffer.size,
-                    "End of bound buffer range {:?} does not fit in buffer size {}",
+                    "Bound buffer range {:?} does not fit in buffer size {}",
                     start .. end,
                     buffer.size
                 );
