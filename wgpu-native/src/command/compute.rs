@@ -46,7 +46,7 @@ impl<B: hal::Backend> ComputePass<B> {
 // Common routines between render/compute
 
 #[no_mangle]
-pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandBufferId {
+pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) {
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
     let (pass, _) = HUB.compute_passes.unregister(pass_id, &mut token);
@@ -56,7 +56,6 @@ pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) -> CommandB
     // into the parent command buffer while recording this compute pass.
     cmb.trackers = pass.trackers;
     cmb.raw.push(pass.raw);
-    pass.cmb_id.value
 }
 
 #[no_mangle]

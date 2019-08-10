@@ -237,7 +237,8 @@ int main() {
         wgpu_render_pass_set_bind_group(rpass, 0, bind_group, NULL, 0);
         wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
         WGPUQueueId queue = wgpu_device_get_queue(device);
-        WGPUCommandBufferId cmd_buf = wgpu_render_pass_end_pass(rpass);
+        wgpu_render_pass_end_pass(rpass);
+        WGPUCommandBufferId cmd_buf =  wgpu_command_encoder_finish(cmd_encoder);
         wgpu_queue_submit(queue, &cmd_buf, 1);
         wgpu_swap_chain_present(swap_chain);
 
