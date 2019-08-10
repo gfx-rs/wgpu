@@ -174,7 +174,7 @@ impl<B: hal::Backend> RenderPass<B> {
 // Common routines between render/compute
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBufferId {
+pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) {
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
     let (mut pass, mut token) = HUB.render_passes.unregister(pass_id, &mut token);
@@ -204,7 +204,6 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) -> CommandBuf
     }
 
     cmb.raw.push(pass.raw);
-    pass.cmb_id.value
 }
 
 #[no_mangle]

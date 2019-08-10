@@ -1,6 +1,6 @@
 #define WGPU_LOCAL
 
-/* Generated with cbindgen:0.9.0 */
+/* Generated with cbindgen:0.8.7 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -680,7 +680,11 @@ WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_enc
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 
-WGPUCommandBufferId wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
+void wgpu_compute_pass_dispatch_indirect(WGPUComputePassId pass_id,
+                                         WGPUBufferId indirect_buffer_id,
+                                         WGPUBufferAddress indirect_offset);
+
+void wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
 void wgpu_compute_pass_insert_debug_marker(WGPUComputePassId _pass_id, WGPURawString _label);
 
@@ -804,7 +808,15 @@ void wgpu_render_pass_draw_indexed(WGPURenderPassId pass_id,
                                    int32_t base_vertex,
                                    uint32_t first_instance);
 
-WGPUCommandBufferId wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
+void wgpu_render_pass_draw_indexed_indirect(WGPURenderPassId pass_id,
+                                            WGPUBufferId indirect_buffer_id,
+                                            WGPUBufferAddress indirect_offset);
+
+void wgpu_render_pass_draw_indirect(WGPURenderPassId pass_id,
+                                    WGPUBufferId indirect_buffer_id,
+                                    WGPUBufferAddress indirect_offset);
+
+void wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
 
 void wgpu_render_pass_insert_debug_marker(WGPURenderPassId _pass_id, WGPURawString _label);
 
