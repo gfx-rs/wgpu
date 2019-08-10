@@ -1,7 +1,7 @@
 #[path = "../framework.rs"]
 mod framework;
 
-const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 #[derive(Clone, Copy)]
 struct Vertex {

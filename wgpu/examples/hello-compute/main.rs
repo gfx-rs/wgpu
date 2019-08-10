@@ -26,7 +26,11 @@ fn main() {
     });
 
     let cs_bytes = include_bytes!("shader.comp.spv");
-    let cs_module = device.create_shader_module(cs_bytes);
+    let mut cs_words = vec!();
+    for bytes4 in cs_bytes.chunks(4) {
+        cs_words.push(u32::from_le_bytes([bytes4[0], bytes4[1], bytes4[2], bytes4[3]]));
+    }
+    let cs_module = device.create_shader_module(&cs_words);
 
     let staging_buffer = device
         .create_buffer_mapped(
