@@ -7,7 +7,7 @@ use crate::{
     BufferAddress,
     BufferId,
     BufferUsage,
-    CommandBufferId,
+    CommandEncoderId,
     Extent3d,
     Origin3d,
     TextureId,
@@ -65,8 +65,8 @@ impl TextureCopyView {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
+    command_buffer_id: CommandEncoderId,
     src: BufferId,
     src_offset: BufferAddress,
     dst: BufferId,
@@ -120,8 +120,8 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
+    command_buffer_id: CommandEncoderId,
     source: &BufferCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
@@ -198,8 +198,8 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
+    command_buffer_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &BufferCopyView,
     copy_size: Extent3d,
@@ -275,8 +275,8 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
+    command_buffer_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
