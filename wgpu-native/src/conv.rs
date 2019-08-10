@@ -141,14 +141,17 @@ pub fn map_color_state_descriptor(
     let blend_state = if desc.color_blend != pipeline::BlendDescriptor::REPLACE
         || desc.alpha_blend != pipeline::BlendDescriptor::REPLACE
     {
-        hal::pso::BlendState::On {
+        Some(hal::pso::BlendState {
             color: map_blend_descriptor(&desc.color_blend),
             alpha: map_blend_descriptor(&desc.alpha_blend),
-        }
+        })
     } else {
-        hal::pso::BlendState::Off
+        None
     };
-    hal::pso::ColorBlendDesc(map_color_write_flags(color_mask), blend_state)
+    hal::pso::ColorBlendDesc {
+        mask: map_color_write_flags(color_mask),
+        blend: blend_state
+    }
 }
 
 fn map_color_write_flags(flags: pipeline::ColorWrite) -> hal::pso::ColorMask {
@@ -219,12 +222,12 @@ pub fn map_depth_stencil_state_descriptor(
         depth: if desc.depth_write_enabled
             || desc.depth_compare != resource::CompareFunction::Always
         {
-            hal::pso::DepthTest::On {
+            Some(hal::pso::DepthTest {
                 fun: map_compare_function(desc.depth_compare),
                 write: desc.depth_write_enabled,
-            }
+            })
         } else {
-            hal::pso::DepthTest::Off
+            None
         },
         depth_bounds: false, // TODO
         stencil: if desc.stencil_read_mask != !0
@@ -232,37 +235,33 @@ pub fn map_depth_stencil_state_descriptor(
             || desc.stencil_front != pipeline::StencilStateFaceDescriptor::IGNORE
             || desc.stencil_back != pipeline::StencilStateFaceDescriptor::IGNORE
         {
-            hal::pso::StencilTest::On {
-                front: map_stencil_face(
-                    &desc.stencil_front,
-                    desc.stencil_read_mask,
-                    desc.stencil_write_mask,
-                ),
-                back: map_stencil_face(
-                    &desc.stencil_back,
-                    desc.stencil_read_mask,
-                    desc.stencil_write_mask,
-                ),
-            }
+            Some(hal::pso::StencilTest {
+                faces: hal::pso::Sided {
+                    front: map_stencil_face(
+                        &desc.stencil_front,
+                    ),
+                    back: map_stencil_face(
+                        &desc.stencil_back,
+                    ),
+                },
+                read_masks: hal::pso::State::Dynamic,
+                write_masks: hal::pso::State::Dynamic,
+                reference_values: hal::pso::State::Dynamic,
+            })
         } else {
-            hal::pso::StencilTest::Off
+            None
         },
     }
 }
 
 fn map_stencil_face(
     stencil_state_face_desc: &pipeline::StencilStateFaceDescriptor,
-    stencil_read_mask: u32,
-    stencil_write_mask: u32,
 ) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
         fun: map_compare_function(stencil_state_face_desc.compare),
-        mask_read: hal::pso::State::Static(stencil_read_mask), // TODO dynamic?
-        mask_write: hal::pso::State::Static(stencil_write_mask), // TODO dynamic?
         op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
         op_depth_fail: map_stencil_operation(stencil_state_face_desc.depth_fail_op),
         op_pass: map_stencil_operation(stencil_state_face_desc.pass_op),
-        reference: hal::pso::State::Static(0), // TODO can this be set?
     }
 }
 

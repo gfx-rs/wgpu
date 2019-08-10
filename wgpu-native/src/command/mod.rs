@@ -196,7 +196,7 @@ pub fn command_encoder_begin_render_pass(
     let mut barriers = Vec::new();
 
     let limits = adapter_guard[device.adapter_id].physical_device.limits();
-    let samples_count_limit = limits.framebuffer_color_samples_count;
+    let samples_count_limit = limits.framebuffer_color_sample_counts;
 
     let color_attachments =
         unsafe { slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length) };
@@ -401,8 +401,6 @@ pub fn command_encoder_begin_render_pass(
     let render_pass = match render_pass_cache.entry(rp_key.clone()) {
         Entry::Occupied(e) => e.into_mut(),
         Entry::Vacant(e) => {
-            let attachment_unused: u32 = !0; // TODO: Get from ash or expose in gfx-hal. Very important this remains a u32.
-
             let color_ids = [
                 (0, hal::image::Layout::ColorAttachmentOptimal),
                 (1, hal::image::Layout::ColorAttachmentOptimal),
@@ -415,7 +413,7 @@ pub fn command_encoder_begin_render_pass(
             if color_attachments.iter().any(|at| at.resolve_target != ptr::null()) {
                 for (i, at) in color_attachments.iter().enumerate() {
                     if at.resolve_target == ptr::null() {
-                        resolve_ids.push((attachment_unused as usize, hal::image::Layout::ColorAttachmentOptimal));
+                        resolve_ids.push((hal::pass::ATTACHMENT_UNUSED, hal::image::Layout::ColorAttachmentOptimal));
                     } else {
                         let sample_count_check = view_guard[color_attachments[i].attachment].samples;
                         assert!(sample_count_check > 1, "RenderPassColorAttachmentDescriptor with a resolve_target must have an attachment with sample_count > 1");
@@ -500,10 +498,10 @@ pub fn command_encoder_begin_render_pass(
                         ChannelType::Uscaled |
                         ChannelType::Sscaled |
                         ChannelType::Srgb => {
-                            hal::command::ClearColor::Float(conv::map_color_f32(&at.clear_color))
+                            hal::command::ClearColor::Sfloat(conv::map_color_f32(&at.clear_color))
                         }
                         ChannelType::Sint => {
-                            hal::command::ClearColor::Int(conv::map_color_i32(&at.clear_color))
+                            hal::command::ClearColor::Sint(conv::map_color_i32(&at.clear_color))
                         }
                         ChannelType::Uint => {
                             hal::command::ClearColor::Uint(conv::map_color_u32(&at.clear_color))

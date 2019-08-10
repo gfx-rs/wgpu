@@ -2,7 +2,7 @@ use crate::{
     device::RenderPassContext,
     resource,
     BufferAddress,
-    ByteArray,
+    U32Array,
     PipelineLayoutId,
     RawString,
     ShaderModuleId,
@@ -213,7 +213,7 @@ pub struct VertexInputDescriptor {
 #[repr(C)]
 #[derive(Debug)]
 pub struct ShaderModuleDescriptor {
-    pub code: ByteArray,
+    pub code: U32Array,
 }
 
 #[repr(C)]

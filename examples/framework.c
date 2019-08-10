@@ -6,7 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-WGPUByteArray read_file(const char *name) {
+WGPUU32Array read_file(const char *name) {
     FILE *file = fopen(name, "rb");
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
@@ -14,8 +14,8 @@ WGPUByteArray read_file(const char *name) {
     fseek(file, 0, SEEK_SET);
     fread(bytes, 1, length, file);
     fclose(file);
-    return (WGPUByteArray){
-        .bytes = bytes,
+    return (WGPUU32Array){
+        .bytes = (uint32_t*) bytes,
         .length = length,
     };
 }
