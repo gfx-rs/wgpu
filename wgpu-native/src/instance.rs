@@ -76,8 +76,8 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
 }
 
 #[cfg(all(feature = "local", feature = "gfx-backend-gl"))]
-pub fn wgpu_create_gl_instance(windowed_context: back::glutin::WindowedContext) -> InstanceId {
-    let raw = back::Surface::from_window(windowed_context);
+pub fn wgpu_create_gl_instance(windowed_context: back::glutin::RawContext<back::glutin::PossiblyCurrent>) -> InstanceId {
+    let raw = back::Surface::from_context(windowed_context);
     let surface = SurfaceHandle::new(raw);
     HUB.surfaces.register_local(surface, &mut Token::root())
 }

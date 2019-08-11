@@ -3,7 +3,7 @@
 #include "wgpu.h"
 #endif
 
-WGPUByteArray read_file(const char *name);
+WGPUU32Array read_file(const char *name);
 
 void read_buffer_map(
     WGPUBufferMapAsyncStatus status, 

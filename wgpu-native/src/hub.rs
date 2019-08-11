@@ -44,8 +44,9 @@ use parking_lot::Mutex;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use vec_map::VecMap;
 
+#[allow(unused)]
+use std::cell::Cell;
 use std::{
-    cell::Cell,
     marker::PhantomData,
     ops,
     sync::Arc,

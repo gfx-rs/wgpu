@@ -1,6 +1,6 @@
 #define WGPU_LOCAL
 
-/* Generated with cbindgen:0.8.7 */
+/* Generated with cbindgen:0.9.0 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -556,12 +556,12 @@ typedef struct {
 } WGPUSamplerDescriptor;
 
 typedef struct {
-  const uint8_t *bytes;
+  const uint32_t *bytes;
   uintptr_t length;
-} WGPUByteArray;
+} WGPUU32Array;
 
 typedef struct {
-  WGPUByteArray code;
+  WGPUU32Array code;
 } WGPUShaderModuleDescriptor;
 
 typedef WGPUId WGPUSurfaceId;

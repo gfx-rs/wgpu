@@ -28,16 +28,16 @@ bitflags = "1.0"
 copyless = "0.1"
 lazy_static = "1.1.0"
 log = "0.4"
-hal = { package = "gfx-hal", version = "0.2.1" }
-gfx-backend-empty = { version = "0.2.1" }
-gfx-backend-vulkan = { version = "0.2", optional = true }
-gfx-backend-dx11 = { version = "0.2.1", optional = true }
-gfx-backend-dx12 = { version = "0.2.1", optional = true }
-gfx-backend-metal = { version = "0.2.2", optional = true }
-gfx-backend-gl = { version = "0.2", optional = true }
+hal = { package = "gfx-hal", version = "0.3.0" }
+gfx-backend-empty = { version = "0.3.0", features = ["winit"] }
+gfx-backend-vulkan = { version = "0.3.0", features = ["winit", "x11"], optional = true }
+gfx-backend-dx11 = { version = "0.3.0", features = ["winit"], optional = true }
+gfx-backend-dx12 = { version = "0.3.0", features = ["winit"], optional = true }
+gfx-backend-metal = { version = "0.3.0", features = ["winit"], optional = true }
+gfx-backend-gl = { version = "0.3.0", features = ["winit", "glutin"], optional = true }
 parking_lot = { version = "0.9" }
-rendy-memory = "0.3"
-rendy-descriptor = "0.3"
+rendy-memory = { git = "https://github.com/amethyst/rendy", rev = "db6adbe7454f52ebf559a38dd88580aa3ebbcaaf" }
+rendy-descriptor = { git = "https://github.com/amethyst/rendy", rev = "db6adbe7454f52ebf559a38dd88580aa3ebbcaaf" }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 vec_map = "0.8"
 winit = { version = "0.19", optional = true }

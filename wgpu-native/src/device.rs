@@ -981,6 +981,7 @@ pub fn device_create_sampler(
             Some(conv::map_compare_function(desc.compare_function))
         },
         border: hal::image::PackedColor(0),
+        normalized: true,
         anisotropic: hal::image::Anisotropic::Off, //TODO
     };
     let raw = unsafe { device.raw.create_sampler(info).unwrap() };
@@ -1816,7 +1817,7 @@ pub fn device_create_swap_chain(
             .supports_queue_family(&adapter.queue_families[0]));
         surface.raw.compatibility(&adapter.physical_device)
     };
-    let num_frames = caps.image_count.start; //TODO: configure?
+    let num_frames = *caps.image_count.start(); //TODO: configure?
     let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
     let mut config = hal::SwapchainConfig::new(
         desc.width,
@@ -1863,7 +1864,7 @@ pub fn device_create_swap_chain(
                     frame.view_id.ref_count,
                 );
             }
-            unsafe { old.command_pool.reset() };
+            unsafe { old.command_pool.reset(false) };
             (Some(old.raw), old.sem_available, old.command_pool)
         }
         _ => unsafe {

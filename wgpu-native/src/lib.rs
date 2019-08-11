@@ -187,8 +187,8 @@ pub struct Extent3d {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct ByteArray {
-    pub bytes: *const u8,
+pub struct U32Array {
+    pub bytes: *const u32,
     pub length: usize,
 }
 
