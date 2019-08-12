@@ -244,9 +244,17 @@ pub fn map_depth_stencil_state_descriptor(
                         &desc.stencil_back,
                     ),
                 },
-                read_masks: hal::pso::State::Dynamic,
-                write_masks: hal::pso::State::Dynamic,
-                reference_values: hal::pso::State::Dynamic,
+                read_masks: hal::pso::State::Static(
+                    hal::pso::Sided::new(desc.stencil_read_mask),
+                ),
+                write_masks: hal::pso::State::Static(
+                    hal::pso::Sided::new(desc.stencil_write_mask),
+                ),
+                reference_values: if desc.needs_stencil_reference() {
+                    hal::pso::State::Dynamic
+                } else {
+                    hal::pso::State::Static(hal::pso::Sided::new(0))
+                },
             })
         } else {
             None
