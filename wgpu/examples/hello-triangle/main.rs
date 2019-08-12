@@ -60,19 +60,11 @@ fn main() {
         limits: wgpu::Limits::default(),
     });
 
-    let vs_bytes = include_bytes!("shader.vert.spv");
-    let mut vs_words = vec!();
-    for bytes4 in vs_bytes.chunks(4) {
-        vs_words.push(u32::from_le_bytes([bytes4[0], bytes4[1], bytes4[2], bytes4[3]]));
-    }
-    let vs_module = device.create_shader_module(&vs_words);
+    let vs = include_bytes!("shader.vert.spv");
+    let vs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
 
-    let fs_bytes = include_bytes!("shader.frag.spv");
-    let mut fs_words = vec!();
-    for bytes4 in fs_bytes.chunks(4) {
-        fs_words.push(u32::from_le_bytes([bytes4[0], bytes4[1], bytes4[2], bytes4[3]]));
-    }
-    let fs_module = device.create_shader_module(&fs_words);
+    let fs = include_bytes!("shader.frag.spv");
+    let fs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
 
     let bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { bindings: &[] });
