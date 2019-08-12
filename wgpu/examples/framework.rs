@@ -23,7 +23,7 @@ pub enum ShaderStage {
     Compute,
 }
 
-pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u8> {
+pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u32> {
     use std::io::Read;
 
     let ty = match stage {
@@ -33,9 +33,14 @@ pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u8> {
     };
 
     let mut output = glsl_to_spirv::compile(&code, ty).unwrap();
-    let mut spv = Vec::new();
-    output.read_to_end(&mut spv).unwrap();
-    spv
+    let mut spv_bytes = Vec::new();
+    output.read_to_end(&mut spv_bytes).unwrap();
+
+    let mut spv_words = Vec::new();
+    for bytes4 in spv_bytes.chunks(4) {
+        spv_words.push(u32::from_le_bytes([bytes4[0], bytes4[1], bytes4[2], bytes4[3]]));
+    }
+    spv_words
 }
 
 pub trait Example {
@@ -78,10 +83,10 @@ pub fn run<E: Example>(title: &str) {
     };
 
     #[cfg(feature = "gl")]
-    let (instance, hidpi_factor, size, surface) = {
+    let (_window, instance, hidpi_factor, size, surface) = {
         let wb = wgpu::winit::WindowBuilder::new();
         let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
-        let context = wgpu::glutin::WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
+        let context = cb.build_windowed(wb, &events_loop).unwrap();
         context.window().set_title(title);
 
         let hidpi_factor = context.window().get_hidpi_factor();
@@ -91,10 +96,12 @@ pub fn run<E: Example>(title: &str) {
             .unwrap()
             .to_physical(hidpi_factor);
 
+        let (context, window) = unsafe { context.make_current().unwrap().split() };
+
         let instance = wgpu::Instance::new(context);
         let surface = instance.get_surface();
 
-        (instance, hidpi_factor, size, surface)
+        (window, instance, hidpi_factor, size, surface)
     };
 
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
@@ -110,7 +117,7 @@ pub fn run<E: Example>(title: &str) {
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-        format: wgpu::TextureFormat::Bgra8Unorm,
+        format: wgpu::TextureFormat::Bgra8UnormSrgb,
         width: size.width.round() as u32,
         height: size.height.round() as u32,
         present_mode: wgpu::PresentMode::Vsync,

@@ -30,10 +30,10 @@ fn main() {
     };
 
     #[cfg(feature = "gl")]
-    let (instance, size, surface) = {
+    let (_window, instance, size, surface) = {
         let wb = wgpu::winit::WindowBuilder::new();
         let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
-        let context = wgpu::glutin::WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
+        let context = cb.build_windowed(wb, &events_loop).unwrap();
 
         let size = context
             .window()
@@ -41,10 +41,12 @@ fn main() {
             .unwrap()
             .to_physical(context.window().get_hidpi_factor());
 
+        let (context, window) = unsafe { context.make_current().unwrap().split() };
+
         let instance = wgpu::Instance::new(context);
         let surface = instance.get_surface();
 
-        (instance, size, surface)
+        (window, instance, size, surface)
     };
 
     let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
@@ -59,9 +61,18 @@ fn main() {
     });
 
     let vs_bytes = include_bytes!("shader.vert.spv");
-    let vs_module = device.create_shader_module(vs_bytes);
+    let mut vs_words = vec!();
+    for bytes4 in vs_bytes.chunks(4) {
+        vs_words.push(u32::from_le_bytes([bytes4[0], bytes4[1], bytes4[2], bytes4[3]]));
+    }
+    let vs_module = device.create_shader_module(&vs_words);
+
     let fs_bytes = include_bytes!("shader.frag.spv");
-    let fs_module = device.create_shader_module(fs_bytes);
+    let mut fs_words = vec!();
+    for bytes4 in fs_bytes.chunks(4) {
+        fs_words.push(u32::from_le_bytes([bytes4[0], bytes4[1], bytes4[2], bytes4[3]]));
+    }
+    let fs_module = device.create_shader_module(&fs_words);
 
     let bind_group_layout =
         device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { bindings: &[] });
@@ -92,7 +103,7 @@ fn main() {
         },
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         color_states: &[wgpu::ColorStateDescriptor {
-            format: wgpu::TextureFormat::Bgra8Unorm,
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
             color_blend: wgpu::BlendDescriptor::REPLACE,
             alpha_blend: wgpu::BlendDescriptor::REPLACE,
             write_mask: wgpu::ColorWrite::ALL,
@@ -107,7 +118,7 @@ fn main() {
         &surface,
         &wgpu::SwapChainDescriptor {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8Unorm,
+            format: wgpu::TextureFormat::Bgra8UnormSrgb,
             width: size.width.round() as u32,
             height: size.height.round() as u32,
             present_mode: wgpu::PresentMode::Vsync,

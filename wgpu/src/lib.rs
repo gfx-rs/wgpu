@@ -469,7 +469,7 @@ impl Instance {
     }
 
     #[cfg(feature = "gl")]
-    pub fn new(windowed_context: wgn::glutin::WindowedContext) -> Self {
+    pub fn new(windowed_context: wgn::glutin::RawContext<wgn::glutin::PossiblyCurrent>) -> Self {
         Instance {
             id: wgn::wgpu_create_gl_instance(windowed_context),
         }
@@ -556,9 +556,9 @@ impl Device {
     }
 
     /// Creates a shader module from SPIR-V source code.
-    pub fn create_shader_module(&self, spv: &[u8]) -> ShaderModule {
+    pub fn create_shader_module(&self, spv: &[u32]) -> ShaderModule {
         let desc = wgn::ShaderModuleDescriptor {
-            code: wgn::ByteArray {
+            code: wgn::U32Array {
                 bytes: spv.as_ptr(),
                 length: spv.len(),
             },
