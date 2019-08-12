@@ -21,9 +21,12 @@ The implementation consists of the following parts:
   DX12   | :heavy_check_mark: |                    |                    |
   Vulkan | :heavy_check_mark: | :heavy_check_mark: |                    |
   Metal  |                    |                    | :heavy_check_mark: |
+  OpenGL |                    |                    |                    |
 
 ## Usage
 
 This repository contains C-language examples that link to the native library targets and perform basic rendering and computation. Please refer to our [Getting Started](https://github.com/gfx-rs/wgpu/wiki/Getting-Started#getting-started) page at the wiki for more information.
 
-The idiomatic Rust wrapper lives in https://github.com/gfx-rs/wgpu-rs and provides a number of more [complex examples](https://github.com/gfx-rs/wgpu-rs/tree/master/examples) to get a feel of the API.
+Bindings:
+  - https://github.com/gfx-rs/wgpu-rs - idiomatic Rust wrapper with [a few more examples](https://github.com/gfx-rs/wgpu-rs/tree/master/examples) to get a feel of the API
+  - [Scopes](https://nest.pijul.com/porky11/wgpu) - experimental [Scopes](scopes.rocks) wrapper
