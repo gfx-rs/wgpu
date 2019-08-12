@@ -61,6 +61,7 @@ pub use wgn::{
     TextureViewDimension,
     VertexAttributeDescriptor,
     VertexFormat,
+    read_spirv,
 };
 
 #[cfg(feature = "gl")]
