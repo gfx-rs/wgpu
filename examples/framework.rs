@@ -24,23 +24,13 @@ pub enum ShaderStage {
 }
 
 pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u32> {
-    use std::io::Read;
-
     let ty = match stage {
         ShaderStage::Vertex => glsl_to_spirv::ShaderType::Vertex,
         ShaderStage::Fragment => glsl_to_spirv::ShaderType::Fragment,
         ShaderStage::Compute => glsl_to_spirv::ShaderType::Compute,
     };
 
-    let mut output = glsl_to_spirv::compile(&code, ty).unwrap();
-    let mut spv_bytes = Vec::new();
-    output.read_to_end(&mut spv_bytes).unwrap();
-
-    let mut spv_words = Vec::new();
-    for bytes4 in spv_bytes.chunks(4) {
-        spv_words.push(u32::from_le_bytes([bytes4[0], bytes4[1], bytes4[2], bytes4[3]]));
-    }
-    spv_words
+    wgpu::read_spirv(glsl_to_spirv::compile(&code, ty).unwrap()).unwrap()
 }
 
 pub trait Example {
