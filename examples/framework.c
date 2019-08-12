@@ -21,15 +21,16 @@ WGPUU32Array read_file(const char *name) {
 }
 
 void read_buffer_map(
-    WGPUBufferMapAsyncStatus status, 
-    const uint8_t *data, 
+    WGPUBufferMapAsyncStatus status,
+    const uint8_t *data,
     uint8_t *userdata) {
+    (void)userdata;
     if (status == WGPUBufferMapAsyncStatus_Success) {
         uint32_t *times = (uint32_t *) data;
         printf("Times: [%d, %d, %d, %d]",
-            times[0], 
-            times[1], 
-            times[2], 
+            times[0],
+            times[1],
+            times[2],
             times[3]);
     }
 }

@@ -46,9 +46,9 @@ else
 	endif
 endif
 
-.PHONY: all check test doc clear lib-native lib-remote examples-native examples-remote
+.PHONY: all check test doc clear lib-native lib-remote examples-compute example-triangle example-remote
 
-all: examples-native examples-remote
+all: examples-compute example-triangle example-remote
 
 check:
 	cargo check --all
@@ -69,10 +69,10 @@ lib-native: Cargo.lock wgpu-native/Cargo.toml $(WILDCARD_WGPU_NATIVE)
 lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
 	cargo build --manifest-path wgpu-remote/Cargo.toml --features $(FEATURE_RUST)
 
-ffi/wgpu.h: wgpu-native/cbindgen.toml $(WILDCARD_WGPU_NATIVE)
+$(FFI_DIR)/wgpu.h: wgpu-native/cbindgen.toml $(WILDCARD_WGPU_NATIVE)
 	rustup run nightly cbindgen wgpu-native > $(FFI_DIR)/wgpu.h
 
-ffi/wgpu-remote.h: wgpu-remote/cbindgen.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
+$(FFI_DIR)/wgpu-remote.h: wgpu-remote/cbindgen.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
 	rustup run nightly cbindgen wgpu-remote > $(FFI_DIR)/wgpu-remote.h
 
 example-compute: lib-native $(FFI_DIR)/wgpu.h examples/compute/main.c
