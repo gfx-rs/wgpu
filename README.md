@@ -29,4 +29,4 @@ This repository contains C-language examples that link to the native library tar
 
 Bindings:
   - https://github.com/gfx-rs/wgpu-rs - idiomatic Rust wrapper with [a few more examples](https://github.com/gfx-rs/wgpu-rs/tree/master/examples) to get a feel of the API
-  - https://nest.pijul.com/porky11/wgpu - experimental [Scopes](scopes.rocks) wrapper
+  - https://nest.pijul.com/porky11/wgpu - experimental [Scopes](http://scopes.rocks) wrapper
