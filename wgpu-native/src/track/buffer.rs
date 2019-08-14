@@ -46,7 +46,7 @@ impl ResourceState for BufferState {
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
-        if usage != old {
+        if usage != old || !BufferUsage::ORDERED.contains(usage) {
             let pending = PendingTransition {
                 id,
                 selector: (),
@@ -77,7 +77,7 @@ impl ResourceState for BufferState {
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
         let new = other.select(stitch);
-        self.last = if old == new {
+        self.last = if old == new && BufferUsage::ORDERED.contains(new) {
             other.last
         } else {
             let pending = PendingTransition {

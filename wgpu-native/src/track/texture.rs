@@ -123,7 +123,7 @@ impl ResourceState for TextureState {
                 }
                 let layers = plane_states.isolate(&selector.layers, Unit::new(usage));
                 for &mut (ref range, ref mut unit) in layers {
-                    if unit.last == usage {
+                    if unit.last == usage && TextureUsage::ORDERED.contains(usage) {
                         continue
                     }
                     let pending = PendingTransition {
@@ -175,7 +175,7 @@ impl ResourceState for TextureState {
                         Range { start: None, end: Some(end) } => Unit::new(end.select(stitch)),
                         Range { start: Some(start), end: Some(end) } => {
                             let mut final_usage = end.select(stitch);
-                            if start.last != final_usage {
+                            if start.last != final_usage || !TextureUsage::ORDERED.contains(final_usage) {
                                 let pending = PendingTransition {
                                     id,
                                     selector: hal::image::SubresourceRange {

@@ -431,7 +431,6 @@ typedef uint32_t WGPUBufferUsage;
 #define WGPUBufferUsage_STORAGE 128
 #define WGPUBufferUsage_INDIRECT 256
 #define WGPUBufferUsage_NONE 0
-#define WGPUBufferUsage_WRITE_ALL 2 + 8 + 128
 
 typedef struct {
   WGPUBufferAddress size;
@@ -575,7 +574,6 @@ typedef uint32_t WGPUTextureUsage;
 #define WGPUTextureUsage_STORAGE 8
 #define WGPUTextureUsage_OUTPUT_ATTACHMENT 16
 #define WGPUTextureUsage_NONE 0
-#define WGPUTextureUsage_WRITE_ALL 2 + 8 + 16
 #define WGPUTextureUsage_UNINITIALIZED 65535
 
 typedef struct {
