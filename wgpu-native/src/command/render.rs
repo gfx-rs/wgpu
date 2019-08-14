@@ -320,6 +320,7 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     pass_id: RenderPassId,
+    start_slot: u32,
     buffers: *const BufferId,
     offsets: *const BufferAddress,
     length: usize,
@@ -331,15 +332,12 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     let offsets = unsafe { slice::from_raw_parts(offsets, length) };
 
     let pass = &mut pass_guard[pass_id];
-    for (vbs, (&id, &offset)) in pass.vertex_state.inputs.iter_mut().zip(buffers.iter().zip(offsets)) {
+    for (vbs, (&id, &offset)) in pass.vertex_state.inputs[start_slot as usize ..].iter_mut().zip(buffers.iter().zip(offsets)) {
         let buffer = pass.trackers
             .buffers
             .use_extend(&*buffer_guard, id, (), BufferUsage::VERTEX)
             .unwrap();
         vbs.total_size = buffer.size - offset;
-    }
-    for vbs in pass.vertex_state.inputs[length..].iter_mut() {
-        vbs.total_size = 0;
     }
 
     pass.vertex_state.update_limits();
@@ -350,7 +348,7 @@ pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
         .zip(offsets.iter().cloned());
 
     unsafe {
-        pass.raw.bind_vertex_buffers(0, buffers);
+        pass.raw.bind_vertex_buffers(start_slot, buffers);
     }
 }
 
