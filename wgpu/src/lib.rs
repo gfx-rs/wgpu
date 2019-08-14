@@ -742,7 +742,7 @@ impl Device {
     /// This returns a [`CreateBufferMapped<T>`], which exposes a `&mut [T]`. The actual [`Buffer`]
     /// will not be created until calling [`CreateBufferMapped::finish`].
     pub fn create_buffer_mapped<'a, T>(
-        &self,
+        &'a self,
         count: usize,
         usage: BufferUsage,
     ) -> CreateBufferMapped<'a, T>
