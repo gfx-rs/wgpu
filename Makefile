@@ -46,9 +46,9 @@ else
 	endif
 endif
 
-.PHONY: all check test doc clear lib-native lib-remote examples-compute example-triangle example-remote
+.PHONY: all check test doc clear lib-native lib-remote example-compute example-triangle example-remote
 
-all: examples-compute example-triangle example-remote
+all: example-compute example-triangle example-remote
 
 check:
 	cargo check --all
