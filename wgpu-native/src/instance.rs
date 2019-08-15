@@ -220,7 +220,7 @@ pub fn instance_get_adapter(
 
     let (mut integrated_first, mut discrete_first, mut discrete_last, mut alternative) =
         (None, None, None, None);
-        
+
     // On Windows > 1803, dx12 enumerate_adapters returns the adapters in order from highest to
     // lowest performance. Therefore, the first found adapter in each category is selected.
     //
@@ -256,7 +256,7 @@ pub fn instance_get_adapter(
 
 #[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_instance_get_adapter(
+pub extern "C" fn wgpu_instance_request_adapter(
     instance_id: InstanceId,
     desc: &AdapterDescriptor,
 ) -> AdapterId {

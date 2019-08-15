@@ -26,6 +26,7 @@ use crate::{
 };
 #[cfg(feature = "local")]
 use crate::{
+    instance::Limits,
     BindGroupLayoutId,
     CommandEncoderId,
     ComputePipelineId,
@@ -581,6 +582,15 @@ impl Device<back::Backend> {
     }
 }
 
+#[cfg(feature = "local")]
+#[no_mangle]
+pub extern "C" fn wgpu_device_get_limits(
+    _device_id: DeviceId,
+    limits: &mut Limits,
+) {
+    *limits = Limits::default(); // TODO
+}
+
 #[derive(Debug)]
 pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
@@ -600,9 +610,9 @@ pub fn device_create_buffer(
 
         if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
             Muv::Data
-        } else if (Bu::MAP_WRITE | Bu::TRANSFER_SRC).contains(desc.usage) {
+        } else if (Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage) {
             Muv::Upload
-        } else if (Bu::MAP_READ | Bu::TRANSFER_DST).contains(desc.usage) {
+        } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
             Muv::Download
         } else {
             Muv::Dynamic
@@ -883,43 +893,48 @@ pub fn device_track_view(
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_view(
     texture_id: TextureId,
-    desc: &resource::TextureViewDescriptor,
+    desc: Option<&resource::TextureViewDescriptor>,
 ) -> TextureViewId {
     let mut token = Token::root();
-    let view = texture_create_view(
-        texture_id,
-        desc.format,
-        conv::map_texture_view_dimension(desc.dimension),
-        hal::image::SubresourceRange {
-            aspects: conv::map_texture_aspect_flags(desc.aspect),
-            levels: desc.base_mip_level as u8 .. (desc.base_mip_level + desc.level_count) as u8,
-            layers: desc.base_array_layer as u16
-                .. (desc.base_array_layer + desc.array_count) as u16,
-        },
-        &mut token,
-    );
-    let ref_count = view.life_guard.ref_count.clone();
-    let id = HUB.texture_views.register_local(view, &mut token);
-    device_track_view(texture_id, id, ref_count, &mut token);
-    id
-}
+    let (texture_guard, _) = HUB.textures.read(&mut token);
+    let texture = &texture_guard[texture_id];
 
-#[cfg(feature = "local")]
-#[no_mangle]
-pub extern "C" fn wgpu_texture_create_default_view(texture_id: TextureId) -> TextureViewId {
-    let mut token = Token::root();
-    let (format, view_kind, range) = {
-        let (texture_guard, _) = HUB.textures.read(&mut token);
-        let texture = &texture_guard[texture_id];
-        let view_kind = match texture.kind {
-            hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
-            hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
-            hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
-            hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
-            hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
-        };
-        (texture.format, view_kind, texture.full_range.clone())
+    let (format, view_kind, range) = match desc {
+        Some(desc) => {
+            let kind = conv::map_texture_view_dimension(desc.dimension);
+            let end_level = if desc.level_count == 0 {
+                texture.full_range.levels.end
+            } else {
+                (desc.base_mip_level + desc.level_count) as u8
+            };
+            let end_layer = if desc.array_layer_count == 0 {
+                texture.full_range.layers.end
+            } else {
+                (desc.base_array_layer + desc.array_layer_count) as u16
+            };
+            let range = hal::image::SubresourceRange {
+                aspects: match desc.aspect {
+                    resource::TextureAspect::All => texture.full_range.aspects,
+                    resource::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
+                    resource::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+                },
+                levels: desc.base_mip_level as u8 .. end_level,
+                layers: desc.base_array_layer as u16 .. end_layer,
+            };
+            (desc.format, kind, range)
+        }
+        None => {
+            let kind = match texture.kind {
+                hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
+                hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
+                hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
+                hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
+                hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
+            };
+            (texture.format, kind, texture.full_range.clone())
+        }
     };
+
     let view = texture_create_view(texture_id, format, view_kind, range, &mut token);
     let ref_count = view.life_guard.ref_count.clone();
     let id = HUB.texture_views.register_local(view, &mut token);
@@ -1011,7 +1026,7 @@ pub fn device_create_bind_group_layout(
         .iter()
         .map(|binding| hal::pso::DescriptorSetLayoutBinding {
             binding: binding.binding,
-            ty: conv::map_binding_type(binding.ty),
+            ty: conv::map_binding_type(binding),
             count: 1, //TODO: consolidate
             stage_flags: conv::map_shader_stage_flags(binding.visibility),
             immutable_samplers: false, // TODO
@@ -1032,11 +1047,7 @@ pub fn device_create_bind_group_layout(
         desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
         dynamic_count: bindings
             .iter()
-            .filter(|b| match b.ty {
-                binding_model::BindingType::UniformBufferDynamic
-                | binding_model::BindingType::StorageBufferDynamic => true,
-                _ => false,
-            })
+            .filter(|b| b.dynamic)
             .count(),
     }
 }
@@ -1129,13 +1140,14 @@ pub fn device_create_bind_group(
         let descriptor = match b.resource {
             binding_model::BindingResource::Buffer(ref bb) => {
                 let (alignment, usage) = match decl.ty {
-                    binding_model::BindingType::UniformBuffer
-                    | binding_model::BindingType::UniformBufferDynamic => {
+                    binding_model::BindingType::UniformBuffer => {
                         (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::UNIFORM)
                     }
-                    binding_model::BindingType::StorageBuffer
-                    | binding_model::BindingType::StorageBufferDynamic => {
+                    binding_model::BindingType::StorageBuffer => {
                         (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE)
+                    }
+                    binding_model::BindingType::ReadonlyStorageBuffer => {
+                        (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE_READ)
                     }
                     binding_model::BindingType::Sampler
                     | binding_model::BindingType::SampledTexture

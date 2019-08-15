@@ -116,10 +116,10 @@ struct Stored<T> {
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Color {
-    pub r: f32,
-    pub g: f32,
-    pub b: f32,
-    pub a: f32,
+    pub r: f64,
+    pub g: f64,
+    pub b: f64,
+    pub a: f64,
 }
 
 impl Color {
@@ -175,6 +175,12 @@ impl Origin3d {
         y: 0.0,
         z: 0.0,
     };
+}
+
+impl Default for Origin3d {
+    fn default() -> Self {
+        Origin3d::ZERO
+    }
 }
 
 #[repr(C)]
@@ -295,6 +301,8 @@ type ComputePipelineHandle = ComputePipeline<back::Backend>;
 define_id!(CommandBufferId);
 type CommandBufferHandle = CommandBuffer<back::Backend>;
 pub type CommandEncoderId = CommandBufferId;
+
+define_id!(RenderBundleId);
 
 define_id!(RenderPassId);
 type RenderPassHandle = RenderPass<back::Backend>;

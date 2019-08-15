@@ -35,7 +35,7 @@
 int main() {
     WGPUInstanceId instance = wgpu_create_instance();
 
-    WGPUAdapterId adapter = wgpu_instance_get_adapter(instance,
+    WGPUAdapterId adapter = wgpu_instance_request_adapter(instance,
         &(WGPUAdapterDescriptor){
             .power_preference = WGPUPowerPreference_LowPower,
         });

@@ -23,19 +23,21 @@ bitflags! {
     pub struct BufferUsage: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
-        const TRANSFER_SRC = 4;
-        const TRANSFER_DST = 8;
+        const COPY_SRC = 4;
+        const COPY_DST = 8;
         const INDEX = 16;
         const VERTEX = 32;
         const UNIFORM = 64;
         const STORAGE = 128;
-        const INDIRECT = 256;
+        const STORAGE_READ = 256;
+        const INDIRECT = 512;
         const NONE = 0;
         /// The combination of all read-only usages.
-        const READ_ALL = Self::MAP_READ.bits | Self::TRANSFER_SRC.bits |
-            Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits | Self::INDIRECT.bits;
+        const READ_ALL = Self::MAP_READ.bits | Self::COPY_SRC.bits |
+            Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
+            Self::STORAGE_READ.bits | Self::INDIRECT.bits;
         /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::MAP_WRITE.bits | Self::TRANSFER_DST.bits | Self::STORAGE.bits;
+        const WRITE_ALL = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
@@ -98,83 +100,77 @@ pub enum TextureDimension {
 pub enum TextureFormat {
     // Normal 8 bit formats
     R8Unorm = 0,
-    R8UnormSrgb = 1,
-    R8Snorm = 2,
-    R8Uint = 3,
-    R8Sint = 4,
+    R8Snorm = 1,
+    R8Uint = 2,
+    R8Sint = 3,
 
     // Normal 16 bit formats
-    R16Unorm = 5,
-    R16Snorm = 6,
-    R16Uint = 7,
-    R16Sint = 8,
-    R16Float = 9,
+    R16Unorm = 4,
+    R16Snorm = 5,
+    R16Uint = 6,
+    R16Sint = 7,
+    R16Float = 8,
 
-    Rg8Unorm = 10,
-    Rg8UnormSrgb = 11,
-    Rg8Snorm = 12,
-    Rg8Uint = 13,
-    Rg8Sint = 14,
-
-    // Packed 16 bit formats
-    B5g6r5Unorm = 15,
+    Rg8Unorm = 9,
+    Rg8Snorm = 10,
+    Rg8Uint = 11,
+    Rg8Sint = 12,
 
     // Normal 32 bit formats
-    R32Uint = 16,
-    R32Sint = 17,
-    R32Float = 18,
-    Rg16Unorm = 19,
-    Rg16Snorm = 20,
-    Rg16Uint = 21,
-    Rg16Sint = 22,
-    Rg16Float = 23,
-    Rgba8Unorm = 24,
-    Rgba8UnormSrgb = 25,
-    Rgba8Snorm = 26,
-    Rgba8Uint = 27,
-    Rgba8Sint = 28,
-    Bgra8Unorm = 29,
-    Bgra8UnormSrgb = 30,
+    R32Uint = 13,
+    R32Sint = 14,
+    R32Float = 15,
+    Rg16Unorm = 16,
+    Rg16Snorm = 17,
+    Rg16Uint = 18,
+    Rg16Sint = 19,
+    Rg16Float = 20,
+    Rgba8Unorm = 21,
+    Rgba8UnormSrgb = 22,
+    Rgba8Snorm = 23,
+    Rgba8Uint = 24,
+    Rgba8Sint = 25,
+    Bgra8Unorm = 26,
+    Bgra8UnormSrgb = 27,
 
     // Packed 32 bit formats
-    Rgb10a2Unorm = 31,
-    Rg11b10Float = 32,
+    Rgb10a2Unorm = 28,
+    Rg11b10Float = 29,
 
     // Normal 64 bit formats
-    Rg32Uint = 33,
-    Rg32Sint = 34,
-    Rg32Float = 35,
-    Rgba16Unorm = 36,
-    Rgba16Snorm = 37,
-    Rgba16Uint = 38,
-    Rgba16Sint = 39,
-    Rgba16Float = 40,
+    Rg32Uint = 30,
+    Rg32Sint = 31,
+    Rg32Float = 32,
+    Rgba16Unorm = 33,
+    Rgba16Snorm = 34,
+    Rgba16Uint = 35,
+    Rgba16Sint = 36,
+    Rgba16Float = 37,
 
     // Normal 128 bit formats
-    Rgba32Uint = 41,
-    Rgba32Sint = 42,
-    Rgba32Float = 43,
+    Rgba32Uint = 38,
+    Rgba32Sint = 39,
+    Rgba32Float = 40,
 
     // Depth and stencil formats
-    D16Unorm = 44,
-    D32Float = 45,
-    D24UnormS8Uint = 46,
-    D32FloatS8Uint = 47,
+    Depth32Float = 41,
+    Depth24Plus = 42,
+    Depth24PlusStencil8 = 43,
 }
 
 bitflags! {
     #[repr(transparent)]
     pub struct TextureUsage: u32 {
-        const TRANSFER_SRC = 1;
-        const TRANSFER_DST = 2;
+        const COPY_SRC = 1;
+        const COPY_DST = 2;
         const SAMPLED = 4;
         const STORAGE = 8;
         const OUTPUT_ATTACHMENT = 16;
         const NONE = 0;
         /// The combination of all read-only usages.
-        const READ_ALL = Self::TRANSFER_SRC.bits | Self::SAMPLED.bits;
+        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits;
         /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::TRANSFER_DST.bits | Self::STORAGE.bits | Self::OUTPUT_ATTACHMENT.bits;
+        const WRITE_ALL = Self::COPY_DST.bits | Self::STORAGE.bits | Self::OUTPUT_ATTACHMENT.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
@@ -231,12 +227,17 @@ impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
     }
 }
 
-bitflags! {
-    #[repr(transparent)]
-    pub struct TextureAspectFlags: u32 {
-        const COLOR = 1;
-        const DEPTH = 2;
-        const STENCIL = 4;
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum TextureAspect {
+    All,
+    StencilOnly,
+    DepthOnly,
+}
+
+impl Default for TextureAspect {
+    fn default() -> Self {
+        TextureAspect::All
     }
 }
 
@@ -256,11 +257,11 @@ pub enum TextureViewDimension {
 pub struct TextureViewDescriptor {
     pub format: TextureFormat,
     pub dimension: TextureViewDimension,
-    pub aspect: TextureAspectFlags,
+    pub aspect: TextureAspect,
     pub base_mip_level: u32,
     pub level_count: u32,
     pub base_array_layer: u32,
-    pub array_count: u32,
+    pub array_layer_count: u32,
 }
 
 #[derive(Debug)]
@@ -291,11 +292,23 @@ pub enum AddressMode {
     MirrorRepeat = 2,
 }
 
+impl Default for AddressMode {
+    fn default() -> Self {
+        AddressMode::ClampToEdge
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum FilterMode {
     Nearest = 0,
     Linear = 1,
+}
+
+impl Default for FilterMode {
+    fn default() -> Self {
+        FilterMode::Nearest
+    }
 }
 
 #[repr(C)]

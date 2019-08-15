@@ -60,7 +60,8 @@ pub enum LoadOp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum StoreOp {
-    Store = 0,
+    Clear = 0,
+    Store = 1,
 }
 
 #[repr(C)]

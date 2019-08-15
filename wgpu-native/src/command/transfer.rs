@@ -84,7 +84,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let (src_buffer, src_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, src, (), BufferUsage::TRANSFER_SRC);
+        .use_replace(&*buffer_guard, src, (), BufferUsage::COPY_SRC);
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -95,7 +95,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let (dst_buffer, dst_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, dst, (), BufferUsage::TRANSFER_DST);
+        .use_replace(&*buffer_guard, dst, (), BufferUsage::COPY_DST);
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -136,7 +136,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
     let (src_buffer, src_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::TRANSFER_SRC);
+        .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::COPY_SRC);
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -148,7 +148,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
         &*texture_guard,
         destination.texture,
         destination.to_selector(aspects),
-        TextureUsage::TRANSFER_DST,
+        TextureUsage::COPY_DST,
     );
     let dst_barriers = dst_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
@@ -215,7 +215,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         &*texture_guard,
         source.texture,
         source.to_selector(aspects),
-        TextureUsage::TRANSFER_SRC,
+        TextureUsage::COPY_SRC,
     );
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
@@ -233,7 +233,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
         &*buffer_guard,
         destination.buffer,
         (),
-        BufferUsage::TRANSFER_DST,
+        BufferUsage::COPY_DST,
     );
     let dst_barrier = dst_barriers.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
@@ -296,7 +296,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
         &*texture_guard,
         source.texture,
         source.to_selector(aspects),
-        TextureUsage::TRANSFER_SRC,
+        TextureUsage::COPY_SRC,
     );
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
@@ -309,7 +309,7 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
         &*texture_guard,
         destination.texture,
         destination.to_selector(aspects),
-        TextureUsage::TRANSFER_DST,
+        TextureUsage::COPY_DST,
     );
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),

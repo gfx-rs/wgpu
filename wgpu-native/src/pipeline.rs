@@ -40,6 +40,12 @@ pub enum BlendOperation {
     Max = 4,
 }
 
+impl Default for BlendOperation {
+    fn default() -> Self {
+        BlendOperation::Add
+    }
+}
+
 bitflags! {
     #[repr(transparent)]
     pub struct ColorWrite: u32 {
@@ -49,6 +55,12 @@ bitflags! {
         const ALPHA = 8;
         const COLOR = 7;
         const ALL = 15;
+    }
+}
+
+impl Default for ColorWrite {
+    fn default() -> Self {
+        ColorWrite::ALL
     }
 }
 
@@ -78,6 +90,12 @@ impl BlendDescriptor {
     }
 }
 
+impl Default for BlendDescriptor {
+    fn default() -> Self {
+        BlendDescriptor::REPLACE
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct ColorStateDescriptor {
@@ -100,6 +118,12 @@ pub enum StencilOperation {
     DecrementWrap = 7,
 }
 
+impl Default for StencilOperation {
+    fn default() -> Self {
+        StencilOperation::Keep
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StencilStateFaceDescriptor {
@@ -116,6 +140,12 @@ impl StencilStateFaceDescriptor {
         depth_fail_op: StencilOperation::Keep,
         pass_op: StencilOperation::Keep,
     };
+}
+
+impl Default for StencilStateFaceDescriptor {
+    fn default() -> Self {
+        StencilStateFaceDescriptor::IGNORE
+    }
 }
 
 #[repr(C)]
@@ -253,12 +283,24 @@ pub enum FrontFace {
     Cw = 1,
 }
 
+impl Default for FrontFace {
+    fn default() -> Self {
+        FrontFace::Ccw
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum CullMode {
     None = 0,
     Front = 1,
     Back = 2,
+}
+
+impl Default for CullMode {
+    fn default() -> Self {
+        CullMode::None
+    }
 }
 
 #[repr(C)]
@@ -284,6 +326,8 @@ pub struct RenderPipelineDescriptor {
     pub depth_stencil_state: *const DepthStencilStateDescriptor,
     pub vertex_input: VertexInputDescriptor,
     pub sample_count: u32,
+    pub sample_mask: u32,
+    pub alpha_coverage_enabled: bool,
 }
 
 bitflags! {

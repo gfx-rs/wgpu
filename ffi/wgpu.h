@@ -23,12 +23,11 @@ typedef enum {
 
 typedef enum {
   WGPUBindingType_UniformBuffer = 0,
-  WGPUBindingType_Sampler = 1,
-  WGPUBindingType_SampledTexture = 2,
-  WGPUBindingType_StorageBuffer = 3,
-  WGPUBindingType_UniformBufferDynamic = 4,
-  WGPUBindingType_StorageBufferDynamic = 5,
-  WGPUBindingType_StorageTexture = 10,
+  WGPUBindingType_StorageBuffer = 1,
+  WGPUBindingType_ReadonlyStorageBuffer = 2,
+  WGPUBindingType_Sampler = 3,
+  WGPUBindingType_SampledTexture = 4,
+  WGPUBindingType_StorageTexture = 5,
 } WGPUBindingType;
 
 typedef enum {
@@ -135,8 +134,15 @@ typedef enum {
 } WGPUStencilOperation;
 
 typedef enum {
-  WGPUStoreOp_Store = 0,
+  WGPUStoreOp_Clear = 0,
+  WGPUStoreOp_Store = 1,
 } WGPUStoreOp;
+
+typedef enum {
+  WGPUTextureAspect_All,
+  WGPUTextureAspect_StencilOnly,
+  WGPUTextureAspect_DepthOnly,
+} WGPUTextureAspect;
 
 typedef enum {
   WGPUTextureDimension_D1,
@@ -146,53 +152,49 @@ typedef enum {
 
 typedef enum {
   WGPUTextureFormat_R8Unorm = 0,
-  WGPUTextureFormat_R8UnormSrgb = 1,
-  WGPUTextureFormat_R8Snorm = 2,
-  WGPUTextureFormat_R8Uint = 3,
-  WGPUTextureFormat_R8Sint = 4,
-  WGPUTextureFormat_R16Unorm = 5,
-  WGPUTextureFormat_R16Snorm = 6,
-  WGPUTextureFormat_R16Uint = 7,
-  WGPUTextureFormat_R16Sint = 8,
-  WGPUTextureFormat_R16Float = 9,
-  WGPUTextureFormat_Rg8Unorm = 10,
-  WGPUTextureFormat_Rg8UnormSrgb = 11,
-  WGPUTextureFormat_Rg8Snorm = 12,
-  WGPUTextureFormat_Rg8Uint = 13,
-  WGPUTextureFormat_Rg8Sint = 14,
-  WGPUTextureFormat_B5g6r5Unorm = 15,
-  WGPUTextureFormat_R32Uint = 16,
-  WGPUTextureFormat_R32Sint = 17,
-  WGPUTextureFormat_R32Float = 18,
-  WGPUTextureFormat_Rg16Unorm = 19,
-  WGPUTextureFormat_Rg16Snorm = 20,
-  WGPUTextureFormat_Rg16Uint = 21,
-  WGPUTextureFormat_Rg16Sint = 22,
-  WGPUTextureFormat_Rg16Float = 23,
-  WGPUTextureFormat_Rgba8Unorm = 24,
-  WGPUTextureFormat_Rgba8UnormSrgb = 25,
-  WGPUTextureFormat_Rgba8Snorm = 26,
-  WGPUTextureFormat_Rgba8Uint = 27,
-  WGPUTextureFormat_Rgba8Sint = 28,
-  WGPUTextureFormat_Bgra8Unorm = 29,
-  WGPUTextureFormat_Bgra8UnormSrgb = 30,
-  WGPUTextureFormat_Rgb10a2Unorm = 31,
-  WGPUTextureFormat_Rg11b10Float = 32,
-  WGPUTextureFormat_Rg32Uint = 33,
-  WGPUTextureFormat_Rg32Sint = 34,
-  WGPUTextureFormat_Rg32Float = 35,
-  WGPUTextureFormat_Rgba16Unorm = 36,
-  WGPUTextureFormat_Rgba16Snorm = 37,
-  WGPUTextureFormat_Rgba16Uint = 38,
-  WGPUTextureFormat_Rgba16Sint = 39,
-  WGPUTextureFormat_Rgba16Float = 40,
-  WGPUTextureFormat_Rgba32Uint = 41,
-  WGPUTextureFormat_Rgba32Sint = 42,
-  WGPUTextureFormat_Rgba32Float = 43,
-  WGPUTextureFormat_D16Unorm = 44,
-  WGPUTextureFormat_D32Float = 45,
-  WGPUTextureFormat_D24UnormS8Uint = 46,
-  WGPUTextureFormat_D32FloatS8Uint = 47,
+  WGPUTextureFormat_R8Snorm = 1,
+  WGPUTextureFormat_R8Uint = 2,
+  WGPUTextureFormat_R8Sint = 3,
+  WGPUTextureFormat_R16Unorm = 4,
+  WGPUTextureFormat_R16Snorm = 5,
+  WGPUTextureFormat_R16Uint = 6,
+  WGPUTextureFormat_R16Sint = 7,
+  WGPUTextureFormat_R16Float = 8,
+  WGPUTextureFormat_Rg8Unorm = 9,
+  WGPUTextureFormat_Rg8Snorm = 10,
+  WGPUTextureFormat_Rg8Uint = 11,
+  WGPUTextureFormat_Rg8Sint = 12,
+  WGPUTextureFormat_R32Uint = 13,
+  WGPUTextureFormat_R32Sint = 14,
+  WGPUTextureFormat_R32Float = 15,
+  WGPUTextureFormat_Rg16Unorm = 16,
+  WGPUTextureFormat_Rg16Snorm = 17,
+  WGPUTextureFormat_Rg16Uint = 18,
+  WGPUTextureFormat_Rg16Sint = 19,
+  WGPUTextureFormat_Rg16Float = 20,
+  WGPUTextureFormat_Rgba8Unorm = 21,
+  WGPUTextureFormat_Rgba8UnormSrgb = 22,
+  WGPUTextureFormat_Rgba8Snorm = 23,
+  WGPUTextureFormat_Rgba8Uint = 24,
+  WGPUTextureFormat_Rgba8Sint = 25,
+  WGPUTextureFormat_Bgra8Unorm = 26,
+  WGPUTextureFormat_Bgra8UnormSrgb = 27,
+  WGPUTextureFormat_Rgb10a2Unorm = 28,
+  WGPUTextureFormat_Rg11b10Float = 29,
+  WGPUTextureFormat_Rg32Uint = 30,
+  WGPUTextureFormat_Rg32Sint = 31,
+  WGPUTextureFormat_Rg32Float = 32,
+  WGPUTextureFormat_Rgba16Unorm = 33,
+  WGPUTextureFormat_Rgba16Snorm = 34,
+  WGPUTextureFormat_Rgba16Uint = 35,
+  WGPUTextureFormat_Rgba16Sint = 36,
+  WGPUTextureFormat_Rgba16Float = 37,
+  WGPUTextureFormat_Rgba32Uint = 38,
+  WGPUTextureFormat_Rgba32Sint = 39,
+  WGPUTextureFormat_Rgba32Float = 40,
+  WGPUTextureFormat_Depth32Float = 41,
+  WGPUTextureFormat_Depth24Plus = 42,
+  WGPUTextureFormat_Depth24PlusStencil8 = 43,
 } WGPUTextureFormat;
 
 typedef enum {
@@ -313,10 +315,10 @@ typedef WGPUId WGPURenderPassId;
 typedef WGPUId WGPUTextureViewId;
 
 typedef struct {
-  float r;
-  float g;
-  float b;
-  float a;
+  double r;
+  double g;
+  double b;
+  double a;
 } WGPUColor;
 #define WGPUColor_TRANSPARENT (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 0 }
 #define WGPUColor_BLACK (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 1 }
@@ -413,6 +415,9 @@ typedef struct {
   uint32_t binding;
   WGPUShaderStage visibility;
   WGPUBindingType ty;
+  WGPUTextureViewDimension texture_dimension;
+  bool multisampled;
+  bool dynamic;
 } WGPUBindGroupLayoutBinding;
 
 typedef struct {
@@ -423,13 +428,14 @@ typedef struct {
 typedef uint32_t WGPUBufferUsage;
 #define WGPUBufferUsage_MAP_READ 1
 #define WGPUBufferUsage_MAP_WRITE 2
-#define WGPUBufferUsage_TRANSFER_SRC 4
-#define WGPUBufferUsage_TRANSFER_DST 8
+#define WGPUBufferUsage_COPY_SRC 4
+#define WGPUBufferUsage_COPY_DST 8
 #define WGPUBufferUsage_INDEX 16
 #define WGPUBufferUsage_VERTEX 32
 #define WGPUBufferUsage_UNIFORM 64
 #define WGPUBufferUsage_STORAGE 128
-#define WGPUBufferUsage_INDIRECT 256
+#define WGPUBufferUsage_STORAGE_READ 256
+#define WGPUBufferUsage_INDIRECT 512
 #define WGPUBufferUsage_NONE 0
 
 typedef struct {
@@ -540,6 +546,8 @@ typedef struct {
   const WGPUDepthStencilStateDescriptor *depth_stencil_state;
   WGPUVertexInputDescriptor vertex_input;
   uint32_t sample_count;
+  uint32_t sample_mask;
+  bool alpha_coverage_enabled;
 } WGPURenderPipelineDescriptor;
 
 typedef struct {
@@ -568,8 +576,8 @@ typedef WGPUId WGPUSurfaceId;
 typedef WGPUSurfaceId WGPUSwapChainId;
 
 typedef uint32_t WGPUTextureUsage;
-#define WGPUTextureUsage_TRANSFER_SRC 1
-#define WGPUTextureUsage_TRANSFER_DST 2
+#define WGPUTextureUsage_COPY_SRC 1
+#define WGPUTextureUsage_COPY_DST 2
 #define WGPUTextureUsage_SAMPLED 4
 #define WGPUTextureUsage_STORAGE 8
 #define WGPUTextureUsage_OUTPUT_ATTACHMENT 16
@@ -600,24 +608,21 @@ typedef struct {
   WGPUPowerPreference power_preference;
 } WGPUAdapterDescriptor;
 
+typedef WGPUId WGPURenderBundleId;
+
 typedef struct {
   WGPUTextureId texture_id;
   WGPUTextureViewId view_id;
 } WGPUSwapChainOutput;
 
-typedef uint32_t WGPUTextureAspectFlags;
-#define WGPUTextureAspectFlags_COLOR 1
-#define WGPUTextureAspectFlags_DEPTH 2
-#define WGPUTextureAspectFlags_STENCIL 4
-
 typedef struct {
   WGPUTextureFormat format;
   WGPUTextureViewDimension dimension;
-  WGPUTextureAspectFlags aspect;
+  WGPUTextureAspect aspect;
   uint32_t base_mip_level;
   uint32_t level_count;
   uint32_t base_array_layer;
-  uint32_t array_count;
+  uint32_t array_layer_count;
 } WGPUTextureViewDescriptor;
 
 #if defined(WGPU_LOCAL)
@@ -763,6 +768,10 @@ WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextu
 
 void wgpu_device_destroy(WGPUDeviceId device_id);
 
+#if defined(WGPU_LOCAL)
+void wgpu_device_get_limits(WGPUDeviceId _device_id, WGPULimits *limits);
+#endif
+
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
 void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
@@ -785,8 +794,8 @@ WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
 #endif
 
 #if defined(WGPU_LOCAL)
-WGPUAdapterId wgpu_instance_get_adapter(WGPUInstanceId instance_id,
-                                        const WGPUAdapterDescriptor *desc);
+WGPUAdapterId wgpu_instance_request_adapter(WGPUInstanceId instance_id,
+                                            const WGPUAdapterDescriptor *desc);
 #endif
 
 void wgpu_queue_submit(WGPUQueueId queue_id,
@@ -815,6 +824,10 @@ void wgpu_render_pass_draw_indirect(WGPURenderPassId pass_id,
                                     WGPUBufferAddress indirect_offset);
 
 void wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
+
+void wgpu_render_pass_execute_bundles(WGPURenderPassId _pass_id,
+                                      const WGPURenderBundleId *_bundles,
+                                      uintptr_t _bundles_length);
 
 void wgpu_render_pass_insert_debug_marker(WGPURenderPassId _pass_id, WGPURawString _label);
 
@@ -860,10 +873,6 @@ void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 
 void wgpu_swap_chain_present(WGPUSwapChainId swap_chain_id);
-
-#if defined(WGPU_LOCAL)
-WGPUTextureViewId wgpu_texture_create_default_view(WGPUTextureId texture_id);
-#endif
 
 #if defined(WGPU_LOCAL)
 WGPUTextureViewId wgpu_texture_create_view(WGPUTextureId texture_id,
