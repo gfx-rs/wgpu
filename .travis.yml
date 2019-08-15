@@ -69,7 +69,7 @@ script:
       cmake --build . --target install &&
       cd ../.. &&
       export CMAKE_PREFIX_PATH=$GLFW3_INSTALL_DIR &&
-      make examples-compute example-triangle VERBOSE=1;
+      make example-compute example-triangle VERBOSE=1;
     fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then make VERBOSE=1; fi
   # TODO: Temporarily only test building the gl backend, properly test when it is usable from C
