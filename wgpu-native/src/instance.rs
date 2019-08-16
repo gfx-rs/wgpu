@@ -81,14 +81,14 @@ pub extern "C" fn wgpu_create_instance() -> InstanceId {
     HUB.instances.register_local(inst, &mut Token::root())
 }
 
-#[cfg(all(feature = "local", feature = "gfx-backend-gl"))]
+#[cfg(all(feature = "local", feature = "glutin"))]
 pub fn wgpu_create_gl_instance(windowed_context: back::glutin::RawContext<back::glutin::PossiblyCurrent>) -> InstanceId {
     let raw = back::Surface::from_context(windowed_context);
     let surface = SurfaceHandle::new(raw);
     HUB.surfaces.register_local(surface, &mut Token::root())
 }
 
-#[cfg(all(feature = "window-winit", not(feature = "gfx-backend-gl")))]
+#[cfg(all(feature = "local", feature = "winit", not(feature = "glutin")))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_winit(
     instance_id: InstanceId,
@@ -151,8 +151,7 @@ pub fn instance_create_surface_from_macos_layer(
     }
 }
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-#[cfg(feature = "local")]
+#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
     instance_id: InstanceId,
@@ -190,8 +189,7 @@ pub fn instance_create_surface_from_windows_hwnd(
     SurfaceHandle::new(raw)
 }
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-#[cfg(feature = "local")]
+#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
 #[no_mangle]
 pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
     instance_id: InstanceId,
@@ -218,11 +216,13 @@ pub fn instance_get_adapter(
         let (instance_guard, _) = HUB.instances.read(token);
         instance_guard[instance_id].enumerate_adapters()
     };
-    #[cfg(feature = "gfx-backend-gl")]
+    #[cfg(feature = "glutin")]
     let adapters = {
         let (surface_guard, _) = HUB.surfaces.read(token);
         surface_guard[instance_id].raw.enumerate_adapters()
     };
+    #[cfg(all(feature = "glutin", not(feature = "gfx-backend-gl")))]
+    let adapters = Vec::<AdapterHandle>::new();
 
     let (mut integrated_first, mut discrete_first, mut discrete_last, mut alternative) =
         (None, None, None, None);
