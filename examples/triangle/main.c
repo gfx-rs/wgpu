@@ -36,7 +36,7 @@ int main() {
     WGPUInstanceId instance = wgpu_create_instance();
 
     WGPUAdapterId adapter = wgpu_instance_request_adapter(instance,
-        &(WGPUAdapterDescriptor){
+        &(WGPURequestAdapterOptions){
             .power_preference = WGPUPowerPreference_LowPower,
         });
 
@@ -88,17 +88,17 @@ int main() {
             &(WGPURenderPipelineDescriptor){
                 .layout = pipeline_layout,
                 .vertex_stage =
-                    (WGPUPipelineStageDescriptor){
+                    (WGPUProgrammableStageDescriptor){
                         .module = vertex_shader,
                         .entry_point = "main",
                     },
                 .fragment_stage =
-                    &(WGPUPipelineStageDescriptor){
+                    &(WGPUProgrammableStageDescriptor){
                         .module = fragment_shader,
                         .entry_point = "main",
                     },
                 .rasterization_state =
-                    (WGPURasterizationStateDescriptor){
+                    &(WGPURasterizationStateDescriptor){
                         .front_face = WGPUFrontFace_Ccw,
                         .cull_mode = WGPUCullMode_None,
                         .depth_bias = 0,
@@ -238,7 +238,7 @@ int main() {
         wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
         WGPUQueueId queue = wgpu_device_get_queue(device);
         wgpu_render_pass_end_pass(rpass);
-        WGPUCommandBufferId cmd_buf =  wgpu_command_encoder_finish(cmd_encoder);
+        WGPUCommandBufferId cmd_buf =  wgpu_command_encoder_finish(cmd_encoder, NULL);
         wgpu_queue_submit(queue, &cmd_buf, 1);
         wgpu_swap_chain_present(swap_chain);
 

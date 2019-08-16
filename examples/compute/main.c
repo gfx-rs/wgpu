@@ -32,16 +32,8 @@ int main(
     uint32_t numbers_length = size / sizeof(uint32_t);
 
     WGPUInstanceId instance = wgpu_create_instance();
-
-    WGPUAdapterId adapter = wgpu_instance_request_adapter(instance,
-        &(WGPUAdapterDescriptor){
-            .power_preference = WGPUPowerPreference_LowPower,
-        });
-
-    WGPUDeviceId device = wgpu_adapter_request_device(adapter,
-        &(WGPUDeviceDescriptor){
-            .extensions = NULL
-        });
+    WGPUAdapterId adapter = wgpu_instance_request_adapter(instance, NULL);
+    WGPUDeviceId device = wgpu_adapter_request_device(adapter, NULL);
 
 	uint8_t *staging_memory;
 
@@ -100,7 +92,7 @@ int main(
         wgpu_device_create_compute_pipeline(device,
             &(WGPUComputePipelineDescriptor){
 				.layout = pipeline_layout,
-                .compute_stage = (WGPUPipelineStageDescriptor){
+                .compute_stage = (WGPUProgrammableStageDescriptor){
                     .module = shader_module,
 					.entry_point = "main"
                 }});
@@ -126,7 +118,7 @@ int main(
 
     WGPUQueueId queue = wgpu_device_get_queue(device);
 
-    WGPUCommandBufferId command_buffer = wgpu_command_encoder_finish(encoder);
+    WGPUCommandBufferId command_buffer = wgpu_command_encoder_finish(encoder, NULL);
 
     wgpu_queue_submit(queue, &command_buffer, 1);
 

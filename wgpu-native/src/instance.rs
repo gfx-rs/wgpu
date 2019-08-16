@@ -26,23 +26,29 @@ pub enum PowerPreference {
     HighPerformance = 2,
 }
 
+impl Default for PowerPreference {
+    fn default() -> Self {
+        PowerPreference::Default
+    }
+}
+
 #[repr(C)]
-#[derive(Debug)]
-#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
-pub struct AdapterDescriptor {
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
 }
 
 #[repr(C)]
-#[derive(Debug, Default)]
-#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
-#[derive(Debug)]
-#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
 }
@@ -56,8 +62,8 @@ impl Default for Limits {
 }
 
 #[repr(C)]
-#[derive(Debug)]
-#[cfg_attr(feature = "remote", derive(Clone, Serialize, Deserialize))]
+#[derive(Clone, Debug, Default)]
+#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
     pub limits: Limits,
@@ -204,7 +210,7 @@ pub fn wgpu_instance_get_gl_surface(instance_id: InstanceId) -> SurfaceId {
 
 pub fn instance_get_adapter(
     instance_id: InstanceId,
-    desc: &AdapterDescriptor,
+    desc: &RequestAdapterOptions,
     token: &mut Token<Root>,
 ) -> AdapterHandle {
     #[cfg(not(feature = "gfx-backend-gl"))]
@@ -258,10 +264,10 @@ pub fn instance_get_adapter(
 #[no_mangle]
 pub extern "C" fn wgpu_instance_request_adapter(
     instance_id: InstanceId,
-    desc: &AdapterDescriptor,
+    desc: Option<&RequestAdapterOptions>,
 ) -> AdapterId {
     let mut token = Token::root();
-    let adapter = instance_get_adapter(instance_id, desc, &mut token);
+    let adapter = instance_get_adapter(instance_id, &desc.cloned().unwrap_or_default(), &mut token);
     let limits = adapter.physical_device.limits();
 
     info!("Adapter {:?}", adapter.info);
@@ -295,9 +301,13 @@ pub fn adapter_create_device(
 #[no_mangle]
 pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: AdapterId,
-    desc: &DeviceDescriptor,
+    desc: Option<&DeviceDescriptor>,
 ) -> DeviceId {
     let mut token = Token::root();
-    let device = adapter_create_device(adapter_id, desc, &mut token);
+    let device = adapter_create_device(
+        adapter_id,
+        &desc.cloned().unwrap_or_default(),
+        &mut token,
+    );
     HUB.devices.register_local(device, &mut token)
 }

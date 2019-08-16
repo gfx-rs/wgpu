@@ -70,10 +70,10 @@ lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
 	cargo build --manifest-path wgpu-remote/Cargo.toml --features $(FEATURE_RUST)
 
 $(FFI_DIR)/wgpu.h: wgpu-native/cbindgen.toml $(WILDCARD_WGPU_NATIVE)
-	rustup run nightly cbindgen wgpu-native > $(FFI_DIR)/wgpu.h
+	rustup run nightly cbindgen -o $(FFI_DIR)/wgpu.h wgpu-native
 
 $(FFI_DIR)/wgpu-remote.h: wgpu-remote/cbindgen.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
-	rustup run nightly cbindgen wgpu-remote > $(FFI_DIR)/wgpu-remote.h
+	rustup run nightly cbindgen -o $(FFI_DIR)/wgpu-remote.h wgpu-remote
 
 example-compute: lib-native $(FFI_DIR)/wgpu.h examples/compute/main.c
 	cd examples/compute && $(CREATE_BUILD_DIR) && cd build && cmake .. -DBACKEND=$(FEATURE_RUST) $(GENERATOR_PLATFORM) && cmake --build .

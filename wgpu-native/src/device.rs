@@ -1166,16 +1166,20 @@ pub fn device_create_bind_group(
                     .use_extend(&*buffer_guard, bb.buffer, (), usage)
                     .unwrap();
 
-                let start = bb.offset;
-                let end = bb.offset + bb.size;
-                assert!(
-                    end <= buffer.size,
-                    "Bound buffer range {:?} does not fit in buffer size {}",
-                    start .. end,
-                    buffer.size
-                );
+                let end = if bb.size == 0 {
+                    None
+                } else {
+                    let end = bb.offset + bb.size;
+                    assert!(
+                        end <= buffer.size,
+                        "Bound buffer range {:?} does not fit in buffer size {}",
+                        bb.offset .. end,
+                        buffer.size
+                    );
+                    Some(end)
+                };
 
-                let range = Some(start) .. Some(end);
+                let range = Some(bb.offset) .. end;
                 hal::pso::Descriptor::Buffer(&buffer.raw, range)
             }
             binding_model::BindingResource::Sampler(id) => {
@@ -1603,7 +1607,11 @@ pub fn device_create_render_pipeline(
         geometry: None,
         fragment,
     };
-    let rasterizer = conv::map_rasterization_state_descriptor(&desc.rasterization_state);
+    let rasterizer = conv::map_rasterization_state_descriptor(
+        &unsafe { desc.rasterization_state.as_ref() }
+            .cloned()
+            .unwrap_or_default(),
+    );
 
     let desc_vbs = unsafe {
         slice::from_raw_parts(
@@ -1665,7 +1673,7 @@ pub fn device_create_render_pipeline(
             rasterization_samples: sc,
             sample_shading: None,
             sample_mask: !0,
-            alpha_coverage: false,
+            alpha_coverage: desc.alpha_to_coverage_enabled,
             alpha_to_one: false,
         })
     };

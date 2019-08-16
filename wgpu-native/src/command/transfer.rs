@@ -67,10 +67,10 @@ impl TextureCopyView {
 #[no_mangle]
 pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     command_buffer_id: CommandBufferId,
-    src: BufferId,
-    src_offset: BufferAddress,
-    dst: BufferId,
-    dst_offset: BufferAddress,
+    source: BufferId,
+    source_offset: BufferAddress,
+    destination: BufferId,
+    destination_offset: BufferAddress,
     size: BufferAddress,
 ) {
     let mut token = Token::root();
@@ -84,7 +84,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let (src_buffer, src_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, src, (), BufferUsage::COPY_SRC);
+        .use_replace(&*buffer_guard, source, (), BufferUsage::COPY_SRC);
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -95,7 +95,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     let (dst_buffer, dst_pending) = cmb
         .trackers
         .buffers
-        .use_replace(&*buffer_guard, dst, (), BufferUsage::COPY_DST);
+        .use_replace(&*buffer_guard, destination, (), BufferUsage::COPY_DST);
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -104,8 +104,8 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
     }));
 
     let region = hal::command::BufferCopy {
-        src: src_offset,
-        dst: dst_offset,
+        src: source_offset,
+        dst: destination_offset,
         size,
     };
     let cmb_raw = cmb.raw.last_mut().unwrap();

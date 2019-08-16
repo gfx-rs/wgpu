@@ -351,6 +351,10 @@ typedef struct {
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
 
+typedef struct {
+  uint32_t todo;
+} WGPUCommandBufferDescriptor;
+
 typedef const char *WGPURawString;
 
 typedef WGPUId WGPUComputePipelineId;
@@ -454,11 +458,11 @@ typedef WGPUId WGPUShaderModuleId;
 typedef struct {
   WGPUShaderModuleId module;
   WGPURawString entry_point;
-} WGPUPipelineStageDescriptor;
+} WGPUProgrammableStageDescriptor;
 
 typedef struct {
   WGPUPipelineLayoutId layout;
-  WGPUPipelineStageDescriptor compute_stage;
+  WGPUProgrammableStageDescriptor compute_stage;
 } WGPUComputePipelineDescriptor;
 
 typedef struct {
@@ -537,17 +541,17 @@ typedef struct {
 
 typedef struct {
   WGPUPipelineLayoutId layout;
-  WGPUPipelineStageDescriptor vertex_stage;
-  const WGPUPipelineStageDescriptor *fragment_stage;
+  WGPUProgrammableStageDescriptor vertex_stage;
+  const WGPUProgrammableStageDescriptor *fragment_stage;
   WGPUPrimitiveTopology primitive_topology;
-  WGPURasterizationStateDescriptor rasterization_state;
+  const WGPURasterizationStateDescriptor *rasterization_state;
   const WGPUColorStateDescriptor *color_states;
   uintptr_t color_states_length;
   const WGPUDepthStencilStateDescriptor *depth_stencil_state;
   WGPUVertexInputDescriptor vertex_input;
   uint32_t sample_count;
   uint32_t sample_mask;
-  bool alpha_coverage_enabled;
+  bool alpha_to_coverage_enabled;
 } WGPURenderPipelineDescriptor;
 
 typedef struct {
@@ -606,7 +610,7 @@ typedef WGPUDeviceId WGPUQueueId;
 
 typedef struct {
   WGPUPowerPreference power_preference;
-} WGPUAdapterDescriptor;
+} WGPURequestAdapterOptions;
 
 typedef WGPUId WGPURenderBundleId;
 
@@ -649,10 +653,10 @@ void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
 void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
 void wgpu_command_buffer_copy_buffer_to_buffer(WGPUCommandBufferId command_buffer_id,
-                                               WGPUBufferId src,
-                                               WGPUBufferAddress src_offset,
-                                               WGPUBufferId dst,
-                                               WGPUBufferAddress dst_offset,
+                                               WGPUBufferId source,
+                                               WGPUBufferAddress source_offset,
+                                               WGPUBufferId destination,
+                                               WGPUBufferAddress destination_offset,
                                                WGPUBufferAddress size);
 
 void wgpu_command_buffer_copy_buffer_to_texture(WGPUCommandBufferId command_buffer_id,
@@ -679,7 +683,8 @@ WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId com
                                                         const WGPURenderPassDescriptor *desc);
 #endif
 
-WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_encoder_id);
+WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_encoder_id,
+                                                const WGPUCommandBufferDescriptor *_desc);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 
@@ -795,7 +800,7 @@ WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
 
 #if defined(WGPU_LOCAL)
 WGPUAdapterId wgpu_instance_request_adapter(WGPUInstanceId instance_id,
-                                            const WGPUAdapterDescriptor *desc);
+                                            const WGPURequestAdapterOptions *desc);
 #endif
 
 void wgpu_queue_submit(WGPUQueueId queue_id,
@@ -858,6 +863,7 @@ void wgpu_render_pass_set_scissor_rect(WGPURenderPassId pass_id,
 void wgpu_render_pass_set_stencil_reference(WGPURenderPassId pass_id, uint32_t value);
 
 void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
+                                         uint32_t start_slot,
                                          const WGPUBufferId *buffers,
                                          const WGPUBufferAddress *offsets,
                                          uintptr_t length);

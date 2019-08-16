@@ -248,7 +248,7 @@ pub struct ShaderModuleDescriptor {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct PipelineStageDescriptor {
+pub struct ProgrammableStageDescriptor {
     pub module: ShaderModuleId,
     pub entry_point: RawString,
 }
@@ -257,7 +257,7 @@ pub struct PipelineStageDescriptor {
 #[derive(Debug)]
 pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub compute_stage: PipelineStageDescriptor,
+    pub compute_stage: ProgrammableStageDescriptor,
 }
 
 #[derive(Debug)]
@@ -304,7 +304,7 @@ impl Default for CullMode {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
@@ -317,17 +317,17 @@ pub struct RasterizationStateDescriptor {
 #[derive(Debug)]
 pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub vertex_stage: PipelineStageDescriptor,
-    pub fragment_stage: *const PipelineStageDescriptor,
+    pub vertex_stage: ProgrammableStageDescriptor,
+    pub fragment_stage: *const ProgrammableStageDescriptor,
     pub primitive_topology: PrimitiveTopology,
-    pub rasterization_state: RasterizationStateDescriptor,
+    pub rasterization_state: *const RasterizationStateDescriptor,
     pub color_states: *const ColorStateDescriptor,
     pub color_states_length: usize,
     pub depth_stencil_state: *const DepthStencilStateDescriptor,
     pub vertex_input: VertexInputDescriptor,
     pub sample_count: u32,
     pub sample_mask: u32,
-    pub alpha_coverage_enabled: bool,
+    pub alpha_to_coverage_enabled: bool,
 }
 
 bitflags! {
