@@ -16,10 +16,10 @@ pub fn map_buffer_usage(
     }
 
     let mut hal_usage = U::empty();
-    if usage.contains(W::TRANSFER_SRC) {
+    if usage.contains(W::COPY_SRC) {
         hal_usage |= U::TRANSFER_SRC;
     }
-    if usage.contains(W::TRANSFER_DST) {
+    if usage.contains(W::COPY_DST) {
         hal_usage |= U::TRANSFER_DST;
     }
     if usage.contains(W::INDEX) {
@@ -49,10 +49,10 @@ pub fn map_texture_usage(
     use hal::image::Usage as U;
 
     let mut value = U::empty();
-    if usage.contains(W::TRANSFER_SRC) {
+    if usage.contains(W::COPY_SRC) {
         value |= U::TRANSFER_SRC;
     }
-    if usage.contains(W::TRANSFER_DST) {
+    if usage.contains(W::COPY_DST) {
         value |= U::TRANSFER_DST;
     }
     if usage.contains(W::SAMPLED) {
@@ -73,17 +73,24 @@ pub fn map_texture_usage(
     value
 }
 
-pub fn map_binding_type(binding_ty: binding_model::BindingType) -> hal::pso::DescriptorType {
-    use crate::binding_model::BindingType::*;
+pub fn map_binding_type(binding: &binding_model::BindGroupLayoutBinding) -> hal::pso::DescriptorType {
+    use crate::binding_model::BindingType as Bt;
     use hal::pso::DescriptorType as H;
-    match binding_ty {
-        UniformBuffer => H::UniformBuffer,
-        Sampler => H::Sampler,
-        SampledTexture => H::SampledImage,
-        StorageTexture => H::StorageImage,
-        StorageBuffer => H::StorageBuffer,
-        UniformBufferDynamic => H::UniformBufferDynamic,
-        StorageBufferDynamic => H::StorageBufferDynamic,
+    match binding.ty {
+        Bt::UniformBuffer => if binding.dynamic {
+            H::UniformBufferDynamic
+        } else {
+            H::UniformBuffer
+        },
+        Bt::StorageBuffer |
+        Bt::ReadonlyStorageBuffer => if binding.dynamic {
+            H::StorageBufferDynamic
+        } else {
+            H::StorageBuffer
+        },
+        Bt::Sampler => H::Sampler,
+        Bt::SampledTexture => H::SampledImage,
+        Bt::StorageTexture => H::StorageImage,
     }
 }
 
@@ -123,14 +130,14 @@ pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
 }
 
 pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::Primitive {
-    use crate::pipeline::PrimitiveTopology::*;
+    use crate::pipeline::PrimitiveTopology as Pt;
     use hal::Primitive as H;
     match primitive_topology {
-        PointList => H::PointList,
-        LineList => H::LineList,
-        LineStrip => H::LineStrip,
-        TriangleList => H::TriangleList,
-        TriangleStrip => H::TriangleStrip,
+        Pt::PointList => H::PointList,
+        Pt::LineList => H::LineList,
+        Pt::LineStrip => H::LineStrip,
+        Pt::TriangleList => H::TriangleList,
+        Pt::TriangleStrip => H::TriangleStrip,
     }
 }
 
@@ -175,43 +182,43 @@ fn map_color_write_flags(flags: pipeline::ColorWrite) -> hal::pso::ColorMask {
 }
 
 fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::BlendOp {
-    use crate::pipeline::BlendOperation::*;
+    use crate::pipeline::BlendOperation as Bo;
     use hal::pso::BlendOp as H;
     match blend_desc.operation {
-        Add => H::Add {
+        Bo::Add => H::Add {
             src: map_blend_factor(blend_desc.src_factor),
             dst: map_blend_factor(blend_desc.dst_factor),
         },
-        Subtract => H::Sub {
+        Bo::Subtract => H::Sub {
             src: map_blend_factor(blend_desc.src_factor),
             dst: map_blend_factor(blend_desc.dst_factor),
         },
-        ReverseSubtract => H::RevSub {
+        Bo::ReverseSubtract => H::RevSub {
             src: map_blend_factor(blend_desc.src_factor),
             dst: map_blend_factor(blend_desc.dst_factor),
         },
-        Min => H::Min,
-        Max => H::Max,
+        Bo::Min => H::Min,
+        Bo::Max => H::Max,
     }
 }
 
 fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
-    use crate::pipeline::BlendFactor::*;
+    use crate::pipeline::BlendFactor as Bf;
     use hal::pso::Factor as H;
     match blend_factor {
-        Zero => H::Zero,
-        One => H::One,
-        SrcColor => H::SrcColor,
-        OneMinusSrcColor => H::OneMinusSrcColor,
-        SrcAlpha => H::SrcAlpha,
-        OneMinusSrcAlpha => H::OneMinusSrcAlpha,
-        DstColor => H::DstColor,
-        OneMinusDstColor => H::OneMinusDstColor,
-        DstAlpha => H::DstAlpha,
-        OneMinusDstAlpha => H::OneMinusDstAlpha,
-        SrcAlphaSaturated => H::SrcAlphaSaturate,
-        BlendColor => H::ConstColor,
-        OneMinusBlendColor => H::OneMinusConstColor,
+        Bf::Zero => H::Zero,
+        Bf::One => H::One,
+        Bf::SrcColor => H::SrcColor,
+        Bf::OneMinusSrcColor => H::OneMinusSrcColor,
+        Bf::SrcAlpha => H::SrcAlpha,
+        Bf::OneMinusSrcAlpha => H::OneMinusSrcAlpha,
+        Bf::DstColor => H::DstColor,
+        Bf::OneMinusDstColor => H::OneMinusDstColor,
+        Bf::DstAlpha => H::DstAlpha,
+        Bf::OneMinusDstAlpha => H::OneMinusDstAlpha,
+        Bf::SrcAlphaSaturated => H::SrcAlphaSaturate,
+        Bf::BlendColor => H::ConstColor,
+        Bf::OneMinusBlendColor => H::OneMinusConstColor,
     }
 }
 
@@ -274,140 +281,134 @@ fn map_stencil_face(
 }
 
 pub fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
-    use crate::resource::CompareFunction::*;
+    use crate::resource::CompareFunction as Cf;
     use hal::pso::Comparison as H;
     match compare_function {
-        Never => H::Never,
-        Less => H::Less,
-        Equal => H::Equal,
-        LessEqual => H::LessEqual,
-        Greater => H::Greater,
-        NotEqual => H::NotEqual,
-        GreaterEqual => H::GreaterEqual,
-        Always => H::Always,
+        Cf::Never => H::Never,
+        Cf::Less => H::Less,
+        Cf::Equal => H::Equal,
+        Cf::LessEqual => H::LessEqual,
+        Cf::Greater => H::Greater,
+        Cf::NotEqual => H::NotEqual,
+        Cf::GreaterEqual => H::GreaterEqual,
+        Cf::Always => H::Always,
     }
 }
 
 fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::pso::StencilOp {
-    use crate::pipeline::StencilOperation::*;
+    use crate::pipeline::StencilOperation as So;
     use hal::pso::StencilOp as H;
     match stencil_operation {
-        Keep => H::Keep,
-        Zero => H::Zero,
-        Replace => H::Replace,
-        Invert => H::Invert,
-        IncrementClamp => H::IncrementClamp,
-        DecrementClamp => H::DecrementClamp,
-        IncrementWrap => H::IncrementWrap,
-        DecrementWrap => H::DecrementWrap,
+        So::Keep => H::Keep,
+        So::Zero => H::Zero,
+        So::Replace => H::Replace,
+        So::Invert => H::Invert,
+        So::IncrementClamp => H::IncrementClamp,
+        So::DecrementClamp => H::DecrementClamp,
+        So::IncrementWrap => H::IncrementWrap,
+        So::DecrementWrap => H::DecrementWrap,
     }
 }
 
 pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::format::Format {
-    use crate::resource::TextureFormat::*;
+    use crate::resource::TextureFormat as Tf;
     use hal::format::Format as H;
     match texture_format {
         // Normal 8 bit formats
-        R8Unorm => H::R8Unorm,
-        R8UnormSrgb => H::R8Srgb,
-        R8Snorm => H::R8Snorm,
-        R8Uint => H::R8Uint,
-        R8Sint => H::R8Sint,
+        Tf::R8Unorm => H::R8Unorm,
+        Tf::R8Snorm => H::R8Snorm,
+        Tf::R8Uint => H::R8Uint,
+        Tf::R8Sint => H::R8Sint,
 
         // Normal 16 bit formats
-        R16Unorm => H::R16Unorm,
-        R16Snorm => H::R16Snorm,
-        R16Uint => H::R16Uint,
-        R16Sint => H::R16Sint,
-        R16Float => H::R16Sfloat,
+        Tf::R16Unorm => H::R16Unorm,
+        Tf::R16Snorm => H::R16Snorm,
+        Tf::R16Uint => H::R16Uint,
+        Tf::R16Sint => H::R16Sint,
+        Tf::R16Float => H::R16Sfloat,
 
-        Rg8Unorm => H::Rg8Unorm,
-        Rg8UnormSrgb => H::Rg8Srgb,
-        Rg8Snorm => H::Rg8Snorm,
-        Rg8Uint => H::Rg8Uint,
-        Rg8Sint => H::Rg8Sint,
-
-        // Packed 16 bit formats
-        B5g6r5Unorm => H::B5g6r5Unorm,
+        Tf::Rg8Unorm => H::Rg8Unorm,
+        Tf::Rg8Snorm => H::Rg8Snorm,
+        Tf::Rg8Uint => H::Rg8Uint,
+        Tf::Rg8Sint => H::Rg8Sint,
 
         // Normal 32 bit formats
-        R32Uint => H::R32Uint,
-        R32Sint => H::R32Sint,
-        R32Float => H::R32Sfloat,
-        Rg16Unorm => H::Rg16Unorm,
-        Rg16Snorm => H::Rg16Snorm,
-        Rg16Uint => H::Rg16Uint,
-        Rg16Sint => H::Rg16Sint,
-        Rg16Float => H::Rg16Sfloat,
-        Rgba8Unorm => H::Rgba8Unorm,
-        Rgba8UnormSrgb => H::Rgba8Srgb,
-        Rgba8Snorm => H::Rgba8Snorm,
-        Rgba8Uint => H::Rgba8Uint,
-        Rgba8Sint => H::Rgba8Sint,
-        Bgra8Unorm => H::Bgra8Unorm,
-        Bgra8UnormSrgb => H::Bgra8Srgb,
+        Tf::R32Uint => H::R32Uint,
+        Tf::R32Sint => H::R32Sint,
+        Tf::R32Float => H::R32Sfloat,
+        Tf::Rg16Unorm => H::Rg16Unorm,
+        Tf::Rg16Snorm => H::Rg16Snorm,
+        Tf::Rg16Uint => H::Rg16Uint,
+        Tf::Rg16Sint => H::Rg16Sint,
+        Tf::Rg16Float => H::Rg16Sfloat,
+        Tf::Rgba8Unorm => H::Rgba8Unorm,
+        Tf::Rgba8UnormSrgb => H::Rgba8Srgb,
+        Tf::Rgba8Snorm => H::Rgba8Snorm,
+        Tf::Rgba8Uint => H::Rgba8Uint,
+        Tf::Rgba8Sint => H::Rgba8Sint,
+        Tf::Bgra8Unorm => H::Bgra8Unorm,
+        Tf::Bgra8UnormSrgb => H::Bgra8Srgb,
 
         // Packed 32 bit formats
-        Rgb10a2Unorm => H::A2r10g10b10Unorm,
-        Rg11b10Float => H::B10g11r11Ufloat,
+        Tf::Rgb10a2Unorm => H::A2r10g10b10Unorm,
+        Tf::Rg11b10Float => H::B10g11r11Ufloat,
 
         // Normal 64 bit formats
-        Rg32Uint => H::Rg32Uint,
-        Rg32Sint => H::Rg32Sint,
-        Rg32Float => H::Rg32Sfloat,
-        Rgba16Unorm => H::Rgba16Unorm,
-        Rgba16Snorm => H::Rgba16Snorm,
-        Rgba16Uint => H::Rgba16Uint,
-        Rgba16Sint => H::Rgba16Sint,
-        Rgba16Float => H::Rgba16Sfloat,
+        Tf::Rg32Uint => H::Rg32Uint,
+        Tf::Rg32Sint => H::Rg32Sint,
+        Tf::Rg32Float => H::Rg32Sfloat,
+        Tf::Rgba16Unorm => H::Rgba16Unorm,
+        Tf::Rgba16Snorm => H::Rgba16Snorm,
+        Tf::Rgba16Uint => H::Rgba16Uint,
+        Tf::Rgba16Sint => H::Rgba16Sint,
+        Tf::Rgba16Float => H::Rgba16Sfloat,
 
         // Normal 128 bit formats
-        Rgba32Uint => H::Rgba32Uint,
-        Rgba32Sint => H::Rgba32Sint,
-        Rgba32Float => H::Rgba32Sfloat,
+        Tf::Rgba32Uint => H::Rgba32Uint,
+        Tf::Rgba32Sint => H::Rgba32Sint,
+        Tf::Rgba32Float => H::Rgba32Sfloat,
 
         // Depth and stencil formats
-        D16Unorm => H::D16Unorm,
-        D32Float => H::D32Sfloat,
-        D24UnormS8Uint => H::D24UnormS8Uint,
-        D32FloatS8Uint => H::D32SfloatS8Uint,
+        Tf::Depth32Float => H::D32Sfloat,
+        Tf::Depth24Plus => H::D24UnormS8Uint, //TODO: substitute
+        Tf::Depth24PlusStencil8 => H::D24UnormS8Uint, //TODO: substitute
     }
 }
 
 pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::Format {
-    use crate::pipeline::VertexFormat::*;
+    use crate::pipeline::VertexFormat as Vf;
     use hal::format::Format as H;
     match vertex_format {
-        Uchar2 => H::Rg8Uint,
-        Uchar4 => H::Rgba8Uint,
-        Char2 => H::Rg8Sint,
-        Char4 => H::Rgba8Sint,
-        Uchar2Norm => H::Rg8Unorm,
-        Uchar4Norm => H::Rgba8Unorm,
-        Char2Norm => H::Rg8Snorm,
-        Char4Norm => H::Rgba8Snorm,
-        Ushort2 => H::Rg16Uint,
-        Ushort4 => H::Rgba16Uint,
-        Short2 => H::Rg16Sint,
-        Short4 => H::Rgba16Sint,
-        Ushort2Norm => H::Rg16Unorm,
-        Ushort4Norm => H::Rgba16Unorm,
-        Short2Norm => H::Rg16Snorm,
-        Short4Norm => H::Rgba16Snorm,
-        Half2 => H::Rg16Sfloat,
-        Half4 => H::Rgba16Sfloat,
-        Float => H::R32Sfloat,
-        Float2 => H::Rg32Sfloat,
-        Float3 => H::Rgb32Sfloat,
-        Float4 => H::Rgba32Sfloat,
-        Uint => H::R32Uint,
-        Uint2 => H::Rg32Uint,
-        Uint3 => H::Rgb32Uint,
-        Uint4 => H::Rgba32Uint,
-        Int => H::R32Sint,
-        Int2 => H::Rg32Sint,
-        Int3 => H::Rgb32Sint,
-        Int4 => H::Rgba32Sint,
+        Vf::Uchar2 => H::Rg8Uint,
+        Vf::Uchar4 => H::Rgba8Uint,
+        Vf::Char2 => H::Rg8Sint,
+        Vf::Char4 => H::Rgba8Sint,
+        Vf::Uchar2Norm => H::Rg8Unorm,
+        Vf::Uchar4Norm => H::Rgba8Unorm,
+        Vf::Char2Norm => H::Rg8Snorm,
+        Vf::Char4Norm => H::Rgba8Snorm,
+        Vf::Ushort2 => H::Rg16Uint,
+        Vf::Ushort4 => H::Rgba16Uint,
+        Vf::Short2 => H::Rg16Sint,
+        Vf::Short4 => H::Rgba16Sint,
+        Vf::Ushort2Norm => H::Rg16Unorm,
+        Vf::Ushort4Norm => H::Rgba16Unorm,
+        Vf::Short2Norm => H::Rg16Snorm,
+        Vf::Short4Norm => H::Rgba16Snorm,
+        Vf::Half2 => H::Rg16Sfloat,
+        Vf::Half4 => H::Rgba16Sfloat,
+        Vf::Float => H::R32Sfloat,
+        Vf::Float2 => H::Rg32Sfloat,
+        Vf::Float3 => H::Rgb32Sfloat,
+        Vf::Float4 => H::Rgba32Sfloat,
+        Vf::Uint => H::R32Uint,
+        Vf::Uint2 => H::Rg32Uint,
+        Vf::Uint3 => H::Rgb32Uint,
+        Vf::Uint4 => H::Rgba32Uint,
+        Vf::Int => H::R32Sint,
+        Vf::Int2 => H::Rg32Sint,
+        Vf::Int3 => H::Rgb32Sint,
+        Vf::Int4 => H::Rgba32Sint,
     }
 }
 
@@ -466,33 +467,15 @@ pub fn map_texture_view_dimension(
     }
 }
 
-#[cfg(feature = "local")]
-pub fn map_texture_aspect_flags(aspect: resource::TextureAspectFlags) -> hal::format::Aspects {
-    use crate::resource::TextureAspectFlags as Taf;
-    use hal::format::Aspects;
-
-    let mut flags = Aspects::empty();
-    if aspect.contains(Taf::COLOR) {
-        flags |= Aspects::COLOR;
-    }
-    if aspect.contains(Taf::DEPTH) {
-        flags |= Aspects::DEPTH;
-    }
-    if aspect.contains(Taf::STENCIL) {
-        flags |= Aspects::STENCIL;
-    }
-    flags
-}
-
 pub fn map_buffer_state(usage: resource::BufferUsage) -> hal::buffer::State {
     use crate::resource::BufferUsage as W;
     use hal::buffer::Access as A;
 
     let mut access = A::empty();
-    if usage.contains(W::TRANSFER_SRC) {
+    if usage.contains(W::COPY_SRC) {
         access |= A::TRANSFER_READ;
     }
-    if usage.contains(W::TRANSFER_DST) {
+    if usage.contains(W::COPY_DST) {
         access |= A::TRANSFER_WRITE;
     }
     if usage.contains(W::INDEX) {
@@ -521,8 +504,8 @@ pub fn map_texture_state(
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
     let layout = match usage {
         W::UNINITIALIZED => return (A::empty(), L::Undefined),
-        W::TRANSFER_SRC => L::TransferSrcOptimal,
-        W::TRANSFER_DST => L::TransferDstOptimal,
+        W::COPY_SRC => L::TransferSrcOptimal,
+        W::COPY_DST => L::TransferDstOptimal,
         W::SAMPLED => L::ShaderReadOnlyOptimal,
         W::OUTPUT_ATTACHMENT if is_color => L::ColorAttachmentOptimal,
         W::OUTPUT_ATTACHMENT => L::DepthStencilAttachmentOptimal, //TODO: read-only depth/stencil
@@ -530,10 +513,10 @@ pub fn map_texture_state(
     };
 
     let mut access = A::empty();
-    if usage.contains(W::TRANSFER_SRC) {
+    if usage.contains(W::COPY_SRC) {
         access |= A::TRANSFER_READ;
     }
-    if usage.contains(W::TRANSFER_DST) {
+    if usage.contains(W::COPY_DST) {
         access |= A::TRANSFER_WRITE;
     }
     if usage.contains(W::SAMPLED) {
@@ -564,19 +547,18 @@ pub fn map_load_store_ops(
             command::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
         },
         store: match store {
+            command::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
             command::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
         },
     }
 }
 
 pub fn map_color_f32(color: &Color) -> hal::pso::ColorValue {
-    [color.r, color.g, color.b, color.a]
+    [color.r as f32, color.g as f32, color.b as f32, color.a as f32]
 }
-
 pub fn map_color_i32(color: &Color) -> [i32; 4] {
     [color.r as i32, color.g as i32, color.b as i32, color.a as i32]
 }
-
 pub fn map_color_u32(color: &Color) -> [u32; 4] {
     [color.r as u32, color.g as u32, color.b as u32, color.a as u32]
 }

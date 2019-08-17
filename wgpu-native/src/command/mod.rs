@@ -60,7 +60,8 @@ pub enum LoadOp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum StoreOp {
-    Store = 0,
+    Clear = 0,
+    Store = 1,
 }
 
 #[repr(C)]
@@ -159,9 +160,16 @@ pub struct CommandEncoderDescriptor {
     pub todo: u32,
 }
 
+#[repr(C)]
+#[derive(Debug)]
+pub struct CommandBufferDescriptor {
+    pub todo: u32,
+}
+
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_finish(
     command_encoder_id: CommandEncoderId,
+    _desc: Option<&CommandBufferDescriptor>,
 ) -> CommandBufferId {
     let mut token = Token::root();
     //TODO: actually close the last recorded command buffer

@@ -16,7 +16,7 @@ mod server;
 #[derive(Serialize, Deserialize, Debug)]
 enum InstanceMessage {
     Create(wgn::InstanceId),
-    InstanceGetAdapter(wgn::InstanceId, wgn::AdapterDescriptor, wgn::AdapterId),
+    InstanceRequestAdapter(wgn::InstanceId, wgn::RequestAdapterOptions, wgn::AdapterId),
     AdapterCreateDevice(wgn::AdapterId, wgn::DeviceDescriptor, wgn::DeviceId),
     Destroy(wgn::InstanceId),
 }
@@ -115,10 +115,10 @@ pub extern "C" fn wgpu_client_destroy(factory: &ClientFactory, client: *mut Clie
 #[no_mangle]
 pub extern "C" fn wgpu_client_get_adapter(
     client: &Client,
-    desc: &wgn::AdapterDescriptor,
+    desc: &wgn::RequestAdapterOptions,
 ) -> wgn::AdapterId {
     let adapter_id = client.identity.lock().adapters.alloc();
-    let msg = GlobalMessage::Instance(InstanceMessage::InstanceGetAdapter(
+    let msg = GlobalMessage::Instance(InstanceMessage::InstanceRequestAdapter(
         client.instance_id,
         desc.clone(),
         adapter_id,

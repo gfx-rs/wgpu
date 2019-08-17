@@ -27,7 +27,7 @@ fn process(message: GlobalMessage) -> ControlFlow {
                 let instance = wgn::create_instance();
                 wgn::HUB.instances.register(instance_id, instance, &mut token);
             }
-            InstanceMessage::InstanceGetAdapter(instance_id, ref desc, id) => {
+            InstanceMessage::InstanceRequestAdapter(instance_id, ref desc, id) => {
                 let adapter = wgn::instance_get_adapter(instance_id, desc, &mut token);
                 wgn::HUB.adapters.register(id, adapter, &mut token);
             }

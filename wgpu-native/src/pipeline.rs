@@ -40,6 +40,12 @@ pub enum BlendOperation {
     Max = 4,
 }
 
+impl Default for BlendOperation {
+    fn default() -> Self {
+        BlendOperation::Add
+    }
+}
+
 bitflags! {
     #[repr(transparent)]
     pub struct ColorWrite: u32 {
@@ -49,6 +55,12 @@ bitflags! {
         const ALPHA = 8;
         const COLOR = 7;
         const ALL = 15;
+    }
+}
+
+impl Default for ColorWrite {
+    fn default() -> Self {
+        ColorWrite::ALL
     }
 }
 
@@ -78,6 +90,12 @@ impl BlendDescriptor {
     }
 }
 
+impl Default for BlendDescriptor {
+    fn default() -> Self {
+        BlendDescriptor::REPLACE
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug)]
 pub struct ColorStateDescriptor {
@@ -100,6 +118,12 @@ pub enum StencilOperation {
     DecrementWrap = 7,
 }
 
+impl Default for StencilOperation {
+    fn default() -> Self {
+        StencilOperation::Keep
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct StencilStateFaceDescriptor {
@@ -116,6 +140,12 @@ impl StencilStateFaceDescriptor {
         depth_fail_op: StencilOperation::Keep,
         pass_op: StencilOperation::Keep,
     };
+}
+
+impl Default for StencilStateFaceDescriptor {
+    fn default() -> Self {
+        StencilStateFaceDescriptor::IGNORE
+    }
 }
 
 #[repr(C)]
@@ -218,7 +248,7 @@ pub struct ShaderModuleDescriptor {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct PipelineStageDescriptor {
+pub struct ProgrammableStageDescriptor {
     pub module: ShaderModuleId,
     pub entry_point: RawString,
 }
@@ -227,7 +257,7 @@ pub struct PipelineStageDescriptor {
 #[derive(Debug)]
 pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub compute_stage: PipelineStageDescriptor,
+    pub compute_stage: ProgrammableStageDescriptor,
 }
 
 #[derive(Debug)]
@@ -253,6 +283,12 @@ pub enum FrontFace {
     Cw = 1,
 }
 
+impl Default for FrontFace {
+    fn default() -> Self {
+        FrontFace::Ccw
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum CullMode {
@@ -261,8 +297,14 @@ pub enum CullMode {
     Back = 2,
 }
 
+impl Default for CullMode {
+    fn default() -> Self {
+        CullMode::None
+    }
+}
+
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
@@ -275,15 +317,17 @@ pub struct RasterizationStateDescriptor {
 #[derive(Debug)]
 pub struct RenderPipelineDescriptor {
     pub layout: PipelineLayoutId,
-    pub vertex_stage: PipelineStageDescriptor,
-    pub fragment_stage: *const PipelineStageDescriptor,
+    pub vertex_stage: ProgrammableStageDescriptor,
+    pub fragment_stage: *const ProgrammableStageDescriptor,
     pub primitive_topology: PrimitiveTopology,
-    pub rasterization_state: RasterizationStateDescriptor,
+    pub rasterization_state: *const RasterizationStateDescriptor,
     pub color_states: *const ColorStateDescriptor,
     pub color_states_length: usize,
     pub depth_stencil_state: *const DepthStencilStateDescriptor,
     pub vertex_input: VertexInputDescriptor,
     pub sample_count: u32,
+    pub sample_mask: u32,
+    pub alpha_to_coverage_enabled: bool,
 }
 
 bitflags! {

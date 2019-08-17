@@ -13,6 +13,7 @@ use crate::{
     CommandBuffer,
     CommandBufferId,
     RawString,
+    RenderBundleId,
     RenderPassId,
     RenderPipelineId,
     Stored,
@@ -636,4 +637,13 @@ pub extern "C" fn wgpu_render_pass_set_scissor_rect(
             }],
         );
     }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_render_pass_execute_bundles(
+    _pass_id: RenderPassId,
+    _bundles: *const RenderBundleId,
+    _bundles_length: usize,
+) {
+    unimplemented!()
 }

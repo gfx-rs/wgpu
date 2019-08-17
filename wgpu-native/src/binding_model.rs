@@ -1,4 +1,5 @@
 use crate::{
+    resource::TextureViewDimension,
     track::TrackerSet,
     BindGroupLayoutId,
     BufferAddress,
@@ -33,12 +34,11 @@ bitflags! {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BindingType {
     UniformBuffer = 0,
-    Sampler = 1,
-    SampledTexture = 2,
-    StorageBuffer = 3,
-    UniformBufferDynamic = 4,
-    StorageBufferDynamic = 5,
-    StorageTexture = 10,
+    StorageBuffer = 1,
+    ReadonlyStorageBuffer = 2,
+    Sampler = 3,
+    SampledTexture = 4,
+    StorageTexture = 5,
 }
 
 #[repr(C)]
@@ -47,6 +47,9 @@ pub struct BindGroupLayoutBinding {
     pub binding: u32,
     pub visibility: ShaderStage,
     pub ty: BindingType,
+    pub texture_dimension: TextureViewDimension,
+    pub multisampled: bool,
+    pub dynamic: bool,
 }
 
 #[repr(C)]

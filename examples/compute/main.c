@@ -12,7 +12,7 @@
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
 
 int main(
-    int argc, 
+    int argc,
     char *argv[]) {
 
     if (argc != 5) {
@@ -32,28 +32,20 @@ int main(
     uint32_t numbers_length = size / sizeof(uint32_t);
 
     WGPUInstanceId instance = wgpu_create_instance();
-
-    WGPUAdapterId adapter = wgpu_instance_get_adapter(instance,
-        &(WGPUAdapterDescriptor){
-            .power_preference = WGPUPowerPreference_LowPower,
-        });
-
-    WGPUDeviceId device = wgpu_adapter_request_device(adapter,
-        &(WGPUDeviceDescriptor){
-            .extensions = NULL
-        });
+    WGPUAdapterId adapter = wgpu_instance_request_adapter(instance, NULL);
+    WGPUDeviceId device = wgpu_adapter_request_device(adapter, NULL);
 
 	uint8_t *staging_memory;
 
     WGPUBufferId staging_buffer = wgpu_device_create_buffer_mapped(device,
             &(WGPUBufferDescriptor){
-                .size = size, 
+                .size = size,
 				.usage = WGPUBufferUsage_MAP_READ},
             &staging_memory);
 
 	memcpy((uint32_t *) staging_memory, numbers, size);
-	
-	wgpu_buffer_unmap(staging_buffer);	
+
+	wgpu_buffer_unmap(staging_buffer);
 
     WGPUBufferId storage_buffer = wgpu_device_create_buffer(device,
         &(WGPUBufferDescriptor){
@@ -72,14 +64,14 @@ int main(
 	WGPUBindingResource resource = {
 		.tag = WGPUBindingResource_Buffer,
         .buffer = (WGPUBufferBinding){
-            .buffer = storage_buffer, 
-			.size = size, 
+            .buffer = storage_buffer,
+			.size = size,
 			.offset = 0}};
 
     WGPUBindGroupId bind_group = wgpu_device_create_bind_group(device,
             &(WGPUBindGroupDescriptor){.layout = bind_group_layout,
                 .bindings = &(WGPUBindGroupBinding){
-					.binding = 0, 
+					.binding = 0,
 					.resource = resource},
                 .bindings_length = BINDINGS_LENGTH});
 
@@ -100,7 +92,7 @@ int main(
         wgpu_device_create_compute_pipeline(device,
             &(WGPUComputePipelineDescriptor){
 				.layout = pipeline_layout,
-                .compute_stage = (WGPUPipelineStageDescriptor){
+                .compute_stage = (WGPUProgrammableStageDescriptor){
                     .module = shader_module,
 					.entry_point = "main"
                 }});
@@ -126,7 +118,7 @@ int main(
 
     WGPUQueueId queue = wgpu_device_get_queue(device);
 
-    WGPUCommandBufferId command_buffer = wgpu_command_encoder_finish(encoder);
+    WGPUCommandBufferId command_buffer = wgpu_command_encoder_finish(encoder, NULL);
 
     wgpu_queue_submit(queue, &command_buffer, 1);
 

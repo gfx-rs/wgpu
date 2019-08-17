@@ -47,7 +47,7 @@ typedef struct {
 
 typedef struct {
   WGPUPowerPreference power_preference;
-} WGPUAdapterDescriptor;
+} WGPURequestAdapterOptions;
 
 typedef struct {
   WGPUClientFactory *factory;
@@ -63,7 +63,8 @@ WGPUClient *wgpu_client_create(const WGPUClientFactory *factory);
 
 void wgpu_client_destroy(const WGPUClientFactory *factory, WGPUClient *client);
 
-WGPUAdapterId wgpu_client_get_adapter(const WGPUClient *client, const WGPUAdapterDescriptor *desc);
+WGPUAdapterId wgpu_client_get_adapter(const WGPUClient *client,
+                                      const WGPURequestAdapterOptions *desc);
 
 WGPUInfrastructure wgpu_initialize(void);
 
