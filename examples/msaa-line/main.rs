@@ -34,21 +34,21 @@ impl Example {
         println!("sample_count: {}", sample_count);
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
-            vertex_stage: wgpu::PipelineStageDescriptor {
+            vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: vs_module,
                 entry_point: "main",
             },
-            fragment_stage: Some(wgpu::PipelineStageDescriptor {
+            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: fs_module,
                 entry_point: "main",
             }),
-            rasterization_state: wgpu::RasterizationStateDescriptor {
+            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::None,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
                 depth_bias_clamp: 0.0,
-            },
+            }),
             primitive_topology: wgpu::PrimitiveTopology::LineList,
             color_states: &[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
@@ -75,6 +75,8 @@ impl Example {
                 ],
             }],
             sample_count,
+            sample_mask: !0,
+            alpha_to_coverage_enabled: false,
         })
     }
 
@@ -94,7 +96,7 @@ impl Example {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         };
 
-        device.create_texture(multisampled_frame_descriptor).create_default_view()
+        device.create_texture(multisampled_frame_descriptor).create_view(None)
     }
 }
 
@@ -212,11 +214,11 @@ impl framework::Example for Example {
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_vertex_buffers(&[(&self.vertex_buffer, 0)]);
+            rpass.set_vertex_buffers(0, &[(&self.vertex_buffer, 0)]);
             rpass.draw(0..self.vertex_count, 0..1);
         }
 
-        device.get_queue().submit(&[encoder.finish()]);
+        device.get_queue().submit(&[encoder.finish(None)]);
     }
 }
 

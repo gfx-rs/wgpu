@@ -49,16 +49,16 @@ fn main() {
         (window, instance, size, surface)
     };
 
-    let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
+    let adapter = instance.get_adapter(Some(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    });
+    }));
 
-    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(Some(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    });
+    }));
 
     let vs = include_bytes!("shader.vert.spv");
     let vs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
@@ -78,21 +78,21 @@ fn main() {
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
-        vertex_stage: wgpu::PipelineStageDescriptor {
+        vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vs_module,
             entry_point: "main",
         },
-        fragment_stage: Some(wgpu::PipelineStageDescriptor {
+        fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
             module: &fs_module,
             entry_point: "main",
         }),
-        rasterization_state: wgpu::RasterizationStateDescriptor {
+        rasterization_state: Some(wgpu::RasterizationStateDescriptor {
             front_face: wgpu::FrontFace::Ccw,
             cull_mode: wgpu::CullMode::None,
             depth_bias: 0,
             depth_bias_slope_scale: 0.0,
             depth_bias_clamp: 0.0,
-        },
+        }),
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         color_states: &[wgpu::ColorStateDescriptor {
             format: wgpu::TextureFormat::Bgra8UnormSrgb,
@@ -104,6 +104,8 @@ fn main() {
         index_format: wgpu::IndexFormat::Uint16,
         vertex_buffers: &[],
         sample_count: 1,
+        sample_mask: !0,
+        alpha_to_coverage_enabled: false,
     });
 
     let mut swap_chain = device.create_swap_chain(
@@ -157,6 +159,6 @@ fn main() {
             rpass.draw(0 .. 3, 0 .. 1);
         }
 
-        device.get_queue().submit(&[encoder.finish()]);
+        device.get_queue().submit(&[encoder.finish(None)]);
     }
 }

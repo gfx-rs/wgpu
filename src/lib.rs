@@ -11,7 +11,7 @@ use std::slice;
 
 pub use wgn::winit;
 pub use wgn::{
-    AdapterDescriptor,
+    RequestAdapterOptions,
     AddressMode,
     BindGroupLayoutBinding,
     BindingType,
@@ -26,6 +26,7 @@ pub use wgn::{
     ColorStateDescriptor,
     ColorWrite,
     CommandEncoderDescriptor,
+    CommandBufferDescriptor,
     CompareFunction,
     CullMode,
     DepthStencilStateDescriptor,
@@ -52,7 +53,7 @@ pub use wgn::{
     StencilStateFaceDescriptor,
     StoreOp,
     SwapChainDescriptor,
-    TextureAspectFlags,
+    TextureAspect,
     TextureDescriptor,
     TextureDimension,
     TextureFormat,
@@ -282,7 +283,7 @@ pub struct PipelineLayoutDescriptor<'a> {
 }
 
 /// A description of a programmable pipeline stage.
-pub struct PipelineStageDescriptor<'a> {
+pub struct ProgrammableStageDescriptor<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
 
@@ -308,13 +309,13 @@ pub struct RenderPipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
 
     /// The compiled vertex stage and its entry point.
-    pub vertex_stage: PipelineStageDescriptor<'a>,
+    pub vertex_stage: ProgrammableStageDescriptor<'a>,
 
     /// The compiled fragment stage and its entry point, if any.
-    pub fragment_stage: Option<PipelineStageDescriptor<'a>>,
+    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
 
     /// The rasterization process for this pipeline.
-    pub rasterization_state: RasterizationStateDescriptor,
+    pub rasterization_state: Option<RasterizationStateDescriptor>,
 
     /// The primitive topology used to interpret vertices.
     pub primitive_topology: PrimitiveTopology,
@@ -333,6 +334,16 @@ pub struct RenderPipelineDescriptor<'a> {
 
     /// The number of samples calculated per pixel (for MSAA).
     pub sample_count: u32,
+
+    /// Bitmask that restricts the samples of a pixel modified by this pipeline.
+    pub sample_mask: u32,
+
+    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
+    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
+    /// affected by a primitive.
+    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
+    /// is guaranteed to be all 1-s.
+    pub alpha_to_coverage_enabled: bool,
 }
 
 /// A complete description of a compute pipeline.
@@ -341,7 +352,7 @@ pub struct ComputePipelineDescriptor<'a> {
     pub layout: &'a PipelineLayout,
 
     /// The compiled compute stage and its entry point.
-    pub compute_stage: PipelineStageDescriptor<'a>,
+    pub compute_stage: ProgrammableStageDescriptor<'a>,
 }
 
 /// A description of all the attachments of a render pass.
@@ -485,9 +496,9 @@ impl Instance {
     ///
     /// Panics if there are no available adapters. This will occur if none of the graphics backends
     /// are enabled.
-    pub fn get_adapter(&self, desc: &AdapterDescriptor) -> Adapter {
+    pub fn get_adapter(&self, options: Option<&RequestAdapterOptions>) -> Adapter {
         Adapter {
-            id: wgn::wgpu_instance_get_adapter(self.id, desc),
+            id: wgn::wgpu_instance_request_adapter(self.id, options),
         }
     }
 
@@ -542,7 +553,7 @@ impl Adapter {
     /// # Panics
     ///
     /// Panics if the extensions specified by `desc` are not supported by this adapter.
-    pub fn request_device(&self, desc: &DeviceDescriptor) -> Device {
+    pub fn request_device(&self, desc: Option<&DeviceDescriptor>) -> Device {
         Device {
             id: wgn::wgpu_adapter_request_device(self.id, desc),
             temp: Temp::default(),
@@ -656,14 +667,14 @@ impl Device {
     /// Creates a render pipeline.
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
         let vertex_entry_point = CString::new(desc.vertex_stage.entry_point).unwrap();
-        let vertex_stage = wgn::PipelineStageDescriptor {
+        let vertex_stage = wgn::ProgrammableStageDescriptor {
             module: desc.vertex_stage.module.id,
             entry_point: vertex_entry_point.as_ptr(),
         };
         let (_fragment_entry_point, fragment_stage) =
             if let Some(fragment_stage) = &desc.fragment_stage {
                 let fragment_entry_point = CString::new(fragment_stage.entry_point).unwrap();
-                let fragment_stage = wgn::PipelineStageDescriptor {
+                let fragment_stage = wgn::ProgrammableStageDescriptor {
                     module: fragment_stage.module.id,
                     entry_point: fragment_entry_point.as_ptr(),
                 };
@@ -693,7 +704,9 @@ impl Device {
                     fragment_stage: fragment_stage
                         .as_ref()
                         .map_or(ptr::null(), |fs| fs as *const _),
-                    rasterization_state: desc.rasterization_state.clone(),
+                    rasterization_state: desc.rasterization_state
+                        .as_ref()
+                        .map_or(ptr::null(), |fs| fs as *const _),
                     primitive_topology: desc.primitive_topology,
                     color_states: temp_color_states.as_ptr(),
                     color_states_length: temp_color_states.len(),
@@ -707,6 +720,8 @@ impl Device {
                         vertex_buffers_length: temp_vertex_buffers.len(),
                     },
                     sample_count: desc.sample_count,
+                    sample_mask: desc.sample_mask,
+                    alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
                 },
             ),
         }
@@ -721,7 +736,7 @@ impl Device {
                 self.id,
                 &wgn::ComputePipelineDescriptor {
                     layout: desc.layout.id,
-                    compute_stage: wgn::PipelineStageDescriptor {
+                    compute_stage: wgn::ProgrammableStageDescriptor {
                         module: desc.compute_stage.module.id,
                         entry_point: entry_point.as_ptr(),
                     },
@@ -943,20 +958,9 @@ impl Drop for Buffer {
 
 impl Texture {
     /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+    pub fn create_view(&self, desc: Option<&TextureViewDescriptor>) -> TextureView {
         TextureView {
             id: wgn::wgpu_texture_create_view(self.id, desc),
-            owned: true,
-        }
-    }
-
-    /// Creates the default view of this texture.
-    ///
-    /// The default view reflects the full dimensions and size of the texture and matches its
-    /// format.
-    pub fn create_default_view(&self) -> TextureView {
-        TextureView {
-            id: wgn::wgpu_texture_create_default_view(self.id),
             owned: true,
         }
     }
@@ -980,9 +984,9 @@ impl Drop for TextureView {
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
-    pub fn finish(self) -> CommandBuffer {
+    pub fn finish(self, desc: Option<&CommandBufferDescriptor>) -> CommandBuffer {
         CommandBuffer {
-            id: wgn::wgpu_command_encoder_finish(self.id),
+            id: wgn::wgpu_command_encoder_finish(self.id, desc),
         }
     }
 
@@ -1145,7 +1149,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// Each element of `buffer_pairs` describes a vertex buffer and an offset in bytes into that
     /// buffer. The offset must be aligned to a multiple of 4 bytes.
-    pub fn set_vertex_buffers(&mut self, buffer_pairs: &[(&Buffer, BufferAddress)]) {
+    pub fn set_vertex_buffers(&mut self, start_slot: u32, buffer_pairs: &[(&Buffer, BufferAddress)]) {
         let mut buffers = Vec::new();
         let mut offsets = Vec::new();
         for &(buffer, offset) in buffer_pairs {
@@ -1154,6 +1158,7 @@ impl<'a> RenderPass<'a> {
         }
         wgn::wgpu_render_pass_set_vertex_buffers(
             self.id,
+            start_slot,
             buffers.as_ptr(),
             offsets.as_ptr(),
             buffer_pairs.len(),
