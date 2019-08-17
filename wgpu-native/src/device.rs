@@ -1672,7 +1672,7 @@ pub fn device_create_render_pipeline(
         Some(hal::pso::Multisampling {
             rasterization_samples: sc,
             sample_shading: None,
-            sample_mask: !0,
+            sample_mask: desc.sample_mask as u64,
             alpha_coverage: desc.alpha_to_coverage_enabled,
             alpha_to_one: false,
         })
