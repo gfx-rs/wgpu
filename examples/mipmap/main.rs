@@ -77,11 +77,17 @@ impl Example {
                     binding: 0,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::SampledTexture,
+                    dynamic: false,
+                    multisampled: false,
+                    texture_dimension: wgn::TextureViewDimension::D2,
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::Sampler,
+                    dynamic: false,
+                    multisampled: false,
+                    texture_dimension: wgn::TextureViewDimension::D2,
                 },
             ],
         });
@@ -102,21 +108,21 @@ impl Example {
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
-            vertex_stage: wgpu::PipelineStageDescriptor {
+            vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
                 entry_point: "main",
             },
-            fragment_stage: Some(wgpu::PipelineStageDescriptor {
+            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &fs_module,
                 entry_point: "main",
             }),
-            rasterization_state: wgpu::RasterizationStateDescriptor {
+            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::None,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
                 depth_bias_clamp: 0.0,
-            },
+            }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleStrip,
             color_states: &[wgpu::ColorStateDescriptor {
                 format: TEXTURE_FORMAT,
@@ -128,6 +134,8 @@ impl Example {
             index_format: wgpu::IndexFormat::Uint16,
             vertex_buffers: &[],
             sample_count: 1,
+            sample_mask: !0,
+            alpha_to_coverage_enabled: false,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -143,15 +151,15 @@ impl Example {
         });
 
         let views = (0 .. mip_count)
-            .map(|mip| texture.create_view(&wgpu::TextureViewDescriptor {
+            .map(|mip| texture.create_view(Some(&wgpu::TextureViewDescriptor {
                 format: TEXTURE_FORMAT,
                 dimension: wgpu::TextureViewDimension::D2,
-                aspect: wgpu::TextureAspectFlags::COLOR,
+                aspect: wgpu::TextureAspect::All,
                 base_mip_level: mip,
                 level_count: 1,
                 base_array_layer: 0,
-                array_count: 1,
-            }))
+                array_layer_count: 1,
+            })))
             .collect::<Vec<_>>();
 
         let mut encoder = device.create_command_encoder(
@@ -188,7 +196,7 @@ impl Example {
             rpass.draw(0 .. 4, 0 .. 1);
         }
 
-        encoder.finish()
+        encoder.finish(None)
     }
 }
 
@@ -213,16 +221,25 @@ impl framework::Example for Example {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
                     ty: wgpu::BindingType::UniformBuffer,
+                    dynamic: false,
+                    multisampled: false,
+                    texture_dimension: wgn::TextureViewDimension::D2,
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::SampledTexture,
+                    dynamic: false,
+                    multisampled: false,
+                    texture_dimension: wgn::TextureViewDimension::D2,
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::Sampler,
+                    dynamic: false,
+                    multisampled: false,
+                    texture_dimension: wgn::TextureViewDimension::D2,
                 },
             ],
         });
@@ -246,11 +263,11 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: TEXTURE_FORMAT,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::TRANSFER_DST,
+            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::COPY_DST,
         });
-        let texture_view = texture.create_default_view();
+        let texture_view = texture.create_view(None);
         let temp_buf = device
-            .create_buffer_mapped(texels.len(), wgpu::BufferUsage::TRANSFER_SRC)
+            .create_buffer_mapped(texels.len(), wgpu::BufferUsage::COPY_SRC)
             .fill_from_slice(&texels);
         init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
@@ -289,7 +306,7 @@ impl framework::Example for Example {
         let uniform_buf = device
             .create_buffer_mapped(
                 16,
-                wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::TRANSFER_DST,
+                wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             )
             .fill_from_slice(mx_ref);
 
@@ -329,21 +346,21 @@ impl framework::Example for Example {
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
-            vertex_stage: wgpu::PipelineStageDescriptor {
+            vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
                 entry_point: "main",
             },
-            fragment_stage: Some(wgpu::PipelineStageDescriptor {
+            fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &fs_module,
                 entry_point: "main",
             }),
-            rasterization_state: wgpu::RasterizationStateDescriptor {
+            rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
                 cull_mode: wgpu::CullMode::Back,
                 depth_bias: 0,
                 depth_bias_slope_scale: 0.0,
                 depth_bias_clamp: 0.0,
-            },
+            }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleStrip,
             color_states: &[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
@@ -365,10 +382,12 @@ impl framework::Example for Example {
                 ],
             }],
             sample_count: 1,
+            sample_mask: !0,
+            alpha_to_coverage_enabled: false,
         });
 
         // Done
-        let init_command_buf = init_encoder.finish();
+        let init_command_buf = init_encoder.finish(None);
         let mipmap_command_buf = Self::generate_mipmaps(&device, &texture, mip_level_count);
         device.get_queue().submit(&[init_command_buf, mipmap_command_buf]);
         Example {
@@ -388,13 +407,13 @@ impl framework::Example for Example {
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
         let temp_buf = device
-            .create_buffer_mapped(16, wgpu::BufferUsage::TRANSFER_SRC)
+            .create_buffer_mapped(16, wgpu::BufferUsage::COPY_SRC)
             .fill_from_slice(mx_ref);
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
-        device.get_queue().submit(&[encoder.finish()]);
+        device.get_queue().submit(&[encoder.finish(None)]);
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
@@ -418,11 +437,11 @@ impl framework::Example for Example {
             });
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_vertex_buffers(&[(&self.vertex_buf, 0)]);
+            rpass.set_vertex_buffers(0, &[(&self.vertex_buf, 0)]);
             rpass.draw(0 .. 4, 0 .. 1);
         }
 
-        device.get_queue().submit(&[encoder.finish()]);
+        device.get_queue().submit(&[encoder.finish(None)]);
     }
 }
 

@@ -9,16 +9,16 @@ fn main() {
 
     let instance = wgpu::Instance::new();
 
-    let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
+    let adapter = instance.get_adapter(Some(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    });
+    }));
 
-    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(Some(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    });
+    }));
 
     // Rendered image is 256×256 with 32-bit RGBA color
     let size = 256u32;
@@ -26,7 +26,7 @@ fn main() {
     // The output buffer lets us retrieve the data as an array
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         size: (size * size) as u64 * size_of::<u32>() as u64,
-        usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::TRANSFER_DST,
+        usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
     });
 
     let texture_extent = wgpu::Extent3d {
@@ -43,7 +43,7 @@ fn main() {
         sample_count: 1,
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
-        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::TRANSFER_SRC,
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::COPY_SRC,
     });
 
     // Set the background to be red
@@ -52,7 +52,7 @@ fn main() {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &texture.create_default_view(),
+                attachment: &texture.create_view(None),
                 resolve_target: None,
                 load_op: wgpu::LoadOp::Clear,
                 store_op: wgpu::StoreOp::Store,
@@ -78,7 +78,7 @@ fn main() {
             texture_extent,
         );
 
-        encoder.finish()
+        encoder.finish(None)
     };
 
     device.get_queue().submit(&[command_buffer]);
