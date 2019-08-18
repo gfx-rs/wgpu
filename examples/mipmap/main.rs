@@ -79,7 +79,7 @@ impl Example {
                     ty: wgpu::BindingType::SampledTexture,
                     dynamic: false,
                     multisampled: false,
-                    texture_dimension: wgn::TextureViewDimension::D2,
+                    texture_dimension: wgpu::TextureViewDimension::D2,
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
@@ -87,7 +87,7 @@ impl Example {
                     ty: wgpu::BindingType::Sampler,
                     dynamic: false,
                     multisampled: false,
-                    texture_dimension: wgn::TextureViewDimension::D2,
+                    texture_dimension: wgpu::TextureViewDimension::D2,
                 },
             ],
         });
@@ -223,7 +223,7 @@ impl framework::Example for Example {
                     ty: wgpu::BindingType::UniformBuffer,
                     dynamic: false,
                     multisampled: false,
-                    texture_dimension: wgn::TextureViewDimension::D2,
+                    texture_dimension: wgpu::TextureViewDimension::D2,
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
@@ -231,7 +231,7 @@ impl framework::Example for Example {
                     ty: wgpu::BindingType::SampledTexture,
                     dynamic: false,
                     multisampled: false,
-                    texture_dimension: wgn::TextureViewDimension::D2,
+                    texture_dimension: wgpu::TextureViewDimension::D2,
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 2,
@@ -239,7 +239,7 @@ impl framework::Example for Example {
                     ty: wgpu::BindingType::Sampler,
                     dynamic: false,
                     multisampled: false,
-                    texture_dimension: wgn::TextureViewDimension::D2,
+                    texture_dimension: wgpu::TextureViewDimension::D2,
                 },
             ],
         });

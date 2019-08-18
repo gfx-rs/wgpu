@@ -54,7 +54,7 @@ fn multithreaded_compute() {
                         ty: wgpu::BindingType::StorageBuffer,
                         dynamic: false,
                         multisampled: false,
-                        texture_dimension: wgn::TextureViewDimension::D2,
+                        texture_dimension: wgpu::TextureViewDimension::D2,
                     }],
                 });
 
