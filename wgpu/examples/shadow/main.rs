@@ -220,7 +220,7 @@ impl framework::Example for Example {
                     ty: wgpu::BindingType::UniformBuffer,
                     dynamic: false,
                     multisampled: false,
-                    texture_dimension: wgn::TextureViewDimension::D2,
+                    texture_dimension: wgpu::TextureViewDimension::D2,
                 }],
             });
 
@@ -414,7 +414,7 @@ impl framework::Example for Example {
                         ty: wgpu::BindingType::UniformBuffer,
                         dynamic: false,
                         multisampled: false,
-                        texture_dimension: wgn::TextureViewDimension::D2,
+                        texture_dimension: wgpu::TextureViewDimension::D2,
                     }],
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -500,7 +500,7 @@ impl framework::Example for Example {
                             ty: wgpu::BindingType::UniformBuffer,
                             dynamic: false,
                             multisampled: false,
-                            texture_dimension: wgn::TextureViewDimension::D2,
+                            texture_dimension: wgpu::TextureViewDimension::D2,
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 1, // lights
@@ -508,7 +508,7 @@ impl framework::Example for Example {
                             ty: wgpu::BindingType::UniformBuffer,
                             dynamic: false,
                             multisampled: false,
-                            texture_dimension: wgn::TextureViewDimension::D2,
+                            texture_dimension: wgpu::TextureViewDimension::D2,
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 2,
@@ -516,7 +516,7 @@ impl framework::Example for Example {
                             ty: wgpu::BindingType::SampledTexture,
                             dynamic: false,
                             multisampled: false,
-                            texture_dimension: wgn::TextureViewDimension::D2,
+                            texture_dimension: wgpu::TextureViewDimension::D2,
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 3,
@@ -524,7 +524,7 @@ impl framework::Example for Example {
                             ty: wgpu::BindingType::Sampler,
                             dynamic: false,
                             multisampled: false,
-                            texture_dimension: wgn::TextureViewDimension::D2,
+                            texture_dimension: wgpu::TextureViewDimension::D2,
                         },
                     ],
                 });
