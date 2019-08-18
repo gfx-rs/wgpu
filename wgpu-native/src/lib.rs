@@ -1,4 +1,4 @@
-#[cfg(all(feature = "local", feature = "window-winit"))]
+#[cfg(all(feature = "winit"))]
 pub extern crate winit;
 
 #[cfg(feature = "gfx-backend-dx11")]
@@ -44,7 +44,7 @@ pub use hal::pso::read_spirv;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[cfg(feature = "gfx-backend-gl")]
+#[cfg(feature = "glutin")]
 pub use back::glutin;
 
 use std::{
