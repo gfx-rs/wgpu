@@ -94,16 +94,16 @@ pub fn run<E: Example>(title: &str) {
         (window, instance, hidpi_factor, size, surface)
     };
 
-    let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
+    let adapter = instance.get_adapter(Some(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    });
+    }));
 
-    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(Some(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    });
+    }));
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,

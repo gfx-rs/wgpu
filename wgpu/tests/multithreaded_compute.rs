@@ -16,15 +16,16 @@ fn multithreaded_compute() {
             let size = (numbers.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
 
             let instance = wgpu::Instance::new();
-            let adapter = instance.get_adapter(&wgpu::AdapterDescriptor {
+            let adapter = instance.get_adapter(Some(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
-            });
-            let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+            }));
+
+            let mut device = adapter.request_device(Some(&wgpu::DeviceDescriptor {
                 extensions: wgpu::Extensions {
                     anisotropic_filtering: false,
                 },
                 limits: wgpu::Limits::default(),
-            });
+            }));
 
             let cs = include_bytes!("../examples/hello-compute/shader.comp.spv");
             let cs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
@@ -33,16 +34,16 @@ fn multithreaded_compute() {
                 .create_buffer_mapped(
                     numbers.len(),
                     wgpu::BufferUsage::MAP_READ
-                        | wgpu::BufferUsage::TRANSFER_DST
-                        | wgpu::BufferUsage::TRANSFER_SRC,
+                        | wgpu::BufferUsage::COPY_DST
+                        | wgpu::BufferUsage::COPY_SRC,
                 )
                 .fill_from_slice(&numbers);
 
             let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 size,
                 usage: wgpu::BufferUsage::STORAGE
-                    | wgpu::BufferUsage::TRANSFER_DST
-                    | wgpu::BufferUsage::TRANSFER_SRC,
+                    | wgpu::BufferUsage::COPY_DST
+                    | wgpu::BufferUsage::COPY_SRC,
             });
 
             let bind_group_layout =
@@ -51,6 +52,9 @@ fn multithreaded_compute() {
                         binding: 0,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::StorageBuffer,
+                        dynamic: false,
+                        multisampled: false,
+                        texture_dimension: wgn::TextureViewDimension::D2,
                     }],
                 });
 
@@ -72,7 +76,7 @@ fn multithreaded_compute() {
             let compute_pipeline =
                 device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                     layout: &pipeline_layout,
-                    compute_stage: wgpu::PipelineStageDescriptor {
+                    compute_stage: wgpu::ProgrammableStageDescriptor {
                         module: &cs_module,
                         entry_point: "main",
                     },
@@ -89,7 +93,7 @@ fn multithreaded_compute() {
             }
             encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
-            device.get_queue().submit(&[encoder.finish()]);
+            device.get_queue().submit(&[encoder.finish(None)]);
 
             staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
                 assert_eq!(result.unwrap().data, [25, 25, 25]);
