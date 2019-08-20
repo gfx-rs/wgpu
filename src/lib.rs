@@ -8,6 +8,7 @@ use std::ffi::CString;
 use std::ops::Range;
 use std::ptr;
 use std::slice;
+use std::thread;
 
 pub use wgn::winit;
 pub use wgn::{
@@ -1217,7 +1218,9 @@ impl<'a> RenderPass<'a> {
 
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
-        wgn::wgpu_render_pass_end_pass(self.id);
+        if !thread::panicking() {
+            wgn::wgpu_render_pass_end_pass(self.id);
+        }
     }
 }
 
@@ -1253,7 +1256,9 @@ impl<'a> ComputePass<'a> {
 
 impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
-        wgn::wgpu_compute_pass_end_pass(self.id);
+        if !thread::panicking() {
+            wgn::wgpu_compute_pass_end_pass(self.id);
+        }
     }
 }
 
@@ -1275,7 +1280,9 @@ impl<'a> Queue<'a> {
 
 impl<'a> Drop for SwapChainOutput<'a> {
     fn drop(&mut self) {
-        wgn::wgpu_swap_chain_present(*self.swap_chain_id);
+        if !thread::panicking() {
+            wgn::wgpu_swap_chain_present(*self.swap_chain_id);
+        }
     }
 }
 
