@@ -30,6 +30,7 @@ mod pipeline;
 mod resource;
 mod swap_chain;
 mod track;
+mod id;
 
 pub use self::binding_model::*;
 pub use self::command::*;
@@ -40,9 +41,8 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
+pub use self::id::*;
 pub use hal::pso::read_spirv;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "glutin")]
 pub use back::glutin;
@@ -197,120 +197,3 @@ pub struct U32Array {
     pub bytes: *const u32,
     pub length: usize,
 }
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-struct Id(Index, Epoch);
-
-pub trait TypedId {
-    fn new(index: Index, epoch: Epoch) -> Self;
-    fn index(&self) -> Index;
-    fn epoch(&self) -> Epoch;
-}
-
-macro_rules! define_id {
-    ($i:ident) => {
-        transparent!($i);
-        typed_id!($i);
-    };
-}
-
-macro_rules! transparent {
-    ($i:ident) => {
-        #[repr(transparent)]
-        #[derive(Clone, Copy, Debug, Hash, PartialEq)]
-        #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-        pub struct $i(Id);
-    };
-}
-
-macro_rules! typed_id {
-    ($i:ident) => {
-        impl $i {
-            fn raw(&self) -> Id {
-                self.0
-            }
-        }
-        impl TypedId for $i {
-            fn new(index: Index, epoch: Epoch) -> Self {
-                let id = Id(index, epoch);
-                $i(id)
-            }
-
-            fn index(&self) -> Index {
-                (self.raw()).0
-            }
-
-            fn epoch(&self) -> Epoch {
-                (self.raw()).1
-            }
-        }
-    };
-}
-
-#[cfg(not(feature = "gfx-backend-gl"))]
-define_id!(InstanceId);
-#[cfg(not(feature = "gfx-backend-gl"))]
-type InstanceHandle = back::Instance;
-#[cfg(feature = "gfx-backend-gl")]
-pub type InstanceId = SurfaceId;
-
-define_id!(AdapterId);
-type AdapterHandle = hal::Adapter<back::Backend>;
-
-define_id!(DeviceId);
-type DeviceHandle = Device<back::Backend>;
-pub type QueueId = DeviceId;
-
-define_id!(BufferId);
-type BufferHandle = Buffer<back::Backend>;
-
-// Resource
-define_id!(TextureViewId);
-type TextureViewHandle = TextureView<back::Backend>;
-
-define_id!(TextureId);
-type TextureHandle = Texture<back::Backend>;
-
-define_id!(SamplerId);
-type SamplerHandle = Sampler<back::Backend>;
-
-// Binding model
-define_id!(BindGroupLayoutId);
-type BindGroupLayoutHandle = BindGroupLayout<back::Backend>;
-
-define_id!(PipelineLayoutId);
-type PipelineLayoutHandle = PipelineLayout<back::Backend>;
-
-define_id!(BindGroupId);
-type BindGroupHandle = BindGroup<back::Backend>;
-
-// Pipeline
-define_id!(InputStateId);
-define_id!(ShaderModuleId);
-type ShaderModuleHandle = ShaderModule<back::Backend>;
-
-define_id!(RenderPipelineId);
-type RenderPipelineHandle = RenderPipeline<back::Backend>;
-
-define_id!(ComputePipelineId);
-type ComputePipelineHandle = ComputePipeline<back::Backend>;
-
-// Command
-define_id!(CommandBufferId);
-type CommandBufferHandle = CommandBuffer<back::Backend>;
-pub type CommandEncoderId = CommandBufferId;
-
-define_id!(RenderBundleId);
-
-define_id!(RenderPassId);
-type RenderPassHandle = RenderPass<back::Backend>;
-
-define_id!(ComputePassId);
-type ComputePassHandle = ComputePass<back::Backend>;
-
-// Swap chain
-define_id!(SurfaceId);
-type SurfaceHandle = Surface<back::Backend>;
-pub type SwapChainId = SurfaceId;

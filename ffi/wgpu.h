@@ -248,9 +248,13 @@ typedef struct {
   WGPUEpoch _1;
 } WGPUId;
 
-typedef WGPUId WGPUDeviceId;
+typedef WGPUId WGPUGenericId_DeviceHandle;
 
-typedef WGPUId WGPUAdapterId;
+typedef WGPUGenericId_DeviceHandle WGPUDeviceId;
+
+typedef WGPUId WGPUGenericId_AdapterHandle;
+
+typedef WGPUGenericId_AdapterHandle WGPUAdapterId;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -265,9 +269,13 @@ typedef struct {
   WGPULimits limits;
 } WGPUDeviceDescriptor;
 
-typedef WGPUId WGPUBindGroupId;
+typedef WGPUId WGPUGenericId_BindGroupHandle;
 
-typedef WGPUId WGPUBufferId;
+typedef WGPUGenericId_BindGroupHandle WGPUBindGroupId;
+
+typedef WGPUId WGPUGenericId_BufferHandle;
+
+typedef WGPUGenericId_BufferHandle WGPUBufferId;
 
 typedef uint64_t WGPUBufferAddress;
 
@@ -275,7 +283,9 @@ typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const
 
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
-typedef WGPUId WGPUCommandBufferId;
+typedef WGPUId WGPUGenericId_CommandBufferHandle;
+
+typedef WGPUGenericId_CommandBufferHandle WGPUCommandBufferId;
 
 typedef struct {
   WGPUBufferId buffer;
@@ -284,7 +294,9 @@ typedef struct {
   uint32_t image_height;
 } WGPUBufferCopyView;
 
-typedef WGPUId WGPUTextureId;
+typedef WGPUId WGPUGenericId_TextureHandle;
+
+typedef WGPUGenericId_TextureHandle WGPUTextureId;
 
 typedef struct {
   float x;
@@ -306,13 +318,19 @@ typedef struct {
   uint32_t depth;
 } WGPUExtent3d;
 
-typedef WGPUId WGPUComputePassId;
+typedef WGPUId WGPUGenericId_ComputePassHandle;
+
+typedef WGPUGenericId_ComputePassHandle WGPUComputePassId;
 
 typedef WGPUCommandBufferId WGPUCommandEncoderId;
 
-typedef WGPUId WGPURenderPassId;
+typedef WGPUId WGPUGenericId_RenderPassHandle;
 
-typedef WGPUId WGPUTextureViewId;
+typedef WGPUGenericId_RenderPassHandle WGPURenderPassId;
+
+typedef WGPUId WGPUGenericId_TextureViewHandle;
+
+typedef WGPUGenericId_TextureViewHandle WGPUTextureViewId;
 
 typedef struct {
   double r;
@@ -357,11 +375,17 @@ typedef struct {
 
 typedef const char *WGPURawString;
 
-typedef WGPUId WGPUComputePipelineId;
+typedef WGPUId WGPUGenericId_ComputePipelineHandle;
 
-typedef WGPUId WGPUInstanceId;
+typedef WGPUGenericId_ComputePipelineHandle WGPUComputePipelineId;
 
-typedef WGPUId WGPUBindGroupLayoutId;
+typedef WGPUId WGPUGenericId_InstanceHandle;
+
+typedef WGPUGenericId_InstanceHandle WGPUInstanceId;
+
+typedef WGPUId WGPUGenericId_BindGroupLayoutHandle;
+
+typedef WGPUGenericId_BindGroupLayoutHandle WGPUBindGroupLayoutId;
 
 typedef struct {
   WGPUBufferId buffer;
@@ -369,7 +393,9 @@ typedef struct {
   WGPUBufferAddress size;
 } WGPUBufferBinding;
 
-typedef WGPUId WGPUSamplerId;
+typedef WGPUId WGPUGenericId_SamplerHandle;
+
+typedef WGPUGenericId_SamplerHandle WGPUSamplerId;
 
 typedef enum {
   WGPUBindingResource_Buffer,
@@ -451,9 +477,13 @@ typedef struct {
   uint32_t todo;
 } WGPUCommandEncoderDescriptor;
 
-typedef WGPUId WGPUPipelineLayoutId;
+typedef WGPUId WGPUGenericId_PipelineLayoutHandle;
 
-typedef WGPUId WGPUShaderModuleId;
+typedef WGPUGenericId_PipelineLayoutHandle WGPUPipelineLayoutId;
+
+typedef WGPUId WGPUGenericId_ShaderModuleHandle;
+
+typedef WGPUGenericId_ShaderModuleHandle WGPUShaderModuleId;
 
 typedef struct {
   WGPUShaderModuleId module;
@@ -470,7 +500,9 @@ typedef struct {
   uintptr_t bind_group_layouts_length;
 } WGPUPipelineLayoutDescriptor;
 
-typedef WGPUId WGPURenderPipelineId;
+typedef WGPUId WGPUGenericId_RenderPipelineHandle;
+
+typedef WGPUGenericId_RenderPipelineHandle WGPURenderPipelineId;
 
 typedef struct {
   WGPUFrontFace front_face;
@@ -575,7 +607,9 @@ typedef struct {
   WGPUU32Array code;
 } WGPUShaderModuleDescriptor;
 
-typedef WGPUId WGPUSurfaceId;
+typedef WGPUId WGPUGenericId_SurfaceHandle;
+
+typedef WGPUGenericId_SurfaceHandle WGPUSurfaceId;
 
 typedef WGPUSurfaceId WGPUSwapChainId;
 
@@ -612,7 +646,9 @@ typedef struct {
   WGPUPowerPreference power_preference;
 } WGPURequestAdapterOptions;
 
-typedef WGPUId WGPURenderBundleId;
+typedef WGPUId WGPUGenericId_RenderBundleHandle;
+
+typedef WGPUGenericId_RenderBundleHandle WGPURenderBundleId;
 
 typedef struct {
   WGPUTextureId texture_id;
