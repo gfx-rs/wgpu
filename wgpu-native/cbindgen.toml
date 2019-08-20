@@ -1,4 +1,7 @@
-header = "#define WGPU_LOCAL"
+header = """
+#define WGPU_LOCAL
+struct WGPUWindow;
+"""
 include_version = true
 braces = "SameLine"
 line_length = 100
@@ -13,10 +16,6 @@ exclude = ["BufferMapResult"]
 [parse]
 parse_deps = false
 
-[parse.expand]
-crates = ["wgpu-native"]
-features = ["local"]
-
 [fn]
 
 [struct]
@@ -30,6 +29,8 @@ derive_helper_methods = true
 bitflags = true
 
 [defines]
-"feature = window-winit" = "WGPU_WINDOW_WINIT"
 "feature = local" = "WGPU_LOCAL"
 "feature = remote" = "WGPU_REMOTE"
+"feature = gfx-backend-gl" = "WGPU_BACKEND_GL"
+"feature = winit" = "WGPU_WINIT"
+"feature = glutin" = "WGPU_GLUTIN"

@@ -11,10 +11,7 @@ exclude = ["BufferMapResult"]
 
 [parse]
 parse_deps = true
-include = ["wgpu_native"]
-
-[parse.expand]
-crates = ["wgpu-native"]
+include = ["wgpu-native"]
 
 [fn]
 

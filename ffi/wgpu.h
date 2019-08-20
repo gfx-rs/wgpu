@@ -1,4 +1,6 @@
 #define WGPU_LOCAL
+struct WGPUWindow;
+
 
 /* Generated with cbindgen:0.9.0 */
 
@@ -381,7 +383,17 @@ typedef WGPUGenericId_ComputePipelineHandle WGPUComputePipelineId;
 
 typedef WGPUId WGPUGenericId_InstanceHandle;
 
+typedef WGPUId WGPUGenericId_SurfaceHandle;
+
+typedef WGPUGenericId_SurfaceHandle WGPUSurfaceId;
+
+#if !defined(WGPU_BACKEND_GL)
 typedef WGPUGenericId_InstanceHandle WGPUInstanceId;
+#endif
+
+#if defined(WGPU_BACKEND_GL)
+typedef WGPUSurfaceId WGPUInstanceId;
+#endif
 
 typedef WGPUId WGPUGenericId_BindGroupLayoutHandle;
 
@@ -607,10 +619,6 @@ typedef struct {
   WGPUU32Array code;
 } WGPUShaderModuleDescriptor;
 
-typedef WGPUId WGPUGenericId_SurfaceHandle;
-
-typedef WGPUGenericId_SurfaceHandle WGPUSurfaceId;
-
 typedef WGPUSurfaceId WGPUSwapChainId;
 
 typedef uint32_t WGPUTextureUsage;
@@ -744,7 +752,7 @@ void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
 
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
 
-#if defined(WGPU_LOCAL)
+#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
 WGPUInstanceId wgpu_create_instance(void);
 #endif
 
@@ -817,18 +825,23 @@ WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
 void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
 
-#if defined(WGPU_LOCAL)
+#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
 WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId instance_id,
                                                             void *layer);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
 WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
                                                              void *hinstance,
                                                              void *hwnd);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if (defined(WGPU_LOCAL) && defined(WGPU_WINIT) && !defined(WGPU_GLUTIN))
+WGPUSurfaceId wgpu_instance_create_surface_from_winit(WGPUInstanceId instance_id,
+                                                      const WGPUWindow *window);
+#endif
+
+#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
 WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
                                                      const void **display,
                                                      uint64_t window);
