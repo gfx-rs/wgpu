@@ -283,44 +283,13 @@ typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const
 
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
-typedef WGPUId WGPUGenericId_CommandBufferHandle;
-
-typedef WGPUGenericId_CommandBufferHandle WGPUCommandBufferId;
-
-typedef struct {
-  WGPUBufferId buffer;
-  WGPUBufferAddress offset;
-  uint32_t row_pitch;
-  uint32_t image_height;
-} WGPUBufferCopyView;
-
-typedef WGPUId WGPUGenericId_TextureHandle;
-
-typedef WGPUGenericId_TextureHandle WGPUTextureId;
-
-typedef struct {
-  float x;
-  float y;
-  float z;
-} WGPUOrigin3d;
-#define WGPUOrigin3d_ZERO (WGPUOrigin3d){ .x = 0, .y = 0, .z = 0 }
-
-typedef struct {
-  WGPUTextureId texture;
-  uint32_t mip_level;
-  uint32_t array_layer;
-  WGPUOrigin3d origin;
-} WGPUTextureCopyView;
-
-typedef struct {
-  uint32_t width;
-  uint32_t height;
-  uint32_t depth;
-} WGPUExtent3d;
-
 typedef WGPUId WGPUGenericId_ComputePassHandle;
 
 typedef WGPUGenericId_ComputePassHandle WGPUComputePassId;
+
+typedef WGPUId WGPUGenericId_CommandBufferHandle;
+
+typedef WGPUGenericId_CommandBufferHandle WGPUCommandBufferId;
 
 typedef WGPUCommandBufferId WGPUCommandEncoderId;
 
@@ -368,6 +337,37 @@ typedef struct {
   uintptr_t color_attachments_length;
   const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
+
+typedef struct {
+  WGPUBufferId buffer;
+  WGPUBufferAddress offset;
+  uint32_t row_pitch;
+  uint32_t image_height;
+} WGPUBufferCopyView;
+
+typedef WGPUId WGPUGenericId_TextureHandle;
+
+typedef WGPUGenericId_TextureHandle WGPUTextureId;
+
+typedef struct {
+  float x;
+  float y;
+  float z;
+} WGPUOrigin3d;
+#define WGPUOrigin3d_ZERO (WGPUOrigin3d){ .x = 0, .y = 0, .z = 0 }
+
+typedef struct {
+  WGPUTextureId texture;
+  uint32_t mip_level;
+  uint32_t array_layer;
+  WGPUOrigin3d origin;
+} WGPUTextureCopyView;
+
+typedef struct {
+  uint32_t width;
+  uint32_t height;
+  uint32_t depth;
+} WGPUExtent3d;
 
 typedef struct {
   uint32_t todo;
@@ -688,28 +688,6 @@ void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
 
 void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
-void wgpu_command_buffer_copy_buffer_to_buffer(WGPUCommandBufferId command_buffer_id,
-                                               WGPUBufferId source,
-                                               WGPUBufferAddress source_offset,
-                                               WGPUBufferId destination,
-                                               WGPUBufferAddress destination_offset,
-                                               WGPUBufferAddress size);
-
-void wgpu_command_buffer_copy_buffer_to_texture(WGPUCommandBufferId command_buffer_id,
-                                                const WGPUBufferCopyView *source,
-                                                const WGPUTextureCopyView *destination,
-                                                WGPUExtent3d copy_size);
-
-void wgpu_command_buffer_copy_texture_to_buffer(WGPUCommandBufferId command_buffer_id,
-                                                const WGPUTextureCopyView *source,
-                                                const WGPUBufferCopyView *destination,
-                                                WGPUExtent3d copy_size);
-
-void wgpu_command_buffer_copy_texture_to_texture(WGPUCommandBufferId command_buffer_id,
-                                                 const WGPUTextureCopyView *source,
-                                                 const WGPUTextureCopyView *destination,
-                                                 WGPUExtent3d copy_size);
-
 #if defined(WGPU_LOCAL)
 WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId command_encoder_id);
 #endif
@@ -718,6 +696,28 @@ WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId c
 WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId command_encoder_id,
                                                         const WGPURenderPassDescriptor *desc);
 #endif
+
+void wgpu_command_encoder_copy_buffer_to_buffer(WGPUCommandEncoderId command_encoder_id,
+                                                WGPUBufferId source,
+                                                WGPUBufferAddress source_offset,
+                                                WGPUBufferId destination,
+                                                WGPUBufferAddress destination_offset,
+                                                WGPUBufferAddress size);
+
+void wgpu_command_encoder_copy_buffer_to_texture(WGPUCommandEncoderId command_encoder_id,
+                                                 const WGPUBufferCopyView *source,
+                                                 const WGPUTextureCopyView *destination,
+                                                 WGPUExtent3d copy_size);
+
+void wgpu_command_encoder_copy_texture_to_buffer(WGPUCommandEncoderId command_encoder_id,
+                                                 const WGPUTextureCopyView *source,
+                                                 const WGPUBufferCopyView *destination,
+                                                 WGPUExtent3d copy_size);
+
+void wgpu_command_encoder_copy_texture_to_texture(WGPUCommandEncoderId command_encoder_id,
+                                                  const WGPUTextureCopyView *source,
+                                                  const WGPUTextureCopyView *destination,
+                                                  WGPUExtent3d copy_size);
 
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_encoder_id,
                                                 const WGPUCommandBufferDescriptor *_desc);

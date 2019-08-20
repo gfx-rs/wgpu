@@ -7,7 +7,7 @@ use crate::{
     BufferAddress,
     BufferId,
     BufferUsage,
-    CommandBufferId,
+    CommandEncoderId,
     Extent3d,
     Origin3d,
     TextureId,
@@ -65,8 +65,8 @@ impl TextureCopyView {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
+    command_encoder_id: CommandEncoderId,
     source: BufferId,
     source_offset: BufferAddress,
     destination: BufferId,
@@ -75,7 +75,7 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
 ) {
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
-    let cmb = &mut cmb_guard[command_buffer_id];
+    let cmb = &mut cmb_guard[command_encoder_id];
     let (buffer_guard, _) = HUB.buffers.read(&mut token);
     // we can't hold both src_pending and dst_pending in scope because they
     // borrow the buffer tracker mutably...
@@ -120,15 +120,15 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
+    command_encoder_id: CommandEncoderId,
     source: &BufferCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
-    let cmb = &mut cmb_guard[command_buffer_id];
+    let cmb = &mut cmb_guard[command_encoder_id];
     let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
     let (texture_guard, _) = HUB.textures.read(&mut token);
     let aspects = texture_guard[destination.texture].full_range.aspects;
@@ -198,15 +198,15 @@ pub extern "C" fn wgpu_command_buffer_copy_buffer_to_texture(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
+    command_encoder_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &BufferCopyView,
     copy_size: Extent3d,
 ) {
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
-    let cmb = &mut cmb_guard[command_buffer_id];
+    let cmb = &mut cmb_guard[command_encoder_id];
     let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
     let (texture_guard, _) = HUB.textures.read(&mut token);
     let aspects = texture_guard[source.texture].full_range.aspects;
@@ -275,15 +275,15 @@ pub extern "C" fn wgpu_command_buffer_copy_texture_to_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_buffer_copy_texture_to_texture(
-    command_buffer_id: CommandBufferId,
+pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
+    command_encoder_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
-    let cmb = &mut cmb_guard[command_buffer_id];
+    let cmb = &mut cmb_guard[command_encoder_id];
     let (_, mut token) = HUB.buffers.read(&mut token); // skip token
     let (texture_guard, _) = HUB.textures.read(&mut token);
     // we can't hold both src_pending and dst_pending in scope because they
