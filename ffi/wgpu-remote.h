@@ -28,9 +28,13 @@ typedef struct {
   WGPUEpoch _1;
 } WGPUId;
 
-typedef WGPUId WGPUDeviceId;
+typedef WGPUId WGPUGenericId_DeviceHandle;
 
-typedef WGPUId WGPUAdapterId;
+typedef WGPUGenericId_DeviceHandle WGPUDeviceId;
+
+typedef WGPUId WGPUGenericId_AdapterHandle;
+
+typedef WGPUGenericId_AdapterHandle WGPUAdapterId;
 
 typedef struct {
   bool anisotropic_filtering;
