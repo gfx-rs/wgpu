@@ -102,7 +102,7 @@ int main(
             .todo = 0
         });
 
-    wgpu_command_buffer_copy_buffer_to_buffer(
+    wgpu_command_encoder_copy_buffer_to_buffer(
         encoder, staging_buffer, 0, storage_buffer, 0, size);
 
     WGPUComputePassId command_pass =
@@ -113,7 +113,7 @@ int main(
     wgpu_compute_pass_dispatch(command_pass, numbers_length, 1, 1);
     wgpu_compute_pass_end_pass(command_pass);
 
-    wgpu_command_buffer_copy_buffer_to_buffer(
+    wgpu_command_encoder_copy_buffer_to_buffer(
         encoder, storage_buffer, 0, staging_buffer, 0, size);
 
     WGPUQueueId queue = wgpu_device_get_queue(device);
