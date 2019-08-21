@@ -1,5 +1,28 @@
 # Change Log
 
+## v0.3 (21-08-2019)
+  - Platforms: experimental OpenGL/WebGL
+  - Crates:
+    - Rust API is moved out to [another repository](https://github.com/gfx-rs/wgpu-rs)
+  - Features:
+    - based on gfx-hal-0.3 with help of `rendy-memory` and `rendy-descriptor`
+    - type-system-assisted deadlock prevention (for locking internal structures)
+    - texture sub-resource tracking
+    - `raw-window-handle` integration instead of `winit`
+    - multisampling
+    - indirect draws and dispatches
+    - stencil masks and reference values
+    - native "compute" example
+    - everything implements `Debug`
+  - Validation
+    - vertex/index/instance ranges at draw calls
+    - bing groups vs their expected layouts
+    - bind group buffer ranges
+    - required stencil reference, blend color
+
+## v0.2.6 (04-04-2019)
+  - fixed frame acquisition GPU waits
+
 ## v0.2.5 (31-03-2019)
   - fixed submission tracking
   - added support for blend colors
