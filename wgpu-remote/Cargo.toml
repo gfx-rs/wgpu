@@ -19,8 +19,8 @@ metal = ["wgpu-native/gfx-backend-metal"]
 gl = ["wgpu-native/gfx-backend-gl"]
 
 [dependencies]
-wgpu-native = { path = "../wgpu-native", version = "0.2", features = ["remote"] }
+wgpu-native = { path = "../wgpu-native", version = "0.3", features = ["remote"] }
 ipc-channel = "0.12"
 log = "0.4"
-parking_lot = { version = "0.8" }
+parking_lot = { version = "0.9" }
 serde = { version = "1.0", features = ["serde_derive"] }

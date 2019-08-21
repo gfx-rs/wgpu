@@ -1,5 +1,4 @@
 #define WGPU_LOCAL
-struct WGPUWindow;
 
 
 /* Generated with cbindgen:0.9.0 */
@@ -834,11 +833,6 @@ WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId insta
 WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
                                                              void *hinstance,
                                                              void *hwnd);
-#endif
-
-#if (defined(WGPU_LOCAL) && defined(WGPU_WINIT) && !defined(WGPU_GLUTIN))
-WGPUSurfaceId wgpu_instance_create_surface_from_winit(WGPUInstanceId instance_id,
-                                                      const WGPUWindow *window);
 #endif
 
 #if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))

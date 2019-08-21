@@ -88,15 +88,56 @@ pub fn wgpu_create_gl_instance(windowed_context: back::glutin::RawContext<back::
     HUB.surfaces.register_local(surface, &mut Token::root())
 }
 
-#[cfg(all(feature = "local", feature = "winit", not(feature = "glutin")))]
-#[no_mangle]
-pub extern "C" fn wgpu_instance_create_surface_from_winit(
+#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
+pub fn wgpu_instance_create_surface(
     instance_id: InstanceId,
-    window: &winit::Window,
+    raw_handle: raw_window_handle::RawWindowHandle,
 ) -> SurfaceId {
     let mut token = Token::root();
     let (instance_guard, mut token) = HUB.instances.read(&mut token);
-    let raw = instance_guard[instance_id].create_surface(window);
+    let instance = &instance_guard[instance_id];
+    let raw = match raw_handle {
+        #[cfg(all(target_os = "ios", feature = "gfx-backend-metal"))]
+        raw_window_handle::RawWindowHandle::IOS(h) =>
+            instance.create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
+        #[cfg(all(target_os = "macos", feature = "gfx-backend-metal"))]
+        raw_window_handle::RawWindowHandle::MacOS(h) =>
+            instance.create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+        #[cfg(all(target_os = "macos", feature = "gfx-backend-vulkan"))]
+        raw_window_handle::RawWindowHandle::MacOS(h) =>
+            instance.create_surface_from_nsview(h.ns_view),
+        #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
+        raw_window_handle::RawWindowHandle::X11(h) =>
+            instance.create_surface_from_xlib(h.display as _, h.window as _),
+        #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
+        raw_window_handle::RawWindowHandle::Wayland(h) =>
+            instance.create_surface_from_wayland(h.display, h.surface),
+        #[cfg(all(windows, feature = "gfx-backend-vulkan"))]
+        raw_window_handle::RawWindowHandle::Windows(h) =>
+            instance.create_surface_from_hwnd(ptr::null_mut(), h.hwnd),
+        #[cfg(all(windows, feature = "gfx-backend-dx12"))]
+        raw_window_handle::RawWindowHandle::Windows(h) =>
+            instance.create_surface_from_hwnd(h.hwnd),
+        #[cfg(all(windows, feature = "gfx-backend-dx12"))]
+        raw_window_handle::RawWindowHandle::Windows(h) =>
+            instance.create_surface_from_hwnd(h.hwnd),
+        #[cfg(any(
+            feature = "gfx-backend-vulkan",
+            feature = "gfx-backend-dx11",
+            feature = "gfx-backend-dx12",
+            feature = "gfx-backend-metal",
+            feature = "gfx-backend-gl",
+        ))]
+        _ => panic!("Unsupported window handle"),
+        #[cfg(not(any(
+            feature = "gfx-backend-vulkan",
+            feature = "gfx-backend-dx11",
+            feature = "gfx-backend-dx12",
+            feature = "gfx-backend-metal",
+            feature = "gfx-backend-gl",
+        )))]
+        _ => { let _ = instance; back::Surface },
+    };
     let surface = SurfaceHandle::new(raw);
     HUB.surfaces.register_local(surface, &mut token)
 }
@@ -221,7 +262,7 @@ pub fn instance_get_adapter(
         let (surface_guard, _) = HUB.surfaces.read(token);
         surface_guard[instance_id].raw.enumerate_adapters()
     };
-    #[cfg(all(feature = "glutin", not(feature = "gfx-backend-gl")))]
+    #[cfg(all(not(feature = "glutin"), feature = "gfx-backend-gl"))]
     let adapters = Vec::<AdapterHandle>::new();
 
     let (mut integrated_first, mut discrete_first, mut discrete_last, mut alternative) =

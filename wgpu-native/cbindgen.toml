@@ -1,6 +1,5 @@
 header = """
 #define WGPU_LOCAL
-struct WGPUWindow;
 """
 include_version = true
 braces = "SameLine"
