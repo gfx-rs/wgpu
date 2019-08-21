@@ -16,16 +16,16 @@ fn multithreaded_compute() {
             let size = (numbers.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
 
             let instance = wgpu::Instance::new();
-            let adapter = instance.get_adapter(Some(&wgpu::RequestAdapterOptions {
+            let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
-            }));
+            });
 
-            let mut device = adapter.request_device(Some(&wgpu::DeviceDescriptor {
+            let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
                 extensions: wgpu::Extensions {
                     anisotropic_filtering: false,
                 },
                 limits: wgpu::Limits::default(),
-            }));
+            });
 
             let cs = include_bytes!("../examples/hello-compute/shader.comp.spv");
             let cs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
@@ -48,14 +48,16 @@ fn multithreaded_compute() {
 
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[wgpu::BindGroupLayoutBinding {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::StorageBuffer,
-                        dynamic: false,
-                        multisampled: false,
-                        texture_dimension: wgpu::TextureViewDimension::D2,
-                    }],
+                    bindings: &[
+                        wgpu::BindGroupLayoutBinding {
+                            binding: 0,
+                            visibility: wgpu::ShaderStage::COMPUTE,
+                            ty: wgpu::BindingType::StorageBuffer {
+                                dynamic: false,
+                                readonly: false,
+                            },
+                        },
+                    ],
                 });
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -93,7 +95,7 @@ fn multithreaded_compute() {
             }
             encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
-            device.get_queue().submit(&[encoder.finish(None)]);
+            device.get_queue().submit(&[encoder.finish()]);
 
             staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
                 assert_eq!(result.unwrap().data, [25, 25, 25]);
