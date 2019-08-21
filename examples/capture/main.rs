@@ -9,16 +9,16 @@ fn main() {
 
     let instance = wgpu::Instance::new();
 
-    let adapter = instance.get_adapter(Some(&wgpu::RequestAdapterOptions {
+    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    }));
+    });
 
-    let mut device = adapter.request_device(Some(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    }));
+    });
 
     // Rendered image is 256×256 with 32-bit RGBA color
     let size = 256u32;
@@ -52,7 +52,7 @@ fn main() {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &texture.create_view(None),
+                attachment: &texture.create_default_view(),
                 resolve_target: None,
                 load_op: wgpu::LoadOp::Clear,
                 store_op: wgpu::StoreOp::Store,
@@ -78,7 +78,7 @@ fn main() {
             texture_extent,
         );
 
-        encoder.finish(None)
+        encoder.finish()
     };
 
     device.get_queue().submit(&[command_buffer]);

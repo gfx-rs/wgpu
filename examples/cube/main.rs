@@ -129,26 +129,22 @@ impl framework::Example for Example {
                 wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer,
-                    dynamic: false,
-                    multisampled: false,
-                    texture_dimension: wgpu::TextureViewDimension::D2,
+                    ty: wgpu::BindingType::UniformBuffer {
+                        dynamic: false,
+                    },
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
                     visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::SampledTexture,
-                    dynamic: false,
-                    multisampled: false,
-                    texture_dimension: wgpu::TextureViewDimension::D2,
+                    ty: wgpu::BindingType::SampledTexture {
+                        multisampled: false,
+                        dimension: wgpu::TextureViewDimension::D2,
+                    },
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::Sampler,
-                    dynamic: false,
-                    multisampled: false,
-                    texture_dimension: wgpu::TextureViewDimension::D2,
                 },
             ],
         });
@@ -173,7 +169,7 @@ impl framework::Example for Example {
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
         });
-        let texture_view = texture.create_view(None);
+        let texture_view = texture.create_default_view();
         let temp_buf = device
             .create_buffer_mapped(texels.len(), wgpu::BufferUsage::COPY_SRC)
             .fill_from_slice(&texels);
@@ -298,7 +294,7 @@ impl framework::Example for Example {
         });
 
         // Done
-        let init_command_buf = init_encoder.finish(None);
+        let init_command_buf = init_encoder.finish();
         device.get_queue().submit(&[init_command_buf]);
         Example {
             vertex_buf,
@@ -310,7 +306,7 @@ impl framework::Example for Example {
         }
     }
 
-    fn update(&mut self, _event: wgpu::winit::WindowEvent) {
+    fn update(&mut self, _event: winit::event::WindowEvent) {
         //empty
     }
 
@@ -325,7 +321,7 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
-        device.get_queue().submit(&[encoder.finish(None)]);
+        device.get_queue().submit(&[encoder.finish()]);
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
@@ -354,7 +350,7 @@ impl framework::Example for Example {
             rpass.draw_indexed(0 .. self.index_count as u32, 0, 0 .. 1);
         }
 
-        device.get_queue().submit(&[encoder.finish(None)]);
+        device.get_queue().submit(&[encoder.finish()]);
     }
 }
 

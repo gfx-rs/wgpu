@@ -212,17 +212,15 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         });
 
-        let local_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[wgpu::BindGroupLayoutBinding {
+        let local_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            bindings: &[
+                wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer,
-                    dynamic: false,
-                    multisampled: false,
-                    texture_dimension: wgpu::TextureViewDimension::D2,
-                }],
-            });
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                },
+            ],
+        });
 
         let mut entities = vec![{
             use cgmath::SquareMatrix;
@@ -260,25 +258,25 @@ impl framework::Example for Example {
                 offset: cgmath::vec3(-2.0, -2.0, 2.0),
                 angle: 10.0,
                 scale: 0.7,
-                rotation: 1.0,
+                rotation: 0.1,
             },
             CubeDesc {
                 offset: cgmath::vec3(2.0, -2.0, 2.0),
                 angle: 50.0,
                 scale: 1.3,
-                rotation: 2.0,
+                rotation: 0.2,
             },
             CubeDesc {
                 offset: cgmath::vec3(-2.0, 2.0, 2.0),
                 angle: 140.0,
                 scale: 1.1,
-                rotation: 3.0,
+                rotation: 0.3,
             },
             CubeDesc {
                 offset: cgmath::vec3(2.0, 2.0, 2.0),
                 angle: 210.0,
                 scale: 0.9,
-                rotation: 4.0,
+                rotation: 0.4,
             },
         ];
 
@@ -337,19 +335,19 @@ impl framework::Example for Example {
             format: Self::SHADOW_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
         });
-        let shadow_view = shadow_texture.create_view(None);
+        let shadow_view = shadow_texture.create_default_view();
 
         let mut shadow_target_views = (0 .. 2)
             .map(|i| {
-                Some(shadow_texture.create_view(Some(&wgpu::TextureViewDescriptor {
+                Some(shadow_texture.create_view(&wgpu::TextureViewDescriptor {
                     format: Self::SHADOW_FORMAT,
                     dimension: wgpu::TextureViewDimension::D2,
-                    aspect: wgpu::TextureAspect::DepthOnly,
+                    aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
                     level_count: 1,
                     base_array_layer: i as u32,
                     array_layer_count: 1,
-                })))
+                }))
             })
             .collect::<Vec<_>>();
         let lights = vec![
@@ -406,17 +404,15 @@ impl framework::Example for Example {
 
         let shadow_pass = {
             // Create pipeline layout
-            let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[wgpu::BindGroupLayoutBinding {
+            let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                bindings: &[
+                    wgpu::BindGroupLayoutBinding {
                         binding: 0, // global
                         visibility: wgpu::ShaderStage::VERTEX,
-                        ty: wgpu::BindingType::UniformBuffer,
-                        dynamic: false,
-                        multisampled: false,
-                        texture_dimension: wgpu::TextureViewDimension::D2,
-                    }],
-                });
+                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                    },
+                ],
+            });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
             });
@@ -497,34 +493,29 @@ impl framework::Example for Example {
                         wgpu::BindGroupLayoutBinding {
                             binding: 0, // global
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer,
-                            dynamic: false,
-                            multisampled: false,
-                            texture_dimension: wgpu::TextureViewDimension::D2,
+                            ty: wgpu::BindingType::UniformBuffer {
+                                dynamic: false,
+                            },
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 1, // lights
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer,
-                            dynamic: false,
-                            multisampled: false,
-                            texture_dimension: wgpu::TextureViewDimension::D2,
+                            ty: wgpu::BindingType::UniformBuffer {
+                                dynamic: false,
+                            },
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 2,
                             visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::SampledTexture,
-                            dynamic: false,
-                            multisampled: false,
-                            texture_dimension: wgpu::TextureViewDimension::D2,
+                            ty: wgpu::BindingType::SampledTexture {
+                                multisampled: false,
+                                dimension: wgpu::TextureViewDimension::D2Array,
+                            },
                         },
                         wgpu::BindGroupLayoutBinding {
                             binding: 3,
                             visibility: wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::Sampler,
-                            dynamic: false,
-                            multisampled: false,
-                            texture_dimension: wgpu::TextureViewDimension::D2,
                         },
                     ],
                 });
@@ -651,12 +642,12 @@ impl framework::Example for Example {
             lights_are_dirty: true,
             shadow_pass,
             forward_pass,
-            forward_depth: depth_texture.create_view(None),
+            forward_depth: depth_texture.create_default_view(),
             light_uniform_buf,
         }
     }
 
-    fn update(&mut self, _event: wgpu::winit::WindowEvent) {
+    fn update(&mut self, _event: winit::event::WindowEvent) {
         //empty
     }
 
@@ -671,7 +662,7 @@ impl framework::Example for Example {
             let mut encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
             encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.forward_pass.uniform_buf, 0, 64);
-            device.get_queue().submit(&[encoder.finish(None)]);
+            device.get_queue().submit(&[encoder.finish()]);
         }
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -687,7 +678,7 @@ impl framework::Example for Example {
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         });
-        self.forward_depth = depth_texture.create_view(None);
+        self.forward_depth = depth_texture.create_default_view();
     }
 
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
@@ -816,7 +807,7 @@ impl framework::Example for Example {
             }
         }
 
-        device.get_queue().submit(&[encoder.finish(None)]);
+        device.get_queue().submit(&[encoder.finish()]);
     }
 }
 

@@ -96,7 +96,7 @@ impl Example {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         };
 
-        device.create_texture(multisampled_frame_descriptor).create_view(None)
+        device.create_texture(multisampled_frame_descriptor).create_default_view()
     }
 }
 
@@ -152,18 +152,18 @@ impl framework::Example for Example {
         }
     }
 
-    fn update(&mut self, event: wgpu::winit::WindowEvent) {
+    fn update(&mut self, event: winit::event::WindowEvent) {
         match event {
-            wgpu::winit::WindowEvent::KeyboardInput { input, .. } => {
-                if let wgpu::winit::ElementState::Pressed = input.state {
+            winit::event::WindowEvent::KeyboardInput { input, .. } => {
+                if let winit::event::ElementState::Pressed = input.state {
                     match input.virtual_keycode {
-                        Some(wgpu::winit::VirtualKeyCode::Left) => {
+                        Some(winit::event::VirtualKeyCode::Left) => {
                             if self.sample_count >= 2 {
                                 self.sample_count = self.sample_count >> 1;
                                 self.rebuild_pipeline = true;
                             }
                         }
-                        Some(wgpu::winit::VirtualKeyCode::Right) => {
+                        Some(winit::event::VirtualKeyCode::Right) => {
                             if self.sample_count <= 16 {
                                 self.sample_count = self.sample_count << 1;
                                 self.rebuild_pipeline = true;
@@ -218,7 +218,7 @@ impl framework::Example for Example {
             rpass.draw(0..self.vertex_count, 0..1);
         }
 
-        device.get_queue().submit(&[encoder.finish(None)]);
+        device.get_queue().submit(&[encoder.finish()]);
     }
 }
 

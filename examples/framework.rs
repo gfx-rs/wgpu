@@ -1,6 +1,8 @@
 use log::info;
+use winit::event::WindowEvent;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
+#[allow(unused)]
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0,
     0.0, -1.0, 0.0, 0.0,
@@ -33,53 +35,47 @@ pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u32> {
     wgpu::read_spirv(glsl_to_spirv::compile(&code, ty).unwrap()).unwrap()
 }
 
-pub trait Example {
+pub trait Example: 'static {
     fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self;
     fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device);
-    fn update(&mut self, event: wgpu::winit::WindowEvent);
+    fn update(&mut self, event: WindowEvent);
     fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device);
 }
 
 pub fn run<E: Example>(title: &str) {
-    use wgpu::winit::{
-        ElementState,
-        Event,
-        EventsLoop,
-        KeyboardInput,
-        VirtualKeyCode,
-        WindowEvent,
+    use winit::{
+        event_loop::{ControlFlow, EventLoop},
+        event,
     };
 
     env_logger::init();
-
-    let mut events_loop = EventsLoop::new();
-
+    let event_loop = EventLoop::new();
     info!("Initializing the window...");
 
     #[cfg(not(feature = "gl"))]
     let (_window, instance, hidpi_factor, size, surface) = {
-        use wgpu::winit::Window;
+        use raw_window_handle::HasRawWindowHandle as _;
+
+
+        let window = winit::window::Window::new(&event_loop).unwrap();
+        window.set_title(title);
+        let hidpi_factor = window.hidpi_factor();
+        let size = window.inner_size().to_physical(hidpi_factor);
 
         let instance = wgpu::Instance::new();
-
-        let window = Window::new(&events_loop).unwrap();
-        window.set_title(title);
-        let hidpi_factor = window.get_hidpi_factor();
-        let size = window.get_inner_size().unwrap().to_physical(hidpi_factor);
-
-        let surface = instance.create_surface(&window);
+        let surface = instance.create_surface(window.raw_window_handle());
 
         (window, instance, hidpi_factor, size, surface)
     };
 
     #[cfg(feature = "gl")]
     let (_window, instance, hidpi_factor, size, surface) = {
-        let wb = wgpu::winit::WindowBuilder::new();
+        let wb = winit::WindowBuilder::new();
         let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
-        let context = cb.build_windowed(wb, &events_loop).unwrap();
+        let context = cb.build_windowed(wb, &event_loop).unwrap();
         context.window().set_title(title);
 
-        let hidpi_factor = context.window().get_hidpi_factor();
+        let hidpi_factor = context.window().hidpi_factor();
         let size = context
             .window()
             .get_inner_size()
@@ -94,16 +90,16 @@ pub fn run<E: Example>(title: &str) {
         (window, instance, hidpi_factor, size, surface)
     };
 
-    let adapter = instance.get_adapter(Some(&wgpu::RequestAdapterOptions {
+    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    }));
+    });
 
-    let mut device = adapter.request_device(Some(&wgpu::DeviceDescriptor {
+    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    }));
+    });
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -118,10 +114,14 @@ pub fn run<E: Example>(title: &str) {
     let mut example = E::init(&sc_desc, &mut device);
 
     info!("Entering render loop...");
-    let mut running = true;
-    while running {
-        events_loop.poll_events(|event| match event {
-            Event::WindowEvent {
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = if cfg!(feature = "metal-auto-capture") {
+            ControlFlow::Exit
+        } else {
+            ControlFlow::Poll
+        };
+        match event {
+            event::Event::WindowEvent {
                 event: WindowEvent::Resized(size),
                 ..
             } => {
@@ -132,30 +132,30 @@ pub fn run<E: Example>(title: &str) {
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
                 example.resize(&sc_desc, &mut device);
             }
-            Event::WindowEvent { event, .. } => match event {
+            event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
                     input:
-                        KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            state: ElementState::Pressed,
+                        event::KeyboardInput {
+                            virtual_keycode: Some(event::VirtualKeyCode::Escape),
+                            state: event::ElementState::Pressed,
                             ..
                         },
                     ..
                 }
                 | WindowEvent::CloseRequested => {
-                    running = false;
+                    *control_flow = ControlFlow::Exit;
                 }
                 _ => {
                     example.update(event);
                 }
             },
+            event::Event::EventsCleared => {
+                let frame = swap_chain.get_next_texture();
+                example.render(&frame, &mut device);
+            }
             _ => (),
-        });
-
-        let frame = swap_chain.get_next_texture();
-        example.render(&frame, &mut device);
-        running &= !cfg!(feature = "metal-auto-capture");
-    }
+        }
+    });
 }
 
 // This allows treating the framework as a standalone example,
