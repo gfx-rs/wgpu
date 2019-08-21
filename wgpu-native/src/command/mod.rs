@@ -114,11 +114,12 @@ impl CommandBufferHandle {
         buffer_guard: &Storage<BufferHandle, BufferId>,
         texture_guard: &Storage<TextureHandle, TextureId>,
     ) {
+        trace!("\tstitch {:?}", stitch);
         let buffer_barriers =
             base.buffers
                 .merge_replace(&head.buffers, stitch)
                 .map(|pending| {
-                    trace!("transit buffer {:?}", pending);
+                    trace!("\tbuffer -> {:?}", pending);
                     hal::memory::Barrier::Buffer {
                         states: pending.to_states(),
                         target: &buffer_guard[pending.id].raw,
@@ -130,7 +131,7 @@ impl CommandBufferHandle {
             .textures
             .merge_replace(&head.textures, stitch)
             .map(|pending| {
-                trace!("transit texture {:?}", pending);
+                trace!("\ttexture -> {:?}", pending);
                 hal::memory::Barrier::Image {
                     states: pending.to_states(),
                     target: &texture_guard[pending.id].raw,
@@ -221,6 +222,7 @@ pub fn command_encoder_begin_render_pass(
         }
     }
 
+    trace!("Encoding render pass begin in command buffer {:?}", command_encoder_id);
     let rp_key = {
         let trackers = &mut cmb.trackers;
         let swap_chain_links = &mut cmb.swap_chain_links;
@@ -253,11 +255,14 @@ pub fn command_encoder_begin_render_pass(
                         view.range.clone(),
                         TextureUsage::OUTPUT_ATTACHMENT,
                     );
-                    barriers.extend(pending.map(|pending| hal::memory::Barrier::Image {
-                        states: pending.to_states(),
-                        target: &texture.raw,
-                        families: None,
-                        range: pending.selector,
+                    barriers.extend(pending.map(|pending| {
+                        trace!("\tdepth-stencil {:?}", pending);
+                        hal::memory::Barrier::Image {
+                            states: pending.to_states(),
+                            target: &texture.raw,
+                            families: None,
+                            range: pending.selector,
+                        }
                     }));
                     hal::image::Layout::DepthStencilAttachmentOptimal
                 }
@@ -312,11 +317,14 @@ pub fn command_encoder_begin_render_pass(
                         view.range.clone(),
                         TextureUsage::OUTPUT_ATTACHMENT,
                     );
-                    barriers.extend(pending.map(|pending| hal::memory::Barrier::Image {
-                        states: pending.to_states(),
-                        target: &texture.raw,
-                        families: None,
-                        range: pending.selector,
+                    barriers.extend(pending.map(|pending| {
+                        trace!("\tcolor {:?}", pending);
+                        hal::memory::Barrier::Image {
+                            states: pending.to_states(),
+                            target: &texture.raw,
+                            families: None,
+                            range: pending.selector,
+                        }
                     }));
                     hal::image::Layout::ColorAttachmentOptimal
                 }
@@ -368,11 +376,14 @@ pub fn command_encoder_begin_render_pass(
                             view.range.clone(),
                             TextureUsage::OUTPUT_ATTACHMENT,
                         );
-                        barriers.extend(pending.map(|pending| hal::memory::Barrier::Image {
-                            states: pending.to_states(),
-                            target: &texture.raw,
-                            families: None,
-                            range: pending.selector,
+                        barriers.extend(pending.map(|pending| {
+                            trace!("\tresolve {:?}", pending);
+                            hal::memory::Barrier::Image {
+                                states: pending.to_states(),
+                                target: &texture.raw,
+                                families: None,
+                                range: pending.selector,
+                            }
                         }));
                         hal::image::Layout::ColorAttachmentOptimal
                     }

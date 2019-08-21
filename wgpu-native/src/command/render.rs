@@ -20,6 +20,7 @@ use crate::{
 };
 
 use hal::command::RawCommandBuffer;
+use log::trace;
 
 use std::{iter, ops::Range, slice};
 
@@ -189,6 +190,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) {
 
     match cmb.raw.last_mut() {
         Some(ref mut last) => {
+            trace!("Encoding barriers before pass {:?}", pass_id);
             CommandBuffer::insert_barriers(
                 last,
                 &mut cmb.trackers,

@@ -17,6 +17,7 @@ use crate::{
 };
 
 use hal::{self, command::RawCommandBuffer};
+use log::trace;
 
 use std::{iter, slice};
 
@@ -102,6 +103,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
     let (texture_guard, _) = HUB.textures.read(&mut token);
 
+    trace!("Encoding barriers on binding of {:?} in pass {:?}", bind_group_id, pass_id);
     CommandBuffer::insert_barriers(
         &mut pass.raw,
         &mut pass.trackers,

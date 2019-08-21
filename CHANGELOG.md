@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.3.1 (21-08-2019)
+  - fixed pipeline barriers that aren't transitions
+
 ## v0.3 (21-08-2019)
   - Platforms: experimental OpenGL/WebGL
   - Crates:
