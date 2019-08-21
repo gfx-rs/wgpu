@@ -1,6 +1,3 @@
-#[cfg(all(feature = "winit"))]
-pub extern crate winit;
-
 #[cfg(feature = "gfx-backend-dx11")]
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "gfx-backend-dx12")]

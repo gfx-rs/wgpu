@@ -16,7 +16,7 @@ WGPUU32Array read_file(const char *name) {
     fclose(file);
     return (WGPUU32Array){
         .bytes = (uint32_t*) bytes,
-        .length = length,
+        .length = length / 4,
     };
 }
 
