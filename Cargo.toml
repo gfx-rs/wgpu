@@ -4,9 +4,12 @@ version = "0.3.0"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",
+	"Lucas Kent <rubickent@gmail.com>",
+	"kyren <kerriganw@gmail.com>",
+	"Cormac O'Brien <cormac@c-obrien.org>",
 ]
 edition = "2018"
-description = "Rusty wgpu API wrapper"
+description = "Rusty WebGPU API wrapper"
 homepage = "https://github.com/gfx-rs/wgpu-rs"
 repository = "https://github.com/gfx-rs/wgpu-rs"
 keywords = ["graphics"]
@@ -20,12 +23,13 @@ metal = ["wgn/gfx-backend-metal"]
 dx11 = ["wgn/gfx-backend-dx11"]
 dx12 = ["wgn/gfx-backend-dx12"]
 vulkan = ["wgn/gfx-backend-vulkan"]
-gl = ["wgn/gfx-backend-gl"]
+#TODO: there is no way to use glutin-0.20 with GL backend v0.3 yet
+#gl = ["wgn/gfx-backend-gl"]
 
 [dependencies]
-#TODO: only depend on the published version
-wgn = { package = "wgpu-native", version = "0.2.6", features = ["local", "window-winit"], git = "https://github.com/gfx-rs/wgpu", rev = "a47ff090bb042f1cb2ad7b13c76eca228390a311"}
+wgn = { package = "wgpu-native", version = "0.3.1", features = ["local"] }
 arrayvec = "0.4"
+raw-window-handle = "0.1"
 zerocopy = "0.2"
 
 [dev-dependencies]
@@ -34,3 +38,4 @@ env_logger = "0.6"
 glsl-to-spirv = "0.1"
 log = "0.4"
 png = "0.15"
+winit = "0.20.0-alpha3"
