@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.3.3 (22-08-2019)
+  - fixed instance creation on Windows
+
 ## v0.3.1 (21-08-2019)
   - fixed pipeline barriers that aren't transitions
 

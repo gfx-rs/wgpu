@@ -114,8 +114,8 @@ pub fn wgpu_instance_create_surface(
             instance.create_surface_from_wayland(h.display, h.surface),
         #[cfg(all(windows, feature = "gfx-backend-vulkan"))]
         raw_window_handle::RawWindowHandle::Windows(h) =>
-            instance.create_surface_from_hwnd(ptr::null_mut(), h.hwnd),
-        #[cfg(all(windows, feature = "gfx-backend-dx12"))]
+            instance.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd),
+        #[cfg(all(windows, feature = "gfx-backend-dx11"))]
         raw_window_handle::RawWindowHandle::Windows(h) =>
             instance.create_surface_from_hwnd(h.hwnd),
         #[cfg(all(windows, feature = "gfx-backend-dx12"))]
