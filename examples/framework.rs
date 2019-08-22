@@ -54,16 +54,13 @@ pub fn run<E: Example>(title: &str) {
 
     #[cfg(not(feature = "gl"))]
     let (_window, instance, hidpi_factor, size, surface) = {
-        use raw_window_handle::HasRawWindowHandle as _;
-
-
         let window = winit::window::Window::new(&event_loop).unwrap();
         window.set_title(title);
         let hidpi_factor = window.hidpi_factor();
         let size = window.inner_size().to_physical(hidpi_factor);
 
         let instance = wgpu::Instance::new();
-        let surface = instance.create_surface(window.raw_window_handle());
+        let surface = instance.create_surface(&window);
 
         (window, instance, hidpi_factor, size, surface)
     };
