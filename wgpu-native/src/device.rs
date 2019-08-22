@@ -1434,6 +1434,7 @@ pub extern "C" fn wgpu_queue_submit(
                         hal::command::CommandBufferInheritanceInfo::default(),
                     );
                 }
+                trace!("Stitching command buffer {:?} before submission", cmb_id);
                 command::CommandBuffer::insert_barriers(
                     &mut transit,
                     &mut *trackers,

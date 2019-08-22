@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-native"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",

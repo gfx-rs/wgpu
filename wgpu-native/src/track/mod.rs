@@ -59,7 +59,7 @@ impl<U: Copy> Unit<U> {
 }
 
 /// Mode of stitching to states together.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Stitch {
     /// Stitch to the init state of the other resource.
     Init,
@@ -209,12 +209,15 @@ impl<S: ResourceState> ResourceTracker<S> {
         default: S::Usage,
     ) -> bool {
         let mut state = S::default();
-        let _ = state.change(
+        match state.change(
             id,
             selector,
             default,
             None,
-        );
+        ) {
+            Ok(()) => (),
+            Err(_) => unreachable!(),
+        }
         self.map
             .insert(id.index(), Resource {
                 ref_count: ref_count.clone(),

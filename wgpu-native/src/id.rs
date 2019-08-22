@@ -1,5 +1,8 @@
 use crate::{Epoch, Index};
-use std::marker::PhantomData;
+use std::{
+    fmt,
+    marker::PhantomData,
+};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -9,7 +12,6 @@ use serde::{Deserialize, Serialize};
 pub struct Id(Index, Epoch);
 
 #[repr(transparent)]
-#[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct GenericId<T>(Id, PhantomData<T>);
 
@@ -18,6 +20,12 @@ impl<T> Copy for GenericId<T> {}
 impl<T> Clone for GenericId<T> {
     fn clone(&self) -> Self {
         Self(self.0, PhantomData)
+    }
+}
+
+impl<T> fmt::Debug for GenericId<T> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        self.0.fmt(formatter)
     }
 }
 

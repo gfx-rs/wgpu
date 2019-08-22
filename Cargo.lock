@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-native"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "arrayvec 0.4.10 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -1449,7 +1449,7 @@ dependencies = [
  "log 0.4.6 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.9.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.91 (registry+https://github.com/rust-lang/crates.io-index)",
- "wgpu-native 0.3.0",
+ "wgpu-native 0.3.1",
 ]
 
 [[package]]

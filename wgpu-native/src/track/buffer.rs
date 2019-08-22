@@ -58,7 +58,10 @@ impl ResourceState for BufferState {
                     usage
                 }
                 None =>  {
-                    if !old.is_empty() && BufferUsage::WRITE_ALL.intersects(old | usage) {
+                    if !old.is_empty() &&
+                        old != usage &&
+                        BufferUsage::WRITE_ALL.intersects(old | usage)
+                    {
                         return Err(pending);
                     }
                     old | usage

@@ -51,7 +51,10 @@ impl PendingTransition<TextureState> {
                 Ok(replace)
             }
             None => {
-                if !u.start.is_empty() && TextureUsage::WRITE_ALL.intersects(u.start | u.end) {
+                if !u.start.is_empty() &&
+                    u.start != u.end &&
+                    TextureUsage::WRITE_ALL.intersects(u.start | u.end)
+                {
                     Err(self)
                 } else {
                     Ok(u.start | u.end)
@@ -149,6 +152,8 @@ impl ResourceState for TextureState {
         stitch: Stitch,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
+        assert!(output.is_some() || stitch == Stitch::Last);
+
         let mut temp = Vec::new();
         while self.mips.len() < other.mips.len() as usize {
             self.mips.push(MipState::default());
@@ -172,7 +177,7 @@ impl ResourceState for TextureState {
                     let unit = match states {
                         Range { start: None, end: None } => unreachable!(),
                         Range { start: Some(start), end: None } => start,
-                        Range { start: None, end: Some(end) } => Unit::new(end.select(stitch)),
+                        Range { start: None, end: Some(end) } => end,
                         Range { start: Some(start), end: Some(end) } => {
                             let mut final_usage = end.select(stitch);
                             if start.last != final_usage || !TextureUsage::ORDERED.contains(final_usage) {
