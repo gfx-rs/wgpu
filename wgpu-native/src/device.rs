@@ -23,6 +23,7 @@ use crate::{
     SurfaceId,
     TextureId,
     TextureViewId,
+    TextureDimension,
 };
 #[cfg(feature = "local")]
 use crate::{
@@ -748,6 +749,16 @@ pub fn device_create_texture(
 
     assert!((desc.mip_level_count as usize) < MAX_MIP_LEVELS);
 
+    let mut view_capabilities = hal::image::ViewCapabilities::empty();
+
+    // 2D textures with array layer counts that are multiples of 6 could be cubemaps
+    // Following gpuweb/gpuweb#68 always add the hint in that case
+    if desc.dimension == TextureDimension::D2 && desc.array_layer_count % 6 == 0 {
+        view_capabilities |= hal::image::ViewCapabilities::KIND_CUBE;
+    };
+
+    // TODO: 2D arrays, cubemap arrays
+
     let mut image = unsafe {
         device.raw.create_image(
             kind,
@@ -755,7 +766,7 @@ pub fn device_create_texture(
             format,
             hal::image::Tiling::Optimal,
             usage,
-            hal::image::ViewCapabilities::empty(), // TODO: format, 2d array, cube
+            view_capabilities,
         )
     }
     .unwrap();
