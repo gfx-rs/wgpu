@@ -560,9 +560,9 @@ impl Instance {
 
     /// Creates a surface from a raw window handle.
     #[cfg(not(feature = "gl"))]
-    pub fn create_surface(&self, raw_handle: raw_window_handle::RawWindowHandle) -> Surface {
+    pub fn create_surface<W: raw_window_handle::HasRawWindowHandle>(&self, window: &W) -> Surface {
         Surface {
-            id: wgn::wgpu_instance_create_surface(self.id, raw_handle),
+            id: wgn::wgpu_instance_create_surface(self.id, window.raw_window_handle()),
         }
     }
 
