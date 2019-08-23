@@ -19,22 +19,13 @@ typedef struct WGPUClientFactory WGPUClientFactory;
 
 typedef struct WGPUServer WGPUServer;
 
-typedef uint32_t WGPUIndex;
+typedef uint64_t WGPUId_DeviceHandle;
 
-typedef uint32_t WGPUEpoch;
+typedef WGPUId_DeviceHandle WGPUDeviceId;
 
-typedef struct {
-  WGPUIndex _0;
-  WGPUEpoch _1;
-} WGPUId;
+typedef uint64_t WGPUId_AdapterHandle;
 
-typedef WGPUId WGPUGenericId_DeviceHandle;
-
-typedef WGPUGenericId_DeviceHandle WGPUDeviceId;
-
-typedef WGPUId WGPUGenericId_AdapterHandle;
-
-typedef WGPUGenericId_AdapterHandle WGPUAdapterId;
+typedef WGPUId_AdapterHandle WGPUAdapterId;
 
 typedef struct {
   bool anisotropic_filtering;

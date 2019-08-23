@@ -1,6 +1,7 @@
 use crate::{
     AdapterHandle,
     AdapterId,
+    Backend,
     BindGroupHandle,
     BindGroupId,
     BindGroupLayoutHandle,
@@ -73,18 +74,20 @@ impl<I: TypedId> Default for IdentityManager<I> {
 
 impl<I: TypedId> IdentityManager<I> {
     pub fn alloc(&mut self) -> I {
+        let backend = Backend::Vulkan;
         match self.free.pop() {
-            Some(index) => I::new(index, self.epochs[index as usize]),
+            Some(index) => I::zip(index, self.epochs[index as usize], backend),
             None => {
-                let id = I::new(self.epochs.len() as Index, 1);
-                self.epochs.push(id.epoch());
+                let epoch = 1;
+                let id = I::zip(self.epochs.len() as Index, epoch, backend);
+                self.epochs.push(epoch);
                 id
             }
         }
     }
 
     pub fn free(&mut self, id: I) {
-        let (index, epoch) = (id.index(), id.epoch());
+        let (index, epoch, _) = id.unzip();
         // avoid doing this check in release
         if cfg!(debug_assertions) {
             assert!(!self.free.contains(&index));
@@ -106,31 +109,35 @@ pub struct Storage<T, I: TypedId> {
 impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
     type Output = T;
     fn index(&self, id: I) -> &T {
-        let (ref value, epoch) = self.map[id.index() as usize];
-        assert_eq!(epoch, id.epoch());
+        let (index, epoch, _) = id.unzip();
+        let (ref value, storage_epoch) = self.map[index as usize];
+        assert_eq!(epoch, storage_epoch);
         value
     }
 }
 
 impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
     fn index_mut(&mut self, id: I) -> &mut T {
-        let (ref mut value, epoch) = self.map[id.index() as usize];
-        assert_eq!(epoch, id.epoch());
+        let (index, epoch, _) = id.unzip();
+        let (ref mut value, storage_epoch) = self.map[index as usize];
+        assert_eq!(epoch, storage_epoch);
         value
     }
 }
 
 impl<T, I: TypedId> Storage<T, I> {
     pub fn contains(&self, id: I) -> bool {
-        match self.map.get(id.index() as usize) {
-            Some(&(_, epoch)) if epoch == id.epoch() => true,
-            _ => false,
+        let (index, epoch, _) = id.unzip();
+        match self.map.get(index as usize) {
+            Some(&(_, storage_epoch)) => epoch == storage_epoch,
+            None => false,
         }
     }
 
     pub fn remove(&mut self, id: I) -> T {
-        let (value, epoch) = self.map.remove(id.index() as usize).unwrap();
-        assert_eq!(epoch, id.epoch());
+        let (index, epoch, _) = id.unzip();
+        let (value, storage_epoch) = self.map.remove(index as usize).unwrap();
+        assert_eq!(epoch, storage_epoch);
         value
     }
 }
@@ -275,11 +282,12 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     pub fn register<A: Access<T>>(
         &self, id: I, value: T, _token: &mut Token<A>
     ) {
+        let (index, epoch, _) = id.unzip();
         let old = self
             .data
             .write()
             .map
-            .insert(id.index() as usize, (value, id.epoch()));
+            .insert(index as usize, (value, epoch));
         assert!(old.is_none());
     }
 

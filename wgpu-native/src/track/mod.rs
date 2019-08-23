@@ -4,6 +4,7 @@ mod texture;
 
 use crate::{
     hub::Storage,
+    Backend,
     Epoch,
     Index,
     RefCount,
@@ -157,6 +158,7 @@ pub struct ResourceTracker<S: ResourceState> {
     map: FastHashMap<Index, Resource<S>>,
     /// Temporary storage for collecting transitions.
     temp: Vec<PendingTransition<S>>,
+    backend: Backend,
 }
 
 impl<S: ResourceState> ResourceTracker<S> {
@@ -165,14 +167,16 @@ impl<S: ResourceState> ResourceTracker<S> {
         ResourceTracker {
             map: FastHashMap::default(),
             temp: Vec::new(),
+            backend: Backend::Vulkan, //TODO
         }
     }
 
     /// Remove an id from the tracked map.
     pub fn remove(&mut self, id: S::Id) -> bool {
-        match self.map.remove(&id.index()) {
+        let (index, epoch, _) = id.unzip();
+        match self.map.remove(&index) {
             Some(resource) => {
-                assert_eq!(resource.epoch, id.epoch());
+                assert_eq!(resource.epoch, epoch);
                 true
             }
             None => false,
@@ -188,9 +192,10 @@ impl<S: ResourceState> ResourceTracker<S> {
 
     /// Return an iterator over used resources keys.
     pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = S::Id> {
+        let backend = self.backend;
         self.map
             .iter()
-            .map(|(&index, resource)| S::Id::new(index, resource.epoch))
+            .map(move |(&index, resource)| S::Id::zip(index, resource.epoch, backend))
     }
 
     /// Clear the tracked contents.
@@ -218,11 +223,13 @@ impl<S: ResourceState> ResourceTracker<S> {
             Ok(()) => (),
             Err(_) => unreachable!(),
         }
+
+        let (index, epoch, _) = id.unzip();
         self.map
-            .insert(id.index(), Resource {
+            .insert(index, Resource {
                 ref_count: ref_count.clone(),
                 state,
-                epoch: id.epoch(),
+                epoch,
             })
             .is_none()
     }
@@ -236,8 +243,9 @@ impl<S: ResourceState> ResourceTracker<S> {
         id: S::Id,
         selector: S::Selector,
     ) -> Option<S::Usage> {
-        let res = self.map.get(&id.index())?;
-        assert_eq!(res.epoch, id.epoch());
+        let (index, epoch, _) = id.unzip();
+        let res = self.map.get(&index)?;
+        assert_eq!(res.epoch, epoch);
         res.state.query(selector)
     }
 
@@ -248,16 +256,17 @@ impl<S: ResourceState> ResourceTracker<S> {
         id: S::Id,
         ref_count: &RefCount,
     ) -> &'a mut Resource<S> {
-        match map.entry(id.index()) {
+        let (index, epoch, _) = id.unzip();
+        match map.entry(index) {
             Entry::Vacant(e) => {
                 e.insert(Resource {
                     ref_count: ref_count.clone(),
                     state: S::default(),
-                    epoch: id.epoch(),
+                    epoch,
                 })
             }
             Entry::Occupied(e) => {
-                assert_eq!(e.get().epoch, id.epoch());
+                assert_eq!(e.get().epoch, epoch);
                 e.into_mut()
             }
         }
@@ -303,7 +312,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                 }
                 Entry::Occupied(e) => {
                     assert_eq!(e.get().epoch, new.epoch);
-                    let id = S::Id::new(index, new.epoch);
+                    let id = S::Id::zip(index, new.epoch, self.backend);
                     e.into_mut().state.merge(id, &new.state, Stitch::Last, None)?;
                 }
             }
@@ -325,7 +334,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                 }
                 Entry::Occupied(e) => {
                     assert_eq!(e.get().epoch, new.epoch);
-                    let id = S::Id::new(index, new.epoch);
+                    let id = S::Id::zip(index, new.epoch, self.backend);
                     e.into_mut().state
                         .merge(id, &new.state, stitch, Some(&mut self.temp))
                         .ok(); //TODO: unwrap?
