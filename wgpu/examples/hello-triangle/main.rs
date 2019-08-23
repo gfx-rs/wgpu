@@ -9,15 +9,13 @@ fn main() {
 
     #[cfg(not(feature = "gl"))]
     let (_window, instance, size, surface) = {
-        use raw_window_handle::HasRawWindowHandle as _;
-
         let window = winit::window::Window::new(&event_loop).unwrap();
         let size = window
             .inner_size()
             .to_physical(window.hidpi_factor());
 
         let instance = wgpu::Instance::new();
-        let surface = instance.create_surface(window.raw_window_handle());
+        let surface = instance.create_surface(&window);
 
         (window, instance, size, surface)
     };
