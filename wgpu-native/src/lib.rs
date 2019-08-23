@@ -51,8 +51,17 @@ use std::{
 };
 
 type SubmissionIndex = usize;
-pub(crate) type Index = u32;
-pub(crate) type Epoch = u32;
+type Index = u32;
+type Epoch = u32;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Backend {
+    Vulkan,
+    Gl,
+    Metal,
+    Dx12,
+    Dx11,
+}
 
 pub type BufferAddress = u64;
 pub type RawString = *const c_char;

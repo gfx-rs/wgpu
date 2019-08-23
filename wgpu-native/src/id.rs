@@ -1,4 +1,4 @@
-use crate::{Epoch, Index};
+use crate::{Backend, Epoch, Index};
 use std::{
     fmt,
     marker::PhantomData,
@@ -6,69 +6,54 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Id(Index, Epoch);
 
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct GenericId<T>(Id, PhantomData<T>);
+pub struct Id<T>(u64, PhantomData<T>);
 
-impl<T> Copy for GenericId<T> {}
+impl<T> Copy for Id<T> {}
 
-impl<T> Clone for GenericId<T> {
+impl<T> Clone for Id<T> {
     fn clone(&self) -> Self {
         Self(self.0, PhantomData)
     }
 }
 
-impl<T> fmt::Debug for GenericId<T> {
+impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         self.0.fmt(formatter)
     }
 }
 
-impl<T> std::hash::Hash for GenericId<T> {
+impl<T> std::hash::Hash for Id<T> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
     }
 }
 
-impl<T> PartialEq for GenericId<T> {
+impl<T> PartialEq for Id<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
     }
 }
 
 pub trait TypedId {
-    fn new(index: Index, epoch: Epoch) -> Self;
-    fn index(&self) -> Index;
-    fn epoch(&self) -> Epoch;
+    fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
+    fn unzip(self) -> (Index, Epoch, Backend);
 }
 
-impl<T> GenericId<T> {
-    fn raw(self) -> Id {
-        self.0
-    }
-}
-
-impl<T> TypedId for GenericId<T> {
-    fn new(index: Index, epoch: Epoch) -> Self {
-        Self(Id(index, epoch), PhantomData)
+impl<T> TypedId for Id<T> {
+    fn zip(index: Index, epoch: Epoch, _backend: Backend) -> Self {
+        Id(index as u64 | ((epoch as u64) << 32), PhantomData)
     }
 
-    fn index(&self) -> Index {
-        (self.raw()).0
-    }
-
-    fn epoch(&self) -> Epoch {
-        (self.raw()).1
+    fn unzip(self) -> (Index, Epoch, Backend) {
+        (self.0 as u32, (self.0 >> 32) as u32, Backend::Vulkan)
     }
 }
 
 #[cfg(not(feature = "gfx-backend-gl"))]
-pub type InstanceId = GenericId<InstanceHandle>;
+pub type InstanceId = Id<InstanceHandle>;
 
 #[cfg(feature = "gfx-backend-gl")]
 pub type InstanceId = SurfaceId;
@@ -76,67 +61,67 @@ pub type InstanceId = SurfaceId;
 #[cfg(not(feature = "gfx-backend-gl"))]
 pub type InstanceHandle = back::Instance;
 
-pub type AdapterId = GenericId<AdapterHandle>;
+pub type AdapterId = Id<AdapterHandle>;
 pub type AdapterHandle = hal::Adapter<back::Backend>;
 
-pub type DeviceId = GenericId<DeviceHandle>;
+pub type DeviceId = Id<DeviceHandle>;
 pub type DeviceHandle = crate::Device<back::Backend>;
 
 pub type QueueId = DeviceId;
 
 // Resource
-pub type BufferId = GenericId<BufferHandle>;
+pub type BufferId = Id<BufferHandle>;
 pub type BufferHandle = crate::Buffer<back::Backend>;
 
-pub type TextureViewId = GenericId<TextureViewHandle>;
+pub type TextureViewId = Id<TextureViewHandle>;
 pub type TextureViewHandle = crate::TextureView<back::Backend>;
 
-pub type TextureId = GenericId<TextureHandle>;
+pub type TextureId = Id<TextureHandle>;
 pub type TextureHandle = crate::Texture<back::Backend>;
 
-pub type SamplerId = GenericId<SamplerHandle>;
+pub type SamplerId = Id<SamplerHandle>;
 pub type SamplerHandle = crate::Sampler<back::Backend>;
 
 // Binding model
-pub type BindGroupLayoutId = GenericId<BindGroupLayoutHandle>;
+pub type BindGroupLayoutId = Id<BindGroupLayoutHandle>;
 pub type BindGroupLayoutHandle = crate::BindGroupLayout<back::Backend>;
 
-pub type PipelineLayoutId = GenericId<PipelineLayoutHandle>;
+pub type PipelineLayoutId = Id<PipelineLayoutHandle>;
 pub type PipelineLayoutHandle = crate::PipelineLayout<back::Backend>;
 
-pub type BindGroupId = GenericId<BindGroupHandle>;
+pub type BindGroupId = Id<BindGroupHandle>;
 pub type BindGroupHandle = crate::BindGroup<back::Backend>;
 
 // Pipeline
-pub type InputStateId = GenericId<InputStateHandle>;
+pub type InputStateId = Id<InputStateHandle>;
 pub enum InputStateHandle {}
 
-pub type ShaderModuleId = GenericId<ShaderModuleHandle>;
+pub type ShaderModuleId = Id<ShaderModuleHandle>;
 pub type ShaderModuleHandle = crate::ShaderModule<back::Backend>;
 
-pub type RenderPipelineId = GenericId<RenderPipelineHandle>;
+pub type RenderPipelineId = Id<RenderPipelineHandle>;
 pub type RenderPipelineHandle = crate::RenderPipeline<back::Backend>;
 
-pub type ComputePipelineId = GenericId<ComputePipelineHandle>;
+pub type ComputePipelineId = Id<ComputePipelineHandle>;
 pub type ComputePipelineHandle = crate::ComputePipeline<back::Backend>;
 
 // Command
-pub type CommandBufferId = GenericId<CommandBufferHandle>;
+pub type CommandBufferId = Id<CommandBufferHandle>;
 pub type CommandBufferHandle = crate::CommandBuffer<back::Backend>;
 
 pub type CommandEncoderId = CommandBufferId;
 
-pub type RenderBundleId = GenericId<RenderBundleHandle>;
+pub type RenderBundleId = Id<RenderBundleHandle>;
 pub enum RenderBundleHandle {}
 
-pub type RenderPassId = GenericId<RenderPassHandle>;
+pub type RenderPassId = Id<RenderPassHandle>;
 pub type RenderPassHandle = crate::RenderPass<back::Backend>;
 
-pub type ComputePassId = GenericId<ComputePassHandle>;
+pub type ComputePassId = Id<ComputePassHandle>;
 pub type ComputePassHandle = crate::ComputePass<back::Backend>;
 
 // Swap chain
-pub type SurfaceId = GenericId<SurfaceHandle>;
+pub type SurfaceId = Id<SurfaceHandle>;
 pub type SurfaceHandle = crate::Surface<back::Backend>;
 
 pub type SwapChainId = SurfaceId;

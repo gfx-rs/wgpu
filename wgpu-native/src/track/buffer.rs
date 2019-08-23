@@ -110,7 +110,7 @@ impl ResourceState for BufferState {
 
 #[cfg(test)]
 mod test {
-    use crate::TypedId;
+    use crate::{Backend, TypedId};
     use super::*;
 
     #[test]
@@ -119,7 +119,7 @@ mod test {
             init: BufferUsage::INDEX,
             last: BufferUsage::STORAGE,
         };
-        let id = TypedId::new(0, 0);
+        let id = TypedId::zip(0, 0, Backend::Vulkan);
         assert!(bs.change(id, (), BufferUsage::VERTEX, None).is_err());
         bs.change(id, (), BufferUsage::VERTEX, Some(&mut Vec::new())).unwrap();
         bs.change(id, (), BufferUsage::INDEX, None).unwrap();

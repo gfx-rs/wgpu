@@ -240,22 +240,13 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
-typedef uint32_t WGPUIndex;
+typedef uint64_t WGPUId_DeviceHandle;
 
-typedef uint32_t WGPUEpoch;
+typedef WGPUId_DeviceHandle WGPUDeviceId;
 
-typedef struct {
-  WGPUIndex _0;
-  WGPUEpoch _1;
-} WGPUId;
+typedef uint64_t WGPUId_AdapterHandle;
 
-typedef WGPUId WGPUGenericId_DeviceHandle;
-
-typedef WGPUGenericId_DeviceHandle WGPUDeviceId;
-
-typedef WGPUId WGPUGenericId_AdapterHandle;
-
-typedef WGPUGenericId_AdapterHandle WGPUAdapterId;
+typedef WGPUId_AdapterHandle WGPUAdapterId;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -270,13 +261,13 @@ typedef struct {
   WGPULimits limits;
 } WGPUDeviceDescriptor;
 
-typedef WGPUId WGPUGenericId_BindGroupHandle;
+typedef uint64_t WGPUId_BindGroupHandle;
 
-typedef WGPUGenericId_BindGroupHandle WGPUBindGroupId;
+typedef WGPUId_BindGroupHandle WGPUBindGroupId;
 
-typedef WGPUId WGPUGenericId_BufferHandle;
+typedef uint64_t WGPUId_BufferHandle;
 
-typedef WGPUGenericId_BufferHandle WGPUBufferId;
+typedef WGPUId_BufferHandle WGPUBufferId;
 
 typedef uint64_t WGPUBufferAddress;
 
@@ -284,23 +275,23 @@ typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const
 
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
-typedef WGPUId WGPUGenericId_ComputePassHandle;
+typedef uint64_t WGPUId_ComputePassHandle;
 
-typedef WGPUGenericId_ComputePassHandle WGPUComputePassId;
+typedef WGPUId_ComputePassHandle WGPUComputePassId;
 
-typedef WGPUId WGPUGenericId_CommandBufferHandle;
+typedef uint64_t WGPUId_CommandBufferHandle;
 
-typedef WGPUGenericId_CommandBufferHandle WGPUCommandBufferId;
+typedef WGPUId_CommandBufferHandle WGPUCommandBufferId;
 
 typedef WGPUCommandBufferId WGPUCommandEncoderId;
 
-typedef WGPUId WGPUGenericId_RenderPassHandle;
+typedef uint64_t WGPUId_RenderPassHandle;
 
-typedef WGPUGenericId_RenderPassHandle WGPURenderPassId;
+typedef WGPUId_RenderPassHandle WGPURenderPassId;
 
-typedef WGPUId WGPUGenericId_TextureViewHandle;
+typedef uint64_t WGPUId_TextureViewHandle;
 
-typedef WGPUGenericId_TextureViewHandle WGPUTextureViewId;
+typedef WGPUId_TextureViewHandle WGPUTextureViewId;
 
 typedef struct {
   double r;
@@ -346,9 +337,9 @@ typedef struct {
   uint32_t image_height;
 } WGPUBufferCopyView;
 
-typedef WGPUId WGPUGenericId_TextureHandle;
+typedef uint64_t WGPUId_TextureHandle;
 
-typedef WGPUGenericId_TextureHandle WGPUTextureId;
+typedef WGPUId_TextureHandle WGPUTextureId;
 
 typedef struct {
   float x;
@@ -376,27 +367,27 @@ typedef struct {
 
 typedef const char *WGPURawString;
 
-typedef WGPUId WGPUGenericId_ComputePipelineHandle;
+typedef uint64_t WGPUId_ComputePipelineHandle;
 
-typedef WGPUGenericId_ComputePipelineHandle WGPUComputePipelineId;
+typedef WGPUId_ComputePipelineHandle WGPUComputePipelineId;
 
-typedef WGPUId WGPUGenericId_InstanceHandle;
+typedef uint64_t WGPUId_InstanceHandle;
 
-typedef WGPUId WGPUGenericId_SurfaceHandle;
+typedef uint64_t WGPUId_SurfaceHandle;
 
-typedef WGPUGenericId_SurfaceHandle WGPUSurfaceId;
+typedef WGPUId_SurfaceHandle WGPUSurfaceId;
 
 #if !defined(WGPU_BACKEND_GL)
-typedef WGPUGenericId_InstanceHandle WGPUInstanceId;
+typedef WGPUId_InstanceHandle WGPUInstanceId;
 #endif
 
 #if defined(WGPU_BACKEND_GL)
 typedef WGPUSurfaceId WGPUInstanceId;
 #endif
 
-typedef WGPUId WGPUGenericId_BindGroupLayoutHandle;
+typedef uint64_t WGPUId_BindGroupLayoutHandle;
 
-typedef WGPUGenericId_BindGroupLayoutHandle WGPUBindGroupLayoutId;
+typedef WGPUId_BindGroupLayoutHandle WGPUBindGroupLayoutId;
 
 typedef struct {
   WGPUBufferId buffer;
@@ -404,9 +395,9 @@ typedef struct {
   WGPUBufferAddress size;
 } WGPUBufferBinding;
 
-typedef WGPUId WGPUGenericId_SamplerHandle;
+typedef uint64_t WGPUId_SamplerHandle;
 
-typedef WGPUGenericId_SamplerHandle WGPUSamplerId;
+typedef WGPUId_SamplerHandle WGPUSamplerId;
 
 typedef enum {
   WGPUBindingResource_Buffer,
@@ -488,13 +479,13 @@ typedef struct {
   uint32_t todo;
 } WGPUCommandEncoderDescriptor;
 
-typedef WGPUId WGPUGenericId_PipelineLayoutHandle;
+typedef uint64_t WGPUId_PipelineLayoutHandle;
 
-typedef WGPUGenericId_PipelineLayoutHandle WGPUPipelineLayoutId;
+typedef WGPUId_PipelineLayoutHandle WGPUPipelineLayoutId;
 
-typedef WGPUId WGPUGenericId_ShaderModuleHandle;
+typedef uint64_t WGPUId_ShaderModuleHandle;
 
-typedef WGPUGenericId_ShaderModuleHandle WGPUShaderModuleId;
+typedef WGPUId_ShaderModuleHandle WGPUShaderModuleId;
 
 typedef struct {
   WGPUShaderModuleId module;
@@ -511,9 +502,9 @@ typedef struct {
   uintptr_t bind_group_layouts_length;
 } WGPUPipelineLayoutDescriptor;
 
-typedef WGPUId WGPUGenericId_RenderPipelineHandle;
+typedef uint64_t WGPUId_RenderPipelineHandle;
 
-typedef WGPUGenericId_RenderPipelineHandle WGPURenderPipelineId;
+typedef WGPUId_RenderPipelineHandle WGPURenderPipelineId;
 
 typedef struct {
   WGPUFrontFace front_face;
@@ -653,9 +644,9 @@ typedef struct {
   WGPUPowerPreference power_preference;
 } WGPURequestAdapterOptions;
 
-typedef WGPUId WGPUGenericId_RenderBundleHandle;
+typedef uint64_t WGPUId_RenderBundleHandle;
 
-typedef WGPUGenericId_RenderBundleHandle WGPURenderBundleId;
+typedef WGPUId_RenderBundleHandle WGPURenderBundleId;
 
 typedef struct {
   WGPUTextureId texture_id;
