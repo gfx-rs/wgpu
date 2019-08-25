@@ -1,4 +1,4 @@
-use crate::{GlobalMessage, InstanceMessage};
+use crate::{GlobalMessage};
 
 use ipc_channel::ipc::IpcReceiver;
 use wgn;
@@ -20,25 +20,14 @@ enum ControlFlow {
 }
 
 fn process(message: GlobalMessage) -> ControlFlow {
-    let mut token = &mut wgn::Token::root();
     match message {
-        GlobalMessage::Instance(msg) => match msg {
-            InstanceMessage::Create(instance_id) => {
-                let instance = wgn::create_instance();
-                wgn::HUB.instances.register(instance_id, instance, &mut token);
-            }
-            InstanceMessage::InstanceRequestAdapter(instance_id, ref desc, id) => {
-                let adapter = wgn::instance_get_adapter(instance_id, desc, &mut token);
-                wgn::HUB.adapters.register(id, adapter, &mut token);
-            }
-            InstanceMessage::AdapterCreateDevice(adapter_id, ref desc, id) => {
-                let device = wgn::adapter_create_device(adapter_id, desc, &mut token);
-                wgn::HUB.devices.register(id, device, &mut token);
-            }
-            InstanceMessage::Destroy(instance_id) => {
-                wgn::HUB.instances.unregister(instance_id, &mut token);
-            }
-        },
+        GlobalMessage::RequestAdapter(ref desc, ref ids) => {
+            wgn::request_adapter(desc, ids);
+        }
+        GlobalMessage::AdapterRequestDevice(adapter_id, ref desc, id) => {
+            use wgn::adapter_request_device as fun;
+            wgn::gfx_select!(adapter_id => fun(adapter_id, desc, id));
+        }
         GlobalMessage::Terminate => return ControlFlow::Terminate,
     }
 

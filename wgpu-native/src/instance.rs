@@ -1,21 +1,61 @@
 use crate::{
     binding_model::MAX_BIND_GROUPS,
-    hub::{HUB, Root, Token},
-    AdapterHandle,
+    device::BIND_BUFFER_ALIGNMENT,
+    hub::{GLOBAL, GfxBackend, Token},
+    id::{Input, Output},
     AdapterId,
-    DeviceHandle,
-    InstanceId,
-    SurfaceHandle,
+    Backend,
+    Device,
+    DeviceId,
+    SwapChainId,
 };
-#[cfg(feature = "local")]
-use crate::{device::BIND_BUFFER_ALIGNMENT, DeviceId, SurfaceId};
+#[cfg(not(feature = "remote"))]
+use crate::{gfx_select, SurfaceId};
 
-#[cfg(feature = "local")]
 use log::info;
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
 
 use hal::{self, Instance as _, PhysicalDevice as _};
+#[cfg(not(feature = "remote"))]
+use std::marker::PhantomData;
+
+
+#[derive(Debug, Default)]
+pub struct Instance {
+    vulkan: Option<gfx_backend_vulkan::Instance>,
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    metal: gfx_backend_metal::Instance,
+}
+
+impl Instance {
+    pub(crate) fn new(name: &str, version: u32) -> Self {
+        Instance {
+            #[cfg(any(unix, windows))]
+            vulkan: Some(gfx_backend_vulkan::Instance::create(name, version)),
+            #[cfg(not(any(unix, windows)))]
+            vulkan: None,
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            metal: gfx_backend_metal::Instance::create(name, version),
+        }
+    }
+}
+
+type GfxSurface<B> = <B as hal::Backend>::Surface;
+
+#[derive(Debug)]
+pub struct Surface {
+    pub(crate) swap_chain: Option<SwapChainId>,
+    pub(crate) vulkan: Option<GfxSurface<gfx_backend_vulkan::Backend>>,
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub(crate) metal: GfxSurface<gfx_backend_metal::Backend>,
+}
+
+#[derive(Debug)]
+pub struct Adapter<B: hal::Backend> {
+    pub(crate) raw: hal::Adapter<B>,
+}
+
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -69,212 +109,163 @@ pub struct DeviceDescriptor {
     pub limits: Limits,
 }
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-pub fn create_instance() -> ::back::Instance {
-    ::back::Instance::create("wgpu", 1)
-}
-
-#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
-#[no_mangle]
-pub extern "C" fn wgpu_create_instance() -> InstanceId {
-    let inst = create_instance();
-    HUB.instances.register_local(inst, &mut Token::root())
-}
-
-#[cfg(all(feature = "local", feature = "glutin"))]
-pub fn wgpu_create_gl_instance(windowed_context: back::glutin::RawContext<back::glutin::PossiblyCurrent>) -> InstanceId {
+#[cfg(all(not(feature = "remote"), feature = "glutin"))]
+pub fn wgpu_create_gl_surface(windowed_context: back::glutin::RawContext<back::glutin::PossiblyCurrent>) -> SurfaceId {
     let raw = back::Surface::from_context(windowed_context);
     let surface = SurfaceHandle::new(raw);
-    HUB.surfaces.register_local(surface, &mut Token::root())
+    GLOBAL.surfaces.register_local(surface, &mut Token::root())
 }
 
-#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
-pub fn wgpu_instance_create_surface(
-    instance_id: InstanceId,
+#[cfg(not(feature = "remote"))]
+pub fn wgpu_create_surface(
     raw_handle: raw_window_handle::RawWindowHandle,
 ) -> SurfaceId {
-    let mut token = Token::root();
-    let (instance_guard, mut token) = HUB.instances.read(&mut token);
-    let instance = &instance_guard[instance_id];
-    let raw = match raw_handle {
-        #[cfg(all(target_os = "ios", feature = "gfx-backend-metal"))]
-        raw_window_handle::RawWindowHandle::IOS(h) =>
-            instance.create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
-        #[cfg(all(target_os = "macos", feature = "gfx-backend-metal"))]
-        raw_window_handle::RawWindowHandle::MacOS(h) =>
-            instance.create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
-        #[cfg(all(target_os = "macos", feature = "gfx-backend-vulkan"))]
-        raw_window_handle::RawWindowHandle::MacOS(h) =>
-            instance.create_surface_from_nsview(h.ns_view),
-        #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
-        raw_window_handle::RawWindowHandle::X11(h) =>
-            instance.create_surface_from_xlib(h.display as _, h.window as _),
-        #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
-        raw_window_handle::RawWindowHandle::Wayland(h) =>
-            instance.create_surface_from_wayland(h.display, h.surface),
-        #[cfg(all(windows, feature = "gfx-backend-vulkan"))]
-        raw_window_handle::RawWindowHandle::Windows(h) =>
-            instance.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd),
-        #[cfg(all(windows, feature = "gfx-backend-dx11"))]
-        raw_window_handle::RawWindowHandle::Windows(h) =>
-            instance.create_surface_from_hwnd(h.hwnd),
-        #[cfg(all(windows, feature = "gfx-backend-dx12"))]
-        raw_window_handle::RawWindowHandle::Windows(h) =>
-            instance.create_surface_from_hwnd(h.hwnd),
-        #[cfg(any(
-            feature = "gfx-backend-vulkan",
-            feature = "gfx-backend-dx11",
-            feature = "gfx-backend-dx12",
-            feature = "gfx-backend-metal",
-            feature = "gfx-backend-gl",
-        ))]
+    use raw_window_handle::RawWindowHandle as Rwh;
+
+    let instance = &GLOBAL.instance;
+    let surface = match raw_handle {
+        #[cfg(target_os = "ios")]
+        Rwh::IOS(h) => Surface {
+            swap_chain: None,
+            vulkan: None,
+            metal: instance.metal.create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
+        },
+        #[cfg(target_os = "macos")]
+        Rwh::MacOS(h) => Surface {
+            swap_chain: None,
+            vulkan: instance.vulkan
+                .as_ref()
+                .map(|inst| inst.create_surface_from_nsview(h.ns_view)),
+            metal: instance.metal.create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+        },
+        #[cfg(unix)]
+        Rwh::X11(h) => Surface {
+            swap_chain: None,
+            vulkan: instance.vulkan
+                .as_ref()
+                .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
+        },
+        #[cfg(unix)]
+        Rwh::Wayland(h) => Surface {
+            swap_chain: None,
+            vulkan: instance.vulkan
+                .as_ref()
+                .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
+        },
+        #[cfg(windows)]
+        Rwh::Windows(h) => Surface {
+            swap_chain: None,
+            vulkan: instance.vulkan
+                .as_ref()
+                .map(|inst| inst.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd)),
+            //dx11: instance.dx11.create_surface_from_hwnd(h.hwnd),
+            //dx12: instance.dx11
+            //    .as_ref()
+            //    .map(|inst| inst.create_surface_from_hwnd(h.hwnd),
+        },
         _ => panic!("Unsupported window handle"),
-        #[cfg(not(any(
-            feature = "gfx-backend-vulkan",
-            feature = "gfx-backend-dx11",
-            feature = "gfx-backend-dx12",
-            feature = "gfx-backend-metal",
-            feature = "gfx-backend-gl",
-        )))]
-        _ => { let _ = instance; back::Surface },
     };
-    let surface = SurfaceHandle::new(raw);
-    HUB.surfaces.register_local(surface, &mut token)
+
+    let mut token = Token::root();
+    GLOBAL.surfaces.register_identity(PhantomData, surface, &mut token)
 }
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-#[allow(unused_variables)]
-pub fn instance_create_surface_from_xlib(
-    instance_id: InstanceId,
-    display: *mut *const std::ffi::c_void,
-    window: u64,
-    token: &mut Token<Root>,
-) -> SurfaceHandle {
-    #[cfg(not(all(unix, feature = "gfx-backend-vulkan")))]
-    unimplemented!();
-
-    #[cfg(all(unix, feature = "gfx-backend-vulkan"))]
-    {
-        let (instance_guard, _) = HUB.instances.read(token);
-        SurfaceHandle::new(instance_guard[instance_id].create_surface_from_xlib(display, window))
-    }
-}
-
-#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
+#[cfg(all(not(feature = "remote"), unix))]
 #[no_mangle]
-pub extern "C" fn wgpu_instance_create_surface_from_xlib(
-    instance_id: InstanceId,
+pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
     window: u64,
 ) -> SurfaceId {
-    let mut token = Token::root();
-    let surface = instance_create_surface_from_xlib(instance_id, display, window, &mut token);
-    HUB.surfaces.register_local(surface, &mut token)
+    use raw_window_handle::unix::X11Handle;
+    wgpu_create_surface(
+        raw_window_handle::RawWindowHandle::X11(X11Handle {
+            window,
+            display: display as *mut _,
+            .. X11Handle::empty()
+        }),
+    )
 }
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-#[allow(unused_variables)]
-pub fn instance_create_surface_from_macos_layer(
-    instance_id: InstanceId,
-    layer: *mut std::ffi::c_void,
-    token: &mut Token<Root>,
-) -> SurfaceHandle {
-    #[cfg(not(feature = "gfx-backend-metal"))]
-    unimplemented!();
-
-    #[cfg(feature = "gfx-backend-metal")]
-    {
-        let (instance_guard, _) = HUB.instances.read(token);
-        SurfaceHandle::new(
-            instance_guard[instance_id]
-                .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
-        )
-    }
-}
-
-#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
+#[cfg(all(not(feature = "remote"), any(target_os = "ios", target_os = "macos")))]
 #[no_mangle]
-pub extern "C" fn wgpu_instance_create_surface_from_macos_layer(
-    instance_id: InstanceId,
+pub extern "C" fn wgpu_create_surface_from_metal_layer(
     layer: *mut std::ffi::c_void,
 ) -> SurfaceId {
-    let mut token = Token::root();
-    let surface = instance_create_surface_from_macos_layer(instance_id, layer, &mut token);
-    HUB.surfaces.register_local(surface, &mut token)
+    let surface = Surface {
+        swap_chain: None,
+        vulkan: GLOBAL.instance.vulkan
+            .as_ref()
+            .map(|inst| inst.create_surface_from_layer(h.ns_view)),
+        metal: GLOBAL.instance.metal.create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+    };
+
+    GLOBAL.surfaces.register_identity(PhantomData, surface, &mut Token::root())
 }
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-#[allow(unused_variables)]
-pub fn instance_create_surface_from_windows_hwnd(
-    instance_id: InstanceId,
-    hinstance: *mut std::ffi::c_void,
-    hwnd: *mut std::ffi::c_void,
-    token: &mut Token<Root>,
-) -> SurfaceHandle {
-    let (instance_guard, _) = HUB.instances.read(token);
-
-    #[cfg(not(any(
-        feature = "gfx-backend-dx11",
-        feature = "gfx-backend-dx12",
-        all(target_os = "windows", feature = "gfx-backend-vulkan"),
-    )))]
-    let raw = unimplemented!();
-
-    #[cfg(any(feature = "gfx-backend-dx11", feature = "gfx-backend-dx12"))]
-    let raw = instance_guard[instance_id].create_surface_from_hwnd(hwnd);
-
-    #[cfg(all(target_os = "windows", feature = "gfx-backend-vulkan"))]
-    let raw = instance_guard[instance_id].create_surface_from_hwnd(hinstance, hwnd);
-
-    #[allow(unreachable_code)]
-    SurfaceHandle::new(raw)
-}
-
-#[cfg(all(feature = "local", not(feature = "gfx-backend-gl")))]
+#[cfg(all(not(feature = "remote"), windows))]
 #[no_mangle]
-pub extern "C" fn wgpu_instance_create_surface_from_windows_hwnd(
-    instance_id: InstanceId,
-    hinstance: *mut std::ffi::c_void,
+pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
+    _hinstance: *mut std::ffi::c_void,
     hwnd: *mut std::ffi::c_void,
 ) -> SurfaceId {
-    let mut token = Token::root();
-    let surface = instance_create_surface_from_windows_hwnd(instance_id, hinstance, hwnd, &mut token);
-    HUB.surfaces.register_local(surface, &mut token)
+    use raw_window_handle::windows::Handle;
+    wgpu_create_surface(
+        raw_window_handle::RawWindowHandle::Windows(raw_window_handle::windows::Handle {
+            hwnd,
+            .. Handle::empty()
+        }),
+    )
 }
 
-#[cfg(all(feature = "local", feature = "gfx-backend-gl"))]
-pub fn wgpu_instance_get_gl_surface(instance_id: InstanceId) -> SurfaceId {
+#[cfg(all(not(feature = "remote"), feature = "gfx-backend-gl"))]
+pub fn wgpu_get_gl_surface() -> SurfaceId {
     instance_id
 }
 
-pub fn instance_get_adapter(
-    instance_id: InstanceId,
+pub fn request_adapter(
     desc: &RequestAdapterOptions,
-    token: &mut Token<Root>,
-) -> AdapterHandle {
-    #[cfg(not(feature = "gfx-backend-gl"))]
-    let adapters = {
-        let (instance_guard, _) = HUB.instances.read(token);
-        instance_guard[instance_id].enumerate_adapters()
-    };
-    #[cfg(feature = "glutin")]
-    let adapters = {
-        let (surface_guard, _) = HUB.surfaces.read(token);
-        surface_guard[instance_id].raw.enumerate_adapters()
-    };
-    #[cfg(all(not(feature = "glutin"), feature = "gfx-backend-gl"))]
-    let adapters = Vec::<AdapterHandle>::new();
+    input_ids: &[Input<AdapterId>],
+) -> Option<Output<AdapterId>> {
+    let instance = &GLOBAL.instance;
+    let mut device_types = Vec::new();
 
-    let (mut integrated_first, mut discrete_first, mut discrete_last, mut alternative) =
-        (None, None, None, None);
+    #[cfg(feature = "remote")]
+    let find_input = |b: Backend| input_ids.iter().find(|id| id.backend() == b).cloned();
+    #[cfg(not(feature = "remote"))]
+    let find_input = |_: Backend| { let _ = input_ids; Some(PhantomData) };
+
+    let id_vulkan = find_input(Backend::Vulkan);
+    let id_metal = find_input(Backend::Metal);
+
+    let mut adapters_vk = match instance.vulkan {
+        Some(ref inst) if id_vulkan.is_some() => {
+            inst.enumerate_adapters()
+        }
+        _ => Vec::new(),
+    };
+    device_types.extend(adapters_vk.iter().map(|ad| ad.info.device_type.clone()));
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    let mut adaptres_mtl = if id_metal.is_some() {
+        let adapters = instance.metal.enumerate_adapters();
+        device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+        adapters
+    } else {
+        Vec::new()
+    };
+
+    if device_types.is_empty() {
+        panic!("No adapters are available!");
+    }
+
+    let (mut integrated_first, mut discrete_first, mut discrete_last) = (None, None, None);
 
     // On Windows > 1803, dx12 enumerate_adapters returns the adapters in order from highest to
     // lowest performance. Therefore, the first found adapter in each category is selected.
     //
     // TODO: move power/performance policy querying into gfx, which has more context into
     // performance policy than wgpu
-    for (i, adapter) in adapters.iter().enumerate() {
-        match adapter.info.device_type {
+    for (i, ty) in device_types.into_iter().enumerate() {
+        match ty {
             hal::adapter::DeviceType::IntegratedGpu => {
                 integrated_first = integrated_first.or(Some(i));
             }
@@ -282,7 +273,7 @@ pub fn instance_get_adapter(
                 discrete_first = discrete_first.or(Some(i));
                 discrete_last = Some(i);
             }
-            _ => alternative = Some(i),
+            _ => {},
         }
     }
 
@@ -293,62 +284,83 @@ pub fn instance_get_adapter(
             discrete_first.or(integrated_first)
         }
     };
+    let mut token = Token::root();
 
-    let selected = preferred_gpu
-        .or(alternative)
-        .expect("No adapters found. Please enable the feature for one of the graphics backends: vulkan, metal, dx12, dx11, gl");
-
-    adapters.into_iter().nth(selected).unwrap()
+    let mut selected = preferred_gpu.unwrap_or(0);
+    {
+        if selected < adapters_vk.len() {
+            let adapter = Adapter {
+                raw: adapters_vk.swap_remove(selected),
+            };
+            info!("Adapter Vulkan {:?}", adapter.raw.info);
+            let id_out = gfx_backend_vulkan::Backend::hub()
+                .adapters
+                .register_identity(id_vulkan.unwrap(), adapter, &mut token);
+            return Some(id_out);
+        }
+        selected -= adapters_vk.len();
+    }
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    {
+        if selected < adapters_mtl.len() {
+            let adapter = Adapter {
+                raw: adapters_mtl.swap_remove(selected),
+            };
+            info!("Adapter Metal {:?}", adapter.raw.info);
+            let id_out = gfx_backend_metal::Backend::hub()
+                .adapters
+                .register_identity(id_metal.unwrap(), adapter, &mut token);
+            return Some(id_out);
+        }
+        selected -= adapters_mtl.len();
+    }
+    let _ = (selected, id_metal);
+    None
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
-pub extern "C" fn wgpu_instance_request_adapter(
-    instance_id: InstanceId,
+pub extern "C" fn wgpu_request_adapter(
     desc: Option<&RequestAdapterOptions>,
 ) -> AdapterId {
-    let mut token = Token::root();
-    let adapter = instance_get_adapter(instance_id, &desc.cloned().unwrap_or_default(), &mut token);
-    let limits = adapter.physical_device.limits();
-
-    info!("Adapter {:?}", adapter.info);
-
-    assert!(
-        BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment == 0,
-        "Adapter storage buffer offset alignment not compatible with WGPU"
-    );
-    assert!(
-        BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment == 0,
-        "Adapter uniform buffer offset alignment not compatible with WGPU"
-    );
-
-    HUB.adapters.register_local(adapter, &mut token)
+    request_adapter(&desc.cloned().unwrap_or_default(), &[]).unwrap()
 }
 
-pub fn adapter_create_device(
+pub fn adapter_request_device<B: GfxBackend>(
     adapter_id: AdapterId,
     _desc: &DeviceDescriptor,
-    token: &mut Token<Root>,
-) -> DeviceHandle {
-    let (adapter_guard, _) = HUB.adapters.read(token);
-    let adapter = &adapter_guard[adapter_id];
-    let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
-    let mem_props = adapter.physical_device.memory_properties();
+    id_in: Input<DeviceId>,
+) -> Output<DeviceId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+    let device = {
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = &adapter_guard[adapter_id].raw;
+        let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
 
-    DeviceHandle::new(raw, adapter_id, queue_group, mem_props)
+        let limits = adapter.physical_device.limits();
+        assert_eq!(
+            0, BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
+            "Adapter storage buffer offset alignment not compatible with WGPU"
+        );
+        assert_eq!(
+            0, BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
+            "Adapter uniform buffer offset alignment not compatible with WGPU"
+        );
+
+        let mem_props = adapter.physical_device.memory_properties();
+        Device::new(raw, adapter_id, queue_group, mem_props)
+    };
+
+    hub.devices.register_identity(id_in, device, &mut token)
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: AdapterId,
     desc: Option<&DeviceDescriptor>,
 ) -> DeviceId {
-    let mut token = Token::root();
-    let device = adapter_create_device(
-        adapter_id,
-        &desc.cloned().unwrap_or_default(),
-        &mut token,
-    );
-    HUB.devices.register_local(device, &mut token)
+    let desc = &desc.cloned().unwrap_or_default();
+    gfx_select!(adapter_id => adapter_request_device(adapter_id, desc, PhantomData))
 }

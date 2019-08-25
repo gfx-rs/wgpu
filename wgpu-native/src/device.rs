@@ -1,45 +1,46 @@
 use crate::{
+    gfx_select,
     binding_model,
     command,
     conv,
-    hub::{HUB, Root, Token},
+    hub::{GLOBAL, GfxBackend, Token},
+    id::{Input, Output},
     pipeline,
     resource,
     swap_chain,
     track::{Stitch, TrackerSet},
     AdapterId,
     BindGroupId,
+    BindGroupLayoutId,
     BufferAddress,
     BufferId,
     BufferMapAsyncStatus,
     BufferMapOperation,
     CommandBufferId,
+    CommandEncoderId,
+    ComputePipelineId,
     DeviceId,
     LifeGuard,
+    PipelineLayoutId,
     QueueId,
     RefCount,
+    RenderPipelineId,
+    SamplerId,
+    ShaderModuleId,
     Stored,
     SubmissionIndex,
     SurfaceId,
+    SwapChainId,
     TextureId,
     TextureViewId,
     TextureDimension,
 };
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 use crate::{
     instance::Limits,
-    BindGroupLayoutId,
-    CommandEncoderId,
-    ComputePipelineId,
-    PipelineLayoutId,
-    RenderPipelineId,
-    SamplerId,
-    ShaderModuleId,
-    SwapChainId,
 };
 
 use arrayvec::ArrayVec;
-use back;
 use copyless::VecHelper as _;
 use hal::{
     self,
@@ -54,9 +55,18 @@ use parking_lot::Mutex;
 use rendy_descriptor::{DescriptorSet, DescriptorAllocator, DescriptorRanges};
 use rendy_memory::{Block, Heaps, MemoryBlock};
 
-#[cfg(feature = "local")]
-use std::sync::atomic::AtomicBool;
-use std::{collections::hash_map::Entry, ffi, iter, ptr, ops::Range, slice, sync::atomic::Ordering};
+use std::{
+    collections::hash_map::Entry,
+    ffi,
+    iter,
+    ptr,
+    ops::Range,
+    slice,
+    sync::atomic::{AtomicBool, Ordering},
+};
+#[cfg(not(feature = "remote"))]
+use std::marker::PhantomData;
+
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
@@ -170,10 +180,7 @@ struct PendingResources<B: hal::Backend> {
     ready_to_map: Vec<BufferId>,
 }
 
-unsafe impl<B: hal::Backend> Send for PendingResources<B> {}
-unsafe impl<B: hal::Backend> Sync for PendingResources<B> {}
-
-impl<B: hal::Backend> PendingResources<B> {
+impl<B: GfxBackend> PendingResources<B> {
     fn destroy(&mut self, resource_id: ResourceId, ref_count: RefCount) {
         debug_assert!(!self.referenced.iter().any(|r| r.0 == resource_id));
         self.referenced.push((resource_id, ref_count));
@@ -253,12 +260,12 @@ impl<B: hal::Backend> PendingResources<B> {
 
         last_done
     }
-}
 
-type DeviceToken<'a> = Token<'a, Device<back::Backend>>;
-
-impl PendingResources<back::Backend> {
-    fn triage_referenced(&mut self, trackers: &mut TrackerSet, mut token: &mut DeviceToken) {
+    fn triage_referenced(
+        &mut self,
+        trackers: &mut TrackerSet,
+        mut token: &mut Token<Device<B>>,
+    ) {
         // Before destruction, a resource is expected to have the following strong refs:
         //  - in resource itself
         //  - in the device tracker
@@ -268,11 +275,13 @@ impl PendingResources<back::Backend> {
         if self.referenced.iter().all(|r| r.1.load() >= MIN_REFS) {
             return;
         }
+
+        let hub = B::hub();
         //TODO: lock less, if possible
-        let (mut bind_group_guard, mut token) = HUB.bind_groups.write(&mut token);
-        let (mut buffer_guard, mut token) = HUB.buffers.write(&mut token);
-        let (mut texture_guard, mut token) = HUB.textures.write(&mut token);
-        let (mut teview_view_guard, _) = HUB.texture_views.write(&mut token);
+        let (mut bind_group_guard, mut token) = hub.bind_groups.write(&mut token);
+        let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
+        let (mut texture_guard, mut token) = hub.textures.write(&mut token);
+        let (mut teview_view_guard, _) = hub.texture_views.write(&mut token);
 
         for i in (0 .. self.referenced.len()).rev() {
             let num_refs = self.referenced[i].1.load();
@@ -290,35 +299,34 @@ impl PendingResources<back::Backend> {
                         }
                         trackers.buffers.remove(id);
                         let buf = buffer_guard.remove(id);
-                        #[cfg(feature = "local")]
-                        HUB.buffers.identity.lock().free(id);
+                        #[cfg(not(feature = "remote"))]
+                        hub.buffers.identity.lock().free(id);
                         (buf.life_guard, NativeResource::Buffer(buf.raw, buf.memory))
                     }
                     ResourceId::Texture(id) => {
                         trackers.textures.remove(id);
                         let tex = texture_guard.remove(id);
-                        #[cfg(feature = "local")]
-                        HUB.textures.identity.lock().free(id);
+                        #[cfg(not(feature = "remote"))]
+                        hub.textures.identity.lock().free(id);
                         let memory = match tex.placement {
                             // swapchain-owned images don't need explicit destruction
                             resource::TexturePlacement::SwapChain(_) => continue,
                             resource::TexturePlacement::Memory(mem) => mem,
-                            resource::TexturePlacement::Void => unreachable!(),
                         };
                         (tex.life_guard, NativeResource::Image(tex.raw, memory))
                     }
                     ResourceId::TextureView(id) => {
                         trackers.views.remove(id);
                         let view = teview_view_guard.remove(id);
-                        #[cfg(feature = "local")]
-                        HUB.texture_views.identity.lock().free(id);
+                        #[cfg(not(feature = "remote"))]
+                        hub.texture_views.identity.lock().free(id);
                         (view.life_guard, NativeResource::ImageView(view.raw))
                     }
                     ResourceId::BindGroup(id) => {
                         trackers.bind_groups.remove(id);
                         let bind_group = bind_group_guard.remove(id);
-                        #[cfg(feature = "local")]
-                        HUB.bind_groups.identity.lock().free(id);
+                        #[cfg(not(feature = "remote"))]
+                        hub.bind_groups.identity.lock().free(id);
                         (bind_group.life_guard, NativeResource::DescriptorSet(bind_group.raw))
                     }
                 };
@@ -334,11 +342,11 @@ impl PendingResources<back::Backend> {
         }
     }
 
-    fn triage_mapped(&mut self, mut token: &mut DeviceToken) {
+    fn triage_mapped(&mut self, token: &mut Token<Device<B>>) {
         if self.mapped.is_empty() {
             return;
         }
-        let (buffer_guard, _) = HUB.buffers.read(&mut token);
+        let (buffer_guard, _) = B::hub().buffers.read(token);
 
         for stored in self.mapped.drain(..) {
             let resource_id = stored.value;
@@ -362,13 +370,10 @@ impl PendingResources<back::Backend> {
 
     fn triage_framebuffers(
         &mut self,
-        framebuffers: &mut FastHashMap<
-            FramebufferKey,
-            <back::Backend as hal::Backend>::Framebuffer,
-        >,
-        mut token: &mut DeviceToken,
+        framebuffers: &mut FastHashMap<FramebufferKey, B::Framebuffer>,
+        token: &mut Token<Device<B>>,
     ) {
-        let (texture_view_guard, _) = HUB.texture_views.read(&mut token);
+        let (texture_view_guard, _) = B::hub().texture_views.read(token);
         let remove_list = framebuffers
             .keys()
             .filter_map(|key| {
@@ -403,13 +408,13 @@ impl PendingResources<back::Backend> {
 
     fn handle_mapping(
         &mut self,
-        raw: &<back::Backend as hal::Backend>::Device,
-        mut token: &mut DeviceToken,
+        raw: &B::Device,
+        token: &mut Token<Device<B>>,
     ) -> Vec<BufferMapPendingCallback> {
         if self.ready_to_map.is_empty() {
             return Vec::new()
         }
-        let (mut buffer_guard, _) = HUB.buffers.write(&mut token);
+        let (mut buffer_guard, _) = B::hub().buffers.write(token);
         self.ready_to_map
             .drain(..)
             .map(|buffer_id| {
@@ -432,9 +437,9 @@ impl PendingResources<back::Backend> {
 type BufferMapResult = Result<*mut u8, hal::mapping::Error>;
 type BufferMapPendingCallback = (BufferMapOperation, BufferMapResult);
 
-fn map_buffer(
-    raw: &<back::Backend as hal::Backend>::Device,
-    buffer: &mut resource::Buffer<back::Backend>,
+fn map_buffer<B: hal::Backend>(
+    raw: &B::Device,
+    buffer: &mut resource::Buffer<B>,
     buffer_range: Range<BufferAddress>,
     kind: HostMap,
 ) -> BufferMapResult {
@@ -478,7 +483,7 @@ pub struct Device<B: hal::Backend> {
     pending: Mutex<PendingResources<B>>,
 }
 
-impl<B: hal::Backend> Device<B> {
+impl<B: GfxBackend> Device<B> {
     pub(crate) fn new(
         raw: B::Device,
         adapter_id: AdapterId,
@@ -524,7 +529,7 @@ impl<B: hal::Backend> Device<B> {
             desc_allocator: Mutex::new(DescriptorAllocator::new()),
             queue_group,
             life_guard,
-            trackers: Mutex::new(TrackerSet::new()),
+            trackers: Mutex::new(TrackerSet::new(B::VARIANT)),
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
             pending: Mutex::new(PendingResources {
@@ -536,11 +541,9 @@ impl<B: hal::Backend> Device<B> {
             }),
         }
     }
-}
 
-impl Device<back::Backend> {
     fn maintain(
-        &self, force_wait: bool, token: &mut DeviceToken,
+        &self, force_wait: bool, token: &mut Token<Self>,
     ) -> Vec<BufferMapPendingCallback> {
         let mut pending = self.pending.lock();
         let mut trackers = self.trackers.lock();
@@ -581,9 +584,133 @@ impl Device<back::Backend> {
             }
         }
     }
+
+    fn create_buffer(
+        &self, self_id: DeviceId, desc: &resource::BufferDescriptor
+    ) -> resource::Buffer<B> {
+        debug_assert_eq!(self_id.backend(), B::VARIANT);
+        let (usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
+
+        let rendy_usage = {
+            use resource::BufferUsage as Bu;
+            use rendy_memory::MemoryUsageValue as Muv;
+
+            if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
+                Muv::Data
+            } else if (Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage) {
+                Muv::Upload
+            } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
+                Muv::Download
+            } else {
+                Muv::Dynamic
+            }
+        };
+
+        let mut buffer = unsafe { self.raw.create_buffer(desc.size, usage).unwrap() };
+        let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
+        let memory = self.mem_allocator
+            .lock()
+            .allocate(
+                &self.raw,
+                requirements.type_mask as u32,
+                rendy_usage,
+                requirements.size,
+                requirements.alignment,
+            )
+            .unwrap();
+
+        unsafe {
+            self.raw
+                .bind_buffer_memory(memory.memory(), memory.range().start, &mut buffer)
+                .unwrap()
+        };
+
+        resource::Buffer {
+            raw: buffer,
+            device_id: Stored {
+                value: self_id,
+                ref_count: self.life_guard.ref_count.clone(),
+            },
+            memory,
+            size: desc.size,
+            mapped_write_ranges: Vec::new(),
+            pending_map_operation: None,
+            life_guard: LifeGuard::new(),
+        }
+    }
+
+    fn create_texture(
+        &self,
+        self_id: DeviceId,
+        desc: &resource::TextureDescriptor,
+    ) -> resource::Texture<B> {
+        debug_assert_eq!(self_id.backend(), B::VARIANT);
+        let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.array_layer_count, desc.sample_count);
+        let format = conv::map_texture_format(desc.format);
+        let aspects = format.surface_desc().aspects;
+        let usage = conv::map_texture_usage(desc.usage, aspects);
+
+        assert!((desc.mip_level_count as usize) < MAX_MIP_LEVELS);
+        let mut view_capabilities = hal::image::ViewCapabilities::empty();
+
+        // 2D textures with array layer counts that are multiples of 6 could be cubemaps
+        // Following gpuweb/gpuweb#68 always add the hint in that case
+        if desc.dimension == TextureDimension::D2 && desc.array_layer_count % 6 == 0 {
+            view_capabilities |= hal::image::ViewCapabilities::KIND_CUBE;
+        };
+
+        // TODO: 2D arrays, cubemap arrays
+
+        let mut image = unsafe {
+            self.raw.create_image(
+                kind,
+                desc.mip_level_count as hal::image::Level,
+                format,
+                hal::image::Tiling::Optimal,
+                usage,
+                view_capabilities,
+            )
+        }
+        .unwrap();
+        let requirements = unsafe { self.raw.get_image_requirements(&image) };
+
+        let memory = self.mem_allocator
+            .lock()
+            .allocate(
+                &self.raw,
+                requirements.type_mask as u32,
+                rendy_memory::Data,
+                requirements.size,
+                requirements.alignment,
+            )
+            .unwrap();
+
+        unsafe {
+            self.raw
+                .bind_image_memory(memory.memory(), memory.range().start, &mut image)
+                .unwrap()
+        };
+
+        resource::Texture {
+            raw: image,
+            device_id: Stored {
+                value: self_id,
+                ref_count: self.life_guard.ref_count.clone(),
+            },
+            kind,
+            format: desc.format,
+            full_range: hal::image::SubresourceRange {
+                aspects,
+                levels: 0 .. desc.mip_level_count as hal::image::Level,
+                layers: 0 .. desc.array_layer_count as hal::image::Layer,
+            },
+            placement: resource::TexturePlacement::Memory(memory),
+            life_guard: LifeGuard::new(),
+        }
+    }
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_get_limits(
     _device_id: DeviceId,
@@ -597,137 +724,106 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
 }
 
-pub fn device_create_buffer(
+pub fn device_create_buffer<B: GfxBackend>(
     device_id: DeviceId,
     desc: &resource::BufferDescriptor,
-) -> resource::Buffer<back::Backend> {
-    let (device_guard, _) = HUB.devices.read(&mut Token::root());
+    id_in: Input<BufferId>,
+) -> Output<BufferId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+
+    let (device_guard, _) = hub.devices.read(&mut token);
     let device = &device_guard[device_id];
-    let (usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
+    let buffer = device.create_buffer(device_id, desc);
 
-    let rendy_usage = {
-        use resource::BufferUsage as Bu;
-        use rendy_memory::MemoryUsageValue as Muv;
-
-        if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
-            Muv::Data
-        } else if (Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage) {
-            Muv::Upload
-        } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
-            Muv::Download
-        } else {
-            Muv::Dynamic
-        }
-    };
-
-    let mut buffer = unsafe { device.raw.create_buffer(desc.size, usage).unwrap() };
-    let requirements = unsafe { device.raw.get_buffer_requirements(&buffer) };
-    let memory = device.mem_allocator
-        .lock()
-        .allocate(
-            &device.raw,
-            requirements.type_mask as u32,
-            rendy_usage,
-            requirements.size,
-            requirements.alignment,
-        )
-        .unwrap();
-
-    unsafe {
-        device.raw
-            .bind_buffer_memory(memory.memory(), memory.range().start, &mut buffer)
-            .unwrap()
-    };
-
-    resource::Buffer {
-        raw: buffer,
-        device_id: Stored {
-            value: device_id,
-            ref_count: device.life_guard.ref_count.clone(),
-        },
-        memory,
-        size: desc.size,
-        mapped_write_ranges: Vec::new(),
-        pending_map_operation: None,
-        life_guard: LifeGuard::new(),
-    }
-}
-
-pub fn device_track_buffer(
-    device_id: DeviceId,
-    buffer_id: BufferId,
-    ref_count: RefCount,
-    flags: resource::BufferUsage,
-    token: &mut Token<Root>,
-) {
-    let (device_guard, _) = HUB.devices.read(token);
-    let ok = device_guard[device_id]
-        .trackers
+    let (id, id_out) = hub.buffers.new_identity(id_in);
+    let ok = device.trackers
         .lock()
         .buffers
-        .init(buffer_id, &ref_count, (), flags);
+        .init(
+            id,
+            &buffer.life_guard.ref_count,
+            (),
+            resource::BufferUsage::empty(),
+        );
     assert!(ok);
+
+    hub.buffers.register(id, buffer, &mut token);
+    id_out
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_buffer(
     device_id: DeviceId,
     desc: &resource::BufferDescriptor,
 ) -> BufferId {
-    let buffer = device_create_buffer(device_id, desc);
-    let ref_count = buffer.life_guard.ref_count.clone();
-    let mut token = Token::root();
-    let id = HUB.buffers.register_local(buffer, &mut token);
-    device_track_buffer(device_id, id, ref_count, resource::BufferUsage::empty(), &mut token);
-    id
+    gfx_select!(device_id => device_create_buffer(device_id, desc, PhantomData))
 }
 
-#[cfg(feature = "local")]
+pub fn device_create_buffer_mapped<B: GfxBackend>(
+    device_id: DeviceId,
+    desc: &resource::BufferDescriptor,
+    mapped_ptr_out: *mut *mut u8,
+    id_in: Input<BufferId>,
+) -> Output<BufferId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+    let mut desc = desc.clone();
+    desc.usage |= resource::BufferUsage::MAP_WRITE;
+
+    let (device_guard, _) = hub.devices.read(&mut token);
+    let device = &device_guard[device_id];
+    let mut buffer = device.create_buffer(device_id, &desc);
+
+    match map_buffer(
+        &device.raw,
+        &mut buffer,
+        0 .. desc.size,
+        HostMap::Write,
+    ) {
+        Ok(ptr) => unsafe {
+            *mapped_ptr_out = ptr;
+        },
+        Err(e) => {
+            log::error!("failed to create buffer in a mapped state: {}", e);
+            unsafe {
+                *mapped_ptr_out = ptr::null_mut();
+            }
+        }
+    }
+
+    let (id, id_out) = hub.buffers.new_identity(id_in);
+    let ok = device.trackers
+        .lock()
+        .buffers
+        .init(
+            id,
+            &buffer.life_guard.ref_count,
+            (),
+            resource::BufferUsage::MAP_WRITE,
+        );
+    assert!(ok);
+
+    hub.buffers.register(id, buffer, &mut token);
+    id_out
+}
+
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_buffer_mapped(
     device_id: DeviceId,
     desc: &resource::BufferDescriptor,
     mapped_ptr_out: *mut *mut u8,
 ) -> BufferId {
-    let mut desc = desc.clone();
-    desc.usage |= resource::BufferUsage::MAP_WRITE;
-    let mut buffer = device_create_buffer(device_id, &desc);
-    let mut token = Token::root();
-
-    {
-        let (device_guard, _) = HUB.devices.read(&mut token);
-        let device = &device_guard[device_id];
-
-        match map_buffer(
-            &device.raw,
-            &mut buffer,
-            0 .. desc.size,
-            HostMap::Write,
-        ) {
-            Ok(ptr) => unsafe {
-                *mapped_ptr_out = ptr;
-            },
-            Err(e) => {
-                log::error!("failed to create buffer in a mapped state: {}", e);
-                unsafe {
-                    *mapped_ptr_out = ptr::null_mut();
-                }
-            }
-        }
-    }
-
-    let ref_count = buffer.life_guard.ref_count.clone();
-    let id = HUB.buffers.register_local(buffer, &mut token);
-    device_track_buffer(device_id, id, ref_count, resource::BufferUsage::MAP_WRITE,  &mut token);
-    id
+    gfx_select!(device_id => device_create_buffer_mapped(device_id, desc, mapped_ptr_out, PhantomData))
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
+pub fn buffer_destroy<B: GfxBackend>(buffer_id: BufferId) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-    let (buffer_guard, _) = HUB.buffers.read(&mut token);
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (buffer_guard, _) = hub.buffers.read(&mut token);
     let buffer = &buffer_guard[buffer_id];
     device_guard[buffer.device_id.value].pending.lock().destroy(
         ResourceId::Buffer(buffer_id),
@@ -735,180 +831,61 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
     );
 }
 
-pub fn device_create_texture(
-    device_id: DeviceId,
-    desc: &resource::TextureDescriptor,
-) -> resource::Texture<back::Backend> {
-    let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.array_layer_count, desc.sample_count);
-    let format = conv::map_texture_format(desc.format);
-    let aspects = format.surface_desc().aspects;
-    let usage = conv::map_texture_usage(desc.usage, aspects);
-
-    let (device_guard, _) = HUB.devices.read(&mut Token::root());
-    let device = &device_guard[device_id];
-
-    assert!((desc.mip_level_count as usize) < MAX_MIP_LEVELS);
-
-    let mut view_capabilities = hal::image::ViewCapabilities::empty();
-
-    // 2D textures with array layer counts that are multiples of 6 could be cubemaps
-    // Following gpuweb/gpuweb#68 always add the hint in that case
-    if desc.dimension == TextureDimension::D2 && desc.array_layer_count % 6 == 0 {
-        view_capabilities |= hal::image::ViewCapabilities::KIND_CUBE;
-    };
-
-    // TODO: 2D arrays, cubemap arrays
-
-    let mut image = unsafe {
-        device.raw.create_image(
-            kind,
-            desc.mip_level_count as hal::image::Level,
-            format,
-            hal::image::Tiling::Optimal,
-            usage,
-            view_capabilities,
-        )
-    }
-    .unwrap();
-    let requirements = unsafe { device.raw.get_image_requirements(&image) };
-
-    let memory = device.mem_allocator
-        .lock()
-        .allocate(
-            &device.raw,
-            requirements.type_mask as u32,
-            rendy_memory::Data,
-            requirements.size,
-            requirements.alignment,
-        )
-        .unwrap();
-
-    unsafe {
-        device.raw
-            .bind_image_memory(memory.memory(), memory.range().start, &mut image)
-            .unwrap()
-    };
-
-    resource::Texture {
-        raw: image,
-        device_id: Stored {
-            value: device_id,
-            ref_count: device.life_guard.ref_count.clone(),
-        },
-        kind,
-        format: desc.format,
-        full_range: hal::image::SubresourceRange {
-            aspects,
-            levels: 0 .. desc.mip_level_count as hal::image::Level,
-            layers: 0 .. desc.array_layer_count as hal::image::Layer,
-        },
-        placement: resource::TexturePlacement::Memory(memory),
-        life_guard: LifeGuard::new(),
-    }
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
+    gfx_select!(buffer_id => buffer_destroy(buffer_id))
 }
 
-pub fn device_track_texture(
+pub fn device_create_texture<B: GfxBackend>(
     device_id: DeviceId,
-    texture_id: TextureId,
-    ref_count: RefCount,
-    full_range: hal::image::SubresourceRange,
-    token: &mut Token<Root>,
-) {
-    let (device_guard, _) = HUB.devices.read(token);
-    let ok = device_guard[device_id]
-        .trackers
+    desc: &resource::TextureDescriptor,
+    id_in: Input<TextureId>,
+) -> Output<TextureId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+
+    let (device_guard, _) = hub.devices.read(&mut token);
+    let device = &device_guard[device_id];
+    let texture = device.create_texture(device_id, desc);
+
+    let (id, id_out) = hub.textures.new_identity(id_in);
+    let ok = device.trackers
         .lock()
         .textures
         .init(
-            texture_id,
-            &ref_count,
-            full_range,
+            id,
+            &texture.life_guard.ref_count,
+            texture.full_range.clone(),
             resource::TextureUsage::UNINITIALIZED,
         );
     assert!(ok);
+
+    hub.textures.register(id, texture, &mut token);
+    id_out
+
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
     desc: &resource::TextureDescriptor,
 ) -> TextureId {
-    let texture = device_create_texture(device_id, desc);
-    let ref_count = texture.life_guard.ref_count.clone();
-    let range = texture.full_range.clone();
-    let mut token = Token::root();
-    let id = HUB.textures.register_local(texture, &mut token);
-    device_track_texture(device_id, id, ref_count, range, &mut token);
-    id
+    gfx_select!(device_id => device_create_texture(device_id, desc, PhantomData))
 }
 
-pub fn texture_create_view(
-    texture_id: TextureId,
-    format: resource::TextureFormat,
-    view_kind: hal::image::ViewKind,
-    range: hal::image::SubresourceRange,
-    token: &mut Token<Root>,
-) -> resource::TextureView<back::Backend> {
-    let (device_guard, mut token) = HUB.devices.read(token);
-    let (texture_guard, _) = HUB.textures.read(&mut token);
-    let texture = &texture_guard[texture_id];
-
-    let raw = unsafe {
-        device_guard[texture.device_id.value]
-            .raw
-            .create_image_view(
-                &texture.raw,
-                view_kind,
-                conv::map_texture_format(format),
-                hal::format::Swizzle::NO,
-                range.clone(),
-            )
-            .unwrap()
-    };
-
-    resource::TextureView {
-        raw,
-        texture_id: Stored {
-            value: texture_id,
-            ref_count: texture.life_guard.ref_count.clone(),
-        },
-        format: texture.format,
-        extent: texture.kind.extent().at_level(range.levels.start),
-        samples: texture.kind.num_samples(),
-        range,
-        is_owned_by_swap_chain: false,
-        life_guard: LifeGuard::new(),
-    }
-}
-
-pub fn device_track_view(
-    texture_id: TextureId,
-    view_id: TextureViewId,
-    ref_count: RefCount,
-    token: &mut Token<Root>,
-) {
-    let (device_guard, mut token) = HUB.devices.read(token);
-    let (texture_guard, _) = HUB.textures.read(&mut token);
-
-    let device_id = texture_guard[texture_id].device_id.value;
-    let ok = device_guard[device_id]
-        .trackers
-        .lock()
-        .views
-        .init(view_id, &ref_count, (), ());
-    assert!(ok);
-}
-
-#[cfg(feature = "local")]
-#[no_mangle]
-pub extern "C" fn wgpu_texture_create_view(
+pub fn texture_create_view<B: GfxBackend>(
     texture_id: TextureId,
     desc: Option<&resource::TextureViewDescriptor>,
-) -> TextureViewId {
+    id_in: Input<TextureViewId>
+) -> Output<TextureViewId> {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (texture_guard, _) = HUB.textures.read(&mut token);
+
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (texture_guard, mut token) = hub.textures.read(&mut token);
     let texture = &texture_guard[texture_id];
+    let device = &device_guard[texture.device_id.value];
 
     let (format, view_kind, range) = match desc {
         Some(desc) => {
@@ -946,18 +923,63 @@ pub extern "C" fn wgpu_texture_create_view(
         }
     };
 
-    let view = texture_create_view(texture_id, format, view_kind, range, &mut token);
-    let ref_count = view.life_guard.ref_count.clone();
-    let id = HUB.texture_views.register_local(view, &mut token);
-    device_track_view(texture_id, id, ref_count, &mut token);
-    id
+    let raw = unsafe {
+        device.raw
+            .create_image_view(
+                &texture.raw,
+                view_kind,
+                conv::map_texture_format(format),
+                hal::format::Swizzle::NO,
+                range.clone(),
+            )
+            .unwrap()
+    };
+
+    let view = resource::TextureView {
+        raw,
+        texture_id: Stored {
+            value: texture_id,
+            ref_count: texture.life_guard.ref_count.clone(),
+        },
+        format: texture.format,
+        extent: texture.kind.extent().at_level(range.levels.start),
+        samples: texture.kind.num_samples(),
+        range,
+        is_owned_by_swap_chain: false,
+        life_guard: LifeGuard::new(),
+    };
+
+    let (id, id_out) = hub.texture_views.new_identity(id_in);
+    let ok = device.trackers
+        .lock()
+        .views
+        .init(
+            id,
+            &view.life_guard.ref_count,
+            (),
+            (),
+        );
+    assert!(ok);
+
+    hub.texture_views.register(id, view, &mut token);
+    id_out
 }
 
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
-pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
+pub extern "C" fn wgpu_texture_create_view(
+    texture_id: TextureId,
+    desc: Option<&resource::TextureViewDescriptor>,
+) -> TextureViewId {
+    gfx_select!(texture_id => texture_create_view(texture_id, desc, PhantomData))
+}
+
+pub fn texture_destroy<B: GfxBackend>(texture_id: TextureId) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-    let (texture_guard, _) = HUB.textures.read(&mut token);
+
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (texture_guard, _) = hub.textures.read(&mut token);
     let texture = &texture_guard[texture_id];
     device_guard[texture.device_id.value]
         .pending
@@ -969,11 +991,16 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
+pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
+    gfx_select!(texture_id => texture_destroy(texture_id))
+}
+
+pub fn texture_view_destroy<B: GfxBackend>(texture_view_id: TextureViewId) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-    let (texture_guard, mut token) = HUB.textures.read(&mut token);
-    let (texture_view_guard, _) = HUB.texture_views.read(&mut token);
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (texture_guard, mut token) = hub.textures.read(&mut token);
+    let (texture_view_guard, _) = hub.texture_views.read(&mut token);
     let view = &texture_view_guard[texture_view_id];
     let device_id = texture_guard[view.texture_id.value].device_id.value;
     device_guard[device_id].pending.lock().destroy(
@@ -982,12 +1009,19 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
     );
 }
 
-pub fn device_create_sampler(
+#[no_mangle]
+pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
+    gfx_select!(texture_view_id => texture_view_destroy(texture_view_id))
+}
+
+pub fn device_create_sampler<B: GfxBackend>(
     device_id: DeviceId,
     desc: &resource::SamplerDescriptor,
-    token: &mut Token<Root>,
-) -> resource::Sampler<back::Backend> {
-    let (device_guard, _) = HUB.devices.read(token);
+    id_in: Input<SamplerId>,
+) -> Output<SamplerId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+    let (device_guard, mut token) = hub.devices.read(&mut token);
     let device = &device_guard[device_id];
 
     let info = hal::image::SamplerInfo {
@@ -1010,27 +1044,29 @@ pub fn device_create_sampler(
         normalized: true,
         anisotropic: hal::image::Anisotropic::Off, //TODO
     };
-    let raw = unsafe { device.raw.create_sampler(info).unwrap() };
 
-    resource::Sampler { raw }
+    let sampler = resource::Sampler {
+        raw: unsafe { device.raw.create_sampler(info).unwrap() },
+    };
+    hub.samplers.register_identity(id_in, sampler, &mut token)
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_sampler(
     device_id: DeviceId,
     desc: &resource::SamplerDescriptor,
 ) -> SamplerId {
-    let mut token = Token::root();
-    let sampler = device_create_sampler(device_id, desc, &mut token);
-    HUB.samplers.register_local(sampler, &mut token)
+    gfx_select!(device_id => device_create_sampler(device_id, desc, PhantomData))
 }
 
-pub fn device_create_bind_group_layout(
+pub fn device_create_bind_group_layout<B: GfxBackend>(
     device_id: DeviceId,
     desc: &binding_model::BindGroupLayoutDescriptor,
-    token: &mut Token<Root>,
-) -> binding_model::BindGroupLayout<back::Backend> {
+    id_in: Input<BindGroupLayoutId>,
+) -> Output<BindGroupLayoutId> {
+    let mut token = Token::root();
+    let hub = B::hub();
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
 
     let raw_bindings = bindings
@@ -1045,14 +1081,14 @@ pub fn device_create_bind_group_layout(
         .collect::<Vec<_>>(); //TODO: avoid heap allocation
 
     let raw = unsafe {
-        let (device_guard, _) = HUB.devices.read(token);
+        let (device_guard, _) = hub.devices.read(&mut token);
         device_guard[device_id]
             .raw
             .create_descriptor_set_layout(&raw_bindings, &[])
             .unwrap()
     };
 
-    binding_model::BindGroupLayout {
+    let layout = binding_model::BindGroupLayout {
         raw,
         bindings: bindings.to_vec(),
         desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
@@ -1060,66 +1096,72 @@ pub fn device_create_bind_group_layout(
             .iter()
             .filter(|b| b.dynamic)
             .count(),
-    }
+    };
+
+    hub.bind_group_layouts.register_identity(id_in, layout, &mut token)
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group_layout(
     device_id: DeviceId,
     desc: &binding_model::BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
-    let mut token = Token::root();
-    let layout = device_create_bind_group_layout(device_id, desc, &mut token);
-    HUB.bind_group_layouts.register_local(layout, &mut token)
+    gfx_select!(device_id => device_create_bind_group_layout(device_id, desc, PhantomData))
 }
 
-pub fn device_create_pipeline_layout(
+pub fn device_create_pipeline_layout<B: GfxBackend>(
     device_id: DeviceId,
     desc: &binding_model::PipelineLayoutDescriptor,
-    token: &mut Token<Root>,
-) -> binding_model::PipelineLayout<back::Backend> {
-    let (device_guard, mut token) = HUB.devices.read(token);
+    id_in: Input<PipelineLayoutId>,
+) -> Output<PipelineLayoutId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+
+    let (device_guard, mut token) = hub.devices.read(&mut token);
     let bind_group_layout_ids =
         unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) };
-    let (bind_group_layout_guard, _) = HUB.bind_group_layouts.read(&mut token);
-    let descriptor_set_layouts = bind_group_layout_ids
-        .iter()
-        .map(|&id| &bind_group_layout_guard[id].raw);
 
     // TODO: push constants
-    let pipeline_layout = unsafe {
-        device_guard[device_id]
-            .raw
-            .create_pipeline_layout(descriptor_set_layouts, &[])
-    }
-    .unwrap();
+    let pipeline_layout = {
+        let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
+        let descriptor_set_layouts = bind_group_layout_ids
+            .iter()
+            .map(|&id| &bind_group_layout_guard[id].raw);
+        unsafe {
+            device_guard[device_id]
+                .raw
+                .create_pipeline_layout(descriptor_set_layouts, &[])
+        }.unwrap()
+    };
 
-    binding_model::PipelineLayout {
+    let layout = binding_model::PipelineLayout {
         raw: pipeline_layout,
         bind_group_layout_ids: bind_group_layout_ids.iter().cloned().collect(),
-    }
+    };
+    hub.pipeline_layouts.register_identity(id_in, layout, &mut token)
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
     desc: &binding_model::PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
-    let mut token = Token::root();
-    let layout = device_create_pipeline_layout(device_id, desc, &mut token);
-    HUB.pipeline_layouts.register_local(layout, &mut token)
+    gfx_select!(device_id => device_create_pipeline_layout(device_id, desc, PhantomData))
 }
 
-pub fn device_create_bind_group(
+pub fn device_create_bind_group<B: GfxBackend>(
     device_id: DeviceId,
     desc: &binding_model::BindGroupDescriptor,
-    token: &mut Token<Root>,
-) -> binding_model::BindGroup<back::Backend> {
-    let (device_guard, mut token) = HUB.devices.read(token);
+    id_in: Input<BindGroupId>,
+) -> Output<BindGroupId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+
+    let (device_guard, mut token) = hub.devices.read(&mut token);
     let device = &device_guard[device_id];
-    let (bind_group_layout_guard, _) = HUB.bind_group_layouts.read(&mut token);
+    let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
     let bind_group_layout = &bind_group_layout_guard[desc.layout];
     let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length as usize) };
     assert_eq!(bindings.len(), bind_group_layout.bindings.len());
@@ -1139,104 +1181,107 @@ pub fn device_create_bind_group(
         desc_sets.pop().unwrap()
     };
 
-    let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
-    let (_, mut token) = HUB.textures.read(&mut token); //skip token
-    let (texture_view_guard, mut token) = HUB.texture_views.read(&mut token);
-    let (sampler_guard, _) = HUB.samplers.read(&mut token);
+    // fill out the descriptors
+    let mut used = TrackerSet::new(B::VARIANT);
+    {
+        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+        let (_, mut token) = hub.textures.read(&mut token); //skip token
+        let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
+        let (sampler_guard, _) = hub.samplers.read(&mut token);
 
-    //TODO: group writes into contiguous sections
-    let mut writes = Vec::new();
-    let mut used = TrackerSet::new();
-    for (b, decl) in bindings.iter().zip(&bind_group_layout.bindings) {
-        let descriptor = match b.resource {
-            binding_model::BindingResource::Buffer(ref bb) => {
-                let (alignment, usage) = match decl.ty {
-                    binding_model::BindingType::UniformBuffer => {
-                        (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::UNIFORM)
-                    }
-                    binding_model::BindingType::StorageBuffer => {
-                        (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE)
-                    }
-                    binding_model::BindingType::ReadonlyStorageBuffer => {
-                        (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE_READ)
-                    }
-                    binding_model::BindingType::Sampler
-                    | binding_model::BindingType::SampledTexture
-                    | binding_model::BindingType::StorageTexture => {
-                        panic!("Mismatched buffer binding for {:?}", decl)
-                    }
-                };
-                assert_eq!(
-                    bb.offset as hal::buffer::Offset % alignment,
-                    0,
-                    "Misaligned buffer offset {}",
-                    bb.offset
-                );
-                let buffer = used
-                    .buffers
-                    .use_extend(&*buffer_guard, bb.buffer, (), usage)
-                    .unwrap();
-
-                let end = if bb.size == 0 {
-                    None
-                } else {
-                    let end = bb.offset + bb.size;
-                    assert!(
-                        end <= buffer.size,
-                        "Bound buffer range {:?} does not fit in buffer size {}",
-                        bb.offset .. end,
-                        buffer.size
+        //TODO: group writes into contiguous sections
+        let mut writes = Vec::new();
+        for (b, decl) in bindings.iter().zip(&bind_group_layout.bindings) {
+            let descriptor = match b.resource {
+                binding_model::BindingResource::Buffer(ref bb) => {
+                    let (alignment, usage) = match decl.ty {
+                        binding_model::BindingType::UniformBuffer => {
+                            (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::UNIFORM)
+                        }
+                        binding_model::BindingType::StorageBuffer => {
+                            (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE)
+                        }
+                        binding_model::BindingType::ReadonlyStorageBuffer => {
+                            (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE_READ)
+                        }
+                        binding_model::BindingType::Sampler
+                        | binding_model::BindingType::SampledTexture
+                        | binding_model::BindingType::StorageTexture => {
+                            panic!("Mismatched buffer binding for {:?}", decl)
+                        }
+                    };
+                    assert_eq!(
+                        bb.offset as hal::buffer::Offset % alignment,
+                        0,
+                        "Misaligned buffer offset {}",
+                        bb.offset
                     );
-                    Some(end)
-                };
+                    let buffer = used
+                        .buffers
+                        .use_extend(&*buffer_guard, bb.buffer, (), usage)
+                        .unwrap();
 
-                let range = Some(bb.offset) .. end;
-                hal::pso::Descriptor::Buffer(&buffer.raw, range)
-            }
-            binding_model::BindingResource::Sampler(id) => {
-                assert_eq!(decl.ty, binding_model::BindingType::Sampler);
-                let sampler = &sampler_guard[id];
-                hal::pso::Descriptor::Sampler(&sampler.raw)
-            }
-            binding_model::BindingResource::TextureView(id) => {
-                let (usage, image_layout) = match decl.ty {
-                    binding_model::BindingType::SampledTexture => (
-                        resource::TextureUsage::SAMPLED,
-                        hal::image::Layout::ShaderReadOnlyOptimal,
-                    ),
-                    binding_model::BindingType::StorageTexture => (
-                        resource::TextureUsage::STORAGE,
-                        hal::image::Layout::General,
-                    ),
-                    _ => panic!("Mismatched texture binding for {:?}", decl),
-                };
-                let view = used.views
-                    .use_extend(&*texture_view_guard, id, (), ())
-                    .unwrap();
-                used.textures
-                    .change_extend(
-                        view.texture_id.value,
-                        &view.texture_id.ref_count,
-                        view.range.clone(),
-                        usage,
-                    )
-                    .unwrap();
-                hal::pso::Descriptor::Image(&view.raw, image_layout)
-            }
-        };
-        writes.alloc().init(hal::pso::DescriptorSetWrite {
-            set: desc_set.raw(),
-            binding: b.binding,
-            array_offset: 0, //TODO
-            descriptors: iter::once(descriptor),
-        });
+                    let end = if bb.size == 0 {
+                        None
+                    } else {
+                        let end = bb.offset + bb.size;
+                        assert!(
+                            end <= buffer.size,
+                            "Bound buffer range {:?} does not fit in buffer size {}",
+                            bb.offset .. end,
+                            buffer.size
+                        );
+                        Some(end)
+                    };
+
+                    let range = Some(bb.offset) .. end;
+                    hal::pso::Descriptor::Buffer(&buffer.raw, range)
+                }
+                binding_model::BindingResource::Sampler(id) => {
+                    assert_eq!(decl.ty, binding_model::BindingType::Sampler);
+                    let sampler = &sampler_guard[id];
+                    hal::pso::Descriptor::Sampler(&sampler.raw)
+                }
+                binding_model::BindingResource::TextureView(id) => {
+                    let (usage, image_layout) = match decl.ty {
+                        binding_model::BindingType::SampledTexture => (
+                            resource::TextureUsage::SAMPLED,
+                            hal::image::Layout::ShaderReadOnlyOptimal,
+                        ),
+                        binding_model::BindingType::StorageTexture => (
+                            resource::TextureUsage::STORAGE,
+                            hal::image::Layout::General,
+                        ),
+                        _ => panic!("Mismatched texture binding for {:?}", decl),
+                    };
+                    let view = used.views
+                        .use_extend(&*texture_view_guard, id, (), ())
+                        .unwrap();
+                    used.textures
+                        .change_extend(
+                            view.texture_id.value,
+                            &view.texture_id.ref_count,
+                            view.range.clone(),
+                            usage,
+                        )
+                        .unwrap();
+                    hal::pso::Descriptor::Image(&view.raw, image_layout)
+                }
+            };
+            writes.alloc().init(hal::pso::DescriptorSetWrite {
+                set: desc_set.raw(),
+                binding: b.binding,
+                array_offset: 0, //TODO
+                descriptors: iter::once(descriptor),
+            });
+        }
+
+        unsafe {
+            device.raw.write_descriptor_sets(writes);
+        }
     }
 
-    unsafe {
-        device.raw.write_descriptor_sets(writes);
-    }
-
-    binding_model::BindGroup {
+    let bind_group = binding_model::BindGroup {
         raw: desc_set,
         device_id: Stored {
             value: device_id,
@@ -1246,43 +1291,32 @@ pub fn device_create_bind_group(
         life_guard: LifeGuard::new(),
         used,
         dynamic_count: bind_group_layout.dynamic_count,
-    }
-}
-
-pub fn device_track_bind_group(
-    device_id: DeviceId,
-    bind_group_id: BindGroupId,
-    ref_count: RefCount,
-    token: &mut Token<Root>,
-) {
-    let (device_guard, _) = HUB.devices.read(token);
-    let ok = device_guard[device_id]
-        .trackers
+    };
+    let (id, id_out) = hub.bind_groups.new_identity(id_in);
+    let ok = device.trackers
         .lock()
         .bind_groups
-        .init(bind_group_id, &ref_count, (), ());
+        .init(id, &bind_group.life_guard.ref_count, (), ());
     assert!(ok);
+
+    hub.bind_groups.register(id, bind_group, &mut token);
+    id_out
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group(
     device_id: DeviceId,
     desc: &binding_model::BindGroupDescriptor,
 ) -> BindGroupId {
-    let mut token = Token::root();
-    let bind_group = device_create_bind_group(device_id, desc, &mut token);
-    let ref_count = bind_group.life_guard.ref_count.clone();
-    let id = HUB.bind_groups.register_local(bind_group, &mut token);
-    device_track_bind_group(device_id, id, ref_count, &mut token);
-    id
+    gfx_select!(device_id => device_create_bind_group(device_id, desc, PhantomData))
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_bind_group_destroy(bind_group_id: BindGroupId) {
+pub fn bind_group_destroy<B: GfxBackend>(bind_group_id: BindGroupId) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-    let (bind_group_guard, _) = HUB.bind_groups.read(&mut token);
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (bind_group_guard, _) = hub.bind_groups.read(&mut token);
     let bind_group = &bind_group_guard[bind_group_id];
     device_guard[bind_group.device_id.value].pending.lock().destroy(
         ResourceId::BindGroup(bind_group_id),
@@ -1290,65 +1324,77 @@ pub extern "C" fn wgpu_bind_group_destroy(bind_group_id: BindGroupId) {
     );
 }
 
-pub fn device_create_shader_module(
-    device_id: DeviceId,
-    desc: &pipeline::ShaderModuleDescriptor,
-    token: &mut Token<Root>,
-) -> ShaderModule<back::Backend> {
-    let spv = unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) };
-    let (device_guard, _) = HUB.devices.read(token);
-    let shader = unsafe {
-        device_guard[device_id]
-            .raw
-            .create_shader_module(spv)
-            .unwrap()
-    };
-
-    ShaderModule { raw: shader }
+#[no_mangle]
+pub extern "C" fn wgpu_bind_group_destroy(bind_group_id: BindGroupId) {
+    gfx_select!(bind_group_id => bind_group_destroy(bind_group_id))
 }
 
-#[cfg(feature = "local")]
+pub fn device_create_shader_module<B: GfxBackend>(
+    device_id: DeviceId,
+    desc: &pipeline::ShaderModuleDescriptor,
+    id_in: Input<ShaderModuleId>
+) -> Output<ShaderModuleId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+
+    let spv = unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) };
+    let shader = {
+        let (device_guard, _) = hub.devices.read(&mut token);
+        ShaderModule {
+            raw: unsafe {
+                device_guard[device_id]
+                    .raw
+                    .create_shader_module(spv)
+                    .unwrap()
+            },
+        }
+    };
+    hub.shader_modules.register_identity(id_in, shader, &mut token)
+}
+
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
     desc: &pipeline::ShaderModuleDescriptor,
 ) -> ShaderModuleId {
-    let mut token = Token::root();
-    let module = device_create_shader_module(device_id, desc, &mut token);
-    HUB.shader_modules.register_local(module, &mut token)
+    gfx_select!(device_id => device_create_shader_module(device_id, desc, PhantomData))
 }
 
-pub fn device_create_command_encoder(
+pub fn device_create_command_encoder<B: GfxBackend>(
     device_id: DeviceId,
     _desc: &command::CommandEncoderDescriptor,
-    token: &mut Token<Root>,
-) -> command::CommandBuffer<back::Backend> {
-    let (device_guard, _) = HUB.devices.read(token);
+    id_in: Input<CommandEncoderId>,
+) -> Output<CommandEncoderId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+
+    let (device_guard, mut token) = hub.devices.read(&mut token);
     let device = &device_guard[device_id];
 
     let dev_stored = Stored {
         value: device_id,
         ref_count: device.life_guard.ref_count.clone(),
     };
-    let mut cmb = device.com_allocator.allocate(dev_stored, &device.raw);
+    let mut comb = device.com_allocator.allocate(dev_stored, &device.raw);
     unsafe {
-        cmb.raw.last_mut().unwrap().begin(
+        comb.raw.last_mut().unwrap().begin(
             hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
             hal::command::CommandBufferInheritanceInfo::default(),
         );
     }
-    cmb
+
+    hub.command_buffers.register_identity(id_in, comb, &mut token)
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_command_encoder(
     device_id: DeviceId,
-    desc: &command::CommandEncoderDescriptor,
+    desc: Option<&command::CommandEncoderDescriptor>,
 ) -> CommandEncoderId {
-    let mut token = Token::root();
-    let cmb = device_create_command_encoder(device_id, desc, &mut token);
-    HUB.command_buffers.register_local(cmb, &mut token)
+    let desc = &desc.cloned().unwrap_or_default();
+    gfx_select!(device_id => device_create_command_encoder(device_id, desc, PhantomData))
 }
 
 #[no_mangle]
@@ -1356,19 +1402,16 @@ pub extern "C" fn wgpu_device_get_queue(device_id: DeviceId) -> QueueId {
     device_id
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_queue_submit(
+pub fn queue_submit<B: GfxBackend>(
     queue_id: QueueId,
-    command_buffers: *const CommandBufferId,
-    command_buffers_length: usize,
+    command_buffer_ids: &[CommandBufferId],
 ) {
-    let command_buffer_ids =
-        unsafe { slice::from_raw_parts(command_buffers, command_buffers_length) };
+    let hub = B::hub();
 
     let (submit_index, fence) = {
         let mut token = Token::root();
-        let (surface_guard, mut token) = HUB.surfaces.read(&mut token);
-        let (mut device_guard, mut token) = HUB.devices.write(&mut token);
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         let device = &mut device_guard[queue_id];
         let mut trackers = device.trackers.lock();
         let mut wait_semaphores = Vec::new();
@@ -1382,17 +1425,17 @@ pub extern "C" fn wgpu_queue_submit(
         // native command buffer of the previous chain instead of always creating
         // a temporary one, since the chains are not finished.
         {
-            let (mut command_buffer_guard, mut token) = HUB.command_buffers.write(&mut token);
-            let (bind_group_guard, mut token) = HUB.bind_groups.read(&mut token);
-            let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
-            let (texture_guard, mut token) = HUB.textures.read(&mut token);
-            let (texture_view_guard, _) = HUB.texture_views.read(&mut token);
+            let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
+            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+            let (texture_guard, mut token) = hub.textures.read(&mut token);
+            let (texture_view_guard, _) = hub.texture_views.read(&mut token);
 
             // finish all the command buffers first
             for &cmb_id in command_buffer_ids {
                 let comb = &mut command_buffer_guard[cmb_id];
                 for link in comb.swap_chain_links.drain(..) {
-                    let swap_chain = surface_guard[link.swap_chain_id].swap_chain.as_ref().unwrap();
+                    let swap_chain = &swap_chain_guard[link.swap_chain_id];
                     let frame = &swap_chain.frames[link.image_index as usize];
                     if frame.need_waiting.swap(false, Ordering::AcqRel) {
                         assert_eq!(frame.acquired_epoch, Some(link.epoch),
@@ -1467,9 +1510,9 @@ pub extern "C" fn wgpu_queue_submit(
         // now prepare the GPU submission
         let fence = device.raw.create_fence(false).unwrap();
         {
-            let (command_buffer_guard, _) = HUB.command_buffers.read(&mut token);
+            let (command_buffer_guard, _) = hub.command_buffers.read(&mut token);
             let submission =
-                hal::queue::Submission::<_, _, &[<back::Backend as hal::Backend>::Semaphore]> {
+                hal::queue::Submission::<_, _, &[B::Semaphore]> {
                     //TODO: may `OneShot` be enough?
                     command_buffers: command_buffer_ids
                         .iter()
@@ -1491,7 +1534,7 @@ pub extern "C" fn wgpu_queue_submit(
     // No need for write access to the device from here on out
     let callbacks = {
         let mut token = Token::root();
-        let (device_guard, mut token) = HUB.devices.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[queue_id];
 
         let callbacks = device.maintain(false, &mut token);
@@ -1504,121 +1547,44 @@ pub extern "C" fn wgpu_queue_submit(
 
         // finally, return the command buffers to the allocator
         for &cmb_id in command_buffer_ids {
-            let (cmd_buf, _) = HUB.command_buffers.unregister(cmb_id, &mut token);
+            let (cmd_buf, _) = hub.command_buffers.unregister(cmb_id, &mut token);
             device.com_allocator.after_submit(cmd_buf, submit_index);
         }
 
         callbacks
     };
 
-    Device::fire_map_callbacks(callbacks);
+    Device::<B>::fire_map_callbacks(callbacks);
 }
 
-pub fn device_create_render_pipeline(
+#[no_mangle]
+pub extern "C" fn wgpu_queue_submit(
+    queue_id: QueueId,
+    command_buffers: *const CommandBufferId,
+    command_buffers_length: usize,
+) {
+    let command_buffer_ids =
+        unsafe { slice::from_raw_parts(command_buffers, command_buffers_length) };
+    gfx_select!(queue_id => queue_submit(queue_id, command_buffer_ids))
+}
+
+pub fn device_create_render_pipeline<B: GfxBackend>(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
-    token: &mut Token<Root>,
-) -> pipeline::RenderPipeline<back::Backend> {
+    id_in: Input<RenderPipelineId>,
+) -> Output<RenderPipelineId> {
+    let hub = B::hub();
+    let mut token = Token::root();
+
     let sc = desc.sample_count;
     assert!(sc == 1 || sc == 2 || sc == 4 || sc == 8 || sc == 16 || sc == 32,
         "Invalid sample_count of {}", sc);
     let sc = sc as u8;
 
-    let (device_guard, mut token) = HUB.devices.read(token);
-    let device = &device_guard[device_id];
-    let (pipeline_layout_guard, mut token) = HUB.pipeline_layouts.read(&mut token);
-    let layout = &pipeline_layout_guard[desc.layout].raw;
-    let (shader_module_guard, _) = HUB.shader_modules.read(&mut token);
-
     let color_states =
         unsafe { slice::from_raw_parts(desc.color_states, desc.color_states_length) };
     let depth_stencil_state = unsafe { desc.depth_stencil_state.as_ref() };
 
-    let rp_key = RenderPassKey {
-        colors: color_states
-            .iter()
-            .map(|at| hal::pass::Attachment {
-                format: Some(conv::map_texture_format(at.format)),
-                samples: sc,
-                ops: hal::pass::AttachmentOps::PRESERVE,
-                stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                layouts: hal::image::Layout::General .. hal::image::Layout::General,
-            })
-            .collect(),
-        // We can ignore the resolves as the vulkan specs says:
-        // As an additional special case, if two render passes have a single subpass,
-        // they are compatible even if they have different resolve attachment references
-        // or depth/stencil resolve modes but satisfy the other compatibility conditions.
-        resolves: ArrayVec::new(),
-        depth_stencil: depth_stencil_state.map(|at| hal::pass::Attachment {
-            format: Some(conv::map_texture_format(at.format)),
-            samples: sc,
-            ops: hal::pass::AttachmentOps::PRESERVE,
-            stencil_ops: hal::pass::AttachmentOps::PRESERVE,
-            layouts: hal::image::Layout::General .. hal::image::Layout::General,
-        }),
-    };
-
-    let mut render_pass_cache = device.render_passes.lock();
-    let main_pass = match render_pass_cache.entry(rp_key) {
-        Entry::Occupied(e) => e.into_mut(),
-        Entry::Vacant(e) => {
-            let color_ids = [
-                (0, hal::image::Layout::ColorAttachmentOptimal),
-                (1, hal::image::Layout::ColorAttachmentOptimal),
-                (2, hal::image::Layout::ColorAttachmentOptimal),
-                (3, hal::image::Layout::ColorAttachmentOptimal),
-            ];
-
-            let depth_id = (
-                desc.color_states_length,
-                hal::image::Layout::DepthStencilAttachmentOptimal,
-            );
-
-            let subpass = hal::pass::SubpassDesc {
-                colors: &color_ids[.. desc.color_states_length],
-                depth_stencil: depth_stencil_state.map(|_| &depth_id),
-                inputs: &[],
-                resolves: &[],
-                preserves: &[],
-            };
-
-            let pass = unsafe {
-                device
-                    .raw
-                    .create_render_pass(e.key().all(), &[subpass], &[])
-            }
-            .unwrap();
-            e.insert(pass)
-        }
-    };
-
-    let vertex = hal::pso::EntryPoint::<back::Backend> {
-        entry: unsafe { ffi::CStr::from_ptr(desc.vertex_stage.entry_point) }
-            .to_str()
-            .to_owned()
-            .unwrap(), // TODO
-        module: &shader_module_guard[desc.vertex_stage.module].raw,
-        specialization: hal::pso::Specialization::EMPTY,
-    };
-    let fragment = unsafe { desc.fragment_stage.as_ref() }.map(|stage| hal::pso::EntryPoint::<
-        back::Backend,
-    > {
-        entry: unsafe { ffi::CStr::from_ptr(stage.entry_point) }
-            .to_str()
-            .to_owned()
-            .unwrap(), // TODO
-        module: &shader_module_guard[stage.module].raw,
-        specialization: hal::pso::Specialization::EMPTY,
-    });
-
-    let shaders = hal::pso::GraphicsShaderSet {
-        vertex,
-        hull: None,
-        domain: None,
-        geometry: None,
-        fragment,
-    };
     let rasterizer = conv::map_rasterization_state_descriptor(
         &unsafe { desc.rasterization_state.as_ref() }
             .cloned()
@@ -1698,38 +1664,131 @@ pub fn device_create_render_pipeline(
         depth_bounds: None,
     };
 
-    let subpass = hal::pass::Subpass {
-        index: 0,
-        main_pass,
-    };
+    let raw_pipeline = {
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+        let layout = &pipeline_layout_guard[desc.layout].raw;
+        let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
-    // TODO
-    let flags = hal::pso::PipelineCreationFlags::empty();
-    // TODO
-    let parent = hal::pso::BasePipeline::None;
+        let rp_key = RenderPassKey {
+            colors: color_states
+                .iter()
+                .map(|at| hal::pass::Attachment {
+                    format: Some(conv::map_texture_format(at.format)),
+                    samples: sc,
+                    ops: hal::pass::AttachmentOps::PRESERVE,
+                    stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+                    layouts: hal::image::Layout::General .. hal::image::Layout::General,
+                })
+                .collect(),
+            // We can ignore the resolves as the vulkan specs says:
+            // As an additional special case, if two render passes have a single subpass,
+            // they are compatible even if they have different resolve attachment references
+            // or depth/stencil resolve modes but satisfy the other compatibility conditions.
+            resolves: ArrayVec::new(),
+            depth_stencil: depth_stencil_state.map(|at| hal::pass::Attachment {
+                format: Some(conv::map_texture_format(at.format)),
+                samples: sc,
+                ops: hal::pass::AttachmentOps::PRESERVE,
+                stencil_ops: hal::pass::AttachmentOps::PRESERVE,
+                layouts: hal::image::Layout::General .. hal::image::Layout::General,
+            }),
+        };
 
-    let pipeline_desc = hal::pso::GraphicsPipelineDesc {
-        shaders,
-        rasterizer,
-        vertex_buffers,
-        attributes,
-        input_assembler,
-        blender,
-        depth_stencil,
-        multisampling,
-        baked_states,
-        layout,
-        subpass,
-        flags,
-        parent,
-    };
+        let mut render_pass_cache = device.render_passes.lock();
+        let main_pass = match render_pass_cache.entry(rp_key) {
+            Entry::Occupied(e) => e.into_mut(),
+            Entry::Vacant(e) => {
+                let color_ids = [
+                    (0, hal::image::Layout::ColorAttachmentOptimal),
+                    (1, hal::image::Layout::ColorAttachmentOptimal),
+                    (2, hal::image::Layout::ColorAttachmentOptimal),
+                    (3, hal::image::Layout::ColorAttachmentOptimal),
+                ];
 
-    // TODO: cache
-    let pipeline = unsafe {
-        device
-            .raw
-            .create_graphics_pipeline(&pipeline_desc, None)
-            .unwrap()
+                let depth_id = (
+                    desc.color_states_length,
+                    hal::image::Layout::DepthStencilAttachmentOptimal,
+                );
+
+                let subpass = hal::pass::SubpassDesc {
+                    colors: &color_ids[.. desc.color_states_length],
+                    depth_stencil: depth_stencil_state.map(|_| &depth_id),
+                    inputs: &[],
+                    resolves: &[],
+                    preserves: &[],
+                };
+
+                let pass = unsafe {
+                    device
+                        .raw
+                        .create_render_pass(e.key().all(), &[subpass], &[])
+                }
+                .unwrap();
+                e.insert(pass)
+            }
+        };
+
+        let vertex = hal::pso::EntryPoint::<B> {
+            entry: unsafe { ffi::CStr::from_ptr(desc.vertex_stage.entry_point) }
+                .to_str()
+                .to_owned()
+                .unwrap(), // TODO
+            module: &shader_module_guard[desc.vertex_stage.module].raw,
+            specialization: hal::pso::Specialization::EMPTY,
+        };
+        let fragment = unsafe { desc.fragment_stage.as_ref() }
+            .map(|stage| hal::pso::EntryPoint::<B> {
+                entry: unsafe { ffi::CStr::from_ptr(stage.entry_point) }
+                    .to_str()
+                    .to_owned()
+                    .unwrap(), // TODO
+                module: &shader_module_guard[stage.module].raw,
+                specialization: hal::pso::Specialization::EMPTY,
+            });
+
+        let shaders = hal::pso::GraphicsShaderSet {
+            vertex,
+            hull: None,
+            domain: None,
+            geometry: None,
+            fragment,
+        };
+
+        let subpass = hal::pass::Subpass {
+            index: 0,
+            main_pass,
+        };
+
+        // TODO
+        let flags = hal::pso::PipelineCreationFlags::empty();
+        // TODO
+        let parent = hal::pso::BasePipeline::None;
+
+        let pipeline_desc = hal::pso::GraphicsPipelineDesc {
+            shaders,
+            rasterizer,
+            vertex_buffers,
+            attributes,
+            input_assembler,
+            blender,
+            depth_stencil,
+            multisampling,
+            baked_states,
+            layout,
+            subpass,
+            flags,
+            parent,
+        };
+
+        // TODO: cache
+        unsafe {
+            device
+                .raw
+                .create_graphics_pipeline(&pipeline_desc, None)
+                .unwrap()
+        }
     };
 
     let pass_context = RenderPassContext {
@@ -1750,104 +1809,110 @@ pub fn device_create_render_pipeline(
         }
     }
 
-    pipeline::RenderPipeline {
-        raw: pipeline,
+    let pipeline = pipeline::RenderPipeline {
+        raw: raw_pipeline,
         layout_id: desc.layout,
         pass_context,
         flags,
         index_format: desc.vertex_input.index_format,
         vertex_strides,
         sample_count: sc,
-    }
+    };
+
+    hub.render_pipelines.register_identity(id_in, pipeline, &mut token)
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
     desc: &pipeline::RenderPipelineDescriptor,
 ) -> RenderPipelineId {
-    let mut token = Token::root();
-    let pipeline = device_create_render_pipeline(device_id, desc, &mut token);
-    HUB.render_pipelines.register_local(pipeline, &mut token)
+    gfx_select!(device_id => device_create_render_pipeline(device_id, desc, PhantomData))
 }
 
-pub fn device_create_compute_pipeline(
+pub fn device_create_compute_pipeline<B: GfxBackend>(
     device_id: DeviceId,
     desc: &pipeline::ComputePipelineDescriptor,
-    token: &mut Token<Root>,
-) -> pipeline::ComputePipeline<back::Backend> {
-    let (device_guard, mut token) = HUB.devices.read(token);
-    let device = &device_guard[device_id].raw;
-    let (pipeline_layout_guard, mut token) = HUB.pipeline_layouts.read(&mut token);
-    let layout = &pipeline_layout_guard[desc.layout].raw;
-    let pipeline_stage = &desc.compute_stage;
-    let (shader_module_guard, _) = HUB.shader_modules.read(&mut token);
+    id_in: Input<ComputePipelineId>
+) -> Output<ComputePipelineId> {
+    let hub = B::hub();
+    let mut token = Token::root();
 
-    let shader = hal::pso::EntryPoint::<back::Backend> {
-        entry: unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
-            .to_str()
-            .to_owned()
-            .unwrap(), // TODO
-        module: &shader_module_guard[pipeline_stage.module].raw,
-        specialization: hal::pso::Specialization::EMPTY,
+    let raw_pipeline = {
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id].raw;
+        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+        let layout = &pipeline_layout_guard[desc.layout].raw;
+        let pipeline_stage = &desc.compute_stage;
+        let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
+
+        let shader = hal::pso::EntryPoint::<B> {
+            entry: unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
+                .to_str()
+                .to_owned()
+                .unwrap(), // TODO
+            module: &shader_module_guard[pipeline_stage.module].raw,
+            specialization: hal::pso::Specialization::EMPTY,
+        };
+
+        // TODO
+        let flags = hal::pso::PipelineCreationFlags::empty();
+        // TODO
+        let parent = hal::pso::BasePipeline::None;
+
+        let pipeline_desc = hal::pso::ComputePipelineDesc {
+            shader,
+            layout,
+            flags,
+            parent,
+        };
+
+        unsafe {
+            device
+                .create_compute_pipeline(&pipeline_desc, None)
+                .unwrap()
+        }
     };
 
-    // TODO
-    let flags = hal::pso::PipelineCreationFlags::empty();
-    // TODO
-    let parent = hal::pso::BasePipeline::None;
-
-    let pipeline_desc = hal::pso::ComputePipelineDesc {
-        shader,
-        layout,
-        flags,
-        parent,
-    };
-
-    let pipeline = unsafe {
-        device
-            .create_compute_pipeline(&pipeline_desc, None)
-            .unwrap()
-    };
-
-    pipeline::ComputePipeline {
-        raw: pipeline,
+    let pipeline = pipeline::ComputePipeline {
+        raw: raw_pipeline,
         layout_id: desc.layout,
-    }
+    };
+    hub.compute_pipelines.register_identity(id_in, pipeline, &mut token)
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_compute_pipeline(
     device_id: DeviceId,
     desc: &pipeline::ComputePipelineDescriptor,
 ) -> ComputePipelineId {
-    let mut token = Token::root();
-    let pipeline = device_create_compute_pipeline(device_id, desc, &mut token);
-    HUB.compute_pipelines.register_local(pipeline, &mut token)
+    gfx_select!(device_id => device_create_compute_pipeline(device_id, desc, PhantomData))
 }
 
-pub fn device_create_swap_chain(
+pub fn device_create_swap_chain<B: GfxBackend>(
     device_id: DeviceId,
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
-    token: &mut Token<Root>,
-) -> Vec<resource::Texture<back::Backend>> {
+    id_in: Input<SwapChainId>,
+    image_ids: Vec<(Input<TextureId>, Input<TextureViewId>)>,
+) -> Output<SwapChainId> {
     info!("creating swap chain {:?}", desc);
+    let hub = B::hub();
+    let mut token = Token::root();
 
-    let (mut surface_guard, mut token) = HUB.surfaces.write(token);
-    let (adapter_guard, mut token) = HUB.adapters.read(&mut token);
-    let (device_guard, _) = HUB.devices.read(&mut token);
+    let (mut surface_guard, mut token) = GLOBAL.surfaces.write(&mut token);
+    let (adapter_guard, mut token) = hub.adapters.read(&mut token);
+    let (device_guard, mut token) = hub.devices.read(&mut token);
     let device = &device_guard[device_id];
     let surface = &mut surface_guard[surface_id];
 
     let (caps, formats, _present_modes) = {
+        let suf = B::get_surface_mut(surface);
         let adapter = &adapter_guard[device.adapter_id];
-        assert!(surface
-            .raw
-            .supports_queue_family(&adapter.queue_families[0]));
-        surface.raw.compatibility(&adapter.physical_device)
+        assert!(suf.supports_queue_family(&adapter.raw.queue_families[0]));
+        suf.compatibility(&adapter.raw.physical_device)
     };
     let num_frames = *caps.image_count.start(); //TODO: configure?
     let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
@@ -1881,10 +1946,12 @@ pub fn device_create_swap_chain(
     */
 
     let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
-        Some(mut old) => {
+        Some(old_id) => {
             //TODO: remove this once gfx-rs stops destroying the old swapchain
             device.raw.wait_idle().unwrap();
             let mut pending = device.pending.lock();
+
+            let (mut old, _) = hub.swap_chains.unregister(old_id, &mut token);
             assert_eq!(old.device_id.value, device_id);
             for frame in old.frames {
                 pending.destroy(
@@ -1912,14 +1979,20 @@ pub fn device_create_swap_chain(
         },
     };
 
-    let (raw, images) = unsafe {
+    let (raw_swap_chain, images) = unsafe {
+        let suf = B::get_surface_mut(surface);
         device
             .raw
-            .create_swapchain(&mut surface.raw, config.with_image_usage(usage), old_raw)
+            .create_swapchain(suf, config.with_image_usage(usage), old_raw)
             .unwrap()
     };
-    surface.swap_chain = Some(swap_chain::SwapChain {
-        raw,
+
+    let (id, id_out) = hub.swap_chains.new_identity(id_in);
+    surface.swap_chain = Some(id);
+
+    let mut trackers = device.trackers.lock();
+    let mut swap_chain = swap_chain::SwapChain {
+        raw: raw_swap_chain,
         device_id: Stored {
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
@@ -1929,91 +2002,80 @@ pub fn device_create_swap_chain(
         acquired: Vec::with_capacity(1), //TODO: get it from gfx-hal?
         sem_available,
         command_pool,
-    });
+    };
 
-    images
+    for ((i, image), (id_texture_in, id_view_in)) in images
         .into_iter()
-        .map(|raw| resource::Texture {
-            raw,
-            device_id: Stored {
-                value: device_id,
-                ref_count: device.life_guard.ref_count.clone(),
-            },
-            kind: hal::image::Kind::D2(desc.width, desc.height, 1, 1),
-            format: desc.format,
-            full_range: hal::image::SubresourceRange {
-                aspects: hal::format::Aspects::COLOR,
-                levels: 0 .. 1,
-                layers: 0 .. 1,
-            },
-            placement: resource::TexturePlacement::Void,
-            life_guard: LifeGuard::new(),
-        })
-        .collect()
-}
-
-#[cfg(feature = "local")]
-pub fn swap_chain_populate_textures(
-    swap_chain_id: SwapChainId,
-    textures: Vec<resource::Texture<back::Backend>>,
-    token: &mut Token<Root>,
-) {
-    let (mut surface_guard, mut token) = HUB.surfaces.write(token);
-    let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-    let device = &device_guard[swap_chain.device_id.value];
-    let mut trackers = device.trackers.lock();
-
-    for (i, mut texture) in textures.into_iter().enumerate() {
-        let format = texture.format;
-        let kind = texture.kind;
-        let range = texture.full_range.clone();
+        .enumerate()
+        .zip(image_ids)
+    {
+        let kind = hal::image::Kind::D2(desc.width, desc.height, 1, 1);
+        let range = hal::image::SubresourceRange {
+            aspects: hal::format::Aspects::COLOR,
+            levels: 0 .. 1,
+            layers: 0 .. 1,
+        };
 
         let view_raw = unsafe {
             device
                 .raw
                 .create_image_view(
-                    &texture.raw,
+                    &image,
                     hal::image::ViewKind::D2,
-                    conv::map_texture_format(format),
+                    conv::map_texture_format(desc.format),
                     hal::format::Swizzle::NO,
                     range.clone(),
                 )
                 .unwrap()
         };
-        texture.placement = resource::TexturePlacement::SwapChain(swap_chain::SwapChainLink {
-            swap_chain_id, //TODO: strongly
-            epoch: Mutex::new(0),
-            image_index: i as hal::SwapImageIndex,
-        });
+        let texture = resource::Texture {
+            raw: image,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.ref_count.clone(),
+            },
+            kind,
+            format: desc.format,
+            full_range: range.clone(),
+            placement: resource::TexturePlacement::SwapChain(swap_chain::SwapChainLink {
+                swap_chain_id: id, //TODO: strongly
+                epoch: Mutex::new(0),
+                image_index: i as hal::SwapImageIndex,
+            }),
+            life_guard: LifeGuard::new(),
+        };
+        let (id_texture, _) = hub.textures.new_identity(id_texture_in);
         let texture_id = Stored {
             ref_count: texture.life_guard.ref_count.clone(),
-            value: HUB.textures.register_local(texture, &mut token),
+            value: id_texture,
         };
         trackers.textures.init(
-            texture_id.value,
+            id_texture,
             &texture_id.ref_count,
             range.clone(),
             resource::TextureUsage::UNINITIALIZED,
         );
+        hub.textures.register(id_texture, texture, &mut token);
 
         let view = resource::TextureView {
             raw: view_raw,
             texture_id: texture_id.clone(),
-            format,
+            format: desc.format,
             extent: kind.extent(),
             samples: kind.num_samples(),
             range,
             is_owned_by_swap_chain: true,
             life_guard: LifeGuard::new(),
         };
+        let (id_view, _) = hub.texture_views.new_identity(id_view_in);
         let view_id = Stored {
             ref_count: view.life_guard.ref_count.clone(),
-            value: HUB.texture_views.register_local(view, &mut token),
+            value: id_view,
         };
         trackers
             .views
-            .init(view_id.value, &view_id.ref_count, (), ());
+            .init(id_view, &view_id.ref_count, (), ());
+        hub.texture_views.register(id_view, view, &mut token);
 
         swap_chain.frames.alloc().init(swap_chain::Frame {
             texture_id,
@@ -2026,35 +2088,46 @@ pub fn swap_chain_populate_textures(
             comb: swap_chain.command_pool.acquire_command_buffer(),
         });
     }
+
+    hub.swap_chains.register(id, swap_chain, &mut token);
+    id_out
 }
 
-#[cfg(feature = "local")]
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_swap_chain(
     device_id: DeviceId,
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
 ) -> SwapChainId {
-    let mut token = Token::root();
-    let textures = device_create_swap_chain(device_id, surface_id, desc, &mut token);
-    swap_chain_populate_textures(surface_id, textures, &mut token);
-    surface_id
+    let image_ids = vec![(PhantomData, PhantomData); 10]; //TODO: make this compatible with "remote"
+    gfx_select!(device_id => device_create_swap_chain(device_id, surface_id, desc, PhantomData, image_ids))
+}
+
+pub fn device_poll<B: GfxBackend>(device_id: DeviceId, force_wait: bool) {
+    let hub = B::hub();
+    let callbacks = {
+        let (device_guard, mut token) = hub.devices.read(&mut Token::root());
+        device_guard[device_id].maintain(force_wait, &mut token)
+    };
+    Device::<B>::fire_map_callbacks(callbacks);
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_poll(device_id: DeviceId, force_wait: bool) {
-    let callbacks = {
-        let (device_guard, mut token) = HUB.devices.read(&mut Token::root());
-        device_guard[device_id].maintain(force_wait, &mut token)
-    };
-    Device::fire_map_callbacks(callbacks);
+    gfx_select!(device_id => device_poll(device_id, force_wait))
+}
+
+pub fn device_destroy<B: GfxBackend>(device_id: DeviceId) {
+    let hub = B::hub();
+    let (device, mut token) = hub.devices.unregister(device_id, &mut Token::root());
+    device.maintain(true, &mut token);
+    device.com_allocator.destroy(&device.raw);
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_destroy(device_id: DeviceId) {
-    let (device, mut token) = HUB.devices.unregister(device_id, &mut Token::root());
-    device.maintain(true, &mut token);
-    device.com_allocator.destroy(&device.raw);
+    gfx_select!(device_id => device_destroy(device_id))
 }
 
 pub type BufferMapReadCallback =
@@ -2062,29 +2135,25 @@ pub type BufferMapReadCallback =
 pub type BufferMapWriteCallback =
     extern "C" fn(status: BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8);
 
-#[no_mangle]
-pub extern "C" fn wgpu_buffer_map_read_async(
+pub fn buffer_map_async<B: GfxBackend>(
     buffer_id: BufferId,
-    start: BufferAddress,
-    size: BufferAddress,
-    callback: BufferMapReadCallback,
-    userdata: *mut u8,
+    usage: resource::BufferUsage,
+    operation: BufferMapOperation,
 ) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
+    let (device_guard, mut token) = hub.devices.read(&mut token);
 
     let (device_id, ref_count) = {
-        let (mut buffer_guard, _) = HUB.buffers.write(&mut token);
+        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let buffer = &mut buffer_guard[buffer_id];
 
         if buffer.pending_map_operation.is_some() {
-            log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
-            callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+            operation.call_error();
             return;
         }
 
-        let range = start .. start + size;
-        buffer.pending_map_operation = Some(BufferMapOperation::Read(range, callback, userdata));
+        buffer.pending_map_operation = Some(operation);
         (buffer.device_id.value, buffer.life_guard.ref_count.clone())
     };
 
@@ -2094,9 +2163,21 @@ pub extern "C" fn wgpu_buffer_map_read_async(
         .trackers
         .lock()
         .buffers
-        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_READ);
+        .change_replace(buffer_id, &ref_count, (), usage);
 
     device.pending.lock().map(buffer_id, ref_count);
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_map_read_async(
+    buffer_id: BufferId,
+    start: BufferAddress,
+    size: BufferAddress,
+    callback: BufferMapReadCallback,
+    userdata: *mut u8,
+) {
+    let operation = BufferMapOperation::Read(start .. start + size, callback, userdata);
+    gfx_select!(buffer_id => buffer_map_async(buffer_id, resource::BufferUsage::MAP_READ, operation))
 }
 
 #[no_mangle]
@@ -2107,40 +2188,16 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     callback: BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
-    let mut token = Token::root();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-
-    let (device_id, ref_count) = {
-        let (mut buffer_guard, _) = HUB.buffers.write(&mut token);
-        let buffer = &mut buffer_guard[buffer_id];
-
-        if buffer.pending_map_operation.is_some() {
-            log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
-            callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
-            return;
-        }
-
-        let range = start .. start + size;
-        buffer.pending_map_operation = Some(BufferMapOperation::Write(range, callback, userdata));
-        (buffer.device_id.value, buffer.life_guard.ref_count.clone())
-    };
-
-   let device = &device_guard[device_id];
-
-    device
-        .trackers
-        .lock()
-        .buffers
-        .change_replace(buffer_id, &ref_count, (), resource::BufferUsage::MAP_WRITE);
-
-    device.pending.lock().map(buffer_id, ref_count);
+    let operation = BufferMapOperation::Write(start .. start + size, callback, userdata);
+    gfx_select!(buffer_id => buffer_map_async(buffer_id, resource::BufferUsage::MAP_WRITE, operation))
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_buffer_unmap(buffer_id: BufferId) {
+pub fn buffer_unmap<B: GfxBackend>(buffer_id: BufferId) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-    let (mut buffer_guard, _) = HUB.buffers.write(&mut token);
+
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (mut buffer_guard, _) = hub.buffers.write(&mut token);
 
     let buffer = &mut buffer_guard[buffer_id];
     let device_raw = &device_guard[buffer.device_id.value].raw;
@@ -2160,4 +2217,9 @@ pub extern "C" fn wgpu_buffer_unmap(buffer_id: BufferId) {
     }
 
     buffer.memory.unmap(device_raw);
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_buffer_unmap(buffer_id: BufferId) {
+    gfx_select!(buffer_id => buffer_unmap(buffer_id))
 }

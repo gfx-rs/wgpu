@@ -1,7 +1,8 @@
 use crate::{
+    gfx_select,
     conv,
     device::all_image_stages,
-    hub::{HUB, Token},
+    hub::{GfxBackend, Token},
     resource,
     DeviceId,
     Extent3d,
@@ -41,21 +42,6 @@ impl SwapChainLink<Mutex<SwapImageEpoch>> {
 }
 
 #[derive(Debug)]
-pub struct Surface<B: hal::Backend> {
-    pub(crate) raw: B::Surface,
-    pub(crate) swap_chain: Option<SwapChain<B>>,
-}
-
-impl<B: hal::Backend> Surface<B> {
-    pub(crate) fn new(raw: B::Surface) -> Self {
-        Surface {
-            raw,
-            swap_chain: None,
-        }
-    }
-}
-
-#[derive(Debug)]
 pub(crate) struct Frame<B: hal::Backend> {
     pub texture_id: Stored<TextureId>,
     pub view_id: Stored<TextureViewId>,
@@ -76,7 +62,7 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) frames: Vec<Frame<B>>,
     pub(crate) acquired: Vec<hal::SwapImageIndex>,
     pub(crate) sem_available: B::Semaphore,
-    #[cfg_attr(not(feature = "local"), allow(dead_code))] //TODO: remove
+    #[cfg_attr(not(not(feature = "remote")), allow(dead_code))] //TODO: remove
     pub(crate) command_pool: hal::CommandPool<B, hal::General>,
 }
 
@@ -122,38 +108,30 @@ pub struct SwapChainOutput {
     pub view_id: TextureViewId,
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -> SwapChainOutput {
+pub fn swap_chain_get_next_texture<B: GfxBackend>(swap_chain_id: SwapChainId) -> SwapChainOutput {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (image_index, device_id, descriptor) = {
-        let (mut surface_guard, _) = HUB.surfaces.write(&mut token);
-        let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
-        let result = unsafe {
-            swap_chain
-                .raw
-                .acquire_image(!0, Some(&swap_chain.sem_available), None)
-        };
-        (
-            result.ok(),
-            swap_chain.device_id.value,
-            swap_chain.desc.clone(),
-        )
-    };
 
-    #[cfg(not(feature = "local"))]
-    let _ = descriptor;
-    #[cfg(feature = "local")]
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
+    let swap_chain = &mut swap_chain_guard[swap_chain_id];
+    let device = &device_guard[swap_chain.device_id.value];
+
+    let image_index = unsafe {
+        swap_chain.raw
+            .acquire_image(!0, Some(&swap_chain.sem_available), None)
+    }.ok();
+
+    #[cfg(not(feature = "remote"))]
     {
-        use crate::device::{device_create_swap_chain, swap_chain_populate_textures};
+        //use crate::device::device_create_swap_chain_textures}
         if image_index.is_none() {
             warn!("acquire_image failed, re-creating");
-            let textures = device_create_swap_chain(device_id, swap_chain_id, &descriptor, &mut token);
-            swap_chain_populate_textures(swap_chain_id, textures, &mut token);
+            unimplemented!()
+            //let textures = device_create_swap_chain(device_id, swap_chain_id, &descriptor, &mut token);
+            //swap_chain_populate_textures(swap_chain_id, textures, &mut token); //TODO?
         }
     }
-
-    let (mut surface_guard, mut token) = HUB.surfaces.write(&mut token);
-    let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
 
     let image_index = match image_index {
         Some((index, suboptimal)) => {
@@ -170,9 +148,6 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
                 .0
         },
     };
-
-    let (device_guard, mut token) = HUB.devices.read(&mut token);
-    let device = &device_guard[device_id];
 
     assert_ne!(
         swap_chain.acquired.len(),
@@ -196,7 +171,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
     mem::swap(&mut frame.sem_available, &mut swap_chain.sem_available);
     frame.need_waiting.store(true, Ordering::Release);
 
-    let (texture_guard, _) = HUB.textures.read(&mut token);
+    let (texture_guard, _) = hub.textures.read(&mut token);
     let frame_epoch = texture_guard[frame.texture_id.value]
         .placement
         .as_swap_chain()
@@ -215,10 +190,18 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
+pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -> SwapChainOutput {
+    gfx_select!(swap_chain_id => swap_chain_get_next_texture(swap_chain_id))
+}
+
+pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (mut surface_guard, mut token) = HUB.surfaces.write(&mut token);
-    let swap_chain = surface_guard[swap_chain_id].swap_chain.as_mut().unwrap();
+
+    let (mut device_guard, mut token) = hub.devices.write(&mut token);
+    let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
+    let swap_chain = &mut swap_chain_guard[swap_chain_id];
+    let device = &mut device_guard[swap_chain.device_id.value];
 
     let image_index = swap_chain.acquired.remove(0);
     let frame = &mut swap_chain.frames[image_index as usize];
@@ -234,10 +217,7 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
         image_index
     );
 
-    let (mut device_guard, mut token) = HUB.devices.write(&mut token);
-    let device = &mut device_guard[swap_chain.device_id.value];
-
-    let (texture_guard, _) = HUB.textures.read(&mut token);
+    let (texture_guard, _) = hub.textures.read(&mut token);
     let texture = &texture_guard[frame.texture_id.value];
     texture.placement.as_swap_chain().bump_epoch();
 
@@ -291,4 +271,9 @@ pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
     if let Err(e) = err {
         warn!("present failed: {:?}", e);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
+    gfx_select!(swap_chain_id => swap_chain_present(swap_chain_id))
 }

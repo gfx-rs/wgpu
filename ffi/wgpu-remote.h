@@ -15,17 +15,15 @@ typedef enum {
 
 typedef struct WGPUClient WGPUClient;
 
-typedef struct WGPUClientFactory WGPUClientFactory;
-
 typedef struct WGPUServer WGPUServer;
 
-typedef uint64_t WGPUId_DeviceHandle;
+typedef uint64_t WGPUId_Device_Dummy;
 
-typedef WGPUId_DeviceHandle WGPUDeviceId;
+typedef WGPUId_Device_Dummy WGPUDeviceId;
 
-typedef uint64_t WGPUId_AdapterHandle;
+typedef uint64_t WGPUId_Adapter_Dummy;
 
-typedef WGPUId_AdapterHandle WGPUAdapterId;
+typedef WGPUId_Adapter_Dummy WGPUAdapterId;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -45,7 +43,7 @@ typedef struct {
 } WGPURequestAdapterOptions;
 
 typedef struct {
-  WGPUClientFactory *factory;
+  WGPUClient *client;
   WGPUServer *server;
   const uint8_t *error;
 } WGPUInfrastructure;
@@ -54,15 +52,11 @@ WGPUDeviceId wgpu_client_adapter_create_device(const WGPUClient *client,
                                                WGPUAdapterId adapter_id,
                                                const WGPUDeviceDescriptor *desc);
 
-WGPUClient *wgpu_client_create(const WGPUClientFactory *factory);
-
-void wgpu_client_destroy(const WGPUClientFactory *factory, WGPUClient *client);
-
-WGPUAdapterId wgpu_client_get_adapter(const WGPUClient *client,
-                                      const WGPURequestAdapterOptions *desc);
+WGPUAdapterId wgpu_client_request_adapter(const WGPUClient *client,
+                                          const WGPURequestAdapterOptions *desc);
 
 WGPUInfrastructure wgpu_initialize(void);
 
 void wgpu_server_process(const WGPUServer *server);
 
-void wgpu_terminate(WGPUClientFactory *factory);
+void wgpu_terminate(WGPUClient *client);

@@ -62,13 +62,28 @@ pub enum BufferMapAsyncStatus {
 }
 
 #[derive(Clone, Debug)]
-pub(crate) enum BufferMapOperation {
+pub enum BufferMapOperation {
     Read(std::ops::Range<u64>, BufferMapReadCallback, *mut u8),
     Write(std::ops::Range<u64>, BufferMapWriteCallback, *mut u8),
 }
 
 unsafe impl Send for BufferMapOperation {}
 unsafe impl Sync for BufferMapOperation {}
+
+impl BufferMapOperation {
+    pub(crate) fn call_error(self) {
+        match self {
+            BufferMapOperation::Read(_, callback, userdata) => {
+                log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
+                callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+            }
+            BufferMapOperation::Write(_, callback, userdata) => {
+                log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
+                callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Buffer<B: hal::Backend> {
@@ -193,17 +208,16 @@ pub struct TextureDescriptor {
 
 #[derive(Debug)]
 pub(crate) enum TexturePlacement<B: hal::Backend> {
-    #[cfg_attr(not(feature = "local"), allow(unused))]
+    #[cfg_attr(not(not(feature = "remote")), allow(unused))]
     SwapChain(SwapChainLink<Mutex<SwapImageEpoch>>),
     Memory(MemoryBlock<B>),
-    Void,
 }
 
 impl<B: hal::Backend> TexturePlacement<B> {
     pub fn as_swap_chain(&self) -> &SwapChainLink<Mutex<SwapImageEpoch>> {
         match *self {
             TexturePlacement::SwapChain(ref link) => link,
-            TexturePlacement::Memory(_) | TexturePlacement::Void => {
+            TexturePlacement::Memory(_) => {
                 panic!("Expected swap chain link!")
             }
         }
@@ -274,7 +288,7 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) samples: hal::image::NumSamples,
     pub(crate) range: hal::image::SubresourceRange,
     pub(crate) is_owned_by_swap_chain: bool,
-    #[cfg_attr(not(feature = "local"), allow(dead_code))]
+    #[cfg_attr(not(not(feature = "remote")), allow(dead_code))]
     pub(crate) life_guard: LifeGuard,
 }
 

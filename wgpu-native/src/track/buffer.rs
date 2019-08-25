@@ -119,7 +119,7 @@ mod test {
             init: BufferUsage::INDEX,
             last: BufferUsage::STORAGE,
         };
-        let id = TypedId::zip(0, 0, Backend::Vulkan);
+        let id = TypedId::zip(0, 0, Backend::Empty);
         assert!(bs.change(id, (), BufferUsage::VERTEX, None).is_err());
         bs.change(id, (), BufferUsage::VERTEX, Some(&mut Vec::new())).unwrap();
         bs.change(id, (), BufferUsage::INDEX, None).unwrap();

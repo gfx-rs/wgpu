@@ -451,7 +451,6 @@ pub fn map_texture_dimension_size(
     }
 }
 
-#[cfg(feature = "local")]
 pub fn map_texture_view_dimension(
     dimension: resource::TextureViewDimension,
 ) -> hal::image::ViewKind {

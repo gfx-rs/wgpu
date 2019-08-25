@@ -12,11 +12,6 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-vulkan = ["wgpu-native/gfx-backend-vulkan"]
-dx11 = ["wgpu-native/gfx-backend-dx11"]
-dx12 = ["wgpu-native/gfx-backend-dx12"]
-metal = ["wgpu-native/gfx-backend-metal"]
-gl = ["wgpu-native/gfx-backend-gl"]
 
 [dependencies]
 wgpu-native = { path = "../wgpu-native", version = "0.3", features = ["remote"] }

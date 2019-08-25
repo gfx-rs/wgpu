@@ -6,10 +6,26 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+const BACKEND_BITS: usize = 3;
+type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Id<T>(u64, PhantomData<T>);
+
+impl<T> Id<T> {
+    pub fn backend(&self) -> Backend {
+        match self.0 >> (64 - BACKEND_BITS) as u8 {
+            0 => Backend::Empty,
+            1 => Backend::Vulkan,
+            2 => Backend::Gl,
+            3 => Backend::Metal,
+            4 => Backend::Dx12,
+            5 => Backend::Dx11,
+            _ => unreachable!(),
+        }
+    }
+}
 
 impl<T> Copy for Id<T> {}
 
@@ -43,85 +59,52 @@ pub trait TypedId {
 }
 
 impl<T> TypedId for Id<T> {
-    fn zip(index: Index, epoch: Epoch, _backend: Backend) -> Self {
-        Id(index as u64 | ((epoch as u64) << 32), PhantomData)
+    fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
+        assert_eq!(0, epoch >> 32 - BACKEND_BITS);
+        let v = index as u64 |
+            ((epoch as u64) << 32) |
+            ((backend as u64) << (64 - BACKEND_BITS));
+        Id(v, PhantomData)
     }
 
     fn unzip(self) -> (Index, Epoch, Backend) {
-        (self.0 as u32, (self.0 >> 32) as u32, Backend::Vulkan)
+        (self.0 as u32, (self.0 >> 32) as u32, self.backend())
     }
 }
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-pub type InstanceId = Id<InstanceHandle>;
+#[cfg(feature = "remote")]
+pub type Input<T> = T;
+#[cfg(not(feature = "remote"))]
+pub type Input<T> = PhantomData<T>;
+#[cfg(not(feature = "remote"))]
+pub type Output<T> = T;
+#[cfg(feature = "remote")]
+pub type Output<T> = PhantomData<T>;
 
-#[cfg(feature = "gfx-backend-gl")]
-pub type InstanceId = SurfaceId;
 
-#[cfg(not(feature = "gfx-backend-gl"))]
-pub type InstanceHandle = back::Instance;
-
-pub type AdapterId = Id<AdapterHandle>;
-pub type AdapterHandle = hal::Adapter<back::Backend>;
-
-pub type DeviceId = Id<DeviceHandle>;
-pub type DeviceHandle = crate::Device<back::Backend>;
-
+pub type AdapterId = Id<crate::Adapter<Dummy>>;
+pub type DeviceId = Id<crate::Device<Dummy>>;
 pub type QueueId = DeviceId;
-
 // Resource
-pub type BufferId = Id<BufferHandle>;
-pub type BufferHandle = crate::Buffer<back::Backend>;
-
-pub type TextureViewId = Id<TextureViewHandle>;
-pub type TextureViewHandle = crate::TextureView<back::Backend>;
-
-pub type TextureId = Id<TextureHandle>;
-pub type TextureHandle = crate::Texture<back::Backend>;
-
-pub type SamplerId = Id<SamplerHandle>;
-pub type SamplerHandle = crate::Sampler<back::Backend>;
-
+pub type BufferId = Id<crate::Buffer<Dummy>>;
+pub type TextureViewId = Id<crate::TextureView<Dummy>>;
+pub type TextureId = Id<crate::Texture<Dummy>>;
+pub type SamplerId = Id<crate::Sampler<Dummy>>;
 // Binding model
-pub type BindGroupLayoutId = Id<BindGroupLayoutHandle>;
-pub type BindGroupLayoutHandle = crate::BindGroupLayout<back::Backend>;
-
-pub type PipelineLayoutId = Id<PipelineLayoutHandle>;
-pub type PipelineLayoutHandle = crate::PipelineLayout<back::Backend>;
-
-pub type BindGroupId = Id<BindGroupHandle>;
-pub type BindGroupHandle = crate::BindGroup<back::Backend>;
-
+pub type BindGroupLayoutId = Id<crate::BindGroupLayout<Dummy>>;
+pub type PipelineLayoutId = Id<crate::PipelineLayout<Dummy>>;
+pub type BindGroupId = Id<crate::BindGroup<Dummy>>;
 // Pipeline
-pub type InputStateId = Id<InputStateHandle>;
-pub enum InputStateHandle {}
-
-pub type ShaderModuleId = Id<ShaderModuleHandle>;
-pub type ShaderModuleHandle = crate::ShaderModule<back::Backend>;
-
-pub type RenderPipelineId = Id<RenderPipelineHandle>;
-pub type RenderPipelineHandle = crate::RenderPipeline<back::Backend>;
-
-pub type ComputePipelineId = Id<ComputePipelineHandle>;
-pub type ComputePipelineHandle = crate::ComputePipeline<back::Backend>;
-
+pub type InputStateId = Id<crate::InputState>;
+pub type ShaderModuleId = Id<crate::ShaderModule<Dummy>>;
+pub type RenderPipelineId = Id<crate::RenderPipeline<Dummy>>;
+pub type ComputePipelineId = Id<crate::ComputePipeline<Dummy>>;
 // Command
-pub type CommandBufferId = Id<CommandBufferHandle>;
-pub type CommandBufferHandle = crate::CommandBuffer<back::Backend>;
-
+pub type CommandBufferId = Id<crate::CommandBuffer<Dummy>>;
 pub type CommandEncoderId = CommandBufferId;
-
-pub type RenderBundleId = Id<RenderBundleHandle>;
-pub enum RenderBundleHandle {}
-
-pub type RenderPassId = Id<RenderPassHandle>;
-pub type RenderPassHandle = crate::RenderPass<back::Backend>;
-
-pub type ComputePassId = Id<ComputePassHandle>;
-pub type ComputePassHandle = crate::ComputePass<back::Backend>;
-
+pub type RenderBundleId = Id<crate::RenderBundle<Dummy>>;
+pub type RenderPassId = Id<crate::RenderPass<Dummy>>;
+pub type ComputePassId = Id<crate::ComputePass<Dummy>>;
 // Swap chain
-pub type SurfaceId = Id<SurfaceHandle>;
-pub type SurfaceHandle = crate::Surface<back::Backend>;
-
-pub type SwapChainId = SurfaceId;
+pub type SurfaceId = Id<crate::Surface>;
+pub type SwapChainId = Id<crate::SwapChain<Dummy>>;

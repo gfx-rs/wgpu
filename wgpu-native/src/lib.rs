@@ -1,21 +1,9 @@
-#[cfg(feature = "gfx-backend-dx11")]
-extern crate gfx_backend_dx11 as back;
-#[cfg(feature = "gfx-backend-dx12")]
-extern crate gfx_backend_dx12 as back;
-#[cfg(not(any(
-    feature = "gfx-backend-vulkan",
-    feature = "gfx-backend-dx11",
-    feature = "gfx-backend-dx12",
-    feature = "gfx-backend-metal",
-    feature = "gfx-backend-gl",
-)))]
-extern crate gfx_backend_empty as back;
-#[cfg(feature = "gfx-backend-metal")]
-extern crate gfx_backend_metal as back;
-#[cfg(feature = "gfx-backend-vulkan")]
-extern crate gfx_backend_vulkan as back;
-#[cfg(feature = "gfx-backend-gl")]
-extern crate gfx_backend_gl as back;
+pub mod backend {
+    pub use gfx_backend_empty::Backend as Empty;
+    pub use gfx_backend_vulkan::Backend as Vulkan;
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub use gfx_backend_metal::Backend as Metal;
+}
 
 mod binding_model;
 mod command;
@@ -32,8 +20,8 @@ mod id;
 pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
-#[cfg(not(feature = "local"))]
-pub use self::hub::{Access, IdentityManager, Registry, Token, HUB};
+#[cfg(feature = "remote")]
+pub use self::hub::{Access, IdentityManager, Registry, Token};
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
@@ -54,13 +42,15 @@ type SubmissionIndex = usize;
 type Index = u32;
 type Epoch = u32;
 
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Backend {
-    Vulkan,
-    Gl,
-    Metal,
-    Dx12,
-    Dx11,
+    Empty = 0,
+    Vulkan = 1,
+    Gl = 2,
+    Metal = 3,
+    Dx12 = 4,
+    Dx11 = 5,
 }
 
 pub type BufferAddress = u64;
@@ -202,4 +192,19 @@ pub struct Extent3d {
 pub struct U32Array {
     pub bytes: *const u32,
     pub length: usize,
+}
+
+#[derive(Debug)]
+pub enum InputState {}
+
+#[macro_export]
+macro_rules! gfx_select {
+    ($id:expr => $function:ident( $($param:expr),+ )) => {
+        match $id.backend() {
+            $crate::Backend::Vulkan => $function::<$crate::backend::Vulkan>( $($param),+ ),
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            $crate::Backend::Metal => $function::<$crate::backend::Metal>( $($param),+ ),
+            _ => unreachable!()
+        }
+    };
 }

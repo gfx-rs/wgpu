@@ -240,13 +240,13 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
-typedef uint64_t WGPUId_DeviceHandle;
+typedef uint64_t WGPUId_Device_Dummy;
 
-typedef WGPUId_DeviceHandle WGPUDeviceId;
+typedef WGPUId_Device_Dummy WGPUDeviceId;
 
-typedef uint64_t WGPUId_AdapterHandle;
+typedef uint64_t WGPUId_Adapter_Dummy;
 
-typedef WGPUId_AdapterHandle WGPUAdapterId;
+typedef WGPUId_Adapter_Dummy WGPUAdapterId;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -261,13 +261,13 @@ typedef struct {
   WGPULimits limits;
 } WGPUDeviceDescriptor;
 
-typedef uint64_t WGPUId_BindGroupHandle;
+typedef uint64_t WGPUId_BindGroup_Dummy;
 
-typedef WGPUId_BindGroupHandle WGPUBindGroupId;
+typedef WGPUId_BindGroup_Dummy WGPUBindGroupId;
 
-typedef uint64_t WGPUId_BufferHandle;
+typedef uint64_t WGPUId_Buffer_Dummy;
 
-typedef WGPUId_BufferHandle WGPUBufferId;
+typedef WGPUId_Buffer_Dummy WGPUBufferId;
 
 typedef uint64_t WGPUBufferAddress;
 
@@ -275,23 +275,27 @@ typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const
 
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
-typedef uint64_t WGPUId_ComputePassHandle;
+typedef uint64_t WGPUId_ComputePass_Dummy;
 
-typedef WGPUId_ComputePassHandle WGPUComputePassId;
+typedef WGPUId_ComputePass_Dummy WGPUComputePassId;
 
-typedef uint64_t WGPUId_CommandBufferHandle;
+typedef uint64_t WGPUId_CommandBuffer_Dummy;
 
-typedef WGPUId_CommandBufferHandle WGPUCommandBufferId;
+typedef WGPUId_CommandBuffer_Dummy WGPUCommandBufferId;
 
 typedef WGPUCommandBufferId WGPUCommandEncoderId;
 
-typedef uint64_t WGPUId_RenderPassHandle;
+typedef struct {
+  uint32_t todo;
+} WGPUComputePassDescriptor;
 
-typedef WGPUId_RenderPassHandle WGPURenderPassId;
+typedef uint64_t WGPUId_RenderPass_Dummy;
 
-typedef uint64_t WGPUId_TextureViewHandle;
+typedef WGPUId_RenderPass_Dummy WGPURenderPassId;
 
-typedef WGPUId_TextureViewHandle WGPUTextureViewId;
+typedef uint64_t WGPUId_TextureView_Dummy;
+
+typedef WGPUId_TextureView_Dummy WGPUTextureViewId;
 
 typedef struct {
   double r;
@@ -337,9 +341,9 @@ typedef struct {
   uint32_t image_height;
 } WGPUBufferCopyView;
 
-typedef uint64_t WGPUId_TextureHandle;
+typedef uint64_t WGPUId_Texture_Dummy;
 
-typedef WGPUId_TextureHandle WGPUTextureId;
+typedef WGPUId_Texture_Dummy WGPUTextureId;
 
 typedef struct {
   float x;
@@ -367,27 +371,17 @@ typedef struct {
 
 typedef const char *WGPURawString;
 
-typedef uint64_t WGPUId_ComputePipelineHandle;
+typedef uint64_t WGPUId_ComputePipeline_Dummy;
 
-typedef WGPUId_ComputePipelineHandle WGPUComputePipelineId;
+typedef WGPUId_ComputePipeline_Dummy WGPUComputePipelineId;
 
-typedef uint64_t WGPUId_InstanceHandle;
+typedef uint64_t WGPUId_Surface;
 
-typedef uint64_t WGPUId_SurfaceHandle;
+typedef WGPUId_Surface WGPUSurfaceId;
 
-typedef WGPUId_SurfaceHandle WGPUSurfaceId;
+typedef uint64_t WGPUId_BindGroupLayout_Dummy;
 
-#if !defined(WGPU_BACKEND_GL)
-typedef WGPUId_InstanceHandle WGPUInstanceId;
-#endif
-
-#if defined(WGPU_BACKEND_GL)
-typedef WGPUSurfaceId WGPUInstanceId;
-#endif
-
-typedef uint64_t WGPUId_BindGroupLayoutHandle;
-
-typedef WGPUId_BindGroupLayoutHandle WGPUBindGroupLayoutId;
+typedef WGPUId_BindGroupLayout_Dummy WGPUBindGroupLayoutId;
 
 typedef struct {
   WGPUBufferId buffer;
@@ -395,9 +389,9 @@ typedef struct {
   WGPUBufferAddress size;
 } WGPUBufferBinding;
 
-typedef uint64_t WGPUId_SamplerHandle;
+typedef uint64_t WGPUId_Sampler_Dummy;
 
-typedef WGPUId_SamplerHandle WGPUSamplerId;
+typedef WGPUId_Sampler_Dummy WGPUSamplerId;
 
 typedef enum {
   WGPUBindingResource_Buffer,
@@ -479,13 +473,13 @@ typedef struct {
   uint32_t todo;
 } WGPUCommandEncoderDescriptor;
 
-typedef uint64_t WGPUId_PipelineLayoutHandle;
+typedef uint64_t WGPUId_PipelineLayout_Dummy;
 
-typedef WGPUId_PipelineLayoutHandle WGPUPipelineLayoutId;
+typedef WGPUId_PipelineLayout_Dummy WGPUPipelineLayoutId;
 
-typedef uint64_t WGPUId_ShaderModuleHandle;
+typedef uint64_t WGPUId_ShaderModule_Dummy;
 
-typedef WGPUId_ShaderModuleHandle WGPUShaderModuleId;
+typedef WGPUId_ShaderModule_Dummy WGPUShaderModuleId;
 
 typedef struct {
   WGPUShaderModuleId module;
@@ -502,9 +496,9 @@ typedef struct {
   uintptr_t bind_group_layouts_length;
 } WGPUPipelineLayoutDescriptor;
 
-typedef uint64_t WGPUId_RenderPipelineHandle;
+typedef uint64_t WGPUId_RenderPipeline_Dummy;
 
-typedef WGPUId_RenderPipelineHandle WGPURenderPipelineId;
+typedef WGPUId_RenderPipeline_Dummy WGPURenderPipelineId;
 
 typedef struct {
   WGPUFrontFace front_face;
@@ -609,7 +603,9 @@ typedef struct {
   WGPUU32Array code;
 } WGPUShaderModuleDescriptor;
 
-typedef WGPUSurfaceId WGPUSwapChainId;
+typedef uint64_t WGPUId_SwapChain_Dummy;
+
+typedef WGPUId_SwapChain_Dummy WGPUSwapChainId;
 
 typedef uint32_t WGPUTextureUsage;
 #define WGPUTextureUsage_COPY_SRC 1
@@ -640,13 +636,13 @@ typedef struct {
 
 typedef WGPUDeviceId WGPUQueueId;
 
+typedef uint64_t WGPUId_RenderBundle_Dummy;
+
+typedef WGPUId_RenderBundle_Dummy WGPURenderBundleId;
+
 typedef struct {
   WGPUPowerPreference power_preference;
 } WGPURequestAdapterOptions;
-
-typedef uint64_t WGPUId_RenderBundleHandle;
-
-typedef WGPUId_RenderBundleHandle WGPURenderBundleId;
 
 typedef struct {
   WGPUTextureId texture_id;
@@ -663,7 +659,7 @@ typedef struct {
   uint32_t array_layer_count;
 } WGPUTextureViewDescriptor;
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUDeviceId wgpu_adapter_request_device(WGPUAdapterId adapter_id,
                                          const WGPUDeviceDescriptor *desc);
 #endif
@@ -686,12 +682,13 @@ void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
 
 void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
-#if defined(WGPU_LOCAL)
-WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId command_encoder_id);
+#if !defined(WGPU_REMOTE)
+WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encoder_id,
+                                                          const WGPUComputePassDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
-WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId command_encoder_id,
+#if !defined(WGPU_REMOTE)
+WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId encoder_id,
                                                         const WGPURenderPassDescriptor *desc);
 #endif
 
@@ -717,8 +714,8 @@ void wgpu_command_encoder_copy_texture_to_texture(WGPUCommandEncoderId command_e
                                                   const WGPUTextureCopyView *destination,
                                                   WGPUExtent3d copy_size);
 
-WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId command_encoder_id,
-                                                const WGPUCommandBufferDescriptor *_desc);
+WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId encoder_id,
+                                                const WGPUCommandBufferDescriptor *desc);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 
@@ -742,100 +739,86 @@ void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
 
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
 
-#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
-WGPUInstanceId wgpu_create_instance(void);
+#if !defined(WGPU_REMOTE)
+WGPUSurfaceId wgpu_create_surface_from_macos_layer(void *layer);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
+WGPUSurfaceId wgpu_create_surface_from_windows_hwnd(void *hinstance, void *hwnd);
+#endif
+
+#if !defined(WGPU_REMOTE)
+WGPUSurfaceId wgpu_create_surface_from_xlib(const void **display, uint64_t window);
+#endif
+
+#if !defined(WGPU_REMOTE)
 WGPUBindGroupId wgpu_device_create_bind_group(WGPUDeviceId device_id,
                                               const WGPUBindGroupDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUBindGroupLayoutId wgpu_device_create_bind_group_layout(WGPUDeviceId device_id,
                                                            const WGPUBindGroupLayoutDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUBufferId wgpu_device_create_buffer(WGPUDeviceId device_id, const WGPUBufferDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUBufferId wgpu_device_create_buffer_mapped(WGPUDeviceId device_id,
                                               const WGPUBufferDescriptor *desc,
                                               uint8_t **mapped_ptr_out);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUCommandEncoderId wgpu_device_create_command_encoder(WGPUDeviceId device_id,
                                                         const WGPUCommandEncoderDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUComputePipelineId wgpu_device_create_compute_pipeline(WGPUDeviceId device_id,
                                                           const WGPUComputePipelineDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUPipelineLayoutId wgpu_device_create_pipeline_layout(WGPUDeviceId device_id,
                                                         const WGPUPipelineLayoutDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPURenderPipelineId wgpu_device_create_render_pipeline(WGPUDeviceId device_id,
                                                         const WGPURenderPipelineDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUSamplerId wgpu_device_create_sampler(WGPUDeviceId device_id, const WGPUSamplerDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUShaderModuleId wgpu_device_create_shader_module(WGPUDeviceId device_id,
                                                     const WGPUShaderModuleDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUSwapChainId wgpu_device_create_swap_chain(WGPUDeviceId device_id,
                                               WGPUSurfaceId surface_id,
                                               const WGPUSwapChainDescriptor *desc);
 #endif
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
 #endif
 
 void wgpu_device_destroy(WGPUDeviceId device_id);
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 void wgpu_device_get_limits(WGPUDeviceId _device_id, WGPULimits *limits);
 #endif
 
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
 void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
-
-#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
-WGPUSurfaceId wgpu_instance_create_surface_from_macos_layer(WGPUInstanceId instance_id,
-                                                            void *layer);
-#endif
-
-#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
-WGPUSurfaceId wgpu_instance_create_surface_from_windows_hwnd(WGPUInstanceId instance_id,
-                                                             void *hinstance,
-                                                             void *hwnd);
-#endif
-
-#if (defined(WGPU_LOCAL) && !defined(WGPU_BACKEND_GL))
-WGPUSurfaceId wgpu_instance_create_surface_from_xlib(WGPUInstanceId instance_id,
-                                                     const void **display,
-                                                     uint64_t window);
-#endif
-
-#if defined(WGPU_LOCAL)
-WGPUAdapterId wgpu_instance_request_adapter(WGPUInstanceId instance_id,
-                                            const WGPURequestAdapterOptions *desc);
-#endif
 
 void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffers,
@@ -882,10 +865,6 @@ void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
 
 void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
 
-void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
-                                       WGPUBufferId buffer_id,
-                                       WGPUBufferAddress offset);
-
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
 
 void wgpu_render_pass_set_scissor_rect(WGPURenderPassId pass_id,
@@ -910,11 +889,15 @@ void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
                                    float min_depth,
                                    float max_depth);
 
+#if !defined(WGPU_REMOTE)
+WGPUAdapterId wgpu_request_adapter(const WGPURequestAdapterOptions *desc);
+#endif
+
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 
 void wgpu_swap_chain_present(WGPUSwapChainId swap_chain_id);
 
-#if defined(WGPU_LOCAL)
+#if !defined(WGPU_REMOTE)
 WGPUTextureViewId wgpu_texture_create_view(WGPUTextureId texture_id,
                                            const WGPUTextureViewDescriptor *desc);
 #endif

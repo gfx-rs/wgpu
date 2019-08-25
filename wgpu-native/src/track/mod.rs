@@ -158,22 +158,24 @@ pub struct ResourceTracker<S: ResourceState> {
     map: FastHashMap<Index, Resource<S>>,
     /// Temporary storage for collecting transitions.
     temp: Vec<PendingTransition<S>>,
+    /// The backend variant for all the tracked resources.
     backend: Backend,
 }
 
 impl<S: ResourceState> ResourceTracker<S> {
     /// Create a new empty tracker.
-    pub fn new() -> Self {
+    pub fn new(backend: Backend) -> Self {
         ResourceTracker {
             map: FastHashMap::default(),
             temp: Vec::new(),
-            backend: Backend::Vulkan, //TODO
+            backend,
         }
     }
 
     /// Remove an id from the tracked map.
     pub fn remove(&mut self, id: S::Id) -> bool {
-        let (index, epoch, _) = id.unzip();
+        let (index, epoch, backend) = id.unzip();
+        debug_assert_eq!(backend, self.backend);
         match self.map.remove(&index) {
             Some(resource) => {
                 assert_eq!(resource.epoch, epoch);
@@ -195,7 +197,9 @@ impl<S: ResourceState> ResourceTracker<S> {
         let backend = self.backend;
         self.map
             .iter()
-            .map(move |(&index, resource)| S::Id::zip(index, resource.epoch, backend))
+            .map(move |(&index, resource)| {
+                S::Id::zip(index, resource.epoch, backend)
+            })
     }
 
     /// Clear the tracked contents.
@@ -224,7 +228,8 @@ impl<S: ResourceState> ResourceTracker<S> {
             Err(_) => unreachable!(),
         }
 
-        let (index, epoch, _) = id.unzip();
+        let (index, epoch, backend) = id.unzip();
+        debug_assert_eq!(backend, self.backend);
         self.map
             .insert(index, Resource {
                 ref_count: ref_count.clone(),
@@ -243,7 +248,8 @@ impl<S: ResourceState> ResourceTracker<S> {
         id: S::Id,
         selector: S::Selector,
     ) -> Option<S::Usage> {
-        let (index, epoch, _) = id.unzip();
+        let (index, epoch, backend) = id.unzip();
+        debug_assert_eq!(backend, self.backend);
         let res = self.map.get(&index)?;
         assert_eq!(res.epoch, epoch);
         res.state.query(selector)
@@ -252,11 +258,13 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Make sure that a resource is tracked, and return a mutable
     /// reference to it.
     fn get_or_insert<'a>(
+        self_backend: Backend,
         map: &'a mut FastHashMap<Index, Resource<S>>,
         id: S::Id,
         ref_count: &RefCount,
     ) -> &'a mut Resource<S> {
-        let (index, epoch, _) = id.unzip();
+        let (index, epoch, backend) = id.unzip();
+        debug_assert_eq!(self_backend, backend);
         match map.entry(index) {
             Entry::Vacant(e) => {
                 e.insert(Resource {
@@ -282,7 +290,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         selector: S::Selector,
         usage: S::Usage,
     ) -> Result<(), PendingTransition<S>> {
-        Self::get_or_insert(&mut self.map, id, ref_count)
+        Self::get_or_insert(self.backend, &mut self.map, id, ref_count)
             .state.change(id, selector, usage, None)
     }
 
@@ -294,7 +302,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         selector: S::Selector,
         usage: S::Usage,
     ) -> Drain<PendingTransition<S>> {
-        let res = Self::get_or_insert(&mut self.map, id, ref_count);
+        let res = Self::get_or_insert(self.backend, &mut self.map, id, ref_count);
         res.state.change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
         self.temp.drain(..)
@@ -305,6 +313,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     pub fn merge_extend(
         &mut self, other: &Self,
     ) -> Result<(), PendingTransition<S>> {
+        debug_assert_eq!(self.backend, other.backend);
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
                 Entry::Vacant(e) => {
@@ -429,12 +438,12 @@ pub struct TrackerSet {
 
 impl TrackerSet {
     /// Create an empty set.
-    pub fn new() -> Self {
+    pub fn new(backend: Backend) -> Self {
         TrackerSet {
-            buffers: ResourceTracker::new(),
-            textures: ResourceTracker::new(),
-            views: ResourceTracker::new(),
-            bind_groups: ResourceTracker::new(),
+            buffers: ResourceTracker::new(backend),
+            textures: ResourceTracker::new(backend),
+            views: ResourceTracker::new(backend),
+            bind_groups: ResourceTracker::new(backend),
         }
     }
 
@@ -461,5 +470,9 @@ impl TrackerSet {
         self.textures.merge_extend(&other.textures).unwrap();
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
+    }
+
+    pub fn backend(&self) -> Backend {
+        self.buffers.backend
     }
 }
