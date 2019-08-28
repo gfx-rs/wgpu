@@ -1,4 +1,8 @@
 pub mod backend {
+    #[cfg(windows)]
+    pub use gfx_backend_dx11::Backend as Dx11;
+    #[cfg(windows)]
+    pub use gfx_backend_dx12::Backend as Dx12;
     pub use gfx_backend_empty::Backend as Empty;
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub use gfx_backend_metal::Backend as Metal;
@@ -29,9 +33,6 @@ pub use self::resource::*;
 pub use self::swap_chain::*;
 pub use hal::pso::read_spirv;
 
-#[cfg(feature = "glutin")]
-pub use back::glutin;
-
 use std::{
     os::raw::c_char,
     ptr,
@@ -47,10 +48,10 @@ type Epoch = u32;
 pub enum Backend {
     Empty = 0,
     Vulkan = 1,
-    Gl = 2,
-    Metal = 3,
-    Dx12 = 4,
-    Dx11 = 5,
+    Metal = 2,
+    Dx12 = 3,
+    Dx11 = 4,
+    Gl = 5,
 }
 
 pub type BufferAddress = u64;
@@ -204,6 +205,10 @@ macro_rules! gfx_select {
             $crate::Backend::Vulkan => $function::<$crate::backend::Vulkan>( $($param),+ ),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             $crate::Backend::Metal => $function::<$crate::backend::Metal>( $($param),+ ),
+            #[cfg(windows)]
+            $crate::Backend::Dx12 => $function::<$crate::backend::Dx12>( $($param),+ ),
+            #[cfg(windows)]
+            $crate::Backend::Dx11 => $function::<$crate::backend::Dx11>( $($param),+ ),
             _ => unreachable!()
         }
     };

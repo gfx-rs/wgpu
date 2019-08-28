@@ -36,6 +36,7 @@ int main() {
     WGPUAdapterId adapter = wgpu_request_adapter(
         &(WGPURequestAdapterOptions){
             .power_preference = WGPUPowerPreference_LowPower,
+            .backends = 2 | 4 | 8,
         });
 
     WGPUDeviceId device = wgpu_adapter_request_device(adapter,
@@ -155,7 +156,7 @@ int main() {
         [ns_window.contentView setWantsLayer:YES];
         metal_layer = [CAMetalLayer layer];
         [ns_window.contentView setLayer:metal_layer];
-        surface = wgpu_create_surface_from_macos_layer(metal_layer);
+        surface = wgpu_create_surface_from_metal_layer(metal_layer);
     }
 #elif WGPU_TARGET == WGPU_TARGET_LINUX
     {

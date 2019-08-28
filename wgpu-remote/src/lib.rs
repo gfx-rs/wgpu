@@ -61,6 +61,8 @@ struct Identities {
     vulkan: IdentityHub,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: IdentityHub,
+    #[cfg(windows)]
+    dx12: IdentityHub,
 }
 
 impl Identities {
@@ -70,6 +72,8 @@ impl Identities {
             vulkan: IdentityHub::new(Backend::Vulkan),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: IdentityHub::new(Backend::Metal),
+            #[cfg(windows)]
+            dx12: IdentityHub::new(Backend::Dx12),
         }
     }
 
@@ -78,6 +82,8 @@ impl Identities {
             Backend::Vulkan => &mut self.vulkan,
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             Backend::Metal => &mut self.metal,
+            #[cfg(windows)]
+            Backend::Dx12 => &mut self.dx12,
             _ => panic!("Unexpected backend: {:?}", backend),
         }
     }
@@ -141,6 +147,8 @@ pub extern "C" fn wgpu_client_request_adapter(
         identities.vulkan.adapters.alloc(),
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         identities.metal.adapters.alloc(),
+        #[cfg(windows)]
+        identities.dx12.adapters.alloc(),
     ];
     let msg = GlobalMessage::RequestAdapter(desc.clone(), ids);
     client.channel.send(msg).unwrap();

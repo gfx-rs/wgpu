@@ -17,7 +17,7 @@ int main(
     char *argv[]) {
 
     if (argc != 5) {
-        printf("You must pass 4 positive integers!");
+        printf("You must pass 4 positive integers!\n");
         return 0;
     }
 

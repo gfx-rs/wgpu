@@ -1,4 +1,5 @@
 use crate::{
+    backend,
     binding_model::MAX_BIND_GROUPS,
     device::BIND_BUFFER_ALIGNMENT,
     hub::{GfxBackend, Token, GLOBAL},
@@ -23,22 +24,32 @@ use hal::{self, Instance as _, PhysicalDevice as _};
 use std::marker::PhantomData;
 
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct Instance {
     vulkan: Option<gfx_backend_vulkan::Instance>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: gfx_backend_metal::Instance,
+    #[cfg(windows)]
+    dx12: Option<gfx_backend_dx12::Instance>,
+    #[cfg(windows)]
+    dx11: gfx_backend_dx11::Instance,
 }
 
 impl Instance {
     pub(crate) fn new(name: &str, version: u32) -> Self {
         Instance {
-            #[cfg(any(unix, windows))]
-            vulkan: Some(gfx_backend_vulkan::Instance::create(name, version)),
-            #[cfg(not(any(unix, windows)))]
-            vulkan: None,
+            //TODO: reconsider once `create` returns a `Result`
+            vulkan: if cfg!(all(unix, not(target_os = "ios"), not(target_os = "macos"))) {
+                Some(gfx_backend_vulkan::Instance::create(name, version))
+            } else {
+                None
+            },
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: gfx_backend_metal::Instance::create(name, version),
+            #[cfg(windows)]
+            dx12: Some(gfx_backend_dx12::Instance::create(name, version)),
+            #[cfg(windows)]
+            dx11: gfx_backend_dx11::Instance::create(name, version),
         }
     }
 }
@@ -48,9 +59,13 @@ type GfxSurface<B> = <B as hal::Backend>::Surface;
 #[derive(Debug)]
 pub struct Surface {
     pub(crate) swap_chain: Option<SwapChainId>,
-    pub(crate) vulkan: Option<GfxSurface<gfx_backend_vulkan::Backend>>,
+    pub(crate) vulkan: Option<GfxSurface<backend::Vulkan>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub(crate) metal: GfxSurface<gfx_backend_metal::Backend>,
+    pub(crate) metal: GfxSurface<backend::Metal>,
+    #[cfg(windows)]
+    pub(crate) dx12: Option<GfxSurface<backend::Dx12>>,
+    #[cfg(windows)]
+    pub(crate) dx11: GfxSurface<backend::Dx11>,
 }
 
 #[derive(Debug)]
@@ -138,15 +153,6 @@ pub struct DeviceDescriptor {
     pub limits: Limits,
 }
 
-#[cfg(all(not(feature = "remote"), feature = "glutin"))]
-pub fn wgpu_create_gl_surface(
-    windowed_context: back::glutin::RawContext<back::glutin::PossiblyCurrent>,
-) -> SurfaceId {
-    let raw = back::Surface::from_context(windowed_context);
-    let surface = SurfaceHandle::new(raw);
-    GLOBAL.surfaces.register_local(surface, &mut Token::root())
-}
-
 #[cfg(not(feature = "remote"))]
 pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
@@ -172,7 +178,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
                 .metal
                 .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
         },
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::X11(h) => Surface {
             swap_chain: None,
             vulkan: instance
@@ -180,7 +186,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
                 .as_ref()
                 .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
         },
-        #[cfg(unix)]
+        #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::Wayland(h) => Surface {
             swap_chain: None,
             vulkan: instance
@@ -195,10 +201,11 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
                 .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd)),
-            //dx11: instance.dx11.create_surface_from_hwnd(h.hwnd),
-            //dx12: instance.dx11
-            //    .as_ref()
-            //    .map(|inst| inst.create_surface_from_hwnd(h.hwnd),
+            dx12: instance
+                .dx12
+                .as_ref()
+                .map(|inst| inst.create_surface_from_hwnd(h.hwnd)),
+            dx11: instance.dx11.create_surface_from_hwnd(h.hwnd),
         },
         _ => panic!("Unsupported window handle"),
     };
@@ -209,7 +216,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         .register_identity(PhantomData, surface, &mut token)
 }
 
-#[cfg(all(not(feature = "remote"), unix))]
+#[cfg(all(not(feature = "remote"), unix, not(target_os = "ios"), not(target_os = "macos")))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
@@ -228,15 +235,11 @@ pub extern "C" fn wgpu_create_surface_from_xlib(
 pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_void) -> SurfaceId {
     let surface = Surface {
         swap_chain: None,
-        vulkan: GLOBAL
-            .instance
-            .vulkan
-            .as_ref()
-            .map(|inst| inst.create_surface_from_layer(h.ns_view)),
+        vulkan: None, //TODO: currently requires `NSView`
         metal: GLOBAL
             .instance
             .metal
-            .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+            .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
     };
 
     GLOBAL
@@ -250,18 +253,13 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     _hinstance: *mut std::ffi::c_void,
     hwnd: *mut std::ffi::c_void,
 ) -> SurfaceId {
-    use raw_window_handle::windows::Handle;
+    use raw_window_handle::windows::WindowsHandle;
     wgpu_create_surface(raw_window_handle::RawWindowHandle::Windows(
-        raw_window_handle::windows::Handle {
+        raw_window_handle::windows::WindowsHandle {
             hwnd,
-            ..Handle::empty()
+            ..WindowsHandle::empty()
         },
     ))
-}
-
-#[cfg(all(not(feature = "remote"), feature = "gfx-backend-gl"))]
-pub fn wgpu_get_gl_surface() -> SurfaceId {
-    instance_id
 }
 
 pub fn request_adapter(
@@ -285,15 +283,37 @@ pub fn request_adapter(
 
     let id_vulkan = find_input(Backend::Vulkan);
     let id_metal = find_input(Backend::Metal);
+    let id_dx12 = find_input(Backend::Dx12);
+    let id_dx11 = find_input(Backend::Dx11);
 
     let mut adapters_vk = match instance.vulkan {
-        Some(ref inst) if id_vulkan.is_some() => inst.enumerate_adapters(),
+        Some(ref inst) if id_vulkan.is_some() => {
+            let adapters = inst.enumerate_adapters();
+            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+            adapters
+        }
         _ => Vec::new(),
     };
-    device_types.extend(adapters_vk.iter().map(|ad| ad.info.device_type.clone()));
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    let mut adaptres_mtl = if id_metal.is_some() {
+    let mut adapters_mtl = if id_metal.is_some() {
         let adapters = instance.metal.enumerate_adapters();
+        device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+        adapters
+    } else {
+        Vec::new()
+    };
+    #[cfg(windows)]
+    let mut adapters_dx12 = match instance.dx12 {
+        Some(ref inst) if id_dx12.is_some() => {
+            let adapters = inst.enumerate_adapters();
+            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+            adapters
+        }
+        _ => Vec::new(),
+    };
+    #[cfg(windows)]
+    let mut adapters_dx11 = if id_dx11.is_some() {
+        let adapters = instance.dx11.enumerate_adapters();
         device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
         adapters
     } else {
@@ -304,32 +324,26 @@ pub fn request_adapter(
         panic!("No adapters are available!");
     }
 
-    let (mut integrated_first, mut discrete_first, mut discrete_last) = (None, None, None);
+    let (mut integrated, mut discrete, mut other) = (None, None, None);
 
-    // On Windows > 1803, dx12 enumerate_adapters returns the adapters in order from highest to
-    // lowest performance. Therefore, the first found adapter in each category is selected.
-    //
-    // TODO: move power/performance policy querying into gfx, which has more context into
-    // performance policy than wgpu
     for (i, ty) in device_types.into_iter().enumerate() {
         match ty {
             hal::adapter::DeviceType::IntegratedGpu => {
-                integrated_first = integrated_first.or(Some(i));
+                integrated = integrated.or(Some(i));
             }
             hal::adapter::DeviceType::DiscreteGpu => {
-                discrete_first = discrete_first.or(Some(i));
-                discrete_last = Some(i);
+                discrete = discrete.or(Some(i));
             }
-            _ => {}
+            _ => {
+                other = other.or(Some(i));
+            }
         }
     }
 
     let preferred_gpu = match desc.power_preference {
-        // If `LowPower`, prefer lowest power `DiscreteGPU`
-        PowerPreference::LowPower => integrated_first.or(discrete_last),
-        PowerPreference::HighPerformance | PowerPreference::Default => {
-            discrete_first.or(integrated_first)
-        }
+        PowerPreference::Default => integrated.or(discrete).or(other),
+        PowerPreference::LowPower => integrated.or(other).or(discrete),
+        PowerPreference::HighPerformance => discrete.or(other).or(integrated),
     };
     let mut token = Token::root();
 
@@ -340,9 +354,11 @@ pub fn request_adapter(
                 raw: adapters_vk.swap_remove(selected),
             };
             info!("Adapter Vulkan {:?}", adapter.raw.info);
-            let id_out = gfx_backend_vulkan::Backend::hub()
-                .adapters
-                .register_identity(id_vulkan.unwrap(), adapter, &mut token);
+            let id_out = backend::Vulkan::hub().adapters.register_identity(
+                id_vulkan.unwrap(),
+                adapter,
+                &mut token,
+            );
             return Some(id_out);
         }
         selected -= adapters_vk.len();
@@ -354,14 +370,45 @@ pub fn request_adapter(
                 raw: adapters_mtl.swap_remove(selected),
             };
             info!("Adapter Metal {:?}", adapter.raw.info);
-            let id_out = gfx_backend_metal::Backend::hub()
-                .adapters
-                .register_identity(id_metal.unwrap(), adapter, &mut token);
+            let id_out = backend::Metal::hub().adapters.register_identity(
+                id_metal.unwrap(),
+                adapter,
+                &mut token,
+            );
             return Some(id_out);
         }
         selected -= adapters_mtl.len();
     }
-    let _ = (selected, id_metal);
+    #[cfg(windows)]
+    {
+        if selected < adapters_dx12.len() {
+            let adapter = Adapter {
+                raw: adapters_dx12.swap_remove(selected),
+            };
+            info!("Adapter Dx12 {:?}", adapter.raw.info);
+            let id_out = backend::Dx12::hub().adapters.register_identity(
+                id_dx12.unwrap(),
+                adapter,
+                &mut token,
+            );
+            return Some(id_out);
+        }
+        selected -= adapters_dx12.len();
+        if selected < adapters_dx11.len() {
+            let adapter = Adapter {
+                raw: adapters_dx11.swap_remove(selected),
+            };
+            info!("Adapter Dx11 {:?}", adapter.raw.info);
+            let id_out = backend::Dx11::hub().adapters.register_identity(
+                id_dx11.unwrap(),
+                adapter,
+                &mut token,
+            );
+            return Some(id_out);
+        }
+        selected -= adapters_dx11.len();
+    }
+    let _ = (selected, id_metal, id_dx12, id_dx11);
     None
 }
 

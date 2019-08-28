@@ -1,4 +1,5 @@
 use crate::{
+    backend,
     id::{Input, Output},
     Adapter,
     AdapterId,
@@ -156,10 +157,8 @@ pub trait Access<B> {}
 
 pub enum Root {}
 //TODO: establish an order instead of declaring all the pairs.
-#[cfg(not(feature = "gfx-backend-gl"))]
 impl Access<Instance> for Root {}
 impl Access<Surface> for Root {}
-#[cfg(not(feature = "gfx-backend-gl"))]
 impl Access<Surface> for Instance {}
 impl<B: hal::Backend> Access<Adapter<B>> for Root {}
 impl<B: hal::Backend> Access<Adapter<B>> for Surface {}
@@ -296,7 +295,7 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
 
     #[cfg(feature = "remote")]
     pub fn new_identity(&self, id_in: Input<I>) -> (I, Output<I>) {
-        //debug_assert_eq!(self.backend, id_in.backend());
+        //TODO: debug_assert_eq!(self.backend, id_in.backend());
         (id_in, PhantomData)
     }
 
@@ -379,9 +378,13 @@ impl<B: GfxBackend> Default for Hub<B> {
 
 #[derive(Debug, Default)]
 pub struct Hubs {
-    vulkan: Hub<gfx_backend_vulkan::Backend>,
+    vulkan: Hub<backend::Vulkan>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    metal: Hub<gfx_backend_metal::Backend>,
+    metal: Hub<backend::Metal>,
+    #[cfg(windows)]
+    dx12: Hub<backend::Dx12>,
+    #[cfg(windows)]
+    dx11: Hub<backend::Dx11>,
 }
 
 #[derive(Debug)]
@@ -405,7 +408,7 @@ pub trait GfxBackend: hal::Backend {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
-impl GfxBackend for gfx_backend_vulkan::Backend {
+impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn hub() -> &'static Hub<Self> {
         &GLOBAL.hubs.vulkan
@@ -416,12 +419,34 @@ impl GfxBackend for gfx_backend_vulkan::Backend {
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-impl GfxBackend for gfx_backend_metal::Backend {
+impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn hub() -> &'static Hub<Self> {
         &GLOBAL.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         &mut surface.metal
+    }
+}
+
+#[cfg(windows)]
+impl GfxBackend for backend::Dx12 {
+    const VARIANT: Backend = Backend::Dx12;
+    fn hub() -> &'static Hub<Self> {
+        &GLOBAL.hubs.dx12
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+        surface.dx12.as_mut().unwrap()
+    }
+}
+
+#[cfg(windows)]
+impl GfxBackend for backend::Dx11 {
+    const VARIANT: Backend = Backend::Dx11;
+    fn hub() -> &'static Hub<Self> {
+        &GLOBAL.hubs.dx11
+    }
+    fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
+        &mut surface.dx11
     }
 }

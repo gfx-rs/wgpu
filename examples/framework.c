@@ -8,6 +8,10 @@
 
 WGPUU32Array read_file(const char *name) {
     FILE *file = fopen(name, "rb");
+    if (!file) {
+        printf("Unable to open %s\n", name);
+        exit(1);
+    }
     fseek(file, 0, SEEK_END);
     long length = ftell(file);
     unsigned char *bytes = malloc(length);
@@ -27,7 +31,7 @@ void read_buffer_map(
     (void)userdata;
     if (status == WGPUBufferMapAsyncStatus_Success) {
         uint32_t *times = (uint32_t *) data;
-        printf("Times: [%d, %d, %d, %d]",
+        printf("Times: [%d, %d, %d, %d]\n",
             times[0],
             times[1],
             times[2],

@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData};
 
 const BACKEND_BITS: usize = 3;
+const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
@@ -15,10 +16,10 @@ impl<T> Id<T> {
         match self.0 >> (64 - BACKEND_BITS) as u8 {
             0 => Backend::Empty,
             1 => Backend::Vulkan,
-            2 => Backend::Gl,
-            3 => Backend::Metal,
-            4 => Backend::Dx12,
-            5 => Backend::Dx11,
+            2 => Backend::Metal,
+            3 => Backend::Dx12,
+            4 => Backend::Dx11,
+            5 => Backend::Gl,
             _ => unreachable!(),
         }
     }
@@ -57,13 +58,17 @@ pub trait TypedId {
 
 impl<T> TypedId for Id<T> {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
-        assert_eq!(0, epoch >> 32 - BACKEND_BITS);
+        assert_eq!(0, epoch >> (32 - BACKEND_BITS));
         let v = index as u64 | ((epoch as u64) << 32) | ((backend as u64) << (64 - BACKEND_BITS));
         Id(v, PhantomData)
     }
 
     fn unzip(self) -> (Index, Epoch, Backend) {
-        (self.0 as u32, (self.0 >> 32) as u32, self.backend())
+        (
+            self.0 as u32,
+            (self.0 >> 32) as u32 & EPOCH_MASK,
+            self.backend(),
+        )
     }
 }
 
@@ -103,3 +108,18 @@ pub type ComputePassId = Id<crate::ComputePass<Dummy>>;
 // Swap chain
 pub type SurfaceId = Id<crate::Surface>;
 pub type SwapChainId = Id<crate::SwapChain<Dummy>>;
+
+#[test]
+fn test_id_backend() {
+    for &b in &[
+        Backend::Empty,
+        Backend::Vulkan,
+        Backend::Metal,
+        Backend::Dx12,
+        Backend::Dx11,
+        Backend::Gl,
+    ] {
+        let id: Id<()> = Id::zip(0, 0, b);
+        assert_eq!(id.backend(), b);
+    }
+}

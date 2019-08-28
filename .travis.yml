@@ -57,10 +57,8 @@ before_install:
 
 script:
   - cargo test
-  - (cd wgpu-native && cargo check --features local,glutin)
-  # TODO: Temporarily only test building the gl backend, properly test when it is usable from C
-  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then (cd wgpu-native && cargo check --features gfx-backend-dx11); fi
-  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then (cd wgpu-native && cargo check --features gfx-backend-dx12); fi
+  # TODO: enable GL backend
+  #- (cd wgpu-native && cargo check --features local,glutin)
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo check --release; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then

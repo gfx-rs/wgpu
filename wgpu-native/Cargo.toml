@@ -41,7 +41,11 @@ vec_map = "0.8"
 gfx-backend-vulkan = { version = "0.3.0", features = ["x11"] }
 
 [target.'cfg(not(unix))'.dependencies]
-gfx-backend-vulkan = "0.3.0"
+gfx-backend-vulkan = "0.3"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 gfx-backend-metal = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+gfx-backend-dx12 = "0.3"
+gfx-backend-dx11 = "0.3"
