@@ -1,8 +1,8 @@
 pub mod backend {
     pub use gfx_backend_empty::Backend as Empty;
-    pub use gfx_backend_vulkan::Backend as Vulkan;
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub use gfx_backend_metal::Backend as Metal;
+    pub use gfx_backend_vulkan::Backend as Vulkan;
 }
 
 mod binding_model;
@@ -10,23 +10,23 @@ mod command;
 mod conv;
 mod device;
 mod hub;
+mod id;
 mod instance;
 mod pipeline;
 mod resource;
 mod swap_chain;
 mod track;
-mod id;
 
 pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
 #[cfg(feature = "remote")]
 pub use self::hub::{Access, IdentityManager, Registry, Token};
+pub use self::id::*;
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-pub use self::id::*;
 pub use hal::pso::read_spirv;
 
 #[cfg(feature = "glutin")]

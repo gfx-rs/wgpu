@@ -1,7 +1,7 @@
 use crate::{
-    gfx_select,
     conv,
     device::{all_buffer_stages, all_image_stages},
+    gfx_select,
     hub::{GfxBackend, Token},
     resource::TexturePlacement,
     swap_chain::SwapChainLink,
@@ -53,9 +53,7 @@ impl TextureCopyView {
         }
     }
 
-    fn to_sub_layers(
-        &self, aspects: hal::format::Aspects
-    ) -> hal::image::SubresourceLayers {
+    fn to_sub_layers(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceLayers {
         let layer = self.array_layer as hal::image::Layer;
         hal::image::SubresourceLayers {
             aspects,
@@ -83,10 +81,10 @@ pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
 
-    let (src_buffer, src_pending) = cmb
-        .trackers
-        .buffers
-        .use_replace(&*buffer_guard, source, (), BufferUsage::COPY_SRC);
+    let (src_buffer, src_pending) =
+        cmb.trackers
+            .buffers
+            .use_replace(&*buffer_guard, source, (), BufferUsage::COPY_SRC);
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -94,10 +92,10 @@ pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
         range: None .. None,
     }));
 
-    let (dst_buffer, dst_pending) = cmb
-        .trackers
-        .buffers
-        .use_replace(&*buffer_guard, destination, (), BufferUsage::COPY_DST);
+    let (dst_buffer, dst_pending) =
+        cmb.trackers
+            .buffers
+            .use_replace(&*buffer_guard, destination, (), BufferUsage::COPY_DST);
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -153,10 +151,10 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
     let (texture_guard, _) = hub.textures.read(&mut token);
     let aspects = texture_guard[destination.texture].full_range.aspects;
 
-    let (src_buffer, src_pending) = cmb
-        .trackers
-        .buffers
-        .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::COPY_SRC);
+    let (src_buffer, src_pending) =
+        cmb.trackers
+            .buffers
+            .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::COPY_SRC);
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -337,8 +335,8 @@ pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
     // we can't hold both src_pending and dst_pending in scope because they
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
-    let aspects = texture_guard[source.texture].full_range.aspects &
-        texture_guard[destination.texture].full_range.aspects;
+    let aspects = texture_guard[source.texture].full_range.aspects
+        & texture_guard[destination.texture].full_range.aspects;
 
     let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
         &*texture_guard,

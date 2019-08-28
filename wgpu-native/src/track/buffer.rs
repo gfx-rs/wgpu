@@ -1,9 +1,5 @@
-use crate::{
-    conv,
-    resource::BufferUsage,
-    BufferId,
-};
 use super::{PendingTransition, ResourceState, Stitch, Unit};
+use crate::{conv, resource::BufferUsage, BufferId};
 use std::ops::Range;
 
 //TODO: store `hal::buffer::State` here to avoid extra conversions
@@ -12,8 +8,7 @@ pub type BufferState = Unit<BufferUsage>;
 impl PendingTransition<BufferState> {
     /// Produce the gfx-hal buffer states corresponding to the transition.
     pub fn to_states(&self) -> Range<hal::buffer::State> {
-        conv::map_buffer_state(self.usage.start) ..
-        conv::map_buffer_state(self.usage.end)
+        conv::map_buffer_state(self.usage.start) .. conv::map_buffer_state(self.usage.end)
     }
 }
 
@@ -31,10 +26,7 @@ impl ResourceState for BufferState {
     type Selector = ();
     type Usage = BufferUsage;
 
-    fn query(
-        &self,
-        _selector: Self::Selector,
-    ) -> Option<Self::Usage> {
+    fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(self.last)
     }
 
@@ -57,10 +49,10 @@ impl ResourceState for BufferState {
                     transitions.push(pending);
                     usage
                 }
-                None =>  {
-                    if !old.is_empty() &&
-                        old != usage &&
-                        BufferUsage::WRITE_ALL.intersects(old | usage)
+                None => {
+                    if !old.is_empty()
+                        && old != usage
+                        && BufferUsage::WRITE_ALL.intersects(old | usage)
                     {
                         return Err(pending);
                     }
@@ -93,7 +85,7 @@ impl ResourceState for BufferState {
                     transitions.push(pending);
                     other.last
                 }
-                None =>  {
+                None => {
                     if !old.is_empty() && BufferUsage::WRITE_ALL.intersects(old | new) {
                         return Err(pending);
                     }
@@ -104,14 +96,13 @@ impl ResourceState for BufferState {
         Ok(())
     }
 
-    fn optimize(&mut self) {
-    }
+    fn optimize(&mut self) {}
 }
 
 #[cfg(test)]
 mod test {
-    use crate::{Backend, TypedId};
     use super::*;
+    use crate::{Backend, TypedId};
 
     #[test]
     fn change() {
@@ -121,7 +112,8 @@ mod test {
         };
         let id = TypedId::zip(0, 0, Backend::Empty);
         assert!(bs.change(id, (), BufferUsage::VERTEX, None).is_err());
-        bs.change(id, (), BufferUsage::VERTEX, Some(&mut Vec::new())).unwrap();
+        bs.change(id, (), BufferUsage::VERTEX, Some(&mut Vec::new()))
+            .unwrap();
         bs.change(id, (), BufferUsage::INDEX, None).unwrap();
         assert_eq!(bs.last, BufferUsage::VERTEX | BufferUsage::INDEX);
     }

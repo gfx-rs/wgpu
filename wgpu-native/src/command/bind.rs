@@ -1,6 +1,11 @@
 use crate::{
     hub::GfxBackend,
-    BindGroup, BindGroupId, BindGroupLayoutId, BufferAddress, PipelineLayoutId, Stored,
+    BindGroup,
+    BindGroupId,
+    BindGroupLayoutId,
+    BufferAddress,
+    PipelineLayoutId,
+    Stored,
 };
 
 use log::trace;
@@ -188,7 +193,7 @@ impl Binder {
                             },
                             self.entries[index + 1 ..]
                                 .iter()
-                                .flat_map(|entry| entry.dynamic_offsets.as_slice())
+                                .flat_map(|entry| entry.dynamic_offsets.as_slice()),
                         )
                     })
                 } else {

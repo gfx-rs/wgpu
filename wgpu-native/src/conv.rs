@@ -73,21 +73,26 @@ pub fn map_texture_usage(
     value
 }
 
-pub fn map_binding_type(binding: &binding_model::BindGroupLayoutBinding) -> hal::pso::DescriptorType {
+pub fn map_binding_type(
+    binding: &binding_model::BindGroupLayoutBinding,
+) -> hal::pso::DescriptorType {
     use crate::binding_model::BindingType as Bt;
     use hal::pso::DescriptorType as H;
     match binding.ty {
-        Bt::UniformBuffer => if binding.dynamic {
-            H::UniformBufferDynamic
-        } else {
-            H::UniformBuffer
-        },
-        Bt::StorageBuffer |
-        Bt::ReadonlyStorageBuffer => if binding.dynamic {
-            H::StorageBufferDynamic
-        } else {
-            H::StorageBuffer
-        },
+        Bt::UniformBuffer => {
+            if binding.dynamic {
+                H::UniformBufferDynamic
+            } else {
+                H::UniformBuffer
+            }
+        }
+        Bt::StorageBuffer | Bt::ReadonlyStorageBuffer => {
+            if binding.dynamic {
+                H::StorageBufferDynamic
+            } else {
+                H::StorageBuffer
+            }
+        }
         Bt::Sampler => H::Sampler,
         Bt::SampledTexture => H::SampledImage,
         Bt::StorageTexture => H::StorageImage,
@@ -157,7 +162,7 @@ pub fn map_color_state_descriptor(
     };
     hal::pso::ColorBlendDesc {
         mask: map_color_write_flags(color_mask),
-        blend: blend_state
+        blend: blend_state,
     }
 }
 
@@ -244,19 +249,11 @@ pub fn map_depth_stencil_state_descriptor(
         {
             Some(hal::pso::StencilTest {
                 faces: hal::pso::Sided {
-                    front: map_stencil_face(
-                        &desc.stencil_front,
-                    ),
-                    back: map_stencil_face(
-                        &desc.stencil_back,
-                    ),
+                    front: map_stencil_face(&desc.stencil_front),
+                    back: map_stencil_face(&desc.stencil_back),
                 },
-                read_masks: hal::pso::State::Static(
-                    hal::pso::Sided::new(desc.stencil_read_mask),
-                ),
-                write_masks: hal::pso::State::Static(
-                    hal::pso::Sided::new(desc.stencil_write_mask),
-                ),
+                read_masks: hal::pso::State::Static(hal::pso::Sided::new(desc.stencil_read_mask)),
+                write_masks: hal::pso::State::Static(hal::pso::Sided::new(desc.stencil_write_mask)),
                 reference_values: if desc.needs_stencil_reference() {
                     hal::pso::State::Dynamic
                 } else {
@@ -438,10 +435,22 @@ pub fn map_texture_dimension_size(
         }
         D2 => {
             assert_eq!(depth, 1);
-            assert!(sample_size == 1 || sample_size == 2 || sample_size == 4
-                || sample_size == 8 || sample_size == 16 || sample_size == 32,
-                "Invalid sample_count of {}", sample_size);
-            H::D2(width, height, checked_u32_as_u16(array_size), sample_size as u8)
+            assert!(
+                sample_size == 1
+                    || sample_size == 2
+                    || sample_size == 4
+                    || sample_size == 8
+                    || sample_size == 16
+                    || sample_size == 32,
+                "Invalid sample_count of {}",
+                sample_size
+            );
+            H::D2(
+                width,
+                height,
+                checked_u32_as_u16(array_size),
+                sample_size as u8,
+            )
         }
         D3 => {
             assert_eq!(array_size, 1);
@@ -553,13 +562,28 @@ pub fn map_load_store_ops(
 }
 
 pub fn map_color_f32(color: &Color) -> hal::pso::ColorValue {
-    [color.r as f32, color.g as f32, color.b as f32, color.a as f32]
+    [
+        color.r as f32,
+        color.g as f32,
+        color.b as f32,
+        color.a as f32,
+    ]
 }
 pub fn map_color_i32(color: &Color) -> [i32; 4] {
-    [color.r as i32, color.g as i32, color.b as i32, color.a as i32]
+    [
+        color.r as i32,
+        color.g as i32,
+        color.b as i32,
+        color.a as i32,
+    ]
 }
 pub fn map_color_u32(color: &Color) -> [u32; 4] {
-    [color.r as u32, color.g as u32, color.b as u32, color.a as u32]
+    [
+        color.r as u32,
+        color.g as u32,
+        color.b as u32,
+        color.a as u32,
+    ]
 }
 
 pub fn map_filter(filter: resource::FilterMode) -> hal::image::Filter {

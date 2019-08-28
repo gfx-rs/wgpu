@@ -1,7 +1,7 @@
 use crate::{
-    gfx_select,
     command::bind::{Binder, LayoutChange},
     device::all_buffer_stages,
+    gfx_select,
     hub::{GfxBackend, Token},
     track::{Stitch, TrackerSet},
     BindGroupId,
@@ -12,9 +12,9 @@ use crate::{
     CommandBufferId,
     ComputePassId,
     ComputePipelineId,
-    BIND_BUFFER_ALIGNMENT,
     RawString,
     Stored,
+    BIND_BUFFER_ALIGNMENT,
 };
 
 use hal::{self, command::RawCommandBuffer};
@@ -104,7 +104,11 @@ pub fn compute_pass_set_bind_group<B: GfxBackend>(
     let (buffer_guard, mut token) = hub.buffers.read(&mut token);
     let (texture_guard, _) = hub.textures.read(&mut token);
 
-    trace!("Encoding barriers on binding of {:?} in pass {:?}", bind_group_id, pass_id);
+    trace!(
+        "Encoding barriers on binding of {:?} in pass {:?}",
+        bind_group_id,
+        pass_id
+    );
     CommandBuffer::insert_barriers(
         &mut pass.raw,
         &mut pass.trackers,
@@ -114,9 +118,9 @@ pub fn compute_pass_set_bind_group<B: GfxBackend>(
         &*texture_guard,
     );
 
-    if let Some((pipeline_layout_id, follow_up_sets, follow_up_offsets)) =
-        pass.binder
-            .provide_entry(index as usize, bind_group_id, bind_group, offsets)
+    if let Some((pipeline_layout_id, follow_up_sets, follow_up_offsets)) = pass
+        .binder
+        .provide_entry(index as usize, bind_group_id, bind_group, offsets)
     {
         let bind_groups = iter::once(bind_group.raw.raw())
             .chain(follow_up_sets.map(|bg_id| bind_group_guard[bg_id].raw.raw()));
@@ -170,9 +174,7 @@ pub extern "C" fn wgpu_compute_pass_insert_debug_marker(
 
 // Compute-specific routines
 
-pub fn compute_pass_dispatch<B: GfxBackend>(
-    pass_id: ComputePassId, x: u32, y: u32, z: u32
-) {
+pub fn compute_pass_dispatch<B: GfxBackend>(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
     let hub = B::hub();
     let mut token = Token::root();
     let (mut pass_guard, _) = hub.compute_passes.write(&mut token);
@@ -197,10 +199,12 @@ pub fn compute_pass_dispatch_indirect<B: GfxBackend>(
     let (mut pass_guard, _) = hub.compute_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
 
-    let (src_buffer, src_pending) = pass
-        .trackers
-        .buffers
-        .use_replace(&*buffer_guard, indirect_buffer_id, (), BufferUsage::INDIRECT);
+    let (src_buffer, src_pending) = pass.trackers.buffers.use_replace(
+        &*buffer_guard,
+        indirect_buffer_id,
+        (),
+        BufferUsage::INDIRECT,
+    );
 
     let barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),

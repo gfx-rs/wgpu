@@ -128,7 +128,7 @@ pub extern "C" fn wgpu_initialize() -> Infrastructure {
 pub extern "C" fn wgpu_terminate(client: *mut Client) {
     let client = unsafe { Box::from_raw(client) };
     let msg = GlobalMessage::Terminate;
-    let _  = client.channel.send(msg);
+    let _ = client.channel.send(msg);
 }
 
 #[no_mangle]
@@ -142,10 +142,7 @@ pub extern "C" fn wgpu_client_request_adapter(
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         identities.metal.adapters.alloc(),
     ];
-    let msg = GlobalMessage::RequestAdapter(
-        desc.clone(),
-        ids,
-    );
+    let msg = GlobalMessage::RequestAdapter(desc.clone(), ids);
     client.channel.send(msg).unwrap();
     unimplemented!()
 }
@@ -156,15 +153,13 @@ pub extern "C" fn wgpu_client_adapter_create_device(
     adapter_id: wgn::AdapterId,
     desc: &wgn::DeviceDescriptor,
 ) -> wgn::DeviceId {
-    let device_id = client.identities
+    let device_id = client
+        .identities
         .lock()
         .select(adapter_id.backend())
-        .devices.alloc();
-    let msg = GlobalMessage::AdapterRequestDevice(
-        adapter_id,
-        desc.clone(),
-        device_id,
-    );
+        .devices
+        .alloc();
+    let msg = GlobalMessage::AdapterRequestDevice(adapter_id, desc.clone(), device_id);
     client.channel.send(msg).unwrap();
     device_id
 }

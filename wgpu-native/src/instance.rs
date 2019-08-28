@@ -1,7 +1,7 @@
 use crate::{
     binding_model::MAX_BIND_GROUPS,
     device::BIND_BUFFER_ALIGNMENT,
-    hub::{GLOBAL, GfxBackend, Token},
+    hub::{GfxBackend, Token, GLOBAL},
     id::{Input, Output},
     AdapterId,
     Backend,
@@ -139,16 +139,16 @@ pub struct DeviceDescriptor {
 }
 
 #[cfg(all(not(feature = "remote"), feature = "glutin"))]
-pub fn wgpu_create_gl_surface(windowed_context: back::glutin::RawContext<back::glutin::PossiblyCurrent>) -> SurfaceId {
+pub fn wgpu_create_gl_surface(
+    windowed_context: back::glutin::RawContext<back::glutin::PossiblyCurrent>,
+) -> SurfaceId {
     let raw = back::Surface::from_context(windowed_context);
     let surface = SurfaceHandle::new(raw);
     GLOBAL.surfaces.register_local(surface, &mut Token::root())
 }
 
 #[cfg(not(feature = "remote"))]
-pub fn wgpu_create_surface(
-    raw_handle: raw_window_handle::RawWindowHandle,
-) -> SurfaceId {
+pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
 
     let instance = &GLOBAL.instance;
@@ -157,34 +157,42 @@ pub fn wgpu_create_surface(
         Rwh::IOS(h) => Surface {
             swap_chain: None,
             vulkan: None,
-            metal: instance.metal.create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
+            metal: instance
+                .metal
+                .create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
         },
         #[cfg(target_os = "macos")]
         Rwh::MacOS(h) => Surface {
             swap_chain: None,
-            vulkan: instance.vulkan
+            vulkan: instance
+                .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_nsview(h.ns_view)),
-            metal: instance.metal.create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+            metal: instance
+                .metal
+                .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
         },
         #[cfg(unix)]
         Rwh::X11(h) => Surface {
             swap_chain: None,
-            vulkan: instance.vulkan
+            vulkan: instance
+                .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
         },
         #[cfg(unix)]
         Rwh::Wayland(h) => Surface {
             swap_chain: None,
-            vulkan: instance.vulkan
+            vulkan: instance
+                .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
         },
         #[cfg(windows)]
         Rwh::Windows(h) => Surface {
             swap_chain: None,
-            vulkan: instance.vulkan
+            vulkan: instance
+                .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd)),
             //dx11: instance.dx11.create_surface_from_hwnd(h.hwnd),
@@ -196,7 +204,9 @@ pub fn wgpu_create_surface(
     };
 
     let mut token = Token::root();
-    GLOBAL.surfaces.register_identity(PhantomData, surface, &mut token)
+    GLOBAL
+        .surfaces
+        .register_identity(PhantomData, surface, &mut token)
 }
 
 #[cfg(all(not(feature = "remote"), unix))]
@@ -206,29 +216,32 @@ pub extern "C" fn wgpu_create_surface_from_xlib(
     window: u64,
 ) -> SurfaceId {
     use raw_window_handle::unix::X11Handle;
-    wgpu_create_surface(
-        raw_window_handle::RawWindowHandle::X11(X11Handle {
-            window,
-            display: display as *mut _,
-            .. X11Handle::empty()
-        }),
-    )
+    wgpu_create_surface(raw_window_handle::RawWindowHandle::X11(X11Handle {
+        window,
+        display: display as *mut _,
+        ..X11Handle::empty()
+    }))
 }
 
 #[cfg(all(not(feature = "remote"), any(target_os = "ios", target_os = "macos")))]
 #[no_mangle]
-pub extern "C" fn wgpu_create_surface_from_metal_layer(
-    layer: *mut std::ffi::c_void,
-) -> SurfaceId {
+pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_void) -> SurfaceId {
     let surface = Surface {
         swap_chain: None,
-        vulkan: GLOBAL.instance.vulkan
+        vulkan: GLOBAL
+            .instance
+            .vulkan
             .as_ref()
             .map(|inst| inst.create_surface_from_layer(h.ns_view)),
-        metal: GLOBAL.instance.metal.create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+        metal: GLOBAL
+            .instance
+            .metal
+            .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
     };
 
-    GLOBAL.surfaces.register_identity(PhantomData, surface, &mut Token::root())
+    GLOBAL
+        .surfaces
+        .register_identity(PhantomData, surface, &mut Token::root())
 }
 
 #[cfg(all(not(feature = "remote"), windows))]
@@ -238,12 +251,12 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     hwnd: *mut std::ffi::c_void,
 ) -> SurfaceId {
     use raw_window_handle::windows::Handle;
-    wgpu_create_surface(
-        raw_window_handle::RawWindowHandle::Windows(raw_window_handle::windows::Handle {
+    wgpu_create_surface(raw_window_handle::RawWindowHandle::Windows(
+        raw_window_handle::windows::Handle {
             hwnd,
-            .. Handle::empty()
-        }),
-    )
+            ..Handle::empty()
+        },
+    ))
 }
 
 #[cfg(all(not(feature = "remote"), feature = "gfx-backend-gl"))]
@@ -274,9 +287,7 @@ pub fn request_adapter(
     let id_metal = find_input(Backend::Metal);
 
     let mut adapters_vk = match instance.vulkan {
-        Some(ref inst) if id_vulkan.is_some() => {
-            inst.enumerate_adapters()
-        }
+        Some(ref inst) if id_vulkan.is_some() => inst.enumerate_adapters(),
         _ => Vec::new(),
     };
     device_types.extend(adapters_vk.iter().map(|ad| ad.info.device_type.clone()));
@@ -309,7 +320,7 @@ pub fn request_adapter(
                 discrete_first = discrete_first.or(Some(i));
                 discrete_last = Some(i);
             }
-            _ => {},
+            _ => {}
         }
     }
 
@@ -356,9 +367,7 @@ pub fn request_adapter(
 
 #[cfg(not(feature = "remote"))]
 #[no_mangle]
-pub extern "C" fn wgpu_request_adapter(
-    desc: Option<&RequestAdapterOptions>,
-) -> AdapterId {
+pub extern "C" fn wgpu_request_adapter(desc: Option<&RequestAdapterOptions>) -> AdapterId {
     request_adapter(&desc.cloned().unwrap_or_default(), &[]).unwrap()
 }
 
@@ -376,11 +385,13 @@ pub fn adapter_request_device<B: GfxBackend>(
 
         let limits = adapter.physical_device.limits();
         assert_eq!(
-            0, BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
+            0,
+            BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
             "Adapter storage buffer offset alignment not compatible with WGPU"
         );
         assert_eq!(
-            0, BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
+            0,
+            BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
 

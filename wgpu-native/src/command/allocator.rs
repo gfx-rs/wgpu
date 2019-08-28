@@ -1,9 +1,5 @@
 use super::CommandBuffer;
-use crate::{
-    hub::GfxBackend,
-    track::TrackerSet,
-    DeviceId, LifeGuard, Stored, SubmissionIndex,
-};
+use crate::{hub::GfxBackend, track::TrackerSet, DeviceId, LifeGuard, Stored, SubmissionIndex};
 
 use hal::{command::RawCommandBuffer, pool::RawCommandPool, Device};
 use log::trace;

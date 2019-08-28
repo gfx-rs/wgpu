@@ -49,11 +49,7 @@ use vec_map::VecMap;
 
 #[allow(unused)]
 use std::cell::Cell;
-use std::{
-    marker::PhantomData,
-    ops,
-    sync::Arc,
-};
+use std::{marker::PhantomData, ops, sync::Arc};
 
 
 /// A simple structure to manage identities of objects.
@@ -236,9 +232,7 @@ impl<'a, T> Token<'a, T> {
             assert_ne!(old, 0, "Root token was dropped");
             active.set(old + 1);
         });
-        Token {
-            level: PhantomData,
-        }
+        Token { level: PhantomData }
     }
 }
 
@@ -249,9 +243,7 @@ impl Token<'static, Root> {
             assert_eq!(0, active.replace(1), "Root token is already active");
         });
 
-        Token {
-            level: PhantomData,
-        }
+        Token { level: PhantomData }
     }
 }
 
@@ -289,16 +281,10 @@ impl<T, I: TypedId> Registry<T, I> {
 }
 
 impl<T, I: TypedId + Copy> Registry<T, I> {
-    pub fn register<A: Access<T>>(
-        &self, id: I, value: T, _token: &mut Token<A>
-    ) {
+    pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
-        let old = self
-            .data
-            .write()
-            .map
-            .insert(index as usize, (value, epoch));
+        let old = self.data.write().map.insert(index as usize, (value, epoch));
         assert!(old.is_none());
     }
 
@@ -315,16 +301,17 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     }
 
     pub fn register_identity<A: Access<T>>(
-        &self, id_in: Input<I>, value: T, token: &mut Token<A>
+        &self,
+        id_in: Input<I>,
+        value: T,
+        token: &mut Token<A>,
     ) -> Output<I> {
         let (id, output) = self.new_identity(id_in);
         self.register(id, value, token);
         output
     }
 
-    pub fn unregister<A: Access<T>>(
-        &self, id: I, _token: &mut Token<A>
-    ) -> (T, Token<T>) {
+    pub fn unregister<A: Access<T>>(&self, id: I, _token: &mut Token<A>) -> (T, Token<T>) {
         let value = self.data.write().remove(id);
         //Note: careful about the order here!
         #[cfg(not(feature = "remote"))]
@@ -333,13 +320,15 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     }
 
     pub fn read<A: Access<T>>(
-        &self, _token: &mut Token<A>
+        &self,
+        _token: &mut Token<A>,
     ) -> (RwLockReadGuard<Storage<T, I>>, Token<T>) {
         (self.data.read(), Token::new())
     }
 
     pub fn write<A: Access<T>>(
-        &self, _token: &mut Token<A>
+        &self,
+        _token: &mut Token<A>,
     ) -> (RwLockWriteGuard<Storage<T, I>>, Token<T>) {
         (self.data.write(), Token::new())
     }

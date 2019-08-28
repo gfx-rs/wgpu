@@ -1,8 +1,8 @@
 use crate::{
-    gfx_select,
     command::bind::{Binder, LayoutChange},
     conv,
     device::{RenderPassContext, BIND_BUFFER_ALIGNMENT, MAX_VERTEX_BUFFERS},
+    gfx_select,
     hub::{GfxBackend, Token},
     pipeline::{IndexFormat, InputStepMode, PipelineFlags},
     resource::BufferUsage,
@@ -101,7 +101,7 @@ impl VertexState {
         self.instance_limit = !0;
         for vbs in &self.inputs {
             if vbs.stride == 0 {
-                continue
+                continue;
             }
             let limit = (vbs.total_size / vbs.stride) as u32;
             match vbs.rate {
@@ -251,9 +251,9 @@ pub fn render_pass_set_bind_group<B: GfxBackend>(
 
     pass.trackers.merge_extend(&bind_group.used);
 
-    if let Some((pipeline_layout_id, follow_up_sets, follow_up_offsets)) =
-        pass.binder
-            .provide_entry(index as usize, bind_group_id, bind_group, offsets)
+    if let Some((pipeline_layout_id, follow_up_sets, follow_up_offsets)) = pass
+        .binder
+        .provide_entry(index as usize, bind_group_id, bind_group, offsets)
     {
         let bind_groups = iter::once(bind_group.raw.raw())
             .chain(follow_up_sets.map(|bg_id| bind_group_guard[bg_id].raw.raw()));
@@ -358,8 +358,12 @@ pub fn render_pass_set_vertex_buffers<B: GfxBackend>(
     let (buffer_guard, _) = hub.buffers.read(&mut token);
 
     let pass = &mut pass_guard[pass_id];
-    for (vbs, (&id, &offset)) in pass.vertex_state.inputs[start_slot as usize ..].iter_mut().zip(buffers.iter().zip(offsets)) {
-        let buffer = pass.trackers
+    for (vbs, (&id, &offset)) in pass.vertex_state.inputs[start_slot as usize ..]
+        .iter_mut()
+        .zip(buffers.iter().zip(offsets))
+    {
+        let buffer = pass
+            .trackers
             .buffers
             .use_extend(&*buffer_guard, id, (), BufferUsage::VERTEX)
             .unwrap();
@@ -404,8 +408,14 @@ pub fn render_pass_draw<B: GfxBackend>(
     let pass = &mut pass_guard[pass_id];
     pass.is_ready().unwrap();
 
-    assert!(first_vertex + vertex_count <= pass.vertex_state.vertex_limit, "Vertex out of range!");
-    assert!(first_instance + instance_count <= pass.vertex_state.instance_limit, "Instance out of range!");
+    assert!(
+        first_vertex + vertex_count <= pass.vertex_state.vertex_limit,
+        "Vertex out of range!"
+    );
+    assert!(
+        first_instance + instance_count <= pass.vertex_state.instance_limit,
+        "Instance out of range!"
+    );
 
     unsafe {
         pass.raw.draw(
@@ -441,16 +451,16 @@ pub fn render_pass_draw_indirect<B: GfxBackend>(
     let buffer = pass
         .trackers
         .buffers
-        .use_extend(&*buffer_guard, indirect_buffer_id, (), BufferUsage::INDIRECT)
+        .use_extend(
+            &*buffer_guard,
+            indirect_buffer_id,
+            (),
+            BufferUsage::INDIRECT,
+        )
         .unwrap();
 
     unsafe {
-        pass.raw.draw_indirect(
-            &buffer.raw,
-            indirect_offset,
-            1,
-            0
-        );
+        pass.raw.draw_indirect(&buffer.raw, indirect_offset, 1, 0);
     }
 }
 
@@ -478,8 +488,14 @@ pub fn render_pass_draw_indexed<B: GfxBackend>(
     pass.is_ready().unwrap();
 
     //TODO: validate that base_vertex + max_index() is within the provided range
-    assert!(first_index + index_count <= pass.index_state.limit, "Index out of range!");
-    assert!(first_instance + instance_count <= pass.vertex_state.instance_limit, "Instance out of range!");
+    assert!(
+        first_index + index_count <= pass.index_state.limit,
+        "Index out of range!"
+    );
+    assert!(
+        first_instance + instance_count <= pass.vertex_state.instance_limit,
+        "Instance out of range!"
+    );
 
     unsafe {
         pass.raw.draw_indexed(
@@ -517,16 +533,17 @@ pub fn render_pass_draw_indexed_indirect<B: GfxBackend>(
     let buffer = pass
         .trackers
         .buffers
-        .use_extend(&*buffer_guard, indirect_buffer_id, (), BufferUsage::INDIRECT)
+        .use_extend(
+            &*buffer_guard,
+            indirect_buffer_id,
+            (),
+            BufferUsage::INDIRECT,
+        )
         .unwrap();
 
     unsafe {
-        pass.raw.draw_indexed_indirect(
-            &buffer.raw,
-            indirect_offset,
-            1,
-            0
-        );
+        pass.raw
+            .draw_indexed_indirect(&buffer.raw, indirect_offset, 1, 0);
     }
 }
 
@@ -556,7 +573,10 @@ pub fn render_pass_set_pipeline<B: GfxBackend>(
         pass.context.compatible(&pipeline.pass_context),
         "The render pipeline is not compatible with the pass!"
     );
-    assert_eq!(pipeline.sample_count, pass.sample_count, "The render pipeline and renderpass have mismatching sample_count");
+    assert_eq!(
+        pipeline.sample_count, pass.sample_count,
+        "The render pipeline and renderpass have mismatching sample_count"
+    );
 
     pass.blend_color_status
         .require(pipeline.flags.contains(PipelineFlags::BLEND_COLOR));
@@ -620,11 +640,16 @@ pub fn render_pass_set_pipeline<B: GfxBackend>(
         }
     }
     // Update vertex buffer limits
-    for (vbs, &(stride, rate)) in pass.vertex_state.inputs.iter_mut().zip(&pipeline.vertex_strides) {
+    for (vbs, &(stride, rate)) in pass
+        .vertex_state
+        .inputs
+        .iter_mut()
+        .zip(&pipeline.vertex_strides)
+    {
         vbs.stride = stride;
         vbs.rate = rate;
     }
-    for vbs in pass.vertex_state.inputs[pipeline.vertex_strides.len() .. ].iter_mut() {
+    for vbs in pass.vertex_state.inputs[pipeline.vertex_strides.len() ..].iter_mut() {
         vbs.stride = 0;
         vbs.rate = InputStepMode::Vertex;
     }

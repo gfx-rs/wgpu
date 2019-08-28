@@ -2,10 +2,10 @@ use crate::{
     device::RenderPassContext,
     resource,
     BufferAddress,
-    U32Array,
     PipelineLayoutId,
     RawString,
     ShaderModuleId,
+    U32Array,
 };
 
 use bitflags::bitflags;

@@ -2,16 +2,7 @@ mod buffer;
 mod range;
 mod texture;
 
-use crate::{
-    hub::Storage,
-    Backend,
-    Epoch,
-    Index,
-    RefCount,
-    TextureViewId,
-    TypedId,
-    BindGroupId,
-};
+use crate::{hub::Storage, Backend, BindGroupId, Epoch, Index, RefCount, TextureViewId, TypedId};
 
 use hal::backend::FastHashMap;
 
@@ -84,10 +75,7 @@ pub trait ResourceState: Clone + Default {
     /// Returns `None` if no sub-resources
     /// are intersecting with the selector, or their usage
     /// isn't consistent.
-    fn query(
-        &self,
-        selector: Self::Selector,
-    ) -> Option<Self::Usage>;
+    fn query(&self, selector: Self::Selector) -> Option<Self::Usage>;
 
     /// Change the last usage of the selected sub-resources.
     ///
@@ -197,9 +185,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         let backend = self.backend;
         self.map
             .iter()
-            .map(move |(&index, resource)| {
-                S::Id::zip(index, resource.epoch, backend)
-            })
+            .map(move |(&index, resource)| S::Id::zip(index, resource.epoch, backend))
     }
 
     /// Clear the tracked contents.
@@ -218,12 +204,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         default: S::Usage,
     ) -> bool {
         let mut state = S::default();
-        match state.change(
-            id,
-            selector,
-            default,
-            None,
-        ) {
+        match state.change(id, selector, default, None) {
             Ok(()) => (),
             Err(_) => unreachable!(),
         }
@@ -231,11 +212,14 @@ impl<S: ResourceState> ResourceTracker<S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         self.map
-            .insert(index, Resource {
-                ref_count: ref_count.clone(),
-                state,
-                epoch,
-            })
+            .insert(
+                index,
+                Resource {
+                    ref_count: ref_count.clone(),
+                    state,
+                    epoch,
+                },
+            )
             .is_none()
     }
 
@@ -243,11 +227,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     ///
     /// Returns `Some(Usage)` only if this usage is consistent
     /// across the given selector.
-    pub fn query(
-        &mut self,
-        id: S::Id,
-        selector: S::Selector,
-    ) -> Option<S::Usage> {
+    pub fn query(&mut self, id: S::Id, selector: S::Selector) -> Option<S::Usage> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         let res = self.map.get(&index)?;
@@ -266,13 +246,11 @@ impl<S: ResourceState> ResourceTracker<S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(self_backend, backend);
         match map.entry(index) {
-            Entry::Vacant(e) => {
-                e.insert(Resource {
-                    ref_count: ref_count.clone(),
-                    state: S::default(),
-                    epoch,
-                })
-            }
+            Entry::Vacant(e) => e.insert(Resource {
+                ref_count: ref_count.clone(),
+                state: S::default(),
+                epoch,
+            }),
             Entry::Occupied(e) => {
                 assert_eq!(e.get().epoch, epoch);
                 e.into_mut()
@@ -291,7 +269,8 @@ impl<S: ResourceState> ResourceTracker<S> {
         usage: S::Usage,
     ) -> Result<(), PendingTransition<S>> {
         Self::get_or_insert(self.backend, &mut self.map, id, ref_count)
-            .state.change(id, selector, usage, None)
+            .state
+            .change(id, selector, usage, None)
     }
 
     /// Replace the usage of a specified resource.
@@ -303,16 +282,15 @@ impl<S: ResourceState> ResourceTracker<S> {
         usage: S::Usage,
     ) -> Drain<PendingTransition<S>> {
         let res = Self::get_or_insert(self.backend, &mut self.map, id, ref_count);
-        res.state.change(id, selector, usage, Some(&mut self.temp))
+        res.state
+            .change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
         self.temp.drain(..)
     }
 
     /// Merge another tracker into `self` by extending the current states
     /// without any transitions.
-    pub fn merge_extend(
-        &mut self, other: &Self,
-    ) -> Result<(), PendingTransition<S>> {
+    pub fn merge_extend(&mut self, other: &Self) -> Result<(), PendingTransition<S>> {
         debug_assert_eq!(self.backend, other.backend);
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
@@ -322,7 +300,9 @@ impl<S: ResourceState> ResourceTracker<S> {
                 Entry::Occupied(e) => {
                     assert_eq!(e.get().epoch, new.epoch);
                     let id = S::Id::zip(index, new.epoch, self.backend);
-                    e.into_mut().state.merge(id, &new.state, Stitch::Last, None)?;
+                    e.into_mut()
+                        .state
+                        .merge(id, &new.state, Stitch::Last, None)?;
                 }
             }
         }
@@ -344,7 +324,8 @@ impl<S: ResourceState> ResourceTracker<S> {
                 Entry::Occupied(e) => {
                     assert_eq!(e.get().epoch, new.epoch);
                     let id = S::Id::zip(index, new.epoch, self.backend);
-                    e.into_mut().state
+                    e.into_mut()
+                        .state
                         .merge(id, &new.state, stitch, Some(&mut self.temp))
                         .ok(); //TODO: unwrap?
                 }
@@ -394,10 +375,7 @@ impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
     type Selector = ();
     type Usage = ();
 
-    fn query(
-        &self,
-        _selector: Self::Selector,
-    ) -> Option<Self::Usage> {
+    fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(())
     }
 
@@ -421,8 +399,7 @@ impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
         Ok(())
     }
 
-    fn optimize(&mut self) {
-    }
+    fn optimize(&mut self) {}
 }
 
 

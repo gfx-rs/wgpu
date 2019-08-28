@@ -1,7 +1,7 @@
 use crate::{
-    gfx_select,
     conv,
     device::all_image_stages,
+    gfx_select,
     hub::{GfxBackend, Token},
     resource,
     DeviceId,
@@ -118,9 +118,11 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(swap_chain_id: SwapChainId) ->
     let device = &device_guard[swap_chain.device_id.value];
 
     let image_index = unsafe {
-        swap_chain.raw
+        swap_chain
+            .raw
             .acquire_image(!0, Some(&swap_chain.sem_available), None)
-    }.ok();
+    }
+    .ok();
 
     #[cfg(not(feature = "remote"))]
     {
@@ -225,7 +227,8 @@ pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
 
     trace!("transit {:?} to present", frame.texture_id.value);
     let mut trackers = device.trackers.lock();
-    let barriers = trackers.textures
+    let barriers = trackers
+        .textures
         .change_replace(
             frame.texture_id.value,
             &texture.life_guard.ref_count,

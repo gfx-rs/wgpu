@@ -1,4 +1,4 @@
-use crate::{GlobalMessage};
+use crate::GlobalMessage;
 
 use ipc_channel::ipc::IpcReceiver;
 use wgn;

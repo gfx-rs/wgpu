@@ -10,7 +10,6 @@ pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::{
-    gfx_select,
     conv,
     device::{
         all_buffer_stages,
@@ -19,6 +18,7 @@ use crate::{
         RenderPassContext,
         RenderPassKey,
     },
+    gfx_select,
     hub::{GfxBackend, Storage, Token},
     id::{Input, Output},
     resource::TexturePlacement,
@@ -41,23 +41,12 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{
-    adapter::PhysicalDevice,
-    command::RawCommandBuffer,
-    Device as _
-};
+use hal::{adapter::PhysicalDevice, command::RawCommandBuffer, Device as _};
 use log::trace;
 
-use std::{
-    collections::hash_map::Entry,
-    iter,
-    mem,
-    slice,
-    ptr,
-    thread::ThreadId,
-};
 #[cfg(not(feature = "remote"))]
 use std::marker::PhantomData;
+use std::{collections::hash_map::Entry, iter, mem, ptr, slice, thread::ThreadId};
 
 
 pub struct RenderBundle<B: hal::Backend> {
@@ -138,18 +127,18 @@ impl<B: GfxBackend> CommandBuffer<B> {
         debug_assert_eq!(B::VARIANT, base.backend());
         debug_assert_eq!(B::VARIANT, head.backend());
 
-        let buffer_barriers =
-            base.buffers
-                .merge_replace(&head.buffers, stitch)
-                .map(|pending| {
-                    trace!("\tbuffer -> {:?}", pending);
-                    hal::memory::Barrier::Buffer {
-                        states: pending.to_states(),
-                        target: &buffer_guard[pending.id].raw,
-                        range: None .. None,
-                        families: None,
-                    }
-                });
+        let buffer_barriers = base
+            .buffers
+            .merge_replace(&head.buffers, stitch)
+            .map(|pending| {
+                trace!("\tbuffer -> {:?}", pending);
+                hal::memory::Barrier::Buffer {
+                    states: pending.to_states(),
+                    target: &buffer_guard[pending.id].raw,
+                    range: None .. None,
+                    families: None,
+                }
+            });
         let texture_barriers = base
             .textures
             .merge_replace(&head.textures, stitch)
@@ -225,7 +214,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
     let cmb = &mut cmb_guard[encoder_id];
     let device = &device_guard[cmb.device_id.value];
 
-    let limits = adapter_guard[device.adapter_id].raw.physical_device.limits();
+    let limits = adapter_guard[device.adapter_id]
+        .raw
+        .physical_device
+        .limits();
     let samples_count_limit = limits.framebuffer_color_sample_counts;
 
     let mut current_comb = device.com_allocator.extend(cmb);
@@ -248,24 +240,40 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             unsafe { slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length) };
         let depth_stencil_attachment = unsafe { desc.depth_stencil_attachment.as_ref() };
 
-        let sample_count = color_attachments.get(0).map(|at| view_guard[at.attachment].samples).unwrap_or(1);
-        assert!(sample_count & samples_count_limit != 0, "Attachment sample_count must be supported by physical device limits");
+        let sample_count = color_attachments
+            .get(0)
+            .map(|at| view_guard[at.attachment].samples)
+            .unwrap_or(1);
+        assert!(
+            sample_count & samples_count_limit != 0,
+            "Attachment sample_count must be supported by physical device limits"
+        );
         for at in color_attachments.iter() {
             let sample_count_check = view_guard[at.attachment].samples;
-            assert_eq!(sample_count_check, sample_count, "All attachments must have the same sample_count");
+            assert_eq!(
+                sample_count_check, sample_count,
+                "All attachments must have the same sample_count"
+            );
 
             if let Some(resolve) = unsafe { at.resolve_target.as_ref() } {
-                assert_eq!(view_guard[*resolve].samples, 1, "All target_resolves must have a sample_count of 1");
+                assert_eq!(
+                    view_guard[*resolve].samples, 1,
+                    "All target_resolves must have a sample_count of 1"
+                );
             }
         }
 
-        trace!("Encoding render pass begin in command buffer {:?}", encoder_id);
+        trace!(
+            "Encoding render pass begin in command buffer {:?}",
+            encoder_id
+        );
         let rp_key = {
             let trackers = &mut cmb.trackers;
             let swap_chain_links = &mut cmb.swap_chain_links;
 
             let depth_stencil = depth_stencil_attachment.map(|at| {
-                let view = trackers.views
+                let view = trackers
+                    .views
                     .use_extend(&*view_guard, at.attachment, (), ())
                     .unwrap();
                 if let Some(ex) = extent {
@@ -273,15 +281,16 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 } else {
                     extent = Some(view.extent);
                 }
-                let old_layout = match trackers.textures.query(
-                    view.texture_id.value,
-                    view.range.clone(),
-                ) {
+                let old_layout = match trackers
+                    .textures
+                    .query(view.texture_id.value, view.range.clone())
+                {
                     Some(usage) => {
                         conv::map_texture_state(
                             usage,
                             hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
-                        ).1
+                        )
+                        .1
                     }
                     None => {
                         // Required sub-resources have inconsistent states, we need to
@@ -317,7 +326,8 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             let mut resolves = ArrayVec::new();
 
             for at in color_attachments {
-                let view = trackers.views
+                let view = trackers
+                    .views
                     .use_extend(&*view_guard, at.attachment, (), ())
                     .unwrap();
                 if let Some(ex) = extent {
@@ -338,13 +348,11 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     swap_chain_links.push(link);
                 }
 
-                let old_layout = match trackers.textures.query(
-                    view.texture_id.value,
-                    view.range.clone(),
-                ) {
-                    Some(usage) => {
-                        conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
-                    }
+                let old_layout = match trackers
+                    .textures
+                    .query(view.texture_id.value, view.range.clone())
+                {
+                    Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
                     None => {
                         // Required sub-resources have inconsistent states, we need to
                         // issue individual barriers instead of relying on the render pass.
@@ -376,7 +384,8 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 });
 
                 if let Some(resolve_target) = unsafe { at.resolve_target.as_ref() } {
-                    let view = trackers.views
+                    let view = trackers
+                        .views
                         .use_extend(&*view_guard, *resolve_target, (), ())
                         .unwrap();
                     if let Some(ex) = extent {
@@ -397,10 +406,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         swap_chain_links.push(link);
                     }
 
-                    let old_layout = match trackers.textures.query(
-                        view.texture_id.value,
-                        view.range.clone(),
-                    ) {
+                    let old_layout = match trackers
+                        .textures
+                        .query(view.texture_id.value, view.range.clone())
+                    {
                         Some(usage) => {
                             conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
                         }
@@ -429,7 +438,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     resolves.push(hal::pass::Attachment {
                         format: Some(conv::map_texture_format(view.format)),
                         samples: view.samples,
-                        ops: hal::pass::AttachmentOps::new(hal::pass::AttachmentLoadOp::DontCare, hal::pass::AttachmentStoreOp::Store),
+                        ops: hal::pass::AttachmentOps::new(
+                            hal::pass::AttachmentLoadOp::DontCare,
+                            hal::pass::AttachmentStoreOp::Store,
+                        ),
                         stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
                         layouts: old_layout .. hal::image::Layout::ColorAttachmentOptimal,
                     });
@@ -466,14 +478,24 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
 
                 let mut resolve_ids = ArrayVec::<[_; crate::device::MAX_COLOR_TARGETS]>::new();
                 let mut attachment_index = color_attachments.len();
-                if color_attachments.iter().any(|at| at.resolve_target != ptr::null()) {
+                if color_attachments
+                    .iter()
+                    .any(|at| at.resolve_target != ptr::null())
+                {
                     for (i, at) in color_attachments.iter().enumerate() {
                         if at.resolve_target == ptr::null() {
-                            resolve_ids.push((hal::pass::ATTACHMENT_UNUSED, hal::image::Layout::ColorAttachmentOptimal));
+                            resolve_ids.push((
+                                hal::pass::ATTACHMENT_UNUSED,
+                                hal::image::Layout::ColorAttachmentOptimal,
+                            ));
                         } else {
-                            let sample_count_check = view_guard[color_attachments[i].attachment].samples;
+                            let sample_count_check =
+                                view_guard[color_attachments[i].attachment].samples;
                             assert!(sample_count_check > 1, "RenderPassColorAttachmentDescriptor with a resolve_target must have an attachment with sample_count > 1");
-                            resolve_ids.push((attachment_index, hal::image::Layout::ColorAttachmentOptimal));
+                            resolve_ids.push((
+                                attachment_index,
+                                hal::image::Layout::ColorAttachmentOptimal,
+                            ));
                             attachment_index += 1;
                         }
                     }
@@ -505,9 +527,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
         let mut framebuffer_cache = device.framebuffers.lock();
         let fb_key = FramebufferKey {
             colors: color_attachments.iter().map(|at| at.attachment).collect(),
-            resolves: color_attachments.iter().filter_map(|at|
-                unsafe { at.resolve_target.as_ref() }.cloned()
-            ).collect(),
+            resolves: color_attachments
+                .iter()
+                .filter_map(|at| unsafe { at.resolve_target.as_ref() }.cloned())
+                .collect(),
             depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
         };
         let framebuffer = match framebuffer_cache.entry(fb_key) {
@@ -547,15 +570,15 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         use hal::format::ChannelType;
                         //TODO: validate sign/unsign and normalized ranges of the color values
                         let value = match key.format.unwrap().base_format().1 {
-                            ChannelType::Unorm |
-                            ChannelType::Snorm |
-                            ChannelType::Ufloat |
-                            ChannelType::Sfloat |
-                            ChannelType::Uscaled |
-                            ChannelType::Sscaled |
-                            ChannelType::Srgb => {
-                                hal::command::ClearColor::Sfloat(conv::map_color_f32(&at.clear_color))
-                            }
+                            ChannelType::Unorm
+                            | ChannelType::Snorm
+                            | ChannelType::Ufloat
+                            | ChannelType::Sfloat
+                            | ChannelType::Uscaled
+                            | ChannelType::Sscaled
+                            | ChannelType::Srgb => hal::command::ClearColor::Sfloat(
+                                conv::map_color_f32(&at.clear_color),
+                            ),
                             ChannelType::Sint => {
                                 hal::command::ClearColor::Sint(conv::map_color_i32(&at.clear_color))
                             }
@@ -563,7 +586,9 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                                 hal::command::ClearColor::Uint(conv::map_color_u32(&at.clear_color))
                             }
                         };
-                        Some(hal::command::ClearValueRaw::from(hal::command::ClearValue::Color(value)))
+                        Some(hal::command::ClearValueRaw::from(
+                            hal::command::ClearValue::Color(value),
+                        ))
                     }
                 }
             })
@@ -571,8 +596,11 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 match (at.depth_load_op, at.stencil_load_op) {
                     (LoadOp::Load, LoadOp::Load) => None,
                     (LoadOp::Clear, _) | (_, LoadOp::Clear) => {
-                        let value = hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
-                        Some(hal::command::ClearValueRaw::from(hal::command::ClearValue::DepthStencil(value)))
+                        let value =
+                            hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
+                        Some(hal::command::ClearValueRaw::from(
+                            hal::command::ClearValue::DepthStencil(value),
+                        ))
                     }
                 }
             }));
@@ -642,17 +670,15 @@ pub fn command_encoder_begin_compute_pass<B: GfxBackend>(
     let cmb = &mut cmb_guard[encoder_id];
 
     let raw = cmb.raw.pop().unwrap();
-    let trackers = mem::replace(
-        &mut cmb.trackers,
-        TrackerSet::new(encoder_id.backend()),
-    );
+    let trackers = mem::replace(&mut cmb.trackers, TrackerSet::new(encoder_id.backend()));
     let stored = Stored {
         value: encoder_id,
         ref_count: cmb.life_guard.ref_count.clone(),
     };
 
     let pass = ComputePass::new(raw, stored, trackers);
-    hub.compute_passes.register_identity(id_in, pass, &mut token)
+    hub.compute_passes
+        .register_identity(id_in, pass, &mut token)
 }
 
 #[cfg(not(feature = "remote"))]

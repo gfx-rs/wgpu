@@ -1,10 +1,7 @@
 use crate::{Backend, Epoch, Index};
-use std::{
-    fmt,
-    marker::PhantomData,
-};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use std::{fmt, marker::PhantomData};
 
 const BACKEND_BITS: usize = 3;
 type Dummy = crate::backend::Empty;
@@ -61,9 +58,7 @@ pub trait TypedId {
 impl<T> TypedId for Id<T> {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
         assert_eq!(0, epoch >> 32 - BACKEND_BITS);
-        let v = index as u64 |
-            ((epoch as u64) << 32) |
-            ((backend as u64) << (64 - BACKEND_BITS));
+        let v = index as u64 | ((epoch as u64) << 32) | ((backend as u64) << (64 - BACKEND_BITS));
         Id(v, PhantomData)
     }
 
