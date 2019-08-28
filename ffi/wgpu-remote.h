@@ -38,8 +38,11 @@ typedef struct {
   WGPULimits limits;
 } WGPUDeviceDescriptor;
 
+typedef uint32_t WGPUBackendBit;
+
 typedef struct {
   WGPUPowerPreference power_preference;
+  WGPUBackendBit backends;
 } WGPURequestAdapterOptions;
 
 typedef struct {

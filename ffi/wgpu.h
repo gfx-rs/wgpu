@@ -640,8 +640,11 @@ typedef uint64_t WGPUId_RenderBundle_Dummy;
 
 typedef WGPUId_RenderBundle_Dummy WGPURenderBundleId;
 
+typedef uint32_t WGPUBackendBit;
+
 typedef struct {
   WGPUPowerPreference power_preference;
+  WGPUBackendBit backends;
 } WGPURequestAdapterOptions;
 
 typedef struct {
@@ -740,11 +743,11 @@ void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
 
 #if !defined(WGPU_REMOTE)
-WGPUSurfaceId wgpu_create_surface_from_macos_layer(void *layer);
+WGPUSurfaceId wgpu_create_surface_from_metal_layer(void *layer);
 #endif
 
 #if !defined(WGPU_REMOTE)
-WGPUSurfaceId wgpu_create_surface_from_windows_hwnd(void *hinstance, void *hwnd);
+WGPUSurfaceId wgpu_create_surface_from_windows_hwnd(void *_hinstance, void *hwnd);
 #endif
 
 #if !defined(WGPU_REMOTE)

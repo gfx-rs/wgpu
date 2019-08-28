@@ -12,6 +12,8 @@ use crate::{
 #[cfg(not(feature = "remote"))]
 use crate::{gfx_select, SurfaceId};
 
+#[cfg(not(feature = "remote"))]
+use bitflags::bitflags;
 use log::info;
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
@@ -66,17 +68,44 @@ pub enum PowerPreference {
     HighPerformance = 2,
 }
 
-impl Default for PowerPreference {
-    fn default() -> Self {
-        PowerPreference::Default
+#[cfg(not(feature = "remote"))]
+bitflags! {
+    #[repr(transparent)]
+    pub struct BackendBit: u32 {
+        const VULKAN = 1 << Backend::Vulkan as u32;
+        const GL = 1 << Backend::Gl as u32;
+        const METAL = 1 << Backend::Metal as u32;
+        const DX12 = 1 << Backend::Dx12 as u32;
+        const DX11 = 1 << Backend::Dx11 as u32;
+        const PRIMARY = Self::VULKAN.bits | Self::METAL.bits | Self::DX12.bits;
+        const SECONDARY = Self::GL.bits | Self::DX11.bits;
+    }
+}
+
+#[cfg(not(feature = "remote"))]
+impl From<Backend> for BackendBit {
+    fn from(backend: Backend) -> Self {
+        BackendBit::from_bits(1 << backend as u32).unwrap()
     }
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
+    #[cfg(not(feature = "remote"))]
+    pub backends: BackendBit,
+}
+
+impl Default for RequestAdapterOptions {
+    fn default() -> Self {
+        RequestAdapterOptions {
+            power_preference: PowerPreference::Default,
+            #[cfg(not(feature = "remote"))]
+            backends: BackendBit::PRIMARY,
+        }
+    }
 }
 
 #[repr(C)]
@@ -232,7 +261,14 @@ pub fn request_adapter(
     #[cfg(feature = "remote")]
     let find_input = |b: Backend| input_ids.iter().find(|id| id.backend() == b).cloned();
     #[cfg(not(feature = "remote"))]
-    let find_input = |_: Backend| { let _ = input_ids; Some(PhantomData) };
+    let find_input = |b: Backend| {
+        let _ = input_ids;
+        if desc.backends.contains(b.into()) {
+            Some(PhantomData)
+        } else {
+            None
+        }
+    };
 
     let id_vulkan = find_input(Backend::Vulkan);
     let id_metal = find_input(Backend::Metal);
