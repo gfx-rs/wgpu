@@ -1,5 +1,5 @@
 use super::CommandBuffer;
-use crate::{track::TrackerSet, DeviceId, LifeGuard, Stored, SubmissionIndex};
+use crate::{hub::GfxBackend, track::TrackerSet, DeviceId, LifeGuard, Stored, SubmissionIndex};
 
 use hal::{command::RawCommandBuffer, pool::RawCommandPool, Device};
 use log::trace;
@@ -48,7 +48,7 @@ pub struct CommandAllocator<B: hal::Backend> {
     inner: Mutex<Inner<B>>,
 }
 
-impl<B: hal::Backend> CommandAllocator<B> {
+impl<B: GfxBackend> CommandAllocator<B> {
     pub fn new(queue_family: hal::queue::QueueFamilyId) -> Self {
         CommandAllocator {
             queue_family,
@@ -64,6 +64,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         device_id: Stored<DeviceId>,
         device: &B::Device,
     ) -> CommandBuffer<B> {
+        //debug_assert_eq!(device_id.backend(), B::VARIANT);
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock();
 
@@ -85,7 +86,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             recorded_thread_id: thread_id,
             device_id,
             life_guard: LifeGuard::new(),
-            trackers: TrackerSet::new(),
+            trackers: TrackerSet::new(B::VARIANT),
             swap_chain_links: Vec::new(),
         }
     }

@@ -1,48 +1,37 @@
-#[cfg(feature = "gfx-backend-dx11")]
-extern crate gfx_backend_dx11 as back;
-#[cfg(feature = "gfx-backend-dx12")]
-extern crate gfx_backend_dx12 as back;
-#[cfg(not(any(
-    feature = "gfx-backend-vulkan",
-    feature = "gfx-backend-dx11",
-    feature = "gfx-backend-dx12",
-    feature = "gfx-backend-metal",
-    feature = "gfx-backend-gl",
-)))]
-extern crate gfx_backend_empty as back;
-#[cfg(feature = "gfx-backend-metal")]
-extern crate gfx_backend_metal as back;
-#[cfg(feature = "gfx-backend-vulkan")]
-extern crate gfx_backend_vulkan as back;
-#[cfg(feature = "gfx-backend-gl")]
-extern crate gfx_backend_gl as back;
+pub mod backend {
+    #[cfg(windows)]
+    pub use gfx_backend_dx11::Backend as Dx11;
+    #[cfg(windows)]
+    pub use gfx_backend_dx12::Backend as Dx12;
+    pub use gfx_backend_empty::Backend as Empty;
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub use gfx_backend_metal::Backend as Metal;
+    pub use gfx_backend_vulkan::Backend as Vulkan;
+}
 
 mod binding_model;
 mod command;
 mod conv;
 mod device;
 mod hub;
+mod id;
 mod instance;
 mod pipeline;
 mod resource;
 mod swap_chain;
 mod track;
-mod id;
 
 pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
-#[cfg(not(feature = "local"))]
-pub use self::hub::{Access, IdentityManager, Registry, Token, HUB};
+#[cfg(feature = "remote")]
+pub use self::hub::{Access, IdentityManager, Registry, Token};
+pub use self::id::*;
 pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-pub use self::id::*;
 pub use hal::pso::read_spirv;
-
-#[cfg(feature = "glutin")]
-pub use back::glutin;
 
 use std::{
     os::raw::c_char,
@@ -51,8 +40,19 @@ use std::{
 };
 
 type SubmissionIndex = usize;
-pub(crate) type Index = u32;
-pub(crate) type Epoch = u32;
+type Index = u32;
+type Epoch = u32;
+
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Backend {
+    Empty = 0,
+    Vulkan = 1,
+    Metal = 2,
+    Dx12 = 3,
+    Dx11 = 4,
+    Gl = 5,
+}
 
 pub type BufferAddress = u64;
 pub type RawString = *const c_char;
@@ -193,4 +193,23 @@ pub struct Extent3d {
 pub struct U32Array {
     pub bytes: *const u32,
     pub length: usize,
+}
+
+#[derive(Debug)]
+pub enum InputState {}
+
+#[macro_export]
+macro_rules! gfx_select {
+    ($id:expr => $function:ident( $($param:expr),+ )) => {
+        match $id.backend() {
+            $crate::Backend::Vulkan => $function::<$crate::backend::Vulkan>( $($param),+ ),
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            $crate::Backend::Metal => $function::<$crate::backend::Metal>( $($param),+ ),
+            #[cfg(windows)]
+            $crate::Backend::Dx12 => $function::<$crate::backend::Dx12>( $($param),+ ),
+            #[cfg(windows)]
+            $crate::Backend::Dx11 => $function::<$crate::backend::Dx11>( $($param),+ ),
+            _ => unreachable!()
+        }
+    };
 }

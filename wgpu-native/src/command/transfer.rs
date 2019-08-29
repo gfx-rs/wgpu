@@ -1,7 +1,8 @@
 use crate::{
     conv,
     device::{all_buffer_stages, all_image_stages},
-    hub::{HUB, Token},
+    gfx_select,
+    hub::{GfxBackend, Token},
     resource::TexturePlacement,
     swap_chain::SwapChainLink,
     BufferAddress,
@@ -52,9 +53,7 @@ impl TextureCopyView {
         }
     }
 
-    fn to_sub_layers(
-        &self, aspects: hal::format::Aspects
-    ) -> hal::image::SubresourceLayers {
+    fn to_sub_layers(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceLayers {
         let layer = self.array_layer as hal::image::Layer;
         hal::image::SubresourceLayers {
             aspects,
@@ -64,8 +63,7 @@ impl TextureCopyView {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
+pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
     command_encoder_id: CommandEncoderId,
     source: BufferId,
     source_offset: BufferAddress,
@@ -73,18 +71,20 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
     destination_offset: BufferAddress,
     size: BufferAddress,
 ) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
+
+    let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
-    let (buffer_guard, _) = HUB.buffers.read(&mut token);
+    let (buffer_guard, _) = hub.buffers.read(&mut token);
     // we can't hold both src_pending and dst_pending in scope because they
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
 
-    let (src_buffer, src_pending) = cmb
-        .trackers
-        .buffers
-        .use_replace(&*buffer_guard, source, (), BufferUsage::COPY_SRC);
+    let (src_buffer, src_pending) =
+        cmb.trackers
+            .buffers
+            .use_replace(&*buffer_guard, source, (), BufferUsage::COPY_SRC);
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -92,10 +92,10 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
         range: None .. None,
     }));
 
-    let (dst_buffer, dst_pending) = cmb
-        .trackers
-        .buffers
-        .use_replace(&*buffer_guard, destination, (), BufferUsage::COPY_DST);
+    let (dst_buffer, dst_pending) =
+        cmb.trackers
+            .buffers
+            .use_replace(&*buffer_guard, destination, (), BufferUsage::COPY_DST);
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -120,23 +120,41 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
+pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
+    command_encoder_id: CommandEncoderId,
+    source: BufferId,
+    source_offset: BufferAddress,
+    destination: BufferId,
+    destination_offset: BufferAddress,
+    size: BufferAddress,
+) {
+    gfx_select!(command_encoder_id => command_encoder_copy_buffer_to_buffer(
+        command_encoder_id,
+        source, source_offset,
+        destination,
+        destination_offset,
+        size))
+}
+
+pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
     command_encoder_id: CommandEncoderId,
     source: &BufferCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
+
+    let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
-    let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
-    let (texture_guard, _) = HUB.textures.read(&mut token);
+    let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+    let (texture_guard, _) = hub.textures.read(&mut token);
     let aspects = texture_guard[destination.texture].full_range.aspects;
 
-    let (src_buffer, src_pending) = cmb
-        .trackers
-        .buffers
-        .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::COPY_SRC);
+    let (src_buffer, src_pending) =
+        cmb.trackers
+            .buffers
+            .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::COPY_SRC);
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -198,17 +216,31 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
+pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
+    command_encoder_id: CommandEncoderId,
+    source: &BufferCopyView,
+    destination: &TextureCopyView,
+    copy_size: Extent3d,
+) {
+    gfx_select!(command_encoder_id => command_encoder_copy_buffer_to_texture(
+        command_encoder_id,
+        source,
+        destination,
+        copy_size))
+}
+
+pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
     command_encoder_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &BufferCopyView,
     copy_size: Extent3d,
 ) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
+    let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
-    let (buffer_guard, mut token) = HUB.buffers.read(&mut token);
-    let (texture_guard, _) = HUB.textures.read(&mut token);
+    let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+    let (texture_guard, _) = hub.textures.read(&mut token);
     let aspects = texture_guard[source.texture].full_range.aspects;
 
     let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
@@ -225,7 +257,6 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
     });
     match src_texture.placement {
         TexturePlacement::SwapChain(_) => unimplemented!(),
-        TexturePlacement::Void => unreachable!(),
         TexturePlacement::Memory(_) => (),
     }
 
@@ -275,22 +306,37 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
+pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
+    command_encoder_id: CommandEncoderId,
+    source: &TextureCopyView,
+    destination: &BufferCopyView,
+    copy_size: Extent3d,
+) {
+    gfx_select!(command_encoder_id => command_encoder_copy_texture_to_buffer(
+        command_encoder_id,
+        source,
+        destination,
+        copy_size))
+}
+
+pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
     command_encoder_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
+    let hub = B::hub();
     let mut token = Token::root();
-    let (mut cmb_guard, mut token) = HUB.command_buffers.write(&mut token);
+
+    let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
-    let (_, mut token) = HUB.buffers.read(&mut token); // skip token
-    let (texture_guard, _) = HUB.textures.read(&mut token);
+    let (_, mut token) = hub.buffers.read(&mut token); // skip token
+    let (texture_guard, _) = hub.textures.read(&mut token);
     // we can't hold both src_pending and dst_pending in scope because they
     // borrow the buffer tracker mutably...
     let mut barriers = Vec::new();
-    let aspects = texture_guard[source.texture].full_range.aspects &
-        texture_guard[destination.texture].full_range.aspects;
+    let aspects = texture_guard[source.texture].full_range.aspects
+        & texture_guard[destination.texture].full_range.aspects;
 
     let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
         &*texture_guard,
@@ -349,4 +395,18 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
             iter::once(region),
         );
     }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
+    command_encoder_id: CommandEncoderId,
+    source: &TextureCopyView,
+    destination: &TextureCopyView,
+    copy_size: Extent3d,
+) {
+    gfx_select!(command_encoder_id => command_encoder_copy_texture_to_texture(
+        command_encoder_id,
+        source,
+        destination,
+        copy_size))
 }

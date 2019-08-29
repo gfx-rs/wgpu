@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define BINDINGS_LENGTH (1)
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
@@ -16,7 +17,7 @@ int main(
     char *argv[]) {
 
     if (argc != 5) {
-        printf("You must pass 4 positive integers!");
+        printf("You must pass 4 positive integers!\n");
         return 0;
     }
 
@@ -31,8 +32,7 @@ int main(
 
     uint32_t numbers_length = size / sizeof(uint32_t);
 
-    WGPUInstanceId instance = wgpu_create_instance();
-    WGPUAdapterId adapter = wgpu_instance_request_adapter(instance, NULL);
+    WGPUAdapterId adapter = wgpu_request_adapter(NULL);
     WGPUDeviceId device = wgpu_adapter_request_device(adapter, NULL);
 
 	uint8_t *staging_memory;
@@ -106,7 +106,7 @@ int main(
         encoder, staging_buffer, 0, storage_buffer, 0, size);
 
     WGPUComputePassId command_pass =
-        wgpu_command_encoder_begin_compute_pass(encoder);
+        wgpu_command_encoder_begin_compute_pass(encoder, NULL);
     wgpu_compute_pass_set_pipeline(command_pass, compute_pipeline);
 
     wgpu_compute_pass_set_bind_group(command_pass, 0, bind_group, NULL, 0);

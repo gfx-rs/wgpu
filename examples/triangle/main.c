@@ -33,11 +33,10 @@
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
 
 int main() {
-    WGPUInstanceId instance = wgpu_create_instance();
-
-    WGPUAdapterId adapter = wgpu_instance_request_adapter(instance,
+    WGPUAdapterId adapter = wgpu_request_adapter(
         &(WGPURequestAdapterOptions){
             .power_preference = WGPUPowerPreference_LowPower,
+            .backends = 2 | 4 | 8,
         });
 
     WGPUDeviceId device = wgpu_adapter_request_device(adapter,
@@ -157,22 +156,19 @@ int main() {
         [ns_window.contentView setWantsLayer:YES];
         metal_layer = [CAMetalLayer layer];
         [ns_window.contentView setLayer:metal_layer];
-        surface = wgpu_instance_create_surface_from_macos_layer(
-            instance, metal_layer);
+        surface = wgpu_create_surface_from_metal_layer(metal_layer);
     }
 #elif WGPU_TARGET == WGPU_TARGET_LINUX
     {
         Display *x11_display = glfwGetX11Display();
         Window x11_window = glfwGetX11Window(window);
-        surface = wgpu_instance_create_surface_from_xlib(
-            instance, (const void **)x11_display, x11_window);
+        surface = wgpu_create_surface_from_xlib((const void **)x11_display, x11_window);
     }
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
     {
         HWND hwnd = glfwGetWin32Window(window);
         HINSTANCE hinstance = GetModuleHandle(NULL);
-        surface = wgpu_instance_create_surface_from_windows_hwnd(
-            instance, hinstance, hwnd);
+        surface = wgpu_create_surface_from_windows_hwnd(hinstance, hwnd);
     }
 #else
     #error "Unsupported WGPU_TARGET"

@@ -1,19 +1,5 @@
 cmake_minimum_required(VERSION 3.11b)
 
-set(BACKEND_VULKAN "vulkan")
-set(BACKEND_METAL "metal")
-set(BACKEND_DX11 "dx11")
-set(BACKEND_DX12 "dx12")
-set(AVAILABLE_BACKENDS 
-    ${BACKEND_VULKAN}
-    ${BACKEND_METAL}
-    ${BACKEND_DX11}
-    ${BACKEND_DX12})
-
-if(NOT DEFINED BACKEND OR NOT "${BACKEND}" IN_LIST AVAILABLE_BACKENDS)
-    message(FATAL_ERROR "BACKEND invalid or undefined, available backends: ${AVAILABLE_BACKENDS}")
-endif()
-
 project(triangle)
 
 set(TARGET_NAME triangle)
@@ -23,12 +9,7 @@ add_executable(triangle main.c ../framework.c)
 if(MSVC)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_WINDOWS)
     target_compile_options(${TARGET_NAME} PRIVATE /W4)
-    set(OS_LIBRARIES "userenv" "ws2_32" "Dwmapi" "dbghelp")    
-    if("${BACKEND}" STREQUAL "${BACKEND_DX11}")
-        list(APPEND OS_LIBRARIES "d3dcompiler" "D3D11" "DXGI")
-    elseif("${BACKEND}" STREQUAL "${BACKEND_DX12}")
-        list(APPEND OS_LIBRARIES "d3dcompiler" "D3D12" "DXGI")
-    endif()
+    set(OS_LIBRARIES "userenv" "ws2_32" "Dwmapi" "dbghelp" "d3dcompiler" "D3D12" "D3D11" "DXGI")
 elseif(APPLE)
     add_definitions(-DWGPU_TARGET=WGPU_TARGET_MACOS)
     set(OS_LIBRARIES "-framework Cocoa" "-framework CoreVideo" "-framework IOKit" "-framework QuartzCore")

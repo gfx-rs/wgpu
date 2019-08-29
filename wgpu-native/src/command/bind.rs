@@ -1,4 +1,12 @@
-use crate::{BindGroupHandle, BindGroupId, BindGroupLayoutId, BufferAddress, PipelineLayoutId, Stored};
+use crate::{
+    hub::GfxBackend,
+    BindGroup,
+    BindGroupId,
+    BindGroupLayoutId,
+    BufferAddress,
+    PipelineLayoutId,
+    Stored,
+};
 
 use log::trace;
 
@@ -50,12 +58,14 @@ pub struct BindGroupEntry {
 }
 
 impl BindGroupEntry {
-    fn provide(
+    fn provide<B: GfxBackend>(
         &mut self,
         bind_group_id: BindGroupId,
-        bind_group: &BindGroupHandle,
+        bind_group: &BindGroup<B>,
         offsets: &[BufferAddress],
     ) -> Provision {
+        debug_assert_eq!(B::VARIANT, bind_group_id.backend());
+
         let was_compatible = match self.provided {
             Some(BindGroupPair {
                 layout_id,
@@ -142,11 +152,11 @@ impl Binder {
     /// (i.e. compatible with current expectations). Also returns an iterator
     /// of bind group IDs to be bound with it: those are compatible bind groups
     /// that were previously blocked because the current one was incompatible.
-    pub(crate) fn provide_entry<'a>(
+    pub(crate) fn provide_entry<'a, B: GfxBackend>(
         &'a mut self,
         index: usize,
         bind_group_id: BindGroupId,
-        bind_group: &BindGroupHandle,
+        bind_group: &BindGroup<B>,
         offsets: &[BufferAddress],
     ) -> Option<(
         PipelineLayoutId,
@@ -154,6 +164,8 @@ impl Binder {
         impl 'a + Iterator<Item = &'a BufferAddress>,
     )> {
         trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
+        debug_assert_eq!(B::VARIANT, bind_group_id.backend());
+
         match self.entries[index].provide(bind_group_id, bind_group, offsets) {
             Provision::Unchanged => None,
             Provision::Changed {
@@ -181,7 +193,7 @@ impl Binder {
                             },
                             self.entries[index + 1 ..]
                                 .iter()
-                                .flat_map(|entry| entry.dynamic_offsets.as_slice())
+                                .flat_map(|entry| entry.dynamic_offsets.as_slice()),
                         )
                     })
                 } else {
