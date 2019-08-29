@@ -12,6 +12,7 @@ use std::thread;
 
 pub use wgn::{
     AddressMode,
+    BackendBit,
     BlendDescriptor,
     BlendFactor,
     BlendOperation,
@@ -73,15 +74,6 @@ struct Temp {
     //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
     //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
     command_buffers: Vec<wgn::CommandBufferId>,
-}
-
-/// A handle to an active `wgpu` instance.
-///
-/// An `Instance` represents the entire context of a running `wgpu` instance. The `Instance`
-/// allows the querying of [`Adapter`] objects and the creation of [`Surface`] objects.
-#[derive(Debug)]
-pub struct Instance {
-    id: wgn::InstanceId,
 }
 
 /// A handle to a physical graphics and/or compute device.
@@ -527,61 +519,33 @@ where
     }
 }
 
-impl Instance {
-    /// Create a new `Instance` object.
-    #[cfg(not(feature = "gl"))]
-    pub fn new() -> Self {
-        Instance {
-            id: wgn::wgpu_create_instance(),
-        }
-    }
-
-    #[cfg(feature = "gl")]
-    pub fn new(windowed_context: wgn::glutin::RawContext<wgn::glutin::PossiblyCurrent>) -> Self {
-        Instance {
-            id: wgn::wgpu_create_gl_instance(windowed_context),
-        }
-    }
-
-    /// Retrieves an [`Adapter`] which matches the given descriptor.
-    ///
-    /// If there are no available adapters matching `options`, this function will return another
-    /// adapter.
-    ///
-    /// # Panics
-    ///
-    /// Panics if there are no available adapters. This will occur if none of the graphics backends
-    /// are enabled.
-    pub fn request_adapter(&self, options: &RequestAdapterOptions) -> Adapter {
-        Adapter {
-            id: wgn::wgpu_instance_request_adapter(self.id, Some(options)),
-        }
-    }
-
+impl Surface {
     /// Creates a surface from a raw window handle.
-    #[cfg(not(feature = "gl"))]
-    pub fn create_surface<W: raw_window_handle::HasRawWindowHandle>(&self, window: &W) -> Surface {
+    pub fn create<W: raw_window_handle::HasRawWindowHandle>(window: &W) -> Self {
         Surface {
-            id: wgn::wgpu_instance_create_surface(self.id, window.raw_window_handle()),
+            id: wgn::wgpu_create_surface(window.raw_window_handle()),
         }
     }
 
-    #[cfg(not(feature = "gl"))]
-    pub fn create_surface_from_core_animation_layer(&self, layer: *mut std::ffi::c_void) -> Surface {
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub fn create_surface_from_core_animation_layer(layer: *mut std::ffi::c_void) -> Self {
         Surface {
-            id: wgn::wgpu_instance_create_surface_from_macos_layer(self.id, layer),
-        }
-    }
-
-    #[cfg(feature = "gl")]
-    pub fn get_surface(&self) -> Surface {
-        Surface {
-            id: wgn::wgpu_instance_get_gl_surface(self.id),
+            id: wgn::wgpu_create_surface_from_metal_layer(layer),
         }
     }
 }
 
 impl Adapter {
+    /// Retrieves an [`Adapter`] which matches the given options.
+    ///
+    /// Some options are "soft", so treated as non-mandatory. Others are "hard".
+    ///
+    /// If no adapters are found that suffice all the "hard" options, `None` is returned.
+    pub fn request(options: &wgn::RequestAdapterOptions) -> Option<Self> {
+        wgn::request_adapter(options, &[])
+            .map(|id| Adapter { id })
+    }
+
     /// Requests a connection to a physical device, creating a logical device.
     ///
     /// # Panics
@@ -625,7 +589,7 @@ impl Device {
     /// Creates an empty [`CommandEncoder`].
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
         CommandEncoder {
-            id: wgn::wgpu_device_create_command_encoder(self.id, desc),
+            id: wgn::wgpu_device_create_command_encoder(self.id, Some(desc)),
         }
     }
 
@@ -1110,7 +1074,7 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: wgn::wgpu_command_encoder_begin_compute_pass(self.id),
+            id: wgn::wgpu_command_encoder_begin_compute_pass(self.id, None),
             _parent: self,
         }
     }

@@ -8,16 +8,14 @@ fn main() {
     let event_loop = EventLoop::new();
 
     #[cfg(not(feature = "gl"))]
-    let (_window, instance, size, surface) = {
+    let (_window, size, surface) = {
         let window = winit::window::Window::new(&event_loop).unwrap();
         let size = window
             .inner_size()
             .to_physical(window.hidpi_factor());
 
-        let instance = wgpu::Instance::new();
-        let surface = instance.create_surface(&window);
-
-        (window, instance, size, surface)
+        let surface = wgpu::Surface::create(&window);
+        (window, size, surface)
     };
 
     #[cfg(feature = "gl")]
@@ -40,9 +38,10 @@ fn main() {
         (window, instance, size, surface)
     };
 
-    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+    let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    });
+        backends: wgpu::BackendBit::PRIMARY,
+    }).unwrap();
 
     let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {

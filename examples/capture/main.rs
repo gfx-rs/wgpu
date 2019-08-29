@@ -7,11 +7,10 @@ use std::mem::size_of;
 fn main() {
     env_logger::init();
 
-    let instance = wgpu::Instance::new();
-
-    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+    let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    });
+        backends: wgpu::BackendBit::PRIMARY,
+    }).unwrap();
 
     let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {

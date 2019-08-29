@@ -19,15 +19,9 @@ license = "MPL-2.0"
 
 [features]
 default = []
-metal = ["wgn/gfx-backend-metal"]
-dx11 = ["wgn/gfx-backend-dx11"]
-dx12 = ["wgn/gfx-backend-dx12"]
-vulkan = ["wgn/gfx-backend-vulkan"]
-#TODO: there is no way to use glutin-0.20 with GL backend v0.3 yet
-#gl = ["wgn/gfx-backend-gl"]
 
 [dependencies]
-wgn = { package = "wgpu-native", version = "0.3.1", features = ["local"] }
+wgn = { package = "wgpu-native", git = "https://github.com/gfx-rs/wgpu", rev = "b58c96e4a66943e09e9a9aa0ee8345c7bc878d38" }
 arrayvec = "0.4"
 raw-window-handle = "0.1"
 zerocopy = "0.2"
