@@ -12,35 +12,20 @@ This is an idiomatic Rust wrapper over [wgpu-native](https://github.com/gfx-rs/w
 
 ## Usage
 
-The library requires one of the following features enabled in order to run any of the examples:
-  - Vulkan
-  - Metal
-  - DirectX 12 (Dx12)
-  - DirectX 11 (Dx11)
-  - OpenGL (Gl)
-
-These examples assume that necessary dependencies for the graphics backend are already installed. 
-
 ### Running an example
 All examples are located under the [examples](examples) directory. We are using the default syntax for running examples, as found in the [Cargo](https://doc.rust-lang.org/cargo/reference/manifest.html#examples) documentation.
 
-#### Cube
 ```bash
-cargo run --example cube --features metal
-cargo run --example cube --features vulkan
-cargo run --example cube --features dx12
-cargo run --example cube --features dx11
-cargo run --example cube --features gl
+cargo run --example cube
 ```
 
 #### Hello Compute
-The "1", "2", "3", and "4" are arguments passed into the program. These arguments are used for the compute pipeline.
+
+`hello-*` examples show barebones setup without any helper code.
+
+For "hello-compute", pass 4 numbers separated by spaces as arguments:
 ```bash
-cargo run --example hello-compute --features metal 1 2 3 4
-cargo run --example hello-compute --features vulkan 1 2 3 4
-cargo run --example hello-compute --features dx12 1 2 3 4
-cargo run --example hello-compute --features dx11 1 2 3 4
-cargo run --example hello-compute --features gl 1 2 3 4
+cargo run --example hello-compute 1 2 3 4
 ```
 
 More examples can be found under the [examples](examples) directory.
@@ -50,6 +35,7 @@ More examples can be found under the [examples](examples) directory.
 Shout out to the following projects that work best with wgpu-rs:
   - [wgpu_glyph](https://github.com/hecrj/wgpu_glyph) - for your text-y rendering needs
   - [coffee](https://github.com/hecrj/coffee) - a whole 2D engine
+  - [rgx](https://github.com/cloudhead/rgx) - a 2D graphics library
   - [imgui-wgpu](https://github.com/unconed/imgui-wgpu-rs) - Dear ImGui interfacing
 
 ## Development
