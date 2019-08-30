@@ -53,16 +53,13 @@ pub fn run<E: Example>(title: &str) {
     info!("Initializing the window...");
 
     #[cfg(not(feature = "gl"))]
-    let (_window, instance, hidpi_factor, size, surface) = {
+    let (_window, hidpi_factor, size, surface) = {
         let window = winit::window::Window::new(&event_loop).unwrap();
         window.set_title(title);
         let hidpi_factor = window.hidpi_factor();
         let size = window.inner_size().to_physical(hidpi_factor);
-
-        let instance = wgpu::Instance::new();
-        let surface = instance.create_surface(&window);
-
-        (window, instance, hidpi_factor, size, surface)
+        let surface = wgpu::Surface::create(&window);
+        (window, hidpi_factor, size, surface)
     };
 
     #[cfg(feature = "gl")]
@@ -87,9 +84,10 @@ pub fn run<E: Example>(title: &str) {
         (window, instance, hidpi_factor, size, surface)
     };
 
-    let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
+    let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::LowPower,
-    });
+        backends: wgpu::BackendBit::PRIMARY,
+    }).unwrap();
 
     let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {

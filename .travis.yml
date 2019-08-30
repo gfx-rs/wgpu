@@ -11,6 +11,4 @@ branches:
 
 script:
   - cargo check
-  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo test --no-run --features vulkan; fi
-  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then cargo test --no-run --features metal; fi
-  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then cargo test --no-run --features dx12; fi
+  - cargo test --no-run
