@@ -8,9 +8,12 @@ use crate::{
     Extent3d,
     Stored,
     SwapChainId,
+    SurfaceId,
     TextureId,
     TextureViewId,
 };
+#[cfg(not(feature = "remote"))]
+use crate::hub::GLOBAL;
 
 use hal::{self, Device as _, Swapchain as _};
 use log::{trace, warn};
@@ -56,13 +59,16 @@ pub(crate) struct Frame<B: hal::Backend> {
 //TODO: does it need a ref-counted lifetime?
 #[derive(Debug)]
 pub struct SwapChain<B: hal::Backend> {
-    pub(crate) raw: B::Swapchain,
+    //Note: it's only an option because we may need to move it out
+    // and then put a new swapchain back in.
+    pub(crate) raw: Option<B::Swapchain>,
+    pub(crate) surface_id: Stored<SurfaceId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: SwapChainDescriptor,
     pub(crate) frames: Vec<Frame<B>>,
     pub(crate) acquired: Vec<hal::SwapImageIndex>,
     pub(crate) sem_available: B::Semaphore,
-    #[cfg_attr(not(not(feature = "remote")), allow(dead_code))] //TODO: remove
+    #[cfg_attr(feature = "remote", allow(dead_code))] //TODO: remove
     pub(crate) command_pool: hal::CommandPool<B, hal::General>,
 }
 
@@ -84,6 +90,23 @@ pub struct SwapChainDescriptor {
 }
 
 impl SwapChainDescriptor {
+    pub(crate) fn to_hal(&self, num_frames: u32) -> hal::window::SwapchainConfig {
+        let mut config = hal::SwapchainConfig::new(
+            self.width,
+            self.height,
+            conv::map_texture_format(self.format),
+            num_frames,
+        );
+        //TODO: check for supported
+        config.image_usage = conv::map_texture_usage(self.usage, hal::format::Aspects::COLOR);
+        config.composite_alpha = hal::window::CompositeAlpha::OPAQUE;
+        config.present_mode = match self.present_mode {
+            PresentMode::NoVsync => hal::PresentMode::Immediate,
+            PresentMode::Vsync => hal::PresentMode::Fifo,
+        };
+        config
+    }
+
     pub fn to_texture_desc(&self) -> resource::TextureDescriptor {
         resource::TextureDescriptor {
             size: Extent3d {
@@ -108,10 +131,14 @@ pub struct SwapChainOutput {
     pub view_id: TextureViewId,
 }
 
-pub fn swap_chain_get_next_texture<B: GfxBackend>(swap_chain_id: SwapChainId) -> SwapChainOutput {
+pub fn swap_chain_get_next_texture<B: GfxBackend>(
+    swap_chain_id: SwapChainId
+) -> SwapChainOutput {
     let hub = B::hub();
     let mut token = Token::root();
 
+    #[cfg(not(feature = "remote"))]
+    let (mut surface_guard, mut token) = GLOBAL.surfaces.write(&mut token);
     let (device_guard, mut token) = hub.devices.read(&mut token);
     let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
     let swap_chain = &mut swap_chain_guard[swap_chain_id];
@@ -120,31 +147,73 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(swap_chain_id: SwapChainId) ->
     let image_index = unsafe {
         swap_chain
             .raw
+            .as_mut()
+            .unwrap()
             .acquire_image(!0, Some(&swap_chain.sem_available), None)
-    }
-    .ok();
+    };
 
     #[cfg(not(feature = "remote"))]
     {
-        //use crate::device::device_create_swap_chain_textures}
-        if image_index.is_none() {
+        if image_index.is_err() {
             warn!("acquire_image failed, re-creating");
-            unimplemented!()
-            //let textures = device_create_swap_chain(device_id, swap_chain_id, &descriptor, &mut token);
-            //swap_chain_populate_textures(swap_chain_id, textures, &mut token); //TODO?
+            //TODO: remove this once gfx-rs stops destroying the old swapchain
+            device.raw.wait_idle().unwrap();
+            let (mut texture_guard, mut token) = hub.textures.write(&mut token);
+            let (mut texture_view_guard, _) = hub.texture_views.write(&mut token);
+            let mut trackers = device.trackers.lock();
+
+            let old_raw = swap_chain.raw.take();
+            let config = swap_chain.desc.to_hal(swap_chain.frames.len() as u32);
+            let surface = &mut surface_guard[swap_chain.surface_id.value];
+
+            let (raw, images) = unsafe {
+                let suf = B::get_surface_mut(surface);
+                device
+                    .raw
+                    .create_swapchain(suf, config, old_raw)
+                    .unwrap()
+            };
+            swap_chain.raw = Some(raw);
+            for (frame, image) in swap_chain.frames.iter_mut().zip(images) {
+                let texture = &mut texture_guard[frame.texture_id.value];
+                let view_raw = unsafe {
+                    device
+                        .raw
+                        .create_image_view(
+                            &image,
+                            hal::image::ViewKind::D2,
+                            conv::map_texture_format(texture.format),
+                            hal::format::Swizzle::NO,
+                            texture.full_range.clone(),
+                        )
+                        .unwrap()
+                };
+                texture.raw = image;
+                trackers.textures.reset(
+                    frame.texture_id.value,
+                    texture.full_range.clone(),
+                    resource::TextureUsage::UNINITIALIZED,
+                );
+                let old_view = mem::replace(&mut texture_view_guard[frame.view_id.value].raw, view_raw);
+                unsafe {
+                    device.raw.destroy_image_view(old_view);
+                }
+            }
         }
     }
 
     let image_index = match image_index {
-        Some((index, suboptimal)) => {
+        Ok((index, suboptimal)) => {
             if suboptimal.is_some() {
                 warn!("acquire_image: sub-optimal");
             }
             index
         }
-        None => unsafe {
+        Err(_) => unsafe {
             swap_chain
                 .raw
+                .as_mut()
+                .unwrap()
                 .acquire_image(!0, Some(&swap_chain.sem_available), None)
                 .unwrap()
                 .0
@@ -266,7 +335,7 @@ pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
         let queue = &mut device.queue_group.queues[0];
         queue.submit(submission, Some(&frame.fence));
         queue.present(
-            iter::once((&swap_chain.raw, image_index)),
+            iter::once((swap_chain.raw.as_ref().unwrap(), image_index)),
             iter::once(&frame.sem_present),
         )
     };

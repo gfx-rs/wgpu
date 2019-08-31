@@ -8,10 +8,11 @@ use crate::{
     Backend,
     Device,
     DeviceId,
+    RefCount,
     SwapChainId,
 };
 #[cfg(not(feature = "remote"))]
-use crate::{gfx_select, SurfaceId};
+use crate::{gfx_select, LifeGuard, SurfaceId};
 
 #[cfg(not(feature = "remote"))]
 use bitflags::bitflags;
@@ -59,6 +60,7 @@ type GfxSurface<B> = <B as hal::Backend>::Surface;
 #[derive(Debug)]
 pub struct Surface {
     pub(crate) swap_chain: Option<SwapChainId>,
+    pub(crate) ref_count: RefCount,
     pub(crate) vulkan: Option<GfxSurface<backend::Vulkan>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub(crate) metal: GfxSurface<backend::Metal>,
@@ -158,10 +160,12 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
     use raw_window_handle::RawWindowHandle as Rwh;
 
     let instance = &GLOBAL.instance;
+    let ref_count = LifeGuard::new().ref_count;
     let surface = match raw_handle {
         #[cfg(target_os = "ios")]
         Rwh::IOS(h) => Surface {
             swap_chain: None,
+            ref_count,
             vulkan: None,
             metal: instance
                 .metal
@@ -170,6 +174,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         #[cfg(target_os = "macos")]
         Rwh::MacOS(h) => Surface {
             swap_chain: None,
+            ref_count,
             vulkan: instance
                 .vulkan
                 .as_ref()
@@ -181,6 +186,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::X11(h) => Surface {
             swap_chain: None,
+            ref_count,
             vulkan: instance
                 .vulkan
                 .as_ref()
@@ -189,6 +195,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::Wayland(h) => Surface {
             swap_chain: None,
+            ref_count,
             vulkan: instance
                 .vulkan
                 .as_ref()
@@ -197,6 +204,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         #[cfg(windows)]
         Rwh::Windows(h) => Surface {
             swap_chain: None,
+            ref_count,
             vulkan: instance
                 .vulkan
                 .as_ref()
@@ -235,6 +243,7 @@ pub extern "C" fn wgpu_create_surface_from_xlib(
 pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_void) -> SurfaceId {
     let surface = Surface {
         swap_chain: None,
+        ref_count: LifeGuard::new().ref_count,
         vulkan: None, //TODO: currently requires `NSView`
         metal: GLOBAL
             .instance

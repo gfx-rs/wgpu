@@ -1911,19 +1911,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
         suf.compatibility(&adapter.raw.physical_device)
     };
     let num_frames = *caps.image_count.start(); //TODO: configure?
-    let usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
-    let mut config = hal::SwapchainConfig::new(
-        desc.width,
-        desc.height,
-        conv::map_texture_format(desc.format),
-        num_frames, //TODO: configure?
-    );
-    //TODO: check for supported
-    config.composite_alpha = hal::window::CompositeAlpha::OPAQUE;
-    config.present_mode = match desc.present_mode {
-        swap_chain::PresentMode::NoVsync => hal::PresentMode::Immediate,
-        swap_chain::PresentMode::Vsync => hal::PresentMode::Fifo,
-    };
+    let config = desc.to_hal(num_frames);
 
     if let Some(formats) = formats {
         assert!(
@@ -1960,9 +1948,9 @@ pub fn device_create_swap_chain<B: GfxBackend>(
                 );
             }
             unsafe { old.command_pool.reset(false) };
-            (Some(old.raw), old.sem_available, old.command_pool)
+            (old.raw, old.sem_available, old.command_pool)
         }
-        _ => unsafe {
+        None => unsafe {
             let sem_available = device.raw.create_semaphore().unwrap();
             let command_pool = device
                 .raw
@@ -1979,7 +1967,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
         let suf = B::get_surface_mut(surface);
         device
             .raw
-            .create_swapchain(suf, config.with_image_usage(usage), old_raw)
+            .create_swapchain(suf, config, old_raw)
             .unwrap()
     };
 
@@ -1988,7 +1976,11 @@ pub fn device_create_swap_chain<B: GfxBackend>(
 
     let mut trackers = device.trackers.lock();
     let mut swap_chain = swap_chain::SwapChain {
-        raw: raw_swap_chain,
+        raw: Some(raw_swap_chain),
+        surface_id: Stored {
+            value: surface_id,
+            ref_count: surface.ref_count.clone(),
+        },
         device_id: Stored {
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
