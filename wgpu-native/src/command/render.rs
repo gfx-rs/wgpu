@@ -601,14 +601,14 @@ pub fn render_pass_set_pipeline<B: GfxBackend>(
             .zip(&pipeline_layout.bind_group_layout_ids)
             .enumerate()
         {
-            if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
+            if let LayoutChange::Match(bg_id, offsets) = entry.expect_layout(bgl_id) {
                 let desc_set = bind_group_guard[bg_id].raw.raw();
                 unsafe {
                     pass.raw.bind_graphics_descriptor_sets(
                         &pipeline_layout.raw,
                         index,
                         iter::once(desc_set),
-                        &[],
+                        offsets.iter().map(|offset| *offset as u32),
                     );
                 }
             }

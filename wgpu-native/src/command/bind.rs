@@ -22,9 +22,9 @@ pub struct BindGroupPair {
 }
 
 #[derive(Debug)]
-pub enum LayoutChange {
+pub enum LayoutChange<'a> {
     Unchanged,
-    Match(BindGroupId),
+    Match(BindGroupId, &'a [BufferAddress]),
     Mismatch,
 }
 
@@ -105,7 +105,8 @@ impl BindGroupEntry {
                 Some(BindGroupPair {
                     layout_id,
                     ref group_id,
-                }) if layout_id == bind_group_layout_id => LayoutChange::Match(group_id.value),
+                }) if layout_id == bind_group_layout_id =>
+                    LayoutChange::Match(group_id.value, &self.dynamic_offsets),
                 Some(_) | None => LayoutChange::Mismatch,
             }
         } else {
