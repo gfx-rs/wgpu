@@ -22,9 +22,9 @@ pub struct BindGroupPair {
 }
 
 #[derive(Debug)]
-pub enum LayoutChange {
+pub enum LayoutChange<'a> {
     Unchanged,
-    Match(BindGroupId),
+    Match(BindGroupId, &'a [BufferAddress]),
     Mismatch,
 }
 
@@ -33,7 +33,6 @@ pub enum Provision {
     Unchanged,
     Changed {
         was_compatible: bool,
-        now_compatible: bool,
     },
 }
 
@@ -93,7 +92,6 @@ impl BindGroupEntry {
 
         Provision::Changed {
             was_compatible,
-            now_compatible: self.expected_layout_id == Some(bind_group.layout_id),
         }
     }
 
@@ -105,7 +103,8 @@ impl BindGroupEntry {
                 Some(BindGroupPair {
                     layout_id,
                     ref group_id,
-                }) if layout_id == bind_group_layout_id => LayoutChange::Match(group_id.value),
+                }) if layout_id == bind_group_layout_id =>
+                    LayoutChange::Match(group_id.value, &self.dynamic_offsets),
                 Some(_) | None => LayoutChange::Mismatch,
             }
         } else {
@@ -168,36 +167,25 @@ impl Binder {
 
         match self.entries[index].provide(bind_group_id, bind_group, offsets) {
             Provision::Unchanged => None,
-            Provision::Changed {
-                now_compatible: false,
-                ..
-            } => {
-                trace!("\t\tnot compatible");
-                None
-            }
             Provision::Changed { was_compatible, .. } => {
-                if self.entries[.. index].iter().all(|entry| entry.is_valid()) {
-                    self.pipeline_layout_id.map(move |pipeline_layout_id| {
-                        let end = if was_compatible {
-                            trace!("\t\tgenerating follow-up sequence");
-                            MAX_BIND_GROUPS
-                        } else {
-                            index + 1
-                        };
-                        (
-                            pipeline_layout_id,
-                            TakeSome {
-                                iter: self.entries[index + 1 .. end]
-                                    .iter()
-                                    .map(|entry| entry.actual_value()),
-                            },
-                            self.entries[index + 1 ..]
+                let compatible_count = self.compatible_count();
+                if index < compatible_count {
+                    let end = compatible_count
+                        .min(if was_compatible { index + 1 } else { MAX_BIND_GROUPS });
+                    trace!("\t\tbinding up to {}", end);
+                    Some((
+                        self.pipeline_layout_id?,
+                        TakeSome {
+                            iter: self.entries[index + 1 .. end]
                                 .iter()
-                                .flat_map(|entry| entry.dynamic_offsets.as_slice()),
-                        )
-                    })
+                                .map(|entry| entry.actual_value()),
+                        },
+                        self.entries[index + 1 .. end]
+                            .iter()
+                            .flat_map(|entry| entry.dynamic_offsets.as_slice()),
+                    ))
                 } else {
-                    trace!("\t\tbehind an incompatible");
+                    trace!("\t\tskipping above compatible {}", compatible_count);
                     None
                 }
             }
@@ -212,5 +200,12 @@ impl Binder {
                 mask | 1u8 << i
             }
         })
+    }
+
+    fn compatible_count(&self) -> usize {
+        self.entries
+            .iter()
+            .position(|entry| !entry.is_valid())
+            .unwrap_or(self.entries.len())
     }
 }

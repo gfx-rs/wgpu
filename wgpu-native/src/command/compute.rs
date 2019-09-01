@@ -255,6 +255,7 @@ pub fn compute_pass_set_pipeline<B: GfxBackend>(
         pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
         pass.binder
             .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
+        let mut is_compatible = true;
 
         for (index, (entry, &bgl_id)) in pass
             .binder
@@ -263,15 +264,22 @@ pub fn compute_pass_set_pipeline<B: GfxBackend>(
             .zip(&pipeline_layout.bind_group_layout_ids)
             .enumerate()
         {
-            if let LayoutChange::Match(bg_id) = entry.expect_layout(bgl_id) {
-                let desc_set = bind_group_guard[bg_id].raw.raw();
-                unsafe {
-                    pass.raw.bind_compute_descriptor_sets(
-                        &pipeline_layout.raw,
-                        index,
-                        iter::once(desc_set),
-                        &[],
-                    );
+            match entry.expect_layout(bgl_id) {
+                LayoutChange::Match(bg_id, offsets) if is_compatible => {
+                    let desc_set = bind_group_guard[bg_id].raw.raw();
+                    unsafe {
+                        pass.raw.bind_compute_descriptor_sets(
+                            &pipeline_layout.raw,
+                            index,
+                            iter::once(desc_set),
+                            offsets.iter().map(|offset| *offset as u32),
+                        );
+                    }
+                }
+                LayoutChange::Match(..) |
+                LayoutChange::Unchanged => {}
+                LayoutChange::Mismatch => {
+                    is_compatible = false;
                 }
             }
         }
