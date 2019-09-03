@@ -21,7 +21,7 @@ license = "MPL-2.0"
 default = []
 
 [dependencies]
-wgn = { package = "wgpu-native", git = "https://github.com/gfx-rs/wgpu", rev = "b58c96e4a66943e09e9a9aa0ee8345c7bc878d38" }
+wgn = { package = "wgpu-native", git = "https://github.com/gfx-rs/wgpu", rev = "40fb3fcdfd38a3788bb1a358301dc9010778651b" }
 arrayvec = "0.4"
 raw-window-handle = "0.1"
 zerocopy = "0.2"
