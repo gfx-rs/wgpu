@@ -40,7 +40,7 @@ impl Instance {
     pub(crate) fn new(name: &str, version: u32) -> Self {
         Instance {
             //TODO: reconsider once `create` returns a `Result`
-            vulkan: if cfg!(all(unix, not(target_os = "ios"), not(target_os = "macos"))) {
+            vulkan: if cfg!(all(any(unix, windows), not(target_os = "ios"), not(target_os = "macos"))) {
                 Some(gfx_backend_vulkan::Instance::create(name, version))
             } else {
                 None
