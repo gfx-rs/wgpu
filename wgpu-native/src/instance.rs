@@ -333,7 +333,7 @@ pub fn request_adapter(
         panic!("No adapters are available!");
     }
 
-    let (mut integrated, mut discrete, mut other) = (None, None, None);
+    let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
 
     for (i, ty) in device_types.into_iter().enumerate() {
         match ty {
@@ -343,6 +343,9 @@ pub fn request_adapter(
             hal::adapter::DeviceType::DiscreteGpu => {
                 discrete = discrete.or(Some(i));
             }
+            hal::adapter::DeviceType::VirtualGpu => {
+                virt = virt.or(Some(i));
+            }
             _ => {
                 other = other.or(Some(i));
             }
@@ -350,9 +353,9 @@ pub fn request_adapter(
     }
 
     let preferred_gpu = match desc.power_preference {
-        PowerPreference::Default => integrated.or(discrete).or(other),
-        PowerPreference::LowPower => integrated.or(other).or(discrete),
-        PowerPreference::HighPerformance => discrete.or(other).or(integrated),
+        PowerPreference::Default => integrated.or(discrete).or(other).or(virt),
+        PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
+        PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
     };
     let mut token = Token::root();
 
