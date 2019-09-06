@@ -39,7 +39,7 @@ fn main() {
     };
 
     let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::LowPower,
+        power_preference: wgpu::PowerPreference::Default,
         backends: wgpu::BackendBit::PRIMARY,
     }).unwrap();
 
