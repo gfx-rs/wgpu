@@ -16,7 +16,7 @@ use crate::{
 };
 
 use copyless::VecHelper as _;
-use hal::command::RawCommandBuffer;
+use hal::command::CommandBuffer as _;
 
 use std::iter;
 

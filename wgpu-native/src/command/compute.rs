@@ -17,7 +17,7 @@ use crate::{
     BIND_BUFFER_ALIGNMENT,
 };
 
-use hal::{self, command::RawCommandBuffer};
+use hal::{self, command::CommandBuffer as _};
 use log::trace;
 
 use std::{iter, slice};

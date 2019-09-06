@@ -15,7 +15,13 @@ use crate::{
 #[cfg(not(feature = "remote"))]
 use crate::hub::GLOBAL;
 
-use hal::{self, Device as _, Swapchain as _};
+use hal::{
+    self,
+    command::CommandBuffer as _,
+    device::Device as _,
+    queue::CommandQueue as _,
+    window::Swapchain as _,
+};
 use log::{trace, warn};
 use parking_lot::Mutex;
 
@@ -33,7 +39,7 @@ const FRAME_TIMEOUT_MS: u64 = 1000;
 pub(crate) struct SwapChainLink<E> {
     pub swap_chain_id: SwapChainId, //TODO: strongly
     pub epoch: E,
-    pub image_index: hal::SwapImageIndex,
+    pub image_index: hal::window::SwapImageIndex,
 }
 
 impl SwapChainLink<Mutex<SwapImageEpoch>> {
@@ -53,7 +59,7 @@ pub(crate) struct Frame<B: hal::Backend> {
     pub sem_present: B::Semaphore,
     pub acquired_epoch: Option<SwapImageEpoch>,
     pub need_waiting: AtomicBool,
-    pub comb: hal::command::CommandBuffer<B, hal::General, hal::command::MultiShot>,
+    pub comb: B::CommandBuffer,
 }
 
 //TODO: does it need a ref-counted lifetime?
@@ -66,10 +72,10 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: SwapChainDescriptor,
     pub(crate) frames: Vec<Frame<B>>,
-    pub(crate) acquired: Vec<hal::SwapImageIndex>,
+    pub(crate) acquired: Vec<hal::window::SwapImageIndex>,
     pub(crate) sem_available: B::Semaphore,
     #[cfg_attr(feature = "remote", allow(dead_code))] //TODO: remove
-    pub(crate) command_pool: hal::CommandPool<B, hal::General>,
+    pub(crate) command_pool: B::CommandPool,
 }
 
 #[repr(C)]
@@ -91,7 +97,7 @@ pub struct SwapChainDescriptor {
 
 impl SwapChainDescriptor {
     pub(crate) fn to_hal(&self, num_frames: u32) -> hal::window::SwapchainConfig {
-        let mut config = hal::SwapchainConfig::new(
+        let mut config = hal::window::SwapchainConfig::new(
             self.width,
             self.height,
             conv::map_texture_format(self.format),
@@ -101,8 +107,8 @@ impl SwapChainDescriptor {
         config.image_usage = conv::map_texture_usage(self.usage, hal::format::Aspects::COLOR);
         config.composite_alpha = hal::window::CompositeAlpha::OPAQUE;
         config.present_mode = match self.present_mode {
-            PresentMode::NoVsync => hal::PresentMode::Immediate,
-            PresentMode::Vsync => hal::PresentMode::Fifo,
+            PresentMode::NoVsync => hal::window::PresentMode::Immediate,
+            PresentMode::Vsync => hal::window::PresentMode::Fifo,
         };
         config
     }
@@ -316,7 +322,7 @@ pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
         });
 
     let err = unsafe {
-        frame.comb.begin(false);
+        frame.comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
         frame.comb.pipeline_barrier(
             all_image_stages() .. hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
             hal::memory::Dependencies::empty(),
@@ -325,7 +331,7 @@ pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
         frame.comb.finish();
 
         // now prepare the GPU submission
-        let submission = hal::Submission {
+        let submission = hal::queue::Submission {
             command_buffers: iter::once(&frame.comb),
             wait_semaphores: None,
             signal_semaphores: Some(&frame.sem_present),
