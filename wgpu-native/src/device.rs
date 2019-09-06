@@ -43,10 +43,11 @@ use copyless::VecHelper as _;
 use hal::{
     self,
     backend::FastHashMap,
-    command::RawCommandBuffer,
-    queue::RawCommandQueue,
-    Device as _,
-    Surface as _,
+    command::CommandBuffer as _,
+    device::Device as _,
+    pool::CommandPool as _,
+    queue::CommandQueue as _,
+    window::Surface as _,
 };
 use log::{info, trace};
 use parking_lot::Mutex;
@@ -434,7 +435,7 @@ impl<B: GfxBackend> PendingResources<B> {
     }
 }
 
-type BufferMapResult = Result<*mut u8, hal::mapping::Error>;
+type BufferMapResult = Result<*mut u8, hal::device::MapError>;
 type BufferMapPendingCallback = (BufferMapOperation, BufferMapResult);
 
 fn map_buffer<B: hal::Backend>(
@@ -474,7 +475,7 @@ fn map_buffer<B: hal::Backend>(
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     pub(crate) adapter_id: AdapterId,
-    pub(crate) queue_group: hal::QueueGroup<B, hal::General>,
+    pub(crate) queue_group: hal::queue::QueueGroup<B>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<Heaps<B>>,
     desc_allocator: Mutex<DescriptorAllocator<B>>,
@@ -489,8 +490,8 @@ impl<B: GfxBackend> Device<B> {
     pub(crate) fn new(
         raw: B::Device,
         adapter_id: AdapterId,
-        queue_group: hal::QueueGroup<B, hal::General>,
-        mem_props: hal::MemoryProperties,
+        queue_group: hal::queue::QueueGroup<B>,
+        mem_props: hal::adapter::MemoryProperties,
     ) -> Self {
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
@@ -521,7 +522,7 @@ impl<B: GfxBackend> Device<B> {
         Device {
             raw,
             adapter_id,
-            com_allocator: command::CommandAllocator::new(queue_group.family()),
+            com_allocator: command::CommandAllocator::new(queue_group.family),
             mem_allocator: Mutex::new(heaps),
             desc_allocator: Mutex::new(DescriptorAllocator::new()),
             queue_group,
@@ -572,7 +573,7 @@ impl<B: GfxBackend> Device<B> {
             let (status, ptr) = match result {
                 Ok(ptr) => (BufferMapAsyncStatus::Success, ptr),
                 Err(e) => {
-                    log::error!("failed to map buffer: {}", e);
+                    log::error!("failed to map buffer: {:?}", e);
                     (BufferMapAsyncStatus::Error, ptr::null_mut())
                 }
             };
@@ -782,7 +783,7 @@ pub fn device_create_buffer_mapped<B: GfxBackend>(
             *mapped_ptr_out = ptr;
         },
         Err(e) => {
-            log::error!("failed to create buffer in a mapped state: {}", e);
+            log::error!("failed to create buffer in a mapped state: {:?}", e);
             unsafe {
                 *mapped_ptr_out = ptr::null_mut();
             }
@@ -1512,7 +1513,6 @@ pub fn queue_submit<B: GfxBackend>(queue_id: QueueId, command_buffer_ids: &[Comm
 
             unsafe {
                 device.queue_group.queues[0]
-                    .as_raw_mut()
                     .submit(submission, Some(&fence));
             }
         }
@@ -1954,8 +1954,8 @@ pub fn device_create_swap_chain<B: GfxBackend>(
             let sem_available = device.raw.create_semaphore().unwrap();
             let command_pool = device
                 .raw
-                .create_command_pool_typed(
-                    &device.queue_group,
+                .create_command_pool(
+                    device.queue_group.family,
                     hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
                 )
                 .unwrap();
@@ -1975,7 +1975,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
     surface.swap_chain = Some(id);
 
     let mut trackers = device.trackers.lock();
-    let mut swap_chain = swap_chain::SwapChain {
+    let mut swap_chain = swap_chain::SwapChain::<B> {
         raw: Some(raw_swap_chain),
         surface_id: Stored {
             value: surface_id,
@@ -2024,7 +2024,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
             placement: resource::TexturePlacement::SwapChain(swap_chain::SwapChainLink {
                 swap_chain_id: id, //TODO: strongly
                 epoch: Mutex::new(0),
-                image_index: i as hal::SwapImageIndex,
+                image_index: i as hal::window::SwapImageIndex,
             }),
             life_guard: LifeGuard::new(),
         };
@@ -2067,7 +2067,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
             sem_present: device.raw.create_semaphore().unwrap(),
             acquired_epoch: None,
             need_waiting: AtomicBool::new(false),
-            comb: swap_chain.command_pool.acquire_command_buffer(),
+            comb: swap_chain.command_pool.allocate_one(hal::command::Level::Primary),
         });
     }
 

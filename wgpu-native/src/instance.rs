@@ -20,7 +20,12 @@ use log::info;
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
 
-use hal::{self, Instance as _, PhysicalDevice as _};
+use hal::{
+    self,
+    Instance as _,
+    adapter::PhysicalDevice as _,
+    queue::QueueFamily as _,
+};
 #[cfg(not(feature = "remote"))]
 use std::marker::PhantomData;
 
@@ -40,17 +45,13 @@ impl Instance {
     pub(crate) fn new(name: &str, version: u32) -> Self {
         Instance {
             //TODO: reconsider once `create` returns a `Result`
-            vulkan: if cfg!(all(any(unix, windows), not(target_os = "ios"), not(target_os = "macos"))) {
-                Some(gfx_backend_vulkan::Instance::create(name, version))
-            } else {
-                None
-            },
+            vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: gfx_backend_metal::Instance::create(name, version),
+            metal: gfx_backend_metal::Instance::create(name, version).unwrap(),
             #[cfg(windows)]
-            dx12: Some(gfx_backend_dx12::Instance::create(name, version)),
+            dx12: gfx_backend_dx12::Instance::create(name, version).ok(),
             #[cfg(windows)]
-            dx11: gfx_backend_dx11::Instance::create(name, version),
+            dx11: gfx_backend_dx11::Instance::create(name, version).unwrap(),
         }
     }
 }
@@ -72,7 +73,7 @@ pub struct Surface {
 
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
-    pub(crate) raw: hal::Adapter<B>,
+    pub(crate) raw: hal::adapter::Adapter<B>,
 }
 
 
@@ -178,7 +179,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
             vulkan: instance
                 .vulkan
                 .as_ref()
-                .map(|inst| inst.create_surface_from_nsview(h.ns_view)),
+                .map(|inst| inst.create_surface_from_ns_view(h.ns_view)),
             metal: instance
                 .metal
                 .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
@@ -440,7 +441,19 @@ pub fn adapter_request_device<B: GfxBackend>(
     let device = {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id].raw;
-        let (raw, queue_group) = adapter.open_with::<_, hal::General>(1, |_qf| true).unwrap();
+
+        let family = adapter
+            .queue_families
+            .iter()
+            .find(|family| {
+                family.queue_type().supports_graphics()
+            })
+            .unwrap();
+        let mut gpu = unsafe {
+            adapter.physical_device
+                .open(&[(family, &[1.0])], hal::Features::empty())
+                .unwrap()
+        };
 
         let limits = adapter.physical_device.limits();
         assert_eq!(
@@ -455,7 +468,12 @@ pub fn adapter_request_device<B: GfxBackend>(
         );
 
         let mem_props = adapter.physical_device.memory_properties();
-        Device::new(raw, adapter_id, queue_group, mem_props)
+        Device::new(
+            gpu.device,
+            adapter_id,
+            gpu.queue_groups.swap_remove(0),
+            mem_props,
+        )
     };
 
     hub.devices.register_identity(id_in, device, &mut token)

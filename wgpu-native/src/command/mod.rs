@@ -41,7 +41,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{adapter::PhysicalDevice, command::RawCommandBuffer, Device as _};
+use hal::{adapter::PhysicalDevice as _, command::CommandBuffer as _, device::Device as _};
 use log::trace;
 
 #[cfg(not(feature = "remote"))]
@@ -576,19 +576,19 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                             | ChannelType::Sfloat
                             | ChannelType::Uscaled
                             | ChannelType::Sscaled
-                            | ChannelType::Srgb => hal::command::ClearColor::Sfloat(
-                                conv::map_color_f32(&at.clear_color),
-                            ),
-                            ChannelType::Sint => {
-                                hal::command::ClearColor::Sint(conv::map_color_i32(&at.clear_color))
-                            }
-                            ChannelType::Uint => {
-                                hal::command::ClearColor::Uint(conv::map_color_u32(&at.clear_color))
-                            }
+                            | ChannelType::Srgb => hal::command::ClearColor {
+                                float32: conv::map_color_f32(&at.clear_color),
+                            },
+                            ChannelType::Sint => hal::command::ClearColor {
+                                sint32: conv::map_color_i32(&at.clear_color),
+                            },
+                            ChannelType::Uint => hal::command::ClearColor {
+                                uint32: conv::map_color_u32(&at.clear_color),
+                            },
                         };
-                        Some(hal::command::ClearValueRaw::from(
-                            hal::command::ClearValue::Color(value),
-                        ))
+                        Some(hal::command::ClearValue {
+                            color: value,
+                        })
                     }
                 }
             })
@@ -596,11 +596,13 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 match (at.depth_load_op, at.stencil_load_op) {
                     (LoadOp::Load, LoadOp::Load) => None,
                     (LoadOp::Clear, _) | (_, LoadOp::Clear) => {
-                        let value =
-                            hal::command::ClearDepthStencil(at.clear_depth, at.clear_stencil);
-                        Some(hal::command::ClearValueRaw::from(
-                            hal::command::ClearValue::DepthStencil(value),
-                        ))
+                        let value = hal::command::ClearDepthStencil {
+                            depth: at.clear_depth,
+                            stencil: at.clear_stencil,
+                        };
+                        Some(hal::command::ClearValue {
+                            depth_stencil: value,
+                        })
                     }
                 }
             }));

@@ -20,7 +20,7 @@ use crate::{
     Stored,
 };
 
-use hal::command::RawCommandBuffer;
+use hal::command::CommandBuffer as _;
 use log::trace;
 
 use std::{iter, ops::Range, slice};
