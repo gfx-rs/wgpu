@@ -85,6 +85,8 @@ pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
         cmb.trackers
             .buffers
             .use_replace(&*buffer_guard, source, (), BufferUsage::COPY_SRC);
+    assert!(src_buffer.usage.contains(BufferUsage::COPY_SRC));
+
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -96,6 +98,8 @@ pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
         cmb.trackers
             .buffers
             .use_replace(&*buffer_guard, destination, (), BufferUsage::COPY_DST);
+    assert!(dst_buffer.usage.contains(BufferUsage::COPY_DST));
+
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -155,6 +159,8 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
         cmb.trackers
             .buffers
             .use_replace(&*buffer_guard, source.buffer, (), BufferUsage::COPY_SRC);
+    assert!(src_buffer.usage.contains(BufferUsage::COPY_SRC));
+
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &src_buffer.raw,
@@ -168,6 +174,8 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
         destination.to_selector(aspects),
         TextureUsage::COPY_DST,
     );
+    assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
+
     let dst_barriers = dst_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &dst_texture.raw,
@@ -249,6 +257,8 @@ pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
         source.to_selector(aspects),
         TextureUsage::COPY_SRC,
     );
+    assert!(src_texture.usage.contains(TextureUsage::COPY_SRC));
+
     let src_barriers = src_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &src_texture.raw,
@@ -266,6 +276,8 @@ pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
         (),
         BufferUsage::COPY_DST,
     );
+    assert!(dst_buffer.usage.contains(BufferUsage::COPY_DST));
+
     let dst_barrier = dst_barriers.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),
         target: &dst_buffer.raw,
@@ -344,6 +356,8 @@ pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
         source.to_selector(aspects),
         TextureUsage::COPY_SRC,
     );
+    assert!(src_texture.usage.contains(TextureUsage::COPY_SRC));
+
     barriers.extend(src_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &src_texture.raw,
@@ -357,6 +371,8 @@ pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
         destination.to_selector(aspects),
         TextureUsage::COPY_DST,
     );
+    assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
+
     barriers.extend(dst_pending.map(|pending| hal::memory::Barrier::Image {
         states: pending.to_states(),
         target: &dst_texture.raw,

@@ -633,6 +633,7 @@ impl<B: GfxBackend> Device<B> {
                 value: self_id,
                 ref_count: self.life_guard.ref_count.clone(),
             },
+            usage: desc.usage,
             memory,
             size: desc.size,
             mapped_write_ranges: Vec::new(),
@@ -705,6 +706,7 @@ impl<B: GfxBackend> Device<B> {
                 value: self_id,
                 ref_count: self.life_guard.ref_count.clone(),
             },
+            usage: desc.usage,
             kind,
             format: desc.format,
             full_range: hal::image::SubresourceRange {
@@ -1173,7 +1175,7 @@ pub fn device_create_bind_group<B: GfxBackend>(
     let mut used = TrackerSet::new(B::VARIANT);
     {
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-        let (_, mut token) = hub.textures.read(&mut token); //skip token
+        let (texture_guard, mut token) = hub.textures.read(&mut token); //skip token
         let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
         let (sampler_guard, _) = hub.samplers.read(&mut token);
 
@@ -1208,6 +1210,7 @@ pub fn device_create_bind_group<B: GfxBackend>(
                         .buffers
                         .use_extend(&*buffer_guard, bb.buffer, (), usage)
                         .unwrap();
+                    assert!(buffer.usage.contains(usage));
 
                     let end = if bb.size == 0 {
                         None
@@ -1245,14 +1248,16 @@ pub fn device_create_bind_group<B: GfxBackend>(
                         .views
                         .use_extend(&*texture_view_guard, id, (), ())
                         .unwrap();
-                    used.textures
-                        .change_extend(
+                    let texture = used.textures
+                        .use_extend(
+                            &*texture_guard,
                             view.texture_id.value,
-                            &view.texture_id.ref_count,
                             view.range.clone(),
                             usage,
                         )
                         .unwrap();
+                    assert!(texture.usage.contains(usage));
+
                     hal::pso::Descriptor::Image(&view.raw, image_layout)
                 }
             };
@@ -2018,6 +2023,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
                 value: device_id,
                 ref_count: device.life_guard.ref_count.clone(),
             },
+            usage: resource::TextureUsage::OUTPUT_ATTACHMENT,
             kind,
             format: desc.format,
             full_range: range.clone(),
@@ -2129,6 +2135,14 @@ pub fn buffer_map_async<B: GfxBackend>(
     let (device_id, ref_count) = {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let buffer = &mut buffer_guard[buffer_id];
+
+        if usage.contains(resource::BufferUsage::MAP_READ) {
+            assert!(buffer.usage.contains(resource::BufferUsage::MAP_READ));
+        }
+
+        if usage.contains(resource::BufferUsage::MAP_WRITE) {
+            assert!(buffer.usage.contains(resource::BufferUsage::MAP_WRITE));
+        }
 
         if buffer.pending_map_operation.is_some() {
             operation.call_error();

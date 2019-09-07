@@ -248,20 +248,6 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             sample_count & samples_count_limit != 0,
             "Attachment sample_count must be supported by physical device limits"
         );
-        for at in color_attachments.iter() {
-            let sample_count_check = view_guard[at.attachment].samples;
-            assert_eq!(
-                sample_count_check, sample_count,
-                "All attachments must have the same sample_count"
-            );
-
-            if let Some(resolve) = unsafe { at.resolve_target.as_ref() } {
-                assert_eq!(
-                    view_guard[*resolve].samples, 1,
-                    "All target_resolves must have a sample_count of 1"
-                );
-            }
-        }
 
         trace!(
             "Encoding render pass begin in command buffer {:?}",
@@ -281,6 +267,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 } else {
                     extent = Some(view.extent);
                 }
+
+                let texture = &texture_guard[view.texture_id.value];
+                assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
+
                 let old_layout = match trackers
                     .textures
                     .query(view.texture_id.value, view.range.clone())
@@ -295,12 +285,13 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     None => {
                         // Required sub-resources have inconsistent states, we need to
                         // issue individual barriers instead of relying on the render pass.
-                        let (texture, pending) = trackers.textures.use_replace(
-                            &*texture_guard,
+                        let pending = trackers.textures.change_replace(
                             view.texture_id.value,
+                            &texture.life_guard.ref_count,
                             view.range.clone(),
                             TextureUsage::OUTPUT_ATTACHMENT,
                         );
+
                         barriers.extend(pending.map(|pending| {
                             trace!("\tdepth-stencil {:?}", pending);
                             hal::memory::Barrier::Image {
@@ -335,6 +326,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 } else {
                     extent = Some(view.extent);
                 }
+                assert_eq!(
+                    view.samples, sample_count,
+                    "All attachments must have the same sample_count"
+                );
 
                 if view.is_owned_by_swap_chain {
                     let link = match texture_guard[view.texture_id.value].placement {
@@ -348,6 +343,9 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     swap_chain_links.push(link);
                 }
 
+                let texture = &texture_guard[view.texture_id.value];
+                assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
+
                 let old_layout = match trackers
                     .textures
                     .query(view.texture_id.value, view.range.clone())
@@ -356,12 +354,13 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     None => {
                         // Required sub-resources have inconsistent states, we need to
                         // issue individual barriers instead of relying on the render pass.
-                        let (texture, pending) = trackers.textures.use_replace(
-                            &*texture_guard,
+                        let pending = trackers.textures.change_replace(
                             view.texture_id.value,
+                            &texture.life_guard.ref_count,
                             view.range.clone(),
                             TextureUsage::OUTPUT_ATTACHMENT,
                         );
+
                         barriers.extend(pending.map(|pending| {
                             trace!("\tcolor {:?}", pending);
                             hal::memory::Barrier::Image {
@@ -393,6 +392,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     } else {
                         extent = Some(view.extent);
                     }
+                    assert_eq!(
+                        view.samples, 1,
+                        "All resolve_targets must have a sample_count of 1"
+                    );
 
                     if view.is_owned_by_swap_chain {
                         let link = match texture_guard[view.texture_id.value].placement {
@@ -406,6 +409,9 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         swap_chain_links.push(link);
                     }
 
+                    let texture = &texture_guard[view.texture_id.value];
+                    assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
+
                     let old_layout = match trackers
                         .textures
                         .query(view.texture_id.value, view.range.clone())
@@ -416,12 +422,13 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         None => {
                             // Required sub-resources have inconsistent states, we need to
                             // issue individual barriers instead of relying on the render pass.
-                            let (texture, pending) = trackers.textures.use_replace(
-                                &*texture_guard,
+                            let pending = trackers.textures.change_replace(
                                 view.texture_id.value,
+                                &texture.life_guard.ref_count,
                                 view.range.clone(),
                                 TextureUsage::OUTPUT_ATTACHMENT,
                             );
+
                             barriers.extend(pending.map(|pending| {
                                 trace!("\tresolve {:?}", pending);
                                 hal::memory::Barrier::Image {

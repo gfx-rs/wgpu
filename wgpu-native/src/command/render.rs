@@ -320,6 +320,7 @@ pub fn render_pass_set_index_buffer<B: GfxBackend>(
         .buffers
         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
         .unwrap();
+    assert!(buffer.usage.contains(BufferUsage::INDEX));
 
     let range = offset .. buffer.size;
     pass.index_state.bound_buffer_view = Some((buffer_id, range));
@@ -368,6 +369,8 @@ pub fn render_pass_set_vertex_buffers<B: GfxBackend>(
             .buffers
             .use_extend(&*buffer_guard, id, (), BufferUsage::VERTEX)
             .unwrap();
+        assert!(buffer.usage.contains(BufferUsage::VERTEX));
+
         vbs.total_size = buffer.size - offset;
     }
 
@@ -459,6 +462,7 @@ pub fn render_pass_draw_indirect<B: GfxBackend>(
             BufferUsage::INDIRECT,
         )
         .unwrap();
+    assert!(buffer.usage.contains(BufferUsage::INDIRECT));
 
     unsafe {
         pass.raw.draw_indirect(&buffer.raw, indirect_offset, 1, 0);
@@ -541,6 +545,7 @@ pub fn render_pass_draw_indexed_indirect<B: GfxBackend>(
             BufferUsage::INDIRECT,
         )
         .unwrap();
+    assert!(buffer.usage.contains(BufferUsage::INDIRECT));
 
     unsafe {
         pass.raw
