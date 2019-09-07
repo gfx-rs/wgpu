@@ -336,6 +336,7 @@ pub fn render_pass_set_index_buffer<B: GfxBackend>(
     }
 }
 
+#[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_index_buffer(
     pass_id: RenderPassId,
     buffer_id: BufferId,
