@@ -648,7 +648,6 @@ typedef struct {
 } WGPURequestAdapterOptions;
 
 typedef struct {
-  WGPUTextureId texture_id;
   WGPUTextureViewId view_id;
 } WGPUSwapChainOutput;
 
@@ -900,7 +899,9 @@ void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
 WGPUAdapterId wgpu_request_adapter(const WGPURequestAdapterOptions *desc);
 #endif
 
+#if !defined(WGPU_REMOTE)
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
+#endif
 
 void wgpu_swap_chain_present(WGPUSwapChainId swap_chain_id);
 

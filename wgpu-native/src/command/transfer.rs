@@ -3,8 +3,6 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     gfx_select,
     hub::{GfxBackend, Token},
-    resource::TexturePlacement,
-    swap_chain::SwapChainLink,
     BufferAddress,
     BufferId,
     BufferUsage,
@@ -15,7 +13,6 @@ use crate::{
     TextureUsage,
 };
 
-use copyless::VecHelper as _;
 use hal::command::CommandBuffer as _;
 
 use std::iter;
@@ -183,14 +180,6 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
         range: pending.selector,
     });
 
-    if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
-        cmb.swap_chain_links.alloc().init(SwapChainLink {
-            swap_chain_id: link.swap_chain_id.clone(),
-            epoch: *link.epoch.lock(),
-            image_index: link.image_index,
-        });
-    }
-
     let aspects = dst_texture.full_range.aspects;
     let bytes_per_texel = conv::map_texture_format(dst_texture.format)
         .surface_desc()
@@ -265,10 +254,6 @@ pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
         families: None,
         range: pending.selector,
     });
-    match src_texture.placement {
-        TexturePlacement::SwapChain(_) => unimplemented!(),
-        TexturePlacement::Memory(_) => (),
-    }
 
     let (dst_buffer, dst_barriers) = cmb.trackers.buffers.use_replace(
         &*buffer_guard,
@@ -379,14 +364,6 @@ pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
         families: None,
         range: pending.selector,
     }));
-
-    if let TexturePlacement::SwapChain(ref link) = dst_texture.placement {
-        cmb.swap_chain_links.alloc().init(SwapChainLink {
-            swap_chain_id: link.swap_chain_id.clone(),
-            epoch: *link.epoch.lock(),
-            image_index: link.image_index,
-        });
-    }
 
     let aspects = src_texture.full_range.aspects & dst_texture.full_range.aspects;
     let region = hal::command::ImageCopy {

@@ -35,7 +35,7 @@ impl<T> Clone for Id<T> {
 
 impl<T> fmt::Debug for Id<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        self.0.fmt(formatter)
+        self.unzip().fmt(formatter)
     }
 }
 
@@ -108,6 +108,19 @@ pub type ComputePassId = Id<crate::ComputePass<Dummy>>;
 // Swap chain
 pub type SurfaceId = Id<crate::Surface>;
 pub type SwapChainId = Id<crate::SwapChain<Dummy>>;
+
+impl SurfaceId {
+    pub(crate) fn to_swap_chain_id(&self, backend: Backend) -> SwapChainId {
+        let (index, epoch, _) = self.unzip();
+        Id::zip(index, epoch, backend)
+    }
+}
+impl SwapChainId {
+    pub(crate) fn to_surface_id(&self) -> SurfaceId {
+        let (index, epoch, _) = self.unzip();
+        Id::zip(index, epoch, Backend::Empty)
+    }
+}
 
 #[test]
 fn test_id_backend() {

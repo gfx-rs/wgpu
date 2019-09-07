@@ -1,5 +1,4 @@
 use crate::{
-    swap_chain::{SwapChainLink, SwapImageEpoch},
     BufferAddress,
     BufferMapReadCallback,
     BufferMapWriteCallback,
@@ -8,12 +7,12 @@ use crate::{
     LifeGuard,
     RefCount,
     Stored,
+    SwapChainId,
     TextureId,
 };
 
 use bitflags::bitflags;
 use hal;
-use parking_lot::Mutex;
 use rendy_memory::MemoryBlock;
 
 use std::borrow::Borrow;
@@ -208,22 +207,6 @@ pub struct TextureDescriptor {
 }
 
 #[derive(Debug)]
-pub(crate) enum TexturePlacement<B: hal::Backend> {
-    #[cfg_attr(not(not(feature = "remote")), allow(unused))]
-    SwapChain(SwapChainLink<Mutex<SwapImageEpoch>>),
-    Memory(MemoryBlock<B>),
-}
-
-impl<B: hal::Backend> TexturePlacement<B> {
-    pub fn as_swap_chain(&self) -> &SwapChainLink<Mutex<SwapImageEpoch>> {
-        match *self {
-            TexturePlacement::SwapChain(ref link) => link,
-            TexturePlacement::Memory(_) => panic!("Expected swap chain link!"),
-        }
-    }
-}
-
-#[derive(Debug)]
 pub struct Texture<B: hal::Backend> {
     pub(crate) raw: B::Image,
     pub(crate) device_id: Stored<DeviceId>,
@@ -231,7 +214,7 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: TextureFormat,
     pub(crate) full_range: hal::image::SubresourceRange,
-    pub(crate) placement: TexturePlacement<B>,
+    pub(crate) memory: MemoryBlock<B>,
     pub(crate) life_guard: LifeGuard,
 }
 
@@ -279,16 +262,26 @@ pub struct TextureViewDescriptor {
 }
 
 #[derive(Debug)]
+pub(crate) enum TextureViewInner<B: hal::Backend> {
+    Native {
+        raw: B::ImageView,
+        source_id: Stored<TextureId>,
+    },
+    SwapChain {
+        image: <B::Surface as hal::window::PresentationSurface<B>>::SwapchainImage,
+        source_id: Stored<SwapChainId>,
+    },
+}
+
+#[derive(Debug)]
 pub struct TextureView<B: hal::Backend> {
-    pub(crate) raw: B::ImageView,
-    pub(crate) texture_id: Stored<TextureId>,
+    pub(crate) inner: TextureViewInner<B>,
     //TODO: store device_id for quick access?
     pub(crate) format: TextureFormat,
     pub(crate) extent: hal::image::Extent,
     pub(crate) samples: hal::image::NumSamples,
     pub(crate) range: hal::image::SubresourceRange,
-    pub(crate) is_owned_by_swap_chain: bool,
-    #[cfg_attr(not(not(feature = "remote")), allow(dead_code))]
+    #[cfg_attr(feature = "remote", allow(dead_code))]
     pub(crate) life_guard: LifeGuard,
 }
 

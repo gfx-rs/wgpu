@@ -135,11 +135,19 @@ impl<T, I: TypedId> Storage<T, I> {
         }
     }
 
-    pub fn remove(&mut self, id: I) -> T {
+    pub fn insert(&mut self, id: I, value: T) -> Option<T> {
         let (index, epoch, _) = id.unzip();
-        let (value, storage_epoch) = self.map.remove(index as usize).unwrap();
-        assert_eq!(epoch, storage_epoch);
-        value
+        let old = self.map.insert(index as usize, (value, epoch));
+        old.map(|(v, _storage_epoch)| v)
+    }
+
+    pub fn remove(&mut self, id: I) -> Option<T> {
+        let (index, epoch, _) = id.unzip();
+        self.map.remove(index as usize)
+            .map(|(value, storage_epoch)| {
+                assert_eq!(epoch, storage_epoch);
+                value
+            })
     }
 }
 
@@ -200,9 +208,9 @@ impl<B: hal::Backend> Access<Buffer<B>> for RenderPass<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for RenderPipeline<B> {}
 impl<B: hal::Backend> Access<Texture<B>> for Root {}
 impl<B: hal::Backend> Access<Texture<B>> for Device<B> {}
-impl<B: hal::Backend> Access<Texture<B>> for SwapChain<B> {}
 impl<B: hal::Backend> Access<Texture<B>> for Buffer<B> {}
 impl<B: hal::Backend> Access<TextureView<B>> for Root {}
+impl<B: hal::Backend> Access<TextureView<B>> for SwapChain<B> {}
 impl<B: hal::Backend> Access<TextureView<B>> for Device<B> {}
 impl<B: hal::Backend> Access<TextureView<B>> for Texture<B> {}
 impl<B: hal::Backend> Access<Sampler<B>> for Root {}
@@ -281,9 +289,8 @@ impl<T, I: TypedId> Registry<T, I> {
 
 impl<T, I: TypedId + Copy> Registry<T, I> {
     pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
-        let (index, epoch, backend) = id.unzip();
-        debug_assert_eq!(backend, self.backend);
-        let old = self.data.write().map.insert(index as usize, (value, epoch));
+        debug_assert_eq!(id.unzip().2, self.backend);
+        let old = self.data.write().insert(id, value);
         assert!(old.is_none());
     }
 
@@ -311,7 +318,7 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     }
 
     pub fn unregister<A: Access<T>>(&self, id: I, _token: &mut Token<A>) -> (T, Token<T>) {
-        let value = self.data.write().remove(id);
+        let value = self.data.write().remove(id).unwrap();
         //Note: careful about the order here!
         #[cfg(not(feature = "remote"))]
         self.identity.lock().free(id);
