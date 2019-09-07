@@ -1,7 +1,7 @@
 #define WGPU_LOCAL
 
 
-/* Generated with cbindgen:0.9.0 */
+/* Generated with cbindgen:0.9.1 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -303,12 +303,12 @@ typedef struct {
   double b;
   double a;
 } WGPUColor;
-#define WGPUColor_TRANSPARENT (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 0 }
-#define WGPUColor_BLACK (WGPUColor){ .r = 0, .g = 0, .b = 0, .a = 1 }
-#define WGPUColor_WHITE (WGPUColor){ .r = 1, .g = 1, .b = 1, .a = 1 }
-#define WGPUColor_RED (WGPUColor){ .r = 1, .g = 0, .b = 0, .a = 1 }
-#define WGPUColor_GREEN (WGPUColor){ .r = 0, .g = 1, .b = 0, .a = 1 }
-#define WGPUColor_BLUE (WGPUColor){ .r = 0, .g = 0, .b = 1, .a = 1 }
+#define WGPUColor_TRANSPARENT (WGPUColor){ .r = 0.0, .g = 0.0, .b = 0.0, .a = 0.0 }
+#define WGPUColor_BLACK (WGPUColor){ .r = 0.0, .g = 0.0, .b = 0.0, .a = 1.0 }
+#define WGPUColor_WHITE (WGPUColor){ .r = 1.0, .g = 1.0, .b = 1.0, .a = 1.0 }
+#define WGPUColor_RED (WGPUColor){ .r = 1.0, .g = 0.0, .b = 0.0, .a = 1.0 }
+#define WGPUColor_GREEN (WGPUColor){ .r = 0.0, .g = 1.0, .b = 0.0, .a = 1.0 }
+#define WGPUColor_BLUE (WGPUColor){ .r = 0.0, .g = 0.0, .b = 1.0, .a = 1.0 }
 
 typedef struct {
   WGPUTextureViewId attachment;
@@ -350,7 +350,7 @@ typedef struct {
   float y;
   float z;
 } WGPUOrigin3d;
-#define WGPUOrigin3d_ZERO (WGPUOrigin3d){ .x = 0, .y = 0, .z = 0 }
+#define WGPUOrigin3d_ZERO (WGPUOrigin3d){ .x = 0.0, .y = 0.0, .z = 0.0 }
 
 typedef struct {
   WGPUTextureId texture;
@@ -867,6 +867,10 @@ void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uintptr_t offsets_length);
 
 void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
+
+void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
+                                       WGPUBufferId buffer_id,
+                                       WGPUBufferAddress offset);
 
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
 
