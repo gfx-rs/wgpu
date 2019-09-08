@@ -6,6 +6,7 @@ pub mod backend {
     pub use gfx_backend_empty::Backend as Empty;
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub use gfx_backend_metal::Backend as Metal;
+    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
     pub use gfx_backend_vulkan::Backend as Vulkan;
 }
 
@@ -202,6 +203,7 @@ pub enum InputState {}
 macro_rules! gfx_select {
     ($id:expr => $function:ident( $($param:expr),+ )) => {
         match $id.backend() {
+            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
             $crate::Backend::Vulkan => $function::<$crate::backend::Vulkan>( $($param),+ ),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             $crate::Backend::Metal => $function::<$crate::backend::Metal>( $($param),+ ),

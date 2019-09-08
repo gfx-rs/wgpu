@@ -30,7 +30,6 @@ lazy_static = "1.1.0"
 log = "0.4"
 hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019" }
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019", features = ["x11"] }
 parking_lot = "0.9"
 raw-window-handle = "0.1"
 rendy-memory = { git = "https://github.com/amethyst/rendy", rev = "a8ac0de977a28d09592d615f8857461622833443" }
@@ -40,7 +39,12 @@ vec_map = "0.8"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019", optional = true }
+
+[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019", features = ["x11"] }
 
 [target.'cfg(windows)'.dependencies]
 gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019" }
 gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019" }
+gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "a084a1f2fec6c9ed928c53e2dc8c1761782b9019" }
