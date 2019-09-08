@@ -11,6 +11,7 @@ use std::slice;
 use std::thread;
 
 pub use wgn::{
+    AdapterInfo,
     AddressMode,
     BackendBit,
     BlendDescriptor,
@@ -560,6 +561,10 @@ impl Adapter {
             temp_command_buffers: Vec::new(),
         };
         (device, queue)
+    }
+
+    pub fn get_info(&self) -> AdapterInfo {
+        wgn::wgpu_adapter_get_info(self.id)
     }
 }
 
