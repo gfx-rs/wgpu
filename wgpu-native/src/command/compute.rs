@@ -205,6 +205,7 @@ pub fn compute_pass_dispatch_indirect<B: GfxBackend>(
         (),
         BufferUsage::INDIRECT,
     );
+    assert!(src_buffer.usage.contains(BufferUsage::INDIRECT));
 
     let barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
         states: pending.to_states(),

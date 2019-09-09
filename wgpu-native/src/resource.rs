@@ -89,6 +89,7 @@ impl BufferMapOperation {
 pub struct Buffer<B: hal::Backend> {
     pub(crate) raw: B::Buffer,
     pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) usage: BufferUsage,
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: BufferAddress,
     pub(crate) mapped_write_ranges: Vec<std::ops::Range<u64>>,
@@ -226,6 +227,7 @@ impl<B: hal::Backend> TexturePlacement<B> {
 pub struct Texture<B: hal::Backend> {
     pub(crate) raw: B::Image,
     pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) usage: TextureUsage,
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: TextureFormat,
     pub(crate) full_range: hal::image::SubresourceRange,
