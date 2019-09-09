@@ -378,6 +378,7 @@ impl<B: GfxBackend> Default for Hub<B> {
 
 #[derive(Debug, Default)]
 pub struct Hubs {
+    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
     vulkan: Hub<backend::Vulkan>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: Hub<backend::Metal>,
@@ -408,6 +409,7 @@ pub trait GfxBackend: hal::Backend {
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
+#[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
 impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
     fn hub() -> &'static Hub<Self> {

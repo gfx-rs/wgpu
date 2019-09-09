@@ -32,6 +32,7 @@ use std::marker::PhantomData;
 
 #[derive(Debug)]
 pub struct Instance {
+    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
     vulkan: Option<gfx_backend_vulkan::Instance>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: gfx_backend_metal::Instance,
@@ -44,7 +45,7 @@ pub struct Instance {
 impl Instance {
     pub(crate) fn new(name: &str, version: u32) -> Self {
         Instance {
-            //TODO: reconsider once `create` returns a `Result`
+            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
             vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: gfx_backend_metal::Instance::create(name, version).unwrap(),
@@ -62,6 +63,7 @@ type GfxSurface<B> = <B as hal::Backend>::Surface;
 pub struct Surface {
     pub(crate) swap_chain: Option<SwapChainId>,
     pub(crate) ref_count: RefCount,
+    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
     pub(crate) vulkan: Option<GfxSurface<backend::Vulkan>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub(crate) metal: GfxSurface<backend::Metal>,
@@ -167,6 +169,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         Rwh::IOS(h) => Surface {
             swap_chain: None,
             ref_count,
+            #[cfg(feature = "gfx-backend-vulkan")]
             vulkan: None,
             metal: instance
                 .metal
@@ -176,6 +179,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         Rwh::MacOS(h) => Surface {
             swap_chain: None,
             ref_count,
+            #[cfg(feature = "gfx-backend-vulkan")]
             vulkan: instance
                 .vulkan
                 .as_ref()
@@ -245,6 +249,7 @@ pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_v
     let surface = Surface {
         swap_chain: None,
         ref_count: LifeGuard::new().ref_count,
+        #[cfg(feature = "gfx-backend-vulkan")]
         vulkan: None, //TODO: currently requires `NSView`
         metal: GLOBAL
             .instance
@@ -296,6 +301,7 @@ pub fn request_adapter(
     let id_dx12 = find_input(Backend::Dx12);
     let id_dx11 = find_input(Backend::Dx11);
 
+    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
     let mut adapters_vk = match instance.vulkan {
         Some(ref inst) if id_vulkan.is_some() => {
             let adapters = inst.enumerate_adapters();
@@ -361,6 +367,7 @@ pub fn request_adapter(
     let mut token = Token::root();
 
     let mut selected = preferred_gpu.unwrap_or(0);
+    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
     {
         if selected < adapters_vk.len() {
             let adapter = Adapter {
@@ -421,7 +428,7 @@ pub fn request_adapter(
         }
         selected -= adapters_dx11.len();
     }
-    let _ = (selected, id_metal, id_dx12, id_dx11);
+    let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
     None
 }
 
