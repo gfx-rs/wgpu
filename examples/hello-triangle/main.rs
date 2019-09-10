@@ -43,7 +43,7 @@ fn main() {
         backends: wgpu::BackendBit::PRIMARY,
     }).unwrap();
 
-    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+    let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
@@ -152,7 +152,7 @@ fn main() {
                     rpass.draw(0 .. 3, 0 .. 1);
                 }
 
-                device.get_queue().submit(&[encoder.finish()]);
+                queue.submit(&[encoder.finish()]);
             }
             _ => (),
         }

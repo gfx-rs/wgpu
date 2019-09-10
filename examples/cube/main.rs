@@ -106,7 +106,7 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>) {
         use std::mem;
 
         let mut init_encoder =
@@ -294,23 +294,22 @@ impl framework::Example for Example {
         });
 
         // Done
-        let init_command_buf = init_encoder.finish();
-        device.get_queue().submit(&[init_command_buf]);
-        Example {
+        let this = Example {
             vertex_buf,
             index_buf,
             index_count: index_data.len(),
             bind_group,
             uniform_buf,
             pipeline,
-        }
+        };
+        (this, Some(init_encoder.finish()))
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
         //empty
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) {
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer> {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
@@ -321,10 +320,10 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
-        device.get_queue().submit(&[encoder.finish()]);
+        Some(encoder.finish())
     }
 
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
+    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {
@@ -350,7 +349,7 @@ impl framework::Example for Example {
             rpass.draw_indexed(0 .. self.index_count as u32, 0, 0 .. 1);
         }
 
-        device.get_queue().submit(&[encoder.finish()]);
+        encoder.finish()
     }
 }
 

@@ -73,7 +73,6 @@ pub use wgn::glutin;
 struct Temp {
     //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
     //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
-    command_buffers: Vec<wgn::CommandBufferId>,
 }
 
 /// A handle to a physical graphics and/or compute device.
@@ -245,11 +244,11 @@ pub struct ComputePass<'a> {
 
 /// A handle to a command queue on a device.
 ///
-/// A `Queue` executes finished [`CommandBuffer`] objects.
+/// A `Queue` executes recorded [`CommandBuffer`] objects.
 #[derive(Debug)]
-pub struct Queue<'a> {
+pub struct Queue {
     id: wgn::QueueId,
-    temp: &'a mut Temp,
+    temp_command_buffers: Vec<wgn::CommandBufferId>,
 }
 
 /// A resource that can be bound to a pipeline.
@@ -546,15 +545,21 @@ impl Adapter {
     }
 
     /// Requests a connection to a physical device, creating a logical device.
+    /// Returns the device together with a queue that executes command buffers.
     ///
     /// # Panics
     ///
     /// Panics if the extensions specified by `desc` are not supported by this adapter.
-    pub fn request_device(&self, desc: &DeviceDescriptor) -> Device {
-        Device {
+    pub fn request_device(&self, desc: &DeviceDescriptor) -> (Device, Queue) {
+        let device = Device {
             id: wgn::wgpu_adapter_request_device(self.id, Some(desc)),
             temp: Temp::default(),
-        }
+        };
+        let queue = Queue {
+            id: wgn::wgpu_device_get_queue(device.id),
+            temp_command_buffers: Vec::new(),
+        };
+        (device, queue)
     }
 }
 
@@ -574,14 +579,6 @@ impl Device {
         };
         ShaderModule {
             id: wgn::wgpu_device_create_shader_module(self.id, &desc),
-        }
-    }
-
-    /// Obtains a queue which can accept [`CommandBuffer`] submissions.
-    pub fn get_queue(&mut self) -> Queue {
-        Queue {
-            id: wgn::wgpu_device_get_queue(self.id),
-            temp: &mut self.temp,
         }
     }
 
@@ -1299,17 +1296,16 @@ impl<'a> Drop for ComputePass<'a> {
     }
 }
 
-impl<'a> Queue<'a> {
+impl Queue {
     /// Submits a series of finished command buffers for execution.
     pub fn submit(&mut self, command_buffers: &[CommandBuffer]) {
-        self.temp.command_buffers.clear();
-        self.temp
-            .command_buffers
+        self.temp_command_buffers.clear();
+        self.temp_command_buffers
             .extend(command_buffers.iter().map(|cb| cb.id));
 
         wgn::wgpu_queue_submit(
             self.id,
-            self.temp.command_buffers.as_ptr(),
+            self.temp_command_buffers.as_ptr(),
             command_buffers.len(),
         );
     }
