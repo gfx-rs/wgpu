@@ -12,7 +12,7 @@ fn main() {
         backends: wgpu::BackendBit::PRIMARY,
     }).unwrap();
 
-    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+    let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
@@ -80,7 +80,7 @@ fn main() {
         encoder.finish()
     };
 
-    device.get_queue().submit(&[command_buffer]);
+    queue.submit(&[command_buffer]);
 
     // Write the buffer as a PNG
     output_buffer.map_read_async(

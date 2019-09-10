@@ -35,11 +35,11 @@ pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u32> {
     wgpu::read_spirv(glsl_to_spirv::compile(&code, ty).unwrap()).unwrap()
 }
 
-pub trait Example: 'static {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self;
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device);
+pub trait Example: 'static + Sized {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>);
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer>;
     fn update(&mut self, event: WindowEvent);
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device);
+    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer;
 }
 
 pub fn run<E: Example>(title: &str) {
@@ -89,7 +89,7 @@ pub fn run<E: Example>(title: &str) {
         backends: wgpu::BackendBit::PRIMARY,
     }).unwrap();
 
-    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+    let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
@@ -106,7 +106,10 @@ pub fn run<E: Example>(title: &str) {
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     info!("Initializing the example...");
-    let mut example = E::init(&sc_desc, &mut device);
+    let (mut example, init_command_buf) = E::init(&sc_desc, &device);
+    if let Some(command_buf) = init_command_buf {
+        queue.submit(&[command_buf]);
+    }
 
     info!("Entering render loop...");
     event_loop.run(move |event, _, control_flow| {
@@ -125,7 +128,10 @@ pub fn run<E: Example>(title: &str) {
                 sc_desc.width = physical.width.round() as u32;
                 sc_desc.height = physical.height.round() as u32;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
-                example.resize(&sc_desc, &mut device);
+                let command_buf = example.resize(&sc_desc, &device);
+                if let Some(command_buf) = command_buf {
+                    queue.submit(&[command_buf]);
+                }
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
@@ -146,7 +152,8 @@ pub fn run<E: Example>(title: &str) {
             },
             event::Event::EventsCleared => {
                 let frame = swap_chain.get_next_texture();
-                example.render(&frame, &mut device);
+                let command_buf = example.render(&frame, &device);
+                queue.submit(&[command_buf]);
             }
             _ => (),
         }
