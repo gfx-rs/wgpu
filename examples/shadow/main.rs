@@ -181,7 +181,7 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>) {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
@@ -636,7 +636,7 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         });
 
-        Example {
+        let this = Example {
             entities,
             lights,
             lights_are_dirty: true,
@@ -644,15 +644,16 @@ impl framework::Example for Example {
             forward_pass,
             forward_depth: depth_texture.create_default_view(),
             light_uniform_buf,
-        }
+        };
+        (this, None)
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
         //empty
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) {
-        {
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer> {
+        let command_buf = {
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let mx_ref: &[f32; 16] = mx_total.as_ref();
             let temp_buf = device
@@ -662,8 +663,8 @@ impl framework::Example for Example {
             let mut encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
             encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.forward_pass.uniform_buf, 0, 64);
-            device.get_queue().submit(&[encoder.finish()]);
-        }
+            encoder.finish()
+        };
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
@@ -679,9 +680,11 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         });
         self.forward_depth = depth_texture.create_default_view();
+
+        Some(command_buf)
     }
 
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
+    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
@@ -807,7 +810,7 @@ impl framework::Example for Example {
             }
         }
 
-        device.get_queue().submit(&[encoder.finish()]);
+        encoder.finish()
     }
 }
 

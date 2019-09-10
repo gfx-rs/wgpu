@@ -69,8 +69,11 @@ impl Example {
     }
 
     fn generate_mipmaps(
-        device: &wgpu::Device, texture: &wgpu::Texture, mip_count: u32
-    ) -> wgpu::CommandBuffer {
+        encoder: &mut wgpu::CommandEncoder,
+        device: &wgpu::Device,
+        texture: &wgpu::Texture,
+        mip_count: u32,
+    ) {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &[
                 wgpu::BindGroupLayoutBinding {
@@ -159,10 +162,6 @@ impl Example {
             }))
             .collect::<Vec<_>>();
 
-        let mut encoder = device.create_command_encoder(
-            &wgpu::CommandEncoderDescriptor { todo: 0 }
-        );
-
         for target_mip in 1 .. mip_count as usize {
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
@@ -192,13 +191,11 @@ impl Example {
             rpass.set_bind_group(0, &bind_group, &[]);
             rpass.draw(0 .. 4, 0 .. 1);
         }
-
-        encoder.finish()
     }
 }
 
 impl framework::Example for Example {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>) {
         use std::mem;
 
         let mut init_encoder =
@@ -380,22 +377,22 @@ impl framework::Example for Example {
         });
 
         // Done
-        let init_command_buf = init_encoder.finish();
-        let mipmap_command_buf = Self::generate_mipmaps(&device, &texture, mip_level_count);
-        device.get_queue().submit(&[init_command_buf, mipmap_command_buf]);
-        Example {
+        Self::generate_mipmaps(&mut init_encoder, &device, &texture, mip_level_count);
+
+        let this = Example {
             vertex_buf,
             bind_group,
             uniform_buf,
             draw_pipeline,
-        }
+        };
+        (this, Some(init_encoder.finish()))
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
         //empty
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) {
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer> {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
@@ -406,10 +403,10 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
-        device.get_queue().submit(&[encoder.finish()]);
+        Some(encoder.finish())
     }
 
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
+    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {
@@ -434,7 +431,7 @@ impl framework::Example for Example {
             rpass.draw(0 .. 4, 0 .. 1);
         }
 
-        device.get_queue().submit(&[encoder.finish()]);
+        encoder.finish()
     }
 }
 

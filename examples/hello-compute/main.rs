@@ -19,7 +19,7 @@ fn main() {
         backends: wgpu::BackendBit::PRIMARY,
     }).unwrap();
 
-    let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+    let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
             anisotropic_filtering: false,
         },
@@ -88,7 +88,7 @@ fn main() {
     }
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
-    device.get_queue().submit(&[encoder.finish()]);
+    queue.submit(&[encoder.finish()]);
 
     staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
         if let Ok(mapping) = result {
