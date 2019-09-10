@@ -101,7 +101,7 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) -> Self {
+    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>) {
         println!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
@@ -138,7 +138,7 @@ impl framework::Example for Example {
             .fill_from_slice(&vertex_data);
         let vertex_count = vertex_data.len() as u32;
 
-        Example {
+        let this = Example {
             vs_module,
             fs_module,
             pipeline_layout,
@@ -149,7 +149,8 @@ impl framework::Example for Example {
             rebuild_pipeline: false,
             sample_count,
             sc_desc: sc_desc.clone(),
-        }
+        };
+        (this, None)
     }
 
     fn update(&mut self, event: winit::event::WindowEvent) {
@@ -177,12 +178,13 @@ impl framework::Example for Example {
         }
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &mut wgpu::Device) {
+    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer> {
         self.sc_desc = sc_desc.clone();
         self.multisampled_framebuffer = Example::create_multisampled_framebuffer(device, sc_desc, self.sample_count);
+        None
     }
 
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &mut wgpu::Device) {
+    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer {
         if self.rebuild_pipeline {
             self.pipeline = Example::create_pipeline(device, &self.sc_desc, &self.vs_module, &self.fs_module, &self.pipeline_layout, self.sample_count);
             self.multisampled_framebuffer = Example::create_multisampled_framebuffer(device, &self.sc_desc, self.sample_count);
@@ -218,7 +220,7 @@ impl framework::Example for Example {
             rpass.draw(0..self.vertex_count, 0..1);
         }
 
-        device.get_queue().submit(&[encoder.finish()]);
+        encoder.finish()
     }
 }
 
