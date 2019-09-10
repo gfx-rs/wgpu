@@ -1,5 +1,7 @@
 #[cfg(not(feature = "remote"))]
-use crate::instance::Limits;
+use crate::{
+    instance::Limits,
+};
 use crate::{
     binding_model,
     command,
@@ -45,11 +47,9 @@ use hal::{
     backend::FastHashMap,
     command::CommandBuffer as _,
     device::Device as _,
-    pool::CommandPool as _,
     queue::CommandQueue as _,
-    window::Surface as _,
+    window::{PresentationSurface as _, Surface as _},
 };
-use log::{info, trace};
 use parking_lot::Mutex;
 use rendy_descriptor::{DescriptorAllocator, DescriptorRanges, DescriptorSet};
 use rendy_memory::{Block, Heaps, MemoryBlock};
@@ -63,7 +63,7 @@ use std::{
     ops::Range,
     ptr,
     slice,
-    sync::atomic::{AtomicBool, Ordering},
+    sync::atomic::{Ordering},
 };
 
 
@@ -228,7 +228,7 @@ impl<B: GfxBackend> PendingResources<B> {
         };
 
         for a in self.active.drain(.. done_count) {
-            trace!("Active submission {} is done", a.index);
+            log::trace!("Active submission {} is done", a.index);
             self.free.extend(a.resources.into_iter().map(|(_, r)| r));
             self.ready_to_map.extend(a.mapped);
             unsafe {
@@ -296,33 +296,32 @@ impl<B: GfxBackend> PendingResources<B> {
                             continue;
                         }
                         trackers.buffers.remove(id);
-                        let buf = buffer_guard.remove(id);
+                        let buf = buffer_guard.remove(id).unwrap();
                         #[cfg(not(feature = "remote"))]
                         hub.buffers.identity.lock().free(id);
                         (buf.life_guard, NativeResource::Buffer(buf.raw, buf.memory))
                     }
                     ResourceId::Texture(id) => {
                         trackers.textures.remove(id);
-                        let tex = texture_guard.remove(id);
+                        let tex = texture_guard.remove(id).unwrap();
                         #[cfg(not(feature = "remote"))]
                         hub.textures.identity.lock().free(id);
-                        let memory = match tex.placement {
-                            // swapchain-owned images don't need explicit destruction
-                            resource::TexturePlacement::SwapChain(_) => continue,
-                            resource::TexturePlacement::Memory(mem) => mem,
-                        };
-                        (tex.life_guard, NativeResource::Image(tex.raw, memory))
+                        (tex.life_guard, NativeResource::Image(tex.raw, tex.memory))
                     }
                     ResourceId::TextureView(id) => {
                         trackers.views.remove(id);
-                        let view = teview_view_guard.remove(id);
+                        let view = teview_view_guard.remove(id).unwrap();
+                        let raw = match view.inner {
+                            resource::TextureViewInner::Native { raw, .. } => raw,
+                            resource::TextureViewInner::SwapChain { .. } => unreachable!(),
+                        };
                         #[cfg(not(feature = "remote"))]
                         hub.texture_views.identity.lock().free(id);
-                        (view.life_guard, NativeResource::ImageView(view.raw))
+                        (view.life_guard, NativeResource::ImageView(raw))
                     }
                     ResourceId::BindGroup(id) => {
                         trackers.bind_groups.remove(id);
-                        let bind_group = bind_group_guard.remove(id);
+                        let bind_group = bind_group_guard.remove(id).unwrap();
                         #[cfg(not(feature = "remote"))]
                         hub.bind_groups.identity.lock().free(id);
                         (
@@ -354,7 +353,7 @@ impl<B: GfxBackend> PendingResources<B> {
             let buf = &buffer_guard[resource_id];
 
             let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-            trace!(
+            log::trace!(
                 "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
                 resource_id,
                 submit_index,
@@ -714,7 +713,7 @@ impl<B: GfxBackend> Device<B> {
                 levels: 0 .. desc.mip_level_count as hal::image::Level,
                 layers: 0 .. desc.array_layer_count as hal::image::Layer,
             },
-            placement: resource::TexturePlacement::Memory(memory),
+            memory,
             life_guard: LifeGuard::new(),
         }
     }
@@ -929,16 +928,17 @@ pub fn texture_create_view<B: GfxBackend>(
     };
 
     let view = resource::TextureView {
-        raw,
-        texture_id: Stored {
-            value: texture_id,
-            ref_count: texture.life_guard.ref_count.clone(),
+        inner: resource::TextureViewInner::Native {
+            raw,
+            source_id: Stored {
+                value: texture_id,
+                ref_count: texture.life_guard.ref_count.clone(),
+            },
         },
         format: texture.format,
         extent: texture.kind.extent().at_level(range.levels.start),
         samples: texture.kind.num_samples(),
         range,
-        is_owned_by_swap_chain: false,
         life_guard: LifeGuard::new(),
     };
 
@@ -991,7 +991,12 @@ pub fn texture_view_destroy<B: GfxBackend>(texture_view_id: TextureViewId) {
     let (texture_guard, mut token) = hub.textures.read(&mut token);
     let (texture_view_guard, _) = hub.texture_views.read(&mut token);
     let view = &texture_view_guard[texture_view_id];
-    let device_id = texture_guard[view.texture_id.value].device_id.value;
+    let device_id = match view.inner {
+        resource::TextureViewInner::Native { ref source_id, .. } =>
+            texture_guard[source_id.value].device_id.value,
+        resource::TextureViewInner::SwapChain { .. } =>
+            panic!("Can't destroy a swap chain image"),
+    };
     device_guard[device_id].pending.lock().destroy(
         ResourceId::TextureView(texture_view_id),
         view.life_guard.ref_count.clone(),
@@ -1248,17 +1253,23 @@ pub fn device_create_bind_group<B: GfxBackend>(
                         .views
                         .use_extend(&*texture_view_guard, id, (), ())
                         .unwrap();
-                    let texture = used.textures
-                        .use_extend(
-                            &*texture_guard,
-                            view.texture_id.value,
-                            view.range.clone(),
-                            usage,
-                        )
-                        .unwrap();
-                    assert!(texture.usage.contains(usage));
+                    match view.inner {
+                        resource::TextureViewInner::Native { ref raw, ref source_id } => {
+		                    let texture = used.textures
+		                        .use_extend(
+		                            &*texture_guard,
+		                            source_id.value,
+		                            view.range.clone(),
+		                            usage,
+		                        )
+		                        .unwrap();
+		                    assert!(texture.usage.contains(usage));
 
-                    hal::pso::Descriptor::Image(&view.raw, image_layout)
+		                    hal::pso::Descriptor::Image(raw, image_layout)
+                        }
+                        resource::TextureViewInner::SwapChain { .. } =>
+                            panic!("Unable to create a bind group with a swap chain image"),
+                    }
                 }
             };
             writes.alloc().init(hal::pso::DescriptorSetWrite {
@@ -1409,117 +1420,108 @@ pub fn queue_submit<B: GfxBackend>(queue_id: QueueId, command_buffer_ids: &[Comm
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         let device = &mut device_guard[queue_id];
+
         let mut trackers = device.trackers.lock();
-        let mut wait_semaphores = Vec::new();
+        let mut signal_semaphores = Vec::new();
 
         let submit_index = 1 + device
             .life_guard
             .submission_index
             .fetch_add(1, Ordering::Relaxed);
 
+        let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
+        let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+        let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+        let (texture_guard, mut token) = hub.textures.read(&mut token);
+        let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+
         //TODO: if multiple command buffers are submitted, we can re-use the last
         // native command buffer of the previous chain instead of always creating
         // a temporary one, since the chains are not finished.
-        {
-            let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (texture_view_guard, _) = hub.texture_views.read(&mut token);
 
-            // finish all the command buffers first
-            for &cmb_id in command_buffer_ids {
-                let comb = &mut command_buffer_guard[cmb_id];
-                for link in comb.swap_chain_links.drain(..) {
-                    let swap_chain = &swap_chain_guard[link.swap_chain_id];
-                    let frame = &swap_chain.frames[link.image_index as usize];
-                    if frame.need_waiting.swap(false, Ordering::AcqRel) {
-                        assert_eq!(frame.acquired_epoch, Some(link.epoch),
-                            "{}. Image index {} with epoch {} != current epoch {:?}",
-                            "Attempting to render to a swapchain output that has already been presented",
-                            link.image_index, link.epoch, frame.acquired_epoch);
-                        wait_semaphores.push((
-                            &frame.sem_available,
-                            hal::pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                        ));
-                    }
-                }
+        // finish all the command buffers first
+        for &cmb_id in command_buffer_ids {
+            let comb = &mut command_buffer_guard[cmb_id];
 
-                // optimize the tracked states
-                comb.trackers.optimize();
+            if let Some(view_id) = comb.used_swap_chain_image.take() {
+                let sem = match texture_view_guard[view_id.value].inner {
+                    resource::TextureViewInner::Native { .. } => unreachable!(),
+                    resource::TextureViewInner::SwapChain { ref source_id, .. } =>
+                        &swap_chain_guard[source_id.value].semaphore,
+                };
+                signal_semaphores.push(sem);
+            }
 
-                // update submission IDs
-                for id in comb.trackers.buffers.used() {
-                    let buffer = &buffer_guard[id];
-                    assert!(buffer.pending_map_operation.is_none());
-                    buffer
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
-                }
-                for id in comb.trackers.textures.used() {
-                    texture_guard[id]
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
-                }
-                for id in comb.trackers.views.used() {
-                    texture_view_guard[id]
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
-                }
-                for id in comb.trackers.bind_groups.used() {
-                    bind_group_guard[id]
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
-                }
+            // optimize the tracked states
+            comb.trackers.optimize();
 
-                // execute resource transitions
-                let mut transit = device.com_allocator.extend(comb);
-                unsafe {
-                    transit.begin(
-                        hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-                        hal::command::CommandBufferInheritanceInfo::default(),
-                    );
-                }
-                trace!("Stitching command buffer {:?} before submission", cmb_id);
-                command::CommandBuffer::insert_barriers(
-                    &mut transit,
-                    &mut *trackers,
-                    &comb.trackers,
-                    Stitch::Init,
-                    &*buffer_guard,
-                    &*texture_guard,
+            // update submission IDs
+            for id in comb.trackers.buffers.used() {
+                let buffer = &buffer_guard[id];
+                assert!(buffer.pending_map_operation.is_none());
+                buffer
+                    .life_guard
+                    .submission_index
+                    .store(submit_index, Ordering::Release);
+            }
+            for id in comb.trackers.textures.used() {
+                texture_guard[id]
+                    .life_guard
+                    .submission_index
+                    .store(submit_index, Ordering::Release);
+            }
+            for id in comb.trackers.views.used() {
+                texture_view_guard[id]
+                    .life_guard
+                    .submission_index
+                    .store(submit_index, Ordering::Release);
+            }
+            for id in comb.trackers.bind_groups.used() {
+                bind_group_guard[id]
+                    .life_guard
+                    .submission_index
+                    .store(submit_index, Ordering::Release);
+            }
+
+            // execute resource transitions
+            let mut transit = device.com_allocator.extend(comb);
+            unsafe {
+                transit.begin(
+                    hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
+                    hal::command::CommandBufferInheritanceInfo::default(),
                 );
-                unsafe {
-                    transit.finish();
-                }
-                comb.raw.insert(0, transit);
-                unsafe {
-                    comb.raw.last_mut().unwrap().finish();
-                }
+            }
+            log::trace!("Stitching command buffer {:?} before submission", cmb_id);
+            command::CommandBuffer::insert_barriers(
+                &mut transit,
+                &mut *trackers,
+                &comb.trackers,
+                Stitch::Init,
+                &*buffer_guard,
+                &*texture_guard,
+            );
+            unsafe {
+                transit.finish();
+            }
+            comb.raw.insert(0, transit);
+            unsafe {
+                comb.raw.last_mut().unwrap().finish();
             }
         }
 
         // now prepare the GPU submission
         let fence = device.raw.create_fence(false).unwrap();
-        {
-            let (command_buffer_guard, _) = hub.command_buffers.read(&mut token);
-            let submission = hal::queue::Submission::<_, _, &[B::Semaphore]> {
-                //TODO: may `OneShot` be enough?
-                command_buffers: command_buffer_ids
-                    .iter()
-                    .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
-                wait_semaphores,
-                signal_semaphores: &[], //TODO: signal `sem_present`?
-            };
+        let submission = hal::queue::Submission::<_, _, Vec<&B::Semaphore>> {
+            command_buffers: command_buffer_ids
+                .iter()
+                .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
+            wait_semaphores: Vec::new(),
+            signal_semaphores,
+        };
 
-            unsafe {
-                device.queue_group.queues[0]
-                    .submit(submission, Some(&fence));
-            }
+        unsafe {
+            device.queue_group.queues[0]
+                .submit(submission, Some(&fence));
         }
 
         (submit_index, fence)
@@ -1896,16 +1898,15 @@ pub fn device_create_swap_chain<B: GfxBackend>(
     device_id: DeviceId,
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
-    id_in: Input<SwapChainId>,
-    image_ids: Vec<(Input<TextureId>, Input<TextureViewId>)>,
-) -> Output<SwapChainId> {
-    info!("creating swap chain {:?}", desc);
+) -> SwapChainId {
+    log::info!("creating swap chain {:?}", desc);
     let hub = B::hub();
     let mut token = Token::root();
 
     let (mut surface_guard, mut token) = GLOBAL.surfaces.write(&mut token);
     let (adapter_guard, mut token) = hub.adapters.read(&mut token);
     let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (mut swap_chain_guard, _) = hub.swap_chains.write(&mut token);
     let device = &device_guard[device_id];
     let surface = &mut surface_guard[surface_id];
 
@@ -1926,159 +1927,41 @@ pub fn device_create_swap_chain<B: GfxBackend>(
             formats
         );
     }
-    //TODO: properly exclusive range
-    /* TODO: this is way too restrictive
-    assert!(desc.width >= caps.extents.start.width && desc.width <= caps.extents.end.width &&
-        desc.height >= caps.extents.start.height && desc.height <= caps.extents.end.height,
-        "Requested size {}x{} is outside of the supported range: {:?}",
-        desc.width, desc.height, caps.extents);
-    */
+    if desc.width < caps.extents.start().width ||
+        desc.width > caps.extents.end().width ||
+        desc.height < caps.extents.start().height ||
+        desc.height > caps.extents.end().height
+    {
+        log::warn!("Requested size {}x{} is outside of the supported range: {:?}",
+            desc.width, desc.height, caps.extents);
+    }
 
-    let (old_raw, sem_available, command_pool) = match surface.swap_chain.take() {
-        Some(old_id) => {
-            //TODO: remove this once gfx-rs stops destroying the old swapchain
-            device.raw.wait_idle().unwrap();
-            let mut pending = device.pending.lock();
+    let hal_desc = desc.to_hal(num_frames);
+    unsafe {
+        B::get_surface_mut(surface)
+            .configure_swapchain(&device.raw, hal_desc)
+            .unwrap();
+    }
 
-            let (mut old, _) = hub.swap_chains.unregister(old_id, &mut token);
-            assert_eq!(old.device_id.value, device_id);
-            for frame in old.frames {
-                pending.destroy(
-                    ResourceId::Texture(frame.texture_id.value),
-                    frame.texture_id.ref_count,
-                );
-                pending.destroy(
-                    ResourceId::TextureView(frame.view_id.value),
-                    frame.view_id.ref_count,
-                );
-            }
-            unsafe { old.command_pool.reset(false) };
-            (old.raw, old.sem_available, old.command_pool)
+    let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
+    if let Some(sc) = swap_chain_guard.remove(sc_id) {
+        unsafe {
+            device.raw.destroy_semaphore(sc.semaphore);
         }
-        None => unsafe {
-            let sem_available = device.raw.create_semaphore().unwrap();
-            let command_pool = device
-                .raw
-                .create_command_pool(
-                    device.queue_group.family,
-                    hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-                )
-                .unwrap();
-            (None, sem_available, command_pool)
-        },
-    };
-
-    let (raw_swap_chain, images) = unsafe {
-        let suf = B::get_surface_mut(surface);
-        device
-            .raw
-            .create_swapchain(suf, config, old_raw)
-            .unwrap()
-    };
-
-    let (id, id_out) = hub.swap_chains.new_identity(id_in);
-    surface.swap_chain = Some(id);
-
-    let mut trackers = device.trackers.lock();
-    let mut swap_chain = swap_chain::SwapChain::<B> {
-        raw: Some(raw_swap_chain),
-        surface_id: Stored {
-            value: surface_id,
-            ref_count: surface.ref_count.clone(),
-        },
+    }
+    let swap_chain = swap_chain::SwapChain {
+        life_guard: LifeGuard::new(),
         device_id: Stored {
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
         },
         desc: desc.clone(),
-        frames: Vec::with_capacity(num_frames as usize),
-        acquired: Vec::with_capacity(1), //TODO: get it from gfx-hal?
-        sem_available,
-        command_pool,
+        num_frames,
+        acquired_view_id: None,
+        semaphore: device.raw.create_semaphore().unwrap(),
     };
-
-    for ((i, image), (id_texture_in, id_view_in)) in images.into_iter().enumerate().zip(image_ids) {
-        let kind = hal::image::Kind::D2(desc.width, desc.height, 1, 1);
-        let range = hal::image::SubresourceRange {
-            aspects: hal::format::Aspects::COLOR,
-            levels: 0 .. 1,
-            layers: 0 .. 1,
-        };
-
-        let view_raw = unsafe {
-            device
-                .raw
-                .create_image_view(
-                    &image,
-                    hal::image::ViewKind::D2,
-                    conv::map_texture_format(desc.format),
-                    hal::format::Swizzle::NO,
-                    range.clone(),
-                )
-                .unwrap()
-        };
-        let texture = resource::Texture {
-            raw: image,
-            device_id: Stored {
-                value: device_id,
-                ref_count: device.life_guard.ref_count.clone(),
-            },
-            usage: resource::TextureUsage::OUTPUT_ATTACHMENT,
-            kind,
-            format: desc.format,
-            full_range: range.clone(),
-            placement: resource::TexturePlacement::SwapChain(swap_chain::SwapChainLink {
-                swap_chain_id: id, //TODO: strongly
-                epoch: Mutex::new(0),
-                image_index: i as hal::window::SwapImageIndex,
-            }),
-            life_guard: LifeGuard::new(),
-        };
-        let (id_texture, _) = hub.textures.new_identity(id_texture_in);
-        let texture_id = Stored {
-            ref_count: texture.life_guard.ref_count.clone(),
-            value: id_texture,
-        };
-        trackers.textures.init(
-            id_texture,
-            &texture_id.ref_count,
-            range.clone(),
-            resource::TextureUsage::UNINITIALIZED,
-        );
-        hub.textures.register(id_texture, texture, &mut token);
-
-        let view = resource::TextureView {
-            raw: view_raw,
-            texture_id: texture_id.clone(),
-            format: desc.format,
-            extent: kind.extent(),
-            samples: kind.num_samples(),
-            range,
-            is_owned_by_swap_chain: true,
-            life_guard: LifeGuard::new(),
-        };
-        let (id_view, _) = hub.texture_views.new_identity(id_view_in);
-        let view_id = Stored {
-            ref_count: view.life_guard.ref_count.clone(),
-            value: id_view,
-        };
-        trackers.views.init(id_view, &view_id.ref_count, (), ());
-        hub.texture_views.register(id_view, view, &mut token);
-
-        swap_chain.frames.alloc().init(swap_chain::Frame {
-            texture_id,
-            view_id,
-            fence: device.raw.create_fence(true).unwrap(),
-            sem_available: device.raw.create_semaphore().unwrap(),
-            sem_present: device.raw.create_semaphore().unwrap(),
-            acquired_epoch: None,
-            need_waiting: AtomicBool::new(false),
-            comb: swap_chain.command_pool.allocate_one(hal::command::Level::Primary),
-        });
-    }
-
-    hub.swap_chains.register(id, swap_chain, &mut token);
-    id_out
+    swap_chain_guard.insert(sc_id, swap_chain);
+    sc_id
 }
 
 #[cfg(not(feature = "remote"))]
@@ -2088,8 +1971,7 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     surface_id: SurfaceId,
     desc: &swap_chain::SwapChainDescriptor,
 ) -> SwapChainId {
-    let image_ids = vec![(PhantomData, PhantomData); 10]; //TODO: make this compatible with "remote"
-    gfx_select!(device_id => device_create_swap_chain(device_id, surface_id, desc, PhantomData, image_ids))
+    gfx_select!(device_id => device_create_swap_chain(device_id, surface_id, desc))
 }
 
 pub fn device_poll<B: GfxBackend>(device_id: DeviceId, force_wait: bool) {

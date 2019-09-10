@@ -223,27 +223,6 @@ impl<S: ResourceState> ResourceTracker<S> {
             .is_none()
     }
 
-    /// Resets a resource to the specified usage.
-    #[cfg(not(feature = "remote"))]
-    pub fn reset(
-        &mut self,
-        id: S::Id,
-        selector: S::Selector,
-        default: S::Usage,
-    ) {
-        let mut state = S::default();
-        match state.change(id, selector, default, None) {
-            Ok(()) => (),
-            Err(_) => unreachable!(),
-        }
-
-        let (index, epoch, backend) = id.unzip();
-        debug_assert_eq!(backend, self.backend);
-        let res = self.map.get_mut(&index).unwrap();
-        assert_eq!(res.epoch, epoch);
-        res.state = state;
-    }
-
     /// Query the usage of a resource selector.
     ///
     /// Returns `Some(Usage)` only if this usage is consistent

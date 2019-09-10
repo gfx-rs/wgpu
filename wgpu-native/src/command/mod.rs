@@ -21,8 +21,7 @@ use crate::{
     gfx_select,
     hub::{GfxBackend, Storage, Token},
     id::{Input, Output},
-    resource::TexturePlacement,
-    swap_chain::{SwapChainLink, SwapImageEpoch},
+    resource::TextureViewInner,
     track::{Stitch, TrackerSet},
     Buffer,
     BufferId,
@@ -46,7 +45,15 @@ use log::trace;
 
 #[cfg(not(feature = "remote"))]
 use std::marker::PhantomData;
-use std::{collections::hash_map::Entry, iter, mem, ptr, slice, thread::ThreadId};
+use std::{
+    borrow::Borrow,
+    collections::hash_map::Entry,
+    iter,
+    mem,
+    ptr,
+    slice,
+    thread::ThreadId,
+};
 
 
 pub struct RenderBundle<B: hal::Backend> {
@@ -111,7 +118,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
-    pub(crate) swap_chain_links: Vec<SwapChainLink<SwapImageEpoch>>,
+    pub(crate) used_swap_chain_image: Option<Stored<TextureViewId>>,
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
@@ -187,7 +194,13 @@ pub fn command_encoder_finish<B: GfxBackend>(
     let mut token = Token::root();
     //TODO: actually close the last recorded command buffer
     let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
-    comb_guard[encoder_id].is_recording = false; //TODO: check for the old value
+    let comb = &mut comb_guard[encoder_id];
+    assert!(comb.is_recording);
+    comb.is_recording = false;
+    // stop tracking the swapchain image, if used
+    if let Some(ref view_id) = comb.used_swap_chain_image {
+        comb.trackers.views.remove(view_id.value);
+    }
     encoder_id
 }
 
@@ -255,7 +268,6 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
         );
         let rp_key = {
             let trackers = &mut cmb.trackers;
-            let swap_chain_links = &mut cmb.swap_chain_links;
 
             let depth_stencil = depth_stencil_attachment.map(|at| {
                 let view = trackers
@@ -267,13 +279,18 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 } else {
                     extent = Some(view.extent);
                 }
+                let texture_id = match view.inner {
+                    TextureViewInner::Native { ref source_id, .. } => source_id.value,
+                    TextureViewInner::SwapChain {..} =>
+                        panic!("Unexpected depth/stencil use of swapchain image!"),
+                };
 
-                let texture = &texture_guard[view.texture_id.value];
+                let texture = &texture_guard[texture_id];
                 assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
                 let old_layout = match trackers
                     .textures
-                    .query(view.texture_id.value, view.range.clone())
+                    .query(texture_id, view.range.clone())
                 {
                     Some(usage) => {
                         conv::map_texture_state(
@@ -286,7 +303,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         // Required sub-resources have inconsistent states, we need to
                         // issue individual barriers instead of relying on the render pass.
                         let pending = trackers.textures.change_replace(
-                            view.texture_id.value,
+                            texture_id,
                             &texture.life_guard.ref_count,
                             view.range.clone(),
                             TextureUsage::OUTPUT_ATTACHMENT,
@@ -317,10 +334,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             let mut resolves = ArrayVec::new();
 
             for at in color_attachments {
-                let view = trackers
-                    .views
-                    .use_extend(&*view_guard, at.attachment, (), ())
-                    .unwrap();
+                let view = &view_guard[at.attachment];
                 if let Some(ex) = extent {
                     assert_eq!(ex, view.extent);
                 } else {
@@ -330,47 +344,55 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     view.samples, sample_count,
                     "All attachments must have the same sample_count"
                 );
+                let first_use = trackers.views
+                    .init(at.attachment, &view.life_guard.ref_count, (), ());
 
-                if view.is_owned_by_swap_chain {
-                    let link = match texture_guard[view.texture_id.value].placement {
-                        TexturePlacement::SwapChain(ref link) => SwapChainLink {
-                            swap_chain_id: link.swap_chain_id.clone(),
-                            epoch: *link.epoch.lock(),
-                            image_index: link.image_index,
-                        },
-                        TexturePlacement::Memory(_) => unreachable!(),
-                    };
-                    swap_chain_links.push(link);
-                }
+                let layouts = match view.inner {
+                    TextureViewInner::Native { ref source_id, .. } => {
+                        let texture = &texture_guard[source_id.value];
+                        assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                let texture = &texture_guard[view.texture_id.value];
-                assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
-
-                let old_layout = match trackers
-                    .textures
-                    .query(view.texture_id.value, view.range.clone())
-                {
-                    Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
-                    None => {
-                        // Required sub-resources have inconsistent states, we need to
-                        // issue individual barriers instead of relying on the render pass.
-                        let pending = trackers.textures.change_replace(
-                            view.texture_id.value,
-                            &texture.life_guard.ref_count,
-                            view.range.clone(),
-                            TextureUsage::OUTPUT_ATTACHMENT,
-                        );
-
-                        barriers.extend(pending.map(|pending| {
-                            trace!("\tcolor {:?}", pending);
-                            hal::memory::Barrier::Image {
-                                states: pending.to_states(),
-                                target: &texture.raw,
-                                families: None,
-                                range: pending.selector,
+                        let old_layout = match trackers
+                            .textures
+                            .query(source_id.value, view.range.clone())
+                        {
+                            Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
+                            None => {
+                                // Required sub-resources have inconsistent states, we need to
+                                // issue individual barriers instead of relying on the render pass.
+                                let pending = trackers.textures.change_replace(
+                                    source_id.value,
+                                    &texture.life_guard.ref_count,
+                                    view.range.clone(),
+                                    TextureUsage::OUTPUT_ATTACHMENT,
+                                );
+                                barriers.extend(pending.map(|pending| {
+                                    trace!("\tcolor {:?}", pending);
+                                    hal::memory::Barrier::Image {
+                                        states: pending.to_states(),
+                                        target: &texture.raw,
+                                        families: None,
+                                        range: pending.selector,
+                                    }
+                                }));
+                                hal::image::Layout::ColorAttachmentOptimal
                             }
-                        }));
-                        hal::image::Layout::ColorAttachmentOptimal
+                        };
+                        old_layout .. hal::image::Layout::ColorAttachmentOptimal
+                    }
+                    TextureViewInner::SwapChain { .. } => {
+                        if let Some(ref view_id) = cmb.used_swap_chain_image {
+                            assert_eq!(view_id.value, at.attachment);
+                        } else {
+                            cmb.used_swap_chain_image = Some(Stored {
+                                value: at.attachment,
+                                ref_count: view.life_guard.ref_count.clone(),
+                            });
+                        }
+
+                        let end = hal::image::Layout::Present;
+                        let start = if first_use { hal::image::Layout::Undefined } else { end };
+                        start .. end
                     }
                 };
 
@@ -379,80 +401,82 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     samples: view.samples,
                     ops: conv::map_load_store_ops(at.load_op, at.store_op),
                     stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                    layouts: old_layout .. hal::image::Layout::ColorAttachmentOptimal,
+                    layouts,
                 });
+            }
 
-                if let Some(resolve_target) = unsafe { at.resolve_target.as_ref() } {
-                    let view = trackers
-                        .views
-                        .use_extend(&*view_guard, *resolve_target, (), ())
-                        .unwrap();
-                    if let Some(ex) = extent {
-                        assert_eq!(ex, view.extent);
-                    } else {
-                        extent = Some(view.extent);
-                    }
-                    assert_eq!(
-                        view.samples, 1,
-                        "All resolve_targets must have a sample_count of 1"
-                    );
+            for &resolve_target in color_attachments
+                .iter()
+                .flat_map(|at| unsafe { at.resolve_target.as_ref() })
+            {
+                let view = &view_guard[resolve_target];
+                assert_eq!(extent, Some(view.extent));
+                assert_eq!(
+                    view.samples, 1,
+                    "All resolve_targets must have a sample_count of 1"
+                );
+                let first_use = trackers.views
+                    .init(resolve_target, &view.life_guard.ref_count, (), ());
 
-                    if view.is_owned_by_swap_chain {
-                        let link = match texture_guard[view.texture_id.value].placement {
-                            TexturePlacement::SwapChain(ref link) => SwapChainLink {
-                                swap_chain_id: link.swap_chain_id.clone(),
-                                epoch: *link.epoch.lock(),
-                                image_index: link.image_index,
-                            },
-                            TexturePlacement::Memory(_) => unreachable!(),
+                let layouts = match view.inner {
+                    TextureViewInner::Native { ref source_id, .. } => {
+                        let texture = &texture_guard[source_id.value];
+                        assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
+
+                        let old_layout = match trackers
+                            .textures
+                            .query(source_id.value, view.range.clone())
+                        {
+                            Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
+                            None => {
+                                // Required sub-resources have inconsistent states, we need to
+                                // issue individual barriers instead of relying on the render pass.
+                                let pending = trackers.textures.change_replace(
+                                    source_id.value,
+                                    &texture.life_guard.ref_count,
+                                    view.range.clone(),
+                                    TextureUsage::OUTPUT_ATTACHMENT,
+                                );
+                                barriers.extend(pending.map(|pending| {
+                                    trace!("\tresolve {:?}", pending);
+                                    hal::memory::Barrier::Image {
+                                        states: pending.to_states(),
+                                        target: &texture.raw,
+                                        families: None,
+                                        range: pending.selector,
+                                    }
+                                }));
+                                hal::image::Layout::ColorAttachmentOptimal
+                            }
                         };
-                        swap_chain_links.push(link);
+                        old_layout .. hal::image::Layout::ColorAttachmentOptimal
                     }
-
-                    let texture = &texture_guard[view.texture_id.value];
-                    assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
-
-                    let old_layout = match trackers
-                        .textures
-                        .query(view.texture_id.value, view.range.clone())
-                    {
-                        Some(usage) => {
-                            conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
+                    TextureViewInner::SwapChain { .. } => {
+                        if let Some(ref view_id) = cmb.used_swap_chain_image {
+                            assert_eq!(view_id.value, resolve_target);
+                        } else {
+                            cmb.used_swap_chain_image = Some(Stored {
+                                value: resolve_target,
+                                ref_count: view.life_guard.ref_count.clone(),
+                            });
                         }
-                        None => {
-                            // Required sub-resources have inconsistent states, we need to
-                            // issue individual barriers instead of relying on the render pass.
-                            let pending = trackers.textures.change_replace(
-                                view.texture_id.value,
-                                &texture.life_guard.ref_count,
-                                view.range.clone(),
-                                TextureUsage::OUTPUT_ATTACHMENT,
-                            );
 
-                            barriers.extend(pending.map(|pending| {
-                                trace!("\tresolve {:?}", pending);
-                                hal::memory::Barrier::Image {
-                                    states: pending.to_states(),
-                                    target: &texture.raw,
-                                    families: None,
-                                    range: pending.selector,
-                                }
-                            }));
-                            hal::image::Layout::ColorAttachmentOptimal
-                        }
-                    };
+                        let end = hal::image::Layout::Present;
+                        let start = if first_use { hal::image::Layout::Undefined } else { end };
+                        start .. end
+                    }
+                };
 
-                    resolves.push(hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(view.format)),
-                        samples: view.samples,
-                        ops: hal::pass::AttachmentOps::new(
-                            hal::pass::AttachmentLoadOp::DontCare,
-                            hal::pass::AttachmentStoreOp::Store,
-                        ),
-                        stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                        layouts: old_layout .. hal::image::Layout::ColorAttachmentOptimal,
-                    });
-                }
+                resolves.push(hal::pass::Attachment {
+                    format: Some(conv::map_texture_format(view.format)),
+                    samples: view.samples,
+                    ops: hal::pass::AttachmentOps::new(
+                        hal::pass::AttachmentLoadOp::DontCare,
+                        hal::pass::AttachmentStoreOp::Store,
+                    ),
+                    stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+                    layouts,
+                });
             }
 
             RenderPassKey {
@@ -544,8 +568,10 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             Entry::Occupied(e) => e.into_mut(),
             Entry::Vacant(e) => {
                 let fb = {
-                    let attachments = e.key().all().map(|&id| &view_guard[id].raw);
-
+                    let attachments = e.key().all().map(|&id| match view_guard[id].inner {
+                        TextureViewInner::Native { ref raw, .. } => raw,
+                        TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
+                    });
                     unsafe {
                         device
                             .raw
