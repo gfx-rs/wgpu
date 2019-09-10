@@ -87,7 +87,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             device_id,
             life_guard: LifeGuard::new(),
             trackers: TrackerSet::new(B::VARIANT),
-            used_swap_chain_image: None,
+            used_swap_chain: None,
         }
     }
 
