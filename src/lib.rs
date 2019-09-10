@@ -431,7 +431,6 @@ pub struct RenderPassColorAttachmentDescriptor<'a> {
 /// A swap chain image that can be rendered to.
 #[derive(Debug)]
 pub struct SwapChainOutput<'a> {
-    pub texture: Texture,
     pub view: TextureView,
     swap_chain_id: &'a wgn::SwapChainId,
 }
@@ -1332,10 +1331,6 @@ impl SwapChain {
     pub fn get_next_texture(&mut self) -> SwapChainOutput {
         let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
         SwapChainOutput {
-            texture: Texture {
-                id: output.texture_id,
-                owned: false,
-            },
             view: TextureView {
                 id: output.view_id,
                 owned: false,
