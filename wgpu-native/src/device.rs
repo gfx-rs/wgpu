@@ -1916,7 +1916,9 @@ pub fn device_create_swap_chain<B: GfxBackend>(
         assert!(suf.supports_queue_family(&adapter.raw.queue_families[0]));
         suf.compatibility(&adapter.raw.physical_device)
     };
-    let num_frames = *caps.image_count.start(); //TODO: configure?
+    let num_frames = swap_chain::DESIRED_NUM_FRAMES
+        .max(*caps.image_count.start())
+        .min(*caps.image_count.end());
     let config = desc.to_hal(num_frames);
 
     if let Some(formats) = formats {
@@ -1936,10 +1938,9 @@ pub fn device_create_swap_chain<B: GfxBackend>(
             desc.width, desc.height, caps.extents);
     }
 
-    let hal_desc = desc.to_hal(num_frames);
     unsafe {
         B::get_surface_mut(surface)
-            .configure_swapchain(&device.raw, hal_desc)
+            .configure_swapchain(&device.raw, config)
             .unwrap();
     }
 

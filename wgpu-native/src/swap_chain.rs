@@ -52,6 +52,7 @@ use hal::{
 use std::marker::PhantomData;
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
+pub const DESIRED_NUM_FRAMES: u32 = 3;
 
 #[derive(Debug)]
 pub struct SwapChain<B: hal::Backend> {
