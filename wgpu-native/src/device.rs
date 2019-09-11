@@ -1433,7 +1433,7 @@ pub fn queue_submit<B: GfxBackend>(queue_id: QueueId, command_buffer_ids: &[Comm
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, mut token) = hub.textures.read(&mut token);
-        let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+        let (mut texture_view_guard, _) = hub.texture_views.write(&mut token);
 
         //TODO: if multiple command buffers are submitted, we can re-use the last
         // native command buffer of the previous chain instead of always creating
@@ -1443,11 +1443,15 @@ pub fn queue_submit<B: GfxBackend>(queue_id: QueueId, command_buffer_ids: &[Comm
         for &cmb_id in command_buffer_ids {
             let comb = &mut command_buffer_guard[cmb_id];
 
-            if let Some(view_id) = comb.used_swap_chain_image.take() {
+            if let Some((view_id, fbo)) = comb.used_swap_chain.take() {
                 let sem = match texture_view_guard[view_id.value].inner {
                     resource::TextureViewInner::Native { .. } => unreachable!(),
-                    resource::TextureViewInner::SwapChain { ref source_id, .. } =>
-                        &swap_chain_guard[source_id.value].semaphore,
+                    resource::TextureViewInner::SwapChain { ref source_id, ref mut framebuffer, .. } => {
+                        assert!(framebuffer.is_none(),
+                            "Using a swap chain in multiple framebuffers is not supported yet");
+                        *framebuffer = Some(fbo);
+                        &swap_chain_guard[source_id.value].semaphore
+                    }
                 };
                 signal_semaphores.push(sem);
             }
@@ -1958,8 +1962,8 @@ pub fn device_create_swap_chain<B: GfxBackend>(
         },
         desc: desc.clone(),
         num_frames,
-        acquired_view_id: None,
         semaphore: device.raw.create_semaphore().unwrap(),
+        acquired_view_id: None,
     };
     swap_chain_guard.insert(sc_id, swap_chain);
     sc_id

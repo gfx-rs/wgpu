@@ -118,7 +118,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
-    pub(crate) used_swap_chain_image: Option<Stored<TextureViewId>>,
+    pub(crate) used_swap_chain: Option<(Stored<TextureViewId>, B::Framebuffer)>,
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
@@ -198,7 +198,7 @@ pub fn command_encoder_finish<B: GfxBackend>(
     assert!(comb.is_recording);
     comb.is_recording = false;
     // stop tracking the swapchain image, if used
-    if let Some(ref view_id) = comb.used_swap_chain_image {
+    if let Some((ref view_id, _)) = comb.used_swap_chain {
         comb.trackers.views.remove(view_id.value);
     }
     encoder_id
@@ -248,6 +248,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
 
         let mut extent = None;
         let mut barriers = Vec::new();
+        let mut used_swap_chain_image = None::<Stored<TextureViewId>>;
 
         let color_attachments =
             unsafe { slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length) };
@@ -381,10 +382,11 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         old_layout .. hal::image::Layout::ColorAttachmentOptimal
                     }
                     TextureViewInner::SwapChain { .. } => {
-                        if let Some(ref view_id) = cmb.used_swap_chain_image {
+                        if let Some((ref view_id, _)) = cmb.used_swap_chain {
                             assert_eq!(view_id.value, at.attachment);
                         } else {
-                            cmb.used_swap_chain_image = Some(Stored {
+                            assert!(used_swap_chain_image.is_none());
+                            used_swap_chain_image = Some(Stored {
                                 value: at.attachment,
                                 ref_count: view.life_guard.ref_count.clone(),
                             });
@@ -452,10 +454,11 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         old_layout .. hal::image::Layout::ColorAttachmentOptimal
                     }
                     TextureViewInner::SwapChain { .. } => {
-                        if let Some(ref view_id) = cmb.used_swap_chain_image {
+                        if let Some((ref view_id, _)) = cmb.used_swap_chain {
                             assert_eq!(view_id.value, resolve_target);
                         } else {
-                            cmb.used_swap_chain_image = Some(Stored {
+                            assert!(used_swap_chain_image.is_none());
+                            used_swap_chain_image = Some(Stored {
                                 value: resolve_target,
                                 ref_count: view.life_guard.ref_count.clone(),
                             });
@@ -555,7 +558,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             }
         };
 
-        let mut framebuffer_cache = device.framebuffers.lock();
+        let mut framebuffer_cache;
         let fb_key = FramebufferKey {
             colors: color_attachments.iter().map(|at| at.attachment).collect(),
             resolves: color_attachments
@@ -564,22 +567,45 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 .collect(),
             depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
         };
-        let framebuffer = match framebuffer_cache.entry(fb_key) {
-            Entry::Occupied(e) => e.into_mut(),
-            Entry::Vacant(e) => {
-                let fb = {
-                    let attachments = e.key().all().map(|&id| match view_guard[id].inner {
-                        TextureViewInner::Native { ref raw, .. } => raw,
-                        TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
-                    });
-                    unsafe {
-                        device
-                            .raw
-                            .create_framebuffer(&render_pass, attachments, extent.unwrap())
-                    }
-                    .unwrap()
+
+        let framebuffer = match used_swap_chain_image.take() {
+            Some(view_id) => {
+                assert!(cmb.used_swap_chain.is_none());
+                // Always create a new framebuffer and delete it after presentation.
+                let attachments = fb_key.all().map(|&id| match view_guard[id].inner {
+                    TextureViewInner::Native { ref raw, .. } => raw,
+                    TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
+                });
+                let framebuffer = unsafe {
+                    device
+                        .raw
+                        .create_framebuffer(&render_pass, attachments, extent.unwrap())
+                        .unwrap()
                 };
-                e.insert(fb)
+                cmb.used_swap_chain = Some((view_id, framebuffer));
+                &mut cmb.used_swap_chain.as_mut().unwrap().1
+            }
+            None => {
+                // Cache framebuffers by the device.
+                framebuffer_cache = device.framebuffers.lock();
+                match framebuffer_cache.entry(fb_key) {
+                    Entry::Occupied(e) => e.into_mut(),
+                    Entry::Vacant(e) => {
+                        let fb = {
+                            let attachments = e.key().all().map(|&id| match view_guard[id].inner {
+                                TextureViewInner::Native { ref raw, .. } => raw,
+                                TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
+                            });
+                            unsafe {
+                                device
+                                    .raw
+                                    .create_framebuffer(&render_pass, attachments, extent.unwrap())
+                            }
+                            .unwrap()
+                        };
+                        e.insert(fb)
+                    }
+                }
             }
         };
 

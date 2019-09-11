@@ -44,6 +44,7 @@ use crate::{
 
 use hal::{
     self,
+    device::Device as _,
     queue::CommandQueue as _,
     window::PresentationSurface as _,
 };
@@ -60,8 +61,8 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) desc: SwapChainDescriptor,
     pub(crate) num_frames: hal::window::SwapImageIndex,
-    pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,
     pub(crate) semaphore: B::Semaphore,
+    pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,
 }
 
 #[repr(C)]
@@ -165,6 +166,7 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
                 value: swap_chain_id,
                 ref_count: sc.life_guard.ref_count.clone(),
             },
+            framebuffer: None,
         },
         format: sc.desc.format,
         extent: hal::image::Extent {
@@ -216,9 +218,9 @@ pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
         .take()
         .expect("Swap chain image is not acquired");
     let (view, _) = hub.texture_views.unregister(view_id.value, &mut token);
-    let image = match view.inner {
+    let (image, framebuffer) = match view.inner {
         resource::TextureViewInner::Native { .. } => unreachable!(),
-        resource::TextureViewInner::SwapChain { image, .. } => image,
+        resource::TextureViewInner::SwapChain { image, framebuffer, .. } => (image, framebuffer),
     };
 
     let err = unsafe {
@@ -229,9 +231,14 @@ pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
             Some(&sc.semaphore),
         )
     };
-
     if let Err(e) = err {
         log::warn!("present failed: {:?}", e);
+    }
+
+    if let Some(fbo) = framebuffer {
+        unsafe {
+            device.raw.destroy_framebuffer(fbo);
+        }
     }
 }
 
