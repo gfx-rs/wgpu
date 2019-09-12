@@ -33,6 +33,7 @@ pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
 pub use hal::pso::read_spirv;
+pub use hal::adapter::AdapterInfo;
 
 use std::{
     os::raw::c_char,

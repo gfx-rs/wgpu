@@ -5,6 +5,7 @@ use crate::{
     hub::{GfxBackend, Token, GLOBAL},
     id::{Input, Output},
     AdapterId,
+    AdapterInfo,
     Backend,
     Device,
     DeviceId,
@@ -477,4 +478,19 @@ pub extern "C" fn wgpu_adapter_request_device(
 ) -> DeviceId {
     let desc = &desc.cloned().unwrap_or_default();
     gfx_select!(adapter_id => adapter_request_device(adapter_id, desc, PhantomData))
+}
+
+pub fn adapter_get_info<B: GfxBackend>(adapter_id: AdapterId) -> AdapterInfo {
+    let hub = B::hub();
+    let mut token = Token::root();
+    let (adapter_guard, _) = hub.adapters.read(&mut token);
+    let adapter = &adapter_guard[adapter_id];
+    adapter.raw.info.clone()
+}
+
+#[cfg(not(feature = "remote"))]
+pub fn wgpu_adapter_get_info(
+    adapter_id: AdapterId
+) -> AdapterInfo {
+    gfx_select!(adapter_id => adapter_get_info(adapter_id))
 }
