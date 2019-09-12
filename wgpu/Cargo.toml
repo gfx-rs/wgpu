@@ -23,7 +23,7 @@ default = []
 vulkan = ["wgn/gfx-backend-vulkan"]
 
 [dependencies]
-wgn = { package = "wgpu-native", git = "https://github.com/gfx-rs/wgpu", rev = "499bf1d2686ad25b5a5133d6433e4f4c9179ff0b" }
+wgn = { package = "wgpu-native", git = "https://github.com/gfx-rs/wgpu", rev = "c3609d71c95dc5be1672c737ee4010e6a9408748" }
 arrayvec = "0.4"
 raw-window-handle = "0.1"
 zerocopy = "0.2"
