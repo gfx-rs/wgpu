@@ -36,7 +36,7 @@ Shout out to the following projects that work best with wgpu-rs:
   - [wgpu_glyph](https://github.com/hecrj/wgpu_glyph) - for your text-y rendering needs
   - [coffee](https://github.com/hecrj/coffee) - a whole 2D engine
   - [rgx](https://github.com/cloudhead/rgx) - a 2D graphics library
-  - [imgui-wgpu](https://github.com/unconed/imgui-wgpu-rs) - Dear ImGui interfacing
+  - [imgui-wgpu](https://github.com/Yatekii/imgui-wgpu-rs) - Dear ImGui interfacing
 
 ## Development
 
