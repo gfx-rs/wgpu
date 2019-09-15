@@ -1248,6 +1248,22 @@ impl<'a> RenderPass<'a> {
             instances.start,
         );
     }
+
+    /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
+    ///
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
+    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+        wgn::wgpu_render_pass_draw_indirect(self.id, indirect_buffer.id, indirect_offset);
+    }
+
+    /// Draws indexed primitives using the active index buffer and the active vertex buffers,
+    /// based on the contents of the `indirect_buffer`.
+    ///
+    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
+    /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
+    pub fn draw_indexed_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+        wgn::wgpu_render_pass_draw_indexed_indirect(self.id, indirect_buffer.id, indirect_offset);
+    }
 }
 
 impl<'a> Drop for RenderPass<'a> {
@@ -1285,6 +1301,11 @@ impl<'a> ComputePass<'a> {
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         wgn::wgpu_compute_pass_dispatch(self.id, x, y, z);
+    }
+
+    /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
+    pub fn dispatch_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+        wgn::wgpu_compute_pass_dispatch_indirect(self.id, indirect_buffer.id, indirect_offset);
     }
 }
 
