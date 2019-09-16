@@ -1215,7 +1215,7 @@ pub fn device_create_bind_group<B: GfxBackend>(
                         .buffers
                         .use_extend(&*buffer_guard, bb.buffer, (), usage)
                         .unwrap();
-                    assert!(buffer.usage.contains(usage));
+                    assert!(buffer.usage.contains(usage), "Expected buffer usage {:?}", usage);
 
                     let end = if bb.size == 0 {
                         None
