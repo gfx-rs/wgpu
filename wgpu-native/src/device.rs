@@ -135,6 +135,7 @@ enum ResourceId {
     Texture(TextureId),
     TextureView(TextureViewId),
     BindGroup(BindGroupId),
+    Sampler(SamplerId),
 }
 
 #[derive(Debug)]
@@ -144,6 +145,7 @@ enum NativeResource<B: hal::Backend> {
     ImageView(B::ImageView),
     Framebuffer(B::Framebuffer),
     DescriptorSet(DescriptorSet<B>),
+    Sampler(B::Sampler),
 }
 
 #[derive(Debug)]
@@ -257,6 +259,9 @@ impl<B: GfxBackend> PendingResources<B> {
                 NativeResource::DescriptorSet(raw) => unsafe {
                     descriptor_allocator.free(iter::once(raw));
                 },
+                NativeResource::Sampler(raw) => unsafe {
+                    device.destroy_sampler(raw);
+                },
             }
         }
 
@@ -279,7 +284,8 @@ impl<B: GfxBackend> PendingResources<B> {
         let (mut bind_group_guard, mut token) = hub.bind_groups.write(&mut token);
         let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
         let (mut texture_guard, mut token) = hub.textures.write(&mut token);
-        let (mut teview_view_guard, _) = hub.texture_views.write(&mut token);
+        let (mut teview_view_guard, mut token) = hub.texture_views.write(&mut token);
+        let (mut sampler_guard, _) = hub.samplers.write(&mut token);
 
         for i in (0 .. self.referenced.len()).rev() {
             let num_refs = self.referenced[i].1.load();
@@ -328,6 +334,13 @@ impl<B: GfxBackend> PendingResources<B> {
                             bind_group.life_guard,
                             NativeResource::DescriptorSet(bind_group.raw),
                         )
+                    }
+                    ResourceId::Sampler(id) => {
+                        trackers.samplers.remove(id);
+                        let sampler = sampler_guard.remove(id).unwrap();
+                        #[cfg(not(feature = "remote"))]
+                        hub.samplers.identity.lock().free(id);
+                        (sampler.life_guard, NativeResource::Sampler(sampler.raw))
                     }
                 };
 
@@ -1041,6 +1054,11 @@ pub fn device_create_sampler<B: GfxBackend>(
 
     let sampler = resource::Sampler {
         raw: unsafe { device.raw.create_sampler(info).unwrap() },
+        device_id: Stored {
+            value: device_id,
+            ref_count: device.life_guard.ref_count.clone(),
+        },
+        life_guard: LifeGuard::new(),
     };
     hub.samplers.register_identity(id_in, sampler, &mut token)
 }
@@ -1052,6 +1070,26 @@ pub extern "C" fn wgpu_device_create_sampler(
     desc: &resource::SamplerDescriptor,
 ) -> SamplerId {
     gfx_select!(device_id => device_create_sampler(device_id, desc, PhantomData))
+}
+
+pub fn sampler_destroy<B: GfxBackend>(sampler_id: SamplerId) {
+    let hub = B::hub();
+    let mut token = Token::root();
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let (sampler_guard, _) = hub.samplers.read(&mut token);
+    let sampler = &sampler_guard[sampler_id];
+    device_guard[sampler.device_id.value]
+        .pending
+        .lock()
+        .destroy(
+            ResourceId::Sampler(sampler_id),
+            sampler.life_guard.ref_count.clone(),
+        );
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_sampler_destroy(sampler_id: SamplerId) {
+    gfx_select!(sampler_id => sampler_destroy(sampler_id))
 }
 
 pub fn device_create_bind_group_layout<B: GfxBackend>(

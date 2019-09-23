@@ -2,7 +2,17 @@ mod buffer;
 mod range;
 mod texture;
 
-use crate::{hub::Storage, Backend, BindGroupId, Epoch, Index, RefCount, TextureViewId, TypedId};
+use crate::{
+    hub::Storage,
+    Backend,
+    BindGroupId,
+    Epoch,
+    Index,
+    RefCount,
+    SamplerId,
+    TextureViewId,
+    TypedId,
+};
 
 use hal::backend::FastHashMap;
 
@@ -410,7 +420,7 @@ pub struct TrackerSet {
     pub textures: ResourceTracker<TextureState>,
     pub views: ResourceTracker<PhantomData<TextureViewId>>,
     pub bind_groups: ResourceTracker<PhantomData<BindGroupId>>,
-    //TODO: samplers
+    pub samplers: ResourceTracker<PhantomData<SamplerId>>,
 }
 
 impl TrackerSet {
@@ -421,6 +431,7 @@ impl TrackerSet {
             textures: ResourceTracker::new(backend),
             views: ResourceTracker::new(backend),
             bind_groups: ResourceTracker::new(backend),
+            samplers: ResourceTracker::new(backend),
         }
     }
 

@@ -360,4 +360,6 @@ pub struct SamplerDescriptor {
 #[derive(Debug)]
 pub struct Sampler<B: hal::Backend> {
     pub(crate) raw: B::Sampler,
+    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
 }
