@@ -2,7 +2,17 @@ mod buffer;
 mod range;
 mod texture;
 
-use crate::{hub::Storage, Backend, BindGroupId, Epoch, Index, RefCount, TextureViewId, TypedId};
+use crate::{
+    hub::Storage,
+    Backend,
+    BindGroupId,
+    Epoch,
+    Index,
+    RefCount,
+    SamplerId,
+    TextureViewId,
+    TypedId,
+};
 
 use hal::backend::FastHashMap;
 
@@ -410,7 +420,7 @@ pub struct TrackerSet {
     pub textures: ResourceTracker<TextureState>,
     pub views: ResourceTracker<PhantomData<TextureViewId>>,
     pub bind_groups: ResourceTracker<PhantomData<BindGroupId>>,
-    //TODO: samplers
+    pub samplers: ResourceTracker<PhantomData<SamplerId>>,
 }
 
 impl TrackerSet {
@@ -421,6 +431,7 @@ impl TrackerSet {
             textures: ResourceTracker::new(backend),
             views: ResourceTracker::new(backend),
             bind_groups: ResourceTracker::new(backend),
+            samplers: ResourceTracker::new(backend),
         }
     }
 
@@ -430,6 +441,7 @@ impl TrackerSet {
         self.textures.clear();
         self.views.clear();
         self.bind_groups.clear();
+        self.samplers.clear();
     }
 
     /// Try to optimize the tracking representation.
@@ -438,6 +450,7 @@ impl TrackerSet {
         self.textures.optimize();
         self.views.optimize();
         self.bind_groups.optimize();
+        self.samplers.optimize();
     }
 
     /// Merge all the trackers of another instance by extending
@@ -447,6 +460,7 @@ impl TrackerSet {
         self.textures.merge_extend(&other.textures).unwrap();
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
+        self.samplers.merge_extend(&other.samplers).unwrap();
     }
 
     pub fn backend(&self) -> Backend {

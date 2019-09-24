@@ -899,6 +899,8 @@ void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
 WGPUAdapterId wgpu_request_adapter(const WGPURequestAdapterOptions *desc);
 #endif
 
+void wgpu_sampler_destroy(WGPUSamplerId sampler_id);
+
 #if !defined(WGPU_REMOTE)
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 #endif

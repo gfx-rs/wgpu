@@ -160,6 +160,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
             });
         base.views.merge_extend(&head.views).unwrap();
         base.bind_groups.merge_extend(&head.bind_groups).unwrap();
+        base.samplers.merge_extend(&head.samplers).unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
