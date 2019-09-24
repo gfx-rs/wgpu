@@ -441,6 +441,7 @@ impl TrackerSet {
         self.textures.clear();
         self.views.clear();
         self.bind_groups.clear();
+        self.samplers.clear();
     }
 
     /// Try to optimize the tracking representation.
@@ -449,6 +450,7 @@ impl TrackerSet {
         self.textures.optimize();
         self.views.optimize();
         self.bind_groups.optimize();
+        self.samplers.optimize();
     }
 
     /// Merge all the trackers of another instance by extending
@@ -458,6 +460,7 @@ impl TrackerSet {
         self.textures.merge_extend(&other.textures).unwrap();
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
+        self.samplers.merge_extend(&other.samplers).unwrap();
     }
 
     pub fn backend(&self) -> Backend {

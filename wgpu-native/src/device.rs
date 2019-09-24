@@ -1273,7 +1273,9 @@ pub fn device_create_bind_group<B: GfxBackend>(
                 }
                 binding_model::BindingResource::Sampler(id) => {
                     assert_eq!(decl.ty, binding_model::BindingType::Sampler);
-                    let sampler = &sampler_guard[id];
+                    let sampler = used.samplers
+                        .use_extend(&*sampler_guard, id, (), ())
+                        .unwrap();
                     hal::pso::Descriptor::Sampler(&sampler.raw)
                 }
                 binding_model::BindingResource::TextureView(id) => {
@@ -1471,7 +1473,8 @@ pub fn queue_submit<B: GfxBackend>(queue_id: QueueId, command_buffer_ids: &[Comm
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, mut token) = hub.textures.read(&mut token);
-        let (mut texture_view_guard, _) = hub.texture_views.write(&mut token);
+        let (mut texture_view_guard, mut token) = hub.texture_views.write(&mut token);
+        let (sampler_guard, _) = hub.samplers.read(&mut token);
 
         //TODO: if multiple command buffers are submitted, we can re-use the last
         // native command buffer of the previous chain instead of always creating
@@ -1520,6 +1523,12 @@ pub fn queue_submit<B: GfxBackend>(queue_id: QueueId, command_buffer_ids: &[Comm
             }
             for id in comb.trackers.bind_groups.used() {
                 bind_group_guard[id]
+                    .life_guard
+                    .submission_index
+                    .store(submit_index, Ordering::Release);
+            }
+            for id in comb.trackers.samplers.used() {
+                sampler_guard[id]
                     .life_guard
                     .submission_index
                     .store(submit_index, Ordering::Release);
