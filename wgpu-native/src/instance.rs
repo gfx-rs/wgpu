@@ -94,7 +94,9 @@ bitflags! {
         const METAL = 1 << Backend::Metal as u32;
         const DX12 = 1 << Backend::Dx12 as u32;
         const DX11 = 1 << Backend::Dx11 as u32;
+        /// Vulkan + METAL + DX12
         const PRIMARY = Self::VULKAN.bits | Self::METAL.bits | Self::DX12.bits;
+        /// OpenGL + DX11
         const SECONDARY = Self::GL.bits | Self::DX11.bits;
     }
 }
