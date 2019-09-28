@@ -30,6 +30,7 @@ use crate::{
     CommandEncoderId,
     ComputePassId,
     DeviceId,
+    Features,
     LifeGuard,
     RenderPassId,
     Stored,
@@ -119,6 +120,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chain: Option<(Stored<TextureViewId>, B::Framebuffer)>,
+    pub(crate) features: Features,
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
@@ -324,7 +326,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     }
                 };
                 hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(view.format)),
+                    format: Some(conv::map_texture_format(view.format, device.features)),
                     samples: view.samples,
                     ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
                     stencil_ops: conv::map_load_store_ops(at.stencil_load_op, at.stencil_store_op),
@@ -400,7 +402,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 };
 
                 colors.push(hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(view.format)),
+                    format: Some(conv::map_texture_format(view.format, device.features)),
                     samples: view.samples,
                     ops: conv::map_load_store_ops(at.load_op, at.store_op),
                     stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
@@ -472,7 +474,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 };
 
                 resolves.push(hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(view.format)),
+                    format: Some(conv::map_texture_format(view.format, device.features)),
                     samples: view.samples,
                     ops: hal::pass::AttachmentOps::new(
                         hal::pass::AttachmentLoadOp::DontCare,

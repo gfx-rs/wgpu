@@ -145,7 +145,6 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
 ) {
     let hub = B::hub();
     let mut token = Token::root();
-
     let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
     let (buffer_guard, mut token) = hub.buffers.read(&mut token);
@@ -181,7 +180,7 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
     });
 
     let aspects = dst_texture.full_range.aspects;
-    let bytes_per_texel = conv::map_texture_format(dst_texture.format)
+    let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.features)
         .surface_desc()
         .bits as u32
         / BITS_PER_BYTE;
@@ -271,7 +270,7 @@ pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
     });
 
     let aspects = src_texture.full_range.aspects;
-    let bytes_per_texel = conv::map_texture_format(src_texture.format)
+    let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.features)
         .surface_desc()
         .bits as u32
         / BITS_PER_BYTE;

@@ -75,7 +75,6 @@ pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
 }
 
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
@@ -459,11 +458,19 @@ pub fn adapter_request_device<B: GfxBackend>(
         );
 
         let mem_props = adapter.physical_device.memory_properties();
+
+        let supports_texture_d24_s8 = adapter
+            .physical_device
+            .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+            .optimal_tiling
+            .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
+
         Device::new(
             gpu.device,
             adapter_id,
             gpu.queue_groups.swap_remove(0),
             mem_props,
+            supports_texture_d24_s8,
         )
     };
 

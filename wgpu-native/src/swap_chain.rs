@@ -35,6 +35,7 @@ use crate::{
     resource,
     DeviceId,
     Extent3d,
+    Features,
     Input,
     LifeGuard,
     Stored,
@@ -83,11 +84,11 @@ pub struct SwapChainDescriptor {
 }
 
 impl SwapChainDescriptor {
-    pub(crate) fn to_hal(&self, num_frames: u32) -> hal::window::SwapchainConfig {
+    pub(crate) fn to_hal(&self, num_frames: u32, features: &Features) -> hal::window::SwapchainConfig {
         let mut config = hal::window::SwapchainConfig::new(
             self.width,
             self.height,
-            conv::map_texture_format(self.format),
+            conv::map_texture_format(self.format, *features),
             num_frames,
         );
         //TODO: check for supported
@@ -146,7 +147,7 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
             }
             Err(e) => {
                 log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
-                let desc = sc.desc.to_hal(sc.num_frames);
+                let desc = sc.desc.to_hal(sc.num_frames, &device.features);
                 unsafe {
                     suf
                         .configure_swapchain(&device.raw, desc)

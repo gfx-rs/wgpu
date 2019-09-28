@@ -1,5 +1,5 @@
 use super::CommandBuffer;
-use crate::{hub::GfxBackend, track::TrackerSet, DeviceId, LifeGuard, Stored, SubmissionIndex};
+use crate::{hub::GfxBackend, track::TrackerSet, DeviceId, Features, LifeGuard, Stored, SubmissionIndex};
 
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
 use log::trace;
@@ -63,6 +63,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
         &self,
         device_id: Stored<DeviceId>,
         device: &B::Device,
+        features: Features,
     ) -> CommandBuffer<B> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
         let thread_id = thread::current().id();
@@ -88,6 +89,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             life_guard: LifeGuard::new(),
             trackers: TrackerSet::new(B::VARIANT),
             used_swap_chain: None,
+            features,
         }
     }
 

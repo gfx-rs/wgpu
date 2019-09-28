@@ -24,6 +24,7 @@ use crate::{
     CommandEncoderId,
     ComputePipelineId,
     DeviceId,
+    Features,
     LifeGuard,
     PipelineLayoutId,
     QueueId,
@@ -496,6 +497,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     pending: Mutex<PendingResources<B>>,
+    pub(crate) features: Features,
 }
 
 impl<B: GfxBackend> Device<B> {
@@ -504,6 +506,7 @@ impl<B: GfxBackend> Device<B> {
         adapter_id: AdapterId,
         queue_group: hal::queue::QueueGroup<B>,
         mem_props: hal::adapter::MemoryProperties,
+        supports_texture_d24_s8: bool,
     ) -> Self {
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
@@ -549,6 +552,9 @@ impl<B: GfxBackend> Device<B> {
                 free: Vec::new(),
                 ready_to_map: Vec::new(),
             }),
+            features: Features {
+                supports_texture_d24_s8,
+            }
         }
     }
 
@@ -666,7 +672,7 @@ impl<B: GfxBackend> Device<B> {
             desc.array_layer_count,
             desc.sample_count,
         );
-        let format = conv::map_texture_format(desc.format);
+        let format = conv::map_texture_format(desc.format, self.features);
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
 
@@ -933,7 +939,7 @@ pub fn texture_create_view<B: GfxBackend>(
             .create_image_view(
                 &texture.raw,
                 view_kind,
-                conv::map_texture_format(format),
+                conv::map_texture_format(format, device.features),
                 hal::format::Swizzle::NO,
                 range.clone(),
             )
@@ -1425,7 +1431,7 @@ pub fn device_create_command_encoder<B: GfxBackend>(
         value: device_id,
         ref_count: device.life_guard.ref_count.clone(),
     };
-    let mut comb = device.com_allocator.allocate(dev_stored, &device.raw);
+    let mut comb = device.com_allocator.allocate(dev_stored, &device.raw, device.features);
     unsafe {
         comb.raw.last_mut().unwrap().begin(
             hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
@@ -1727,7 +1733,7 @@ pub fn device_create_render_pipeline<B: GfxBackend>(
             colors: color_states
                 .iter()
                 .map(|at| hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(at.format)),
+                    format: Some(conv::map_texture_format(at.format, device.features)),
                     samples: sc,
                     ops: hal::pass::AttachmentOps::PRESERVE,
                     stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
@@ -1740,7 +1746,7 @@ pub fn device_create_render_pipeline<B: GfxBackend>(
             // or depth/stencil resolve modes but satisfy the other compatibility conditions.
             resolves: ArrayVec::new(),
             depth_stencil: depth_stencil_state.map(|at| hal::pass::Attachment {
-                format: Some(conv::map_texture_format(at.format)),
+                format: Some(conv::map_texture_format(at.format, device.features)),
                 samples: sc,
                 ops: hal::pass::AttachmentOps::PRESERVE,
                 stencil_ops: hal::pass::AttachmentOps::PRESERVE,
@@ -1970,7 +1976,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
     let num_frames = swap_chain::DESIRED_NUM_FRAMES
         .max(*caps.image_count.start())
         .min(*caps.image_count.end());
-    let config = desc.to_hal(num_frames);
+    let config = desc.to_hal(num_frames, &device.features);
 
     if let Some(formats) = formats {
         assert!(
