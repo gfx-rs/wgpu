@@ -1,4 +1,4 @@
-use crate::{binding_model, command, pipeline, resource, Color, Extent3d, Origin3d};
+use crate::{binding_model, command, pipeline, resource, Color, Extent3d, Features, Origin3d};
 
 pub fn map_buffer_usage(
     usage: resource::BufferUsage,
@@ -307,7 +307,7 @@ fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::
     }
 }
 
-pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::format::Format {
+pub(crate) fn map_texture_format(texture_format: resource::TextureFormat, features: Features) -> hal::format::Format {
     use crate::resource::TextureFormat as Tf;
     use hal::format::Format as H;
     match texture_format {
@@ -367,8 +367,16 @@ pub fn map_texture_format(texture_format: resource::TextureFormat) -> hal::forma
 
         // Depth and stencil formats
         Tf::Depth32Float => H::D32Sfloat,
-        Tf::Depth24Plus => H::D24UnormS8Uint, //TODO: substitute
-        Tf::Depth24PlusStencil8 => H::D24UnormS8Uint, //TODO: substitute
+        Tf::Depth24Plus => if features.supports_texture_d24_s8 {
+            H::D24UnormS8Uint
+        } else {
+            H::D32Sfloat
+        }
+        Tf::Depth24PlusStencil8 => if features.supports_texture_d24_s8 {
+            H::D24UnormS8Uint
+        } else {
+            H::D32SfloatS8Uint
+        },
     }
 }
 
