@@ -37,7 +37,9 @@ use crate::{
     SurfaceId,
     SwapChainId,
     TextureDimension,
+    TextureFormat,
     TextureId,
+    TextureUsage,
     TextureViewId,
 };
 
@@ -666,6 +668,15 @@ impl<B: GfxBackend> Device<B> {
         desc: &resource::TextureDescriptor,
     ) -> resource::Texture<B> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
+
+        // Ensure `D24Plus` textures cannot be copied
+        match desc.format {
+            TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
+                assert!(!desc.usage.intersects(TextureUsage::COPY_SRC | TextureUsage::COPY_DST));
+            }
+            _ => {}
+        }
+
         let kind = conv::map_texture_dimension_size(
             desc.dimension,
             desc.size,
