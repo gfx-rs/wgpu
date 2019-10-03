@@ -131,7 +131,7 @@ pub struct Sampler {
 /// A handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) to which rendered images may
-/// be presented. A `Surface` may be created with [`Instance::create_surface`].
+/// be presented. A `Surface` may be created with [`Surface::create`].
 #[derive(Debug)]
 pub struct Surface {
     id: wgn::SurfaceId,
