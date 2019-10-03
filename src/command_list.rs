@@ -103,14 +103,7 @@ impl GraphicsCommandList {
             ptr::null()
         };
         unsafe {
-            self.ClearDepthStencilView(
-                dsv,
-                flags.bits(),
-                depth,
-                stencil,
-                num_rects,
-                rects,
-            );
+            self.ClearDepthStencilView(dsv, flags.bits(), depth, stencil, num_rects, rects);
         }
     }
 
@@ -229,6 +222,36 @@ impl GraphicsCommandList {
         }
     }
 
+    pub fn set_compute_root_constant_buffer_view(
+        &self,
+        root_index: u32,
+        buffer_location: GpuAddress,
+    ) {
+        unsafe {
+            self.SetComputeRootConstantBufferView(root_index, buffer_location);
+        }
+    }
+
+    pub fn set_compute_root_shader_resource_view(
+        &self,
+        root_index: u32,
+        buffer_location: GpuAddress,
+    ) {
+        unsafe {
+            self.SetComputeRootShaderResourceView(root_index, buffer_location);
+        }
+    }
+
+    pub fn set_compute_root_unordered_access_view(
+        &self,
+        root_index: u32,
+        buffer_location: GpuAddress,
+    ) {
+        unsafe {
+            self.SetComputeRootUnorderedAccessView(root_index, buffer_location);
+        }
+    }
+
     pub fn set_graphics_root_descriptor_table(
         &self,
         root_index: u32,
@@ -236,6 +259,36 @@ impl GraphicsCommandList {
     ) {
         unsafe {
             self.SetGraphicsRootDescriptorTable(root_index, base_descriptor);
+        }
+    }
+
+    pub fn set_graphics_root_constant_buffer_view(
+        &self,
+        root_index: u32,
+        buffer_location: GpuAddress,
+    ) {
+        unsafe {
+            self.SetGraphicsRootConstantBufferView(root_index, buffer_location);
+        }
+    }
+
+    pub fn set_graphics_root_shader_resource_view(
+        &self,
+        root_index: u32,
+        buffer_location: GpuAddress,
+    ) {
+        unsafe {
+            self.SetGraphicsRootShaderResourceView(root_index, buffer_location);
+        }
+    }
+
+    pub fn set_graphics_root_unordered_access_view(
+        &self,
+        root_index: u32,
+        buffer_location: GpuAddress,
+    ) {
+        unsafe {
+            self.SetGraphicsRootUnorderedAccessView(root_index, buffer_location);
         }
     }
 }

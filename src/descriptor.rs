@@ -8,13 +8,14 @@ use {Blob, D3DResult, Error, TextureAddressMode};
 pub type CpuDescriptor = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE;
 pub type GpuDescriptor = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE;
 
+#[derive(Clone, Copy, Debug)]
 pub struct Binding {
     pub register: u32,
     pub space: u32,
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum HeapType {
     CbvSrvUav = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
     Sampler = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
@@ -41,7 +42,7 @@ impl DescriptorHeap {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum ShaderVisibility {
     All = d3d12::D3D12_SHADER_VISIBILITY_ALL,
     VS = d3d12::D3D12_SHADER_VISIBILITY_VERTEX,
@@ -52,7 +53,7 @@ pub enum ShaderVisibility {
 }
 
 #[repr(u32)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub enum DescriptorRangeType {
     SRV = d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
     UAV = d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
@@ -109,7 +110,11 @@ impl RootParameter {
         RootParameter(param)
     }
 
-    fn descriptor(ty: d3d12::D3D12_ROOT_PARAMETER_TYPE, visibility: ShaderVisibility, binding: Binding) -> Self {
+    fn descriptor(
+        ty: d3d12::D3D12_ROOT_PARAMETER_TYPE,
+        visibility: ShaderVisibility,
+        binding: Binding,
+    ) -> Self {
         let mut param = d3d12::D3D12_ROOT_PARAMETER {
             ParameterType: ty,
             ShaderVisibility: visibility as _,
@@ -138,6 +143,7 @@ impl RootParameter {
 }
 
 #[repr(u32)]
+#[derive(Copy, Clone, Debug)]
 pub enum StaticBorderColor {
     TransparentBlack = d3d12::D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
     OpaqueBlack = d3d12::D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
@@ -178,6 +184,7 @@ impl StaticSampler {
 }
 
 #[repr(u32)]
+#[derive(Copy, Clone, Debug)]
 pub enum RootSignatureVersion {
     V1_0 = d3d12::D3D_ROOT_SIGNATURE_VERSION_1_0,
     V1_1 = d3d12::D3D_ROOT_SIGNATURE_VERSION_1_1,
