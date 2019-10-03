@@ -108,6 +108,33 @@ impl RootParameter {
 
         RootParameter(param)
     }
+
+    fn descriptor(ty: d3d12::D3D12_ROOT_PARAMETER_TYPE, visibility: ShaderVisibility, binding: Binding) -> Self {
+        let mut param = d3d12::D3D12_ROOT_PARAMETER {
+            ParameterType: ty,
+            ShaderVisibility: visibility as _,
+            ..unsafe { mem::zeroed() }
+        };
+
+        *unsafe { param.u.Descriptor_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR {
+            ShaderRegister: binding.register,
+            RegisterSpace: binding.space,
+        };
+
+        RootParameter(param)
+    }
+
+    pub fn cbv_descriptor(visibility: ShaderVisibility, binding: Binding) -> Self {
+        Self::descriptor(d3d12::D3D12_ROOT_PARAMETER_TYPE_CBV, visibility, binding)
+    }
+
+    pub fn srv_descriptor(visibility: ShaderVisibility, binding: Binding) -> Self {
+        Self::descriptor(d3d12::D3D12_ROOT_PARAMETER_TYPE_SRV, visibility, binding)
+    }
+
+    pub fn uav_descriptor(visibility: ShaderVisibility, binding: Binding) -> Self {
+        Self::descriptor(d3d12::D3D12_ROOT_PARAMETER_TYPE_UAV, visibility, binding)
+    }
 }
 
 #[repr(u32)]
