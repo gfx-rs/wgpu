@@ -1,6 +1,6 @@
 [package]
 name = "d3d12"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["msiglreith <m.siglreith@gmail.com>"]
 description = "Low level D3D12 API wrapper"
 repository = "https://github.com/gfx-rs/d3d12-rs"
