@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define WGPUDESIRED_NUM_FRAMES 3
+
 #define WGPUMAX_BIND_GROUPS 4
 
 #define WGPUMAX_COLOR_TARGETS 4
