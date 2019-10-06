@@ -186,7 +186,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
                 .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
         },
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
-        Rwh::X11(h) => Surface {
+        Rwh::Xlib(h) => Surface {
             vulkan: instance
                 .vulkan
                 .as_ref()
@@ -226,11 +226,11 @@ pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
     window: u64,
 ) -> SurfaceId {
-    use raw_window_handle::unix::X11Handle;
-    wgpu_create_surface(raw_window_handle::RawWindowHandle::X11(X11Handle {
+    use raw_window_handle::unix::XlibHandle;
+    wgpu_create_surface(raw_window_handle::RawWindowHandle::Xlib(XlibHandle {
         window,
         display: display as *mut _,
-        ..X11Handle::empty()
+        ..XlibHandle::empty()
     }))
 }
 

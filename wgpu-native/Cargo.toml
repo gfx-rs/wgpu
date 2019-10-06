@@ -23,7 +23,7 @@ metal-auto-capture = ["gfx-backend-metal/auto-capture"]
 #glutin = ["gfx-backend-gl/glutin"]
 
 [dependencies]
-arrayvec = "0.4"
+arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1"
 lazy_static = "1.1.0"
@@ -31,7 +31,7 @@ log = "0.4"
 hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "3d5db15661127c8cad8d85522a68ec36c82f6e69" }
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "3d5db15661127c8cad8d85522a68ec36c82f6e69" }
 parking_lot = "0.9"
-raw-window-handle = "0.1"
+raw-window-handle = "0.3"
 rendy-memory = { git = "https://github.com/amethyst/rendy", rev = "e8ffcabc2bc74fbb282d4f71fa55c28d0ec31c86" }
 rendy-descriptor = { git = "https://github.com/amethyst/rendy", rev = "e8ffcabc2bc74fbb282d4f71fa55c28d0ec31c86" }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
