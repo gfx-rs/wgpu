@@ -137,11 +137,17 @@ impl<B: GfxBackend> RenderPass<B> {
         context: RenderPassContext,
         sample_count: u8,
     ) -> Self {
+        let hub = B::hub();
+        let mut token = Token::root();
+        let (cmb_guard, _) = hub.command_buffers.read(&mut token);
+        let cmb = &cmb_guard[cmb_id.value];
+        let max_bind_groups = cmb.features.max_bind_groups;
+
         RenderPass {
             raw,
             cmb_id,
             context,
-            binder: Binder::default(),
+            binder: Binder::new(max_bind_groups),
             trackers: TrackerSet::new(B::VARIANT),
             blend_color_status: OptionalState::Unused,
             stencil_reference_status: OptionalState::Unused,
@@ -232,6 +238,7 @@ pub fn render_pass_set_bind_group<B: GfxBackend>(
 
     let (mut pass_guard, _) = hub.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
+
 
     let bind_group = pass
         .trackers

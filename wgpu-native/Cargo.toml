@@ -35,6 +35,7 @@ raw-window-handle = "0.3"
 rendy-memory = { git = "https://github.com/amethyst/rendy", rev = "e8ffcabc2bc74fbb282d4f71fa55c28d0ec31c86" }
 rendy-descriptor = { git = "https://github.com/amethyst/rendy", rev = "e8ffcabc2bc74fbb282d4f71fa55c28d0ec31c86" }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
+smallvec = "0.6"
 vec_map = "0.8"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
