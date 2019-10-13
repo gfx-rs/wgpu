@@ -234,7 +234,6 @@ pub fn render_pass_set_bind_group<B: GfxBackend>(
     let (mut pass_guard, _) = hub.render_passes.write(&mut token);
     let pass = &mut pass_guard[pass_id];
 
-
     let bind_group = pass
         .trackers
         .bind_groups
