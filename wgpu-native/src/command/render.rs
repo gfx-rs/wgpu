@@ -136,13 +136,8 @@ impl<B: GfxBackend> RenderPass<B> {
         cmb_id: Stored<CommandBufferId>,
         context: RenderPassContext,
         sample_count: u8,
+        max_bind_groups: u32,
     ) -> Self {
-        let hub = B::hub();
-        let mut token = Token::root();
-        let (cmb_guard, _) = hub.command_buffers.read(&mut token);
-        let cmb = &cmb_guard[cmb_id.value];
-        let max_bind_groups = cmb.features.max_bind_groups;
-
         RenderPass {
             raw,
             cmb_id,
