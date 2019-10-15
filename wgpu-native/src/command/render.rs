@@ -136,12 +136,13 @@ impl<B: GfxBackend> RenderPass<B> {
         cmb_id: Stored<CommandBufferId>,
         context: RenderPassContext,
         sample_count: u8,
+        max_bind_groups: u32,
     ) -> Self {
         RenderPass {
             raw,
             cmb_id,
             context,
-            binder: Binder::default(),
+            binder: Binder::new(max_bind_groups),
             trackers: TrackerSet::new(B::VARIANT),
             blend_color_status: OptionalState::Unused,
             stencil_reference_status: OptionalState::Unused,

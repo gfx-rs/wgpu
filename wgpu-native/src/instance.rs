@@ -429,7 +429,7 @@ pub extern "C" fn wgpu_request_adapter(desc: Option<&RequestAdapterOptions>) -> 
 
 pub fn adapter_request_device<B: GfxBackend>(
     adapter_id: AdapterId,
-    _desc: &DeviceDescriptor,
+    desc: &DeviceDescriptor,
     id_in: Input<DeviceId>,
 ) -> Output<DeviceId> {
     let hub = B::hub();
@@ -462,6 +462,10 @@ pub fn adapter_request_device<B: GfxBackend>(
             BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
+        assert!(
+            u32::from(limits.max_bound_descriptor_sets) >= desc.limits.max_bind_groups,
+            "Adapter does not support the requested max_bind_groups"
+        );
 
         let mem_props = adapter.physical_device.memory_properties();
 
@@ -477,6 +481,7 @@ pub fn adapter_request_device<B: GfxBackend>(
             gpu.queue_groups.swap_remove(0),
             mem_props,
             supports_texture_d24_s8,
+            desc.limits.max_bind_groups,
         )
     };
 

@@ -223,5 +223,6 @@ macro_rules! gfx_select {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Features {
+    pub max_bind_groups: u32,
     pub supports_texture_d24_s8: bool,
 }

@@ -513,6 +513,7 @@ impl<B: GfxBackend> Device<B> {
         queue_group: hal::queue::QueueGroup<B>,
         mem_props: hal::adapter::MemoryProperties,
         supports_texture_d24_s8: bool,
+        max_bind_groups: u32,
     ) -> Self {
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
@@ -559,6 +560,7 @@ impl<B: GfxBackend> Device<B> {
                 ready_to_map: Vec::new(),
             }),
             features: Features {
+                max_bind_groups,
                 supports_texture_d24_s8,
             }
         }

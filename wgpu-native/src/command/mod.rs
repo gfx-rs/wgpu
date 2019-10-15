@@ -712,6 +712,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             },
             context,
             sample_count,
+            cmb.features.max_bind_groups,
         )
     };
     hub.render_passes.register_identity(id_in, pass, &mut token)
