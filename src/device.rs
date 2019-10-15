@@ -2,7 +2,7 @@
 
 use com::WeakPtr;
 use command_list::{CmdListType, CommandSignature, IndirectArgument};
-use descriptor::{CpuDescriptor, HeapFlags, HeapType, RenderTargetViewDesc};
+use descriptor::{CpuDescriptor, DescriptorHeapFlags, DescriptorHeapType, RenderTargetViewDesc};
 use std::ops::Range;
 use winapi::um::d3d12;
 use winapi::Interface;
@@ -101,8 +101,8 @@ impl Device {
     pub fn create_descriptor_heap(
         &self,
         num_descriptors: u32,
-        heap_type: HeapType,
-        flags: HeapFlags,
+        heap_type: DescriptorHeapType,
+        flags: DescriptorHeapFlags,
         node_mask: NodeMask,
     ) -> D3DResult<DescriptorHeap> {
         let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
@@ -124,7 +124,7 @@ impl Device {
         (heap, hr)
     }
 
-    pub fn get_descriptor_increment_size(&self, heap_type: HeapType) -> u32 {
+    pub fn get_descriptor_increment_size(&self, heap_type: DescriptorHeapType) -> u32 {
         unsafe { self.GetDescriptorHandleIncrementSize(heap_type as _) }
     }
 
@@ -152,7 +152,7 @@ impl Device {
 
     pub fn create_query_heap(
         &self,
-        heap_ty: query::HeapType,
+        heap_ty: query::QueryHeapType,
         count: u32,
         node_mask: NodeMask,
     ) -> D3DResult<QueryHeap> {

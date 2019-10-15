@@ -3,7 +3,7 @@ use winapi::um::d3d12;
 
 #[repr(u32)]
 #[derive(Debug, Copy, Clone)]
-pub enum HeapType {
+pub enum QueryHeapType {
     Occlusion = d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION,
     Timestamp = d3d12::D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
     PipelineStatistics = d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS,

@@ -16,7 +16,7 @@ pub struct Binding {
 
 #[repr(u32)]
 #[derive(Clone, Copy, Debug)]
-pub enum HeapType {
+pub enum DescriptorHeapType {
     CbvSrvUav = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
     Sampler = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
     Rtv = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
@@ -24,7 +24,7 @@ pub enum HeapType {
 }
 
 bitflags! {
-    pub struct HeapFlags: u32 {
+    pub struct DescriptorHeapFlags: u32 {
         const SHADER_VISIBLE = d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
     }
 }
