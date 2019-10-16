@@ -37,6 +37,7 @@ Shout out to the following projects that work best with wgpu-rs:
   - [coffee](https://github.com/hecrj/coffee) - a whole 2D engine
   - [rgx](https://github.com/cloudhead/rgx) - a 2D graphics library
   - [imgui-wgpu](https://github.com/Yatekii/imgui-wgpu-rs) - Dear ImGui interfacing
+  - [pixels](https://github.com/parasyte/pixels) - the easiest way to create a hardware-accelerated pixel frame buffer
 
 ## Development
 
