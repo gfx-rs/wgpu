@@ -5,7 +5,7 @@ pub type Heap = WeakPtr<d3d12::ID3D12Heap>;
 
 #[repr(u32)]
 #[derive(Clone, Copy)]
-pub enum Type {
+pub enum HeapType {
     Default = d3d12::D3D12_HEAP_TYPE_DEFAULT,
     Upload = d3d12::D3D12_HEAP_TYPE_UPLOAD,
     Readback = d3d12::D3D12_HEAP_TYPE_READBACK,
@@ -18,7 +18,7 @@ pub enum CpuPageProperty {
     Unknown = d3d12::D3D12_CPU_PAGE_PROPERTY_UNKNOWN,
     NotAvailable = d3d12::D3D12_CPU_PAGE_PROPERTY_NOT_AVAILABLE,
     WriteCombine = d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
-    WriteBack= d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
+    WriteBack = d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_BACK,
 }
 
 #[repr(u32)]
@@ -30,7 +30,7 @@ pub enum MemoryPool {
 }
 
 bitflags! {
-    pub struct Flags: u32 {
+    pub struct HeapFlags: u32 {
         const NONE = d3d12::D3D12_HEAP_FLAG_NONE;
         const SHARED = d3d12::D3D12_HEAP_FLAG_SHARED;
         const DENY_BUFFERS = d3d12::D3D12_HEAP_FLAG_DENY_BUFFERS;
@@ -48,16 +48,16 @@ bitflags! {
 }
 
 #[repr(transparent)]
-pub struct Properties(pub d3d12::D3D12_HEAP_PROPERTIES);
-impl Properties {
+pub struct HeapProperties(pub d3d12::D3D12_HEAP_PROPERTIES);
+impl HeapProperties {
     pub fn new(
-        heap_type: Type,
+        heap_type: HeapType,
         cpu_page_property: CpuPageProperty,
         memory_pool_preference: MemoryPool,
         creation_node_mask: u32,
         visible_node_mask: u32,
     ) -> Self {
-        Properties(d3d12::D3D12_HEAP_PROPERTIES {
+        HeapProperties(d3d12::D3D12_HEAP_PROPERTIES {
             Type: heap_type as _,
             CPUPageProperty: cpu_page_property as _,
             MemoryPoolPreference: memory_pool_preference as _,
@@ -68,15 +68,15 @@ impl Properties {
 }
 
 #[repr(transparent)]
-pub struct Desc(d3d12::D3D12_HEAP_DESC);
-impl Desc{
+pub struct HeapDesc(d3d12::D3D12_HEAP_DESC);
+impl HeapDesc {
     pub fn new(
         size_in_bytes: u64,
-        properties: Properties,
+        properties: HeapProperties,
         alignment: u64,
-        flags: Flags,
+        flags: HeapFlags,
     ) -> Self {
-        Desc(d3d12::D3D12_HEAP_DESC{
+        HeapDesc(d3d12::D3D12_HEAP_DESC {
             SizeInBytes: size_in_bytes,
             Properties: properties.0,
             Alignment: alignment,
@@ -84,4 +84,3 @@ impl Desc{
         })
     }
 }
-

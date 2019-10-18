@@ -3,6 +3,7 @@
 use com::WeakPtr;
 use command_list::{CmdListType, CommandSignature, IndirectArgument};
 use descriptor::{CpuDescriptor, DescriptorHeapFlags, DescriptorHeapType, RenderTargetViewDesc};
+use heap::{Heap, HeapFlags, HeapProperties};
 use std::ops::Range;
 use winapi::um::d3d12;
 use winapi::Interface;
@@ -12,7 +13,6 @@ use {
     Fence, GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature,
     Shader, TextureAddressMode,
 };
-use heap::{Properties, Flags, Heap};
 
 pub type Device = WeakPtr<d3d12::ID3D12Device>;
 
@@ -34,27 +34,23 @@ impl Device {
         (device, hr)
     }
 
-    pub fn create_heap(&self,
-                       size_in_bytes: u64,
-                       properties: Properties,
-                       alignment: u64,
-                       flags: Flags) -> D3DResult<Heap> {
+    pub fn create_heap(
+        &self,
+        size_in_bytes: u64,
+        properties: HeapProperties,
+        alignment: u64,
+        flags: HeapFlags,
+    ) -> D3DResult<Heap> {
         let mut heap = Heap::null();
 
-        let desc = d3d12::D3D12_HEAP_DESC{
+        let desc = d3d12::D3D12_HEAP_DESC {
             SizeInBytes: size_in_bytes,
             Properties: properties.0,
             Alignment: alignment,
             Flags: flags.bits(),
         };
 
-        let hr = unsafe {
-            self.CreateHeap(
-                &desc,
-                &d3d12::ID3D12Heap::uuidof(),
-                heap.mut_void(),
-            )
-        };
+        let hr = unsafe { self.CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void()) };
 
         (heap, hr)
     }

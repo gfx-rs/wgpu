@@ -56,6 +56,34 @@ impl IndirectArgument {
     // TODO: missing variants
 }
 
+#[repr(transparent)]
+pub struct ResourceBarrier(d3d12::D3D12_RESOURCE_BARRIER);
+
+impl ResourceBarrier {
+    pub fn transition(
+        resource: Resource,
+        subresource: u32,
+        state_before: d3d12::D3D12_RESOURCE_STATES,
+        state_after: d3d12::D3D12_RESOURCE_STATES,
+        flags: d3d12::D3D12_RESOURCE_BARRIER_FLAGS,
+    ) -> Self {
+        let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
+            Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_TRANSITION,
+            Flags: flags,
+            ..unsafe { mem::zeroed() }
+        };
+        unsafe {
+            *barrier.u.Transition_mut() = d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: resource.as_mut_ptr(),
+                Subresource: subresource,
+                StateBefore: state_before,
+                StateAfter: state_after,
+            };
+        }
+        ResourceBarrier(barrier)
+    }
+}
+
 pub type CommandSignature = WeakPtr<d3d12::ID3D12CommandSignature>;
 pub type CommandList = WeakPtr<d3d12::ID3D12CommandList>;
 pub type GraphicsCommandList = WeakPtr<d3d12::ID3D12GraphicsCommandList>;
@@ -289,6 +317,12 @@ impl GraphicsCommandList {
     ) {
         unsafe {
             self.SetGraphicsRootUnorderedAccessView(root_index, buffer_location);
+        }
+    }
+
+    pub fn resource_barrier(&self, barriers: &[ResourceBarrier]) {
+        unsafe {
+            self.ResourceBarrier(barriers.len() as _, barriers.as_ptr() as _) // matches representation
         }
     }
 }
