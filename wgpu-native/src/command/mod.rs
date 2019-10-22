@@ -745,7 +745,7 @@ pub fn command_encoder_begin_compute_pass<B: GfxBackend>(
         ref_count: cmb.life_guard.ref_count.clone(),
     };
 
-    let pass = ComputePass::new(raw, stored, trackers);
+    let pass = ComputePass::new(raw, stored, trackers, cmb.features.max_bind_groups);
     hub.compute_passes
         .register_identity(id_in, pass, &mut token)
 }

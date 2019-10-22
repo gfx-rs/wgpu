@@ -39,11 +39,12 @@ impl<B: hal::Backend> ComputePass<B> {
         raw: B::CommandBuffer,
         cmb_id: Stored<CommandBufferId>,
         trackers: TrackerSet,
+        max_bind_groups: u32,
     ) -> Self {
         ComputePass {
             raw,
             cmb_id,
-            binder: Binder::default(),
+            binder: Binder::new(max_bind_groups),
             trackers,
         }
     }

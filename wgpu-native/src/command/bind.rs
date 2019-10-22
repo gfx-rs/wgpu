@@ -138,7 +138,7 @@ impl BindGroupEntry {
     }
 }
 
-#[derive(Default, Debug)]
+#[derive(Debug)]
 pub struct Binder {
     pub(crate) pipeline_layout_id: Option<PipelineLayoutId>, //TODO: strongly `Stored`
     pub(crate) entries: SmallVec<[BindGroupEntry; DEFAULT_BIND_GROUPS]>,
