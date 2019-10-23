@@ -8,6 +8,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define WGPUDEFAULT_BIND_GROUPS 4
+
 #define WGPUDESIRED_NUM_FRAMES 3
 
 #define WGPUMAX_BIND_GROUPS 4

@@ -269,7 +269,7 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
 pub fn request_adapter(
     desc: &RequestAdapterOptions,
     input_ids: &[Input<AdapterId>],
-) -> Option<Output<AdapterId>> {
+) -> Option<AdapterId> {
     let instance = &GLOBAL.instance;
     let mut device_types = Vec::new();
 
@@ -284,6 +284,10 @@ pub fn request_adapter(
             None
         }
     };
+    #[cfg(feature = "remote")]
+    let pick = |_output, input_maybe| input_maybe;
+    #[cfg(not(feature = "remote"))]
+    let pick = |output, _input_maybe| Some(output);
 
     let id_vulkan = find_input(Backend::Vulkan);
     let id_metal = find_input(Backend::Metal);
@@ -368,7 +372,7 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return Some(id_out);
+            return pick(id_out, id_vulkan);
         }
         selected -= adapters_vk.len();
     }
@@ -384,7 +388,7 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return Some(id_out);
+            return pick(id_out, id_metal);
         }
         selected -= adapters_mtl.len();
     }
@@ -400,7 +404,7 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return Some(id_out);
+            return pick(id_out, id_dx12);
         }
         selected -= adapters_dx12.len();
         if selected < adapters_dx11.len() {
@@ -413,7 +417,7 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return Some(id_out);
+            return pick(id_out, id_dx11);
         }
         selected -= adapters_dx11.len();
     }
