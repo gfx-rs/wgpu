@@ -76,13 +76,13 @@ impl<T> TypedId for Id<T> {
     }
 }
 
-#[cfg(feature = "remote")]
+#[cfg(not(feature = "local"))]
 pub type Input<T> = T;
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 pub type Input<T> = PhantomData<T>;
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 pub type Output<T> = T;
-#[cfg(feature = "remote")]
+#[cfg(not(feature = "local"))]
 pub type Output<T> = PhantomData<T>;
 
 

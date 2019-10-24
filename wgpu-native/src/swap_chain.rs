@@ -45,7 +45,7 @@ use crate::{
     SwapChainId,
     TextureViewId,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{gfx_select, hub::GLOBAL};
 
 use hal::{
@@ -55,7 +55,7 @@ use hal::{
     window::PresentationSurface as _,
 };
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use std::marker::PhantomData;
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
@@ -204,7 +204,7 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -> SwapChainOutput {
     gfx_select!(swap_chain_id => swap_chain_get_next_texture(&*GLOBAL, swap_chain_id, PhantomData))
@@ -249,7 +249,7 @@ pub fn swap_chain_present<B: GfxBackend>(global: &Global, swap_chain_id: SwapCha
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
     gfx_select!(swap_chain_id => swap_chain_present(&*GLOBAL, swap_chain_id))

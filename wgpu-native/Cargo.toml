@@ -17,7 +17,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-remote = ["serde"]
+local = ["lazy_static"]
 metal-auto-capture = ["gfx-backend-metal/auto-capture"]
 #NOTE: glutin feature is not stable, use at your own risk
 #glutin = ["gfx-backend-gl/glutin"]
@@ -26,7 +26,7 @@ metal-auto-capture = ["gfx-backend-metal/auto-capture"]
 arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1"
-lazy_static = "1.1.0" #TODO: local only
+lazy_static = { version = "1.1.0", optional = true }
 log = "0.4"
 hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "3d5db15661127c8cad8d85522a68ec36c82f6e69" }
 gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "3d5db15661127c8cad8d85522a68ec36c82f6e69" }

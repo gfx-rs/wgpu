@@ -46,14 +46,14 @@ use crate::{
     TypedId,
 };
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use parking_lot::Mutex;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use vec_map::VecMap;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use std::sync::Arc;
 use std::{marker::PhantomData, ops};
 
@@ -272,7 +272,7 @@ impl<'a, T> Drop for Token<'a, T> {
 
 #[derive(Debug)]
 pub struct Registry<T, I: TypedId> {
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     pub identity: Mutex<IdentityManager<I>>,
     data: RwLock<Storage<T, I>>,
     backend: Backend,
@@ -281,7 +281,7 @@ pub struct Registry<T, I: TypedId> {
 impl<T, I: TypedId> Registry<T, I> {
     fn new(backend: Backend) -> Self {
         Registry {
-            #[cfg(not(feature = "remote"))]
+            #[cfg(feature = "local")]
             identity: Mutex::new(IdentityManager::new(backend)),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
@@ -299,13 +299,13 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
         assert!(old.is_none());
     }
 
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     pub fn new_identity(&self, _id_in: Input<I>) -> (I, Output<I>) {
         let id = self.identity.lock().alloc();
         (id, id)
     }
 
-    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "local"))]
     pub fn new_identity(&self, id_in: Input<I>) -> (I, Output<I>) {
         //TODO: debug_assert_eq!(self.backend, id_in.backend());
         (id_in, PhantomData)
@@ -325,7 +325,7 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     pub fn unregister<A: Access<T>>(&self, id: I, _token: &mut Token<A>) -> (T, Token<T>) {
         let value = self.data.write().remove(id).unwrap();
         //Note: careful about the order here!
-        #[cfg(not(feature = "remote"))]
+        #[cfg(feature = "local")]
         self.identity.lock().free(id);
         (value, Token::new())
     }
@@ -407,7 +407,7 @@ pub struct Global {
     hubs: Hubs,
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 lazy_static::lazy_static! {
     pub static ref GLOBAL: Arc<Global> = Arc::new(Global {
         instance: Instance::new("wgpu", 1),

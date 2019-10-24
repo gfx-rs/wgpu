@@ -14,13 +14,13 @@ use crate::{
     Device,
     DeviceId,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{gfx_select, SurfaceId, hub::GLOBAL};
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use bitflags::bitflags;
 use log::{info, warn};
-#[cfg(feature = "remote")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use hal::{
@@ -29,7 +29,7 @@ use hal::{
     adapter::PhysicalDevice as _,
     queue::QueueFamily as _,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use std::marker::PhantomData;
 
 
@@ -81,14 +81,14 @@ pub struct Adapter<B: hal::Backend> {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
     HighPerformance = 2,
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 bitflags! {
     #[repr(transparent)]
     pub struct BackendBit: u32 {
@@ -104,7 +104,7 @@ bitflags! {
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 impl From<Backend> for BackendBit {
     fn from(backend: Backend) -> Self {
         BackendBit::from_bits(1 << backend as u32).unwrap()
@@ -113,10 +113,10 @@ impl From<Backend> for BackendBit {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     pub backends: BackendBit,
 }
 
@@ -124,7 +124,7 @@ impl Default for RequestAdapterOptions {
     fn default() -> Self {
         RequestAdapterOptions {
             power_preference: PowerPreference::Default,
-            #[cfg(not(feature = "remote"))]
+            #[cfg(feature = "local")]
             backends: BackendBit::PRIMARY,
         }
     }
@@ -132,14 +132,14 @@ impl Default for RequestAdapterOptions {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
 }
@@ -154,13 +154,13 @@ impl Default for Limits {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
     pub limits: Limits,
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
 
@@ -220,7 +220,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         .register_identity(PhantomData, surface, &mut token)
 }
 
-#[cfg(all(not(feature = "remote"), unix, not(target_os = "ios"), not(target_os = "macos")))]
+#[cfg(all(feature = "local", unix, not(target_os = "ios"), not(target_os = "macos")))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
@@ -234,7 +234,7 @@ pub extern "C" fn wgpu_create_surface_from_xlib(
     }))
 }
 
-#[cfg(all(not(feature = "remote"), any(target_os = "ios", target_os = "macos")))]
+#[cfg(all(feature = "local", any(target_os = "ios", target_os = "macos")))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_void) -> SurfaceId {
     let surface = Surface {
@@ -251,7 +251,7 @@ pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_v
         .register_identity(PhantomData, surface, &mut Token::root())
 }
 
-#[cfg(all(not(feature = "remote"), windows))]
+#[cfg(all(feature = "local", windows))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     _hinstance: *mut std::ffi::c_void,
@@ -274,9 +274,9 @@ pub fn request_adapter(
     let instance = &global.instance;
     let mut device_types = Vec::new();
 
-    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "local"))]
     let find_input = |b: Backend| input_ids.iter().find(|id| id.backend() == b).cloned();
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     let find_input = |b: Backend| {
         let _ = input_ids;
         if desc.backends.contains(b.into()) {
@@ -285,9 +285,9 @@ pub fn request_adapter(
             None
         }
     };
-    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "local"))]
     let pick = |_output, input_maybe| input_maybe;
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     let pick = |output, _input_maybe| Some(output);
 
     let id_vulkan = find_input(Backend::Vulkan);
@@ -426,7 +426,7 @@ pub fn request_adapter(
     None
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_request_adapter(desc: Option<&RequestAdapterOptions>) -> AdapterId {
     request_adapter(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[]).unwrap()
@@ -498,7 +498,7 @@ pub fn adapter_request_device<B: GfxBackend>(
     hub.devices.register_identity(id_in, device, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: AdapterId,
@@ -516,7 +516,7 @@ pub fn adapter_get_info<B: GfxBackend>(global: &Global, adapter_id: AdapterId) -
     adapter.raw.info.clone()
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 pub fn wgpu_adapter_get_info(
     adapter_id: AdapterId
 ) -> AdapterInfo {

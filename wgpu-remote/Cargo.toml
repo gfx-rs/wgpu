@@ -14,7 +14,7 @@ crate-type = ["lib", "cdylib", "staticlib"]
 default = []
 
 [dependencies]
-wgpu-native = { path = "../wgpu-native", version = "0.3", features = ["remote"] }
+wgpu-native = { path = "../wgpu-native", version = "0.3", features = ["serde"] }
 ipc-channel = "0.12"
 log = "0.4"
 parking_lot = { version = "0.9" }

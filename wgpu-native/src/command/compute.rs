@@ -19,14 +19,14 @@ use crate::{
     Stored,
     BIND_BUFFER_ALIGNMENT,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{gfx_select, hub::GLOBAL};
 
 use hal::{self, command::CommandBuffer as _};
 use log::trace;
 
 use std::iter;
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use std::slice;
 
 #[derive(Debug)]
@@ -68,7 +68,7 @@ pub fn compute_pass_end_pass<B: GfxBackend>(global: &Global, pass_id: ComputePas
     cmb.raw.push(pass.raw);
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) {
     gfx_select!(pass_id => compute_pass_end_pass(&*GLOBAL, pass_id))
@@ -148,7 +148,7 @@ pub fn compute_pass_set_bind_group<B: GfxBackend>(
     };
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_set_bind_group(
     pass_id: ComputePassId,
@@ -194,7 +194,7 @@ pub fn compute_pass_dispatch<B: GfxBackend>(global: &Global, pass_id: ComputePas
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
     gfx_select!(pass_id => compute_pass_dispatch(&*GLOBAL, pass_id, x, y, z))
@@ -237,7 +237,7 @@ pub fn compute_pass_dispatch_indirect<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch_indirect(
     pass_id: ComputePassId,
@@ -302,7 +302,7 @@ pub fn compute_pass_set_pipeline<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_set_pipeline(
     pass_id: ComputePassId,

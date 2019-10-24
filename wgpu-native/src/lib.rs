@@ -29,7 +29,7 @@ mod track;
 pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
-#[cfg(feature = "remote")]
+#[cfg(not(feature = "local"))]
 pub use self::hub::{Access, IdentityManager, Registry, Token};
 pub use self::id::*;
 pub use self::instance::*;

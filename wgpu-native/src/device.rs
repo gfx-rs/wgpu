@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{
     instance::Limits,
 };
@@ -45,7 +45,7 @@ use crate::{
     TextureUsage,
     TextureViewId,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{gfx_select, hub::GLOBAL};
 
 use arrayvec::ArrayVec;
@@ -62,7 +62,7 @@ use parking_lot::Mutex;
 use rendy_descriptor::{DescriptorAllocator, DescriptorRanges, DescriptorSet};
 use rendy_memory::{Block, Heaps, MemoryBlock};
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use std::marker::PhantomData;
 use std::{
     collections::hash_map::Entry,
@@ -313,14 +313,14 @@ impl<B: GfxBackend> PendingResources<B> {
                         }
                         trackers.buffers.remove(id);
                         let buf = buffer_guard.remove(id).unwrap();
-                        #[cfg(not(feature = "remote"))]
+                        #[cfg(feature = "local")]
                         hub.buffers.identity.lock().free(id);
                         (buf.life_guard, NativeResource::Buffer(buf.raw, buf.memory))
                     }
                     ResourceId::Texture(id) => {
                         trackers.textures.remove(id);
                         let tex = texture_guard.remove(id).unwrap();
-                        #[cfg(not(feature = "remote"))]
+                        #[cfg(feature = "local")]
                         hub.textures.identity.lock().free(id);
                         (tex.life_guard, NativeResource::Image(tex.raw, tex.memory))
                     }
@@ -331,14 +331,14 @@ impl<B: GfxBackend> PendingResources<B> {
                             resource::TextureViewInner::Native { raw, .. } => raw,
                             resource::TextureViewInner::SwapChain { .. } => unreachable!(),
                         };
-                        #[cfg(not(feature = "remote"))]
+                        #[cfg(feature = "local")]
                         hub.texture_views.identity.lock().free(id);
                         (view.life_guard, NativeResource::ImageView(raw))
                     }
                     ResourceId::BindGroup(id) => {
                         trackers.bind_groups.remove(id);
                         let bind_group = bind_group_guard.remove(id).unwrap();
-                        #[cfg(not(feature = "remote"))]
+                        #[cfg(feature = "local")]
                         hub.bind_groups.identity.lock().free(id);
                         (
                             bind_group.life_guard,
@@ -348,7 +348,7 @@ impl<B: GfxBackend> PendingResources<B> {
                     ResourceId::Sampler(id) => {
                         trackers.samplers.remove(id);
                         let sampler = sampler_guard.remove(id).unwrap();
-                        #[cfg(not(feature = "remote"))]
+                        #[cfg(feature = "local")]
                         hub.samplers.identity.lock().free(id);
                         (sampler.life_guard, NativeResource::Sampler(sampler.raw))
                     }
@@ -760,7 +760,7 @@ impl<B: GfxBackend> Device<B> {
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_get_limits(_device_id: DeviceId, limits: &mut Limits) {
     *limits = Limits::default(); // TODO
@@ -797,7 +797,7 @@ pub fn device_create_buffer<B: GfxBackend>(
     id_out
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_buffer(
     device_id: DeviceId,
@@ -847,7 +847,7 @@ pub fn device_create_buffer_mapped<B: GfxBackend>(
     id_out
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_buffer_mapped(
     device_id: DeviceId,
@@ -869,7 +869,7 @@ pub fn buffer_destroy<B: GfxBackend>(global: &Global, buffer_id: BufferId) {
     );
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_destroy(buffer_id: BufferId) {
     gfx_select!(buffer_id => buffer_destroy(&*GLOBAL, buffer_id))
@@ -901,7 +901,7 @@ pub fn device_create_texture<B: GfxBackend>(
     id_out
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: DeviceId,
@@ -1000,7 +1000,7 @@ pub fn texture_create_view<B: GfxBackend>(
     id_out
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_view(
     texture_id: TextureId,
@@ -1025,7 +1025,7 @@ pub fn texture_destroy<B: GfxBackend>(global: &Global, texture_id: TextureId) {
         );
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     gfx_select!(texture_id => texture_destroy(&*GLOBAL, texture_id))
@@ -1052,7 +1052,7 @@ pub fn texture_view_destroy<B: GfxBackend>(
     );
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: TextureViewId) {
     gfx_select!(texture_view_id => texture_view_destroy(&*GLOBAL, texture_view_id))
@@ -1101,7 +1101,7 @@ pub fn device_create_sampler<B: GfxBackend>(
     hub.samplers.register_identity(id_in, sampler, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_sampler(
     device_id: DeviceId,
@@ -1125,7 +1125,7 @@ pub fn sampler_destroy<B: GfxBackend>(global: &Global, sampler_id: SamplerId) {
         );
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_sampler_destroy(sampler_id: SamplerId) {
     gfx_select!(sampler_id => sampler_destroy(&*GLOBAL, sampler_id))
@@ -1171,7 +1171,7 @@ pub fn device_create_bind_group_layout<B: GfxBackend>(
         .register_identity(id_in, layout, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group_layout(
     device_id: DeviceId,
@@ -1215,7 +1215,7 @@ pub fn device_create_pipeline_layout<B: GfxBackend>(
         .register_identity(id_in, layout, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_pipeline_layout(
     device_id: DeviceId,
@@ -1390,7 +1390,7 @@ pub fn device_create_bind_group<B: GfxBackend>(
     id_out
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_bind_group(
     device_id: DeviceId,
@@ -1414,7 +1414,7 @@ pub fn bind_group_destroy<B: GfxBackend>(global: &Global, bind_group_id: BindGro
         );
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_bind_group_destroy(bind_group_id: BindGroupId) {
     gfx_select!(bind_group_id => bind_group_destroy(&*GLOBAL, bind_group_id))
@@ -1445,7 +1445,7 @@ pub fn device_create_shader_module<B: GfxBackend>(
         .register_identity(id_in, shader, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_shader_module(
     device_id: DeviceId,
@@ -1482,7 +1482,7 @@ pub fn device_create_command_encoder<B: GfxBackend>(
         .register_identity(id_in, comb, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_command_encoder(
     device_id: DeviceId,
@@ -1492,7 +1492,7 @@ pub extern "C" fn wgpu_device_create_command_encoder(
     gfx_select!(device_id => device_create_command_encoder(&*GLOBAL, device_id, desc, PhantomData))
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_get_queue(device_id: DeviceId) -> QueueId {
     device_id
@@ -1654,7 +1654,7 @@ pub fn queue_submit<B: GfxBackend>(
     Device::<B>::fire_map_callbacks(callbacks);
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_queue_submit(
     queue_id: QueueId,
@@ -1927,7 +1927,7 @@ pub fn device_create_render_pipeline<B: GfxBackend>(
         .register_identity(id_in, pipeline, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_render_pipeline(
     device_id: DeviceId,
@@ -1989,7 +1989,7 @@ pub fn device_create_compute_pipeline<B: GfxBackend>(
         .register_identity(id_in, pipeline, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_compute_pipeline(
     device_id: DeviceId,
@@ -2070,7 +2070,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
     sc_id
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_swap_chain(
     device_id: DeviceId,
@@ -2089,7 +2089,7 @@ pub fn device_poll<B: GfxBackend>(global: &Global, device_id: DeviceId, force_wa
     Device::<B>::fire_map_callbacks(callbacks);
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_poll(device_id: DeviceId, force_wait: bool) {
     gfx_select!(device_id => device_poll(&*GLOBAL, device_id, force_wait))
@@ -2102,7 +2102,7 @@ pub fn device_destroy<B: GfxBackend>(global: &Global, device_id: DeviceId) {
     device.com_allocator.destroy(&device.raw);
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_destroy(device_id: DeviceId) {
     gfx_select!(device_id => device_destroy(&*GLOBAL, device_id))
@@ -2155,7 +2155,7 @@ pub fn buffer_map_async<B: GfxBackend>(
     device.pending.lock().map(buffer_id, ref_count);
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_map_read_async(
     buffer_id: BufferId,
@@ -2168,7 +2168,7 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     gfx_select!(buffer_id => buffer_map_async(&*GLOBAL, buffer_id, resource::BufferUsage::MAP_READ, operation))
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_map_write_async(
     buffer_id: BufferId,
@@ -2208,7 +2208,7 @@ pub fn buffer_unmap<B: GfxBackend>(global: &Global, buffer_id: BufferId) {
     buffer.memory.unmap(device_raw);
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_unmap(buffer_id: BufferId) {
     gfx_select!(buffer_id => buffer_unmap(&*GLOBAL, buffer_id))

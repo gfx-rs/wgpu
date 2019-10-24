@@ -15,7 +15,7 @@ use crate::{
     TextureId,
     TextureUsage,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{gfx_select, hub::GLOBAL};
 
 use hal::command::CommandBuffer as _;
@@ -126,7 +126,7 @@ pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
     command_encoder_id: CommandEncoderId,
@@ -220,7 +220,7 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
     command_encoder_id: CommandEncoderId,
@@ -313,7 +313,7 @@ pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
     command_encoder_id: CommandEncoderId,
@@ -404,7 +404,7 @@ pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
     command_encoder_id: CommandEncoderId,

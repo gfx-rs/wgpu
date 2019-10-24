@@ -15,6 +15,9 @@ exclude = ["BufferMapResult"]
 [parse]
 parse_deps = false
 
+[parse.expand]
+features = ["local"]
+
 [fn]
 
 [struct]

@@ -20,14 +20,14 @@ use crate::{
     RenderPipelineId,
     Stored,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{gfx_select, RawString, RenderBundleId, hub::GLOBAL};
 
 use hal::command::CommandBuffer as _;
 use log::trace;
 
 use std::{iter, ops::Range};
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use std::slice;
 
 #[derive(Debug, PartialEq)]
@@ -216,7 +216,7 @@ pub fn render_pass_end_pass<B: GfxBackend>(global: &Global, pass_id: RenderPassI
     cmb.raw.push(pass.raw);
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_end_pass(pass_id: RenderPassId) {
     gfx_select!(pass_id => render_pass_end_pass(&*GLOBAL, pass_id))
@@ -279,7 +279,7 @@ pub fn render_pass_set_bind_group<B: GfxBackend>(
     };
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_bind_group(
     pass_id: RenderPassId,
@@ -296,19 +296,19 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     gfx_select!(pass_id => render_pass_set_bind_group(&*GLOBAL, pass_id, index, bind_group_id, offsets))
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_push_debug_group(_pass_id: RenderPassId, _label: RawString) {
     //TODO
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_pop_debug_group(_pass_id: RenderPassId) {
     //TODO
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_insert_debug_marker(_pass_id: RenderPassId, _label: RawString) {
     //TODO
@@ -350,7 +350,7 @@ pub fn render_pass_set_index_buffer<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_index_buffer(
     pass_id: RenderPassId,
@@ -401,7 +401,7 @@ pub fn render_pass_set_vertex_buffers<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
     pass_id: RenderPassId,
@@ -446,7 +446,7 @@ pub fn render_pass_draw<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_draw(
     pass_id: RenderPassId,
@@ -488,7 +488,7 @@ pub fn render_pass_draw_indirect<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_draw_indirect(
     pass_id: RenderPassId,
@@ -532,7 +532,7 @@ pub fn render_pass_draw_indexed<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_draw_indexed(
     pass_id: RenderPassId,
@@ -576,7 +576,7 @@ pub fn render_pass_draw_indexed_indirect<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_draw_indexed_indirect(
     pass_id: RenderPassId,
@@ -695,7 +695,7 @@ pub fn render_pass_set_pipeline<B: GfxBackend>(
     pass.vertex_state.update_limits();
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_pipeline(
     pass_id: RenderPassId,
@@ -719,7 +719,7 @@ pub fn render_pass_set_blend_color<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color: &Color) {
     gfx_select!(pass_id => render_pass_set_blend_color(&*GLOBAL, pass_id, color))
@@ -740,7 +740,7 @@ pub fn render_pass_set_stencil_reference<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_stencil_reference(
     pass_id: RenderPassId, value: u32
@@ -782,7 +782,7 @@ pub fn render_pass_set_viewport<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_viewport(
     pass_id: RenderPassId,
@@ -825,7 +825,7 @@ pub fn render_pass_set_scissor_rect<B: GfxBackend>(
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_set_scissor_rect(
     pass_id: RenderPassId,
@@ -837,7 +837,7 @@ pub extern "C" fn wgpu_render_pass_set_scissor_rect(
     gfx_select!(pass_id => render_pass_set_scissor_rect(&*GLOBAL, pass_id, x, y, w, h))
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_render_pass_execute_bundles(
     _pass_id: RenderPassId,

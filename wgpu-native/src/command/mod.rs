@@ -42,14 +42,14 @@ use crate::{
     TextureUsage,
     TextureViewId,
 };
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use crate::{gfx_select, hub::GLOBAL};
 
 use arrayvec::ArrayVec;
 use hal::{adapter::PhysicalDevice as _, command::CommandBuffer as _, device::Device as _};
 use log::trace;
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use std::marker::PhantomData;
 use std::{
     borrow::Borrow,
@@ -213,7 +213,7 @@ pub fn command_encoder_finish<B: GfxBackend>(
     encoder_id
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_finish(
     encoder_id: CommandEncoderId,
@@ -722,7 +722,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
     hub.render_passes.register_identity(id_in, pass, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_begin_render_pass(
     encoder_id: CommandEncoderId,
@@ -755,7 +755,7 @@ pub fn command_encoder_begin_compute_pass<B: GfxBackend>(
         .register_identity(id_in, pass, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
     encoder_id: CommandEncoderId,
