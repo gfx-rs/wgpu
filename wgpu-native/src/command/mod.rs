@@ -22,8 +22,7 @@ use crate::{
         RenderPassContext,
         RenderPassKey,
     },
-    gfx_select,
-    hub::{GfxBackend, Storage, Token},
+    hub::{GfxBackend, Global, Storage, Token},
     id::{Input, Output},
     resource::TextureViewInner,
     track::{Stitch, TrackerSet},
@@ -43,6 +42,8 @@ use crate::{
     TextureUsage,
     TextureViewId,
 };
+#[cfg(not(feature = "remote"))]
+use crate::{gfx_select, hub::GLOBAL};
 
 use arrayvec::ArrayVec;
 use hal::{adapter::PhysicalDevice as _, command::CommandBuffer as _, device::Device as _};
@@ -194,10 +195,11 @@ pub struct CommandBufferDescriptor {
 }
 
 pub fn command_encoder_finish<B: GfxBackend>(
+    global: &Global,
     encoder_id: CommandEncoderId,
     _desc: &CommandBufferDescriptor,
 ) -> CommandBufferId {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
     //TODO: actually close the last recorded command buffer
     let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
@@ -211,21 +213,23 @@ pub fn command_encoder_finish<B: GfxBackend>(
     encoder_id
 }
 
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_finish(
     encoder_id: CommandEncoderId,
     desc: Option<&CommandBufferDescriptor>,
 ) -> CommandBufferId {
     let desc = &desc.cloned().unwrap_or_default();
-    gfx_select!(encoder_id => command_encoder_finish(encoder_id, desc))
+    gfx_select!(encoder_id => command_encoder_finish(&*GLOBAL, encoder_id, desc))
 }
 
 pub fn command_encoder_begin_render_pass<B: GfxBackend>(
+    global: &Global,
     encoder_id: CommandEncoderId,
     desc: &RenderPassDescriptor,
     id_in: Input<RenderPassId>,
 ) -> Output<RenderPassId> {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
 
     let (adapter_guard, mut token) = hub.adapters.read(&mut token);
@@ -724,15 +728,16 @@ pub extern "C" fn wgpu_command_encoder_begin_render_pass(
     encoder_id: CommandEncoderId,
     desc: &RenderPassDescriptor,
 ) -> RenderPassId {
-    gfx_select!(encoder_id => command_encoder_begin_render_pass(encoder_id, desc, PhantomData))
+    gfx_select!(encoder_id => command_encoder_begin_render_pass(&*GLOBAL, encoder_id, desc, PhantomData))
 }
 
 pub fn command_encoder_begin_compute_pass<B: GfxBackend>(
+    global: &Global,
     encoder_id: CommandEncoderId,
     _desc: &ComputePassDescriptor,
     id_in: Input<ComputePassId>,
 ) -> Output<ComputePassId> {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
 
     let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -757,5 +762,5 @@ pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
     desc: Option<&ComputePassDescriptor>,
 ) -> ComputePassId {
     let desc = &desc.cloned().unwrap_or_default();
-    gfx_select!(encoder_id => command_encoder_begin_compute_pass(encoder_id, desc, PhantomData))
+    gfx_select!(encoder_id => command_encoder_begin_compute_pass(&*GLOBAL, encoder_id, desc, PhantomData))
 }

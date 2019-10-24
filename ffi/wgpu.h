@@ -244,6 +244,8 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
+typedef struct WGPUGlobal WGPUGlobal;
+
 typedef uint64_t WGPUId_Device_Dummy;
 
 typedef WGPUId_Device_Dummy WGPUDeviceId;
@@ -670,23 +672,33 @@ WGPUDeviceId wgpu_adapter_request_device(WGPUAdapterId adapter_id,
                                          const WGPUDeviceDescriptor *desc);
 #endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_bind_group_destroy(WGPUBindGroupId bind_group_id);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_buffer_destroy(WGPUBufferId buffer_id);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_buffer_map_read_async(WGPUBufferId buffer_id,
                                 WGPUBufferAddress start,
                                 WGPUBufferAddress size,
                                 WGPUBufferMapReadCallback callback,
                                 uint8_t *userdata);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
                                  WGPUBufferAddress start,
                                  WGPUBufferAddress size,
                                  WGPUBufferMapWriteCallback callback,
                                  uint8_t *userdata);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_buffer_unmap(WGPUBufferId buffer_id);
+#endif
 
 #if !defined(WGPU_REMOTE)
 WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encoder_id,
@@ -698,38 +710,54 @@ WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId enc
                                                         const WGPURenderPassDescriptor *desc);
 #endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_command_encoder_copy_buffer_to_buffer(WGPUCommandEncoderId command_encoder_id,
                                                 WGPUBufferId source,
                                                 WGPUBufferAddress source_offset,
                                                 WGPUBufferId destination,
                                                 WGPUBufferAddress destination_offset,
                                                 WGPUBufferAddress size);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_command_encoder_copy_buffer_to_texture(WGPUCommandEncoderId command_encoder_id,
                                                  const WGPUBufferCopyView *source,
                                                  const WGPUTextureCopyView *destination,
                                                  WGPUExtent3d copy_size);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_command_encoder_copy_texture_to_buffer(WGPUCommandEncoderId command_encoder_id,
                                                  const WGPUTextureCopyView *source,
                                                  const WGPUBufferCopyView *destination,
                                                  WGPUExtent3d copy_size);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_command_encoder_copy_texture_to_texture(WGPUCommandEncoderId command_encoder_id,
                                                   const WGPUTextureCopyView *source,
                                                   const WGPUTextureCopyView *destination,
                                                   WGPUExtent3d copy_size);
+#endif
 
+#if !defined(WGPU_REMOTE)
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId encoder_id,
                                                 const WGPUCommandBufferDescriptor *desc);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_compute_pass_dispatch_indirect(WGPUComputePassId pass_id,
                                          WGPUBufferId indirect_buffer_id,
                                          WGPUBufferAddress indirect_offset);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
+#endif
 
 void wgpu_compute_pass_insert_debug_marker(WGPUComputePassId _pass_id, WGPURawString _label);
 
@@ -737,13 +765,17 @@ void wgpu_compute_pass_pop_debug_group(WGPUComputePassId _pass_id);
 
 void wgpu_compute_pass_push_debug_group(WGPUComputePassId _pass_id, WGPURawString _label);
 
+#if !defined(WGPU_REMOTE)
 void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
                                       uint32_t index,
                                       WGPUBindGroupId bind_group_id,
                                       const WGPUBufferAddress *offsets,
                                       uintptr_t offsets_length);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
+#endif
 
 #if !defined(WGPU_REMOTE)
 WGPUSurfaceId wgpu_create_surface_from_metal_layer(void *layer);
@@ -816,81 +848,124 @@ WGPUSwapChainId wgpu_device_create_swap_chain(WGPUDeviceId device_id,
 WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextureDescriptor *desc);
 #endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_device_destroy(WGPUDeviceId device_id);
+#endif
 
 #if !defined(WGPU_REMOTE)
 void wgpu_device_get_limits(WGPUDeviceId _device_id, WGPULimits *limits);
 #endif
 
+#if !defined(WGPU_REMOTE)
 WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffers,
                        uintptr_t command_buffers_length);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_draw(WGPURenderPassId pass_id,
                            uint32_t vertex_count,
                            uint32_t instance_count,
                            uint32_t first_vertex,
                            uint32_t first_instance);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_draw_indexed(WGPURenderPassId pass_id,
                                    uint32_t index_count,
                                    uint32_t instance_count,
                                    uint32_t first_index,
                                    int32_t base_vertex,
                                    uint32_t first_instance);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_draw_indexed_indirect(WGPURenderPassId pass_id,
                                             WGPUBufferId indirect_buffer_id,
                                             WGPUBufferAddress indirect_offset);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_draw_indirect(WGPURenderPassId pass_id,
                                     WGPUBufferId indirect_buffer_id,
                                     WGPUBufferAddress indirect_offset);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_execute_bundles(WGPURenderPassId _pass_id,
                                       const WGPURenderBundleId *_bundles,
                                       uintptr_t _bundles_length);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_insert_debug_marker(WGPURenderPassId _pass_id, WGPURawString _label);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_pop_debug_group(WGPURenderPassId _pass_id);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_push_debug_group(WGPURenderPassId _pass_id, WGPURawString _label);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
                                      const WGPUBufferAddress *offsets,
                                      uintptr_t offsets_length);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
                                        WGPUBufferId buffer_id,
                                        WGPUBufferAddress offset);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_set_scissor_rect(WGPURenderPassId pass_id,
                                        uint32_t x,
                                        uint32_t y,
                                        uint32_t w,
                                        uint32_t h);
+#endif
 
-void wgpu_render_pass_set_stencil_reference(WGPURenderPassId pass_id, uint32_t value);
+#if !defined(WGPU_REMOTE)
+void wgpu_render_pass_set_stencil_reference(const WGPUGlobal *global,
+                                            WGPURenderPassId pass_id,
+                                            uint32_t value);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
                                          uint32_t start_slot,
                                          const WGPUBufferId *buffers,
                                          const WGPUBufferAddress *offsets,
                                          uintptr_t length);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
                                    float x,
                                    float y,
@@ -898,24 +973,33 @@ void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
                                    float h,
                                    float min_depth,
                                    float max_depth);
+#endif
 
 #if !defined(WGPU_REMOTE)
 WGPUAdapterId wgpu_request_adapter(const WGPURequestAdapterOptions *desc);
 #endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_sampler_destroy(WGPUSamplerId sampler_id);
+#endif
 
 #if !defined(WGPU_REMOTE)
 WGPUSwapChainOutput wgpu_swap_chain_get_next_texture(WGPUSwapChainId swap_chain_id);
 #endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_swap_chain_present(WGPUSwapChainId swap_chain_id);
+#endif
 
 #if !defined(WGPU_REMOTE)
 WGPUTextureViewId wgpu_texture_create_view(WGPUTextureId texture_id,
                                            const WGPUTextureViewDescriptor *desc);
 #endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_texture_destroy(WGPUTextureId texture_id);
+#endif
 
+#if !defined(WGPU_REMOTE)
 void wgpu_texture_view_destroy(WGPUTextureViewId texture_view_id);
+#endif

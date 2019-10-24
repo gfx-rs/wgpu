@@ -5,8 +5,7 @@
 use crate::{
     conv,
     device::{all_buffer_stages, all_image_stages},
-    gfx_select,
-    hub::{GfxBackend, Token},
+    hub::{GfxBackend, Global, Token},
     BufferAddress,
     BufferId,
     BufferUsage,
@@ -16,6 +15,8 @@ use crate::{
     TextureId,
     TextureUsage,
 };
+#[cfg(not(feature = "remote"))]
+use crate::{gfx_select, hub::GLOBAL};
 
 use hal::command::CommandBuffer as _;
 
@@ -65,6 +66,7 @@ impl TextureCopyView {
 }
 
 pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
+    global: &Global,
     command_encoder_id: CommandEncoderId,
     source: BufferId,
     source_offset: BufferAddress,
@@ -72,7 +74,7 @@ pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
     destination_offset: BufferAddress,
     size: BufferAddress,
 ) {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
 
     let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -124,6 +126,7 @@ pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
     }
 }
 
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
     command_encoder_id: CommandEncoderId,
@@ -134,6 +137,7 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
     size: BufferAddress,
 ) {
     gfx_select!(command_encoder_id => command_encoder_copy_buffer_to_buffer(
+        &*GLOBAL,
         command_encoder_id,
         source, source_offset,
         destination,
@@ -142,12 +146,13 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
 }
 
 pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
+    global: &Global,
     command_encoder_id: CommandEncoderId,
     source: &BufferCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
@@ -215,6 +220,7 @@ pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
     }
 }
 
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
     command_encoder_id: CommandEncoderId,
@@ -223,6 +229,7 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
     copy_size: Extent3d,
 ) {
     gfx_select!(command_encoder_id => command_encoder_copy_buffer_to_texture(
+        &*GLOBAL,
         command_encoder_id,
         source,
         destination,
@@ -230,12 +237,13 @@ pub extern "C" fn wgpu_command_encoder_copy_buffer_to_texture(
 }
 
 pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
+    global: &Global,
     command_encoder_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &BufferCopyView,
     copy_size: Extent3d,
 ) {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
     let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let cmb = &mut cmb_guard[command_encoder_id];
@@ -305,6 +313,7 @@ pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
     }
 }
 
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
     command_encoder_id: CommandEncoderId,
@@ -313,6 +322,7 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
     copy_size: Extent3d,
 ) {
     gfx_select!(command_encoder_id => command_encoder_copy_texture_to_buffer(
+        &*GLOBAL,
         command_encoder_id,
         source,
         destination,
@@ -320,12 +330,13 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_buffer(
 }
 
 pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
+    global: &Global,
     command_encoder_id: CommandEncoderId,
     source: &TextureCopyView,
     destination: &TextureCopyView,
     copy_size: Extent3d,
 ) {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
 
     let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -393,6 +404,7 @@ pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
     }
 }
 
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
     command_encoder_id: CommandEncoderId,
@@ -401,6 +413,7 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
     copy_size: Extent3d,
 ) {
     gfx_select!(command_encoder_id => command_encoder_copy_texture_to_texture(
+        &*GLOBAL,
         command_encoder_id,
         source,
         destination,

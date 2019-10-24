@@ -46,15 +46,16 @@ use crate::{
     TypedId,
 };
 
-use lazy_static::lazy_static;
 #[cfg(not(feature = "remote"))]
 use parking_lot::Mutex;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use vec_map::VecMap;
 
-#[allow(unused)]
+#[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{marker::PhantomData, ops, sync::Arc};
+#[cfg(not(feature = "remote"))]
+use std::sync::Arc;
+use std::{marker::PhantomData, ops};
 
 
 /// A simple structure to manage identities of objects.
@@ -406,7 +407,8 @@ pub struct Global {
     hubs: Hubs,
 }
 
-lazy_static! {
+#[cfg(not(feature = "remote"))]
+lazy_static::lazy_static! {
     pub static ref GLOBAL: Arc<Global> = Arc::new(Global {
         instance: Instance::new("wgpu", 1),
         surfaces: Registry::new(Backend::Empty),
@@ -416,15 +418,15 @@ lazy_static! {
 
 pub trait GfxBackend: hal::Backend {
     const VARIANT: Backend;
-    fn hub() -> &'static Hub<Self>;
+    fn hub(global: &Global) -> &Hub<Self>;
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
 #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
 impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.vulkan
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.vulkan
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.vulkan.as_mut().unwrap()
@@ -434,8 +436,8 @@ impl GfxBackend for backend::Vulkan {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.metal
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         &mut surface.metal
@@ -445,8 +447,8 @@ impl GfxBackend for backend::Metal {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.dx12
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.dx12
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.dx12.as_mut().unwrap()
@@ -456,8 +458,8 @@ impl GfxBackend for backend::Dx12 {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.dx11
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         &mut surface.dx11

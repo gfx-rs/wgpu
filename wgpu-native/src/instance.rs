@@ -6,7 +6,7 @@ use crate::{
     backend,
     binding_model::MAX_BIND_GROUPS,
     device::BIND_BUFFER_ALIGNMENT,
-    hub::{GfxBackend, Token, GLOBAL},
+    hub::{GfxBackend, Global, Token},
     id::{Input, Output},
     AdapterId,
     AdapterInfo,
@@ -15,7 +15,7 @@ use crate::{
     DeviceId,
 };
 #[cfg(not(feature = "remote"))]
-use crate::{gfx_select, SurfaceId};
+use crate::{gfx_select, SurfaceId, hub::GLOBAL};
 
 #[cfg(not(feature = "remote"))]
 use bitflags::bitflags;
@@ -46,7 +46,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub(crate) fn new(name: &str, version: u32) -> Self {
+    pub fn new(name: &str, version: u32) -> Self {
         Instance {
             #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
             vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
@@ -267,10 +267,11 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
 }
 
 pub fn request_adapter(
+    global: &Global,
     desc: &RequestAdapterOptions,
     input_ids: &[Input<AdapterId>],
 ) -> Option<AdapterId> {
-    let instance = &GLOBAL.instance;
+    let instance = &global.instance;
     let mut device_types = Vec::new();
 
     #[cfg(feature = "remote")]
@@ -367,7 +368,7 @@ pub fn request_adapter(
                 raw: adapters_vk.swap_remove(selected),
             };
             info!("Adapter Vulkan {:?}", adapter.raw.info);
-            let id_out = backend::Vulkan::hub().adapters.register_identity(
+            let id_out = backend::Vulkan::hub(global).adapters.register_identity(
                 id_vulkan.unwrap(),
                 adapter,
                 &mut token,
@@ -383,7 +384,7 @@ pub fn request_adapter(
                 raw: adapters_mtl.swap_remove(selected),
             };
             info!("Adapter Metal {:?}", adapter.raw.info);
-            let id_out = backend::Metal::hub().adapters.register_identity(
+            let id_out = backend::Metal::hub(global).adapters.register_identity(
                 id_metal.unwrap(),
                 adapter,
                 &mut token,
@@ -399,7 +400,7 @@ pub fn request_adapter(
                 raw: adapters_dx12.swap_remove(selected),
             };
             info!("Adapter Dx12 {:?}", adapter.raw.info);
-            let id_out = backend::Dx12::hub().adapters.register_identity(
+            let id_out = backend::Dx12::hub(global).adapters.register_identity(
                 id_dx12.unwrap(),
                 adapter,
                 &mut token,
@@ -412,7 +413,7 @@ pub fn request_adapter(
                 raw: adapters_dx11.swap_remove(selected),
             };
             info!("Adapter Dx11 {:?}", adapter.raw.info);
-            let id_out = backend::Dx11::hub().adapters.register_identity(
+            let id_out = backend::Dx11::hub(global).adapters.register_identity(
                 id_dx11.unwrap(),
                 adapter,
                 &mut token,
@@ -428,15 +429,16 @@ pub fn request_adapter(
 #[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_request_adapter(desc: Option<&RequestAdapterOptions>) -> AdapterId {
-    request_adapter(&desc.cloned().unwrap_or_default(), &[]).unwrap()
+    request_adapter(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[]).unwrap()
 }
 
 pub fn adapter_request_device<B: GfxBackend>(
+    global: &Global,
     adapter_id: AdapterId,
     desc: &DeviceDescriptor,
     id_in: Input<DeviceId>,
 ) -> Output<DeviceId> {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
     let device = {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -503,11 +505,11 @@ pub extern "C" fn wgpu_adapter_request_device(
     desc: Option<&DeviceDescriptor>,
 ) -> DeviceId {
     let desc = &desc.cloned().unwrap_or_default();
-    gfx_select!(adapter_id => adapter_request_device(adapter_id, desc, PhantomData))
+    gfx_select!(adapter_id => adapter_request_device(&*GLOBAL, adapter_id, desc, PhantomData))
 }
 
-pub fn adapter_get_info<B: GfxBackend>(adapter_id: AdapterId) -> AdapterInfo {
-    let hub = B::hub();
+pub fn adapter_get_info<B: GfxBackend>(global: &Global, adapter_id: AdapterId) -> AdapterInfo {
+    let hub = B::hub(global);
     let mut token = Token::root();
     let (adapter_guard, _) = hub.adapters.read(&mut token);
     let adapter = &adapter_guard[adapter_id];
@@ -518,5 +520,5 @@ pub fn adapter_get_info<B: GfxBackend>(adapter_id: AdapterId) -> AdapterInfo {
 pub fn wgpu_adapter_get_info(
     adapter_id: AdapterId
 ) -> AdapterInfo {
-    gfx_select!(adapter_id => adapter_get_info(adapter_id))
+    gfx_select!(adapter_id => adapter_get_info(&*GLOBAL, adapter_id))
 }

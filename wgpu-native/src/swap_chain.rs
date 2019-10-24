@@ -34,8 +34,7 @@
 
 use crate::{
     conv,
-    gfx_select,
-    hub::{GLOBAL, GfxBackend, Token},
+    hub::{GfxBackend, Global, Token},
     resource,
     DeviceId,
     Extent3d,
@@ -46,6 +45,8 @@ use crate::{
     SwapChainId,
     TextureViewId,
 };
+#[cfg(not(feature = "remote"))]
+use crate::{gfx_select, hub::GLOBAL};
 
 use hal::{
     self,
@@ -129,13 +130,14 @@ pub struct SwapChainOutput {
 }
 
 pub fn swap_chain_get_next_texture<B: GfxBackend>(
+    global: &Global,
     swap_chain_id: SwapChainId,
     view_id_in: Input<TextureViewId>,
 ) -> SwapChainOutput {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
 
-    let (mut surface_guard, mut token) = GLOBAL.surfaces.write(&mut token);
+    let (mut surface_guard, mut token) = global.surfaces.write(&mut token);
     let surface = &mut surface_guard[swap_chain_id.to_surface_id()];
     let (device_guard, mut token) = hub.devices.read(&mut token);
     let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
@@ -205,14 +207,14 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
 #[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -> SwapChainOutput {
-    gfx_select!(swap_chain_id => swap_chain_get_next_texture(swap_chain_id, PhantomData))
+    gfx_select!(swap_chain_id => swap_chain_get_next_texture(&*GLOBAL, swap_chain_id, PhantomData))
 }
 
-pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
-    let hub = B::hub();
+pub fn swap_chain_present<B: GfxBackend>(global: &Global, swap_chain_id: SwapChainId) {
+    let hub = B::hub(global);
     let mut token = Token::root();
 
-    let (mut surface_guard, mut token) = GLOBAL.surfaces.write(&mut token);
+    let (mut surface_guard, mut token) = global.surfaces.write(&mut token);
     let surface = &mut surface_guard[swap_chain_id.to_surface_id()];
     let (mut device_guard, mut token) = hub.devices.write(&mut token);
     let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
@@ -247,7 +249,8 @@ pub fn swap_chain_present<B: GfxBackend>(swap_chain_id: SwapChainId) {
     }
 }
 
+#[cfg(not(feature = "remote"))]
 #[no_mangle]
 pub extern "C" fn wgpu_swap_chain_present(swap_chain_id: SwapChainId) {
-    gfx_select!(swap_chain_id => swap_chain_present(swap_chain_id))
+    gfx_select!(swap_chain_id => swap_chain_present(&*GLOBAL, swap_chain_id))
 }
