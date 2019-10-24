@@ -28,6 +28,19 @@ layout(set = 1, binding = 0) uniform Entity {
     vec4 u_Color;
 };
 
+float fetch_shadow(int light_id, vec4 homogeneous_coords) {
+    if (homogeneous_coords.w <= 0.0) {
+        return 1.0;
+    }
+    // compute texture coordinates for shadow lookup
+    vec4 light_local = vec4(
+        (homogeneous_coords.xy/homogeneous_coords.w + 1.0) / 2.0,
+        light_id,
+        homogeneous_coords.z / homogeneous_coords.w
+    );
+    // do the lookup, using HW PCF and comparison
+    return texture(sampler2DArrayShadow(t_Shadow, s_Shadow), light_local);
+}
 
 void main() {
     vec3 normal = normalize(v_Normal);
@@ -37,13 +50,7 @@ void main() {
     for (int i=0; i<int(u_NumLights.x) && i<MAX_LIGHTS; ++i) {
         Light light = u_Lights[i];
         // project into the light space
-        vec4 light_local = light.proj * v_Position;
-        // compute texture coordinates for shadow lookup
-        light_local.xy = (light_local.xy/light_local.w + 1.0) / 2.0;
-        light_local.w = light_local.z / light_local.w;
-        light_local.z = i;
-        // do the lookup, using HW PCF and comparison
-        float shadow = texture(sampler2DArrayShadow(t_Shadow, s_Shadow), light_local);
+        float shadow = fetch_shadow(i, light.proj * v_Position);
         // compute Lambertian diffuse term
         vec3 light_dir = normalize(light.pos.xyz - v_Position.xyz);
         float diffuse = max(0.0, dot(normal, light_dir));
