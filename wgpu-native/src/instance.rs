@@ -19,7 +19,7 @@ use crate::{gfx_select, SurfaceId};
 
 #[cfg(not(feature = "remote"))]
 use bitflags::bitflags;
-use log::info;
+use log::{info, warn};
 #[cfg(feature = "remote")]
 use serde::{Deserialize, Serialize};
 
@@ -466,10 +466,14 @@ pub fn adapter_request_device<B: GfxBackend>(
             BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
-        assert!(
-            u32::from(limits.max_bound_descriptor_sets) >= desc.limits.max_bind_groups,
-            "Adapter does not support the requested max_bind_groups"
-        );
+        if desc.limits.max_bind_groups == 0 {
+            warn!("max_bind_groups limit is missing");
+        } else {
+            assert!(
+                u32::from(limits.max_bound_descriptor_sets) >= desc.limits.max_bind_groups,
+                "Adapter does not support the requested max_bind_groups"
+            );
+        }
 
         let mem_props = adapter.physical_device.memory_properties();
 
