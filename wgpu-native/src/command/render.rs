@@ -21,13 +21,13 @@ use crate::{
     Stored,
 };
 #[cfg(feature = "local")]
-use crate::{gfx_select, RawString, RenderBundleId, hub::GLOBAL};
+use crate::{gfx_select, hub::GLOBAL, RawString, RenderBundleId};
 
 use hal::command::CommandBuffer as _;
 
-use std::{iter, ops::Range};
 #[cfg(feature = "local")]
 use std::slice;
+use std::{iter, ops::Range};
 
 #[derive(Debug, PartialEq)]
 enum OptionalState {
@@ -644,8 +644,7 @@ pub fn render_pass_set_pipeline<B: GfxBackend>(
                         );
                     }
                 }
-                LayoutChange::Match(..) |
-                LayoutChange::Unchanged => {}
+                LayoutChange::Match(..) | LayoutChange::Unchanged => {}
                 LayoutChange::Mismatch => {
                     is_compatible = false;
                 }
@@ -704,7 +703,9 @@ pub extern "C" fn wgpu_render_pass_set_pipeline(
 }
 
 pub fn render_pass_set_blend_color<B: GfxBackend>(
-    global: &Global, pass_id: RenderPassId, color: &Color
+    global: &Global,
+    pass_id: RenderPassId,
+    color: &Color,
 ) {
     let hub = B::hub(global);
     let mut token = Token::root();
@@ -725,7 +726,9 @@ pub extern "C" fn wgpu_render_pass_set_blend_color(pass_id: RenderPassId, color:
 }
 
 pub fn render_pass_set_stencil_reference<B: GfxBackend>(
-    global: &Global, pass_id: RenderPassId, value: u32
+    global: &Global,
+    pass_id: RenderPassId,
+    value: u32,
 ) {
     let hub = B::hub(global);
     let mut token = Token::root();
@@ -741,9 +744,7 @@ pub fn render_pass_set_stencil_reference<B: GfxBackend>(
 
 #[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_set_stencil_reference(
-    pass_id: RenderPassId, value: u32
-) {
+pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass_id: RenderPassId, value: u32) {
     gfx_select!(pass_id => render_pass_set_stencil_reference(&*GLOBAL, pass_id, value))
 }
 

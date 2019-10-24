@@ -10,7 +10,10 @@ pub mod backend {
     pub use gfx_backend_empty::Backend as Empty;
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub use gfx_backend_metal::Backend as Metal;
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     pub use gfx_backend_vulkan::Backend as Vulkan;
 }
 
@@ -36,8 +39,8 @@ pub use self::instance::*;
 pub use self::pipeline::*;
 pub use self::resource::*;
 pub use self::swap_chain::*;
-pub use hal::pso::read_spirv;
 pub use hal::adapter::AdapterInfo;
+pub use hal::pso::read_spirv;
 
 use std::{
     os::raw::c_char,

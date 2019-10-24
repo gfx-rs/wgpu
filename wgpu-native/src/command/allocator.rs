@@ -3,7 +3,15 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::CommandBuffer;
-use crate::{hub::GfxBackend, track::TrackerSet, DeviceId, Features, LifeGuard, Stored, SubmissionIndex};
+use crate::{
+    hub::GfxBackend,
+    track::TrackerSet,
+    DeviceId,
+    Features,
+    LifeGuard,
+    Stored,
+    SubmissionIndex,
+};
 
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
 use parking_lot::Mutex;

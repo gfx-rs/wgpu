@@ -184,7 +184,13 @@ pub extern "C" fn wgpu_compute_pass_insert_debug_marker(
 
 // Compute-specific routines
 
-pub fn compute_pass_dispatch<B: GfxBackend>(global: &Global, pass_id: ComputePassId, x: u32, y: u32, z: u32) {
+pub fn compute_pass_dispatch<B: GfxBackend>(
+    global: &Global,
+    pass_id: ComputePassId,
+    x: u32,
+    y: u32,
+    z: u32,
+) {
     let hub = B::hub(global);
     let mut token = Token::root();
     let (mut pass_guard, _) = hub.compute_passes.write(&mut token);
@@ -291,8 +297,7 @@ pub fn compute_pass_set_pipeline<B: GfxBackend>(
                         );
                     }
                 }
-                LayoutChange::Match(..) |
-                LayoutChange::Unchanged => {}
+                LayoutChange::Match(..) | LayoutChange::Unchanged => {}
                 LayoutChange::Mismatch => {
                     is_compatible = false;
                 }

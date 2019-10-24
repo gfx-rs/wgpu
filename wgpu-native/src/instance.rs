@@ -15,26 +15,24 @@ use crate::{
     DeviceId,
 };
 #[cfg(feature = "local")]
-use crate::{gfx_select, SurfaceId, hub::GLOBAL};
+use crate::{gfx_select, hub::GLOBAL, SurfaceId};
 
 #[cfg(feature = "local")]
 use bitflags::bitflags;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use hal::{
-    self,
-    Instance as _,
-    adapter::PhysicalDevice as _,
-    queue::QueueFamily as _,
-};
+use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
 
 
 #[derive(Debug)]
 pub struct Instance {
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     vulkan: Option<gfx_backend_vulkan::Instance>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: gfx_backend_metal::Instance,
@@ -47,7 +45,10 @@ pub struct Instance {
 impl Instance {
     pub fn new(name: &str, version: u32) -> Self {
         Instance {
-            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+            #[cfg(any(
+                not(any(target_os = "ios", target_os = "macos")),
+                feature = "gfx-backend-vulkan"
+            ))]
             vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: gfx_backend_metal::Instance::create(name, version).unwrap(),
@@ -63,7 +64,10 @@ type GfxSurface<B> = <B as hal::Backend>::Surface;
 
 #[derive(Debug)]
 pub struct Surface {
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     pub(crate) vulkan: Option<GfxSurface<backend::Vulkan>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub(crate) metal: GfxSurface<backend::Metal>,
@@ -219,7 +223,12 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         .register_identity(PhantomData, surface, &mut token)
 }
 
-#[cfg(all(feature = "local", unix, not(target_os = "ios"), not(target_os = "macos")))]
+#[cfg(all(
+    feature = "local",
+    unix,
+    not(target_os = "ios"),
+    not(target_os = "macos")
+))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
@@ -294,7 +303,10 @@ pub fn request_adapter(
     let id_dx12 = find_input(Backend::Dx12);
     let id_dx11 = find_input(Backend::Dx11);
 
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     let mut adapters_vk = match instance.vulkan {
         Some(ref inst) if id_vulkan.is_some() => {
             let adapters = inst.enumerate_adapters();
@@ -360,7 +372,10 @@ pub fn request_adapter(
     let mut token = Token::root();
 
     let mut selected = preferred_gpu.unwrap_or(0);
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     {
         if selected < adapters_vk.len() {
             let adapter = Adapter {
@@ -446,12 +461,11 @@ pub fn adapter_request_device<B: GfxBackend>(
         let family = adapter
             .queue_families
             .iter()
-            .find(|family| {
-                family.queue_type().supports_graphics()
-            })
+            .find(|family| family.queue_type().supports_graphics())
             .unwrap();
         let mut gpu = unsafe {
-            adapter.physical_device
+            adapter
+                .physical_device
                 .open(&[(family, &[1.0])], hal::Features::empty())
                 .unwrap()
         };
@@ -516,8 +530,6 @@ pub fn adapter_get_info<B: GfxBackend>(global: &Global, adapter_id: AdapterId) -
 }
 
 #[cfg(feature = "local")]
-pub fn wgpu_adapter_get_info(
-    adapter_id: AdapterId
-) -> AdapterInfo {
+pub fn wgpu_adapter_get_info(adapter_id: AdapterId) -> AdapterInfo {
     gfx_select!(adapter_id => adapter_get_info(&*GLOBAL, adapter_id))
 }

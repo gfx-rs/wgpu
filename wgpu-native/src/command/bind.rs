@@ -35,9 +35,7 @@ pub enum LayoutChange<'a> {
 #[derive(Debug)]
 pub enum Provision {
     Unchanged,
-    Changed {
-        was_compatible: bool,
-    },
+    Changed { was_compatible: bool },
 }
 
 struct TakeSome<I> {
@@ -94,9 +92,7 @@ impl BindGroupEntry {
         self.dynamic_offsets.clear();
         self.dynamic_offsets.extend_from_slice(offsets);
 
-        Provision::Changed {
-            was_compatible,
-        }
+        Provision::Changed { was_compatible }
     }
 
     pub fn expect_layout(&mut self, bind_group_layout_id: BindGroupLayoutId) -> LayoutChange {
@@ -107,8 +103,9 @@ impl BindGroupEntry {
                 Some(BindGroupPair {
                     layout_id,
                     ref group_id,
-                }) if layout_id == bind_group_layout_id =>
-                    LayoutChange::Match(group_id.value, &self.dynamic_offsets),
+                }) if layout_id == bind_group_layout_id => {
+                    LayoutChange::Match(group_id.value, &self.dynamic_offsets)
+                }
                 Some(_) | None => LayoutChange::Mismatch,
             }
         } else {
@@ -147,7 +144,7 @@ impl Binder {
     pub(crate) fn new(max_bind_groups: u32) -> Self {
         Self {
             pipeline_layout_id: None,
-            entries: smallvec![Default::default(); max_bind_groups as usize]
+            entries: smallvec![Default::default(); max_bind_groups as usize],
         }
     }
 
@@ -181,8 +178,11 @@ impl Binder {
             Provision::Changed { was_compatible, .. } => {
                 let compatible_count = self.compatible_count();
                 if index < compatible_count {
-                    let end = compatible_count
-                        .min(if was_compatible { index + 1 } else { self.entries.len() });
+                    let end = compatible_count.min(if was_compatible {
+                        index + 1
+                    } else {
+                        self.entries.len()
+                    });
                     log::trace!("\t\tbinding up to {}", end);
                     Some((
                         self.pipeline_layout_id?,

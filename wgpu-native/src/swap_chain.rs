@@ -48,12 +48,7 @@ use crate::{
 #[cfg(feature = "local")]
 use crate::{gfx_select, hub::GLOBAL};
 
-use hal::{
-    self,
-    device::Device as _,
-    queue::CommandQueue as _,
-    window::PresentationSurface as _,
-};
+use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
 
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
@@ -89,7 +84,11 @@ pub struct SwapChainDescriptor {
 }
 
 impl SwapChainDescriptor {
-    pub(crate) fn to_hal(&self, num_frames: u32, features: &Features) -> hal::window::SwapchainConfig {
+    pub(crate) fn to_hal(
+        &self,
+        num_frames: u32,
+        features: &Features,
+    ) -> hal::window::SwapchainConfig {
         let mut config = hal::window::SwapchainConfig::new(
             self.width,
             self.height,
@@ -155,12 +154,8 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
                 log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
                 let desc = sc.desc.to_hal(sc.num_frames, &device.features);
                 unsafe {
-                    suf
-                        .configure_swapchain(&device.raw, desc)
-                        .unwrap();
-                    suf
-                        .acquire_image(FRAME_TIMEOUT_MS * 1_000_000)
-                        .unwrap()
+                    suf.configure_swapchain(&device.raw, desc).unwrap();
+                    suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000).unwrap()
                 }
             }
         }
@@ -193,15 +188,16 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
     let (view_id, _) = hub.texture_views.new_identity(view_id_in);
     hub.texture_views.register(view_id, view, &mut token);
 
-    assert!(sc.acquired_view_id.is_none(), "Swap chain image is already acquired");
+    assert!(
+        sc.acquired_view_id.is_none(),
+        "Swap chain image is already acquired"
+    );
     sc.acquired_view_id = Some(Stored {
         value: view_id,
         ref_count,
     });
 
-    SwapChainOutput {
-        view_id,
-    }
+    SwapChainOutput { view_id }
 }
 
 #[cfg(feature = "local")]
@@ -221,22 +217,21 @@ pub fn swap_chain_present<B: GfxBackend>(global: &Global, swap_chain_id: SwapCha
     let sc = &mut swap_chain_guard[swap_chain_id];
     let device = &mut device_guard[sc.device_id.value];
 
-    let view_id = sc.acquired_view_id
+    let view_id = sc
+        .acquired_view_id
         .take()
         .expect("Swap chain image is not acquired");
     let (view, _) = hub.texture_views.unregister(view_id.value, &mut token);
     let (image, framebuffer) = match view.inner {
         resource::TextureViewInner::Native { .. } => unreachable!(),
-        resource::TextureViewInner::SwapChain { image, framebuffer, .. } => (image, framebuffer),
+        resource::TextureViewInner::SwapChain {
+            image, framebuffer, ..
+        } => (image, framebuffer),
     };
 
     let err = unsafe {
         let queue = &mut device.queue_group.queues[0];
-        queue.present_surface(
-            B::get_surface_mut(surface),
-            image,
-            Some(&sc.semaphore),
-        )
+        queue.present_surface(B::get_surface_mut(surface), image, Some(&sc.semaphore))
     };
     if let Err(e) = err {
         log::warn!("present failed: {:?}", e);

@@ -3,9 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #[cfg(feature = "local")]
-use crate::{
-    instance::Limits,
-};
+use crate::instance::Limits;
 use crate::{
     binding_model,
     command,
@@ -71,7 +69,7 @@ use std::{
     ops::Range,
     ptr,
     slice,
-    sync::atomic::{Ordering},
+    sync::atomic::Ordering,
 };
 
 
@@ -277,7 +275,10 @@ impl<B: GfxBackend> PendingResources<B> {
     }
 
     fn triage_referenced(
-        &mut self, global: &Global, trackers: &mut TrackerSet, mut token: &mut Token<Device<B>>
+        &mut self,
+        global: &Global,
+        trackers: &mut TrackerSet,
+        mut token: &mut Token<Device<B>>,
     ) {
         // Before destruction, a resource is expected to have the following strong refs:
         //  - in resource itself
@@ -567,11 +568,16 @@ impl<B: GfxBackend> Device<B> {
             features: Features {
                 max_bind_groups,
                 supports_texture_d24_s8,
-            }
+            },
         }
     }
 
-    fn maintain(&self, global: &Global, force_wait: bool, token: &mut Token<Self>) -> Vec<BufferMapPendingCallback> {
+    fn maintain(
+        &self,
+        global: &Global,
+        force_wait: bool,
+        token: &mut Token<Self>,
+    ) -> Vec<BufferMapPendingCallback> {
         let mut pending = self.pending.lock();
         let mut trackers = self.trackers.lock();
 
@@ -683,7 +689,9 @@ impl<B: GfxBackend> Device<B> {
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
-                assert!(!desc.usage.intersects(TextureUsage::COPY_SRC | TextureUsage::COPY_DST));
+                assert!(!desc
+                    .usage
+                    .intersects(TextureUsage::COPY_SRC | TextureUsage::COPY_DST));
             }
             _ => {}
         }
@@ -1031,9 +1039,7 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: TextureId) {
     gfx_select!(texture_id => texture_destroy(&*GLOBAL, texture_id))
 }
 
-pub fn texture_view_destroy<B: GfxBackend>(
-    global: &Global, texture_view_id: TextureViewId
-) {
+pub fn texture_view_destroy<B: GfxBackend>(global: &Global, texture_view_id: TextureViewId) {
     let hub = B::hub(global);
     let mut token = Token::root();
     let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1041,10 +1047,10 @@ pub fn texture_view_destroy<B: GfxBackend>(
     let (texture_view_guard, _) = hub.texture_views.read(&mut token);
     let view = &texture_view_guard[texture_view_id];
     let device_id = match view.inner {
-        resource::TextureViewInner::Native { ref source_id, .. } =>
-            texture_guard[source_id.value].device_id.value,
-        resource::TextureViewInner::SwapChain { .. } =>
-            panic!("Can't destroy a swap chain image"),
+        resource::TextureViewInner::Native { ref source_id, .. } => {
+            texture_guard[source_id.value].device_id.value
+        }
+        resource::TextureViewInner::SwapChain { .. } => panic!("Can't destroy a swap chain image"),
     };
     device_guard[device_id].pending.lock().destroy(
         ResourceId::TextureView(texture_view_id),
@@ -1295,7 +1301,11 @@ pub fn device_create_bind_group<B: GfxBackend>(
                         .buffers
                         .use_extend(&*buffer_guard, bb.buffer, (), usage)
                         .unwrap();
-                    assert!(buffer.usage.contains(usage), "Expected buffer usage {:?}", usage);
+                    assert!(
+                        buffer.usage.contains(usage),
+                        "Expected buffer usage {:?}",
+                        usage
+                    );
 
                     let end = if bb.size == 0 {
                         None
@@ -1315,7 +1325,8 @@ pub fn device_create_bind_group<B: GfxBackend>(
                 }
                 binding_model::BindingResource::Sampler(id) => {
                     assert_eq!(decl.ty, binding_model::BindingType::Sampler);
-                    let sampler = used.samplers
+                    let sampler = used
+                        .samplers
                         .use_extend(&*sampler_guard, id, (), ())
                         .unwrap();
                     hal::pso::Descriptor::Sampler(&sampler.raw)
@@ -1336,21 +1347,26 @@ pub fn device_create_bind_group<B: GfxBackend>(
                         .use_extend(&*texture_view_guard, id, (), ())
                         .unwrap();
                     match view.inner {
-                        resource::TextureViewInner::Native { ref raw, ref source_id } => {
-		                    let texture = used.textures
-		                        .use_extend(
-		                            &*texture_guard,
-		                            source_id.value,
-		                            view.range.clone(),
-		                            usage,
-		                        )
-		                        .unwrap();
-		                    assert!(texture.usage.contains(usage));
+                        resource::TextureViewInner::Native {
+                            ref raw,
+                            ref source_id,
+                        } => {
+                            let texture = used
+                                .textures
+                                .use_extend(
+                                    &*texture_guard,
+                                    source_id.value,
+                                    view.range.clone(),
+                                    usage,
+                                )
+                                .unwrap();
+                            assert!(texture.usage.contains(usage));
 
-		                    hal::pso::Descriptor::Image(raw, image_layout)
+                            hal::pso::Descriptor::Image(raw, image_layout)
                         }
-                        resource::TextureViewInner::SwapChain { .. } =>
-                            panic!("Unable to create a bind group with a swap chain image"),
+                        resource::TextureViewInner::SwapChain { .. } => {
+                            panic!("Unable to create a bind group with a swap chain image")
+                        }
                     }
                 }
             };
@@ -1470,7 +1486,9 @@ pub fn device_create_command_encoder<B: GfxBackend>(
         value: device_id,
         ref_count: device.life_guard.ref_count.clone(),
     };
-    let mut comb = device.com_allocator.allocate(dev_stored, &device.raw, device.features);
+    let mut comb = device
+        .com_allocator
+        .allocate(dev_stored, &device.raw, device.features);
     unsafe {
         comb.raw.last_mut().unwrap().begin(
             hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
@@ -1537,9 +1555,15 @@ pub fn queue_submit<B: GfxBackend>(
             if let Some((view_id, fbo)) = comb.used_swap_chain.take() {
                 let sem = match texture_view_guard[view_id.value].inner {
                     resource::TextureViewInner::Native { .. } => unreachable!(),
-                    resource::TextureViewInner::SwapChain { ref source_id, ref mut framebuffer, .. } => {
-                        assert!(framebuffer.is_none(),
-                            "Using a swap chain in multiple framebuffers is not supported yet");
+                    resource::TextureViewInner::SwapChain {
+                        ref source_id,
+                        ref mut framebuffer,
+                        ..
+                    } => {
+                        assert!(
+                            framebuffer.is_none(),
+                            "Using a swap chain in multiple framebuffers is not supported yet"
+                        );
                         *framebuffer = Some(fbo);
                         &swap_chain_guard[source_id.value].semaphore
                     }
@@ -1621,8 +1645,7 @@ pub fn queue_submit<B: GfxBackend>(
         };
 
         unsafe {
-            device.queue_group.queues[0]
-                .submit(submission, Some(&fence));
+            device.queue_group.queues[0].submit(submission, Some(&fence));
         }
 
         (submit_index, fence)
@@ -2034,13 +2057,17 @@ pub fn device_create_swap_chain<B: GfxBackend>(
             formats
         );
     }
-    if desc.width < caps.extents.start().width ||
-        desc.width > caps.extents.end().width ||
-        desc.height < caps.extents.start().height ||
-        desc.height > caps.extents.end().height
+    if desc.width < caps.extents.start().width
+        || desc.width > caps.extents.end().width
+        || desc.height < caps.extents.start().height
+        || desc.height > caps.extents.end().height
     {
-        log::warn!("Requested size {}x{} is outside of the supported range: {:?}",
-            desc.width, desc.height, caps.extents);
+        log::warn!(
+            "Requested size {}x{} is outside of the supported range: {:?}",
+            desc.width,
+            desc.height,
+            caps.extents
+        );
     }
 
     unsafe {
