@@ -9,7 +9,6 @@ use wgn::{AdapterId, Backend, DeviceId, IdentityManager, SurfaceId};
 use crate::server::Server;
 
 use ipc_channel::ipc;
-use log::error;
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
@@ -124,7 +123,7 @@ pub extern "C" fn wgpu_initialize() -> Infrastructure {
             }
         }
         Err(e) => {
-            error!("WGPU initialize failed: {:?}", e);
+            log::error!("WGPU initialize failed: {:?}", e);
             Infrastructure {
                 client: ptr::null_mut(),
                 server: ptr::null_mut(),

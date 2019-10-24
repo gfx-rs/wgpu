@@ -19,7 +19,6 @@ use crate::{gfx_select, SurfaceId, hub::GLOBAL};
 
 #[cfg(feature = "local")]
 use bitflags::bitflags;
-use log::{info, warn};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -367,7 +366,7 @@ pub fn request_adapter(
             let adapter = Adapter {
                 raw: adapters_vk.swap_remove(selected),
             };
-            info!("Adapter Vulkan {:?}", adapter.raw.info);
+            log::info!("Adapter Vulkan {:?}", adapter.raw.info);
             let id_out = backend::Vulkan::hub(global).adapters.register_identity(
                 id_vulkan.unwrap(),
                 adapter,
@@ -383,7 +382,7 @@ pub fn request_adapter(
             let adapter = Adapter {
                 raw: adapters_mtl.swap_remove(selected),
             };
-            info!("Adapter Metal {:?}", adapter.raw.info);
+            log::info!("Adapter Metal {:?}", adapter.raw.info);
             let id_out = backend::Metal::hub(global).adapters.register_identity(
                 id_metal.unwrap(),
                 adapter,
@@ -399,7 +398,7 @@ pub fn request_adapter(
             let adapter = Adapter {
                 raw: adapters_dx12.swap_remove(selected),
             };
-            info!("Adapter Dx12 {:?}", adapter.raw.info);
+            log::info!("Adapter Dx12 {:?}", adapter.raw.info);
             let id_out = backend::Dx12::hub(global).adapters.register_identity(
                 id_dx12.unwrap(),
                 adapter,
@@ -412,7 +411,7 @@ pub fn request_adapter(
             let adapter = Adapter {
                 raw: adapters_dx11.swap_remove(selected),
             };
-            info!("Adapter Dx11 {:?}", adapter.raw.info);
+            log::info!("Adapter Dx11 {:?}", adapter.raw.info);
             let id_out = backend::Dx11::hub(global).adapters.register_identity(
                 id_dx11.unwrap(),
                 adapter,
@@ -469,7 +468,7 @@ pub fn adapter_request_device<B: GfxBackend>(
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
         if desc.limits.max_bind_groups == 0 {
-            warn!("max_bind_groups limit is missing");
+            log::warn!("max_bind_groups limit is missing");
         } else {
             assert!(
                 u32::from(limits.max_bound_descriptor_sets) >= desc.limits.max_bind_groups,

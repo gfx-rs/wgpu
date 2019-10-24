@@ -24,7 +24,6 @@ use crate::{
 use crate::{gfx_select, RawString, RenderBundleId, hub::GLOBAL};
 
 use hal::command::CommandBuffer as _;
-use log::trace;
 
 use std::{iter, ops::Range};
 #[cfg(feature = "local")]
@@ -197,7 +196,7 @@ pub fn render_pass_end_pass<B: GfxBackend>(global: &Global, pass_id: RenderPassI
 
     match cmb.raw.last_mut() {
         Some(last) => {
-            trace!("Encoding barriers before pass {:?}", pass_id);
+            log::trace!("Encoding barriers before pass {:?}", pass_id);
             CommandBuffer::insert_barriers(
                 last,
                 &mut cmb.trackers,

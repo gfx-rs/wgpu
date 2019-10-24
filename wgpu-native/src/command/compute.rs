@@ -23,7 +23,6 @@ use crate::{
 use crate::{gfx_select, hub::GLOBAL};
 
 use hal::{self, command::CommandBuffer as _};
-use log::trace;
 
 use std::iter;
 #[cfg(feature = "local")]
@@ -114,7 +113,7 @@ pub fn compute_pass_set_bind_group<B: GfxBackend>(
     let (buffer_guard, mut token) = hub.buffers.read(&mut token);
     let (texture_guard, _) = hub.textures.read(&mut token);
 
-    trace!(
+    log::trace!(
         "Encoding barriers on binding of {:?} in pass {:?}",
         bind_group_id,
         pass_id

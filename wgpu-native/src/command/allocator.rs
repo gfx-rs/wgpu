@@ -6,7 +6,6 @@ use super::CommandBuffer;
 use crate::{hub::GfxBackend, track::TrackerSet, DeviceId, Features, LifeGuard, Stored, SubmissionIndex};
 
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
-use log::trace;
 use parking_lot::Mutex;
 
 use std::{collections::HashMap, sync::atomic::Ordering, thread};
@@ -127,7 +126,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
                 .load(Ordering::Acquire);
             if index <= last_done {
                 let cmd_buf = inner.pending.swap_remove(i);
-                trace!(
+                log::trace!(
                     "recycling comb submitted in {} when {} is done",
                     index,
                     last_done

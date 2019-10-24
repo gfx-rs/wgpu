@@ -12,7 +12,6 @@ use crate::{
     Stored,
 };
 
-use log::trace;
 use smallvec::{smallvec, SmallVec};
 
 use std::convert::identity;
@@ -174,7 +173,7 @@ impl Binder {
         impl 'a + Iterator<Item = BindGroupId>,
         impl 'a + Iterator<Item = &'a BufferAddress>,
     )> {
-        trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
+        log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         debug_assert_eq!(B::VARIANT, bind_group_id.backend());
 
         match self.entries[index].provide(bind_group_id, bind_group, offsets) {
@@ -184,7 +183,7 @@ impl Binder {
                 if index < compatible_count {
                     let end = compatible_count
                         .min(if was_compatible { index + 1 } else { self.entries.len() });
-                    trace!("\t\tbinding up to {}", end);
+                    log::trace!("\t\tbinding up to {}", end);
                     Some((
                         self.pipeline_layout_id?,
                         TakeSome {
@@ -197,7 +196,7 @@ impl Binder {
                             .flat_map(|entry| entry.dynamic_offsets.as_slice()),
                     ))
                 } else {
-                    trace!("\t\tskipping above compatible {}", compatible_count);
+                    log::trace!("\t\tskipping above compatible {}", compatible_count);
                     None
                 }
             }

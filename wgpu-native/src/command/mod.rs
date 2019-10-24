@@ -47,7 +47,6 @@ use crate::{gfx_select, hub::GLOBAL};
 
 use arrayvec::ArrayVec;
 use hal::{adapter::PhysicalDevice as _, command::CommandBuffer as _, device::Device as _};
-use log::trace;
 
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
@@ -137,7 +136,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
         buffer_guard: &Storage<Buffer<B>, BufferId>,
         texture_guard: &Storage<Texture<B>, TextureId>,
     ) {
-        trace!("\tstitch {:?}", stitch);
+        log::trace!("\tstitch {:?}", stitch);
         debug_assert_eq!(B::VARIANT, base.backend());
         debug_assert_eq!(B::VARIANT, head.backend());
 
@@ -145,7 +144,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
             .buffers
             .merge_replace(&head.buffers, stitch)
             .map(|pending| {
-                trace!("\tbuffer -> {:?}", pending);
+                log::trace!("\tbuffer -> {:?}", pending);
                 hal::memory::Barrier::Buffer {
                     states: pending.to_states(),
                     target: &buffer_guard[pending.id].raw,
@@ -157,7 +156,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
             .textures
             .merge_replace(&head.textures, stitch)
             .map(|pending| {
-                trace!("\ttexture -> {:?}", pending);
+                log::trace!("\ttexture -> {:?}", pending);
                 hal::memory::Barrier::Image {
                     states: pending.to_states(),
                     target: &texture_guard[pending.id].raw,
@@ -274,7 +273,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             "Attachment sample_count must be supported by physical device limits"
         );
 
-        trace!(
+        log::trace!(
             "Encoding render pass begin in command buffer {:?}",
             encoder_id
         );
@@ -322,7 +321,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         );
 
                         barriers.extend(pending.map(|pending| {
-                            trace!("\tdepth-stencil {:?}", pending);
+                            log::trace!("\tdepth-stencil {:?}", pending);
                             hal::memory::Barrier::Image {
                                 states: pending.to_states(),
                                 target: &texture.raw,
@@ -379,7 +378,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                                     TextureUsage::OUTPUT_ATTACHMENT,
                                 );
                                 barriers.extend(pending.map(|pending| {
-                                    trace!("\tcolor {:?}", pending);
+                                    log::trace!("\tcolor {:?}", pending);
                                     hal::memory::Barrier::Image {
                                         states: pending.to_states(),
                                         target: &texture.raw,
@@ -451,7 +450,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                                     TextureUsage::OUTPUT_ATTACHMENT,
                                 );
                                 barriers.extend(pending.map(|pending| {
-                                    trace!("\tresolve {:?}", pending);
+                                    log::trace!("\tresolve {:?}", pending);
                                     hal::memory::Barrier::Image {
                                         states: pending.to_states(),
                                         target: &texture.raw,
