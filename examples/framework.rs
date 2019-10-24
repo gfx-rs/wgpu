@@ -1,4 +1,3 @@
-use log::info;
 use winit::event::WindowEvent;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
@@ -50,7 +49,7 @@ pub fn run<E: Example>(title: &str) {
 
     env_logger::init();
     let event_loop = EventLoop::new();
-    info!("Initializing the window...");
+    log::info!("Initializing the window...");
 
     #[cfg(not(feature = "gl"))]
     let (_window, hidpi_factor, size, surface) = {
@@ -105,13 +104,13 @@ pub fn run<E: Example>(title: &str) {
     };
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
-    info!("Initializing the example...");
+    log::info!("Initializing the example...");
     let (mut example, init_command_buf) = E::init(&sc_desc, &device);
     if let Some(command_buf) = init_command_buf {
         queue.submit(&[command_buf]);
     }
 
-    info!("Entering render loop...");
+    log::info!("Entering render loop...");
     event_loop.run(move |event, _, control_flow| {
         *control_flow = if cfg!(feature = "metal-auto-capture") {
             ControlFlow::Exit
@@ -124,7 +123,7 @@ pub fn run<E: Example>(title: &str) {
                 ..
             } => {
                 let physical = size.to_physical(hidpi_factor);
-                info!("Resizing to {:?}", physical);
+                log::info!("Resizing to {:?}", physical);
                 sc_desc.width = physical.width.round() as u32;
                 sc_desc.height = physical.height.round() as u32;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
