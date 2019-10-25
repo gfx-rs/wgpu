@@ -58,7 +58,7 @@ before_install:
 script:
   - cargo test
   # TODO: enable GL backend
-  - (cd wgpu-native && cargo check --features local)
+  - (cd wgpu-native && cargo check --all-features)
   - if [[ $TRAVIS_OS_NAME == "osx" ]]; then (cd wgpu-native && cargo check --features gfx-backend-vulkan); fi
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo check --release; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen; fi

@@ -411,13 +411,24 @@ pub struct Global {
     hubs: Hubs,
 }
 
+impl Global {
+    fn new_impl(name: &str) -> Self {
+        Global {
+            instance: Instance::new(name, 1),
+            surfaces: Registry::new(Backend::Empty),
+            hubs: Hubs::default(),
+        }
+    }
+
+    #[cfg(not(feature = "local"))]
+    pub fn new(name: &str) -> Self {
+        Self::new_impl(name)
+    }
+}
+
 #[cfg(feature = "local")]
 lazy_static::lazy_static! {
-    pub static ref GLOBAL: Arc<Global> = Arc::new(Global {
-        instance: Instance::new("wgpu", 1),
-        surfaces: Registry::new(Backend::Empty),
-        hubs: Hubs::default(),
-    });
+    pub static ref GLOBAL: Arc<Global> = Arc::new(Global::new_impl("wgpu"));
 }
 
 pub trait GfxBackend: hal::Backend {

@@ -33,7 +33,7 @@ pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
 #[cfg(not(feature = "local"))]
-pub use self::hub::{Access, IdentityManager, Registry, Token};
+pub use self::hub::{Access, Global, IdentityManager, Registry, Token};
 pub use self::id::*;
 pub use self::instance::*;
 pub use self::pipeline::*;

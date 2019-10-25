@@ -94,6 +94,7 @@ pub enum PowerPreference {
 #[cfg(feature = "local")]
 bitflags! {
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BackendBit: u32 {
         const VULKAN = 1 << Backend::Vulkan as u32;
         const GL = 1 << Backend::Gl as u32;

@@ -2,51 +2,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-//TODO: remove once `cbindgen` is smart enough
-extern crate wgpu_native as wgn;
 use wgn::{AdapterId, Backend, DeviceId, IdentityManager, SurfaceId};
 
-use crate::server::Server;
-
-use ipc_channel::ipc;
 use parking_lot::Mutex;
-use serde::{Deserialize, Serialize};
 
-use std::{ptr, sync::Arc};
+use std::{ptr, slice};
 
-mod server;
-
-/// A message on the timeline of devices, queues, and resources.
-#[derive(Serialize, Deserialize, Debug)]
-enum GlobalMessage {
-    RequestAdapter(wgn::RequestAdapterOptions, Vec<wgn::AdapterId>),
-    AdapterRequestDevice(wgn::AdapterId, wgn::DeviceDescriptor, wgn::DeviceId),
-    //Device(DeviceMessage),
-    //Queue(QueueMessage),
-    //Texture(TextureMessage),
-    //Command(CommandMessage),
-    Terminate,
-}
+pub mod server;
 
 #[derive(Debug)]
 struct IdentityHub {
     adapters: IdentityManager<AdapterId>,
     devices: IdentityManager<DeviceId>,
-    /*
-    pipeline_layouts: IdentityManager<PipelineLayoutId>,
-    shader_modules: IdentityManager<ShaderModuleId>,
-    bind_group_layouts: IdentityManager<BindGroupLayoutId>,
-    bind_groups: IdentityManager<BindGroupId>,
-    command_buffers: IdentityManager<CommandBufferId>,
-    render_passes: IdentityManager<RenderPassId>,
-    render_pipelines: IdentityManager<RenderPipelineId>,
-    compute_passes: IdentityManager<ComputePassId>,
-    compute_pipelines: IdentityManager<ComputePipelineId>,
-    buffers: IdentityManager<BufferId>,
-    textures: IdentityManager<TextureId>,
-    texture_views: IdentityManager<TextureViewId>,
-    samplers: IdentityManager<SamplerId>,
-    */
 }
 
 impl IdentityHub {
@@ -92,85 +59,92 @@ impl Identities {
     }
 }
 
-
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Client {
-    channel: ipc::IpcSender<GlobalMessage>,
-    identities: Arc<Mutex<Identities>>,
+    identities: Mutex<Identities>,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct Infrastructure {
     pub client: *mut Client,
-    pub server: *mut Server,
     pub error: *const u8,
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_initialize() -> Infrastructure {
-    match ipc::channel() {
-        Ok((sender, receiver)) => {
-            let client = Client {
-                channel: sender,
-                identities: Arc::new(Mutex::new(Identities::new())),
-            };
-            let server = Server::new(receiver);
-            Infrastructure {
-                client: Box::into_raw(Box::new(client)),
-                server: Box::into_raw(Box::new(server)),
-                error: ptr::null(),
-            }
-        }
-        Err(e) => {
-            log::error!("WGPU initialize failed: {:?}", e);
-            Infrastructure {
-                client: ptr::null_mut(),
-                server: ptr::null_mut(),
-                error: ptr::null(), //TODO_remote_
-            }
-        }
+pub extern "C" fn wgpu_client_new() -> Infrastructure {
+    log::info!("Initializing WGPU client");
+    let client = Box::new(Client {
+        identities: Mutex::new(Identities::new()),
+    });
+    Infrastructure {
+        client: Box::into_raw(client),
+        error: ptr::null(),
     }
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_terminate(client: *mut Client) {
-    let client = unsafe { Box::from_raw(client) };
-    let msg = GlobalMessage::Terminate;
-    let _ = client.channel.send(msg);
+pub extern "C" fn wgpu_client_delete(client: *mut Client) {
+    log::info!("Terminating WGPU client");
+    let _client = unsafe { Box::from_raw(client) };
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_request_adapter(
+pub extern "C" fn wgpu_client_make_adapter_ids(
     client: &Client,
-    desc: &wgn::RequestAdapterOptions,
-) -> wgn::AdapterId {
+    ids: *mut wgn::AdapterId,
+    id_length: usize,
+) -> usize {
     let mut identities = client.identities.lock();
-    let ids = vec![
-        identities.vulkan.adapters.alloc(),
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        identities.metal.adapters.alloc(),
-        #[cfg(windows)]
-        identities.dx12.adapters.alloc(),
-    ];
-    let msg = GlobalMessage::RequestAdapter(desc.clone(), ids);
-    client.channel.send(msg).unwrap();
-    unimplemented!()
+    assert_ne!(id_length, 0);
+    let mut ids = unsafe { slice::from_raw_parts_mut(ids, id_length) }.iter_mut();
+
+    *ids.next().unwrap() = identities.vulkan.adapters.alloc();
+
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    {
+        *ids.next().unwrap() = identities.metal.adapters.alloc();
+    }
+    #[cfg(windows)]
+    {
+        *ids.next().unwrap() = identities.dx12.adapters.alloc();
+    }
+
+    id_length - ids.len()
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_adapter_create_device(
+pub extern "C" fn wgpu_client_kill_adapter_ids(
+    client: &Client,
+    ids: *const wgn::AdapterId,
+    id_length: usize,
+) {
+    let mut identity = client.identities.lock();
+    let ids = unsafe { slice::from_raw_parts(ids, id_length) };
+    for &id in ids {
+        identity.select(id.backend()).adapters.free(id)
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_device_id(
     client: &Client,
     adapter_id: wgn::AdapterId,
-    desc: &wgn::DeviceDescriptor,
 ) -> wgn::DeviceId {
-    let device_id = client
+    client
         .identities
         .lock()
         .select(adapter_id.backend())
         .devices
-        .alloc();
-    let msg = GlobalMessage::AdapterRequestDevice(adapter_id, desc.clone(), device_id);
-    client.channel.send(msg).unwrap();
-    device_id
+        .alloc()
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: wgn::DeviceId) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .devices
+        .free(id)
 }

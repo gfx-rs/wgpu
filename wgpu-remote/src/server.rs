@@ -2,49 +2,39 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::GlobalMessage;
+use std::slice;
 
-use ipc_channel::ipc::IpcReceiver;
-use wgn;
-
-#[derive(Debug)]
-pub struct Server {
-    channel: IpcReceiver<GlobalMessage>,
-}
-
-impl Server {
-    pub(crate) fn new(channel: IpcReceiver<GlobalMessage>) -> Self {
-        Server { channel }
-    }
-}
-
-enum ControlFlow {
-    Continue,
-    Terminate,
-}
-
-fn process(_message: GlobalMessage) -> ControlFlow {
-    /*
-    match message {
-        GlobalMessage::RequestAdapter(ref desc, ref ids) => {
-            wgn::request_adapter(desc, ids);
-        }
-        GlobalMessage::AdapterRequestDevice(adapter_id, ref desc, id) => {
-            use wgn::adapter_request_device as fun;
-            wgn::gfx_select!(adapter_id => fun(adapter_id, desc, id));
-        }
-        GlobalMessage::Terminate => return ControlFlow::Terminate,
-    }*/
-
-    ControlFlow::Continue
+#[no_mangle]
+pub extern "C" fn wgpu_server_new() -> *mut wgn::Global {
+    log::info!("Initializing WGPU server");
+    Box::into_raw(Box::new(wgn::Global::new("wgpu")))
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_process(server: &Server) {
-    while let Ok(message) = server.channel.try_recv() {
-        match process(message) {
-            ControlFlow::Continue => {}
-            ControlFlow::Terminate => break,
-        }
-    }
+pub extern "C" fn wgpu_server_delete(global: *mut wgn::Global) {
+    log::info!("Terminating WGPU server");
+    //TODO: proper cleanup
+    let _ = unsafe { Box::from_raw(global) };
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_instance_request_adapter(
+    global: &wgn::Global,
+    desc: &wgn::RequestAdapterOptions,
+    ids: *const wgn::AdapterId,
+    id_length: usize,
+) -> wgn::AdapterId {
+    let ids = unsafe { slice::from_raw_parts(ids, id_length) };
+    wgn::request_adapter(global, desc, ids).unwrap()
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_adapter_request_device(
+    global: &wgn::Global,
+    self_id: wgn::AdapterId,
+    desc: &wgn::DeviceDescriptor,
+    new_id: wgn::DeviceId,
+) {
+    use wgn::adapter_request_device as func;
+    wgn::gfx_select!(self_id => func(global, self_id, desc, new_id));
 }

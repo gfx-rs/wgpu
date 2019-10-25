@@ -1,65 +1,105 @@
-
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 /* Generated with cbindgen:0.9.1 */
 
-#include <stdarg.h>
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
+/* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
+ * To generate this file:
+ *   1. Get the latest cbindgen using `cargo install --force cbindgen`
+ *      a. Alternatively, you can clone `https://github.com/eqrion/cbindgen` and use a tagged release
+ *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --lockfile Cargo.lock --crate wgpu-remote -o dom/webgpu/ffi/wgpu_ffi_generated.h`
+ */
 
-typedef enum {
+typedef void WGPUEmpty;
+
+
+#include <cstdarg>
+#include <cstdint>
+#include <cstdlib>
+#include <new>
+
+enum class WGPUPowerPreference {
   WGPUPowerPreference_Default = 0,
   WGPUPowerPreference_LowPower = 1,
   WGPUPowerPreference_HighPerformance = 2,
-} WGPUPowerPreference;
+};
 
-typedef struct WGPUClient WGPUClient;
+template<typename B>
+struct WGPUAdapter;
 
-typedef struct WGPUServer WGPUServer;
+struct WGPUClient;
 
-typedef uint64_t WGPUId_Device_Dummy;
+template<typename B>
+struct WGPUDevice;
 
-typedef WGPUId_Device_Dummy WGPUDeviceId;
+struct WGPUGlobal;
 
-typedef uint64_t WGPUId_Adapter_Dummy;
+using WGPUDummy = WGPUEmpty;
 
-typedef WGPUId_Adapter_Dummy WGPUAdapterId;
+template<typename T>
+using WGPUId = uint64_t;
 
-typedef struct {
-  bool anisotropic_filtering;
-} WGPUExtensions;
+using WGPUAdapterId = WGPUId<WGPUAdapter<WGPUDummy>>;
 
-typedef struct {
-  uint32_t max_bind_groups;
-} WGPULimits;
+using WGPUDeviceId = WGPUId<WGPUDevice<WGPUDummy>>;
 
-typedef struct {
-  WGPUExtensions extensions;
-  WGPULimits limits;
-} WGPUDeviceDescriptor;
+struct WGPUInfrastructure {
+  WGPUClient *client;
+  const uint8_t *error;
 
-typedef uint32_t WGPUBackendBit;
+  bool operator==(const WGPUInfrastructure& aOther) const {
+    return client == aOther.client &&
+           error == aOther.error;
+  }
+};
 
-typedef struct {
+using WGPUBackendBit = uint32_t;
+
+struct WGPURequestAdapterOptions {
   WGPUPowerPreference power_preference;
   WGPUBackendBit backends;
-} WGPURequestAdapterOptions;
 
-typedef struct {
-  WGPUClient *client;
-  WGPUServer *server;
-  const uint8_t *error;
-} WGPUInfrastructure;
+  bool operator==(const WGPURequestAdapterOptions& aOther) const {
+    return power_preference == aOther.power_preference &&
+           backends == aOther.backends;
+  }
+};
 
-WGPUDeviceId wgpu_client_adapter_create_device(const WGPUClient *client,
-                                               WGPUAdapterId adapter_id,
-                                               const WGPUDeviceDescriptor *desc);
+extern "C" {
 
-WGPUAdapterId wgpu_client_request_adapter(const WGPUClient *client,
-                                          const WGPURequestAdapterOptions *desc);
+WGPU_INLINE
+void wgpu_client_delete(WGPUClient *aClient)
+WGPU_FUNC;
 
-WGPUInfrastructure wgpu_initialize(void);
+WGPU_INLINE
+uintptr_t wgpu_client_make_adapter_ids(const WGPUClient *aClient,
+                                       WGPUAdapterId *aIds,
+                                       uintptr_t aIdLength)
+WGPU_FUNC;
 
-void wgpu_server_process(const WGPUServer *server);
+WGPU_INLINE
+WGPUDeviceId wgpu_client_make_device_id(const WGPUClient *aClient,
+                                        WGPUAdapterId aAdapterId)
+WGPU_FUNC;
 
-void wgpu_terminate(WGPUClient *client);
+WGPU_INLINE
+WGPUInfrastructure wgpu_client_new()
+WGPU_FUNC;
+
+WGPU_INLINE
+void wgpu_server_delete(WGPUGlobal *aGlobal)
+WGPU_FUNC;
+
+WGPU_INLINE
+WGPUGlobal *wgpu_server_new()
+WGPU_FUNC;
+
+WGPU_INLINE
+WGPUAdapterId wgpu_server_request_adapter(const WGPUGlobal *aGlobal,
+                                          const WGPURequestAdapterOptions *aDesc,
+                                          const WGPUAdapterId *aIds,
+                                          uintptr_t aIdLength)
+WGPU_FUNC;
+
+} // extern "C"
