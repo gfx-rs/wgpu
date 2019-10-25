@@ -35,22 +35,17 @@ int main(
     WGPUAdapterId adapter = wgpu_request_adapter(NULL);
     WGPUDeviceId device = wgpu_adapter_request_device(adapter, NULL);
 
-	uint8_t *staging_memory;
+    uint8_t *staging_memory;
 
-    WGPUBufferId staging_buffer = wgpu_device_create_buffer_mapped(device,
+    WGPUBufferId buffer = wgpu_device_create_buffer_mapped(device,
             &(WGPUBufferDescriptor){
                 .size = size,
-				.usage = WGPUBufferUsage_MAP_READ},
+				.usage = WGPUBufferUsage_STORAGE | WGPUBufferUsage_MAP_READ},
             &staging_memory);
 
 	memcpy((uint32_t *) staging_memory, numbers, size);
 
-	wgpu_buffer_unmap(staging_buffer);
-
-    WGPUBufferId storage_buffer = wgpu_device_create_buffer(device,
-        &(WGPUBufferDescriptor){
-			.size = size,
-            .usage = WGPUBufferUsage_STORAGE});
+	wgpu_buffer_unmap(buffer);
 
     WGPUBindGroupLayoutId bind_group_layout =
         wgpu_device_create_bind_group_layout(device,
@@ -63,10 +58,10 @@ int main(
 
 	WGPUBindingResource resource = {
 		.tag = WGPUBindingResource_Buffer,
-        .buffer = (WGPUBufferBinding){
-            .buffer = storage_buffer,
+        .buffer = {(WGPUBufferBinding){
+            .buffer = buffer,
 			.size = size,
-			.offset = 0}};
+			.offset = 0}}};
 
     WGPUBindGroupId bind_group = wgpu_device_create_bind_group(device,
             &(WGPUBindGroupDescriptor){.layout = bind_group_layout,
@@ -102,9 +97,6 @@ int main(
             .todo = 0
         });
 
-    wgpu_command_encoder_copy_buffer_to_buffer(
-        encoder, staging_buffer, 0, storage_buffer, 0, size);
-
     WGPUComputePassId command_pass =
         wgpu_command_encoder_begin_compute_pass(encoder, NULL);
     wgpu_compute_pass_set_pipeline(command_pass, compute_pipeline);
@@ -113,16 +105,13 @@ int main(
     wgpu_compute_pass_dispatch(command_pass, numbers_length, 1, 1);
     wgpu_compute_pass_end_pass(command_pass);
 
-    wgpu_command_encoder_copy_buffer_to_buffer(
-        encoder, storage_buffer, 0, staging_buffer, 0, size);
-
     WGPUQueueId queue = wgpu_device_get_queue(device);
 
     WGPUCommandBufferId command_buffer = wgpu_command_encoder_finish(encoder, NULL);
 
     wgpu_queue_submit(queue, &command_buffer, 1);
 
-    wgpu_buffer_map_read_async(staging_buffer, 0, size, read_buffer_map, NULL);
+    wgpu_buffer_map_read_async(buffer, 0, size, read_buffer_map, NULL);
 
     wgpu_device_poll(device, true);
 

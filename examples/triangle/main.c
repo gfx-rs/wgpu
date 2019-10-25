@@ -45,6 +45,10 @@ int main() {
                 {
                     .anisotropic_filtering = false,
                 },
+            .limits =
+                {
+                    .max_bind_groups = 1,
+                },
         });
 
     WGPUShaderModuleId vertex_shader = wgpu_device_create_shader_module(device,

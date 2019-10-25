@@ -1172,8 +1172,12 @@ pub fn device_create_pipeline_layout<B: GfxBackend>(
     let mut token = Token::root();
 
     let (device_guard, mut token) = hub.devices.read(&mut token);
+    let device = &device_guard[device_id];
     let bind_group_layout_ids =
         unsafe { slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length) };
+
+    assert!(desc.bind_group_layouts_length <= (device.features.max_bind_groups as usize),
+        "Cannot set a bind group which is beyond the `max_bind_groups` limit requested on device creation");
 
     // TODO: push constants
     let pipeline_layout = {
@@ -1182,9 +1186,7 @@ pub fn device_create_pipeline_layout<B: GfxBackend>(
             .iter()
             .map(|&id| &bind_group_layout_guard[id].raw);
         unsafe {
-            device_guard[device_id]
-                .raw
-                .create_pipeline_layout(descriptor_set_layouts, &[])
+            device.raw.create_pipeline_layout(descriptor_set_layouts, &[])
         }
         .unwrap()
     };

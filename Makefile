@@ -26,7 +26,9 @@ else
 	CREATE_BUILD_DIR=mkdir -p $(BUILD_DIR)
 endif
 
-.PHONY: all check test doc clear lib-native lib-remote example-compute example-triangle example-remote
+.PHONY: all check test doc clear lib-native lib-remote \
+	example-compute example-triangle example-remote \
+	run-example-compute run-example-triangle run-example-remote
 
 all: example-compute example-triangle example-remote
 
@@ -56,10 +58,19 @@ $(FFI_DIR)/wgpu-remote.h: wgpu-remote/cbindgen.toml $(WILDCARD_WGPU_NATIVE_AND_R
 	rustup run nightly cbindgen -o $(FFI_DIR)/wgpu-remote.h wgpu-remote
 
 example-compute: lib-native $(FFI_DIR)/wgpu.h examples/compute/main.c
-	cd examples/compute && $(CREATE_BUILD_DIR) && cd build && cmake .. $(GENERATOR_PLATFORM) && cmake --build .
+	cd examples/compute && $(CREATE_BUILD_DIR) && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. $(GENERATOR_PLATFORM) && cmake --build .
+
+run-example-compute: example-compute
+	cd examples/compute/build && ./compute 1 2 3 4
 
 example-triangle: lib-native $(FFI_DIR)/wgpu.h examples/triangle/main.c
-	cd examples/triangle && $(CREATE_BUILD_DIR) && cd build && cmake .. $(GENERATOR_PLATFORM) && cmake --build .
+	cd examples/triangle && $(CREATE_BUILD_DIR) && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. $(GENERATOR_PLATFORM) && cmake --build .
+
+run-example-triangle: example-triangle
+	cd examples/triangle/build && ./triangle
 
 example-remote: lib-remote $(FFI_DIR)/wgpu-remote.h examples/remote/main.c
-	cd examples/remote && $(CREATE_BUILD_DIR) && cd build && cmake .. && cmake --build .
+	cd examples/remote && $(CREATE_BUILD_DIR) && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. $(GENERATOR_PLATFORM) && cmake --build .
+
+run-example-remote: example-remote
+	cd examples/remote/build && ./remote
