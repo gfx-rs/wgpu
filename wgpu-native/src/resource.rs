@@ -288,7 +288,6 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) extent: hal::image::Extent,
     pub(crate) samples: hal::image::NumSamples,
     pub(crate) range: hal::image::SubresourceRange,
-    #[cfg_attr(feature = "remote", allow(dead_code))]
     pub(crate) life_guard: LifeGuard,
 }
 

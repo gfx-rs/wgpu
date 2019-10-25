@@ -6,7 +6,7 @@ use crate::{
     backend,
     binding_model::MAX_BIND_GROUPS,
     device::BIND_BUFFER_ALIGNMENT,
-    hub::{GfxBackend, Token, GLOBAL},
+    hub::{GfxBackend, Global, Token},
     id::{Input, Output},
     AdapterId,
     AdapterInfo,
@@ -14,28 +14,25 @@ use crate::{
     Device,
     DeviceId,
 };
-#[cfg(not(feature = "remote"))]
-use crate::{gfx_select, SurfaceId};
+#[cfg(feature = "local")]
+use crate::{gfx_select, hub::GLOBAL, SurfaceId};
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use bitflags::bitflags;
-use log::{info, warn};
-#[cfg(feature = "remote")]
+#[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use hal::{
-    self,
-    Instance as _,
-    adapter::PhysicalDevice as _,
-    queue::QueueFamily as _,
-};
-#[cfg(not(feature = "remote"))]
+use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
+#[cfg(feature = "local")]
 use std::marker::PhantomData;
 
 
 #[derive(Debug)]
 pub struct Instance {
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     vulkan: Option<gfx_backend_vulkan::Instance>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: gfx_backend_metal::Instance,
@@ -46,9 +43,12 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub(crate) fn new(name: &str, version: u32) -> Self {
+    pub fn new(name: &str, version: u32) -> Self {
         Instance {
-            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+            #[cfg(any(
+                not(any(target_os = "ios", target_os = "macos")),
+                feature = "gfx-backend-vulkan"
+            ))]
             vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: gfx_backend_metal::Instance::create(name, version).unwrap(),
@@ -64,7 +64,10 @@ type GfxSurface<B> = <B as hal::Backend>::Surface;
 
 #[derive(Debug)]
 pub struct Surface {
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     pub(crate) vulkan: Option<GfxSurface<backend::Vulkan>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub(crate) metal: GfxSurface<backend::Metal>,
@@ -81,14 +84,14 @@ pub struct Adapter<B: hal::Backend> {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
     HighPerformance = 2,
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 bitflags! {
     #[repr(transparent)]
     pub struct BackendBit: u32 {
@@ -104,7 +107,7 @@ bitflags! {
     }
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 impl From<Backend> for BackendBit {
     fn from(backend: Backend) -> Self {
         BackendBit::from_bits(1 << backend as u32).unwrap()
@@ -113,10 +116,10 @@ impl From<Backend> for BackendBit {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     pub backends: BackendBit,
 }
 
@@ -124,7 +127,7 @@ impl Default for RequestAdapterOptions {
     fn default() -> Self {
         RequestAdapterOptions {
             power_preference: PowerPreference::Default,
-            #[cfg(not(feature = "remote"))]
+            #[cfg(feature = "local")]
             backends: BackendBit::PRIMARY,
         }
     }
@@ -132,14 +135,14 @@ impl Default for RequestAdapterOptions {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
 }
@@ -154,13 +157,13 @@ impl Default for Limits {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "remote", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
     pub limits: Limits,
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
 
@@ -220,7 +223,12 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> Su
         .register_identity(PhantomData, surface, &mut token)
 }
 
-#[cfg(all(not(feature = "remote"), unix, not(target_os = "ios"), not(target_os = "macos")))]
+#[cfg(all(
+    feature = "local",
+    unix,
+    not(target_os = "ios"),
+    not(target_os = "macos")
+))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
@@ -234,7 +242,7 @@ pub extern "C" fn wgpu_create_surface_from_xlib(
     }))
 }
 
-#[cfg(all(not(feature = "remote"), any(target_os = "ios", target_os = "macos")))]
+#[cfg(all(feature = "local", any(target_os = "ios", target_os = "macos")))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_void) -> SurfaceId {
     let surface = Surface {
@@ -251,7 +259,7 @@ pub extern "C" fn wgpu_create_surface_from_metal_layer(layer: *mut std::ffi::c_v
         .register_identity(PhantomData, surface, &mut Token::root())
 }
 
-#[cfg(all(not(feature = "remote"), windows))]
+#[cfg(all(feature = "local", windows))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     _hinstance: *mut std::ffi::c_void,
@@ -267,15 +275,16 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
 }
 
 pub fn request_adapter(
+    global: &Global,
     desc: &RequestAdapterOptions,
     input_ids: &[Input<AdapterId>],
 ) -> Option<AdapterId> {
-    let instance = &GLOBAL.instance;
+    let instance = &global.instance;
     let mut device_types = Vec::new();
 
-    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "local"))]
     let find_input = |b: Backend| input_ids.iter().find(|id| id.backend() == b).cloned();
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     let find_input = |b: Backend| {
         let _ = input_ids;
         if desc.backends.contains(b.into()) {
@@ -284,9 +293,9 @@ pub fn request_adapter(
             None
         }
     };
-    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "local"))]
     let pick = |_output, input_maybe| input_maybe;
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     let pick = |output, _input_maybe| Some(output);
 
     let id_vulkan = find_input(Backend::Vulkan);
@@ -294,7 +303,10 @@ pub fn request_adapter(
     let id_dx12 = find_input(Backend::Dx12);
     let id_dx11 = find_input(Backend::Dx11);
 
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     let mut adapters_vk = match instance.vulkan {
         Some(ref inst) if id_vulkan.is_some() => {
             let adapters = inst.enumerate_adapters();
@@ -360,14 +372,17 @@ pub fn request_adapter(
     let mut token = Token::root();
 
     let mut selected = preferred_gpu.unwrap_or(0);
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     {
         if selected < adapters_vk.len() {
             let adapter = Adapter {
                 raw: adapters_vk.swap_remove(selected),
             };
-            info!("Adapter Vulkan {:?}", adapter.raw.info);
-            let id_out = backend::Vulkan::hub().adapters.register_identity(
+            log::info!("Adapter Vulkan {:?}", adapter.raw.info);
+            let id_out = backend::Vulkan::hub(global).adapters.register_identity(
                 id_vulkan.unwrap(),
                 adapter,
                 &mut token,
@@ -382,8 +397,8 @@ pub fn request_adapter(
             let adapter = Adapter {
                 raw: adapters_mtl.swap_remove(selected),
             };
-            info!("Adapter Metal {:?}", adapter.raw.info);
-            let id_out = backend::Metal::hub().adapters.register_identity(
+            log::info!("Adapter Metal {:?}", adapter.raw.info);
+            let id_out = backend::Metal::hub(global).adapters.register_identity(
                 id_metal.unwrap(),
                 adapter,
                 &mut token,
@@ -398,8 +413,8 @@ pub fn request_adapter(
             let adapter = Adapter {
                 raw: adapters_dx12.swap_remove(selected),
             };
-            info!("Adapter Dx12 {:?}", adapter.raw.info);
-            let id_out = backend::Dx12::hub().adapters.register_identity(
+            log::info!("Adapter Dx12 {:?}", adapter.raw.info);
+            let id_out = backend::Dx12::hub(global).adapters.register_identity(
                 id_dx12.unwrap(),
                 adapter,
                 &mut token,
@@ -411,8 +426,8 @@ pub fn request_adapter(
             let adapter = Adapter {
                 raw: adapters_dx11.swap_remove(selected),
             };
-            info!("Adapter Dx11 {:?}", adapter.raw.info);
-            let id_out = backend::Dx11::hub().adapters.register_identity(
+            log::info!("Adapter Dx11 {:?}", adapter.raw.info);
+            let id_out = backend::Dx11::hub(global).adapters.register_identity(
                 id_dx11.unwrap(),
                 adapter,
                 &mut token,
@@ -425,18 +440,19 @@ pub fn request_adapter(
     None
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_request_adapter(desc: Option<&RequestAdapterOptions>) -> AdapterId {
-    request_adapter(&desc.cloned().unwrap_or_default(), &[]).unwrap()
+    request_adapter(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[]).unwrap()
 }
 
 pub fn adapter_request_device<B: GfxBackend>(
+    global: &Global,
     adapter_id: AdapterId,
     desc: &DeviceDescriptor,
     id_in: Input<DeviceId>,
 ) -> Output<DeviceId> {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
     let device = {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
@@ -445,12 +461,11 @@ pub fn adapter_request_device<B: GfxBackend>(
         let family = adapter
             .queue_families
             .iter()
-            .find(|family| {
-                family.queue_type().supports_graphics()
-            })
+            .find(|family| family.queue_type().supports_graphics())
             .unwrap();
         let mut gpu = unsafe {
-            adapter.physical_device
+            adapter
+                .physical_device
                 .open(&[(family, &[1.0])], hal::Features::empty())
                 .unwrap()
         };
@@ -467,7 +482,7 @@ pub fn adapter_request_device<B: GfxBackend>(
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
         if desc.limits.max_bind_groups == 0 {
-            warn!("max_bind_groups limit is missing");
+            log::warn!("max_bind_groups limit is missing");
         } else {
             assert!(
                 u32::from(limits.max_bound_descriptor_sets) >= desc.limits.max_bind_groups,
@@ -496,27 +511,25 @@ pub fn adapter_request_device<B: GfxBackend>(
     hub.devices.register_identity(id_in, device, &mut token)
 }
 
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: AdapterId,
     desc: Option<&DeviceDescriptor>,
 ) -> DeviceId {
     let desc = &desc.cloned().unwrap_or_default();
-    gfx_select!(adapter_id => adapter_request_device(adapter_id, desc, PhantomData))
+    gfx_select!(adapter_id => adapter_request_device(&*GLOBAL, adapter_id, desc, PhantomData))
 }
 
-pub fn adapter_get_info<B: GfxBackend>(adapter_id: AdapterId) -> AdapterInfo {
-    let hub = B::hub();
+pub fn adapter_get_info<B: GfxBackend>(global: &Global, adapter_id: AdapterId) -> AdapterInfo {
+    let hub = B::hub(global);
     let mut token = Token::root();
     let (adapter_guard, _) = hub.adapters.read(&mut token);
     let adapter = &adapter_guard[adapter_id];
     adapter.raw.info.clone()
 }
 
-#[cfg(not(feature = "remote"))]
-pub fn wgpu_adapter_get_info(
-    adapter_id: AdapterId
-) -> AdapterInfo {
-    gfx_select!(adapter_id => adapter_get_info(adapter_id))
+#[cfg(feature = "local")]
+pub fn wgpu_adapter_get_info(adapter_id: AdapterId) -> AdapterInfo {
+    gfx_select!(adapter_id => adapter_get_info(&*GLOBAL, adapter_id))
 }

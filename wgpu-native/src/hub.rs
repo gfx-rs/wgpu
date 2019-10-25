@@ -46,15 +46,16 @@ use crate::{
     TypedId,
 };
 
-use lazy_static::lazy_static;
-#[cfg(not(feature = "remote"))]
+#[cfg(feature = "local")]
 use parking_lot::Mutex;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use vec_map::VecMap;
 
-#[allow(unused)]
+#[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{marker::PhantomData, ops, sync::Arc};
+#[cfg(feature = "local")]
+use std::sync::Arc;
+use std::{marker::PhantomData, ops};
 
 
 /// A simple structure to manage identities of objects.
@@ -147,7 +148,8 @@ impl<T, I: TypedId> Storage<T, I> {
 
     pub fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
-        self.map.remove(index as usize)
+        self.map
+            .remove(index as usize)
             .map(|(value, storage_epoch)| {
                 assert_eq!(epoch, storage_epoch);
                 value
@@ -271,7 +273,7 @@ impl<'a, T> Drop for Token<'a, T> {
 
 #[derive(Debug)]
 pub struct Registry<T, I: TypedId> {
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     pub identity: Mutex<IdentityManager<I>>,
     data: RwLock<Storage<T, I>>,
     backend: Backend,
@@ -280,7 +282,7 @@ pub struct Registry<T, I: TypedId> {
 impl<T, I: TypedId> Registry<T, I> {
     fn new(backend: Backend) -> Self {
         Registry {
-            #[cfg(not(feature = "remote"))]
+            #[cfg(feature = "local")]
             identity: Mutex::new(IdentityManager::new(backend)),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
@@ -298,13 +300,13 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
         assert!(old.is_none());
     }
 
-    #[cfg(not(feature = "remote"))]
+    #[cfg(feature = "local")]
     pub fn new_identity(&self, _id_in: Input<I>) -> (I, Output<I>) {
         let id = self.identity.lock().alloc();
         (id, id)
     }
 
-    #[cfg(feature = "remote")]
+    #[cfg(not(feature = "local"))]
     pub fn new_identity(&self, id_in: Input<I>) -> (I, Output<I>) {
         //TODO: debug_assert_eq!(self.backend, id_in.backend());
         (id_in, PhantomData)
@@ -324,7 +326,7 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     pub fn unregister<A: Access<T>>(&self, id: I, _token: &mut Token<A>) -> (T, Token<T>) {
         let value = self.data.write().remove(id).unwrap();
         //Note: careful about the order here!
-        #[cfg(not(feature = "remote"))]
+        #[cfg(feature = "local")]
         self.identity.lock().free(id);
         (value, Token::new())
     }
@@ -389,7 +391,10 @@ impl<B: GfxBackend> Default for Hub<B> {
 
 #[derive(Debug, Default)]
 pub struct Hubs {
-    #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+    #[cfg(any(
+        not(any(target_os = "ios", target_os = "macos")),
+        feature = "gfx-backend-vulkan"
+    ))]
     vulkan: Hub<backend::Vulkan>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: Hub<backend::Metal>,
@@ -406,7 +411,8 @@ pub struct Global {
     hubs: Hubs,
 }
 
-lazy_static! {
+#[cfg(feature = "local")]
+lazy_static::lazy_static! {
     pub static ref GLOBAL: Arc<Global> = Arc::new(Global {
         instance: Instance::new("wgpu", 1),
         surfaces: Registry::new(Backend::Empty),
@@ -416,15 +422,18 @@ lazy_static! {
 
 pub trait GfxBackend: hal::Backend {
     const VARIANT: Backend;
-    fn hub() -> &'static Hub<Self>;
+    fn hub(global: &Global) -> &Hub<Self>;
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
-#[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+#[cfg(any(
+    not(any(target_os = "ios", target_os = "macos")),
+    feature = "gfx-backend-vulkan"
+))]
 impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.vulkan
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.vulkan
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.vulkan.as_mut().unwrap()
@@ -434,8 +443,8 @@ impl GfxBackend for backend::Vulkan {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.metal
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         &mut surface.metal
@@ -445,8 +454,8 @@ impl GfxBackend for backend::Metal {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.dx12
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.dx12
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.dx12.as_mut().unwrap()
@@ -456,8 +465,8 @@ impl GfxBackend for backend::Dx12 {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
-    fn hub() -> &'static Hub<Self> {
-        &GLOBAL.hubs.dx11
+    fn hub(global: &Global) -> &Hub<Self> {
+        &global.hubs.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         &mut surface.dx11

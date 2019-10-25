@@ -311,7 +311,10 @@ fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::
     }
 }
 
-pub(crate) fn map_texture_format(texture_format: resource::TextureFormat, features: Features) -> hal::format::Format {
+pub(crate) fn map_texture_format(
+    texture_format: resource::TextureFormat,
+    features: Features,
+) -> hal::format::Format {
     use crate::resource::TextureFormat as Tf;
     use hal::format::Format as H;
     match texture_format {
@@ -371,16 +374,20 @@ pub(crate) fn map_texture_format(texture_format: resource::TextureFormat, featur
 
         // Depth and stencil formats
         Tf::Depth32Float => H::D32Sfloat,
-        Tf::Depth24Plus => if features.supports_texture_d24_s8 {
-            H::D24UnormS8Uint
-        } else {
-            H::D32Sfloat
+        Tf::Depth24Plus => {
+            if features.supports_texture_d24_s8 {
+                H::D24UnormS8Uint
+            } else {
+                H::D32Sfloat
+            }
         }
-        Tf::Depth24PlusStencil8 => if features.supports_texture_d24_s8 {
-            H::D24UnormS8Uint
-        } else {
-            H::D32SfloatS8Uint
-        },
+        Tf::Depth24PlusStencil8 => {
+            if features.supports_texture_d24_s8 {
+                H::D24UnormS8Uint
+            } else {
+                H::D32SfloatS8Uint
+            }
+        }
     }
 }
 

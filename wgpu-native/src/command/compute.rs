@@ -5,8 +5,7 @@
 use crate::{
     command::bind::{Binder, LayoutChange},
     device::all_buffer_stages,
-    gfx_select,
-    hub::{GfxBackend, Token},
+    hub::{GfxBackend, Global, Token},
     track::{Stitch, TrackerSet},
     BindGroupId,
     BufferAddress,
@@ -20,11 +19,14 @@ use crate::{
     Stored,
     BIND_BUFFER_ALIGNMENT,
 };
+#[cfg(feature = "local")]
+use crate::{gfx_select, hub::GLOBAL};
 
 use hal::{self, command::CommandBuffer as _};
-use log::trace;
 
-use std::{iter, slice};
+use std::iter;
+#[cfg(feature = "local")]
+use std::slice;
 
 #[derive(Debug)]
 pub struct ComputePass<B: hal::Backend> {
@@ -52,9 +54,9 @@ impl<B: hal::Backend> ComputePass<B> {
 
 // Common routines between render/compute
 
-pub fn compute_pass_end_pass<B: GfxBackend>(pass_id: ComputePassId) {
+pub fn compute_pass_end_pass<B: GfxBackend>(global: &Global, pass_id: ComputePassId) {
     let mut token = Token::root();
-    let hub = B::hub();
+    let hub = B::hub(global);
     let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
     let (pass, _) = hub.compute_passes.unregister(pass_id, &mut token);
     let cmb = &mut cmb_guard[pass.cmb_id.value];
@@ -65,18 +67,20 @@ pub fn compute_pass_end_pass<B: GfxBackend>(pass_id: ComputePassId) {
     cmb.raw.push(pass.raw);
 }
 
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: ComputePassId) {
-    gfx_select!(pass_id => compute_pass_end_pass(pass_id))
+    gfx_select!(pass_id => compute_pass_end_pass(&*GLOBAL, pass_id))
 }
 
 pub fn compute_pass_set_bind_group<B: GfxBackend>(
+    global: &Global,
     pass_id: ComputePassId,
     index: u32,
     bind_group_id: BindGroupId,
     offsets: &[BufferAddress],
 ) {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
 
     let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
@@ -109,7 +113,7 @@ pub fn compute_pass_set_bind_group<B: GfxBackend>(
     let (buffer_guard, mut token) = hub.buffers.read(&mut token);
     let (texture_guard, _) = hub.textures.read(&mut token);
 
-    trace!(
+    log::trace!(
         "Encoding barriers on binding of {:?} in pass {:?}",
         bind_group_id,
         pass_id
@@ -143,6 +147,7 @@ pub fn compute_pass_set_bind_group<B: GfxBackend>(
     };
 }
 
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_set_bind_group(
     pass_id: ComputePassId,
@@ -156,7 +161,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     } else {
         &[]
     };
-    gfx_select!(pass_id => compute_pass_set_bind_group(pass_id, index, bind_group_id, offsets))
+    gfx_select!(pass_id => compute_pass_set_bind_group(&*GLOBAL, pass_id, index, bind_group_id, offsets))
 }
 
 #[no_mangle]
@@ -179,8 +184,14 @@ pub extern "C" fn wgpu_compute_pass_insert_debug_marker(
 
 // Compute-specific routines
 
-pub fn compute_pass_dispatch<B: GfxBackend>(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
-    let hub = B::hub();
+pub fn compute_pass_dispatch<B: GfxBackend>(
+    global: &Global,
+    pass_id: ComputePassId,
+    x: u32,
+    y: u32,
+    z: u32,
+) {
+    let hub = B::hub(global);
     let mut token = Token::root();
     let (mut pass_guard, _) = hub.compute_passes.write(&mut token);
     unsafe {
@@ -188,17 +199,19 @@ pub fn compute_pass_dispatch<B: GfxBackend>(pass_id: ComputePassId, x: u32, y: u
     }
 }
 
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch(pass_id: ComputePassId, x: u32, y: u32, z: u32) {
-    gfx_select!(pass_id => compute_pass_dispatch(pass_id, x, y, z))
+    gfx_select!(pass_id => compute_pass_dispatch(&*GLOBAL, pass_id, x, y, z))
 }
 
 pub fn compute_pass_dispatch_indirect<B: GfxBackend>(
+    global: &Global,
     pass_id: ComputePassId,
     indirect_buffer_id: BufferId,
     indirect_offset: BufferAddress,
 ) {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
     let (buffer_guard, _) = hub.buffers.read(&mut token);
     let (mut pass_guard, _) = hub.compute_passes.write(&mut token);
@@ -229,20 +242,22 @@ pub fn compute_pass_dispatch_indirect<B: GfxBackend>(
     }
 }
 
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_dispatch_indirect(
     pass_id: ComputePassId,
     indirect_buffer_id: BufferId,
     indirect_offset: BufferAddress,
 ) {
-    gfx_select!(pass_id => compute_pass_dispatch_indirect(pass_id, indirect_buffer_id, indirect_offset))
+    gfx_select!(pass_id => compute_pass_dispatch_indirect(&*GLOBAL, pass_id, indirect_buffer_id, indirect_offset))
 }
 
 pub fn compute_pass_set_pipeline<B: GfxBackend>(
+    global: &Global,
     pass_id: ComputePassId,
     pipeline_id: ComputePipelineId,
 ) {
-    let hub = B::hub();
+    let hub = B::hub(global);
     let mut token = Token::root();
     let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
     let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -282,8 +297,7 @@ pub fn compute_pass_set_pipeline<B: GfxBackend>(
                         );
                     }
                 }
-                LayoutChange::Match(..) |
-                LayoutChange::Unchanged => {}
+                LayoutChange::Match(..) | LayoutChange::Unchanged => {}
                 LayoutChange::Mismatch => {
                     is_compatible = false;
                 }
@@ -292,10 +306,11 @@ pub fn compute_pass_set_pipeline<B: GfxBackend>(
     }
 }
 
+#[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_compute_pass_set_pipeline(
     pass_id: ComputePassId,
     pipeline_id: ComputePipelineId,
 ) {
-    gfx_select!(pass_id => compute_pass_set_pipeline(pass_id, pipeline_id))
+    gfx_select!(pass_id => compute_pass_set_pipeline(&*GLOBAL, pass_id, pipeline_id))
 }

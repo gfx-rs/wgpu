@@ -23,7 +23,8 @@ enum ControlFlow {
     Terminate,
 }
 
-fn process(message: GlobalMessage) -> ControlFlow {
+fn process(_message: GlobalMessage) -> ControlFlow {
+    /*
     match message {
         GlobalMessage::RequestAdapter(ref desc, ref ids) => {
             wgn::request_adapter(desc, ids);
@@ -33,7 +34,7 @@ fn process(message: GlobalMessage) -> ControlFlow {
             wgn::gfx_select!(adapter_id => fun(adapter_id, desc, id));
         }
         GlobalMessage::Terminate => return ControlFlow::Terminate,
-    }
+    }*/
 
     ControlFlow::Continue
 }

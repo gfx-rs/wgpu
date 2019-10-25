@@ -44,7 +44,7 @@ clear:
 	$(CLEAN_FFI_DIR)
 
 lib-native: Cargo.lock wgpu-native/Cargo.toml $(WILDCARD_WGPU_NATIVE)
-	cargo build --manifest-path wgpu-native/Cargo.toml
+	cargo build --manifest-path wgpu-native/Cargo.toml --features local
 
 lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_NATIVE_AND_REMOTE)
 	cargo build --manifest-path wgpu-remote/Cargo.toml
