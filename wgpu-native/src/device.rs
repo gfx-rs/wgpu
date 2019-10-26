@@ -768,6 +768,21 @@ impl<B: GfxBackend> Device<B> {
     }
 }
 
+impl<B: hal::Backend> Device<B> {
+    pub(crate) fn destroy_bind_group(&self, bind_group: binding_model::BindGroup<B>) {
+        unsafe {
+            self.desc_allocator.lock().free(iter::once(bind_group.raw));
+        }
+    }
+
+    pub(crate) fn destroy_self(self) {
+        self.com_allocator.destroy(&self.raw);
+        unsafe {
+            self.desc_allocator.lock().cleanup(&self.raw);
+        }
+    }
+}
+
 #[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_device_get_limits(_device_id: DeviceId, limits: &mut Limits) {

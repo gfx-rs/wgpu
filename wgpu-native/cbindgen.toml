@@ -32,7 +32,6 @@ bitflags = true
 
 [defines]
 "feature = local" = "WGPU_LOCAL"
-"feature = remote" = "WGPU_REMOTE"
 "feature = gfx-backend-gl" = "WGPU_BACKEND_GL"
 "feature = winit" = "WGPU_WINIT"
 "feature = glutin" = "WGPU_GLUTIN"
