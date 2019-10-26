@@ -58,6 +58,31 @@ impl Instance {
             dx11: gfx_backend_dx11::Instance::create(name, version).unwrap(),
         }
     }
+
+    #[cfg(not(feature = "local"))]
+    pub(crate) fn destroy_surface(&mut self, surface: Surface) {
+        //TODO: fill out the proper destruction once we are on gfx-0.4
+        #[cfg(any(
+            not(any(target_os = "ios", target_os = "macos")),
+            feature = "gfx-backend-vulkan"
+        ))]
+        {
+            if let Some(_suf) = surface.vulkan {
+                //self.vulkan.as_mut().unwrap().destroy_surface(suf);
+            }
+        }
+        #[cfg(any(target_os = "ios", target_os = "macos"))]
+        {
+            //self.metal.destroy_surface(surface.metal);
+        }
+        #[cfg(windows)]
+        {
+            if let Some(_suf) = surface.dx12 {
+                //self.dx12.as_mut().unwrap().destroy_surface(suf);
+            }
+            //self.dx11.destroy_surface(surface.dx11);
+        }
+    }
 }
 
 type GfxSurface<B> = <B as hal::Backend>::Surface;

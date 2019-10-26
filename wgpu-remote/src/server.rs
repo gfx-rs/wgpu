@@ -13,8 +13,8 @@ pub extern "C" fn wgpu_server_new() -> *mut wgn::Global {
 #[no_mangle]
 pub extern "C" fn wgpu_server_delete(global: *mut wgn::Global) {
     log::info!("Terminating WGPU server");
-    //TODO: proper cleanup
-    let _ = unsafe { Box::from_raw(global) };
+    unsafe { Box::from_raw(global) }.delete();
+    log::info!("\t...done");
 }
 
 #[no_mangle]
@@ -37,4 +37,10 @@ pub extern "C" fn wgpu_server_adapter_request_device(
 ) {
     use wgn::adapter_request_device as func;
     wgn::gfx_select!(self_id => func(global, self_id, desc, new_id));
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_device_destroy(global: &wgn::Global, self_id: wgn::DeviceId) {
+    use wgn::device_destroy as func;
+    wgn::gfx_select!(self_id => func(global, self_id))
 }

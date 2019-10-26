@@ -60,16 +60,6 @@ pub struct CommandAllocator<B: hal::Backend> {
 }
 
 impl<B: GfxBackend> CommandAllocator<B> {
-    pub fn new(queue_family: hal::queue::QueueFamilyId) -> Self {
-        CommandAllocator {
-            queue_family,
-            inner: Mutex::new(Inner {
-                pools: HashMap::new(),
-                pending: Vec::new(),
-            }),
-        }
-    }
-
     pub(crate) fn allocate(
         &self,
         device_id: Stored<DeviceId>,
@@ -101,6 +91,18 @@ impl<B: GfxBackend> CommandAllocator<B> {
             trackers: TrackerSet::new(B::VARIANT),
             used_swap_chain: None,
             features,
+        }
+    }
+}
+
+impl<B: hal::Backend> CommandAllocator<B> {
+    pub fn new(queue_family: hal::queue::QueueFamilyId) -> Self {
+        CommandAllocator {
+            queue_family,
+            inner: Mutex::new(Inner {
+                pools: HashMap::new(),
+                pending: Vec::new(),
+            }),
         }
     }
 

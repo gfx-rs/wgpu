@@ -14,7 +14,7 @@ include_version = true
 braces = "SameLine"
 line_length = 100
 tab_width = 2
-language = "C++"
+language = "C"
 
 [export]
 prefix = "WGPU"

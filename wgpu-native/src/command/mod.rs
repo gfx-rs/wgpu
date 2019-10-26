@@ -112,7 +112,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
     is_recording: bool,
     recorded_thread_id: ThreadId,
-    device_id: Stored<DeviceId>,
+    pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chain: Option<(Stored<TextureViewId>, B::Framebuffer)>,

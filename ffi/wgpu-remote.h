@@ -14,62 +14,67 @@
 typedef void WGPUEmpty;
 
 
-#include <cstdarg>
-#include <cstdint>
-#include <cstdlib>
-#include <new>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
 
-enum class WGPUPowerPreference {
+typedef enum {
   WGPUPowerPreference_Default = 0,
   WGPUPowerPreference_LowPower = 1,
   WGPUPowerPreference_HighPerformance = 2,
-};
+} WGPUPowerPreference;
 
-template<typename B>
-struct WGPUAdapter;
+typedef struct WGPUClient WGPUClient;
 
-struct WGPUClient;
+typedef struct WGPUGlobal WGPUGlobal;
 
-template<typename B>
-struct WGPUDevice;
+typedef uint64_t WGPUId_Adapter_Dummy;
 
-struct WGPUGlobal;
+typedef WGPUId_Adapter_Dummy WGPUAdapterId;
 
-using WGPUDummy = WGPUEmpty;
+typedef uint64_t WGPUId_Device_Dummy;
 
-template<typename T>
-using WGPUId = uint64_t;
+typedef WGPUId_Device_Dummy WGPUDeviceId;
 
-using WGPUAdapterId = WGPUId<WGPUAdapter<WGPUDummy>>;
-
-using WGPUDeviceId = WGPUId<WGPUDevice<WGPUDummy>>;
-
-struct WGPUInfrastructure {
+typedef struct {
   WGPUClient *client;
   const uint8_t *error;
+} WGPUInfrastructure;
 
-  bool operator==(const WGPUInfrastructure& aOther) const {
-    return client == aOther.client &&
-           error == aOther.error;
-  }
-};
+typedef struct {
+  bool anisotropic_filtering;
+} WGPUExtensions;
 
-using WGPUBackendBit = uint32_t;
+typedef struct {
+  uint32_t max_bind_groups;
+} WGPULimits;
 
-struct WGPURequestAdapterOptions {
+typedef struct {
+  WGPUExtensions extensions;
+  WGPULimits limits;
+} WGPUDeviceDescriptor;
+
+typedef uint32_t WGPUBackendBit;
+
+typedef struct {
   WGPUPowerPreference power_preference;
   WGPUBackendBit backends;
-
-  bool operator==(const WGPURequestAdapterOptions& aOther) const {
-    return power_preference == aOther.power_preference &&
-           backends == aOther.backends;
-  }
-};
-
-extern "C" {
+} WGPURequestAdapterOptions;
 
 WGPU_INLINE
 void wgpu_client_delete(WGPUClient *aClient)
+WGPU_FUNC;
+
+WGPU_INLINE
+void wgpu_client_kill_adapter_ids(const WGPUClient *aClient,
+                                  const WGPUAdapterId *aIds,
+                                  uintptr_t aIdLength)
+WGPU_FUNC;
+
+WGPU_INLINE
+void wgpu_client_kill_device_id(const WGPUClient *aClient,
+                                WGPUDeviceId aId)
 WGPU_FUNC;
 
 WGPU_INLINE
@@ -84,7 +89,14 @@ WGPUDeviceId wgpu_client_make_device_id(const WGPUClient *aClient,
 WGPU_FUNC;
 
 WGPU_INLINE
-WGPUInfrastructure wgpu_client_new()
+WGPUInfrastructure wgpu_client_new(void)
+WGPU_FUNC;
+
+WGPU_INLINE
+void wgpu_server_adapter_request_device(const WGPUGlobal *aGlobal,
+                                        WGPUAdapterId aSelfId,
+                                        const WGPUDeviceDescriptor *aDesc,
+                                        WGPUDeviceId aNewId)
 WGPU_FUNC;
 
 WGPU_INLINE
@@ -92,14 +104,17 @@ void wgpu_server_delete(WGPUGlobal *aGlobal)
 WGPU_FUNC;
 
 WGPU_INLINE
-WGPUGlobal *wgpu_server_new()
+void wgpu_server_device_destroy(const WGPUGlobal *aGlobal,
+                                WGPUDeviceId aSelfId)
 WGPU_FUNC;
 
 WGPU_INLINE
-WGPUAdapterId wgpu_server_request_adapter(const WGPUGlobal *aGlobal,
-                                          const WGPURequestAdapterOptions *aDesc,
-                                          const WGPUAdapterId *aIds,
-                                          uintptr_t aIdLength)
+WGPUAdapterId wgpu_server_instance_request_adapter(const WGPUGlobal *aGlobal,
+                                                   const WGPURequestAdapterOptions *aDesc,
+                                                   const WGPUAdapterId *aIds,
+                                                   uintptr_t aIdLength)
 WGPU_FUNC;
 
-} // extern "C"
+WGPU_INLINE
+WGPUGlobal *wgpu_server_new(void)
+WGPU_FUNC;

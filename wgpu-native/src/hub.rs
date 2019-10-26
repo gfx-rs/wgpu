@@ -389,6 +389,67 @@ impl<B: GfxBackend> Default for Hub<B> {
     }
 }
 
+impl<B: hal::Backend> Drop for Hub<B> {
+    fn drop(&mut self) {
+        use crate::resource::TextureViewInner;
+        use hal::device::Device as _;
+
+        let mut devices = self.devices.data.write();
+
+        for (_, (sampler, _)) in self.samplers.data.write().map.drain() {
+            unsafe {
+                devices[sampler.device_id.value].raw.destroy_sampler(sampler.raw);
+            }
+        }
+        {
+            let textures = self.textures.data.read();
+            for (_, (texture_view, _)) in self.texture_views.data.write().map.drain() {
+                match texture_view.inner {
+                    TextureViewInner::Native { raw, source_id } => {
+                        let device = &devices[textures[source_id.value].device_id.value];
+                        unsafe {
+                            device.raw.destroy_image_view(raw);
+                        }
+                    }
+                    TextureViewInner::SwapChain { .. } => {} //TODO
+                }
+            }
+        }
+        for (_, (texture, _)) in self.textures.data.write().map.drain() {
+            unsafe {
+                devices[texture.device_id.value].raw.destroy_image(texture.raw);
+            }
+        }
+        for (_, (buffer, _)) in self.buffers.data.write().map.drain() {
+            unsafe {
+                devices[buffer.device_id.value].raw.destroy_buffer(buffer.raw);
+            }
+        }
+        for (_, (command_buffer, _)) in self.command_buffers.data.write().map.drain() {
+            devices[command_buffer.device_id.value].com_allocator.after_submit(command_buffer, 0);
+        }
+        for (_, (bind_group, _)) in self.bind_groups.data.write().map.drain() {
+            let device = &devices[bind_group.device_id.value];
+            device.destroy_bind_group(bind_group);
+        }
+
+        //TODO:
+        // self.compute_pipelines
+        // self.compute_passes
+        // self.render_pipelines
+        // self.render_passes
+        // self.bind_group_layouts
+        // self.pipeline_layouts
+        // self.shader_modules
+        // self.swap_chains
+        // self.adapters
+
+        for (_, (device, _)) in devices.map.drain() {
+            device.destroy_self();
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct Hubs {
     #[cfg(any(
@@ -423,6 +484,16 @@ impl Global {
     #[cfg(not(feature = "local"))]
     pub fn new(name: &str) -> Self {
         Self::new_impl(name)
+    }
+
+    #[cfg(not(feature = "local"))]
+    pub fn delete(self) {
+        let Global { mut instance, surfaces, hubs } = self;
+        drop(hubs);
+        // destroy surfaces
+        for (_, (surface, _)) in surfaces.data.write().map.drain() {
+            instance.destroy_surface(surface);
+        }
     }
 }
 
