@@ -48,9 +48,9 @@ use crate::{gfx_select, hub::GLOBAL};
 
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
+use gfx_auxil::FastHashMap;
 use hal::{
     self,
-    backend::FastHashMap,
     command::CommandBuffer as _,
     device::Device as _,
     queue::CommandQueue as _,
@@ -1090,7 +1090,7 @@ pub fn device_create_sampler<B: GfxBackend>(
     let (device_guard, mut token) = hub.devices.read(&mut token);
     let device = &device_guard[device_id];
 
-    let info = hal::image::SamplerInfo {
+    let info = hal::image::SamplerDesc {
         min_filter: conv::map_filter(desc.min_filter),
         mag_filter: conv::map_filter(desc.mag_filter),
         mip_filter: conv::map_filter(desc.mipmap_filter),
@@ -1099,8 +1099,8 @@ pub fn device_create_sampler<B: GfxBackend>(
             conv::map_wrap(desc.address_mode_v),
             conv::map_wrap(desc.address_mode_w),
         ),
-        lod_bias: 0.0.into(),
-        lod_range: desc.lod_min_clamp.into() .. desc.lod_max_clamp.into(),
+        lod_bias: hal::image::Lod(0.0),
+        lod_range: hal::image::Lod(desc.lod_min_clamp) .. hal::image::Lod(desc.lod_max_clamp),
         comparison: if desc.compare_function == resource::CompareFunction::Always {
             None
         } else {
@@ -1112,7 +1112,7 @@ pub fn device_create_sampler<B: GfxBackend>(
     };
 
     let sampler = resource::Sampler {
-        raw: unsafe { device.raw.create_sampler(info).unwrap() },
+        raw: unsafe { device.raw.create_sampler(&info).unwrap() },
         device_id: Stored {
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
@@ -1774,7 +1774,8 @@ pub fn device_create_render_pipeline<B: GfxBackend>(
 
     let input_assembler = hal::pso::InputAssemblerDesc {
         primitive: conv::map_primitive_topology(desc.primitive_topology),
-        primitive_restart: hal::pso::PrimitiveRestart::Disabled, // TODO
+        with_adjacency: false,
+        restart_index: None, //TODO
     };
 
     let blender = hal::pso::BlendDesc {
@@ -2055,11 +2056,13 @@ pub fn device_create_swap_chain<B: GfxBackend>(
     let device = &device_guard[device_id];
     let surface = &mut surface_guard[surface_id];
 
-    let (caps, formats, _present_modes) = {
+    let (caps, formats) = {
         let suf = B::get_surface_mut(surface);
         let adapter = &adapter_guard[device.adapter_id];
         assert!(suf.supports_queue_family(&adapter.raw.queue_families[0]));
-        suf.compatibility(&adapter.raw.physical_device)
+        let formats = suf.supported_formats(&adapter.raw.physical_device);
+        let caps = suf.capabilities(&adapter.raw.physical_device);
+        (caps, formats)
     };
     let num_frames = swap_chain::DESIRED_NUM_FRAMES
         .max(*caps.image_count.start())

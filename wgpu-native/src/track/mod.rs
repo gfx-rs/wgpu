@@ -18,7 +18,7 @@ use crate::{
     TypedId,
 };
 
-use hal::backend::FastHashMap;
+use gfx_auxil::FastHashMap;
 
 use std::{
     borrow::Borrow,

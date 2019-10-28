@@ -138,9 +138,9 @@ pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
     }
 }
 
-pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::Primitive {
+pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::pso::Primitive {
     use crate::pipeline::PrimitiveTopology as Pt;
-    use hal::Primitive as H;
+    use hal::pso::Primitive as H;
     match primitive_topology {
         Pt::PointList => H::PointList,
         Pt::LineList => H::LineList,
@@ -512,7 +512,7 @@ pub fn map_buffer_state(usage: resource::BufferUsage) -> hal::buffer::State {
         access |= A::VERTEX_BUFFER_READ;
     }
     if usage.contains(W::UNIFORM) {
-        access |= A::CONSTANT_BUFFER_READ | A::SHADER_READ;
+        access |= A::UNIFORM_READ | A::SHADER_READ;
     }
     if usage.contains(W::STORAGE) {
         access |= A::SHADER_WRITE;
