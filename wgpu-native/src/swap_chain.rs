@@ -97,10 +97,10 @@ impl SwapChainDescriptor {
         );
         //TODO: check for supported
         config.image_usage = conv::map_texture_usage(self.usage, hal::format::Aspects::COLOR);
-        config.composite_alpha = hal::window::CompositeAlpha::OPAQUE;
+        config.composite_alpha_mode = hal::window::CompositeAlphaMode::OPAQUE;
         config.present_mode = match self.present_mode {
-            PresentMode::NoVsync => hal::window::PresentMode::Immediate,
-            PresentMode::Vsync => hal::window::PresentMode::Fifo,
+            PresentMode::NoVsync => hal::window::PresentMode::IMMEDIATE,
+            PresentMode::Vsync => hal::window::PresentMode::FIFO,
         };
         config
     }
