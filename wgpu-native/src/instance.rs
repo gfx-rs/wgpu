@@ -368,7 +368,8 @@ pub fn request_adapter(
     };
 
     if device_types.is_empty() {
-        panic!("No adapters are available!");
+        log::warn!("No adapters are available!");
+        return None;
     }
 
     let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
@@ -463,7 +464,7 @@ pub fn request_adapter(
         selected -= adapters_dx11.len();
     }
     let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
-    None
+    unreachable!()
 }
 
 #[cfg(feature = "local")]
