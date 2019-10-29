@@ -73,6 +73,7 @@ impl Instance {
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
+            let _ = surface;
             //self.metal.destroy_surface(surface.metal);
         }
         #[cfg(windows)]
