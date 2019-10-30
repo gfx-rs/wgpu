@@ -108,11 +108,17 @@ void wgpu_server_device_destroy(const WGPUGlobal *aGlobal,
                                 WGPUDeviceId aSelfId)
 WGPU_FUNC;
 
+/**
+ * Request an adapter according to the specified options.
+ * Provide the list of IDs to pick from.
+ *
+ * Returns the index in this list, or -1 if unable to pick.
+ */
 WGPU_INLINE
-WGPUAdapterId wgpu_server_instance_request_adapter(const WGPUGlobal *aGlobal,
-                                                   const WGPURequestAdapterOptions *aDesc,
-                                                   const WGPUAdapterId *aIds,
-                                                   uintptr_t aIdLength)
+int8_t wgpu_server_instance_request_adapter(const WGPUGlobal *aGlobal,
+                                            const WGPURequestAdapterOptions *aDesc,
+                                            const WGPUAdapterId *aIds,
+                                            uintptr_t aIdLength)
 WGPU_FUNC;
 
 WGPU_INLINE

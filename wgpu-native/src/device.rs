@@ -775,10 +775,11 @@ impl<B: hal::Backend> Device<B> {
         }
     }
 
-    pub(crate) fn destroy_self(self) {
+    pub(crate) fn dispose(self) {
         self.com_allocator.destroy(&self.raw);
+        let desc_alloc = self.desc_allocator.into_inner();
         unsafe {
-            self.desc_allocator.lock().cleanup(&self.raw);
+            desc_alloc.dispose(&self.raw);
         }
     }
 }

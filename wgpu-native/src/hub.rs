@@ -445,7 +445,7 @@ impl<B: hal::Backend> Drop for Hub<B> {
         // self.adapters
 
         for (_, (device, _)) in devices.map.drain() {
-            device.destroy_self();
+            device.dispose();
         }
     }
 }

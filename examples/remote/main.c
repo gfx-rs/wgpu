@@ -6,23 +6,49 @@
 
 int main() {
     WGPUInfrastructure infra = wgpu_client_new();
+    WGPUClient *client = infra.client;
 
-    if (!infra.client || infra.error) {
-        printf("Cannot initialize WGPU client: %s", infra.error);
+    if (!client || infra.error) {
+        printf("Cannot initialize WGPU client: %s\n", infra.error);
         return 1;
     }
 
     WGPUGlobal* server = wgpu_server_new();
 
     if (!server) {
-        printf("Cannot initialize WGPU client: %s", server);
+        printf("Cannot initialize WGPU client: %s\n", server);
         return 1;
+    }
+
+    WGPUAdapterId adapterId = 0;
+    {
+        WGPUAdapterId ids[10];
+        int count = wgpu_client_make_adapter_ids(client, ids, 10);
+
+        WGPURequestAdapterOptions options = {
+            .power_preference = WGPUPowerPreference_LowPower,
+            .backends = 2 | 4 | 8,
+        };
+        char index = wgpu_server_instance_request_adapter(server, &options, ids, count);
+        if (index < 0) {
+            printf("No available GPU adapters!\n");
+            return 2;
+        }
+
+        wgpu_client_kill_adapter_ids(client, ids, index);
+        wgpu_client_kill_adapter_ids(client, ids+index+1, count-index-1);
+        adapterId = ids[index];
     }
 
     //TODO: do something meaningful
 
+    if (adapterId) {
+        //wgpu_server_destroy_adapter()
+        wgpu_client_kill_adapter_ids(client, &adapterId, 1);
+    }
     wgpu_server_delete(server);
-    wgpu_client_delete(infra.client);
+    wgpu_client_delete(client);
 
+    printf("Done\n");
     return 0;
 }

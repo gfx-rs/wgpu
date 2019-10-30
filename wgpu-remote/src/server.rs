@@ -17,15 +17,22 @@ pub extern "C" fn wgpu_server_delete(global: *mut wgn::Global) {
     log::info!("\t...done");
 }
 
+/// Request an adapter according to the specified options.
+/// Provide the list of IDs to pick from.
+///
+/// Returns the index in this list, or -1 if unable to pick.
 #[no_mangle]
 pub extern "C" fn wgpu_server_instance_request_adapter(
     global: &wgn::Global,
     desc: &wgn::RequestAdapterOptions,
     ids: *const wgn::AdapterId,
     id_length: usize,
-) -> wgn::AdapterId {
+) -> i8 {
     let ids = unsafe { slice::from_raw_parts(ids, id_length) };
-    wgn::request_adapter(global, desc, ids).unwrap()
+    match wgn::request_adapter(global, desc, ids) {
+        Some(id) => ids.iter().position(|&i| i == id).unwrap() as i8,
+        None => -1,
+    }
 }
 
 #[no_mangle]
