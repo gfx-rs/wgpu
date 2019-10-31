@@ -541,8 +541,9 @@ impl Adapter {
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub fn request(options: &wgn::RequestAdapterOptions) -> Option<Self> {
-        wgn::request_adapter(options, &[])
-            .map(|id| Adapter { id })
+        Some(Adapter {
+            id: wgn::wgpu_request_adapter(Some(options)),
+        })
     }
 
     /// Requests a connection to a physical device, creating a logical device.

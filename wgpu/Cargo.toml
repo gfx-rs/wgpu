@@ -22,8 +22,13 @@ default = []
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
 vulkan = ["wgn/gfx-backend-vulkan"]
 
+[dependencies.wgn]
+package = "wgpu-native"
+git = "https://github.com/gfx-rs/wgpu"
+rev = "b8d26c9186a59cf71cd8fab4e550c0746d1a2f80"
+features = ["local"]
+
 [dependencies]
-wgn = { package = "wgpu-native", git = "https://github.com/gfx-rs/wgpu", rev = "78fbbba5e928e4a6f15a03a1c04d06916a947673" }
 arrayvec = "0.5"
 raw-window-handle = "0.3"
 zerocopy = "0.2"
