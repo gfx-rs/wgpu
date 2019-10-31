@@ -2,7 +2,7 @@ use com::WeakPtr;
 use std::ptr;
 use winapi::shared::windef::HWND;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype};
-use winapi::um::d3d12;
+use winapi::um::{dxgidebug, d3d12};
 use winapi::Interface;
 use {CommandQueue, D3DResult, Resource, SampleDesc, HRESULT};
 
@@ -42,9 +42,66 @@ pub enum AlphaMode {
 pub type Adapter1 = WeakPtr<dxgi::IDXGIAdapter1>;
 pub type Factory2 = WeakPtr<dxgi1_2::IDXGIFactory2>;
 pub type Factory4 = WeakPtr<dxgi1_4::IDXGIFactory4>;
+pub type InfoQueue = WeakPtr<dxgidebug::IDXGIInfoQueue>;
 pub type SwapChain = WeakPtr<dxgi::IDXGISwapChain>;
 pub type SwapChain1 = WeakPtr<dxgi1_2::IDXGISwapChain1>;
 pub type SwapChain3 = WeakPtr<dxgi1_4::IDXGISwapChain3>;
+
+#[cfg(feature = "libloading")]
+pub struct DxgiLib {
+    lib: libloading::Library,
+}
+
+#[cfg(feature = "libloading")]
+impl DxgiLib {
+    pub fn new() -> libloading::Result<Self> {
+        libloading::Library::new("dxgi.dll")
+            .map(|lib| DxgiLib {
+                lib,
+            })
+    }
+
+    pub fn create_factory2(
+        &self, flags: FactoryCreationFlags
+    ) -> libloading::Result<D3DResult<Factory4>> {
+        type Fun = extern "system" fn(
+            winapi::shared::minwindef::UINT,
+            winapi::shared::guiddef::REFIID,
+            *mut *mut winapi::ctypes::c_void,
+        ) -> HRESULT;
+
+        let mut factory = Factory4::null();
+        let hr = unsafe {
+            let func: libloading::Symbol<Fun> = self.lib.get(b"CreateDXGIFactory2")?;
+            func(
+                flags.bits(),
+                &dxgi1_4::IDXGIFactory4::uuidof(),
+                factory.mut_void(),
+            )
+        };
+
+        Ok((factory, hr))
+    }
+
+    pub fn get_debug_interface1(&self) -> libloading::Result<D3DResult<InfoQueue>> {
+        type Fun = extern "system" fn(
+            winapi::shared::minwindef::UINT,
+            winapi::shared::guiddef::REFIID,
+            *mut *mut winapi::ctypes::c_void,
+        ) -> HRESULT;
+
+        let mut queue = InfoQueue::null();
+        let hr = unsafe {
+            let func: libloading::Symbol<Fun> = self.lib.get(b"DXGIGetDebugInterface1")?;
+            func(
+                0,
+                &dxgidebug::IDXGIInfoQueue::uuidof(),
+                queue.mut_void(),
+            )
+        };
+        Ok((queue, hr))
+    }
+}
 
 // TODO: strong types
 pub struct SwapchainDesc {
@@ -103,6 +160,7 @@ impl Factory2 {
 }
 
 impl Factory4 {
+    #[cfg(feature = "libstatic")]
     pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
         let mut factory = Factory4::null();
         let hr = unsafe {
