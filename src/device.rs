@@ -9,17 +9,47 @@ use winapi::um::d3d12;
 use winapi::Interface;
 use {pso, query, queue};
 use {
-    Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap, FeatureLevel,
+    Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap,
     Fence, GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature,
     Shader, TextureAddressMode,
 };
 
 pub type Device = WeakPtr<d3d12::ID3D12Device>;
 
+#[cfg(feature = "libloading")]
+impl crate::D3D12Lib {
+    pub fn create_device<I: Interface>(
+        &self,
+        adapter: WeakPtr<I>,
+        feature_level: crate::FeatureLevel,
+    ) -> libloading::Result<D3DResult<Device>> {
+        type Fun = extern "system" fn(
+            *mut winapi::um::unknwnbase::IUnknown,
+            winapi::um::d3dcommon::D3D_FEATURE_LEVEL,
+            winapi::shared::guiddef::REFGUID,
+            *mut *mut  winapi::ctypes::c_void,
+        ) -> crate::HRESULT;
+
+        let mut device = Device::null();
+        let hr = unsafe {
+            let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12CreateDevice")?;
+            func(
+                adapter.as_unknown() as *const _ as *mut _,
+                feature_level as _,
+                &d3d12::ID3D12Device::uuidof(),
+                device.mut_void(),
+            )
+        };
+
+        Ok((device, hr))
+    }
+}
+
 impl Device {
+    #[cfg(feature = "libstatic")]
     pub fn create<I: Interface>(
         adapter: WeakPtr<I>,
-        feature_level: FeatureLevel,
+        feature_level: crate::FeatureLevel,
     ) -> D3DResult<Self> {
         let mut device = Device::null();
         let hr = unsafe {

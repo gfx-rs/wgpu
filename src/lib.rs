@@ -83,3 +83,8 @@ impl Error {
         CStr::from_ptr(data as *const _ as *const _)
     }
 }
+
+#[cfg(feature = "libloading")]
+pub struct D3D12Lib {
+    lib: libloading::Library,
+}

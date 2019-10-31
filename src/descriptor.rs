@@ -156,7 +156,6 @@ impl StaticSampler {
     pub fn new(
         visibility: ShaderVisibility,
         binding: Binding,
-
         filter: d3d12::D3D12_FILTER,
         address_mode: TextureAddressMode,
         mip_lod_bias: f32,
@@ -202,14 +201,57 @@ bitflags! {
 }
 
 pub type RootSignature = WeakPtr<d3d12::ID3D12RootSignature>;
+pub type BlobResult = D3DResult<(Blob, Error)>;
+
+#[cfg(feature = "libloading")]
+impl crate::D3D12Lib {
+    pub fn serialize_root_signature(
+        &self,
+        version: RootSignatureVersion,
+        parameters: &[RootParameter],
+        static_samplers: &[StaticSampler],
+        flags: RootSignatureFlags,
+    ) -> libloading::Result<BlobResult> {
+        use winapi::um::d3dcommon::ID3DBlob;
+        type Fun = extern "system" fn(
+            *const d3d12::D3D12_ROOT_SIGNATURE_DESC,
+            d3d12::D3D_ROOT_SIGNATURE_VERSION,
+            *mut *mut ID3DBlob,
+            *mut *mut ID3DBlob,
+        ) -> crate::HRESULT;
+
+        let desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
+            NumParameters: parameters.len() as _,
+            pParameters: parameters.as_ptr() as *const _,
+            NumStaticSamplers: static_samplers.len() as _,
+            pStaticSamplers: static_samplers.as_ptr() as _,
+            Flags: flags.bits(),
+        };
+
+        let mut blob = Blob::null();
+        let mut error = Error::null();
+        let hr = unsafe {
+            let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12SerializeRootSignature")?;
+            func(
+                &desc,
+                version as _,
+                blob.mut_void() as *mut *mut _,
+                error.mut_void() as *mut *mut _,
+            )
+        };
+
+        Ok(((blob, error), hr))
+    }
+}
 
 impl RootSignature {
+    #[cfg(feature = "libstatic")]
     pub fn serialize(
         version: RootSignatureVersion,
         parameters: &[RootParameter],
         static_samplers: &[StaticSampler],
         flags: RootSignatureFlags,
-    ) -> D3DResult<(Blob, Error)> {
+    ) -> BlobResult {
         let mut blob = Blob::null();
         let mut error = Error::null();
 

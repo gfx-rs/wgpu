@@ -9,9 +9,13 @@ license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/d3d12"
 categories = ["memory-management"]
 
+[features]
+libstatic = []
+
 [dependencies]
 bitflags = "1"
+libloading = { version = "0.5", optional = true }
 
 [dependencies.winapi]
 version = "0.3"
-features = ["dxgi1_2","dxgi1_3","dxgi1_4","d3d12","d3d12sdklayers","d3dcommon","d3dcompiler","dxgiformat","synchapi","winerror"]
+features = ["dxgi1_2","dxgi1_3","dxgi1_4","dxgidebug","d3d12","d3d12sdklayers","d3dcommon","d3dcompiler","dxgiformat","synchapi","winerror"]

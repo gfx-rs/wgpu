@@ -24,3 +24,6 @@ install:
 build: false
 test_script:
   - cargo check
+  - cargo check --features libloading
+  - cargo check --features libstatic
+  - cargo check --all-features
