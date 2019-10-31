@@ -1571,22 +1571,20 @@ pub fn queue_submit<B: GfxBackend>(
             let comb = &mut command_buffer_guard[cmb_id];
 
             if let Some((view_id, fbo)) = comb.used_swap_chain.take() {
-                let sem = match texture_view_guard[view_id.value].inner {
+                match texture_view_guard[view_id.value].inner {
                     resource::TextureViewInner::Native { .. } => unreachable!(),
                     resource::TextureViewInner::SwapChain {
                         ref source_id,
-                        ref mut framebuffer,
+                        ref mut framebuffers,
                         ..
                     } => {
-                        assert!(
-                            framebuffer.is_none(),
-                            "Using a swap chain in multiple framebuffers is not supported yet"
-                        );
-                        *framebuffer = Some(fbo);
-                        &swap_chain_guard[source_id.value].semaphore
+                        if framebuffers.is_empty() {
+                            let sem = &swap_chain_guard[source_id.value].semaphore;
+                            signal_semaphores.push(sem);
+                        }
+                        framebuffers.push(fbo);
                     }
                 };
-                signal_semaphores.push(sem);
             }
 
             // optimize the tracked states
