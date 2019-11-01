@@ -46,7 +46,7 @@ impl crate::D3D12Lib {
 }
 
 impl Device {
-    #[cfg(feature = "libstatic")]
+    #[cfg(feature = "implicit-link")]
     pub fn create<I: Interface>(
         adapter: WeakPtr<I>,
         feature_level: crate::FeatureLevel,

@@ -1,5 +1,5 @@
 use com::WeakPtr;
-#[cfg(any(feature = "libloading", feature = "libstatic"))]
+#[cfg(any(feature = "libloading", feature = "implicit-link"))]
 use winapi::Interface as _;
 use winapi::um::d3d12sdklayers;
 
@@ -27,7 +27,7 @@ impl crate::D3D12Lib {
 }
 
 impl Debug {
-    #[cfg(feature = "libstatic")]
+    #[cfg(feature = "implicit-link")]
     pub fn get_interface() -> crate::D3DResult<Self> {
         let mut debug = Debug::null();
         let hr = unsafe {

@@ -245,7 +245,7 @@ impl crate::D3D12Lib {
 }
 
 impl RootSignature {
-    #[cfg(feature = "libstatic")]
+    #[cfg(feature = "implicit-link")]
     pub fn serialize(
         version: RootSignatureVersion,
         parameters: &[RootParameter],

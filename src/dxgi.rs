@@ -48,6 +48,7 @@ pub type SwapChain1 = WeakPtr<dxgi1_2::IDXGISwapChain1>;
 pub type SwapChain3 = WeakPtr<dxgi1_4::IDXGISwapChain3>;
 
 #[cfg(feature = "libloading")]
+#[derive(Debug)]
 pub struct DxgiLib {
     lib: libloading::Library,
 }
@@ -160,7 +161,7 @@ impl Factory2 {
 }
 
 impl Factory4 {
-    #[cfg(feature = "libstatic")]
+    #[cfg(feature = "implicit-link")]
     pub fn create(flags: FactoryCreationFlags) -> D3DResult<Self> {
         let mut factory = Factory4::null();
         let hr = unsafe {
