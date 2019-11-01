@@ -13,8 +13,6 @@ pub struct DiscardRegion<'a> {
     pub subregions: Range<Subresource>,
 }
 
-pub type Heap = WeakPtr<d3d12::ID3D12Heap>;
-
 pub type Resource = WeakPtr<d3d12::ID3D12Resource>;
 
 impl Resource {

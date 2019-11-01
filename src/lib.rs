@@ -85,6 +85,17 @@ impl Error {
 }
 
 #[cfg(feature = "libloading")]
+#[derive(Debug)]
 pub struct D3D12Lib {
     lib: libloading::Library,
+}
+
+#[cfg(feature = "libloading")]
+impl D3D12Lib {
+    pub fn new() -> libloading::Result<Self> {
+        libloading::Library::new("d3d12.dll")
+            .map(|lib| D3D12Lib {
+                lib,
+            })
+    }
 }
