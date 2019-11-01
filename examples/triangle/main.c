@@ -211,6 +211,10 @@ int main() {
 
         WGPUSwapChainOutput next_texture =
             wgpu_swap_chain_get_next_texture(swap_chain);
+        if (!next_texture.view_id) {
+            printf("Cannot acquire next swap chain texture");
+            return 1;
+        }
 
         WGPUCommandEncoderId cmd_encoder = wgpu_device_create_command_encoder(
             device, &(WGPUCommandEncoderDescriptor){.todo = 0});

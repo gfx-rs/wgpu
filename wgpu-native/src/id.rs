@@ -16,6 +16,8 @@ type Dummy = crate::backend::Empty;
 pub struct Id<T>(u64, PhantomData<T>);
 
 impl<T> Id<T> {
+    pub const ERROR: Self = Self(0, PhantomData);
+
     pub fn backend(&self) -> Backend {
         match self.0 >> (64 - BACKEND_BITS) as u8 {
             0 => Backend::Empty,

@@ -128,11 +128,16 @@ pub struct SwapChainOutput {
     pub view_id: TextureViewId,
 }
 
+#[derive(Debug)]
+pub enum SwapChainGetNextTextureError {
+    GpuProcessingTimeout,
+}
+
 pub fn swap_chain_get_next_texture<B: GfxBackend>(
     global: &Global,
     swap_chain_id: SwapChainId,
     view_id_in: Input<TextureViewId>,
-) -> SwapChainOutput {
+) -> Result<SwapChainOutput, SwapChainGetNextTextureError> {
     let hub = B::hub(global);
     let mut token = Token::root();
 
@@ -148,7 +153,7 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
         match unsafe { suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000) } {
             Ok(surface_image) => surface_image,
             Err(hal::window::AcquireError::Timeout) => {
-                panic!("GPU took too much time processing last frames :(");
+                return Err(SwapChainGetNextTextureError::GpuProcessingTimeout);
             }
             Err(e) => {
                 log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
@@ -197,13 +202,15 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
         ref_count,
     });
 
-    SwapChainOutput { view_id }
+    Ok(SwapChainOutput { view_id })
 }
 
 #[cfg(feature = "local")]
 #[no_mangle]
 pub extern "C" fn wgpu_swap_chain_get_next_texture(swap_chain_id: SwapChainId) -> SwapChainOutput {
-    gfx_select!(swap_chain_id => swap_chain_get_next_texture(&*GLOBAL, swap_chain_id, PhantomData))
+    gfx_select!(swap_chain_id => swap_chain_get_next_texture(&*GLOBAL, swap_chain_id, PhantomData)).unwrap_or(SwapChainOutput {
+        view_id: TextureViewId::ERROR,
+    })
 }
 
 pub fn swap_chain_present<B: GfxBackend>(global: &Global, swap_chain_id: SwapChainId) {
