@@ -509,7 +509,7 @@ pub fn adapter_request_device<B: GfxBackend>(
             BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
             "Adapter uniform buffer offset alignment not compatible with WGPU"
         );
-        if desc.limits.max_bind_groups == 0 {
+        if limits.max_bound_descriptor_sets == 0 {
             log::warn!("max_bind_groups limit is missing");
         } else {
             assert!(
