@@ -11,14 +11,13 @@ use crate::{
     Backend,
     BindGroupId,
     Epoch,
+    FastHashMap,
     Index,
     RefCount,
     SamplerId,
     TextureViewId,
     TypedId,
 };
-
-use gfx_auxil::FastHashMap;
 
 use std::{
     borrow::Borrow,

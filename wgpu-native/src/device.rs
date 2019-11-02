@@ -25,6 +25,7 @@ use crate::{
     CommandEncoderId,
     ComputePipelineId,
     DeviceId,
+    FastHashMap,
     Features,
     LifeGuard,
     PipelineLayoutId,
@@ -48,7 +49,6 @@ use crate::{gfx_select, hub::GLOBAL};
 
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
-use gfx_auxil::FastHashMap;
 use hal::{
     self,
     command::CommandBuffer as _,
