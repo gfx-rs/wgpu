@@ -229,3 +229,6 @@ pub(crate) struct Features {
     pub max_bind_groups: u32,
     pub supports_texture_d24_s8: bool,
 }
+
+/// Fast hash map used internally.
+type FastHashMap<K, V> = std::collections::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;

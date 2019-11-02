@@ -681,7 +681,7 @@ dependencies = [
  "arrayvec 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "bitflags 1.0.4 (registry+https://github.com/rust-lang/crates.io-index)",
  "copyless 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx-auxil 0.1.0 (git+https://github.com/gfx-rs/gfx?rev=46386475f7e823e807ec984c372ffe04dcc0a22b)",
+ "fxhash 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx-backend-dx11 0.4.0 (git+https://github.com/gfx-rs/gfx?rev=46386475f7e823e807ec984c372ffe04dcc0a22b)",
  "gfx-backend-dx12 0.4.0 (git+https://github.com/gfx-rs/gfx?rev=46386475f7e823e807ec984c372ffe04dcc0a22b)",
  "gfx-backend-empty 0.4.0 (git+https://github.com/gfx-rs/gfx?rev=46386475f7e823e807ec984c372ffe04dcc0a22b)",
