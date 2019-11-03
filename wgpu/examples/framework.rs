@@ -35,16 +35,27 @@ pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u32> {
 }
 
 pub trait Example: 'static + Sized {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>);
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer>;
+    fn init(
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> (Self, Option<wgpu::CommandBuffer>);
+    fn resize(
+        &mut self,
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> Option<wgpu::CommandBuffer>;
     fn update(&mut self, event: WindowEvent);
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer;
+    fn render(
+        &mut self,
+        frame: &wgpu::SwapChainOutput,
+        device: &wgpu::Device,
+    ) -> wgpu::CommandBuffer;
 }
 
 pub fn run<E: Example>(title: &str) {
     use winit::{
-        event_loop::{ControlFlow, EventLoop},
         event,
+        event_loop::{ControlFlow, EventLoop},
     };
 
     env_logger::init();
@@ -86,7 +97,8 @@ pub fn run<E: Example>(title: &str) {
     let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
         power_preference: wgpu::PowerPreference::Default,
         backends: wgpu::BackendBit::PRIMARY,
-    }).unwrap();
+    })
+    .unwrap();
 
     let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
