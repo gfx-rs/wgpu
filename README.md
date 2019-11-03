@@ -7,7 +7,7 @@ This is an idiomatic Rust wrapper over [wgpu-native](https://github.com/gfx-rs/w
 
 ## Gallery
 
-![Cube](etc/example-cube.png) ![Shadow](etc/example-shadow.png) ![MipMap](etc/example-mipmap.png)
+![Cube](etc/example-cube.png) ![Shadow](etc/example-shadow.png) ![MipMap](etc/example-mipmap.png) ![Skybox](etc/example-skybox.gif)
 ![vange-rs](etc/vange-rs.png) ![Brawl](etc/brawl-attack.gif) ![GLX map](etc/glx-map.png)
 
 ## Usage
