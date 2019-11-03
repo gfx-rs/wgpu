@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-native"
-version = "0.3.3"
+version = "0.4.0"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",
@@ -29,24 +29,24 @@ copyless = "0.1"
 fxhash = "0.2"
 lazy_static = { version = "1.1.0", optional = true }
 log = "0.4"
-hal = { package = "gfx-hal", git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b" }
-gfx-backend-empty = { git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b" }
+hal = { package = "gfx-hal", version = "0.4" }
+gfx-backend-empty = { version = "0.4" }
 parking_lot = "0.9"
 raw-window-handle = { version = "0.3", optional = true }
-rendy-memory = { git = "https://github.com/amethyst/rendy", rev = "948ee05f7b2d129f2f1b9321c87077dd766d9672" }
-rendy-descriptor = { git = "https://github.com/amethyst/rendy", rev = "948ee05f7b2d129f2f1b9321c87077dd766d9672" }
+rendy-memory = "0.5"
+rendy-descriptor = "0.5"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "0.6"
 vec_map = "0.8"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b", optional = true }
+gfx-backend-metal = { version = "0.4" }
+gfx-backend-vulkan = { version = "0.4", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b", features = ["x11"] }
+gfx-backend-vulkan = { version = "0.4", features = ["x11"] }
 
 [target.'cfg(windows)'.dependencies]
-gfx-backend-dx12 = { git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b" }
-gfx-backend-dx11 = { git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b" }
-gfx-backend-vulkan = { git = "https://github.com/gfx-rs/gfx", rev = "46386475f7e823e807ec984c372ffe04dcc0a22b" }
+gfx-backend-dx12 = { version = "0.4.1" }
+gfx-backend-dx11 = { version = "0.4" }
+gfx-backend-vulkan = { version = "0.4" }
