@@ -170,7 +170,7 @@ impl framework::Example for Skybox {
         });
 
         for (i, image) in faces.iter().enumerate() {
-            println!(
+            log::debug!(
                 "Copying skybox image {} of size {},{} to gpu",
                 i, image_width, image_height,
             );
@@ -272,7 +272,7 @@ impl framework::Example for Skybox {
     ) -> wgpu::CommandBuffer {
         let mut init_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
-        let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(1.0));
+        let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
         self.uniforms[1] = self.uniforms[1] * rotation;
         let uniform_buf_size = std::mem::size_of::<Uniforms>();
         let temp_buf = device
