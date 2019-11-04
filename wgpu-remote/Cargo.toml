@@ -14,6 +14,6 @@ crate-type = ["lib", "cdylib", "staticlib"]
 default = []
 
 [dependencies]
-wgn = { path = "../wgpu-native", package = "wgpu-native", version = "0.3" }
+wgn = { path = "../wgpu-native", package = "wgpu-native", version = "0.4" }
 log = "0.4"
 parking_lot = { version = "0.9" }

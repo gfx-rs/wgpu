@@ -1,5 +1,15 @@
 # Change Log
 
+## v0.4 (03-11-2019)
+  - Platforms: removed OpenGL/WebGL support temporarily
+  - Features:
+    - based on gfx-hal-0.4 with the new swapchain model
+    - exposing adapters from all available backends on a system
+    - tracking of samplers
+    - cube map support with an example
+  - Validation:
+    - buffer and texture usage
+
 ## v0.3.3 (22-08-2019)
   - fixed instance creation on Windows
 
@@ -15,7 +25,7 @@
     - type-system-assisted deadlock prevention (for locking internal structures)
     - texture sub-resource tracking
     - `raw-window-handle` integration instead of `winit`
-    - multisampling
+    - multisampling with an example
     - indirect draws and dispatches
     - stencil masks and reference values
     - native "compute" example
