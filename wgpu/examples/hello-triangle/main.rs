@@ -133,7 +133,8 @@ fn main() {
                 _ => {}
             },
             event::Event::EventsCleared => {
-                let frame = swap_chain.get_next_texture();
+                let frame = swap_chain.get_next_texture()
+                    .expect("Timeout when acquiring next swap chain texture");
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
                 {
