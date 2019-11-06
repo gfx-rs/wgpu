@@ -162,7 +162,8 @@ pub fn run<E: Example>(title: &str) {
                 }
             },
             event::Event::EventsCleared => {
-                let frame = swap_chain.get_next_texture();
+                let frame = swap_chain.get_next_texture()
+                    .expect("Timeout when acquiring next swap chain texture");
                 let command_buf = example.render(&frame, &device);
                 queue.submit(&[command_buf]);
             }
