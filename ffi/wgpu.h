@@ -651,6 +651,8 @@ typedef struct {
   WGPUBackendBit backends;
 } WGPURequestAdapterOptions;
 
+typedef void (*WGPURequestAdapterCallback)(const WGPUAdapterId *adapter, void *userdata);
+
 typedef struct {
   WGPUTextureViewId view_id;
 } WGPUSwapChainOutput;
@@ -972,7 +974,9 @@ void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
 #endif
 
 #if defined(WGPU_LOCAL)
-WGPUAdapterId wgpu_request_adapter(const WGPURequestAdapterOptions *desc);
+void wgpu_request_adapter_async(const WGPURequestAdapterOptions *desc,
+                                WGPURequestAdapterCallback callback,
+                                void *userdata);
 #endif
 
 #if defined(WGPU_LOCAL)

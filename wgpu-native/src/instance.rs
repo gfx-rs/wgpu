@@ -26,6 +26,7 @@ use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance 
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
 
+use std::ffi::c_void;
 
 #[derive(Debug)]
 pub struct Instance {
@@ -301,11 +302,16 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     ))
 }
 
-pub fn request_adapter(
+pub type RequestAdapterCallback =
+    extern "C" fn(adapter: *const AdapterId, userdata: *mut c_void);
+
+pub fn request_adapter_async(
     global: &Global,
     desc: &RequestAdapterOptions,
     input_ids: &[Input<AdapterId>],
-) -> Option<AdapterId> {
+    callback: RequestAdapterCallback,
+    userdata: *mut c_void,
+) {
     let instance = &global.instance;
     let mut device_types = Vec::new();
 
@@ -321,9 +327,15 @@ pub fn request_adapter(
         }
     };
     #[cfg(not(feature = "local"))]
-    let pick = |_output, input_maybe| input_maybe;
+    let pick = |_output, input_maybe: Option<AdapterId>| {
+        let adapter = input_maybe.as_ref();
+        callback(adapter.map_or(&AdapterId::ERROR, |x| x as *const _), userdata);
+    };
     #[cfg(feature = "local")]
-    let pick = |output, _input_maybe| Some(output);
+    let pick = |output: Option<AdapterId>, _input_maybe| {
+        let adapter = output.as_ref();
+        callback(adapter.map_or(&AdapterId::ERROR, |x| x as *const _), userdata);
+    };
 
     let id_vulkan = find_input(Backend::Vulkan);
     let id_metal = find_input(Backend::Metal);
@@ -370,7 +382,8 @@ pub fn request_adapter(
 
     if device_types.is_empty() {
         log::warn!("No adapters are available!");
-        return None;
+        pick(None, None);
+        return;
     }
 
     let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
@@ -415,7 +428,8 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_vulkan);
+            pick(Some(id_out), id_vulkan);
+            return;
         }
         selected -= adapters_vk.len();
     }
@@ -431,7 +445,8 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_metal);
+            pick(Some(id_out), id_metal);
+            return;
         }
         selected -= adapters_mtl.len();
     }
@@ -447,7 +462,8 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_dx12);
+            pick(Some(id_out), id_dx12);
+            return;
         }
         selected -= adapters_dx12.len();
         if selected < adapters_dx11.len() {
@@ -460,7 +476,8 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_dx11);
+            pick(Some(id_out), id_dx11);
+            return;
         }
         selected -= adapters_dx11.len();
     }
@@ -470,8 +487,12 @@ pub fn request_adapter(
 
 #[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_request_adapter(desc: Option<&RequestAdapterOptions>) -> AdapterId {
-    request_adapter(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[]).unwrap()
+pub extern "C" fn wgpu_request_adapter_async(
+    desc: Option<&RequestAdapterOptions>,
+    callback: RequestAdapterCallback,
+    userdata: *mut c_void,
+) {
+    request_adapter_async(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[], callback, userdata);
 }
 
 pub fn adapter_request_device<B: GfxBackend>(
