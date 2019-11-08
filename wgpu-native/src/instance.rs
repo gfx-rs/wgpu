@@ -312,6 +312,15 @@ pub fn request_adapter_async(
     callback: RequestAdapterCallback,
     userdata: *mut c_void,
 ) {
+    let adapter = pick_adapter(global, desc, input_ids);
+    callback(adapter.as_ref().map_or(&AdapterId::ERROR, |x| x as *const _), userdata);
+}
+
+fn pick_adapter(
+    global: &Global,
+    desc: &RequestAdapterOptions,
+    input_ids: &[Input<AdapterId>],
+) -> Option<AdapterId> {
     let instance = &global.instance;
     let mut device_types = Vec::new();
 
@@ -325,16 +334,6 @@ pub fn request_adapter_async(
         } else {
             None
         }
-    };
-    #[cfg(not(feature = "local"))]
-    let pick = |_output, input_maybe: Option<AdapterId>| {
-        let adapter = input_maybe.as_ref();
-        callback(adapter.map_or(&AdapterId::ERROR, |x| x as *const _), userdata);
-    };
-    #[cfg(feature = "local")]
-    let pick = |output: Option<AdapterId>, _input_maybe| {
-        let adapter = output.as_ref();
-        callback(adapter.map_or(&AdapterId::ERROR, |x| x as *const _), userdata);
     };
 
     let id_vulkan = find_input(Backend::Vulkan);
@@ -382,8 +381,7 @@ pub fn request_adapter_async(
 
     if device_types.is_empty() {
         log::warn!("No adapters are available!");
-        pick(None, None);
-        return;
+        return None;
     }
 
     let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
@@ -410,6 +408,16 @@ pub fn request_adapter_async(
         PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
         PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
     };
+
+    #[allow(unused_variables)]
+    let local_or_remote_id = |local_id, remote_id| {
+        #[cfg(not(feature = "local"))]
+        let id = remote_id;
+        #[cfg(feature = "local")]
+        let id = Some(local_id);
+        id
+    };
+
     let mut token = Token::root();
 
     let mut selected = preferred_gpu.unwrap_or(0);
@@ -428,8 +436,7 @@ pub fn request_adapter_async(
                 adapter,
                 &mut token,
             );
-            pick(Some(id_out), id_vulkan);
-            return;
+            return local_or_remote_id(id_out, id_vulkan);
         }
         selected -= adapters_vk.len();
     }
@@ -445,8 +452,7 @@ pub fn request_adapter_async(
                 adapter,
                 &mut token,
             );
-            pick(Some(id_out), id_metal);
-            return;
+            return local_or_remote_id(id_out, id_metal);
         }
         selected -= adapters_mtl.len();
     }
@@ -462,8 +468,7 @@ pub fn request_adapter_async(
                 adapter,
                 &mut token,
             );
-            pick(Some(id_out), id_dx12);
-            return;
+            return local_or_remote_id(id_out, id_dx12);
         }
         selected -= adapters_dx12.len();
         if selected < adapters_dx11.len() {
@@ -476,11 +481,11 @@ pub fn request_adapter_async(
                 adapter,
                 &mut token,
             );
-            pick(Some(id_out), id_dx11);
-            return;
+            return local_or_remote_id(id_out, id_dx11);
         }
         selected -= adapters_dx11.len();
     }
+
     let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
     unreachable!()
 }
