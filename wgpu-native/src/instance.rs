@@ -26,6 +26,7 @@ use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance 
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
 
+use std::ffi::c_void;
 
 #[derive(Debug)]
 pub struct Instance {
@@ -301,7 +302,21 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     ))
 }
 
-pub fn request_adapter(
+pub type RequestAdapterCallback =
+    extern "C" fn(adapter: *const AdapterId, userdata: *mut c_void);
+
+pub fn request_adapter_async(
+    global: &Global,
+    desc: &RequestAdapterOptions,
+    input_ids: &[Input<AdapterId>],
+    callback: RequestAdapterCallback,
+    userdata: *mut c_void,
+) {
+    let adapter = pick_adapter(global, desc, input_ids);
+    callback(adapter.as_ref().map_or(&AdapterId::ERROR, |x| x as *const _), userdata);
+}
+
+fn pick_adapter(
     global: &Global,
     desc: &RequestAdapterOptions,
     input_ids: &[Input<AdapterId>],
@@ -320,10 +335,6 @@ pub fn request_adapter(
             None
         }
     };
-    #[cfg(not(feature = "local"))]
-    let pick = |_output, input_maybe| input_maybe;
-    #[cfg(feature = "local")]
-    let pick = |output, _input_maybe| Some(output);
 
     let id_vulkan = find_input(Backend::Vulkan);
     let id_metal = find_input(Backend::Metal);
@@ -397,6 +408,16 @@ pub fn request_adapter(
         PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
         PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
     };
+
+    #[allow(unused_variables)]
+    let local_or_remote_id = |local_id, remote_id| {
+        #[cfg(not(feature = "local"))]
+        let id = remote_id;
+        #[cfg(feature = "local")]
+        let id = Some(local_id);
+        id
+    };
+
     let mut token = Token::root();
 
     let mut selected = preferred_gpu.unwrap_or(0);
@@ -415,7 +436,7 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_vulkan);
+            return local_or_remote_id(id_out, id_vulkan);
         }
         selected -= adapters_vk.len();
     }
@@ -431,7 +452,7 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_metal);
+            return local_or_remote_id(id_out, id_metal);
         }
         selected -= adapters_mtl.len();
     }
@@ -447,7 +468,7 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_dx12);
+            return local_or_remote_id(id_out, id_dx12);
         }
         selected -= adapters_dx12.len();
         if selected < adapters_dx11.len() {
@@ -460,18 +481,23 @@ pub fn request_adapter(
                 adapter,
                 &mut token,
             );
-            return pick(id_out, id_dx11);
+            return local_or_remote_id(id_out, id_dx11);
         }
         selected -= adapters_dx11.len();
     }
+
     let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
     unreachable!()
 }
 
 #[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_request_adapter(desc: Option<&RequestAdapterOptions>) -> AdapterId {
-    request_adapter(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[]).unwrap()
+pub extern "C" fn wgpu_request_adapter_async(
+    desc: Option<&RequestAdapterOptions>,
+    callback: RequestAdapterCallback,
+    userdata: *mut c_void,
+) {
+    request_adapter_async(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[], callback, userdata);
 }
 
 pub fn adapter_request_device<B: GfxBackend>(

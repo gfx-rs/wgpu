@@ -12,6 +12,26 @@
 #define BINDINGS_LENGTH (1)
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
 
+void request_adapter_callback(WGPUAdapterId const *received, void *userdata) {
+    WGPUAdapterId *id = (WGPUAdapterId*) userdata;
+    *id = *received;
+}
+
+void read_buffer_map(
+    WGPUBufferMapAsyncStatus status,
+    const uint8_t *data,
+    uint8_t *userdata) {
+    (void)userdata;
+    if (status == WGPUBufferMapAsyncStatus_Success) {
+        uint32_t *times = (uint32_t *) data;
+        printf("Times: [%d, %d, %d, %d]\n",
+            times[0],
+            times[1],
+            times[2],
+            times[3]);
+    }
+}
+
 int main(
     int argc,
     char *argv[]) {
@@ -32,7 +52,13 @@ int main(
 
     uint32_t numbers_length = size / sizeof(uint32_t);
 
-    WGPUAdapterId adapter = wgpu_request_adapter(NULL);
+    WGPUAdapterId adapter = { 0 };
+    wgpu_request_adapter_async(
+        NULL,
+        request_adapter_callback,
+        (void *) &adapter
+    );
+
     WGPUDeviceId device = wgpu_adapter_request_device(adapter, NULL);
 
     uint8_t *staging_memory;

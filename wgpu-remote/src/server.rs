@@ -28,10 +28,23 @@ pub extern "C" fn wgpu_server_instance_request_adapter(
     ids: *const wgn::AdapterId,
     id_length: usize,
 ) -> i8 {
+    extern "C" fn request_adapter_callback(
+        data: *const wgn::AdapterId,
+        user_data: *mut std::ffi::c_void,
+    ) {
+        unsafe {
+            *(user_data as *mut wgn::AdapterId) = *data;
+        }
+    }
+
     let ids = unsafe { slice::from_raw_parts(ids, id_length) };
-    match wgn::request_adapter(global, desc, ids) {
-        Some(id) => ids.iter().position(|&i| i == id).unwrap() as i8,
-        None => -1,
+    let mut adapter_id: wgn::AdapterId = wgn::AdapterId::ERROR;
+    let adapter_id_ref = &mut adapter_id;
+    wgn::request_adapter_async(global, desc, ids, request_adapter_callback, adapter_id_ref as *mut _ as *mut std::ffi::c_void);
+    if adapter_id == wgn::AdapterId::ERROR {
+        -1
+    } else {
+        ids.iter().position(|&i| i == adapter_id).unwrap() as i8
     }
 }
 
