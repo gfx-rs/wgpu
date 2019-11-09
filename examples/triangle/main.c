@@ -32,23 +32,9 @@
 #define RENDER_PASS_ATTACHMENTS_LENGTH (1)
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
 
-void request_adapter_callback(WGPUAdapterId const *received, void *userdata) {
-    WGPUAdapterId *id = (WGPUAdapterId*) userdata;
-    *id = *received;
-}
-
-int main() {
-    WGPUAdapterId adapter = { 0 };
-    wgpu_request_adapter_async(
-        &(WGPURequestAdapterOptions){
-            .power_preference = WGPUPowerPreference_LowPower,
-            .backends = 2 | 4 | 8,
-        },
-        request_adapter_callback,
-        (void *) &adapter
-    );
-
-    WGPUDeviceId device = wgpu_adapter_request_device(adapter,
+void on_received_adapter(WGPUAdapterId const *adapter, void *userdata) {
+    WGPUDeviceId device = wgpu_adapter_request_device(
+        *adapter,
         &(WGPUDeviceDescriptor){
             .extensions =
                 {
@@ -148,7 +134,7 @@ int main() {
 
     if (!glfwInit()) {
         printf("Cannot initialize glfw");
-        return 1;
+        exit(1);
     }
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
@@ -157,7 +143,7 @@ int main() {
 
     if (!window) {
         printf("Cannot create window");
-        return 1;
+        exit(1);
     }
 
     WGPUSurfaceId surface;
@@ -222,7 +208,7 @@ int main() {
             wgpu_swap_chain_get_next_texture(swap_chain);
         if (!next_texture.view_id) {
             printf("Cannot acquire next swap chain texture");
-            return 1;
+            exit(1);
         }
 
         WGPUCommandEncoderId cmd_encoder = wgpu_device_create_command_encoder(
@@ -260,6 +246,23 @@ int main() {
 
     glfwDestroyWindow(window);
     glfwTerminate();
+}
+
+int main() {
+    WGPUEventLoopId event_loop = wgpu_create_event_loop();
+
+    wgpu_request_adapter_async(
+        &(WGPURequestAdapterOptions){
+            .power_preference = WGPUPowerPreference_LowPower,
+            .backends = 2 | 4 | 8,
+        },
+        event_loop,
+        on_received_adapter,
+        NULL
+    );
+
+    wgpu_process_events(event_loop);
+    wgpu_destroy_event_loop(event_loop);
 
     return 0;
 }

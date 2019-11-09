@@ -244,6 +244,8 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
+typedef struct WGPUEventLoop WGPUEventLoop;
+
 typedef uint64_t WGPUId_Device_Dummy;
 
 typedef WGPUId_Device_Dummy WGPUDeviceId;
@@ -378,6 +380,8 @@ typedef const char *WGPURawString;
 typedef uint64_t WGPUId_ComputePipeline_Dummy;
 
 typedef WGPUId_ComputePipeline_Dummy WGPUComputePipelineId;
+
+typedef WGPUEventLoop *WGPUEventLoopId;
 
 typedef uint64_t WGPUId_Surface;
 
@@ -778,6 +782,10 @@ void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipeli
 #endif
 
 #if defined(WGPU_LOCAL)
+WGPUEventLoopId wgpu_create_event_loop(void);
+#endif
+
+#if defined(WGPU_LOCAL)
 WGPUSurfaceId wgpu_create_surface_from_metal_layer(void *layer);
 #endif
 
@@ -787,6 +795,10 @@ WGPUSurfaceId wgpu_create_surface_from_windows_hwnd(void *_hinstance, void *hwnd
 
 #if defined(WGPU_LOCAL)
 WGPUSurfaceId wgpu_create_surface_from_xlib(const void **display, uint64_t window);
+#endif
+
+#if defined(WGPU_LOCAL)
+void wgpu_destroy_event_loop(WGPUEventLoopId event_loop_id);
 #endif
 
 #if defined(WGPU_LOCAL)
@@ -862,6 +874,10 @@ WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 
 #if defined(WGPU_LOCAL)
 void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
+#endif
+
+#if defined(WGPU_LOCAL)
+void wgpu_process_events(WGPUEventLoopId event_loop_id);
 #endif
 
 #if defined(WGPU_LOCAL)
@@ -975,6 +991,7 @@ void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
 
 #if defined(WGPU_LOCAL)
 void wgpu_request_adapter_async(const WGPURequestAdapterOptions *desc,
+                                WGPUEventLoopId event_loop_id,
                                 WGPURequestAdapterCallback callback,
                                 void *userdata);
 #endif

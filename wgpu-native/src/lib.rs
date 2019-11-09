@@ -21,6 +21,7 @@ mod binding_model;
 mod command;
 mod conv;
 mod device;
+mod event_loop;
 mod hub;
 mod id;
 mod instance;
@@ -32,6 +33,7 @@ mod track;
 pub use self::binding_model::*;
 pub use self::command::*;
 pub use self::device::*;
+pub use self::event_loop::*;
 #[cfg(not(feature = "local"))]
 pub use self::hub::{Access, Global, IdentityManager, Registry, Token};
 pub use self::id::*;

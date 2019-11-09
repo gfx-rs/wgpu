@@ -87,7 +87,6 @@ pub type Output<T> = T;
 #[cfg(not(feature = "local"))]
 pub type Output<T> = PhantomData<T>;
 
-
 pub type AdapterId = Id<crate::Adapter<Dummy>>;
 pub type DeviceId = Id<crate::Device<Dummy>>;
 pub type QueueId = DeviceId;

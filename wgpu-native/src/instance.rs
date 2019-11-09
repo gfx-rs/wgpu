@@ -13,6 +13,8 @@ use crate::{
     Backend,
     Device,
     DeviceId,
+    Event,
+    EventLoopId,
 };
 #[cfg(feature = "local")]
 use crate::{gfx_select, hub::GLOBAL, SurfaceId};
@@ -308,12 +310,13 @@ pub type RequestAdapterCallback =
 pub fn request_adapter_async(
     global: &Global,
     desc: &RequestAdapterOptions,
+    event_loop_id: EventLoopId,
     input_ids: &[Input<AdapterId>],
     callback: RequestAdapterCallback,
     userdata: *mut c_void,
 ) {
-    let adapter = pick_adapter(global, desc, input_ids);
-    callback(adapter.as_ref().map_or(&AdapterId::ERROR, |x| x as *const _), userdata);
+    let adapter_id = pick_adapter(global, desc, input_ids);
+    event_loop_id.schedule(Event::RequestAdapterCallback(callback, adapter_id.unwrap_or(AdapterId::ERROR), userdata));
 }
 
 fn pick_adapter(
@@ -494,10 +497,11 @@ fn pick_adapter(
 #[no_mangle]
 pub extern "C" fn wgpu_request_adapter_async(
     desc: Option<&RequestAdapterOptions>,
+    event_loop_id: EventLoopId,
     callback: RequestAdapterCallback,
     userdata: *mut c_void,
 ) {
-    request_adapter_async(&*GLOBAL, &desc.cloned().unwrap_or_default(), &[], callback, userdata);
+    request_adapter_async(&*GLOBAL, &desc.cloned().unwrap_or_default(), event_loop_id, &[], callback, userdata);
 }
 
 pub fn adapter_request_device<B: GfxBackend>(

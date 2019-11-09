@@ -23,6 +23,7 @@ use crate::{
     Device,
     DeviceId,
     Epoch,
+    EventLoop,
     Index,
     Instance,
     PipelineLayout,
@@ -162,7 +163,7 @@ impl<T, I: TypedId> Storage<T, I> {
 /// If type A implements `Access<B>`, that means we are allowed to proceed
 /// with locking resource `B` after we lock `A`.
 ///
-/// The implenentations basically describe the edges in a directed graph
+/// The implementations basically describe the edges in a directed graph
 /// of lock transitions. As long as it doesn't have loops, we can have
 /// multiple concurrent paths on this graph (from multiple threads) without
 /// deadlocks, i.e. there is always a path whose next resource is not locked
@@ -171,6 +172,7 @@ pub trait Access<B> {}
 
 pub enum Root {}
 //TODO: establish an order instead of declaring all the pairs.
+impl Access<EventLoop> for Root {}
 impl Access<Instance> for Root {}
 impl Access<Surface> for Root {}
 impl Access<Surface> for Instance {}
@@ -269,7 +271,6 @@ impl<'a, T> Drop for Token<'a, T> {
         });
     }
 }
-
 
 #[derive(Debug)]
 pub struct Registry<T, I: TypedId> {
@@ -488,7 +489,7 @@ impl Global {
 
     #[cfg(not(feature = "local"))]
     pub fn delete(self) {
-        let Global { mut instance, surfaces, hubs } = self;
+        let Global { mut instance, surfaces, hubs, .. } = self;
         drop(hubs);
         // destroy surfaces
         for (_, (surface, _)) in surfaces.data.write().map.drain() {
