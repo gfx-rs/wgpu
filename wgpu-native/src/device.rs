@@ -25,6 +25,8 @@ use crate::{
     CommandEncoderId,
     ComputePipelineId,
     DeviceId,
+    Event,
+    EventLoopId,
     FastHashMap,
     Features,
     LifeGuard,
@@ -72,8 +74,6 @@ use std::{
     sync::atomic::Ordering,
 };
 
-
-const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 8;
@@ -209,19 +209,7 @@ impl<B: GfxBackend> PendingResources<B> {
         device: &B::Device,
         heaps_mutex: &Mutex<Heaps<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
-        force_wait: bool,
     ) -> SubmissionIndex {
-        if force_wait && !self.active.is_empty() {
-            let status = unsafe {
-                device.wait_for_fences(
-                    self.active.iter().map(|a| &a.fence),
-                    hal::device::WaitFor::All,
-                    CLEANUP_WAIT_MS * 1_000_000,
-                )
-            };
-            assert_eq!(status, Ok(true), "GPU got stuck :(");
-        }
-
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
         let done_count = self
@@ -436,12 +424,14 @@ impl<B: GfxBackend> PendingResources<B> {
         global: &Global,
         raw: &B::Device,
         token: &mut Token<Device<B>>,
-    ) -> Vec<BufferMapPendingCallback> {
+        event_loop_id: EventLoopId,
+    ) {
         if self.ready_to_map.is_empty() {
-            return Vec::new();
+            return;
         }
+
         let (mut buffer_guard, _) = B::hub(global).buffers.write(token);
-        self.ready_to_map
+        let callbacks = self.ready_to_map
             .drain(..)
             .map(|buffer_id| {
                 let buffer = &mut buffer_guard[buffer_id];
@@ -455,13 +445,16 @@ impl<B: GfxBackend> PendingResources<B> {
                     }
                 };
                 (operation, result)
-            })
-            .collect()
+            });
+
+        for callback in callbacks {
+            event_loop_id.schedule(Event::BufferMapPendingCallback(callback));
+        }
     }
 }
 
-type BufferMapResult = Result<*mut u8, hal::device::MapError>;
-type BufferMapPendingCallback = (BufferMapOperation, BufferMapResult);
+pub type BufferMapResult = Result<*mut u8, hal::device::MapError>;
+pub type BufferMapPendingCallback = (BufferMapOperation, BufferMapResult);
 
 fn map_buffer<B: hal::Backend>(
     raw: &B::Device,
@@ -572,12 +565,12 @@ impl<B: GfxBackend> Device<B> {
         }
     }
 
-    fn maintain(
+    pub fn maintain(
         &self,
         global: &Global,
-        force_wait: bool,
+        event_loop_id: EventLoopId,
         token: &mut Token<Self>,
-    ) -> Vec<BufferMapPendingCallback> {
+    ) {
         let mut pending = self.pending.lock();
         let mut trackers = self.trackers.lock();
 
@@ -588,9 +581,9 @@ impl<B: GfxBackend> Device<B> {
             &self.raw,
             &self.mem_allocator,
             &self.desc_allocator,
-            force_wait,
         );
-        let callbacks = pending.handle_mapping(global, &self.raw, token);
+
+        pending.handle_mapping(global, &self.raw, token, event_loop_id);
 
         unsafe {
             self.desc_allocator.lock().cleanup(&self.raw);
@@ -598,26 +591,6 @@ impl<B: GfxBackend> Device<B> {
 
         if last_done != 0 {
             self.com_allocator.maintain(last_done);
-        }
-
-        callbacks
-    }
-
-    //Note: this logic is specifically moved out of `handle_mapping()` in order to
-    // have nothing locked by the time we execute users callback code.
-    fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callbacks: I) {
-        for (operation, result) in callbacks {
-            let (status, ptr) = match result {
-                Ok(ptr) => (BufferMapAsyncStatus::Success, ptr),
-                Err(e) => {
-                    log::error!("failed to map buffer: {:?}", e);
-                    (BufferMapAsyncStatus::Error, ptr::null_mut())
-                }
-            };
-            match operation {
-                BufferMapOperation::Read(_, on_read, userdata) => on_read(status, ptr, userdata),
-                BufferMapOperation::Write(_, on_write, userdata) => on_write(status, ptr, userdata),
-            }
         }
     }
 
@@ -1538,9 +1511,9 @@ pub fn queue_submit<B: GfxBackend>(
     global: &Global,
     queue_id: QueueId,
     command_buffer_ids: &[CommandBufferId],
+    event_loop_id: EventLoopId,
 ) {
     let hub = B::hub(global);
-
     let (submit_index, fence) = {
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
@@ -1668,29 +1641,22 @@ pub fn queue_submit<B: GfxBackend>(
     };
 
     // No need for write access to the device from here on out
-    let callbacks = {
-        let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[queue_id];
+    let mut token = Token::root();
+    let (device_guard, mut token) = hub.devices.read(&mut token);
+    let device = &device_guard[queue_id];
+    device.maintain(global, event_loop_id, &mut token);
+    device.pending.lock().active.alloc().init(ActiveSubmission {
+        index: submit_index,
+        fence,
+        resources: Vec::new(),
+        mapped: Vec::new(),
+    });
 
-        let callbacks = device.maintain(global, false, &mut token);
-        device.pending.lock().active.alloc().init(ActiveSubmission {
-            index: submit_index,
-            fence,
-            resources: Vec::new(),
-            mapped: Vec::new(),
-        });
-
-        // finally, return the command buffers to the allocator
-        for &cmb_id in command_buffer_ids {
-            let (cmd_buf, _) = hub.command_buffers.unregister(cmb_id, &mut token);
-            device.com_allocator.after_submit(cmd_buf, submit_index);
-        }
-
-        callbacks
-    };
-
-    Device::<B>::fire_map_callbacks(callbacks);
+    // Finally, return the command buffers to the allocator
+    for &cmb_id in command_buffer_ids {
+        let (cmd_buf, _) = hub.command_buffers.unregister(cmb_id, &mut token);
+        device.com_allocator.after_submit(cmd_buf, submit_index);
+    }
 }
 
 #[cfg(feature = "local")]
@@ -1699,10 +1665,11 @@ pub extern "C" fn wgpu_queue_submit(
     queue_id: QueueId,
     command_buffers: *const CommandBufferId,
     command_buffers_length: usize,
+    event_loop_id: EventLoopId,
 ) {
     let command_buffer_ids =
         unsafe { slice::from_raw_parts(command_buffers, command_buffers_length) };
-    gfx_select!(queue_id => queue_submit(&*GLOBAL, queue_id, command_buffer_ids))
+    gfx_select!(queue_id => queue_submit(&*GLOBAL, queue_id, command_buffer_ids, event_loop_id))
 }
 
 pub fn device_create_render_pipeline<B: GfxBackend>(
@@ -2126,32 +2093,17 @@ pub extern "C" fn wgpu_device_create_swap_chain(
     gfx_select!(device_id => device_create_swap_chain(&*GLOBAL, device_id, surface_id, desc))
 }
 
-pub fn device_poll<B: GfxBackend>(global: &Global, device_id: DeviceId, force_wait: bool) {
-    let hub = B::hub(global);
-    let callbacks = {
-        let (device_guard, mut token) = hub.devices.read(&mut Token::root());
-        device_guard[device_id].maintain(global, force_wait, &mut token)
-    };
-    Device::<B>::fire_map_callbacks(callbacks);
-}
-
-#[cfg(feature = "local")]
-#[no_mangle]
-pub extern "C" fn wgpu_device_poll(device_id: DeviceId, force_wait: bool) {
-    gfx_select!(device_id => device_poll(&*GLOBAL, device_id, force_wait))
-}
-
-pub fn device_destroy<B: GfxBackend>(global: &Global, device_id: DeviceId) {
+pub fn device_destroy<B: GfxBackend>(global: &Global, device_id: DeviceId, event_loop_id: EventLoopId) {
     let hub = B::hub(global);
     let (device, mut token) = hub.devices.unregister(device_id, &mut Token::root());
-    device.maintain(global, true, &mut token);
+    device.maintain(global, event_loop_id, &mut token);
     device.com_allocator.destroy(&device.raw);
 }
 
 #[cfg(feature = "local")]
 #[no_mangle]
-pub extern "C" fn wgpu_device_destroy(device_id: DeviceId) {
-    gfx_select!(device_id => device_destroy(&*GLOBAL, device_id))
+pub extern "C" fn wgpu_device_destroy(device_id: DeviceId, event_loop_id: EventLoopId) {
+    gfx_select!(device_id => device_destroy(&*GLOBAL, device_id, event_loop_id))
 }
 
 pub type BufferMapReadCallback =
@@ -2164,6 +2116,7 @@ pub fn buffer_map_async<B: GfxBackend>(
     buffer_id: BufferId,
     usage: resource::BufferUsage,
     operation: BufferMapOperation,
+    _event_loop_id: EventLoopId,
 ) {
     let hub = B::hub(global);
     let mut token = Token::root();
@@ -2209,9 +2162,10 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     size: BufferAddress,
     callback: BufferMapReadCallback,
     userdata: *mut u8,
+    event_loop_id: EventLoopId,
 ) {
     let operation = BufferMapOperation::Read(start .. start + size, callback, userdata);
-    gfx_select!(buffer_id => buffer_map_async(&*GLOBAL, buffer_id, resource::BufferUsage::MAP_READ, operation))
+    gfx_select!(buffer_id => buffer_map_async(&*GLOBAL, buffer_id, resource::BufferUsage::MAP_READ, operation, event_loop_id))
 }
 
 #[cfg(feature = "local")]
@@ -2222,9 +2176,10 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     size: BufferAddress,
     callback: BufferMapWriteCallback,
     userdata: *mut u8,
+    event_loop_id: EventLoopId,
 ) {
     let operation = BufferMapOperation::Write(start .. start + size, callback, userdata);
-    gfx_select!(buffer_id => buffer_map_async(&*GLOBAL, buffer_id, resource::BufferUsage::MAP_WRITE, operation))
+    gfx_select!(buffer_id => buffer_map_async(&*GLOBAL, buffer_id, resource::BufferUsage::MAP_WRITE, operation, event_loop_id))
 }
 
 pub fn buffer_unmap<B: GfxBackend>(global: &Global, buffer_id: BufferId) {

@@ -24,6 +24,7 @@ use crate::{
     DeviceId,
     Epoch,
     EventLoop,
+    EventLoopId,
     Index,
     Instance,
     PipelineLayout,
@@ -133,6 +134,12 @@ impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
 }
 
 impl<T, I: TypedId> Storage<T, I> {
+    pub fn values(&self) -> impl Iterator<Item = &T> {
+        self.map
+            .iter()
+            .map(|(_, (value, _))| value)
+    }
+
     pub fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map.get(index as usize) {
@@ -466,11 +473,20 @@ pub struct Hubs {
     dx11: Hub<backend::Dx11>,
 }
 
+impl Hubs {
+    pub fn maintain_all_devices(&self, global: &Global, event_loop_id: EventLoopId) {
+        let (device_guard, mut token) = self.metal.devices.read(&mut Token::root());
+        for device in device_guard.values() {
+            device.maintain(global, event_loop_id, &mut token);
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Global {
     pub instance: Instance,
     pub surfaces: Registry<Surface, SurfaceId>,
-    hubs: Hubs,
+    pub hubs: Hubs,
 }
 
 impl Global {

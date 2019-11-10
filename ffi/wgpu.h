@@ -279,6 +279,8 @@ typedef uint64_t WGPUBufferAddress;
 
 typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const uint8_t *data, uint8_t *userdata);
 
+typedef WGPUEventLoop *WGPUEventLoopId;
+
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
 typedef uint64_t WGPUId_ComputePass_Dummy;
@@ -380,8 +382,6 @@ typedef const char *WGPURawString;
 typedef uint64_t WGPUId_ComputePipeline_Dummy;
 
 typedef WGPUId_ComputePipeline_Dummy WGPUComputePipelineId;
-
-typedef WGPUEventLoop *WGPUEventLoopId;
 
 typedef uint64_t WGPUId_Surface;
 
@@ -689,7 +689,8 @@ void wgpu_buffer_map_read_async(WGPUBufferId buffer_id,
                                 WGPUBufferAddress start,
                                 WGPUBufferAddress size,
                                 WGPUBufferMapReadCallback callback,
-                                uint8_t *userdata);
+                                uint8_t *userdata,
+                                WGPUEventLoopId event_loop_id);
 #endif
 
 #if defined(WGPU_LOCAL)
@@ -697,7 +698,8 @@ void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
                                  WGPUBufferAddress start,
                                  WGPUBufferAddress size,
                                  WGPUBufferMapWriteCallback callback,
-                                 uint8_t *userdata);
+                                 uint8_t *userdata,
+                                 WGPUEventLoopId event_loop_id);
 #endif
 
 #if defined(WGPU_LOCAL)
@@ -861,7 +863,7 @@ WGPUTextureId wgpu_device_create_texture(WGPUDeviceId device_id, const WGPUTextu
 #endif
 
 #if defined(WGPU_LOCAL)
-void wgpu_device_destroy(WGPUDeviceId device_id);
+void wgpu_device_destroy(WGPUDeviceId device_id, WGPUEventLoopId event_loop_id);
 #endif
 
 #if defined(WGPU_LOCAL)
@@ -873,17 +875,14 @@ WGPUQueueId wgpu_device_get_queue(WGPUDeviceId device_id);
 #endif
 
 #if defined(WGPU_LOCAL)
-void wgpu_device_poll(WGPUDeviceId device_id, bool force_wait);
-#endif
-
-#if defined(WGPU_LOCAL)
 void wgpu_process_events(WGPUEventLoopId event_loop_id);
 #endif
 
 #if defined(WGPU_LOCAL)
 void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffers,
-                       uintptr_t command_buffers_length);
+                       uintptr_t command_buffers_length,
+                       WGPUEventLoopId event_loop_id);
 #endif
 
 #if defined(WGPU_LOCAL)
