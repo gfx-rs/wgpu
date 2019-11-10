@@ -1,5 +1,9 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
+mod future;
+use future::GpuFutureCompletion;
+pub use future::GpuFuture;
+
 use arrayvec::ArrayVec;
 
 use std::ffi::CString;
@@ -100,6 +104,7 @@ pub struct Device {
 #[derive(Debug)]
 pub struct Buffer {
     id: wgc::id::BufferId,
+    device_id: wgc::id::DeviceId,
 }
 
 /// A handle to a texture on the GPU.
@@ -494,13 +499,14 @@ impl<'a> TextureCopyView<'a> {
 pub struct CreateBufferMapped<'a> {
     id: wgc::id::BufferId,
     pub data: &'a mut [u8],
+    device_id: wgc::id::DeviceId,
 }
 
 impl CreateBufferMapped<'_> {
     /// Unmaps the buffer from host memory and returns a [`Buffer`].
     pub fn finish(self) -> Buffer {
         wgn::wgpu_buffer_unmap(self.id);
-        Buffer { id: self.id }
+        Buffer { device_id: self.device_id, id: self.id }
     }
 }
 
@@ -790,6 +796,7 @@ impl Device {
     /// Creates a new buffer.
     pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
         Buffer {
+            device_id: self.id,
             id: wgn::wgpu_device_create_buffer(self.id, desc),
         }
     }
@@ -811,7 +818,7 @@ impl Device {
 
         let data = unsafe { std::slice::from_raw_parts_mut(ptr as *mut u8, size) };
 
-        CreateBufferMapped { id, data }
+        CreateBufferMapped { device_id: self.id, id, data }
     }
 
     /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
@@ -858,6 +865,52 @@ impl Drop for Device {
     }
 }
 
+pub struct BufferReadMapping {
+    data: *const u8,
+    size: usize,
+    buffer_id: wgc::id::BufferId,
+}
+//TODO: proper error type
+pub type BufferMapReadResult = Result<BufferReadMapping, ()>;
+
+impl BufferReadMapping
+{
+    pub fn as_slice(&self) -> &[u8] {
+        unsafe {
+            slice::from_raw_parts(self.data as *const u8, self.size)
+        }
+    }
+}
+
+impl Drop for BufferReadMapping {
+    fn drop(&mut self) {
+        wgn::wgpu_buffer_unmap(self.buffer_id);
+    }
+}
+
+pub struct BufferWriteMapping {
+    data: *mut u8,
+    size: usize,
+    buffer_id: wgc::id::BufferId,
+}
+//TODO: proper error type
+pub type BufferMapWriteResult = Result<BufferWriteMapping, ()>;
+
+impl BufferWriteMapping
+{
+    pub fn as_slice(&mut self) -> &mut [u8] {
+        unsafe {
+            slice::from_raw_parts_mut(self.data as *mut u8, self.size)
+        }
+    }
+}
+
+impl Drop for BufferWriteMapping {
+    fn drop(&mut self) {
+        wgn::wgpu_buffer_unmap(self.buffer_id);
+    }
+}
+
 pub struct BufferAsyncMapping<T> {
     pub data: T,
     buffer_id: wgc::id::BufferId,
@@ -871,97 +924,99 @@ impl<T> Drop for BufferAsyncMapping<T> {
     }
 }
 
-struct BufferMapReadAsyncUserData<F>
-where
-    F: FnOnce(BufferMapAsyncResult<&[u8]>),
+struct BufferMapReadFutureUserData
 {
-    size: usize,
-    callback: F,
+    size: BufferAddress,
+    completion: GpuFutureCompletion<BufferMapReadResult>,
     buffer_id: wgc::id::BufferId,
 }
 
-struct BufferMapWriteAsyncUserData<F>
-where
-    F: FnOnce(BufferMapAsyncResult<&mut [u8]>),
+struct BufferMapWriteFutureUserData
 {
-    size: usize,
-    callback: F,
+    size: BufferAddress,
+    completion: GpuFutureCompletion<BufferMapWriteResult>,
     buffer_id: wgc::id::BufferId,
 }
 
 impl Buffer {
-    pub fn map_read_async<F>(&self, start: BufferAddress, size: usize, callback: F)
-    where
-        F: FnOnce(BufferMapAsyncResult<&[u8]>),
+    /// Map the buffer for reading. The result is returned in a future.
+    pub fn map_read(&self, start: BufferAddress, size: BufferAddress) -> GpuFuture<BufferMapReadResult>
     {
-        extern "C" fn buffer_map_read_callback_wrapper<F>(
-            status: BufferMapAsyncStatus,
+        let (future, completion) = future::new_gpu_future(self.device_id);
+
+        extern "C" fn buffer_map_read_future_wrapper(
+            status: wgc::resource::BufferMapAsyncStatus,
             data: *const u8,
             user_data: *mut u8,
-        ) where
-            F: FnOnce(BufferMapAsyncResult<&[u8]>),
+        )
         {
             let user_data =
-                unsafe { Box::from_raw(user_data as *mut BufferMapReadAsyncUserData<F>) };
-            let data: &[u8] = unsafe { slice::from_raw_parts(data as *const u8, user_data.size) };
-            match status {
-                BufferMapAsyncStatus::Success => (user_data.callback)(Ok(BufferAsyncMapping {
+                unsafe { Box::from_raw(user_data as *mut BufferMapReadFutureUserData) };
+            if let wgc::resource::BufferMapAsyncStatus::Success = status {
+                user_data.completion.complete(Ok(BufferReadMapping {
                     data,
+                    size: user_data.size as usize,
                     buffer_id: user_data.buffer_id,
-                })),
-                _ => (user_data.callback)(Err(())),
+                }));
+            } else {
+                user_data.completion.complete(Err(()));
             }
         }
 
-        let user_data = Box::new(BufferMapReadAsyncUserData {
+        let user_data = Box::new(BufferMapReadFutureUserData {
             size,
-            callback,
+            completion,
             buffer_id: self.id,
         });
         wgn::wgpu_buffer_map_read_async(
             self.id,
             start,
-            size as BufferAddress,
-            buffer_map_read_callback_wrapper::<F>,
+            size,
+            buffer_map_read_future_wrapper,
             Box::into_raw(user_data) as *mut u8,
         );
+
+        future
     }
 
-    pub fn map_write_async<F>(&self, start: BufferAddress, size: usize, callback: F)
-    where
-        F: FnOnce(BufferMapAsyncResult<&mut [u8]>),
+    /// Map the buffer for writing. The result is returned in a future.
+    pub fn map_write(&self, start: BufferAddress, size: BufferAddress) -> GpuFuture<BufferMapWriteResult>
     {
-        extern "C" fn buffer_map_write_callback_wrapper<F>(
-            status: BufferMapAsyncStatus,
+        let (future, completion) = future::new_gpu_future(self.device_id);
+
+        extern "C" fn buffer_map_write_future_wrapper(
+            status: wgc::resource::BufferMapAsyncStatus,
             data: *mut u8,
             user_data: *mut u8,
-        ) where
-            F: FnOnce(BufferMapAsyncResult<&mut [u8]>),
+        )
         {
             let user_data =
-                unsafe { Box::from_raw(user_data as *mut BufferMapWriteAsyncUserData<F>) };
-            let data = unsafe { slice::from_raw_parts_mut(data as *mut u8, user_data.size) };
-            match status {
-                BufferMapAsyncStatus::Success => (user_data.callback)(Ok(BufferAsyncMapping {
+                unsafe { Box::from_raw(user_data as *mut BufferMapWriteFutureUserData) };
+            if let wgc::resource::BufferMapAsyncStatus::Success = status {
+                user_data.completion.complete(Ok(BufferWriteMapping {
                     data,
+                    size: user_data.size as usize,
                     buffer_id: user_data.buffer_id,
-                })),
-                _ => (user_data.callback)(Err(())),
+                }));
+            } else {
+                user_data.completion.complete(Err(()));
             }
         }
 
-        let user_data = Box::new(BufferMapWriteAsyncUserData {
+        let user_data = Box::new(BufferMapWriteFutureUserData {
             size,
-            callback,
+            completion,
             buffer_id: self.id,
         });
         wgn::wgpu_buffer_map_write_async(
             self.id,
             start,
-            size as BufferAddress,
-            buffer_map_write_callback_wrapper::<F>,
+            size,
+            buffer_map_write_future_wrapper,
             Box::into_raw(user_data) as *mut u8,
         );
+
+        future
     }
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.
