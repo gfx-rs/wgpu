@@ -8,6 +8,7 @@ authors = [
 edition = "2018"
 
 [lib]
+# Enabling these targets makes our CI bots try to build them and fail atm
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
