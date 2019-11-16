@@ -9,12 +9,16 @@ edition = "2018"
 
 [lib]
 # Enabling these targets makes our CI bots try to build them and fail atm
-crate-type = ["lib", "cdylib", "staticlib"]
+#crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
 
+[dependencies.core]
+path = "../wgpu-core"
+package = "wgpu-core"
+version = "0.1"
+
 [dependencies]
-wgn = { path = "../wgpu-native", package = "wgpu-native", version = "0.4" }
 log = "0.4"
 parking_lot = { version = "0.9" }

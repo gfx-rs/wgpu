@@ -1,5 +1,6 @@
 [workspace]
 members = [
+	"wgpu-core",
     "wgpu-native",
     "wgpu-remote",
 ]

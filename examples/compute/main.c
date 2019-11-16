@@ -59,6 +59,7 @@ int main(
     WGPUAdapterId adapter = { 0 };
     wgpu_request_adapter_async(
         NULL,
+        2 | 4 | 8,
         request_adapter_callback,
         (void *) &adapter
     );

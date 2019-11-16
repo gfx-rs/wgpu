@@ -8,15 +8,12 @@ mod texture;
 
 use crate::{
     hub::Storage,
+    id::{BindGroupId, SamplerId, TextureViewId, TypedId},
     Backend,
-    BindGroupId,
     Epoch,
     FastHashMap,
     Index,
     RefCount,
-    SamplerId,
-    TextureViewId,
-    TypedId,
 };
 
 use std::{
@@ -212,7 +209,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     pub fn init(
         &mut self,
         id: S::Id,
-        ref_count: &RefCount,
+        ref_count: RefCount,
         selector: S::Selector,
         default: S::Usage,
     ) -> bool {
@@ -228,7 +225,7 @@ impl<S: ResourceState> ResourceTracker<S> {
             .insert(
                 index,
                 Resource {
-                    ref_count: ref_count.clone(),
+                    ref_count,
                     state,
                     epoch,
                 },

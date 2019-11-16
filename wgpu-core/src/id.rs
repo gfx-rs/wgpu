@@ -78,42 +78,33 @@ impl<T> TypedId for Id<T> {
     }
 }
 
-#[cfg(not(feature = "local"))]
-pub type Input<T> = T;
-#[cfg(feature = "local")]
-pub type Input<T> = PhantomData<T>;
-#[cfg(feature = "local")]
-pub type Output<T> = T;
-#[cfg(not(feature = "local"))]
-pub type Output<T> = PhantomData<T>;
 
-
-pub type AdapterId = Id<crate::Adapter<Dummy>>;
-pub type DeviceId = Id<crate::Device<Dummy>>;
+pub type AdapterId = Id<crate::instance::Adapter<Dummy>>;
+pub type SurfaceId = Id<crate::instance::Surface>;
+// Device
+pub type DeviceId = Id<crate::device::Device<Dummy>>;
 pub type QueueId = DeviceId;
+pub type ShaderModuleId = Id<crate::device::ShaderModule<Dummy>>;
 // Resource
-pub type BufferId = Id<crate::Buffer<Dummy>>;
-pub type TextureViewId = Id<crate::TextureView<Dummy>>;
-pub type TextureId = Id<crate::Texture<Dummy>>;
-pub type SamplerId = Id<crate::Sampler<Dummy>>;
+pub type BufferId = Id<crate::resource::Buffer<Dummy>>;
+pub type TextureViewId = Id<crate::resource::TextureView<Dummy>>;
+pub type TextureId = Id<crate::resource::Texture<Dummy>>;
+pub type SamplerId = Id<crate::resource::Sampler<Dummy>>;
 // Binding model
-pub type BindGroupLayoutId = Id<crate::BindGroupLayout<Dummy>>;
-pub type PipelineLayoutId = Id<crate::PipelineLayout<Dummy>>;
-pub type BindGroupId = Id<crate::BindGroup<Dummy>>;
+pub type BindGroupLayoutId = Id<crate::binding_model::BindGroupLayout<Dummy>>;
+pub type PipelineLayoutId = Id<crate::binding_model::PipelineLayout<Dummy>>;
+pub type BindGroupId = Id<crate::binding_model::BindGroup<Dummy>>;
 // Pipeline
-pub type InputStateId = Id<crate::InputState>;
-pub type ShaderModuleId = Id<crate::ShaderModule<Dummy>>;
-pub type RenderPipelineId = Id<crate::RenderPipeline<Dummy>>;
-pub type ComputePipelineId = Id<crate::ComputePipeline<Dummy>>;
+pub type RenderPipelineId = Id<crate::pipeline::RenderPipeline<Dummy>>;
+pub type ComputePipelineId = Id<crate::pipeline::ComputePipeline<Dummy>>;
 // Command
-pub type CommandBufferId = Id<crate::CommandBuffer<Dummy>>;
+pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
 pub type CommandEncoderId = CommandBufferId;
-pub type RenderBundleId = Id<crate::RenderBundle<Dummy>>;
-pub type RenderPassId = Id<crate::RenderPass<Dummy>>;
-pub type ComputePassId = Id<crate::ComputePass<Dummy>>;
+pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
+pub type RenderPassId = Id<crate::command::RenderPass<Dummy>>;
+pub type ComputePassId = Id<crate::command::ComputePass<Dummy>>;
 // Swap chain
-pub type SurfaceId = Id<crate::Surface>;
-pub type SwapChainId = Id<crate::SwapChain<Dummy>>;
+pub type SwapChainId = Id<crate::swap_chain::SwapChain<Dummy>>;
 
 impl SurfaceId {
     pub(crate) fn to_swap_chain_id(&self, backend: Backend) -> SwapChainId {

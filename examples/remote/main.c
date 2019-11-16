@@ -31,7 +31,6 @@ int main() {
 
         WGPURequestAdapterOptions options = {
             .power_preference = WGPUPowerPreference_LowPower,
-            .backends = 2 | 4 | 8,
         };
         char index = wgpu_server_instance_request_adapter(server, &options, ids, count);
         if (index < 0) {

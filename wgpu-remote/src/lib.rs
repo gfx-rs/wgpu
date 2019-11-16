@@ -2,7 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use wgn::{AdapterId, Backend, DeviceId, IdentityManager, SurfaceId};
+use core::{
+    hub::IdentityManager,
+    id::{AdapterId, DeviceId},
+    Backend,
+};
 
 use parking_lot::Mutex;
 
@@ -10,24 +14,16 @@ use std::{ptr, slice};
 
 pub mod server;
 
-#[derive(Debug)]
+
+#[derive(Debug, Default)]
 struct IdentityHub {
-    adapters: IdentityManager<AdapterId>,
-    devices: IdentityManager<DeviceId>,
+    adapters: IdentityManager,
+    devices: IdentityManager,
 }
 
-impl IdentityHub {
-    fn new(backend: Backend) -> Self {
-        IdentityHub {
-            adapters: IdentityManager::new(backend),
-            devices: IdentityManager::new(backend),
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct Identities {
-    surfaces: IdentityManager<SurfaceId>,
+    surfaces: IdentityManager,
     vulkan: IdentityHub,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     metal: IdentityHub,
@@ -36,17 +32,6 @@ struct Identities {
 }
 
 impl Identities {
-    fn new() -> Self {
-        Identities {
-            surfaces: IdentityManager::new(Backend::Empty),
-            vulkan: IdentityHub::new(Backend::Vulkan),
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: IdentityHub::new(Backend::Metal),
-            #[cfg(windows)]
-            dx12: IdentityHub::new(Backend::Dx12),
-        }
-    }
-
     fn select(&mut self, backend: Backend) -> &mut IdentityHub {
         match backend {
             Backend::Vulkan => &mut self.vulkan,
@@ -75,7 +60,7 @@ pub struct Infrastructure {
 pub extern "C" fn wgpu_client_new() -> Infrastructure {
     log::info!("Initializing WGPU client");
     let client = Box::new(Client {
-        identities: Mutex::new(Identities::new()),
+        identities: Mutex::new(Identities::default()),
     });
     Infrastructure {
         client: Box::into_raw(client),
@@ -92,22 +77,22 @@ pub extern "C" fn wgpu_client_delete(client: *mut Client) {
 #[no_mangle]
 pub extern "C" fn wgpu_client_make_adapter_ids(
     client: &Client,
-    ids: *mut wgn::AdapterId,
+    ids: *mut AdapterId,
     id_length: usize,
 ) -> usize {
     let mut identities = client.identities.lock();
     assert_ne!(id_length, 0);
     let mut ids = unsafe { slice::from_raw_parts_mut(ids, id_length) }.iter_mut();
 
-    *ids.next().unwrap() = identities.vulkan.adapters.alloc();
+    *ids.next().unwrap() = identities.vulkan.adapters.alloc(Backend::Vulkan);
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     {
-        *ids.next().unwrap() = identities.metal.adapters.alloc();
+        *ids.next().unwrap() = identities.metal.adapters.alloc(Backend::Metal);
     }
     #[cfg(windows)]
     {
-        *ids.next().unwrap() = identities.dx12.adapters.alloc();
+        *ids.next().unwrap() = identities.dx12.adapters.alloc(Backend::Dx12);
     }
 
     id_length - ids.len()
@@ -116,7 +101,7 @@ pub extern "C" fn wgpu_client_make_adapter_ids(
 #[no_mangle]
 pub extern "C" fn wgpu_client_kill_adapter_ids(
     client: &Client,
-    ids: *const wgn::AdapterId,
+    ids: *const AdapterId,
     id_length: usize,
 ) {
     let mut identity = client.identities.lock();
@@ -127,20 +112,18 @@ pub extern "C" fn wgpu_client_kill_adapter_ids(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_device_id(
-    client: &Client,
-    adapter_id: wgn::AdapterId,
-) -> wgn::DeviceId {
+pub extern "C" fn wgpu_client_make_device_id(client: &Client, adapter_id: AdapterId) -> DeviceId {
+    let backend = adapter_id.backend();
     client
         .identities
         .lock()
-        .select(adapter_id.backend())
+        .select(backend)
         .devices
-        .alloc()
+        .alloc(backend)
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: wgn::DeviceId) {
+pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: DeviceId) {
     client
         .identities
         .lock()

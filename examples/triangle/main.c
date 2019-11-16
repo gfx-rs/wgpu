@@ -46,8 +46,8 @@ int main() {
     wgpu_request_adapter_async(
         &(WGPURequestAdapterOptions){
             .power_preference = WGPUPowerPreference_LowPower,
-            .backends = 2 | 4 | 8,
         },
+        2 | 4 | 8,
         request_adapter_callback,
         (void *) &adapter
     );

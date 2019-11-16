@@ -4,96 +4,77 @@
 
 use crate::{
     backend,
-    id::{Input, Output},
-    Adapter,
-    AdapterId,
+    binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
+    command::{CommandBuffer, ComputePass, RenderPass},
+    device::{Device, ShaderModule},
+    id::{
+        AdapterId,
+        BindGroupId,
+        BindGroupLayoutId,
+        BufferId,
+        CommandBufferId,
+        ComputePassId,
+        ComputePipelineId,
+        DeviceId,
+        PipelineLayoutId,
+        RenderPassId,
+        RenderPipelineId,
+        SamplerId,
+        ShaderModuleId,
+        SurfaceId,
+        SwapChainId,
+        TextureId,
+        TextureViewId,
+        TypedId,
+    },
+    instance::{Adapter, Instance, Surface},
+    pipeline::{ComputePipeline, RenderPipeline},
+    resource::{Buffer, Sampler, Texture, TextureView},
+    swap_chain::SwapChain,
     Backend,
-    BindGroup,
-    BindGroupId,
-    BindGroupLayout,
-    BindGroupLayoutId,
-    Buffer,
-    BufferId,
-    CommandBuffer,
-    CommandBufferId,
-    ComputePass,
-    ComputePassId,
-    ComputePipeline,
-    ComputePipelineId,
-    Device,
-    DeviceId,
     Epoch,
     Index,
-    Instance,
-    PipelineLayout,
-    PipelineLayoutId,
-    RenderPass,
-    RenderPassId,
-    RenderPipeline,
-    RenderPipelineId,
-    Sampler,
-    SamplerId,
-    ShaderModule,
-    ShaderModuleId,
-    Surface,
-    SurfaceId,
-    SwapChain,
-    SwapChainId,
-    Texture,
-    TextureId,
-    TextureView,
-    TextureViewId,
-    TypedId,
 };
 
-#[cfg(feature = "local")]
-use parking_lot::Mutex;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use vec_map::VecMap;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-#[cfg(feature = "local")]
-use std::sync::Arc;
 use std::{marker::PhantomData, ops};
 
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
-pub struct IdentityManager<I: TypedId> {
+pub struct IdentityManager {
     free: Vec<Index>,
     epochs: Vec<Epoch>,
-    backend: Backend,
-    phantom: PhantomData<I>,
 }
 
-impl<I: TypedId> IdentityManager<I> {
-    pub fn new(backend: Backend) -> Self {
+impl Default for IdentityManager {
+    fn default() -> Self {
         IdentityManager {
             free: Default::default(),
             epochs: Default::default(),
-            backend,
-            phantom: PhantomData,
         }
     }
 }
 
-impl<I: TypedId> IdentityManager<I> {
-    pub fn alloc(&mut self) -> I {
+impl IdentityManager {
+    pub fn alloc<I: TypedId>(&mut self, backend: Backend) -> I {
         match self.free.pop() {
-            Some(index) => I::zip(index, self.epochs[index as usize], self.backend),
+            Some(index) => I::zip(index, self.epochs[index as usize], backend),
             None => {
                 let epoch = 1;
-                let id = I::zip(self.epochs.len() as Index, epoch, self.backend);
+                let id = I::zip(self.epochs.len() as Index, epoch, backend);
                 self.epochs.push(epoch);
                 id
             }
         }
     }
 
-    pub fn free(&mut self, id: I) {
-        let (index, epoch, backend) = id.unzip();
-        debug_assert_eq!(backend, self.backend);
+    pub fn free<I: TypedId>(&mut self, id: I) {
+        let (index, epoch, _backend) = id.unzip();
         // avoid doing this check in release
         if cfg!(debug_assertions) {
             assert!(!self.free.contains(&index));
@@ -271,19 +252,57 @@ impl<'a, T> Drop for Token<'a, T> {
 }
 
 
+pub trait IdentityFilter<I> {
+    type Input: Clone;
+    fn process(&self, id: Self::Input, backend: Backend) -> I;
+    fn free(&self, id: I);
+}
+
+impl<I: TypedId + Clone> IdentityFilter<I> for () {
+    type Input = I;
+    fn process(&self, id: I, _backend: Backend) -> I {
+        //debug_assert_eq!(id.unzip().2, backend);
+        id
+    }
+    fn free(&self, _id: I) {}
+}
+
+impl<I: TypedId> IdentityFilter<I> for Mutex<IdentityManager> {
+    type Input = PhantomData<I>;
+    fn process(&self, _id: Self::Input, backend: Backend) -> I {
+        self.lock().alloc(backend)
+    }
+    fn free(&self, id: I) {
+        self.lock().free(id)
+    }
+}
+
+/// Compound trait for all the things a device cares about
+/// for the matter of destruction/cleanup.
+pub trait AllIdentityFilter:
+    IdentityFilter<BufferId>
+    + IdentityFilter<TextureId>
+    + IdentityFilter<TextureViewId>
+    + IdentityFilter<BindGroupId>
+    + IdentityFilter<SamplerId>
+{
+}
+
+impl AllIdentityFilter for Mutex<IdentityManager> {}
+impl AllIdentityFilter for () {}
+
+
 #[derive(Debug)]
-pub struct Registry<T, I: TypedId> {
-    #[cfg(feature = "local")]
-    pub identity: Mutex<IdentityManager<I>>,
+pub struct Registry<T, I: TypedId, F> {
+    pub(crate) identity: F,
     data: RwLock<Storage<T, I>>,
     backend: Backend,
 }
 
-impl<T, I: TypedId> Registry<T, I> {
+impl<T, I: TypedId, F: Default> Registry<T, I, F> {
     fn new(backend: Backend) -> Self {
         Registry {
-            #[cfg(feature = "local")]
-            identity: Mutex::new(IdentityManager::new(backend)),
+            identity: F::default(),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
                 _phantom: PhantomData,
@@ -293,42 +312,11 @@ impl<T, I: TypedId> Registry<T, I> {
     }
 }
 
-impl<T, I: TypedId + Copy> Registry<T, I> {
+impl<T, I: TypedId + Copy, F> Registry<T, I, F> {
     pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         debug_assert_eq!(id.unzip().2, self.backend);
         let old = self.data.write().insert(id, value);
         assert!(old.is_none());
-    }
-
-    #[cfg(feature = "local")]
-    pub fn new_identity(&self, _id_in: Input<I>) -> (I, Output<I>) {
-        let id = self.identity.lock().alloc();
-        (id, id)
-    }
-
-    #[cfg(not(feature = "local"))]
-    pub fn new_identity(&self, id_in: Input<I>) -> (I, Output<I>) {
-        //TODO: debug_assert_eq!(self.backend, id_in.backend());
-        (id_in, PhantomData)
-    }
-
-    pub fn register_identity<A: Access<T>>(
-        &self,
-        id_in: Input<I>,
-        value: T,
-        token: &mut Token<A>,
-    ) -> Output<I> {
-        let (id, output) = self.new_identity(id_in);
-        self.register(id, value, token);
-        output
-    }
-
-    pub fn unregister<A: Access<T>>(&self, id: I, _token: &mut Token<A>) -> (T, Token<T>) {
-        let value = self.data.write().remove(id).unwrap();
-        //Note: careful about the order here!
-        #[cfg(feature = "local")]
-        self.identity.lock().free(id);
-        (value, Token::new())
     }
 
     pub fn read<A: Access<T>>(
@@ -346,27 +334,47 @@ impl<T, I: TypedId + Copy> Registry<T, I> {
     }
 }
 
-#[derive(Debug)]
-pub struct Hub<B: hal::Backend> {
-    pub adapters: Registry<Adapter<B>, AdapterId>,
-    pub devices: Registry<Device<B>, DeviceId>,
-    pub swap_chains: Registry<SwapChain<B>, SwapChainId>,
-    pub pipeline_layouts: Registry<PipelineLayout<B>, PipelineLayoutId>,
-    pub shader_modules: Registry<ShaderModule<B>, ShaderModuleId>,
-    pub bind_group_layouts: Registry<BindGroupLayout<B>, BindGroupLayoutId>,
-    pub bind_groups: Registry<BindGroup<B>, BindGroupId>,
-    pub command_buffers: Registry<CommandBuffer<B>, CommandBufferId>,
-    pub render_passes: Registry<RenderPass<B>, RenderPassId>,
-    pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId>,
-    pub compute_passes: Registry<ComputePass<B>, ComputePassId>,
-    pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId>,
-    pub buffers: Registry<Buffer<B>, BufferId>,
-    pub textures: Registry<Texture<B>, TextureId>,
-    pub texture_views: Registry<TextureView<B>, TextureViewId>,
-    pub samplers: Registry<Sampler<B>, SamplerId>,
+impl<T, I: TypedId + Copy, F: IdentityFilter<I>> Registry<T, I, F> {
+    pub fn register_identity<A: Access<T>>(
+        &self,
+        id_in: F::Input,
+        value: T,
+        token: &mut Token<A>,
+    ) -> I {
+        let id = self.identity.process(id_in, self.backend);
+        self.register(id, value, token);
+        id
+    }
+
+    pub fn unregister<A: Access<T>>(&self, id: I, _token: &mut Token<A>) -> (T, Token<T>) {
+        let value = self.data.write().remove(id).unwrap();
+        //Note: careful about the order here!
+        self.identity.free(id);
+        (value, Token::new())
+    }
 }
 
-impl<B: GfxBackend> Default for Hub<B> {
+#[derive(Debug)]
+pub struct Hub<B: hal::Backend, F> {
+    pub adapters: Registry<Adapter<B>, AdapterId, F>,
+    pub devices: Registry<Device<B>, DeviceId, F>,
+    pub swap_chains: Registry<SwapChain<B>, SwapChainId, F>,
+    pub pipeline_layouts: Registry<PipelineLayout<B>, PipelineLayoutId, F>,
+    pub shader_modules: Registry<ShaderModule<B>, ShaderModuleId, F>,
+    pub bind_group_layouts: Registry<BindGroupLayout<B>, BindGroupLayoutId, F>,
+    pub bind_groups: Registry<BindGroup<B>, BindGroupId, F>,
+    pub command_buffers: Registry<CommandBuffer<B>, CommandBufferId, F>,
+    pub render_passes: Registry<RenderPass<B>, RenderPassId, F>,
+    pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId, F>,
+    pub compute_passes: Registry<ComputePass<B>, ComputePassId, F>,
+    pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId, F>,
+    pub buffers: Registry<Buffer<B>, BufferId, F>,
+    pub textures: Registry<Texture<B>, TextureId, F>,
+    pub texture_views: Registry<TextureView<B>, TextureViewId, F>,
+    pub samplers: Registry<Sampler<B>, SamplerId, F>,
+}
+
+impl<B: GfxBackend, F: Default> Default for Hub<B, F> {
     fn default() -> Self {
         Hub {
             adapters: Registry::new(B::VARIANT),
@@ -389,7 +397,7 @@ impl<B: GfxBackend> Default for Hub<B> {
     }
 }
 
-impl<B: hal::Backend> Drop for Hub<B> {
+impl<B: hal::Backend, F> Drop for Hub<B, F> {
     fn drop(&mut self) {
         use crate::resource::TextureViewInner;
         use hal::device::Device as _;
@@ -398,7 +406,9 @@ impl<B: hal::Backend> Drop for Hub<B> {
 
         for (_, (sampler, _)) in self.samplers.data.write().map.drain() {
             unsafe {
-                devices[sampler.device_id.value].raw.destroy_sampler(sampler.raw);
+                devices[sampler.device_id.value]
+                    .raw
+                    .destroy_sampler(sampler.raw);
             }
         }
         {
@@ -417,16 +427,22 @@ impl<B: hal::Backend> Drop for Hub<B> {
         }
         for (_, (texture, _)) in self.textures.data.write().map.drain() {
             unsafe {
-                devices[texture.device_id.value].raw.destroy_image(texture.raw);
+                devices[texture.device_id.value]
+                    .raw
+                    .destroy_image(texture.raw);
             }
         }
         for (_, (buffer, _)) in self.buffers.data.write().map.drain() {
             unsafe {
-                devices[buffer.device_id.value].raw.destroy_buffer(buffer.raw);
+                devices[buffer.device_id.value]
+                    .raw
+                    .destroy_buffer(buffer.raw);
             }
         }
         for (_, (command_buffer, _)) in self.command_buffers.data.write().map.drain() {
-            devices[command_buffer.device_id.value].com_allocator.after_submit(command_buffer, 0);
+            devices[command_buffer.device_id.value]
+                .com_allocator
+                .after_submit(command_buffer, 0);
         }
         for (_, (bind_group, _)) in self.bind_groups.data.write().map.drain() {
             let device = &devices[bind_group.device_id.value];
@@ -451,29 +467,29 @@ impl<B: hal::Backend> Drop for Hub<B> {
 }
 
 #[derive(Debug, Default)]
-pub struct Hubs {
+pub struct Hubs<F> {
     #[cfg(any(
         not(any(target_os = "ios", target_os = "macos")),
         feature = "gfx-backend-vulkan"
     ))]
-    vulkan: Hub<backend::Vulkan>,
+    vulkan: Hub<backend::Vulkan, F>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    metal: Hub<backend::Metal>,
+    metal: Hub<backend::Metal, F>,
     #[cfg(windows)]
-    dx12: Hub<backend::Dx12>,
+    dx12: Hub<backend::Dx12, F>,
     #[cfg(windows)]
-    dx11: Hub<backend::Dx11>,
+    dx11: Hub<backend::Dx11, F>,
 }
 
 #[derive(Debug)]
-pub struct Global {
+pub struct Global<F> {
     pub instance: Instance,
-    pub surfaces: Registry<Surface, SurfaceId>,
-    hubs: Hubs,
+    pub surfaces: Registry<Surface, SurfaceId, F>,
+    hubs: Hubs<F>,
 }
 
-impl Global {
-    fn new_impl(name: &str) -> Self {
+impl<F: Default> Global<F> {
+    pub fn new(name: &str) -> Self {
         Global {
             instance: Instance::new(name, 1),
             surfaces: Registry::new(Backend::Empty),
@@ -481,14 +497,12 @@ impl Global {
         }
     }
 
-    #[cfg(not(feature = "local"))]
-    pub fn new(name: &str) -> Self {
-        Self::new_impl(name)
-    }
-
-    #[cfg(not(feature = "local"))]
     pub fn delete(self) {
-        let Global { mut instance, surfaces, hubs } = self;
+        let Global {
+            mut instance,
+            surfaces,
+            hubs,
+        } = self;
         drop(hubs);
         // destroy surfaces
         for (_, (surface, _)) in surfaces.data.write().map.drain() {
@@ -497,14 +511,9 @@ impl Global {
     }
 }
 
-#[cfg(feature = "local")]
-lazy_static::lazy_static! {
-    pub static ref GLOBAL: Arc<Global> = Arc::new(Global::new_impl("wgpu"));
-}
-
 pub trait GfxBackend: hal::Backend {
     const VARIANT: Backend;
-    fn hub(global: &Global) -> &Hub<Self>;
+    fn hub<F>(global: &Global<F>) -> &Hub<Self, F>;
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
@@ -514,7 +523,7 @@ pub trait GfxBackend: hal::Backend {
 ))]
 impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
-    fn hub(global: &Global) -> &Hub<Self> {
+    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.vulkan
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
@@ -525,7 +534,7 @@ impl GfxBackend for backend::Vulkan {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
-    fn hub(global: &Global) -> &Hub<Self> {
+    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
@@ -536,7 +545,7 @@ impl GfxBackend for backend::Metal {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
-    fn hub(global: &Global) -> &Hub<Self> {
+    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.dx12
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
@@ -547,7 +556,7 @@ impl GfxBackend for backend::Dx12 {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
-    fn hub(global: &Global) -> &Hub<Self> {
+    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
