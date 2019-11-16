@@ -138,7 +138,9 @@ pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
     }
 }
 
-pub fn map_primitive_topology(primitive_topology: pipeline::PrimitiveTopology) -> hal::pso::Primitive {
+pub fn map_primitive_topology(
+    primitive_topology: pipeline::PrimitiveTopology,
+) -> hal::pso::Primitive {
     use crate::pipeline::PrimitiveTopology as Pt;
     use hal::pso::Primitive as H;
     match primitive_topology {

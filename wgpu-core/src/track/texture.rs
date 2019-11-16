@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{range::RangedStates, PendingTransition, ResourceState, Stitch, Unit};
-use crate::{conv, device::MAX_MIP_LEVELS, resource::TextureUsage, TextureId};
+use crate::{conv, device::MAX_MIP_LEVELS, id::TextureId, resource::TextureUsage};
 
 use arrayvec::ArrayVec;
 

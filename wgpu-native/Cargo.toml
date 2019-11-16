@@ -13,41 +13,19 @@ keywords = ["graphics"]
 license = "MPL-2.0"
 
 [lib]
-# Enabling these targets makes our CI bots try to build them and fail atm
 crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
-local = ["lazy_static", "raw-window-handle"]
-metal-auto-capture = ["gfx-backend-metal/auto-capture"]
-#NOTE: glutin feature is not stable, use at your own risk
-#glutin = ["gfx-backend-gl/glutin"]
+#metal-auto-capture = ["gfx-backend-metal/auto-capture"]
+vulkan-portability = ["core/gfx-backend-vulkan"]
+
+[dependencies.core]
+path = "../wgpu-core"
+package = "wgpu-core"
+version = "0.1"
 
 [dependencies]
-arrayvec = "0.5"
-bitflags = "1.0"
-copyless = "0.1"
-fxhash = "0.2"
-lazy_static = { version = "1.1.0", optional = true }
-log = "0.4"
-hal = { package = "gfx-hal", version = "0.4" }
-gfx-backend-empty = { version = "0.4" }
+lazy_static = "1.1"
 parking_lot = "0.9"
-raw-window-handle = { version = "0.3", optional = true }
-rendy-memory = "0.5"
-rendy-descriptor = "0.5"
-serde = { version = "1.0", features = ["serde_derive"], optional = true }
-smallvec = "0.6"
-vec_map = "0.8"
-
-[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { version = "0.4" }
-gfx-backend-vulkan = { version = "0.4", optional = true }
-
-[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.4", features = ["x11"] }
-
-[target.'cfg(windows)'.dependencies]
-gfx-backend-dx12 = { version = "0.4.1" }
-gfx-backend-dx11 = { version = "0.4" }
-gfx-backend-vulkan = { version = "0.4" }
+raw-window-handle = "0.3"

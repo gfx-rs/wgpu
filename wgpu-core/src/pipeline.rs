@@ -4,15 +4,12 @@
 
 use crate::{
     device::RenderPassContext,
+    id::{PipelineLayoutId, ShaderModuleId},
     resource,
     BufferAddress,
-    PipelineLayoutId,
     RawString,
-    ShaderModuleId,
     U32Array,
 };
-
-use bitflags::bitflags;
 
 pub type ShaderLocation = u32;
 
@@ -50,7 +47,7 @@ impl Default for BlendOperation {
     }
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[repr(transparent)]
     pub struct ColorWrite: u32 {
         const RED = 1;
@@ -334,7 +331,7 @@ pub struct RenderPipelineDescriptor {
     pub alpha_to_coverage_enabled: bool,
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
         const BLEND_COLOR = 1;

@@ -27,8 +27,6 @@ typedef enum {
 
 typedef struct WGPUClient WGPUClient;
 
-typedef struct WGPUGlobal WGPUGlobal;
-
 typedef uint64_t WGPUId_Adapter_Dummy;
 
 typedef WGPUId_Adapter_Dummy WGPUAdapterId;
@@ -55,11 +53,8 @@ typedef struct {
   WGPULimits limits;
 } WGPUDeviceDescriptor;
 
-typedef uint32_t WGPUBackendBit;
-
 typedef struct {
   WGPUPowerPreference power_preference;
-  WGPUBackendBit backends;
 } WGPURequestAdapterOptions;
 
 WGPU_INLINE

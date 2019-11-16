@@ -22,7 +22,7 @@ exclude = ["BufferMapResult"]
 
 [parse]
 parse_deps = true
-include = ["wgpu-native"]
+include = ["wgpu-core"]
 
 [fn]
 prefix = "WGPU_INLINE"

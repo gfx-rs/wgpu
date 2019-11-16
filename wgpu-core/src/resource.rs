@@ -3,26 +3,22 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    device::{BufferMapReadCallback, BufferMapWriteCallback},
+    id::{DeviceId, SwapChainId, TextureId},
     BufferAddress,
-    BufferMapReadCallback,
-    BufferMapWriteCallback,
-    DeviceId,
     Extent3d,
     LifeGuard,
     RefCount,
     Stored,
-    SwapChainId,
-    TextureId,
 };
 
-use bitflags::bitflags;
 use hal;
 use rendy_memory::MemoryBlock;
 use smallvec::SmallVec;
 
 use std::borrow::Borrow;
 
-bitflags! {
+bitflags::bitflags! {
     #[repr(transparent)]
     pub struct BufferUsage: u32 {
         const MAP_READ = 1;
@@ -178,7 +174,7 @@ pub enum TextureFormat {
     Depth24PlusStencil8 = 43,
 }
 
-bitflags! {
+bitflags::bitflags! {
     #[repr(transparent)]
     pub struct TextureUsage: u32 {
         const COPY_SRC = 1;

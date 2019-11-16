@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{PendingTransition, ResourceState, Stitch, Unit};
-use crate::{conv, resource::BufferUsage, BufferId};
+use crate::{conv, id::BufferId, resource::BufferUsage};
 use std::ops::Range;
 
 //TODO: store `hal::buffer::State` here to avoid extra conversions
@@ -106,7 +106,7 @@ impl ResourceState for BufferState {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{Backend, TypedId};
+    use crate::{id::TypedId, Backend};
 
     #[test]
     fn change() {

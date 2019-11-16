@@ -22,10 +22,8 @@ prefix = "WGPU"
 exclude = ["BufferMapResult"]
 
 [parse]
-parse_deps = false
-
-[parse.expand]
-features = ["local"]
+parse_deps = true
+include = ["wgpu-core"]
 
 [fn]
 
@@ -40,7 +38,3 @@ derive_helper_methods = true
 bitflags = true
 
 [defines]
-"feature = local" = "WGPU_LOCAL"
-"feature = gfx-backend-gl" = "WGPU_BACKEND_GL"
-"feature = winit" = "WGPU_WINIT"
-"feature = glutin" = "WGPU_GLUTIN"

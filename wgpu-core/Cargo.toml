@@ -1,0 +1,48 @@
+[package]
+name = "wgpu-core"
+version = "0.1.0"
+authors = [
+	"Dzmitry Malyshau <kvark@mozilla.com>",
+	"Joshua Groves <josh@joshgroves.com>",
+]
+edition = "2018"
+description = "WebGPU core logic on gfx-hal/rendy"
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MPL-2.0"
+
+[lib]
+
+[features]
+default = []
+metal-auto-capture = ["gfx-backend-metal/auto-capture"]
+#NOTE: glutin feature is not stable, use at your own risk
+#glutin = ["gfx-backend-gl/glutin"]
+
+[dependencies]
+arrayvec = "0.5"
+bitflags = "1.0"
+copyless = "0.1"
+fxhash = "0.2"
+log = "0.4"
+hal = { package = "gfx-hal", version = "0.4" }
+gfx-backend-empty = { version = "0.4" }
+parking_lot = "0.9"
+rendy-memory = "0.5"
+rendy-descriptor = "0.5"
+serde = { version = "1.0", features = ["serde_derive"], optional = true }
+smallvec = "0.6"
+vec_map = "0.8"
+
+[target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
+gfx-backend-metal = { version = "0.4" }
+gfx-backend-vulkan = { version = "0.4", optional = true }
+
+[target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
+gfx-backend-vulkan = { version = "0.4", features = ["x11"] }
+
+[target.'cfg(windows)'.dependencies]
+gfx-backend-dx12 = { version = "0.4.1" }
+gfx-backend-dx11 = { version = "0.4" }
+gfx-backend-vulkan = { version = "0.4" }
