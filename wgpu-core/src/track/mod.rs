@@ -29,6 +29,8 @@ use buffer::BufferState;
 use texture::TextureState;
 
 
+pub const SEPARATE_DEPTH_STENCIL_STATES: bool = false;
+
 /// A single unit of state tracking. It keeps an initial
 /// usage as well as the last/current one, similar to `Range`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -349,7 +351,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// the last read-only usage, if possible.
     ///
     /// Returns the old usage as an error if there is a conflict.
-    pub fn use_extend<'a, T: 'a + Borrow<RefCount>>(
+    pub fn use_extend<'a, T: 'a + Borrow<RefCount> + Borrow<S::Selector>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
@@ -366,7 +368,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Combines storage access by 'Id' with the transition that replaces
     /// the last usage with a new one, returning an iterator over these
     /// transitions.
-    pub fn use_replace<'a, T: 'a + Borrow<RefCount>>(
+    pub fn use_replace<'a, T: 'a + Borrow<RefCount> + Borrow<S::Selector>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
@@ -411,6 +413,8 @@ impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
 
     fn optimize(&mut self) {}
 }
+
+pub const DUMMY_SELECTOR: () = ();
 
 
 /// A set of trackers for all relevant resources.

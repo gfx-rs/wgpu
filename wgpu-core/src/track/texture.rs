@@ -129,7 +129,7 @@ impl ResourceState for TextureState {
                     let pending = PendingTransition {
                         id,
                         selector: hal::image::SubresourceRange {
-                            aspects: hal::format::Aspects::COLOR,
+                            aspects: aspect,
                             levels: level .. level + 1,
                             layers: range.clone(),
                         },
@@ -158,7 +158,7 @@ impl ResourceState for TextureState {
 
         for (mip_id, (mip_self, mip_other)) in self.mips.iter_mut().zip(&other.mips).enumerate() {
             let level = mip_id as hal::image::Level;
-            for &mut (aspects, ref mut planes_self, planes_other) in &mut [
+            for &mut (aspect, ref mut planes_self, planes_other) in &mut [
                 (
                     hal::format::Aspects::COLOR,
                     &mut mip_self.color,
@@ -203,7 +203,7 @@ impl ResourceState for TextureState {
                                 let pending = PendingTransition {
                                     id,
                                     selector: hal::image::SubresourceRange {
-                                        aspects,
+                                        aspects: aspect,
                                         levels: level .. level + 1,
                                         layers: layers.clone(),
                                     },

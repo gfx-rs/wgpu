@@ -29,7 +29,7 @@ use crate::{
     pipeline,
     resource,
     swap_chain,
-    track::{Stitch, TrackerSet},
+    track::{SEPARATE_DEPTH_STENCIL_STATES, Stitch, TrackerSet},
     BufferAddress,
     FastHashMap,
     Features,
@@ -931,10 +931,14 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
                     (desc.base_array_layer + desc.array_layer_count) as u16
                 };
                 let range = hal::image::SubresourceRange {
-                    aspects: match desc.aspect {
-                        resource::TextureAspect::All => texture.full_range.aspects,
-                        resource::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
-                        resource::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+                    aspects: if SEPARATE_DEPTH_STENCIL_STATES {
+                        match desc.aspect {
+                            resource::TextureAspect::All => texture.full_range.aspects,
+                            resource::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
+                            resource::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+                        }
+                    } else {
+                        texture.full_range.aspects
                     },
                     levels: desc.base_mip_level as u8 .. end_level,
                     layers: desc.base_array_layer as u16 .. end_layer,
