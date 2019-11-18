@@ -662,6 +662,7 @@ impl<B: GfxBackend> Device<B> {
             usage: desc.usage,
             memory,
             size: desc.size,
+            full_range: (),
             mapped_write_ranges: Vec::new(),
             pending_map_operation: None,
             life_guard: LifeGuard::new(),
@@ -2015,7 +2016,7 @@ impl<F> Global<F> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (device_id, ref_count) = {
+        let (device_id, ref_count, full_range) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
@@ -2033,7 +2034,7 @@ impl<F> Global<F> {
             }
 
             buffer.pending_map_operation = Some(operation);
-            (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+            (buffer.device_id.value, buffer.life_guard.ref_count.clone(), buffer.full_range)
         };
 
         let device = &device_guard[device_id];
@@ -2042,7 +2043,7 @@ impl<F> Global<F> {
             .trackers
             .lock()
             .buffers
-            .change_replace(buffer_id, &ref_count, (), usage);
+            .change_replace(buffer_id, &ref_count, (), usage, &full_range);
 
         device.pending.lock().map(buffer_id, ref_count);
     }

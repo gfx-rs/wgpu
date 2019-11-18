@@ -21,7 +21,7 @@ struct MipState {
     stencil: PlaneStates,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct TextureState {
     mips: ArrayVec<[MipState; MAX_MIP_LEVELS]>,
 }
@@ -70,6 +70,14 @@ impl ResourceState for TextureState {
     type Selector = hal::image::SubresourceRange;
     type Usage = TextureUsage;
 
+    fn new(full_selector: &Self::Selector) -> Self {
+        TextureState {
+            mips: (0 .. full_selector.levels.end)
+                .map(|_| MipState::default())
+                .collect(),
+        }
+    }
+
     fn query(&self, selector: Self::Selector) -> Option<Self::Usage> {
         let mut result = None;
         let num_levels = self.mips.len();
@@ -104,9 +112,6 @@ impl ResourceState for TextureState {
         usage: Self::Usage,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
-        while self.mips.len() < selector.levels.end as usize {
-            self.mips.push(MipState::default());
-        }
         for (mip_id, mip) in self.mips
             [selector.levels.start as usize .. selector.levels.end as usize]
             .iter_mut()
@@ -244,7 +249,11 @@ mod test {
 
     #[test]
     fn query() {
-        let mut ts = TextureState::default();
+        let mut ts = TextureState::new(&SubresourceRange {
+            aspects: Aspects::all(),
+            levels: 0 .. 10,
+            layers: 0 .. 10,
+        });
         ts.mips.push(MipState::default());
         ts.mips.push(MipState::default());
         ts.mips[1].color = PlaneStates::new(&[

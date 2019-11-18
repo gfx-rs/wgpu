@@ -93,6 +93,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) usage: BufferUsage,
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: BufferAddress,
+    pub(crate) full_range: (),
     pub(crate) mapped_write_ranges: Vec<std::ops::Range<u64>>,
     pub(crate) pending_map_operation: Option<BufferMapOperation>,
     pub(crate) life_guard: LifeGuard,
