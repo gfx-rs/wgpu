@@ -5,6 +5,7 @@
 use crate::{
     device::{BufferMapReadCallback, BufferMapWriteCallback},
     id::{DeviceId, SwapChainId, TextureId},
+    track::DUMMY_SELECTOR,
     BufferAddress,
     Extent3d,
     LifeGuard,
@@ -92,6 +93,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) usage: BufferUsage,
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: BufferAddress,
+    pub(crate) full_range: (),
     pub(crate) mapped_write_ranges: Vec<std::ops::Range<u64>>,
     pub(crate) pending_map_operation: Option<BufferMapOperation>,
     pub(crate) life_guard: LifeGuard,
@@ -100,6 +102,12 @@ pub struct Buffer<B: hal::Backend> {
 impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
     fn borrow(&self) -> &RefCount {
         &self.life_guard.ref_count
+    }
+}
+
+impl<B: hal::Backend> Borrow<()> for Buffer<B> {
+    fn borrow(&self) -> &() {
+        &DUMMY_SELECTOR
     }
 }
 
@@ -225,6 +233,12 @@ impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
     }
 }
 
+impl<B: hal::Backend> Borrow<hal::image::SubresourceRange> for Texture<B> {
+    fn borrow(&self) -> &hal::image::SubresourceRange {
+        &self.full_range
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum TextureAspect {
@@ -289,6 +303,12 @@ pub struct TextureView<B: hal::Backend> {
 impl<B: hal::Backend> Borrow<RefCount> for TextureView<B> {
     fn borrow(&self) -> &RefCount {
         &self.life_guard.ref_count
+    }
+}
+
+impl<B: hal::Backend> Borrow<()> for TextureView<B> {
+    fn borrow(&self) -> &() {
+        &DUMMY_SELECTOR
     }
 }
 
@@ -365,5 +385,11 @@ pub struct Sampler<B: hal::Backend> {
 impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {
     fn borrow(&self) -> &RefCount {
         &self.life_guard.ref_count
+    }
+}
+
+impl<B: hal::Backend> Borrow<()> for Sampler<B> {
+    fn borrow(&self) -> &() {
+        &DUMMY_SELECTOR
     }
 }

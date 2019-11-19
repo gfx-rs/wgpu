@@ -5,7 +5,7 @@
 use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     resource::TextureViewDimension,
-    track::TrackerSet,
+    track::{DUMMY_SELECTOR, TrackerSet},
     BufferAddress,
     LifeGuard,
     RefCount,
@@ -123,5 +123,11 @@ pub struct BindGroup<B: hal::Backend> {
 impl<B: hal::Backend> Borrow<RefCount> for BindGroup<B> {
     fn borrow(&self) -> &RefCount {
         &self.life_guard.ref_count
+    }
+}
+
+impl<B: hal::Backend> Borrow<()> for BindGroup<B> {
+    fn borrow(&self) -> &() {
+        &DUMMY_SELECTOR
     }
 }

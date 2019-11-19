@@ -16,19 +16,17 @@ impl PendingTransition<BufferState> {
     }
 }
 
-impl Default for BufferState {
-    fn default() -> Self {
+impl ResourceState for BufferState {
+    type Id = BufferId;
+    type Selector = ();
+    type Usage = BufferUsage;
+
+    fn new(_full_selector: &Self::Selector) -> Self {
         BufferState {
             init: BufferUsage::empty(),
             last: BufferUsage::empty(),
         }
     }
-}
-
-impl ResourceState for BufferState {
-    type Id = BufferId;
-    type Selector = ();
-    type Usage = BufferUsage;
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(self.last)

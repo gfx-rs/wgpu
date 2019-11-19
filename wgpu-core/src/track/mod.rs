@@ -29,6 +29,8 @@ use buffer::BufferState;
 use texture::TextureState;
 
 
+pub const SEPARATE_DEPTH_STENCIL_STATES: bool = false;
+
 /// A single unit of state tracking. It keeps an initial
 /// usage as well as the last/current one, similar to `Range`.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -71,13 +73,16 @@ pub enum Stitch {
 
 /// The main trait that abstracts away the tracking logic of
 /// a particular resource type, like a buffer or a texture.
-pub trait ResourceState: Clone + Default {
+pub trait ResourceState: Clone {
     /// Corresponding `HUB` identifier.
     type Id: Copy + Debug + TypedId;
     /// A type specifying the sub-resources.
     type Selector: Debug;
     /// Usage type for a `Unit` of a sub-resource.
     type Usage: Debug;
+
+    /// Create a new resource state to track the specified subresources.
+    fn new(full_selector: &Self::Selector) -> Self;
 
     /// Check if all the selected sub-resources have the same
     /// usage, and return it.
@@ -213,7 +218,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         selector: S::Selector,
         default: S::Usage,
     ) -> bool {
-        let mut state = S::default();
+        let mut state = S::new(&selector);
         match state.change(id, selector, default, None) {
             Ok(()) => (),
             Err(_) => unreachable!(),
@@ -252,13 +257,14 @@ impl<S: ResourceState> ResourceTracker<S> {
         map: &'a mut FastHashMap<Index, Resource<S>>,
         id: S::Id,
         ref_count: &RefCount,
+        full_selector: &S::Selector,
     ) -> &'a mut Resource<S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(self_backend, backend);
         match map.entry(index) {
             Entry::Vacant(e) => e.insert(Resource {
                 ref_count: ref_count.clone(),
-                state: S::default(),
+                state: S::new(full_selector),
                 epoch,
             }),
             Entry::Occupied(e) => {
@@ -277,8 +283,9 @@ impl<S: ResourceState> ResourceTracker<S> {
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
+        full_selector: &S::Selector,
     ) -> Result<(), PendingTransition<S>> {
-        Self::get_or_insert(self.backend, &mut self.map, id, ref_count)
+        Self::get_or_insert(self.backend, &mut self.map, id, ref_count, full_selector)
             .state
             .change(id, selector, usage, None)
     }
@@ -290,8 +297,9 @@ impl<S: ResourceState> ResourceTracker<S> {
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
+        full_selector: &S::Selector,
     ) -> Drain<PendingTransition<S>> {
-        let res = Self::get_or_insert(self.backend, &mut self.map, id, ref_count);
+        let res = Self::get_or_insert(self.backend, &mut self.map, id, ref_count, full_selector);
         res.state
             .change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
@@ -349,7 +357,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// the last read-only usage, if possible.
     ///
     /// Returns the old usage as an error if there is a conflict.
-    pub fn use_extend<'a, T: 'a + Borrow<RefCount>>(
+    pub fn use_extend<'a, T: 'a + Borrow<RefCount> + Borrow<S::Selector>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
@@ -357,7 +365,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         usage: S::Usage,
     ) -> Result<&'a T, S::Usage> {
         let item = &storage[id];
-        self.change_extend(id, item.borrow(), selector, usage)
+        self.change_extend(id, item.borrow(), selector, usage, item.borrow())
             .map(|()| item)
             .map_err(|pending| pending.usage.start)
     }
@@ -366,7 +374,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Combines storage access by 'Id' with the transition that replaces
     /// the last usage with a new one, returning an iterator over these
     /// transitions.
-    pub fn use_replace<'a, T: 'a + Borrow<RefCount>>(
+    pub fn use_replace<'a, T: 'a + Borrow<RefCount> + Borrow<S::Selector>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
@@ -374,7 +382,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         usage: S::Usage,
     ) -> (&'a T, Drain<PendingTransition<S>>) {
         let item = &storage[id];
-        let drain = self.change_replace(id, item.borrow(), selector, usage);
+        let drain = self.change_replace(id, item.borrow(), selector, usage, item.borrow());
         (item, drain)
     }
 }
@@ -384,6 +392,10 @@ impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
     type Id = I;
     type Selector = ();
     type Usage = ();
+
+    fn new(_full_selector: &Self::Selector) -> Self {
+        PhantomData
+    }
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(())
@@ -411,6 +423,8 @@ impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
 
     fn optimize(&mut self) {}
 }
+
+pub const DUMMY_SELECTOR: () = ();
 
 
 /// A set of trackers for all relevant resources.

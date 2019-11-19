@@ -296,6 +296,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                 &texture.life_guard.ref_count,
                                 view.range.clone(),
                                 TextureUsage::OUTPUT_ATTACHMENT,
+                                &texture.full_range,
                             );
 
                             barriers.extend(pending.map(|pending| {
@@ -363,6 +364,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                         &texture.life_guard.ref_count,
                                         view.range.clone(),
                                         TextureUsage::OUTPUT_ATTACHMENT,
+                                        &texture.full_range,
                                     );
                                     barriers.extend(pending.map(|pending| {
                                         log::trace!("\tcolor {:?}", pending);
@@ -445,6 +447,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                         &texture.life_guard.ref_count,
                                         view.range.clone(),
                                         TextureUsage::OUTPUT_ATTACHMENT,
+                                        &texture.full_range,
                                     );
                                     barriers.extend(pending.map(|pending| {
                                         log::trace!("\tresolve {:?}", pending);

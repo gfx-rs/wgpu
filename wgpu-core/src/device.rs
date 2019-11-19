@@ -29,7 +29,7 @@ use crate::{
     pipeline,
     resource,
     swap_chain,
-    track::{Stitch, TrackerSet},
+    track::{SEPARATE_DEPTH_STENCIL_STATES, Stitch, TrackerSet},
     BufferAddress,
     FastHashMap,
     Features,
@@ -662,6 +662,7 @@ impl<B: GfxBackend> Device<B> {
             usage: desc.usage,
             memory,
             size: desc.size,
+            full_range: (),
             mapped_write_ranges: Vec::new(),
             pending_map_operation: None,
             life_guard: LifeGuard::new(),
@@ -931,10 +932,14 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
                     (desc.base_array_layer + desc.array_layer_count) as u16
                 };
                 let range = hal::image::SubresourceRange {
-                    aspects: match desc.aspect {
-                        resource::TextureAspect::All => texture.full_range.aspects,
-                        resource::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
-                        resource::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+                    aspects: if SEPARATE_DEPTH_STENCIL_STATES {
+                        match desc.aspect {
+                            resource::TextureAspect::All => texture.full_range.aspects,
+                            resource::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
+                            resource::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+                        }
+                    } else {
+                        texture.full_range.aspects
                     },
                     levels: desc.base_mip_level as u8 .. end_level,
                     layers: desc.base_array_layer as u16 .. end_layer,
@@ -2011,7 +2016,7 @@ impl<F> Global<F> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (device_id, ref_count) = {
+        let (device_id, ref_count, full_range) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
@@ -2029,7 +2034,7 @@ impl<F> Global<F> {
             }
 
             buffer.pending_map_operation = Some(operation);
-            (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+            (buffer.device_id.value, buffer.life_guard.ref_count.clone(), buffer.full_range)
         };
 
         let device = &device_guard[device_id];
@@ -2038,7 +2043,7 @@ impl<F> Global<F> {
             .trackers
             .lock()
             .buffers
-            .change_replace(buffer_id, &ref_count, (), usage);
+            .change_replace(buffer_id, &ref_count, (), usage, &full_range);
 
         device.pending.lock().map(buffer_id, ref_count);
     }
