@@ -20,12 +20,19 @@ license = "MPL-2.0"
 [features]
 default = []
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
-vulkan = ["wgn/gfx-backend-vulkan"]
+vulkan = ["wgn/vulkan-portability"]
 
 [dependencies.wgn]
 package = "wgpu-native"
 version = "0.4"
-features = ["local"]
+git = "https://github.com/gfx-rs/wgpu"
+rev = "73b33ea76e2f91b3114aa7640b1d60518d39f915"
+
+[dependencies.core]
+package = "wgpu-core"
+version = "0.1"
+git = "https://github.com/gfx-rs/wgpu"
+rev = "73b33ea76e2f91b3114aa7640b1d60518d39f915"
 
 [dependencies]
 arrayvec = "0.5"
