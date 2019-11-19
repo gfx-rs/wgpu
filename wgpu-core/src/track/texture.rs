@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use super::{range::RangedStates, PendingTransition, ResourceState, Stitch, Unit};
+use super::{SEPARATE_DEPTH_STENCIL_STATES, range::RangedStates, PendingTransition, ResourceState, Stitch, Unit};
 use crate::{conv, device::MAX_MIP_LEVELS, id::TextureId, resource::TextureUsage};
 
 use arrayvec::ArrayVec;
@@ -10,16 +10,9 @@ use arrayvec::ArrayVec;
 use std::ops::Range;
 
 
-type PlaneStates = RangedStates<hal::image::Layer, Unit<TextureUsage>>;
-
-
 //TODO: store `hal::image::State` here to avoid extra conversions
-#[derive(Clone, Debug, Default)]
-struct MipState {
-    color: PlaneStates,
-    depth: PlaneStates,
-    stencil: PlaneStates,
-}
+type PlaneStates = RangedStates<hal::image::Layer, Unit<TextureUsage>>;
+type MipState = ArrayVec<[(hal::format::Aspects, PlaneStates); 2]>;
 
 #[derive(Clone, Debug)]
 pub struct TextureState {
@@ -73,8 +66,18 @@ impl ResourceState for TextureState {
     fn new(full_selector: &Self::Selector) -> Self {
         TextureState {
             mips: (0 .. full_selector.levels.end)
-                .map(|_| MipState::default())
-                .collect(),
+                .map(|_| {
+                    let mut slices = ArrayVec::new();
+                    let aspects_without_stencil = full_selector.aspects & !hal::format::Aspects::STENCIL;
+                    if SEPARATE_DEPTH_STENCIL_STATES && full_selector.aspects != aspects_without_stencil {
+                        slices.push((aspects_without_stencil, PlaneStates::default()));
+                        slices.push((hal::format::Aspects::STENCIL, PlaneStates::default()));
+                    } else {
+                        slices.push((full_selector.aspects, PlaneStates::default()))
+                    }
+                    slices
+                })
+                .collect()
         }
     }
 
@@ -84,12 +87,8 @@ impl ResourceState for TextureState {
         let mip_start = num_levels.min(selector.levels.start as usize);
         let mip_end = num_levels.min(selector.levels.end as usize);
         for mip in self.mips[mip_start .. mip_end].iter() {
-            for &(aspect, plane_states) in &[
-                (hal::format::Aspects::COLOR, &mip.color),
-                (hal::format::Aspects::DEPTH, &mip.depth),
-                (hal::format::Aspects::STENCIL, &mip.stencil),
-            ] {
-                if !selector.aspects.contains(aspect) {
+            for &(aspects, ref plane_states) in mip {
+                if !selector.aspects.intersects(aspects) {
                     continue;
                 }
                 match plane_states.query(&selector.layers, |unit| unit.last) {
@@ -118,14 +117,12 @@ impl ResourceState for TextureState {
             .enumerate()
         {
             let level = selector.levels.start + mip_id as hal::image::Level;
-            for &mut (aspect, ref mut plane_states) in &mut [
-                (hal::format::Aspects::COLOR, &mut mip.color),
-                (hal::format::Aspects::DEPTH, &mut mip.depth),
-                (hal::format::Aspects::STENCIL, &mut mip.stencil),
-            ] {
-                if !selector.aspects.contains(aspect) {
+            for &mut (mip_aspects, ref mut plane_states) in mip {
+                let aspects = selector.aspects & mip_aspects;
+                if aspects.is_empty() {
                     continue;
                 }
+                debug_assert_eq!(aspects, mip_aspects);
                 let layers = plane_states.isolate(&selector.layers, Unit::new(usage));
                 for &mut (ref range, ref mut unit) in layers {
                     if unit.last == usage && TextureUsage::ORDERED.contains(usage) {
@@ -134,7 +131,7 @@ impl ResourceState for TextureState {
                     let pending = PendingTransition {
                         id,
                         selector: hal::image::SubresourceRange {
-                            aspects: aspect,
+                            aspects,
                             levels: level .. level + 1,
                             layers: range.clone(),
                         },
@@ -163,23 +160,8 @@ impl ResourceState for TextureState {
 
         for (mip_id, (mip_self, mip_other)) in self.mips.iter_mut().zip(&other.mips).enumerate() {
             let level = mip_id as hal::image::Level;
-            for &mut (aspect, ref mut planes_self, planes_other) in &mut [
-                (
-                    hal::format::Aspects::COLOR,
-                    &mut mip_self.color,
-                    &mip_other.color,
-                ),
-                (
-                    hal::format::Aspects::DEPTH,
-                    &mut mip_self.depth,
-                    &mip_other.depth,
-                ),
-                (
-                    hal::format::Aspects::STENCIL,
-                    &mut mip_self.stencil,
-                    &mip_other.stencil,
-                ),
-            ] {
+            for (&mut (aspects, ref mut planes_self), &(aspects_other, ref planes_other)) in mip_self.iter_mut().zip(mip_other) {
+                debug_assert_eq!(aspects, aspects_other);
                 temp.extend(planes_self.merge(planes_other, 0));
                 planes_self.clear();
 
@@ -208,7 +190,7 @@ impl ResourceState for TextureState {
                                 let pending = PendingTransition {
                                     id,
                                     selector: hal::image::SubresourceRange {
-                                        aspects: aspect,
+                                        aspects,
                                         levels: level .. level + 1,
                                         layers: layers.clone(),
                                     },
@@ -232,9 +214,9 @@ impl ResourceState for TextureState {
 
     fn optimize(&mut self) {
         for mip in self.mips.iter_mut() {
-            mip.color.coalesce();
-            mip.depth.coalesce();
-            mip.stencil.coalesce();
+            for &mut (_, ref mut planes) in mip.iter_mut() {
+                planes.coalesce();
+            }
         }
     }
 }
@@ -250,13 +232,11 @@ mod test {
     #[test]
     fn query() {
         let mut ts = TextureState::new(&SubresourceRange {
-            aspects: Aspects::all(),
-            levels: 0 .. 10,
+            aspects: Aspects::COLOR,
+            levels: 0 .. 2,
             layers: 0 .. 10,
         });
-        ts.mips.push(MipState::default());
-        ts.mips.push(MipState::default());
-        ts.mips[1].color = PlaneStates::new(&[
+        ts.mips[1][0].1 = PlaneStates::new(&[
             (1 .. 3, Unit::new(TextureUsage::SAMPLED)),
             (3 .. 5, Unit::new(TextureUsage::SAMPLED)),
             (5 .. 6, Unit::new(TextureUsage::STORAGE)),
