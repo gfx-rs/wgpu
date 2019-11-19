@@ -649,7 +649,7 @@ typedef struct {
 
 typedef uint32_t WGPUBackendBit;
 
-typedef void (*WGPURequestAdapterCallback)(const WGPUAdapterId *adapter, void *userdata);
+typedef void (*WGPURequestAdapterCallback)(WGPUAdapterId id, void *userdata);
 
 typedef struct {
   WGPUTextureViewId view_id;

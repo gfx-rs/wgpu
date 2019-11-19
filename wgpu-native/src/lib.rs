@@ -1,7 +1,10 @@
 use std::sync::Arc;
 
-pub mod command;
-pub mod device;
+mod command;
+mod device;
+
+pub use self::command::*;
+pub use self::device::*;
 
 type Global = core::hub::Global<parking_lot::Mutex<core::hub::IdentityManager>>;
 
