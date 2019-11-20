@@ -906,7 +906,7 @@ where
 }
 
 impl Buffer {
-    pub fn map_read_async<T, F>(&self, start: BufferAddress, size: BufferAddress, callback: F)
+    pub fn map_read_async<T, F>(&self, start: BufferAddress, count: usize, callback: F)
     where
         T: 'static + FromBytes,
         F: FnOnce(BufferMapAsyncResult<&[T]>) + 'static,
@@ -936,6 +936,8 @@ impl Buffer {
             }
         }
 
+        let size = (count * std::mem::size_of::<T>()) as BufferAddress;
+
         let user_data = Box::new(BufferMapReadAsyncUserData {
             size,
             callback,
@@ -951,7 +953,7 @@ impl Buffer {
         );
     }
 
-    pub fn map_write_async<T, F>(&self, start: BufferAddress, size: BufferAddress, callback: F)
+    pub fn map_write_async<T, F>(&self, start: BufferAddress, count: usize, callback: F)
     where
         T: 'static + AsBytes + FromBytes,
         F: FnOnce(BufferMapAsyncResult<&mut [T]>) + 'static,
@@ -980,6 +982,8 @@ impl Buffer {
                 _ => (user_data.callback)(Err(())),
             }
         }
+
+        let size = (count * std::mem::size_of::<T>()) as BufferAddress;
 
         let user_data = Box::new(BufferMapWriteAsyncUserData {
             size,

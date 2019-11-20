@@ -87,7 +87,7 @@ fn main() {
     // Write the buffer as a PNG
     output_buffer.map_read_async(
         0,
-        (size * size) as u64 * size_of::<u32>() as u64,
+        (size * size) as usize * size_of::<u32>(),
         move |result: wgpu::BufferMapAsyncResult<&[u8]>| {
             let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), size, size);
             png_encoder.set_depth(png::BitDepth::Eight);
