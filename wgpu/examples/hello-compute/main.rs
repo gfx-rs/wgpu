@@ -92,7 +92,7 @@ fn main() {
 
     queue.submit(&[encoder.finish()]);
 
-    staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
+    staging_buffer.map_read_async(0, numbers.len(), |result: wgpu::BufferMapAsyncResult<&[u32]>| {
         if let Ok(mapping) = result {
             println!("Times: {:?}", mapping.data);
         }
