@@ -14,10 +14,12 @@ fn main() {
 
     let size = (numbers.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
 
-    let adapter = wgpu::Adapter::request(&wgpu::RequestAdapterOptions {
-        power_preference: wgpu::PowerPreference::Default,
-        backends: wgpu::BackendBit::PRIMARY,
-    }).unwrap();
+    let adapter = wgpu::Adapter::request(
+        &wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::Default,
+        },
+        wgpu::BackendBit::PRIMARY,
+    ).unwrap();
 
     let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
