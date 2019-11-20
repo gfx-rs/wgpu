@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::{BufferMapReadCallback, BufferMapWriteCallback},
     id::{DeviceId, SwapChainId, TextureId},
     track::DUMMY_SELECTOR,
     BufferAddress,
@@ -17,7 +16,7 @@ use hal;
 use rendy_memory::MemoryBlock;
 use smallvec::SmallVec;
 
-use std::borrow::Borrow;
+use std::{borrow::Borrow, fmt};
 
 bitflags::bitflags! {
     #[repr(transparent)]
@@ -62,25 +61,35 @@ pub enum BufferMapAsyncStatus {
     ContextLost,
 }
 
-#[derive(Clone, Debug)]
 pub enum BufferMapOperation {
-    Read(std::ops::Range<u64>, BufferMapReadCallback, *mut u8),
-    Write(std::ops::Range<u64>, BufferMapWriteCallback, *mut u8),
+    Read(std::ops::Range<u64>, Box<dyn FnOnce(BufferMapAsyncStatus, *const u8)>),
+    Write(std::ops::Range<u64>, Box<dyn FnOnce(BufferMapAsyncStatus, *mut u8)>),
 }
 
+//TODO: clarify if/why this is needed here
 unsafe impl Send for BufferMapOperation {}
 unsafe impl Sync for BufferMapOperation {}
+
+impl fmt::Debug for BufferMapOperation {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        let (op, range) = match *self {
+            BufferMapOperation::Read(ref range, _) => ("read", range),
+            BufferMapOperation::Write(ref range, _) => ("write", range),
+        };
+        write!(fmt, "BufferMapOperation <{}> of range {:?}", op, range)
+    }
+}
 
 impl BufferMapOperation {
     pub(crate) fn call_error(self) {
         match self {
-            BufferMapOperation::Read(_, callback, userdata) => {
+            BufferMapOperation::Read(_, callback) => {
                 log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
-                callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+                callback(BufferMapAsyncStatus::Error, std::ptr::null());
             }
-            BufferMapOperation::Write(_, callback, userdata) => {
+            BufferMapOperation::Write(_, callback) => {
                 log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
-                callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+                callback(BufferMapAsyncStatus::Error, std::ptr::null_mut());
             }
         }
     }

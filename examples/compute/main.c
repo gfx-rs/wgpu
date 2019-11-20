@@ -16,9 +16,8 @@
 #define BINDINGS_LENGTH (1)
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
 
-void request_adapter_callback(WGPUAdapterId const *received, void *userdata) {
-    WGPUAdapterId *id = (WGPUAdapterId*) userdata;
-    *id = *received;
+void request_adapter_callback(WGPUAdapterId received, void *userdata) {
+    *(WGPUAdapterId*)userdata = received;
 }
 
 void read_buffer_map(

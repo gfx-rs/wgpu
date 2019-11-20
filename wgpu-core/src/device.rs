@@ -600,11 +600,11 @@ impl<B: GfxBackend> Device<B> {
                 }
             };
             match operation {
-                resource::BufferMapOperation::Read(_, on_read, userdata) => {
-                    on_read(status, ptr, userdata)
+                resource::BufferMapOperation::Read(_, on_read) => {
+                    on_read(status, ptr)
                 }
-                resource::BufferMapOperation::Write(_, on_write, userdata) => {
-                    on_write(status, ptr, userdata)
+                resource::BufferMapOperation::Write(_, on_write) => {
+                    on_write(status, ptr)
                 }
             }
         }
@@ -1999,11 +1999,6 @@ impl<F: AllIdentityFilter + IdentityFilter<DeviceId>> Global<F> {
         device.com_allocator.destroy(&device.raw);
     }
 }
-
-pub type BufferMapReadCallback =
-    extern "C" fn(status: resource::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8);
-pub type BufferMapWriteCallback =
-    extern "C" fn(status: resource::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8);
 
 impl<F> Global<F> {
     pub fn buffer_map_async<B: GfxBackend>(

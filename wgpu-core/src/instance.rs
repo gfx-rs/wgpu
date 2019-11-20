@@ -17,7 +17,6 @@ use serde::{Deserialize, Serialize};
 pub use hal::adapter::AdapterInfo;
 use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
 
-use std::ffi::c_void;
 
 #[derive(Debug)]
 pub struct Instance {
@@ -152,8 +151,6 @@ pub struct DeviceDescriptor {
     pub extensions: Extensions,
     pub limits: Limits,
 }
-
-pub type RequestAdapterCallback = extern "C" fn(adapter: *const AdapterId, userdata: *mut c_void);
 
 bitflags::bitflags! {
     #[repr(transparent)]
