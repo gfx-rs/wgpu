@@ -28,7 +28,7 @@ version = "0.4"
 git = "https://github.com/gfx-rs/wgpu"
 rev = "73b33ea76e2f91b3114aa7640b1d60518d39f915"
 
-[dependencies.core]
+[dependencies.wgc]
 package = "wgpu-core"
 version = "0.1"
 git = "https://github.com/gfx-rs/wgpu"
