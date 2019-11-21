@@ -96,14 +96,10 @@ impl Example {
             bind_group_layouts: &[&bind_group_layout],
         });
 
-        let vs_bytes = framework::load_glsl(
-            include_str!("blit.vert"),
-            framework::ShaderStage::Vertex,
-        );
-        let fs_bytes = framework::load_glsl(
-            include_str!("blit.frag"),
-            framework::ShaderStage::Fragment,
-        );
+        let vs_bytes =
+            framework::load_glsl(include_str!("blit.vert"), framework::ShaderStage::Vertex);
+        let fs_bytes =
+            framework::load_glsl(include_str!("blit.frag"), framework::ShaderStage::Fragment);
         let vs_module = device.create_shader_module(&vs_bytes);
         let fs_module = device.create_shader_module(&fs_bytes);
 
@@ -152,15 +148,17 @@ impl Example {
         });
 
         let views = (0 .. mip_count)
-            .map(|mip| texture.create_view(&wgpu::TextureViewDescriptor {
-                format: TEXTURE_FORMAT,
-                dimension: wgpu::TextureViewDimension::D2,
-                aspect: wgpu::TextureAspect::All,
-                base_mip_level: mip,
-                level_count: 1,
-                base_array_layer: 0,
-                array_layer_count: 1,
-            }))
+            .map(|mip| {
+                texture.create_view(&wgpu::TextureViewDescriptor {
+                    format: TEXTURE_FORMAT,
+                    dimension: wgpu::TextureViewDimension::D2,
+                    aspect: wgpu::TextureAspect::All,
+                    base_mip_level: mip,
+                    level_count: 1,
+                    base_array_layer: 0,
+                    array_layer_count: 1,
+                })
+            })
             .collect::<Vec<_>>();
 
         for target_mip in 1 .. mip_count as usize {
@@ -196,7 +194,10 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>) {
+    fn init(
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> (Self, Option<wgpu::CommandBuffer>) {
         use std::mem;
 
         let mut init_encoder =
@@ -215,9 +216,7 @@ impl framework::Example for Example {
                 wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
-                    },
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
@@ -254,7 +253,9 @@ impl framework::Example for Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: TEXTURE_FORMAT,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::COPY_DST,
+            usage: wgpu::TextureUsage::SAMPLED
+                | wgpu::TextureUsage::OUTPUT_ATTACHMENT
+                | wgpu::TextureUsage::COPY_DST,
         });
         let texture_view = texture.create_default_view();
         let temp_buf = device
@@ -295,10 +296,7 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         let uniform_buf = device
-            .create_buffer_mapped(
-                16,
-                wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            )
+            .create_buffer_mapped(16, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST)
             .fill_from_slice(mx_ref);
 
         // Create bind group
@@ -324,14 +322,10 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
-        let vs_bytes = framework::load_glsl(
-            include_str!("draw.vert"),
-            framework::ShaderStage::Vertex,
-        );
-        let fs_bytes = framework::load_glsl(
-            include_str!("draw.frag"),
-            framework::ShaderStage::Fragment,
-        );
+        let vs_bytes =
+            framework::load_glsl(include_str!("draw.vert"), framework::ShaderStage::Vertex);
+        let fs_bytes =
+            framework::load_glsl(include_str!("draw.frag"), framework::ShaderStage::Fragment);
         let vs_module = device.create_shader_module(&vs_bytes);
         let fs_module = device.create_shader_module(&fs_bytes);
 
@@ -364,13 +358,11 @@ impl framework::Example for Example {
             vertex_buffers: &[wgpu::VertexBufferDescriptor {
                 stride: vertex_size as wgpu::BufferAddress,
                 step_mode: wgpu::InputStepMode::Vertex,
-                attributes: &[
-                    wgpu::VertexAttributeDescriptor {
-                        format: wgpu::VertexFormat::Float4,
-                        offset: 0,
-                        shader_location: 0,
-                    },
-                ],
+                attributes: &[wgpu::VertexAttributeDescriptor {
+                    format: wgpu::VertexFormat::Float4,
+                    offset: 0,
+                    shader_location: 0,
+                }],
             }],
             sample_count: 1,
             sample_mask: !0,
@@ -393,7 +385,11 @@ impl framework::Example for Example {
         //empty
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer> {
+    fn resize(
+        &mut self,
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> Option<wgpu::CommandBuffer> {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
@@ -407,7 +403,11 @@ impl framework::Example for Example {
         Some(encoder.finish())
     }
 
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer {
+    fn render(
+        &mut self,
+        frame: &wgpu::SwapChainOutput,
+        device: &wgpu::Device,
+    ) -> wgpu::CommandBuffer {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {

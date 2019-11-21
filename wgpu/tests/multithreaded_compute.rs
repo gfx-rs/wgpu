@@ -28,7 +28,8 @@ fn multithreaded_compute() {
             });
 
             let cs = include_bytes!("../examples/hello-compute/shader.comp.spv");
-            let cs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
+            let cs_module = device
+                .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
 
             let staging_buffer = device
                 .create_buffer_mapped(
@@ -48,16 +49,14 @@ fn multithreaded_compute() {
 
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[
-                        wgpu::BindGroupLayoutBinding {
-                            binding: 0,
-                            visibility: wgpu::ShaderStage::COMPUTE,
-                            ty: wgpu::BindingType::StorageBuffer {
-                                dynamic: false,
-                                readonly: false,
-                            },
+                    bindings: &[wgpu::BindGroupLayoutBinding {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::COMPUTE,
+                        ty: wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            readonly: false,
                         },
-                    ],
+                    }],
                 });
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
