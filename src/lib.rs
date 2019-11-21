@@ -11,12 +11,10 @@ use std::slice;
 use std::thread;
 
 pub use wgc::{
-    binding_model::{
-        ShaderStage,
-    },
+    binding_model::ShaderStage,
     command::{
-        CommandEncoderDescriptor,
         CommandBufferDescriptor,
+        CommandEncoderDescriptor,
         LoadOp,
         RenderPassDepthStencilAttachmentDescriptor,
         StoreOp,
@@ -50,6 +48,7 @@ pub use wgc::{
         VertexAttributeDescriptor,
         VertexFormat,
     },
+    read_spirv,
     resource::{
         AddressMode,
         BufferDescriptor,
@@ -66,24 +65,18 @@ pub use wgc::{
         TextureViewDescriptor,
         TextureViewDimension,
     },
-    swap_chain::{
-        PresentMode,
-        SwapChainDescriptor,
-    },
+    swap_chain::{PresentMode, SwapChainDescriptor},
     BufferAddress,
     Color,
     Extent3d,
     Origin3d,
-    read_spirv,
 };
 
-
 //TODO: avoid heap allocating vectors during resource creation.
-#[derive(Default)]
-#[derive(Debug)]
+#[derive(Default, Debug)]
 struct Temp {
     //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
-    //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
+//vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
 }
 
 /// A handle to a physical graphics and/or compute device.
@@ -551,15 +544,21 @@ impl Adapter {
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub fn request(options: &RequestAdapterOptions, backends: BackendBit) -> Option<Self> {
-        unsafe extern "C" fn adapter_callback(id: wgc::id::AdapterId, user_data: *mut std::ffi::c_void) {
+        unsafe extern "C" fn adapter_callback(
+            id: wgc::id::AdapterId,
+            user_data: *mut std::ffi::c_void,
+        ) {
             *(user_data as *mut wgc::id::AdapterId) = id;
         }
 
         let mut id = wgc::id::AdapterId::ERROR;
-        wgn::wgpu_request_adapter_async(Some(options), backends, adapter_callback, &mut id as *mut _ as *mut std::ffi::c_void);
-        Some(Adapter {
-            id,
-        })
+        wgn::wgpu_request_adapter_async(
+            Some(options),
+            backends,
+            adapter_callback,
+            &mut id as *mut _ as *mut std::ffi::c_void,
+        );
+        Some(Adapter { id })
     }
 
     /// Requests a connection to a physical device, creating a logical device.
@@ -655,22 +654,27 @@ impl Device {
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
         use wgc::binding_model as bm;
 
-        let temp_layouts = desc.bindings
+        let temp_layouts = desc
+            .bindings
             .iter()
             .map(|bind| bm::BindGroupLayoutBinding {
                 binding: bind.binding,
                 visibility: bind.visibility,
                 ty: match bind.ty {
                     BindingType::UniformBuffer { .. } => bm::BindingType::UniformBuffer,
-                    BindingType::StorageBuffer { readonly: false, .. } => bm::BindingType::StorageBuffer,
-                    BindingType::StorageBuffer { readonly: true, .. } => bm::BindingType::ReadonlyStorageBuffer,
+                    BindingType::StorageBuffer {
+                        readonly: false, ..
+                    } => bm::BindingType::StorageBuffer,
+                    BindingType::StorageBuffer { readonly: true, .. } => {
+                        bm::BindingType::ReadonlyStorageBuffer
+                    }
                     BindingType::Sampler => bm::BindingType::Sampler,
                     BindingType::SampledTexture { .. } => bm::BindingType::SampledTexture,
                     BindingType::StorageTexture { .. } => bm::BindingType::StorageTexture,
                 },
                 dynamic: match bind.ty {
-                    BindingType::UniformBuffer { dynamic } |
-                    BindingType::StorageBuffer { dynamic, .. } => dynamic,
+                    BindingType::UniformBuffer { dynamic }
+                    | BindingType::StorageBuffer { dynamic, .. } => dynamic,
                     _ => false,
                 },
                 multisampled: match bind.ty {
@@ -678,8 +682,8 @@ impl Device {
                     _ => false,
                 },
                 texture_dimension: match bind.ty {
-                    BindingType::SampledTexture { dimension, .. } |
-                    BindingType::StorageTexture { dimension } => dimension,
+                    BindingType::SampledTexture { dimension, .. }
+                    | BindingType::StorageTexture { dimension } => dimension,
                     _ => TextureViewDimension::D2,
                 },
             })
@@ -756,7 +760,8 @@ impl Device {
                     fragment_stage: fragment_stage
                         .as_ref()
                         .map_or(ptr::null(), |fs| fs as *const _),
-                    rasterization_state: desc.rasterization_state
+                    rasterization_state: desc
+                        .rasterization_state
                         .as_ref()
                         .map_or(ptr::null(), |p| p as *const _),
                     primitive_topology: desc.primitive_topology,
@@ -1294,7 +1299,11 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
-    pub fn draw_indexed_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+    ) {
         wgn::wgpu_render_pass_draw_indexed_indirect(self.id, indirect_buffer.id, indirect_offset);
     }
 }

@@ -19,7 +19,8 @@ fn main() {
             power_preference: wgpu::PowerPreference::Default,
         },
         wgpu::BackendBit::PRIMARY,
-    ).unwrap();
+    )
+    .unwrap();
 
     let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
@@ -29,14 +30,13 @@ fn main() {
     });
 
     let cs = include_bytes!("shader.comp.spv");
-    let cs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
+    let cs_module =
+        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
 
     let staging_buffer = device
         .create_buffer_mapped(
             numbers.len(),
-            wgpu::BufferUsage::MAP_READ
-                | wgpu::BufferUsage::COPY_DST
-                | wgpu::BufferUsage::COPY_SRC,
+            wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
         )
         .fill_from_slice(&numbers);
 
@@ -48,13 +48,14 @@ fn main() {
     });
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        bindings: &[
-            wgpu::BindGroupLayoutBinding {
-                binding: 0,
-                visibility: wgpu::ShaderStage::COMPUTE,
-                ty: wgpu::BindingType::StorageBuffer { dynamic: false, readonly: false },
+        bindings: &[wgpu::BindGroupLayoutBinding {
+            binding: 0,
+            visibility: wgpu::ShaderStage::COMPUTE,
+            ty: wgpu::BindingType::StorageBuffer {
+                dynamic: false,
+                readonly: false,
             },
-        ],
+        }],
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -92,9 +93,13 @@ fn main() {
 
     queue.submit(&[encoder.finish()]);
 
-    staging_buffer.map_read_async(0, numbers.len(), |result: wgpu::BufferMapAsyncResult<&[u32]>| {
-        if let Ok(mapping) = result {
-            println!("Times: {:?}", mapping.data);
-        }
-    });
+    staging_buffer.map_read_async(
+        0,
+        numbers.len(),
+        |result: wgpu::BufferMapAsyncResult<&[u32]>| {
+            if let Ok(mapping) = result {
+                println!("Times: {:?}", mapping.data);
+            }
+        },
+    );
 }

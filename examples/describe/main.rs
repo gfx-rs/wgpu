@@ -7,7 +7,8 @@ fn main() {
             power_preference: wgpu::PowerPreference::Default,
         },
         wgpu::BackendBit::PRIMARY,
-    ).unwrap();
+    )
+    .unwrap();
 
     println!("{:?}", adapter.get_info())
 }

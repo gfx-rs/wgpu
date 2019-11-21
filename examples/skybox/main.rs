@@ -76,10 +76,7 @@ impl framework::Example for Skybox {
                 uniforms.len(),
                 wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             )
-            .fill_from_slice(&[
-                uniforms[0].into(),
-                uniforms[1].into(),
-            ]);
+            .fill_from_slice(&[uniforms[0].into(), uniforms[1].into()]);
         let uniform_buf_size = std::mem::size_of::<Uniforms>();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -175,7 +172,9 @@ impl framework::Example for Skybox {
         for (i, image) in faces.iter().enumerate() {
             log::debug!(
                 "Copying skybox image {} of size {},{} to gpu",
-                i, image_width, image_height,
+                i,
+                image_width,
+                image_height,
             );
             let image_buf = device
                 .create_buffer_mapped(image.len(), wgpu::BufferUsage::COPY_SRC)
@@ -218,7 +217,7 @@ impl framework::Example for Skybox {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer {
                         buffer: &uniform_buf,
-                        range: 0..uniform_buf_size as wgpu::BufferAddress,
+                        range: 0 .. uniform_buf_size as wgpu::BufferAddress,
                     },
                 },
                 wgpu::Binding {
@@ -279,14 +278,8 @@ impl framework::Example for Skybox {
         self.uniforms[1] = self.uniforms[1] * rotation;
         let uniform_buf_size = std::mem::size_of::<Uniforms>();
         let temp_buf = device
-            .create_buffer_mapped::<[[f32; 4]; 4]>(
-                self.uniforms.len(),
-                wgpu::BufferUsage::COPY_SRC,
-            )
-            .fill_from_slice(&[
-                self.uniforms[0].into(),
-                self.uniforms[1].into(),
-            ]);
+            .create_buffer_mapped::<[[f32; 4]; 4]>(self.uniforms.len(), wgpu::BufferUsage::COPY_SRC)
+            .fill_from_slice(&[self.uniforms[0].into(), self.uniforms[1].into()]);
 
         init_encoder.copy_buffer_to_buffer(
             &temp_buf,
@@ -315,7 +308,7 @@ impl framework::Example for Skybox {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.draw(0..3 as u32, 0..1);
+            rpass.draw(0 .. 3 as u32, 0 .. 1);
         }
         init_encoder.finish()
     }
