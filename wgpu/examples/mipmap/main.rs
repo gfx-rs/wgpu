@@ -3,7 +3,8 @@ mod framework;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
 struct Vertex {
     #[allow(dead_code)]
     pos: [f32; 4],

@@ -72,11 +72,14 @@ impl framework::Example for Skybox {
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
         let uniform_buf = device
-            .create_buffer_mapped(
+            .create_buffer_mapped::<[[f32; 4]; 4]>(
                 uniforms.len(),
                 wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             )
-            .fill_from_slice(&uniforms);
+            .fill_from_slice(&[
+                uniforms[0].into(),
+                uniforms[1].into(),
+            ]);
         let uniform_buf_size = std::mem::size_of::<Uniforms>();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -276,8 +279,14 @@ impl framework::Example for Skybox {
         self.uniforms[1] = self.uniforms[1] * rotation;
         let uniform_buf_size = std::mem::size_of::<Uniforms>();
         let temp_buf = device
-            .create_buffer_mapped(2, wgpu::BufferUsage::COPY_SRC)
-            .fill_from_slice(&self.uniforms);
+            .create_buffer_mapped::<[[f32; 4]; 4]>(
+                self.uniforms.len(),
+                wgpu::BufferUsage::COPY_SRC,
+            )
+            .fill_from_slice(&[
+                self.uniforms[0].into(),
+                self.uniforms[1].into(),
+            ]);
 
         init_encoder.copy_buffer_to_buffer(
             &temp_buf,
