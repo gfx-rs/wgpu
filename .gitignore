@@ -11,3 +11,6 @@ Cargo.lock
 
 # Other
 .DS_Store
+
+# Output from capture example
+red.png
