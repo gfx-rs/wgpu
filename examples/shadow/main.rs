@@ -3,8 +3,10 @@ use std::{mem, ops::Range, rc::Rc};
 #[path = "../framework.rs"]
 mod framework;
 
+use zerocopy::{AsBytes, FromBytes};
+
 #[repr(C)]
-#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+#[derive(Clone, Copy, AsBytes, FromBytes)]
 
 struct Vertex {
     _pos: [i8; 4],
@@ -97,7 +99,7 @@ struct Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+#[derive(Clone, Copy, AsBytes, FromBytes)]
 struct LightRaw {
     proj: [[f32; 4]; 4],
     pos: [f32; 4],
@@ -132,14 +134,14 @@ impl Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+#[derive(Clone, Copy, AsBytes, FromBytes)]
 struct ForwardUniforms {
     proj: [[f32; 4]; 4],
     num_lights: [u32; 4],
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+#[derive(Clone, Copy, AsBytes, FromBytes)]
 struct EntityUniforms {
     model: [[f32; 4]; 4],
     color: [f32; 4],
@@ -197,25 +199,19 @@ impl framework::Example for Example {
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
         let cube_vertex_buf = Rc::new(
-            device
-                .create_buffer_mapped(cube_vertex_data.len(), wgpu::BufferUsage::VERTEX)
-                .fill_from_slice(&cube_vertex_data),
+            device.create_buffer_with_data(cube_vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX),
         );
 
         let cube_index_buf = Rc::new(
-            device
-                .create_buffer_mapped(cube_index_data.len(), wgpu::BufferUsage::INDEX)
-                .fill_from_slice(&cube_index_data),
+            device.create_buffer_with_data(cube_index_data.as_bytes(), wgpu::BufferUsage::INDEX),
         );
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
-        let plane_vertex_buf = device
-            .create_buffer_mapped(plane_vertex_data.len(), wgpu::BufferUsage::VERTEX)
-            .fill_from_slice(&plane_vertex_data);
+        let plane_vertex_buf =
+            device.create_buffer_with_data(plane_vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
 
-        let plane_index_buf = device
-            .create_buffer_mapped(plane_index_data.len(), wgpu::BufferUsage::INDEX)
-            .fill_from_slice(&plane_index_data);
+        let plane_index_buf =
+            device.create_buffer_with_data(plane_index_data.as_bytes(), wgpu::BufferUsage::INDEX);
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -534,9 +530,10 @@ impl framework::Example for Example {
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
             let uniform_size = mem::size_of::<ForwardUniforms>() as wgpu::BufferAddress;
-            let uniform_buf = device
-                .create_buffer_mapped(1, wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST)
-                .fill_from_slice(&[forward_uniforms]);
+            let uniform_buf = device.create_buffer_with_data(
+                forward_uniforms.as_bytes(),
+                wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            );
 
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -662,9 +659,8 @@ impl framework::Example for Example {
         let command_buf = {
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let mx_ref: &[f32; 16] = mx_total.as_ref();
-            let temp_buf = device
-                .create_buffer_mapped(16, wgpu::BufferUsage::COPY_SRC)
-                .fill_from_slice(mx_ref);
+            let temp_buf =
+                device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
 
             let mut encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
@@ -699,25 +695,33 @@ impl framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
 
         {
-            let size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
-            let temp_buf_data =
-                device.create_buffer_mapped(self.entities.len(), wgpu::BufferUsage::COPY_SRC);
+            let size = mem::size_of::<EntityUniforms>();
+            let temp_buf_data = device
+                .create_buffer_mapped(self.entities.len() * size, wgpu::BufferUsage::COPY_SRC);
 
-            for (i, entity) in self.entities.iter_mut().enumerate() {
+            // FIXME: Align and use `LayoutVerified`
+            for (entity, slot) in self
+                .entities
+                .iter_mut()
+                .zip(temp_buf_data.data.chunks_exact_mut(size))
+            {
                 if entity.rotation_speed != 0.0 {
                     let rotation =
                         cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
                     entity.mx_world = entity.mx_world * rotation;
                 }
-                temp_buf_data.data[i] = EntityUniforms {
-                    model: entity.mx_world.into(),
-                    color: [
-                        entity.color.r as f32,
-                        entity.color.g as f32,
-                        entity.color.b as f32,
-                        entity.color.a as f32,
-                    ],
-                };
+                slot.copy_from_slice(
+                    EntityUniforms {
+                        model: entity.mx_world.into(),
+                        color: [
+                            entity.color.r as f32,
+                            entity.color.g as f32,
+                            entity.color.b as f32,
+                            entity.color.a as f32,
+                        ],
+                    }
+                    .as_bytes(),
+                );
             }
 
             let temp_buf = temp_buf_data.finish();
@@ -725,28 +729,34 @@ impl framework::Example for Example {
             for (i, entity) in self.entities.iter().enumerate() {
                 encoder.copy_buffer_to_buffer(
                     &temp_buf,
-                    i as wgpu::BufferAddress * size,
+                    (i * size) as wgpu::BufferAddress,
                     &entity.uniform_buf,
                     0,
-                    size,
+                    size as wgpu::BufferAddress,
                 );
             }
         }
 
         if self.lights_are_dirty {
             self.lights_are_dirty = false;
-            let size = (self.lights.len() * mem::size_of::<LightRaw>()) as wgpu::BufferAddress;
+            let size = mem::size_of::<LightRaw>();
+            let total_size = size * self.lights.len();
             let temp_buf_data =
-                device.create_buffer_mapped(self.lights.len(), wgpu::BufferUsage::COPY_SRC);
-            for (i, light) in self.lights.iter().enumerate() {
-                temp_buf_data.data[i] = light.to_raw();
+                device.create_buffer_mapped(total_size, wgpu::BufferUsage::COPY_SRC);
+            // FIXME: Align and use `LayoutVerified`
+            for (light, slot) in self
+                .lights
+                .iter()
+                .zip(temp_buf_data.data.chunks_exact_mut(size))
+            {
+                slot.copy_from_slice(light.to_raw().as_bytes());
             }
             encoder.copy_buffer_to_buffer(
                 &temp_buf_data.finish(),
                 0,
                 &self.light_uniform_buf,
                 0,
-                size,
+                total_size as wgpu::BufferAddress,
             );
         }
 
