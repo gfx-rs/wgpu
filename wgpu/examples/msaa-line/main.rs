@@ -10,8 +10,10 @@
 #[path = "../framework.rs"]
 mod framework;
 
+use zerocopy::{AsBytes, FromBytes};
+
 #[repr(C)]
-#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+#[derive(Clone, Copy, AsBytes, FromBytes)]
 struct Vertex {
     _pos: [f32; 2],
     _color: [f32; 4],
@@ -162,9 +164,8 @@ impl framework::Example for Example {
             });
         }
 
-        let vertex_buffer = device
-            .create_buffer_mapped(vertex_data.len(), wgpu::BufferUsage::VERTEX)
-            .fill_from_slice(&vertex_data);
+        let vertex_buffer =
+            device.create_buffer_with_data(vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
         let vertex_count = vertex_data.len() as u32;
 
         let this = Example {

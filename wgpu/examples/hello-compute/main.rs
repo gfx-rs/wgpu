@@ -1,4 +1,5 @@
-use std::str::FromStr;
+use std::{convert::TryInto as _, str::FromStr};
+use zerocopy::AsBytes as _;
 
 fn main() {
     env_logger::init();
@@ -12,7 +13,8 @@ fn main() {
         .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
         .collect();
 
-    let size = (numbers.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+    let slice_size = numbers.len() * std::mem::size_of::<u32>();
+    let size = slice_size as wgpu::BufferAddress;
 
     let adapter = wgpu::Adapter::request(
         &wgpu::RequestAdapterOptions {
@@ -33,12 +35,10 @@ fn main() {
     let cs_module =
         device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
 
-    let staging_buffer = device
-        .create_buffer_mapped(
-            numbers.len(),
-            wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
-        )
-        .fill_from_slice(&numbers);
+    let staging_buffer = device.create_buffer_with_data(
+        numbers.as_slice().as_bytes(),
+        wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+    );
 
     let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         size,
@@ -93,13 +93,15 @@ fn main() {
 
     queue.submit(&[encoder.finish()]);
 
-    staging_buffer.map_read_async(
-        0,
-        numbers.len(),
-        |result: wgpu::BufferMapAsyncResult<&[u32]>| {
-            if let Ok(mapping) = result {
-                println!("Times: {:?}", mapping.data);
-            }
-        },
-    );
+    // FIXME: Align and use `LayoutVerified`
+    staging_buffer.map_read_async(0, slice_size, |result| {
+        if let Ok(mapping) = result {
+            let times: Box<[u32]> = mapping
+                .data
+                .chunks_exact(4)
+                .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+                .collect();
+            println!("Times: {:?}", times);
+        }
+    });
 }

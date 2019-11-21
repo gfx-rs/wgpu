@@ -1,9 +1,12 @@
 #[path = "../framework.rs"]
 mod framework;
 
+use zerocopy::AsBytes as _;
+
 const SKYBOX_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
-type Uniforms = [cgmath::Matrix4<f32>; 2];
+type Uniform = cgmath::Matrix4<f32>;
+type Uniforms = [Uniform; 2];
 
 pub struct Skybox {
     aspect: f32,
@@ -24,6 +27,23 @@ impl Skybox {
         let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
         [mx_correction * mx_projection, mx_correction * mx_view]
     }
+}
+
+fn buffer_from_uniforms(
+    device: &wgpu::Device,
+    uniforms: &Uniforms,
+    usage: wgpu::BufferUsage,
+) -> wgpu::Buffer {
+    let uniform_buf = device.create_buffer_mapped(std::mem::size_of::<Uniforms>(), usage);
+    // FIXME: Align and use `LayoutVerified`
+    for (u, slot) in uniforms.iter().zip(
+        uniform_buf
+            .data
+            .chunks_exact_mut(std::mem::size_of::<Uniform>()),
+    ) {
+        slot.copy_from_slice(AsRef::<[[f32; 4]; 4]>::as_ref(u).as_bytes());
+    }
+    uniform_buf.finish()
 }
 
 impl framework::Example for Skybox {
@@ -71,12 +91,11 @@ impl framework::Example for Skybox {
 
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
-        let uniform_buf = device
-            .create_buffer_mapped::<[[f32; 4]; 4]>(
-                uniforms.len(),
-                wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            )
-            .fill_from_slice(&[uniforms[0].into(), uniforms[1].into()]);
+        let uniform_buf = buffer_from_uniforms(
+            &device,
+            &uniforms,
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        );
         let uniform_buf_size = std::mem::size_of::<Uniforms>();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -176,9 +195,7 @@ impl framework::Example for Skybox {
                 image_width,
                 image_height,
             );
-            let image_buf = device
-                .create_buffer_mapped(image.len(), wgpu::BufferUsage::COPY_SRC)
-                .fill_from_slice(&image);
+            let image_buf = device.create_buffer_with_data(image, wgpu::BufferUsage::COPY_SRC);
 
             init_encoder.copy_buffer_to_texture(
                 wgpu::BufferCopyView {
@@ -256,9 +273,8 @@ impl framework::Example for Skybox {
         let mx_total = uniforms[0] * uniforms[1];
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
-        let temp_buf = device
-            .create_buffer_mapped(16, wgpu::BufferUsage::COPY_SRC)
-            .fill_from_slice(mx_ref);
+        let temp_buf =
+            device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
 
         let mut init_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
@@ -277,9 +293,7 @@ impl framework::Example for Skybox {
         let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
         self.uniforms[1] = self.uniforms[1] * rotation;
         let uniform_buf_size = std::mem::size_of::<Uniforms>();
-        let temp_buf = device
-            .create_buffer_mapped::<[[f32; 4]; 4]>(self.uniforms.len(), wgpu::BufferUsage::COPY_SRC)
-            .fill_from_slice(&[self.uniforms[0].into(), self.uniforms[1].into()]);
+        let temp_buf = buffer_from_uniforms(&device, &self.uniforms, wgpu::BufferUsage::COPY_SRC);
 
         init_encoder.copy_buffer_to_buffer(
             &temp_buf,
