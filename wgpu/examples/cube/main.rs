@@ -1,7 +1,8 @@
 #[path = "../framework.rs"]
 mod framework;
 
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
 struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
