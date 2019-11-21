@@ -3,7 +3,9 @@ use std::{mem, ops::Range, rc::Rc};
 #[path = "../framework.rs"]
 mod framework;
 
-#[derive(Clone, Copy)]
+#[repr(C)]
+#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+
 struct Vertex {
     _pos: [i8; 4],
     _normal: [i8; 4],
@@ -95,7 +97,7 @@ struct Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
 struct LightRaw {
     proj: [[f32; 4]; 4],
     pos: [f32; 4],
@@ -124,16 +126,16 @@ impl Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
 struct ForwardUniforms {
     proj: [[f32; 4]; 4],
     num_lights: [u32; 4],
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
 struct EntityUniforms {
-    model: cgmath::Matrix4<f32>,
+    model: [[f32; 4]; 4],
     color: [f32; 4],
 }
 
@@ -700,7 +702,7 @@ impl framework::Example for Example {
                     entity.mx_world = entity.mx_world * rotation;
                 }
                 temp_buf_data.data[i] = EntityUniforms {
-                    model: entity.mx_world.clone(),
+                    model: entity.mx_world.into(),
                     color: [
                         entity.color.r as f32,
                         entity.color.g as f32,

@@ -10,7 +10,7 @@ use std::ptr;
 use std::slice;
 use std::thread;
 
-pub use core::{
+pub use wgc::{
     binding_model::{
         ShaderStage,
     },
@@ -92,7 +92,7 @@ struct Temp {
 /// yielding a [`Device`] object.
 #[derive(Debug)]
 pub struct Adapter {
-    id: core::id::AdapterId,
+    id: wgc::id::AdapterId,
 }
 
 /// An open connection to a graphics and/or compute device.
@@ -101,20 +101,20 @@ pub struct Adapter {
 /// well as exposing [`Queue`] objects.
 #[derive(Debug)]
 pub struct Device {
-    id: core::id::DeviceId,
+    id: wgc::id::DeviceId,
     temp: Temp,
 }
 
 /// A handle to a GPU-accessible buffer.
 #[derive(Debug)]
 pub struct Buffer {
-    id: core::id::BufferId,
+    id: wgc::id::BufferId,
 }
 
 /// A handle to a texture on the GPU.
 #[derive(Debug)]
 pub struct Texture {
-    id: core::id::TextureId,
+    id: wgc::id::TextureId,
     owned: bool,
 }
 
@@ -124,7 +124,7 @@ pub struct Texture {
 /// [`RenderPipeline`] or [`BindGroup`].
 #[derive(Debug)]
 pub struct TextureView {
-    id: core::id::TextureViewId,
+    id: wgc::id::TextureViewId,
     owned: bool,
 }
 
@@ -135,7 +135,7 @@ pub struct TextureView {
 /// the documentation for [`SamplerDescriptor`] for more information.
 #[derive(Debug)]
 pub struct Sampler {
-    id: core::id::SamplerId,
+    id: wgc::id::SamplerId,
 }
 
 /// A handle to a presentable surface.
@@ -144,7 +144,7 @@ pub struct Sampler {
 /// be presented. A `Surface` may be created with [`Surface::create`].
 #[derive(Debug)]
 pub struct Surface {
-    id: core::id::SurfaceId,
+    id: wgc::id::SurfaceId,
 }
 
 /// A handle to a swap chain.
@@ -153,7 +153,7 @@ pub struct Surface {
 /// A `SwapChain` may be created with [`Device::create_swap_chain`].
 #[derive(Debug)]
 pub struct SwapChain {
-    id: core::id::SwapChainId,
+    id: wgc::id::SwapChainId,
 }
 
 /// An opaque handle to a binding group layout.
@@ -164,7 +164,7 @@ pub struct SwapChain {
 /// create a [`PipelineLayoutDescriptor`], which can be used to create a [`PipelineLayout`].
 #[derive(Debug)]
 pub struct BindGroupLayout {
-    id: core::id::BindGroupLayoutId,
+    id: wgc::id::BindGroupLayoutId,
 }
 
 /// An opaque handle to a binding group.
@@ -175,7 +175,7 @@ pub struct BindGroupLayout {
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
 #[derive(Debug)]
 pub struct BindGroup {
-    id: core::id::BindGroupId,
+    id: wgc::id::BindGroupId,
 }
 
 impl Drop for BindGroup {
@@ -191,7 +191,7 @@ impl Drop for BindGroup {
 /// programmable stages of a pipeline.
 #[derive(Debug)]
 pub struct ShaderModule {
-    id: core::id::ShaderModuleId,
+    id: wgc::id::ShaderModuleId,
 }
 
 /// An opaque handle to a pipeline layout.
@@ -199,7 +199,7 @@ pub struct ShaderModule {
 /// A `PipelineLayout` object describes the available binding groups of a pipeline.
 #[derive(Debug)]
 pub struct PipelineLayout {
-    id: core::id::PipelineLayoutId,
+    id: wgc::id::PipelineLayoutId,
 }
 
 /// A handle to a rendering (graphics) pipeline.
@@ -208,13 +208,13 @@ pub struct PipelineLayout {
 /// buffers and targets. A `RenderPipeline` may be created with [`Device::create_render_pipeline`].
 #[derive(Debug)]
 pub struct RenderPipeline {
-    id: core::id::RenderPipelineId,
+    id: wgc::id::RenderPipelineId,
 }
 
 /// A handle to a compute pipeline.
 #[derive(Debug)]
 pub struct ComputePipeline {
-    id: core::id::ComputePipelineId,
+    id: wgc::id::ComputePipelineId,
 }
 
 /// An opaque handle to a command buffer on the GPU.
@@ -224,7 +224,7 @@ pub struct ComputePipeline {
 /// a [`CommandEncoder`] and then calling [`CommandEncoder::finish`].
 #[derive(Debug)]
 pub struct CommandBuffer {
-    id: core::id::CommandBufferId,
+    id: wgc::id::CommandBufferId,
 }
 
 /// An object that encodes GPU operations.
@@ -236,20 +236,20 @@ pub struct CommandBuffer {
 /// be submitted for execution.
 #[derive(Debug)]
 pub struct CommandEncoder {
-    id: core::id::CommandEncoderId,
+    id: wgc::id::CommandEncoderId,
 }
 
 /// An in-progress recording of a render pass.
 #[derive(Debug)]
 pub struct RenderPass<'a> {
-    id: core::id::RenderPassId,
+    id: wgc::id::RenderPassId,
     _parent: &'a mut CommandEncoder,
 }
 
 /// An in-progress recording of a compute pass.
 #[derive(Debug)]
 pub struct ComputePass<'a> {
-    id: core::id::ComputePassId,
+    id: wgc::id::ComputePassId,
     _parent: &'a mut CommandEncoder,
 }
 
@@ -258,8 +258,8 @@ pub struct ComputePass<'a> {
 /// A `Queue` executes recorded [`CommandBuffer`] objects.
 #[derive(Debug)]
 pub struct Queue {
-    id: core::id::QueueId,
-    temp_command_buffers: Vec<core::id::CommandBufferId>,
+    id: wgc::id::QueueId,
+    temp_command_buffers: Vec<wgc::id::CommandBufferId>,
 }
 
 /// A resource that can be bound to a pipeline.
@@ -442,7 +442,7 @@ pub struct RenderPassColorAttachmentDescriptor<'a> {
 #[derive(Debug)]
 pub struct SwapChainOutput<'a> {
     pub view: TextureView,
-    swap_chain_id: &'a core::id::SwapChainId,
+    swap_chain_id: &'a wgc::id::SwapChainId,
 }
 
 /// A view of a buffer which can be used to copy to or from a texture.
@@ -462,8 +462,8 @@ pub struct BufferCopyView<'a> {
 }
 
 impl<'a> BufferCopyView<'a> {
-    fn into_native(self) -> core::command::BufferCopyView {
-        core::command::BufferCopyView {
+    fn into_native(self) -> wgc::command::BufferCopyView {
+        wgc::command::BufferCopyView {
             buffer: self.buffer.id,
             offset: self.offset,
             row_pitch: self.row_pitch,
@@ -489,8 +489,8 @@ pub struct TextureCopyView<'a> {
 }
 
 impl<'a> TextureCopyView<'a> {
-    fn into_native(self) -> core::command::TextureCopyView {
-        core::command::TextureCopyView {
+    fn into_native(self) -> wgc::command::TextureCopyView {
+        wgc::command::TextureCopyView {
             texture: self.texture.id,
             mip_level: self.mip_level,
             array_layer: self.array_layer,
@@ -501,7 +501,7 @@ impl<'a> TextureCopyView<'a> {
 
 /// A buffer being created, mapped in host memory.
 pub struct CreateBufferMapped<'a, T> {
-    id: core::id::BufferId,
+    id: wgc::id::BufferId,
     pub data: &'a mut [T],
 }
 
@@ -551,11 +551,11 @@ impl Adapter {
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub fn request(options: &RequestAdapterOptions, backends: BackendBit) -> Option<Self> {
-        unsafe extern "C" fn adapter_callback(id: core::id::AdapterId, user_data: *mut std::ffi::c_void) {
-            *(user_data as *mut core::id::AdapterId) = id;
+        unsafe extern "C" fn adapter_callback(id: wgc::id::AdapterId, user_data: *mut std::ffi::c_void) {
+            *(user_data as *mut wgc::id::AdapterId) = id;
         }
 
-        let mut id = core::id::AdapterId::ERROR;
+        let mut id = wgc::id::AdapterId::ERROR;
         wgn::wgpu_request_adapter_async(Some(options), backends, adapter_callback, &mut id as *mut _ as *mut std::ffi::c_void);
         Some(Adapter {
             id,
@@ -593,8 +593,8 @@ impl Device {
 
     /// Creates a shader module from SPIR-V source code.
     pub fn create_shader_module(&self, spv: &[u32]) -> ShaderModule {
-        let desc = core::pipeline::ShaderModuleDescriptor {
-            code: core::U32Array {
+        let desc = wgc::pipeline::ShaderModuleDescriptor {
+            code: wgc::U32Array {
                 bytes: spv.as_ptr(),
                 length: spv.len(),
             },
@@ -613,7 +613,7 @@ impl Device {
 
     /// Creates a new bind group.
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
-        use core::binding_model as bm;
+        use wgc::binding_model as bm;
 
         let bindings = desc
             .bindings
@@ -653,7 +653,7 @@ impl Device {
 
     /// Creates a bind group layout.
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
-        use core::binding_model as bm;
+        use wgc::binding_model as bm;
 
         let temp_layouts = desc.bindings
             .iter()
@@ -706,7 +706,7 @@ impl Device {
         PipelineLayout {
             id: wgn::wgpu_device_create_pipeline_layout(
                 self.id,
-                &core::binding_model::PipelineLayoutDescriptor {
+                &wgc::binding_model::PipelineLayoutDescriptor {
                     bind_group_layouts: temp_layouts.as_ptr(),
                     bind_group_layouts_length: temp_layouts.len(),
                 },
@@ -716,7 +716,7 @@ impl Device {
 
     /// Creates a render pipeline.
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
-        use core::pipeline as pipe;
+        use wgc::pipeline as pipe;
 
         let vertex_entry_point = CString::new(desc.vertex_stage.entry_point).unwrap();
         let vertex_stage = pipe::ProgrammableStageDescriptor {
@@ -781,7 +781,7 @@ impl Device {
 
     /// Creates a compute pipeline.
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
-        use core::pipeline as pipe;
+        use wgc::pipeline as pipe;
 
         let entry_point = CString::new(desc.compute_stage.entry_point).unwrap();
 
@@ -816,7 +816,7 @@ impl Device {
         usage: BufferUsage,
     ) -> CreateBufferMapped<'a, T>
     where
-        T: 'static + Copy,
+        T: 'static + Copy + AsBytes + FromBytes,
     {
         let type_size = std::mem::size_of::<T>() as BufferAddress;
         assert_ne!(type_size, 0);
@@ -872,7 +872,7 @@ impl Drop for Device {
 
 pub struct BufferAsyncMapping<T> {
     pub data: T,
-    buffer_id: core::id::BufferId,
+    buffer_id: wgc::id::BufferId,
 }
 //TODO: proper error type
 pub type BufferMapAsyncResult<T> = Result<BufferAsyncMapping<T>, ()>;
@@ -890,7 +890,7 @@ where
 {
     size: BufferAddress,
     callback: F,
-    buffer_id: core::id::BufferId,
+    buffer_id: wgc::id::BufferId,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -901,7 +901,7 @@ where
 {
     size: BufferAddress,
     callback: F,
-    buffer_id: core::id::BufferId,
+    buffer_id: wgc::id::BufferId,
     phantom: std::marker::PhantomData<T>,
 }
 
@@ -909,7 +909,7 @@ impl Buffer {
     pub fn map_read_async<T, F>(&self, start: BufferAddress, count: usize, callback: F)
     where
         T: 'static + FromBytes,
-        F: FnOnce(BufferMapAsyncResult<&[T]>) + 'static,
+        F: FnOnce(BufferMapAsyncResult<&[T]>),
     {
         extern "C" fn buffer_map_read_callback_wrapper<T, F>(
             status: BufferMapAsyncStatus,
@@ -956,7 +956,7 @@ impl Buffer {
     pub fn map_write_async<T, F>(&self, start: BufferAddress, count: usize, callback: F)
     where
         T: 'static + AsBytes + FromBytes,
-        F: FnOnce(BufferMapAsyncResult<&mut [T]>) + 'static,
+        F: FnOnce(BufferMapAsyncResult<&mut [T]>),
     {
         extern "C" fn buffer_map_write_callback_wrapper<T, F>(
             status: BufferMapAsyncStatus,
@@ -1061,7 +1061,7 @@ impl CommandEncoder {
         let colors = desc
             .color_attachments
             .iter()
-            .map(|ca| core::command::RenderPassColorAttachmentDescriptor {
+            .map(|ca| wgc::command::RenderPassColorAttachmentDescriptor {
                 attachment: ca.attachment.id,
                 resolve_target: ca.resolve_target.map_or(ptr::null(), |v| &v.id as *const _),
                 load_op: ca.load_op,
@@ -1085,7 +1085,7 @@ impl CommandEncoder {
         RenderPass {
             id: wgn::wgpu_command_encoder_begin_render_pass(
                 self.id,
-                &core::command::RenderPassDescriptor {
+                &wgc::command::RenderPassDescriptor {
                     color_attachments: colors.as_ptr(),
                     color_attachments_length: colors.len(),
                     depth_stencil_attachment: depth_stencil
@@ -1382,7 +1382,7 @@ impl SwapChain {
     /// Returns an `Err` if the GPU timed out when attempting to acquire the next texture.
     pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, ()> {
         let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
-        if output.view_id == core::id::Id::ERROR {
+        if output.view_id == wgc::id::Id::ERROR {
             Err(())
         } else {
             Ok(SwapChainOutput {
