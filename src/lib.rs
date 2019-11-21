@@ -599,7 +599,7 @@ impl Device {
 
         let bindings = desc
             .bindings
-            .into_iter()
+            .iter()
             .map(|binding| bm::BindGroupBinding {
                 binding: binding.binding,
                 resource: match binding.resource {
