@@ -4,7 +4,7 @@
 use std::fs::File;
 use std::mem::size_of;
 
-fn main() {
+async fn run() {
     env_logger::init();
 
     let adapter = wgpu::Adapter::request(
@@ -86,21 +86,21 @@ fn main() {
     queue.submit(&[command_buffer]);
 
     // Write the buffer as a PNG
-    output_buffer.map_read_async(
-        0,
-        (size * size) as usize * size_of::<u32>(),
-        move |result: wgpu::BufferMapAsyncResult<&[u8]>| {
-            let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), size, size);
-            png_encoder.set_depth(png::BitDepth::Eight);
-            png_encoder.set_color(png::ColorType::RGBA);
-            png_encoder
-                .write_header()
-                .unwrap()
-                .write_image_data(result.unwrap().data)
-                .unwrap();
-        },
-    );
+    if let Ok(mapping) = output_buffer.map_read(0u64, (size * size) as u64 * size_of::<u32>() as u64).await {
+        let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), size, size);
+        png_encoder.set_depth(png::BitDepth::Eight);
+        png_encoder.set_color(png::ColorType::RGBA);
+        png_encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(mapping.as_slice())
+            .unwrap();
+    }
 
     // The device will be polled when it is dropped but we can also poll it explicitly
     device.poll(true);
+}
+
+fn main() {
+    futures::executor::block_on(run());
 }

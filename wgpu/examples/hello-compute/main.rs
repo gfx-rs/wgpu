@@ -1,7 +1,7 @@
 use std::{convert::TryInto as _, str::FromStr};
 use zerocopy::AsBytes as _;
 
-fn main() {
+async fn run() {
     env_logger::init();
 
     // For now this just panics if you didn't pass numbers. Could add proper error handling.
@@ -93,15 +93,17 @@ fn main() {
 
     queue.submit(&[encoder.finish()]);
 
-    // FIXME: Align and use `LayoutVerified`
-    staging_buffer.map_read_async(0, slice_size, |result| {
-        if let Ok(mapping) = result {
-            let times: Box<[u32]> = mapping
-                .data
-                .chunks_exact(4)
-                .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-                .collect();
-            println!("Times: {:?}", times);
-        }
-    });
+    if let Ok(mapping) = staging_buffer.map_read(0u64, size).await {
+        let times : Box<[u32]> = mapping
+            .as_slice()
+            .chunks_exact(4)
+            .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
+            .collect();
+
+        println!("Times: {:?}", times);
+    }
+}
+
+fn main() {
+    futures::executor::block_on(run());
 }
