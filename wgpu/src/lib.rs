@@ -21,6 +21,9 @@ pub use wgc::{
         RenderPassDepthStencilAttachmentDescriptor,
         StoreOp,
     },
+    device::{
+        BIND_BUFFER_ALIGNMENT,
+    },
     instance::{
         AdapterInfo,
         BackendBit,
