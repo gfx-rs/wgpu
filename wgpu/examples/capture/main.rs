@@ -12,7 +12,8 @@ fn main() {
             power_preference: wgpu::PowerPreference::Default,
         },
         wgpu::BackendBit::PRIMARY,
-    ).unwrap();
+    )
+    .unwrap();
 
     let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {

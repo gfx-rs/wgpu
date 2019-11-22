@@ -1,7 +1,7 @@
 fn main() {
     use winit::{
-        event_loop::{ControlFlow, EventLoop},
         event,
+        event_loop::{ControlFlow, EventLoop},
     };
 
     env_logger::init();
@@ -10,9 +10,7 @@ fn main() {
     #[cfg(not(feature = "gl"))]
     let (_window, size, surface) = {
         let window = winit::window::Window::new(&event_loop).unwrap();
-        let size = window
-            .inner_size()
-            .to_physical(window.hidpi_factor());
+        let size = window.inner_size().to_physical(window.hidpi_factor());
 
         let surface = wgpu::Surface::create(&window);
         (window, size, surface)
@@ -43,7 +41,8 @@ fn main() {
             power_preference: wgpu::PowerPreference::Default,
         },
         wgpu::BackendBit::PRIMARY,
-    ).unwrap();
+    )
+    .unwrap();
 
     let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
@@ -53,14 +52,15 @@ fn main() {
     });
 
     let vs = include_bytes!("shader.vert.spv");
-    let vs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
+    let vs_module =
+        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
 
     let fs = include_bytes!("shader.frag.spv");
-    let fs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
+    let fs_module =
+        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
 
-    let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        bindings: &[],
-    });
+    let bind_group_layout =
+        device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor { bindings: &[] });
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         layout: &bind_group_layout,
         bindings: &[],
@@ -135,7 +135,8 @@ fn main() {
                 _ => {}
             },
             event::Event::EventsCleared => {
-                let frame = swap_chain.get_next_texture()
+                let frame = swap_chain
+                    .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });

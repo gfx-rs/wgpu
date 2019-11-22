@@ -10,10 +10,12 @@
 #[path = "../framework.rs"]
 mod framework;
 
+use zerocopy::{AsBytes, FromBytes};
+
 #[repr(C)]
-#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+#[derive(Clone, Copy, AsBytes, FromBytes)]
 struct Vertex {
-    _pos:   [f32; 2],
+    _pos: [f32; 2],
     _color: [f32; 4],
 }
 
@@ -31,7 +33,14 @@ struct Example {
 }
 
 impl Example {
-    fn create_pipeline(device: &wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor, vs_module: &wgpu::ShaderModule, fs_module: &wgpu::ShaderModule, pipeline_layout: &wgpu::PipelineLayout, sample_count: u32) -> wgpu::RenderPipeline {
+    fn create_pipeline(
+        device: &wgpu::Device,
+        sc_desc: &wgpu::SwapChainDescriptor,
+        vs_module: &wgpu::ShaderModule,
+        fs_module: &wgpu::ShaderModule,
+        pipeline_layout: &wgpu::PipelineLayout,
+        sample_count: u32,
+    ) -> wgpu::RenderPipeline {
         println!("sample_count: {}", sample_count);
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
@@ -81,7 +90,11 @@ impl Example {
         })
     }
 
-    fn create_multisampled_framebuffer(device: &wgpu::Device, sc_desc: &wgpu::SwapChainDescriptor, sample_count: u32) -> wgpu::TextureView {
+    fn create_multisampled_framebuffer(
+        device: &wgpu::Device,
+        sc_desc: &wgpu::SwapChainDescriptor,
+        sample_count: u32,
+    ) -> wgpu::TextureView {
         let multisampled_texture_extent = wgpu::Extent3d {
             width: sc_desc.width,
             height: sc_desc.height,
@@ -97,17 +110,26 @@ impl Example {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         };
 
-        device.create_texture(multisampled_frame_descriptor).create_default_view()
+        device
+            .create_texture(multisampled_frame_descriptor)
+            .create_default_view()
     }
 }
 
 impl framework::Example for Example {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>) {
+    fn init(
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> (Self, Option<wgpu::CommandBuffer>) {
         println!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
-        let vs_bytes = framework::load_glsl(include_str!("shader.vert"), framework::ShaderStage::Vertex);
-        let fs_bytes = framework::load_glsl(include_str!("shader.frag"), framework::ShaderStage::Fragment);
+        let vs_bytes =
+            framework::load_glsl(include_str!("shader.vert"), framework::ShaderStage::Vertex);
+        let fs_bytes = framework::load_glsl(
+            include_str!("shader.frag"),
+            framework::ShaderStage::Fragment,
+        );
         let vs_module = device.create_shader_module(&vs_bytes);
         let fs_module = device.create_shader_module(&fs_bytes);
 
@@ -115,13 +137,21 @@ impl framework::Example for Example {
             bind_group_layouts: &[],
         });
 
-        let pipeline = Example::create_pipeline(device, &sc_desc, &vs_module, &fs_module, &pipeline_layout, sample_count);
-        let multisampled_framebuffer = Example::create_multisampled_framebuffer(device, sc_desc, sample_count);
+        let pipeline = Example::create_pipeline(
+            device,
+            &sc_desc,
+            &vs_module,
+            &fs_module,
+            &pipeline_layout,
+            sample_count,
+        );
+        let multisampled_framebuffer =
+            Example::create_multisampled_framebuffer(device, sc_desc, sample_count);
 
-        let mut vertex_data = vec!();
+        let mut vertex_data = vec![];
 
         let max = 50;
-        for i in 0..max {
+        for i in 0 .. max {
             let percent = i as f32 / max as f32;
             let (sin, cos) = (percent * 2.0 * std::f32::consts::PI).sin_cos();
             vertex_data.push(Vertex {
@@ -134,9 +164,8 @@ impl framework::Example for Example {
             });
         }
 
-        let vertex_buffer = device
-            .create_buffer_mapped(vertex_data.len(), wgpu::BufferUsage::VERTEX)
-            .fill_from_slice(&vertex_data);
+        let vertex_buffer =
+            device.create_buffer_with_data(vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
         let vertex_count = vertex_data.len() as u32;
 
         let this = Example {
@@ -171,28 +200,46 @@ impl framework::Example for Example {
                                 self.rebuild_pipeline = true;
                             }
                         }
-                        _ => { }
+                        _ => {}
                     }
                 }
             }
-            _ => { }
+            _ => {}
         }
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer> {
+    fn resize(
+        &mut self,
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> Option<wgpu::CommandBuffer> {
         self.sc_desc = sc_desc.clone();
-        self.multisampled_framebuffer = Example::create_multisampled_framebuffer(device, sc_desc, self.sample_count);
+        self.multisampled_framebuffer =
+            Example::create_multisampled_framebuffer(device, sc_desc, self.sample_count);
         None
     }
 
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer {
+    fn render(
+        &mut self,
+        frame: &wgpu::SwapChainOutput,
+        device: &wgpu::Device,
+    ) -> wgpu::CommandBuffer {
         if self.rebuild_pipeline {
-            self.pipeline = Example::create_pipeline(device, &self.sc_desc, &self.vs_module, &self.fs_module, &self.pipeline_layout, self.sample_count);
-            self.multisampled_framebuffer = Example::create_multisampled_framebuffer(device, &self.sc_desc, self.sample_count);
+            self.pipeline = Example::create_pipeline(
+                device,
+                &self.sc_desc,
+                &self.vs_module,
+                &self.fs_module,
+                &self.pipeline_layout,
+                self.sample_count,
+            );
+            self.multisampled_framebuffer =
+                Example::create_multisampled_framebuffer(device, &self.sc_desc, self.sample_count);
             self.rebuild_pipeline = false;
         }
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachmentDescriptor {
@@ -218,7 +265,7 @@ impl framework::Example for Example {
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_vertex_buffers(0, &[(&self.vertex_buffer, 0)]);
-            rpass.draw(0..self.vertex_count, 0..1);
+            rpass.draw(0 .. self.vertex_count, 0 .. 1);
         }
 
         encoder.finish()
