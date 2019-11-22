@@ -1,9 +1,7 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
 use arrayvec::ArrayVec;
-use zerocopy::{AsBytes, FromBytes, LayoutVerified};
 
-use std::convert::TryFrom;
 use std::ffi::CString;
 use std::ops::Range;
 use std::ptr;
@@ -11,12 +9,10 @@ use std::slice;
 use std::thread;
 
 pub use wgc::{
-    binding_model::{
-        ShaderStage,
-    },
+    binding_model::ShaderStage,
     command::{
-        CommandEncoderDescriptor,
         CommandBufferDescriptor,
+        CommandEncoderDescriptor,
         LoadOp,
         RenderPassDepthStencilAttachmentDescriptor,
         StoreOp,
@@ -50,6 +46,7 @@ pub use wgc::{
         VertexAttributeDescriptor,
         VertexFormat,
     },
+    read_spirv,
     resource::{
         AddressMode,
         BufferDescriptor,
@@ -66,24 +63,18 @@ pub use wgc::{
         TextureViewDescriptor,
         TextureViewDimension,
     },
-    swap_chain::{
-        PresentMode,
-        SwapChainDescriptor,
-    },
+    swap_chain::{PresentMode, SwapChainDescriptor},
     BufferAddress,
     Color,
     Extent3d,
     Origin3d,
-    read_spirv,
 };
 
-
 //TODO: avoid heap allocating vectors during resource creation.
-#[derive(Default)]
-#[derive(Debug)]
+#[derive(Default, Debug)]
 struct Temp {
     //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
-    //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
+//vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
 }
 
 /// A handle to a physical graphics and/or compute device.
@@ -500,27 +491,12 @@ impl<'a> TextureCopyView<'a> {
 }
 
 /// A buffer being created, mapped in host memory.
-pub struct CreateBufferMapped<'a, T> {
+pub struct CreateBufferMapped<'a> {
     id: wgc::id::BufferId,
-    pub data: &'a mut [T],
+    pub data: &'a mut [u8],
 }
 
-impl<'a, T> CreateBufferMapped<'a, T>
-where
-    T: Copy,
-{
-    /// Copies a slice into the mapped buffer and unmaps it, returning a [`Buffer`].
-    ///
-    /// `slice` and `self.data` must have the same length.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the slices have different lengths.
-    pub fn fill_from_slice(self, slice: &[T]) -> Buffer {
-        self.data.copy_from_slice(slice);
-        self.finish()
-    }
-
+impl CreateBufferMapped<'_> {
     /// Unmaps the buffer from host memory and returns a [`Buffer`].
     pub fn finish(self) -> Buffer {
         wgn::wgpu_buffer_unmap(self.id);
@@ -551,15 +527,21 @@ impl Adapter {
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub fn request(options: &RequestAdapterOptions, backends: BackendBit) -> Option<Self> {
-        unsafe extern "C" fn adapter_callback(id: wgc::id::AdapterId, user_data: *mut std::ffi::c_void) {
+        unsafe extern "C" fn adapter_callback(
+            id: wgc::id::AdapterId,
+            user_data: *mut std::ffi::c_void,
+        ) {
             *(user_data as *mut wgc::id::AdapterId) = id;
         }
 
         let mut id = wgc::id::AdapterId::ERROR;
-        wgn::wgpu_request_adapter_async(Some(options), backends, adapter_callback, &mut id as *mut _ as *mut std::ffi::c_void);
-        Some(Adapter {
-            id,
-        })
+        wgn::wgpu_request_adapter_async(
+            Some(options),
+            backends,
+            adapter_callback,
+            &mut id as *mut _ as *mut std::ffi::c_void,
+        );
+        Some(Adapter { id })
     }
 
     /// Requests a connection to a physical device, creating a logical device.
@@ -617,7 +599,7 @@ impl Device {
 
         let bindings = desc
             .bindings
-            .into_iter()
+            .iter()
             .map(|binding| bm::BindGroupBinding {
                 binding: binding.binding,
                 resource: match binding.resource {
@@ -655,22 +637,27 @@ impl Device {
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
         use wgc::binding_model as bm;
 
-        let temp_layouts = desc.bindings
+        let temp_layouts = desc
+            .bindings
             .iter()
             .map(|bind| bm::BindGroupLayoutBinding {
                 binding: bind.binding,
                 visibility: bind.visibility,
                 ty: match bind.ty {
                     BindingType::UniformBuffer { .. } => bm::BindingType::UniformBuffer,
-                    BindingType::StorageBuffer { readonly: false, .. } => bm::BindingType::StorageBuffer,
-                    BindingType::StorageBuffer { readonly: true, .. } => bm::BindingType::ReadonlyStorageBuffer,
+                    BindingType::StorageBuffer {
+                        readonly: false, ..
+                    } => bm::BindingType::StorageBuffer,
+                    BindingType::StorageBuffer { readonly: true, .. } => {
+                        bm::BindingType::ReadonlyStorageBuffer
+                    }
                     BindingType::Sampler => bm::BindingType::Sampler,
                     BindingType::SampledTexture { .. } => bm::BindingType::SampledTexture,
                     BindingType::StorageTexture { .. } => bm::BindingType::StorageTexture,
                 },
                 dynamic: match bind.ty {
-                    BindingType::UniformBuffer { dynamic } |
-                    BindingType::StorageBuffer { dynamic, .. } => dynamic,
+                    BindingType::UniformBuffer { dynamic }
+                    | BindingType::StorageBuffer { dynamic, .. } => dynamic,
                     _ => false,
                 },
                 multisampled: match bind.ty {
@@ -678,8 +665,8 @@ impl Device {
                     _ => false,
                 },
                 texture_dimension: match bind.ty {
-                    BindingType::SampledTexture { dimension, .. } |
-                    BindingType::StorageTexture { dimension } => dimension,
+                    BindingType::SampledTexture { dimension, .. }
+                    | BindingType::StorageTexture { dimension } => dimension,
                     _ => TextureViewDimension::D2,
                 },
             })
@@ -756,7 +743,8 @@ impl Device {
                     fragment_stage: fragment_stage
                         .as_ref()
                         .map_or(ptr::null(), |fs| fs as *const _),
-                    rasterization_state: desc.rasterization_state
+                    rasterization_state: desc
+                        .rasterization_state
                         .as_ref()
                         .map_or(ptr::null(), |p| p as *const _),
                     primitive_topology: desc.primitive_topology,
@@ -808,30 +796,30 @@ impl Device {
 
     /// Creates a new buffer and maps it into host-visible memory.
     ///
-    /// This returns a [`CreateBufferMapped<T>`], which exposes a `&mut [T]`. The actual [`Buffer`]
+    /// This returns a [`CreateBufferMapped`], which exposes a `&mut [u8]`. The actual [`Buffer`]
     /// will not be created until calling [`CreateBufferMapped::finish`].
-    pub fn create_buffer_mapped<'a, T>(
-        &'a self,
-        count: usize,
-        usage: BufferUsage,
-    ) -> CreateBufferMapped<'a, T>
-    where
-        T: 'static + Copy + AsBytes + FromBytes,
-    {
-        let type_size = std::mem::size_of::<T>() as BufferAddress;
-        assert_ne!(type_size, 0);
+    pub fn create_buffer_mapped(&self, size: usize, usage: BufferUsage) -> CreateBufferMapped<'_> {
+        assert_ne!(size, 0);
 
         let desc = BufferDescriptor {
-            size: (type_size * count as BufferAddress).max(1),
+            size: size as BufferAddress,
             usage,
         };
         let mut ptr: *mut u8 = std::ptr::null_mut();
 
         let id = wgn::wgpu_device_create_buffer_mapped(self.id, &desc, &mut ptr as *mut *mut u8);
 
-        let data = unsafe { std::slice::from_raw_parts_mut(ptr as *mut T, count) };
+        let data = unsafe { std::slice::from_raw_parts_mut(ptr as *mut u8, size) };
 
         CreateBufferMapped { id, data }
+    }
+
+    /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
+    /// and finally unmaps it, returning a [`Buffer`].
+    pub fn create_buffer_with_data(&self, data: &[u8], usage: BufferUsage) -> Buffer {
+        let mapped = self.create_buffer_mapped(data.len(), usage);
+        mapped.data.copy_from_slice(data);
+        mapped.finish()
     }
 
     /// Creates a new [`Texture`].
@@ -883,50 +871,39 @@ impl<T> Drop for BufferAsyncMapping<T> {
     }
 }
 
-struct BufferMapReadAsyncUserData<T, F>
+struct BufferMapReadAsyncUserData<F>
 where
-    T: FromBytes,
-    F: FnOnce(BufferMapAsyncResult<&[T]>),
+    F: FnOnce(BufferMapAsyncResult<&[u8]>),
 {
-    size: BufferAddress,
+    size: usize,
     callback: F,
     buffer_id: wgc::id::BufferId,
-    phantom: std::marker::PhantomData<T>,
 }
 
-struct BufferMapWriteAsyncUserData<T, F>
+struct BufferMapWriteAsyncUserData<F>
 where
-    T: AsBytes + FromBytes,
-    F: FnOnce(BufferMapAsyncResult<&mut [T]>),
+    F: FnOnce(BufferMapAsyncResult<&mut [u8]>),
 {
-    size: BufferAddress,
+    size: usize,
     callback: F,
     buffer_id: wgc::id::BufferId,
-    phantom: std::marker::PhantomData<T>,
 }
 
 impl Buffer {
-    pub fn map_read_async<T, F>(&self, start: BufferAddress, count: usize, callback: F)
+    pub fn map_read_async<F>(&self, start: BufferAddress, size: usize, callback: F)
     where
-        T: 'static + FromBytes,
-        F: FnOnce(BufferMapAsyncResult<&[T]>),
+        F: FnOnce(BufferMapAsyncResult<&[u8]>),
     {
-        extern "C" fn buffer_map_read_callback_wrapper<T, F>(
+        extern "C" fn buffer_map_read_callback_wrapper<F>(
             status: BufferMapAsyncStatus,
             data: *const u8,
             user_data: *mut u8,
         ) where
-            T: FromBytes,
-            F: FnOnce(BufferMapAsyncResult<&[T]>),
+            F: FnOnce(BufferMapAsyncResult<&[u8]>),
         {
             let user_data =
-                unsafe { Box::from_raw(user_data as *mut BufferMapReadAsyncUserData<T, F>) };
-            let data: &[u8] = unsafe {
-                slice::from_raw_parts(data as *const u8, usize::try_from(user_data.size).unwrap())
-            };
-            let data = LayoutVerified::new_slice(data)
-                .expect("could not interpret bytes as &[T]")
-                .into_slice();
+                unsafe { Box::from_raw(user_data as *mut BufferMapReadAsyncUserData<F>) };
+            let data: &[u8] = unsafe { slice::from_raw_parts(data as *const u8, user_data.size) };
             match status {
                 BufferMapAsyncStatus::Success => (user_data.callback)(Ok(BufferAsyncMapping {
                     data,
@@ -935,45 +912,35 @@ impl Buffer {
                 _ => (user_data.callback)(Err(())),
             }
         }
-
-        let size = (count * std::mem::size_of::<T>()) as BufferAddress;
 
         let user_data = Box::new(BufferMapReadAsyncUserData {
             size,
             callback,
             buffer_id: self.id,
-            phantom: std::marker::PhantomData,
         });
         wgn::wgpu_buffer_map_read_async(
             self.id,
             start,
-            size,
-            buffer_map_read_callback_wrapper::<T, F>,
+            size as BufferAddress,
+            buffer_map_read_callback_wrapper::<F>,
             Box::into_raw(user_data) as *mut u8,
         );
     }
 
-    pub fn map_write_async<T, F>(&self, start: BufferAddress, count: usize, callback: F)
+    pub fn map_write_async<F>(&self, start: BufferAddress, size: usize, callback: F)
     where
-        T: 'static + AsBytes + FromBytes,
-        F: FnOnce(BufferMapAsyncResult<&mut [T]>),
+        F: FnOnce(BufferMapAsyncResult<&mut [u8]>),
     {
-        extern "C" fn buffer_map_write_callback_wrapper<T, F>(
+        extern "C" fn buffer_map_write_callback_wrapper<F>(
             status: BufferMapAsyncStatus,
             data: *mut u8,
             user_data: *mut u8,
         ) where
-            T: AsBytes + FromBytes,
-            F: FnOnce(BufferMapAsyncResult<&mut [T]>),
+            F: FnOnce(BufferMapAsyncResult<&mut [u8]>),
         {
             let user_data =
-                unsafe { Box::from_raw(user_data as *mut BufferMapWriteAsyncUserData<T, F>) };
-            let data = unsafe {
-                slice::from_raw_parts_mut(data as *mut u8, usize::try_from(user_data.size).unwrap())
-            };
-            let data = LayoutVerified::new_slice(data)
-                .expect("could not interpret bytes as &mut [T]")
-                .into_mut_slice();
+                unsafe { Box::from_raw(user_data as *mut BufferMapWriteAsyncUserData<F>) };
+            let data = unsafe { slice::from_raw_parts_mut(data as *mut u8, user_data.size) };
             match status {
                 BufferMapAsyncStatus::Success => (user_data.callback)(Ok(BufferAsyncMapping {
                     data,
@@ -983,19 +950,16 @@ impl Buffer {
             }
         }
 
-        let size = (count * std::mem::size_of::<T>()) as BufferAddress;
-
         let user_data = Box::new(BufferMapWriteAsyncUserData {
             size,
             callback,
             buffer_id: self.id,
-            phantom: std::marker::PhantomData,
         });
         wgn::wgpu_buffer_map_write_async(
             self.id,
             start,
-            size,
-            buffer_map_write_callback_wrapper::<T, F>,
+            size as BufferAddress,
+            buffer_map_write_callback_wrapper::<F>,
             Box::into_raw(user_data) as *mut u8,
         );
     }
@@ -1294,7 +1258,11 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
-    pub fn draw_indexed_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &Buffer,
+        indirect_offset: BufferAddress,
+    ) {
         wgn::wgpu_render_pass_draw_indexed_indirect(self.id, indirect_buffer.id, indirect_offset);
     }
 }

@@ -37,7 +37,6 @@ rev = "73b33ea76e2f91b3114aa7640b1d60518d39f915"
 [dependencies]
 arrayvec = "0.5"
 raw-window-handle = "0.3"
-zerocopy = "0.2"
 
 [dev-dependencies]
 cgmath = "0.17"
@@ -46,3 +45,4 @@ glsl-to-spirv = "0.1"
 log = "0.4"
 png = "0.15"
 winit = "0.20.0-alpha4"
+zerocopy = "0.2"

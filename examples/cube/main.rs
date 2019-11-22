@@ -1,8 +1,10 @@
 #[path = "../framework.rs"]
 mod framework;
 
+use zerocopy::{AsBytes, FromBytes};
+
 #[repr(C)]
-#[derive(Clone, Copy, zerocopy::AsBytes, zerocopy::FromBytes)]
+#[derive(Clone, Copy, AsBytes, FromBytes)]
 struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
@@ -107,7 +109,10 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn init(sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> (Self, Option<wgpu::CommandBuffer>) {
+    fn init(
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> (Self, Option<wgpu::CommandBuffer>) {
         use std::mem;
 
         let mut init_encoder =
@@ -116,13 +121,12 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
-        let vertex_buf = device
-            .create_buffer_mapped(vertex_data.len(), wgpu::BufferUsage::VERTEX)
-            .fill_from_slice(&vertex_data);
 
-        let index_buf = device
-            .create_buffer_mapped(index_data.len(), wgpu::BufferUsage::INDEX)
-            .fill_from_slice(&index_data);
+        let vertex_buf =
+            device.create_buffer_with_data(vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
+
+        let index_buf =
+            device.create_buffer_with_data(index_data.as_bytes(), wgpu::BufferUsage::INDEX);
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -130,9 +134,7 @@ impl framework::Example for Example {
                 wgpu::BindGroupLayoutBinding {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
-                    },
+                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 },
                 wgpu::BindGroupLayoutBinding {
                     binding: 1,
@@ -171,9 +173,8 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
         });
         let texture_view = texture.create_default_view();
-        let temp_buf = device
-            .create_buffer_mapped(texels.len(), wgpu::BufferUsage::COPY_SRC)
-            .fill_from_slice(&texels);
+        let temp_buf =
+            device.create_buffer_with_data(texels.as_slice(), wgpu::BufferUsage::COPY_SRC);
         init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
@@ -208,12 +209,10 @@ impl framework::Example for Example {
         });
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        let uniform_buf = device
-            .create_buffer_mapped(
-                16,
-                wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            )
-            .fill_from_slice(mx_ref);
+        let uniform_buf = device.create_buffer_with_data(
+            mx_ref.as_bytes(),
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        );
 
         // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -310,13 +309,16 @@ impl framework::Example for Example {
         //empty
     }
 
-    fn resize(&mut self, sc_desc: &wgpu::SwapChainDescriptor, device: &wgpu::Device) -> Option<wgpu::CommandBuffer> {
+    fn resize(
+        &mut self,
+        sc_desc: &wgpu::SwapChainDescriptor,
+        device: &wgpu::Device,
+    ) -> Option<wgpu::CommandBuffer> {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
-        let temp_buf = device
-            .create_buffer_mapped(16, wgpu::BufferUsage::COPY_SRC)
-            .fill_from_slice(mx_ref);
+        let temp_buf =
+            device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
@@ -324,7 +326,11 @@ impl framework::Example for Example {
         Some(encoder.finish())
     }
 
-    fn render(&mut self, frame: &wgpu::SwapChainOutput, device: &wgpu::Device) -> wgpu::CommandBuffer {
+    fn render(
+        &mut self,
+        frame: &wgpu::SwapChainOutput,
+        device: &wgpu::Device,
+    ) -> wgpu::CommandBuffer {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
         {

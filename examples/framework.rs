@@ -99,7 +99,8 @@ pub fn run<E: Example>(title: &str) {
             power_preference: wgpu::PowerPreference::Default,
         },
         wgpu::BackendBit::PRIMARY,
-    ).unwrap();
+    )
+    .unwrap();
 
     let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
         extensions: wgpu::Extensions {
@@ -163,7 +164,8 @@ pub fn run<E: Example>(title: &str) {
                 }
             },
             event::Event::EventsCleared => {
-                let frame = swap_chain.get_next_texture()
+                let frame = swap_chain
+                    .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
                 let command_buf = example.render(&frame, &device);
                 queue.submit(&[command_buf]);

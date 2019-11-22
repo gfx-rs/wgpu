@@ -1,3 +1,6 @@
+#[cfg(any(feature = "vulkan", feature = "metal", feature = "dx12"))]
+use std::convert::TryInto as _;
+
 #[test]
 #[cfg(any(feature = "vulkan", feature = "metal", feature = "dx12"))]
 fn multithreaded_compute() {
@@ -13,14 +16,18 @@ fn multithreaded_compute() {
         thread::spawn(move || {
             let numbers = vec![100, 100, 100];
 
-            let size = (numbers.len() * std::mem::size_of::<u32>()) as wgpu::BufferAddress;
+            let slice_size = numbers.len() * std::mem::size_of::<u32>();
+            let size = slice_size as wgpu::BufferAddress;
 
-            let instance = wgpu::Instance::new();
-            let adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
-            });
+            let adapter = wgpu::Adapter::request(
+                &wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::Default,
+                },
+                wgpu::BackendBit::PRIMARY,
+            )
+            .unwrap();
 
-            let mut device = adapter.request_device(&wgpu::DeviceDescriptor {
+            let (device, mut queue) = adapter.request_device(&wgpu::DeviceDescriptor {
                 extensions: wgpu::Extensions {
                     anisotropic_filtering: false,
                 },
@@ -28,16 +35,15 @@ fn multithreaded_compute() {
             });
 
             let cs = include_bytes!("../examples/hello-compute/shader.comp.spv");
-            let cs_module = device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
+            let cs_module = device
+                .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
 
-            let staging_buffer = device
-                .create_buffer_mapped(
-                    numbers.len(),
-                    wgpu::BufferUsage::MAP_READ
-                        | wgpu::BufferUsage::COPY_DST
-                        | wgpu::BufferUsage::COPY_SRC,
-                )
-                .fill_from_slice(&numbers);
+            let staging_buffer = device.create_buffer_with_data(
+                numbers.as_slice(),
+                wgpu::BufferUsage::MAP_READ
+                    | wgpu::BufferUsage::COPY_DST
+                    | wgpu::BufferUsage::COPY_SRC,
+            );
 
             let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
                 size,
@@ -48,16 +54,14 @@ fn multithreaded_compute() {
 
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[
-                        wgpu::BindGroupLayoutBinding {
-                            binding: 0,
-                            visibility: wgpu::ShaderStage::COMPUTE,
-                            ty: wgpu::BindingType::StorageBuffer {
-                                dynamic: false,
-                                readonly: false,
-                            },
+                    bindings: &[wgpu::BindGroupLayoutBinding {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::COMPUTE,
+                        ty: wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            readonly: false,
                         },
-                    ],
+                    }],
                 });
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -95,10 +99,17 @@ fn multithreaded_compute() {
             }
             encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
-            device.get_queue().submit(&[encoder.finish()]);
+            queue.submit(&[encoder.finish()]);
 
-            staging_buffer.map_read_async(0, size, |result: wgpu::BufferMapAsyncResult<&[u32]>| {
-                assert_eq!(result.unwrap().data, [25, 25, 25]);
+            // FIXME: Align and use `LayoutVerified`
+            staging_buffer.map_read_async(0, slice_size, |result| {
+                let result_data: Box<[u32]> = result
+                    .unwrap()
+                    .data
+                    .chunks_exact(std::mem::size_of::<u32>())
+                    .map(|c| u32::from_ne_bytes(c.try_into().unwrap()))
+                    .collect();
+                assert_eq!(&*result_data, &[25, 25, 25]);
             });
             tx.send(true).unwrap();
         });
