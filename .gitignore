@@ -12,5 +12,8 @@ Cargo.lock
 # Other
 .DS_Store
 
+# VSCode project
+.vscode
+
 # Output from capture example
 red.png
