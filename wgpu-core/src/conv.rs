@@ -35,7 +35,7 @@ pub fn map_buffer_usage(
     if usage.contains(W::UNIFORM) {
         hal_usage |= U::UNIFORM;
     }
-    if usage.contains(W::STORAGE) {
+    if usage.intersects(W::STORAGE | W::STORAGE_READ) {
         hal_usage |= U::STORAGE;
     }
     if usage.contains(W::INDIRECT) {
