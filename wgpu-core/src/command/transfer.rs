@@ -169,7 +169,6 @@ impl<F> Global<F> {
             range: pending.selector,
         });
 
-        let aspects = dst_texture.full_range.aspects;
         let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.features)
             .surface_desc()
             .bits as u32
@@ -246,7 +245,6 @@ impl<F> Global<F> {
             range: None .. None,
         });
 
-        let aspects = src_texture.full_range.aspects;
         let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.features)
             .surface_desc()
             .bits as u32
@@ -328,7 +326,6 @@ impl<F> Global<F> {
             range: pending.selector,
         }));
 
-        let aspects = src_texture.full_range.aspects & dst_texture.full_range.aspects;
         let region = hal::command::ImageCopy {
             src_subresource: source.to_sub_layers(aspects),
             src_offset: conv::map_origin(source.origin),

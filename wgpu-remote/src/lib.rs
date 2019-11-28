@@ -4,7 +4,7 @@
 
 use core::{
     hub::IdentityManager,
-    id::{AdapterId, DeviceId},
+    id,
     Backend,
 };
 
@@ -19,6 +19,7 @@ pub mod server;
 struct IdentityHub {
     adapters: IdentityManager,
     devices: IdentityManager,
+    buffers: IdentityManager,
 }
 
 #[derive(Debug, Default)]
@@ -77,7 +78,7 @@ pub extern "C" fn wgpu_client_delete(client: *mut Client) {
 #[no_mangle]
 pub extern "C" fn wgpu_client_make_adapter_ids(
     client: &Client,
-    ids: *mut AdapterId,
+    ids: *mut id::AdapterId,
     id_length: usize,
 ) -> usize {
     let mut identities = client.identities.lock();
@@ -101,7 +102,7 @@ pub extern "C" fn wgpu_client_make_adapter_ids(
 #[no_mangle]
 pub extern "C" fn wgpu_client_kill_adapter_ids(
     client: &Client,
-    ids: *const AdapterId,
+    ids: *const id::AdapterId,
     id_length: usize,
 ) {
     let mut identity = client.identities.lock();
@@ -112,7 +113,7 @@ pub extern "C" fn wgpu_client_kill_adapter_ids(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_device_id(client: &Client, adapter_id: AdapterId) -> DeviceId {
+pub extern "C" fn wgpu_client_make_device_id(client: &Client, adapter_id: id::AdapterId) -> id::DeviceId {
     let backend = adapter_id.backend();
     client
         .identities
@@ -123,11 +124,32 @@ pub extern "C" fn wgpu_client_make_device_id(client: &Client, adapter_id: Adapte
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: DeviceId) {
+pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: id::DeviceId) {
     client
         .identities
         .lock()
         .select(id.backend())
         .devices
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_buffer_id(client: &Client, device_id: id::DeviceId) -> id::BufferId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .buffers
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_buffer_id(client: &Client, id: id::BufferId) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .buffers
         .free(id)
 }
