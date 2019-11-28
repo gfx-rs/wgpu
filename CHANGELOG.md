@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.4.1 (28-11-2019)
+  - fixed depth/stencil transitions
+  - fixed dynamic offset iteration
+
 ## v0.4 (03-11-2019)
   - Platforms: removed OpenGL/WebGL support temporarily
   - Features:
