@@ -54,3 +54,13 @@ pub extern "C" fn wgpu_server_adapter_request_device(
 pub extern "C" fn wgpu_server_device_destroy(global: &Global<()>, self_id: id::DeviceId) {
     gfx_select!(self_id => global.device_destroy(self_id))
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_device_create_buffer(
+    global: &Global<()>,
+    self_id: id::DeviceId,
+    desc: &core::resource::BufferDescriptor,
+    new_id: id::BufferId,
+) {
+    gfx_select!(self_id => global.device_create_buffer(self_id, desc, new_id));
+}
