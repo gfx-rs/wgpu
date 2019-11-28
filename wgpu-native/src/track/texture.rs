@@ -129,7 +129,7 @@ impl ResourceState for TextureState {
                     let pending = PendingTransition {
                         id,
                         selector: hal::image::SubresourceRange {
-                            aspects: hal::format::Aspects::COLOR,
+                            aspects: aspect,
                             levels: level .. level + 1,
                             layers: range.clone(),
                         },
