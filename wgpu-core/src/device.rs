@@ -481,6 +481,27 @@ fn map_buffer<B: hal::Backend>(
     Ok(ptr.as_ptr())
 }
 
+fn unmap_buffer<B: hal::Backend>(
+    raw: &B::Device,
+    buffer: &mut resource::Buffer<B>,
+) {
+    if !buffer.mapped_write_ranges.is_empty() {
+        unsafe {
+            raw
+                .flush_mapped_memory_ranges(
+                    buffer
+                        .mapped_write_ranges
+                        .iter()
+                        .map(|r| (buffer.memory.memory(), r.clone())),
+                )
+                .unwrap()
+        };
+        buffer.mapped_write_ranges.clear();
+    }
+
+    buffer.memory.unmap(raw);
+}
+
 #[derive(Debug)]
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
@@ -844,6 +865,41 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         );
         assert!(ok);
         id
+    }
+
+    pub fn device_set_buffer_sub_data<B: GfxBackend>(
+        &self,
+        device_id: DeviceId,
+        buffer_id: BufferId,
+        offset: BufferAddress,
+        data: &[u8],
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+        let device = &device_guard[device_id];
+        let mut buffer = &mut buffer_guard[buffer_id];
+        assert!(buffer.usage.contains(resource::BufferUsage::MAP_WRITE));
+        //assert!(buffer isn't used by the GPU);
+
+        match map_buffer(
+            &device.raw,
+            &mut buffer,
+            offset .. offset + data.len() as BufferAddress,
+            HostMap::Write,
+        ) {
+            Ok(ptr) => unsafe {
+                ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
+            },
+            Err(e) => {
+                log::error!("failed to map a buffer: {:?}", e);
+                return;
+            }
+        }
+
+        unmap_buffer(&device.raw, buffer);
     }
 
     pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: BufferId) {
@@ -2049,24 +2105,11 @@ impl<F> Global<F> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
-
         let buffer = &mut buffer_guard[buffer_id];
-        let device_raw = &device_guard[buffer.device_id.value].raw;
 
-        if !buffer.mapped_write_ranges.is_empty() {
-            unsafe {
-                device_raw
-                    .flush_mapped_memory_ranges(
-                        buffer
-                            .mapped_write_ranges
-                            .iter()
-                            .map(|r| (buffer.memory.memory(), r.clone())),
-                    )
-                    .unwrap()
-            };
-            buffer.mapped_write_ranges.clear();
-        }
-
-        buffer.memory.unmap(device_raw);
+        unmap_buffer(
+            &device_guard[buffer.device_id.value].raw,
+            buffer,
+        );
     }
 }
