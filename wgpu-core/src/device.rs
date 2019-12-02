@@ -902,6 +902,41 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         unmap_buffer(&device.raw, buffer);
     }
 
+    pub fn device_get_buffer_sub_data<B: GfxBackend>(
+        &self,
+        device_id: DeviceId,
+        buffer_id: BufferId,
+        offset: BufferAddress,
+        data: &mut [u8],
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+        let device = &device_guard[device_id];
+        let mut buffer = &mut buffer_guard[buffer_id];
+        assert!(buffer.usage.contains(resource::BufferUsage::MAP_READ));
+        //assert!(buffer isn't used by the GPU);
+
+        match map_buffer(
+            &device.raw,
+            &mut buffer,
+            offset .. offset + data.len() as BufferAddress,
+            HostMap::Read,
+        ) {
+            Ok(ptr) => unsafe {
+                ptr::copy_nonoverlapping(ptr, data.as_mut_ptr(), data.len());
+            },
+            Err(e) => {
+                log::error!("failed to map a buffer: {:?}", e);
+                return;
+            }
+        }
+
+        unmap_buffer(&device.raw, buffer);
+    }
+
     pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: BufferId) {
         let hub = B::hub(self);
         let mut token = Token::root();
