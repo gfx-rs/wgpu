@@ -79,3 +79,18 @@ pub extern "C" fn wgpu_server_device_set_buffer_sub_data(
     };
     gfx_select!(self_id => global.device_set_buffer_sub_data(self_id, buffer_id, offset, slice));
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_device_get_buffer_sub_data(
+    global: &Global<()>,
+    self_id: id::DeviceId,
+    buffer_id: id::BufferId,
+    offset: core::BufferAddress,
+    data: *mut u8,
+    size: core::BufferAddress,
+) {
+    let slice = unsafe {
+        slice::from_raw_parts_mut(data, size as usize)
+    };
+    gfx_select!(self_id => global.device_get_buffer_sub_data(self_id, buffer_id, offset, slice));
+}
