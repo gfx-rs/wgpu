@@ -2,18 +2,20 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use core::{gfx_select, hub::Global, id};
+use core::{gfx_select, id};
 
 use std::slice;
 
+pub type Global = core::hub::Global<()>;
+
 #[no_mangle]
-pub extern "C" fn wgpu_server_new() -> *mut Global<()> {
+pub extern "C" fn wgpu_server_new() -> *mut Global {
     log::info!("Initializing WGPU server");
     Box::into_raw(Box::new(Global::new("wgpu")))
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_delete(global: *mut Global<()>) {
+pub extern "C" fn wgpu_server_delete(global: *mut Global) {
     log::info!("Terminating WGPU server");
     unsafe { Box::from_raw(global) }.delete();
     log::info!("\t...done");
@@ -25,7 +27,7 @@ pub extern "C" fn wgpu_server_delete(global: *mut Global<()>) {
 /// Returns the index in this list, or -1 if unable to pick.
 #[no_mangle]
 pub extern "C" fn wgpu_server_instance_request_adapter(
-    global: &Global<()>,
+    global: &Global,
     desc: &core::instance::RequestAdapterOptions,
     ids: *const id::AdapterId,
     id_length: usize,
@@ -42,7 +44,7 @@ pub extern "C" fn wgpu_server_instance_request_adapter(
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_adapter_request_device(
-    global: &Global<()>,
+    global: &Global,
     self_id: id::AdapterId,
     desc: &core::instance::DeviceDescriptor,
     new_id: id::DeviceId,
@@ -51,13 +53,13 @@ pub extern "C" fn wgpu_server_adapter_request_device(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_device_destroy(global: &Global<()>, self_id: id::DeviceId) {
+pub extern "C" fn wgpu_server_device_destroy(global: &Global, self_id: id::DeviceId) {
     gfx_select!(self_id => global.device_destroy(self_id))
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_device_create_buffer(
-    global: &Global<()>,
+    global: &Global,
     self_id: id::DeviceId,
     desc: &core::resource::BufferDescriptor,
     new_id: id::BufferId,
@@ -67,7 +69,7 @@ pub extern "C" fn wgpu_server_device_create_buffer(
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_device_set_buffer_sub_data(
-    global: &Global<()>,
+    global: &Global,
     self_id: id::DeviceId,
     buffer_id: id::BufferId,
     offset: core::BufferAddress,
@@ -82,7 +84,7 @@ pub extern "C" fn wgpu_server_device_set_buffer_sub_data(
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_device_get_buffer_sub_data(
-    global: &Global<()>,
+    global: &Global,
     self_id: id::DeviceId,
     buffer_id: id::BufferId,
     offset: core::BufferAddress,
@@ -93,4 +95,9 @@ pub extern "C" fn wgpu_server_device_get_buffer_sub_data(
         slice::from_raw_parts_mut(data, size as usize)
     };
     gfx_select!(self_id => global.device_get_buffer_sub_data(self_id, buffer_id, offset, slice));
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_buffer_destroy(global: &Global, self_id: id::BufferId) {
+    gfx_select!(self_id => global.buffer_destroy(self_id));
 }
