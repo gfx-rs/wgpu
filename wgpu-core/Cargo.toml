@@ -32,7 +32,7 @@ parking_lot = "0.9"
 rendy-memory = "0.5"
 rendy-descriptor = "0.5"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
-smallvec = "0.6"
+smallvec = "1.0"
 vec_map = "0.8"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
