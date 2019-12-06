@@ -6,6 +6,7 @@ authors = [
 	"Joshua Groves <josh@joshgroves.com>",
 ]
 edition = "2018"
+license = "MPL-2.0"
 
 [lib]
 # Enabling these targets makes our CI bots try to build them and fail atm
