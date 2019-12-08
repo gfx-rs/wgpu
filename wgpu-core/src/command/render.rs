@@ -383,7 +383,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (mut pass_guard, _) = hub.render_passes.write(&mut token);
+        let (mut pass_guard, mut token) = hub.render_passes.write(&mut token);
         let (buffer_guard, _) = hub.buffers.read(&mut token);
         let pass = &mut pass_guard[pass_id];
         pass.is_ready().unwrap();
@@ -447,7 +447,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (mut pass_guard, _) = hub.render_passes.write(&mut token);
+        let (mut pass_guard, mut token) = hub.render_passes.write(&mut token);
         let (buffer_guard, _) = hub.buffers.read(&mut token);
         let pass = &mut pass_guard[pass_id];
         pass.is_ready().unwrap();
