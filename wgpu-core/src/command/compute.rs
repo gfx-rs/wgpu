@@ -161,8 +161,9 @@ impl<F> Global<F> {
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
+        let (mut pass_guard, mut token) = hub.compute_passes.write(&mut token);
         let (buffer_guard, _) = hub.buffers.read(&mut token);
-        let (mut pass_guard, _) = hub.compute_passes.write(&mut token);
+
         let pass = &mut pass_guard[pass_id];
 
         let (src_buffer, src_pending) = pass.trackers.buffers.use_replace(

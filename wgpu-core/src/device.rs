@@ -811,7 +811,7 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_guard, _) = hub.devices.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let buffer = device.create_buffer(device_id, desc);
         let ref_count = buffer.life_guard.ref_count.clone();
@@ -839,7 +839,7 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         let mut desc = desc.clone();
         desc.usage |= resource::BufferUsage::MAP_WRITE;
 
-        let (device_guard, _) = hub.devices.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = device.create_buffer(device_id, &desc);
         let ref_count = buffer.life_guard.ref_count.clone();
@@ -960,7 +960,7 @@ impl<F: IdentityFilter<TextureId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_guard, _) = hub.devices.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let texture = device.create_texture(device_id, desc);
         let range = texture.full_range.clone();
@@ -1267,7 +1267,7 @@ impl<F: IdentityFilter<BindGroupId>> Global<F> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
+        let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
         let bindings =
             unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length as usize) };
@@ -2074,8 +2074,9 @@ impl<F: IdentityFilter<SwapChainId>> Global<F> {
 impl<F: AllIdentityFilter> Global<F> {
     pub fn device_poll<B: GfxBackend>(&self, device_id: DeviceId, force_wait: bool) {
         let hub = B::hub(self);
+        let mut token = Token::root();
         let callbacks = {
-            let (device_guard, mut token) = hub.devices.read(&mut Token::root());
+            let (device_guard, mut token) = hub.devices.read(&mut token);
             device_guard[device_id].maintain(self, force_wait, &mut token)
         };
         Device::<B>::fire_map_callbacks(callbacks);
@@ -2085,7 +2086,8 @@ impl<F: AllIdentityFilter> Global<F> {
 impl<F: AllIdentityFilter + IdentityFilter<DeviceId>> Global<F> {
     pub fn device_destroy<B: GfxBackend>(&self, device_id: DeviceId) {
         let hub = B::hub(self);
-        let (device, mut token) = hub.devices.unregister(device_id, &mut Token::root());
+        let mut token = Token::root();
+        let (device, mut token) = hub.devices.unregister(device_id, &mut token);
         device.maintain(self, true, &mut token);
         device.com_allocator.destroy(&device.raw);
     }

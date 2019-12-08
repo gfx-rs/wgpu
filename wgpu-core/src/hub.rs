@@ -167,6 +167,7 @@ impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Device<B> {}
+impl<B: hal::Backend> Access<BindGroup<B>> for BindGroupLayout<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for PipelineLayout<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Root {}
@@ -319,17 +320,17 @@ impl<T, I: TypedId + Copy, F> Registry<T, I, F> {
         assert!(old.is_none());
     }
 
-    pub fn read<A: Access<T>>(
-        &self,
-        _token: &mut Token<A>,
-    ) -> (RwLockReadGuard<Storage<T, I>>, Token<T>) {
+    pub fn read<'a, A: Access<T>>(
+        &'a self,
+        _token: &'a mut Token<A>,
+    ) -> (RwLockReadGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.read(), Token::new())
     }
 
-    pub fn write<A: Access<T>>(
-        &self,
-        _token: &mut Token<A>,
-    ) -> (RwLockWriteGuard<Storage<T, I>>, Token<T>) {
+    pub fn write<'a, A: Access<T>>(
+        &'a self,
+        _token: &'a mut Token<A>,
+    ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.write(), Token::new())
     }
 }
@@ -346,7 +347,11 @@ impl<T, I: TypedId + Copy, F: IdentityFilter<I>> Registry<T, I, F> {
         id
     }
 
-    pub fn unregister<A: Access<T>>(&self, id: I, _token: &mut Token<A>) -> (T, Token<T>) {
+    pub fn unregister<'a, A: Access<T>>(
+        &self,
+        id: I,
+        _token: &'a mut Token<A>,
+    ) -> (T, Token<'a, T>) {
         let value = self.data.write().remove(id).unwrap();
         //Note: careful about the order here!
         self.identity.free(id);
