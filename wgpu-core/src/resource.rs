@@ -15,11 +15,14 @@ use crate::{
 use hal;
 use rendy_memory::MemoryBlock;
 use smallvec::SmallVec;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 use std::{borrow::Borrow, fmt};
 
 bitflags::bitflags! {
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BufferUsage: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
@@ -46,6 +49,7 @@ bitflags::bitflags! {
 }
 
 #[repr(C)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct BufferDescriptor {
     pub size: BufferAddress,
