@@ -1181,6 +1181,23 @@ impl<F: IdentityFilter<BindGroupLayoutId>> Global<F> {
         let mut token = Token::root();
         let hub = B::hub(self);
         let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
+        let bindings_map: FastHashMap<_, _> = bindings
+            .iter()
+            .cloned()
+            .map(|b| (b.binding, b))
+            .collect();
+
+        {
+            let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
+            let bind_group_layout =
+                bind_group_layout_guard
+                    .iter(device_id.backend())
+                    .find(|(_, bgl)| bgl.bindings == bindings_map);
+
+            if let Some((id, _)) = bind_group_layout {
+                return id;
+            }
+        }
 
         let raw_bindings = bindings
             .iter()
@@ -1203,7 +1220,7 @@ impl<F: IdentityFilter<BindGroupLayoutId>> Global<F> {
 
         let layout = binding_model::BindGroupLayout {
             raw,
-            bindings: bindings.to_vec(),
+            bindings: bindings_map,
             desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
             dynamic_count: bindings.iter().filter(|b| b.dynamic).count(),
         };
@@ -1299,7 +1316,9 @@ impl<F: IdentityFilter<BindGroupId>> Global<F> {
 
             //TODO: group writes into contiguous sections
             let mut writes = Vec::new();
-            for (b, decl) in bindings.iter().zip(&bind_group_layout.bindings) {
+            for b in bindings.iter() {
+                let decl = bind_group_layout.bindings.get(&b.binding)
+                    .expect("Failed to find binding declaration for binding");
                 let descriptor = match b.resource {
                     binding_model::BindingResource::Buffer(ref bb) => {
                         let (alignment, usage) = match decl.ty {

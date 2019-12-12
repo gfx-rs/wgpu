@@ -7,6 +7,7 @@ use crate::{
     resource::TextureViewDimension,
     track::{DUMMY_SELECTOR, TrackerSet},
     BufferAddress,
+    FastHashMap,
     LifeGuard,
     RefCount,
     Stored,
@@ -41,7 +42,7 @@ pub enum BindingType {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 pub struct BindGroupLayoutBinding {
     pub binding: u32,
     pub visibility: ShaderStage,
@@ -61,7 +62,7 @@ pub struct BindGroupLayoutDescriptor {
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
-    pub(crate) bindings: Vec<BindGroupLayoutBinding>,
+    pub(crate) bindings: FastHashMap<u32, BindGroupLayoutBinding>,
     pub(crate) desc_ranges: DescriptorRanges,
     pub(crate) dynamic_count: usize,
 }
