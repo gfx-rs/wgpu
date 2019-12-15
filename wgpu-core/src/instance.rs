@@ -344,7 +344,8 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         }
 
         let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
-        unreachable!()
+        log::warn!("Some adapters are present, but enumerating them failed!");
+        None
     }
 
     pub fn adapter_get_info<B: GfxBackend>(&self, adapter_id: AdapterId) -> AdapterInfo {
