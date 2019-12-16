@@ -63,6 +63,7 @@ pub fn compute_pass_end_pass<B: GfxBackend>(global: &Global, pass_id: ComputePas
 
     // There are no transitions to be made: we've already been inserting barriers
     // into the parent command buffer while recording this compute pass.
+    log::debug!("Compute pass {:?} tracker: {:#?}", pass_id, pass.trackers);
     cmb.trackers = pass.trackers;
     cmb.raw.push(pass.raw);
 }
