@@ -237,7 +237,6 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             let (view_guard, _) = hub.texture_views.read(&mut token);
 
             let mut extent = None;
-            let mut barriers = Vec::new();
             let mut used_swap_chain_image = None::<Stored<TextureViewId>>;
 
             let color_attachments = unsafe {
@@ -254,77 +253,61 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 "Attachment sample_count must be supported by physical device limits"
             );
 
+            const MAX_TOTAL_ATTACHMENTS: usize = 10;
+            type OutputAttachment<'a> = (TextureId, &'a hal::image::SubresourceRange, Option<TextureUsage>);
+            let mut output_attachments = ArrayVec::<[OutputAttachment; MAX_TOTAL_ATTACHMENTS]>::new();
+
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
                 encoder_id
             );
             let rp_key = {
-                let trackers = &mut cmb.trackers;
-
-                let depth_stencil = depth_stencil_attachment.map(|at| {
-                    let view = trackers
-                        .views
-                        .use_extend(&*view_guard, at.attachment, (), ())
-                        .unwrap();
-                    if let Some(ex) = extent {
-                        assert_eq!(ex, view.extent);
-                    } else {
-                        extent = Some(view.extent);
-                    }
-                    let texture_id = match view.inner {
-                        TextureViewInner::Native { ref source_id, .. } => source_id.value,
-                        TextureViewInner::SwapChain { .. } => {
-                            panic!("Unexpected depth/stencil use of swapchain image!")
+                let depth_stencil = match depth_stencil_attachment {
+                    Some(at) => {
+                        let view = cmb.trackers
+                            .views
+                            .use_extend(&*view_guard, at.attachment, (), ())
+                            .unwrap();
+                        if let Some(ex) = extent {
+                            assert_eq!(ex, view.extent);
+                        } else {
+                            extent = Some(view.extent);
                         }
-                    };
+                        let texture_id = match view.inner {
+                            TextureViewInner::Native { ref source_id, .. } => source_id.value,
+                            TextureViewInner::SwapChain { .. } => {
+                                panic!("Unexpected depth/stencil use of swapchain image!")
+                            }
+                        };
 
-                    let texture = &texture_guard[texture_id];
-                    assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
+                        // Using render pass for transition.
+                        let consistent_usage = cmb.trackers.textures.query(
+                            texture_id,
+                            view.range.clone(),
+                        );
+                        output_attachments.push((texture_id, &view.range, consistent_usage));
 
-                    let consistent_usage = trackers.textures.query(texture_id, view.range.clone());
-                    let pending = trackers.textures.change_replace(
-                        texture_id,
-                        &texture.life_guard.ref_count,
-                        view.range.clone(),
-                        TextureUsage::OUTPUT_ATTACHMENT,
-                        &texture.full_range,
-                    );
-
-                    let old_layout = match consistent_usage {
-                        Some(usage) => {
-                            // Using render pass for transition.
-                            conv::map_texture_state(
+                        let old_layout = match consistent_usage {
+                            Some(usage) => conv::map_texture_state(
                                 usage,
                                 hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
-                            )
-                            .1
-                        }
-                        None => {
-                            // Required sub-resources have inconsistent states, we need to
-                            // issue individual barriers instead of relying on the render pass.
-                            barriers.extend(pending.map(|pending| {
-                                log::trace!("\tdepth-stencil {:?}", pending);
-                                hal::memory::Barrier::Image {
-                                    states: pending.to_states(),
-                                    target: &texture.raw,
-                                    families: None,
-                                    range: pending.selector,
-                                }
-                            }));
-                            hal::image::Layout::DepthStencilAttachmentOptimal
-                        }
-                    };
-                    hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(view.format, device.features)),
-                        samples: view.samples,
-                        ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
-                        stencil_ops: conv::map_load_store_ops(
-                            at.stencil_load_op,
-                            at.stencil_store_op,
-                        ),
-                        layouts: old_layout .. hal::image::Layout::DepthStencilAttachmentOptimal,
+                            ).1,
+                            None => hal::image::Layout::DepthStencilAttachmentOptimal,
+                        };
+
+                        Some(hal::pass::Attachment {
+                            format: Some(conv::map_texture_format(view.format, device.features)),
+                            samples: view.samples,
+                            ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
+                            stencil_ops: conv::map_load_store_ops(
+                                at.stencil_load_op,
+                                at.stencil_store_op,
+                            ),
+                            layouts: old_layout .. hal::image::Layout::DepthStencilAttachmentOptimal,
+                        })
                     }
-                });
+                    None => None,
+                };
 
                 let mut colors = ArrayVec::new();
                 let mut resolves = ArrayVec::new();
@@ -340,7 +323,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         view.samples, sample_count,
                         "All attachments must have the same sample_count"
                     );
-                    let first_use = trackers.views.init(
+                    let first_use = cmb.trackers.views.init(
                         at.attachment,
                         view.life_guard.ref_count.clone(),
                         (),
@@ -349,40 +332,15 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
-                            let texture = &texture_guard[source_id.value];
-                            assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
-
-                            let consistent_usage = trackers.textures.query(
+                            let consistent_usage = cmb.trackers.textures.query(
                                 source_id.value,
                                 view.range.clone(),
                             );
-                            let pending = trackers.textures.change_replace(
-                                source_id.value,
-                                &texture.life_guard.ref_count,
-                                view.range.clone(),
-                                TextureUsage::OUTPUT_ATTACHMENT,
-                                &texture.full_range,
-                            );
+                            output_attachments.push((source_id.value, &view.range, consistent_usage));
 
                             let old_layout = match consistent_usage {
-                                Some(usage) => {
-                                    // Using render pass for transition.
-                                    conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
-                                }
-                                None => {
-                                    // Required sub-resources have inconsistent states, we need to
-                                    // issue individual barriers instead of relying on the render pass.
-                                    barriers.extend(pending.map(|pending| {
-                                        log::trace!("\tcolor {:?}", pending);
-                                        hal::memory::Barrier::Image {
-                                            states: pending.to_states(),
-                                            target: &texture.raw,
-                                            families: None,
-                                            range: pending.selector,
-                                        }
-                                    }));
-                                    hal::image::Layout::ColorAttachmentOptimal
-                                }
+                                Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
+                                None => hal::image::Layout::ColorAttachmentOptimal,
                             };
                             old_layout .. hal::image::Layout::ColorAttachmentOptimal
                         }
@@ -426,7 +384,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         view.samples, 1,
                         "All resolve_targets must have a sample_count of 1"
                     );
-                    let first_use = trackers.views.init(
+                    let first_use = cmb.trackers.views.init(
                         resolve_target,
                         view.life_guard.ref_count.clone(),
                         (),
@@ -435,40 +393,15 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
-                            let texture = &texture_guard[source_id.value];
-                            assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
-
-                            let consistent_usage = trackers.textures.query(
+                            let consistent_usage = cmb.trackers.textures.query(
                                 source_id.value,
                                 view.range.clone(),
                             );
-                            let pending = trackers.textures.change_replace(
-                                source_id.value,
-                                &texture.life_guard.ref_count,
-                                view.range.clone(),
-                                TextureUsage::OUTPUT_ATTACHMENT,
-                                &texture.full_range,
-                            );
+                            output_attachments.push((source_id.value, &view.range, consistent_usage));
 
                             let old_layout = match consistent_usage {
-                                Some(usage) => {
-                                    // Using render pass for transition.
-                                    conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
-                                }
-                                None => {
-                                    // Required sub-resources have inconsistent states, we need to
-                                    // issue individual barriers instead of relying on the render pass.
-                                    barriers.extend(pending.map(|pending| {
-                                        log::trace!("\tresolve {:?}", pending);
-                                        hal::memory::Barrier::Image {
-                                            states: pending.to_states(),
-                                            target: &texture.raw,
-                                            families: None,
-                                            range: pending.selector,
-                                        }
-                                    }));
-                                    hal::image::Layout::ColorAttachmentOptimal
-                                }
+                                Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
+                                None => hal::image::Layout::ColorAttachmentOptimal,
                             };
                             old_layout .. hal::image::Layout::ColorAttachmentOptimal
                         }
@@ -512,14 +445,30 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 }
             };
 
-            if !barriers.is_empty() {
-                unsafe {
-                    current_comb.pipeline_barrier(
-                        all_image_stages() .. all_image_stages(),
-                        hal::memory::Dependencies::empty(),
-                        barriers,
+            let mut trackers = TrackerSet::new(B::VARIANT);
+            for (texture_id, view_range, consistent_usage) in output_attachments {
+                let texture = &texture_guard[texture_id];
+                assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
+
+                let ok = trackers.textures.init(
+                    texture_id,
+                    texture.life_guard.ref_count.clone(),
+                    view_range.clone(),
+                    consistent_usage.unwrap_or(TextureUsage::OUTPUT_ATTACHMENT),
+                );
+                assert!(ok, "Your texture {:?} is in the another attachment!", texture_id);
+
+                if consistent_usage.is_some() {
+                    // If we expect the texture to be transited to a new state by the
+                    // render pass configuration, make the tracker aware of that.
+                    let _ = trackers.textures.change_replace(
+                        texture_id,
+                        &texture.life_guard.ref_count,
+                        view_range.clone(),
+                        TextureUsage::OUTPUT_ATTACHMENT,
+                        &texture.full_range,
                     );
-                }
+                };
             }
 
             let mut render_pass_cache = device.render_passes.lock();
@@ -730,6 +679,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     ref_count: cmb.life_guard.ref_count.clone(),
                 },
                 context,
+                trackers,
                 sample_count,
                 cmb.features.max_bind_groups,
             )
