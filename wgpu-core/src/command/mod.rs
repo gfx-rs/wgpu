@@ -196,6 +196,7 @@ impl<F> Global<F> {
         if let Some((ref view_id, _)) = comb.used_swap_chain {
             comb.trackers.views.remove(view_id.value);
         }
+        log::debug!("Command buffer {:?} tracker: {:#?}", encoder_id, comb.trackers);
         encoder_id
     }
 }
@@ -280,8 +281,18 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     let texture = &texture_guard[texture_id];
                     assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                    let old_layout = match trackers.textures.query(texture_id, view.range.clone()) {
+                    let consistent_usage = trackers.textures.query(texture_id, view.range.clone());
+                    let pending = trackers.textures.change_replace(
+                        texture_id,
+                        &texture.life_guard.ref_count,
+                        view.range.clone(),
+                        TextureUsage::OUTPUT_ATTACHMENT,
+                        &texture.full_range,
+                    );
+
+                    let old_layout = match consistent_usage {
                         Some(usage) => {
+                            // Using render pass for transition.
                             conv::map_texture_state(
                                 usage,
                                 hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
@@ -291,14 +302,6 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         None => {
                             // Required sub-resources have inconsistent states, we need to
                             // issue individual barriers instead of relying on the render pass.
-                            let pending = trackers.textures.change_replace(
-                                texture_id,
-                                &texture.life_guard.ref_count,
-                                view.range.clone(),
-                                TextureUsage::OUTPUT_ATTACHMENT,
-                                &texture.full_range,
-                            );
-
                             barriers.extend(pending.map(|pending| {
                                 log::trace!("\tdepth-stencil {:?}", pending);
                                 hal::memory::Barrier::Image {
@@ -349,23 +352,26 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                             let texture = &texture_guard[source_id.value];
                             assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                            let old_layout = match trackers
-                                .textures
-                                .query(source_id.value, view.range.clone())
-                            {
+                            let consistent_usage = trackers.textures.query(
+                                source_id.value,
+                                view.range.clone(),
+                            );
+                            let pending = trackers.textures.change_replace(
+                                source_id.value,
+                                &texture.life_guard.ref_count,
+                                view.range.clone(),
+                                TextureUsage::OUTPUT_ATTACHMENT,
+                                &texture.full_range,
+                            );
+
+                            let old_layout = match consistent_usage {
                                 Some(usage) => {
+                                    // Using render pass for transition.
                                     conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
                                 }
                                 None => {
                                     // Required sub-resources have inconsistent states, we need to
                                     // issue individual barriers instead of relying on the render pass.
-                                    let pending = trackers.textures.change_replace(
-                                        source_id.value,
-                                        &texture.life_guard.ref_count,
-                                        view.range.clone(),
-                                        TextureUsage::OUTPUT_ATTACHMENT,
-                                        &texture.full_range,
-                                    );
                                     barriers.extend(pending.map(|pending| {
                                         log::trace!("\tcolor {:?}", pending);
                                         hal::memory::Barrier::Image {
@@ -432,23 +438,26 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                             let texture = &texture_guard[source_id.value];
                             assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                            let old_layout = match trackers
-                                .textures
-                                .query(source_id.value, view.range.clone())
-                            {
+                            let consistent_usage = trackers.textures.query(
+                                source_id.value,
+                                view.range.clone(),
+                            );
+                            let pending = trackers.textures.change_replace(
+                                source_id.value,
+                                &texture.life_guard.ref_count,
+                                view.range.clone(),
+                                TextureUsage::OUTPUT_ATTACHMENT,
+                                &texture.full_range,
+                            );
+
+                            let old_layout = match consistent_usage {
                                 Some(usage) => {
+                                    // Using render pass for transition.
                                     conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
                                 }
                                 None => {
                                     // Required sub-resources have inconsistent states, we need to
                                     // issue individual barriers instead of relying on the render pass.
-                                    let pending = trackers.textures.change_replace(
-                                        source_id.value,
-                                        &texture.life_guard.ref_count,
-                                        view.range.clone(),
-                                        TextureUsage::OUTPUT_ATTACHMENT,
-                                        &texture.full_range,
-                                    );
                                     barriers.extend(pending.map(|pending| {
                                         log::trace!("\tresolve {:?}", pending);
                                         hal::memory::Barrier::Image {
