@@ -817,13 +817,12 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         let ref_count = buffer.life_guard.ref_count.clone();
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
-        let ok =
-            device
-                .trackers
-                .lock()
-                .buffers
-                .init(id, ref_count, (), resource::BufferUsage::empty());
-        assert!(ok);
+        device
+            .trackers
+            .lock()
+            .buffers
+            .init(id, ref_count, &())
+            .unwrap();
         id
     }
 
@@ -857,13 +856,15 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         }
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
-        let ok = device.trackers.lock().buffers.init(
-            id,
-            ref_count,
-            (),
-            resource::BufferUsage::MAP_WRITE,
-        );
-        assert!(ok);
+        device.trackers
+            .lock()
+            .buffers.init(
+                id,
+                ref_count,
+                &(),
+            )
+            .unwrap()
+            .set((), resource::BufferUsage::MAP_WRITE);
         id
     }
 
@@ -967,13 +968,15 @@ impl<F: IdentityFilter<TextureId>> Global<F> {
         let ref_count = texture.life_guard.ref_count.clone();
 
         let id = hub.textures.register_identity(id_in, texture, &mut token);
-        let ok = device.trackers.lock().textures.init(
-            id,
-            ref_count,
-            range,
-            resource::TextureUsage::UNINITIALIZED,
-        );
-        assert!(ok);
+        device.trackers
+            .lock()
+            .textures.init(
+                id,
+                ref_count,
+                &range,
+            )
+            .unwrap()
+            .set(range, resource::TextureUsage::UNINITIALIZED);
         id
     }
 
@@ -1079,8 +1082,10 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
         let ref_count = view.life_guard.ref_count.clone();
 
         let id = hub.texture_views.register_identity(id_in, view, &mut token);
-        let ok = device.trackers.lock().views.init(id, ref_count, (), ());
-        assert!(ok);
+        device.trackers
+            .lock()
+            .views.init(id, ref_count, &())
+            .unwrap();
         id
     }
 
@@ -1150,8 +1155,10 @@ impl<F: IdentityFilter<SamplerId>> Global<F> {
         let ref_count = sampler.life_guard.ref_count.clone();
 
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
-        let ok = device.trackers.lock().samplers.init(id, ref_count, (), ());
-        assert!(ok);
+        device.trackers
+            .lock()
+            .samplers.init(id, ref_count, &())
+            .unwrap();
         id
     }
 
@@ -1427,15 +1434,15 @@ impl<F: IdentityFilter<BindGroupId>> Global<F> {
         let id = hub
             .bind_groups
             .register_identity(id_in, bind_group, &mut token);
-        log::debug!("Bind group {:?} tracker : {:#?}",
+        log::debug!("Bind group {:?} {:#?}",
             id, hub.bind_groups.read(&mut token).0[id].used);
 
-        let ok = device
+        device
             .trackers
             .lock()
             .bind_groups
-            .init(id, ref_count, (), ());
-        assert!(ok);
+            .init(id, ref_count, &())
+            .unwrap();
         id
     }
 
@@ -1630,7 +1637,7 @@ impl<F: AllIdentityFilter + IdentityFilter<CommandBufferId>> Global<F> {
                 }
             }
 
-            log::debug!("Device tracker after submission: {:#?}", trackers);
+            log::debug!("Device after submission {}: {:#?}", submit_index, trackers);
 
             // now prepare the GPU submission
             let fence = device.raw.create_fence(false).unwrap();

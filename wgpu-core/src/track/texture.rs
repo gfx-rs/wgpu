@@ -171,9 +171,14 @@ impl ResourceState for TextureState {
                             end: Some(end),
                         } => {
                             let to_usage = end.port();
-                            let final_usage = if start.last != to_usage
-                                || !TextureUsage::ORDERED.contains(to_usage)
+                            if start.last == to_usage
+                                && TextureUsage::ORDERED.contains(to_usage)
                             {
+                                Unit {
+                                    first: start.first,
+                                    last: end.last,
+                                }
+                            } else {
                                 let pending = PendingTransition {
                                     id,
                                     selector: hal::image::SubresourceRange {
@@ -185,18 +190,20 @@ impl ResourceState for TextureState {
                                 };
 
                                 match output {
-                                    None => pending.collapse()?,
+                                    None => {
+                                        Unit {
+                                            first: start.first,
+                                            last: pending.collapse()?,
+                                        }
+                                    }
                                     Some(ref mut out) => {
                                         out.push(pending);
-                                        end.last
+                                        Unit {
+                                            first: Some(start.last),
+                                            last: end.last,
+                                        }
                                     }
                                 }
-                            } else {
-                                end.last
-                            };
-                            Unit {
-                                first: Some(start.port()),
-                                last: final_usage,
                             }
                         }
                     };

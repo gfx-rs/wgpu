@@ -194,7 +194,7 @@ impl<F> Global<F> {
         if let Some((ref view_id, _)) = comb.used_swap_chain {
             comb.trackers.views.remove(view_id.value);
         }
-        log::debug!("Command buffer {:?} tracker: {:#?}", encoder_id, comb.trackers);
+        log::debug!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
         encoder_id
     }
 }
@@ -324,9 +324,8 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     let first_use = cmb.trackers.views.init(
                         at.attachment,
                         view.life_guard.ref_count.clone(),
-                        (),
-                        (),
-                    );
+                        &(),
+                    ).is_some();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -385,9 +384,8 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     let first_use = cmb.trackers.views.init(
                         resolve_target,
                         view.life_guard.ref_count.clone(),
-                        (),
-                        (),
-                    );
+                        &(),
+                    ).is_some();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -448,13 +446,15 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 let texture = &texture_guard[texture_id];
                 assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                let ok = trackers.textures.init(
+                let usage = consistent_usage.unwrap_or(TextureUsage::OUTPUT_ATTACHMENT);
+                match trackers.textures.init(
                     texture_id,
                     texture.life_guard.ref_count.clone(),
-                    view_range.clone(),
-                    consistent_usage.unwrap_or(TextureUsage::OUTPUT_ATTACHMENT),
-                );
-                assert!(ok, "Your texture {:?} is in the another attachment!", texture_id);
+                    &texture.full_range,
+                ) {
+                    Some(mut init) => init.set(view_range.clone(), usage),
+                    None => panic!("Your texture {:?} is in the another attachment!", texture_id),
+                };
 
                 if consistent_usage.is_some() {
                     // If we expect the texture to be transited to a new state by the

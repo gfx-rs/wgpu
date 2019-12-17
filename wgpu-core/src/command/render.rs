@@ -186,7 +186,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             pass.raw.end_render_pass();
         }
         pass.trackers.optimize();
-        log::debug!("Render pass {:?} tracker: {:#?}", pass_id, pass.trackers);
+        log::debug!("Render pass {:?} {:#?}", pass_id, pass.trackers);
 
         let cmb = &mut cmb_guard[pass.cmb_id.value];
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
@@ -207,6 +207,11 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             None => {
                 cmb.trackers.merge_extend(&pass.trackers);
             }
+        }
+
+        if false {
+            log::debug!("Command buffer {:?} after render pass {:#?}",
+                pass.cmb_id.value, cmb.trackers);
         }
 
         cmb.raw.push(pass.raw);

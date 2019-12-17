@@ -56,7 +56,7 @@ impl<F: IdentityFilter<ComputePassId>> Global<F> {
 
         // There are no transitions to be made: we've already been inserting barriers
         // into the parent command buffer while recording this compute pass.
-        log::debug!("Compute pass {:?} tracker: {:#?}", pass_id, pass.trackers);
+        log::debug!("Compute pass {:?} {:#?}", pass_id, pass.trackers);
         cmb.trackers = pass.trackers;
         cmb.raw.push(pass.raw);
     }

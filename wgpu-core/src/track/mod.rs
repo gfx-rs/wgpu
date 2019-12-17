@@ -132,6 +132,21 @@ pub struct PendingTransition<S: ResourceState> {
     pub usage: Range<S::Usage>,
 }
 
+/// Helper initialization structure that allows setting the usage on
+/// various sub-resources.
+#[derive(Debug)]
+pub struct Initializer<'a, S: ResourceState> {
+    id: S::Id,
+    state: &'a mut S,
+}
+
+impl<S: ResourceState> Initializer<'_, S> {
+    pub fn set(&mut self, selector: S::Selector, usage: S::Usage) -> bool {
+        self.state.change(self.id, selector, usage, None)
+            .is_ok()
+    }
+}
+
 /// A tracker for all resources of a given type.
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
@@ -204,27 +219,24 @@ impl<S: ResourceState> ResourceTracker<S> {
         &mut self,
         id: S::Id,
         ref_count: RefCount,
-        selector: S::Selector,
-        default: S::Usage,
-    ) -> bool {
-        let mut state = S::new(&selector);
-        match state.change(id, selector, default, None) {
-            Ok(()) => (),
-            Err(_) => unreachable!(),
-        }
-
+        full_selector: &S::Selector,
+    ) -> Option<Initializer<S>> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
-        self.map
-            .insert(
-                index,
-                Resource {
+        match self.map.entry(index) {
+            Entry::Vacant(e) => {
+                let res = e.insert(Resource {
                     ref_count,
-                    state,
+                    state: S::new(full_selector),
                     epoch,
-                },
-            )
-            .is_none()
+                });
+                Some(Initializer {
+                    id,
+                    state: &mut res.state,
+                })
+            }
+            Entry::Occupied(_) => None,
+        }
     }
 
     /// Query the usage of a resource selector.
