@@ -136,8 +136,15 @@ impl<T, I: TypedId> Storage<T, I> {
                 value
             })
     }
-}
 
+    pub fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
+        self.map
+            .iter()
+            .map(move |(index, (value, storage_epoch))| {
+                (I::zip(index as Index, *storage_epoch, backend), value)
+            })
+    }
+}
 
 /// Type system for enforcing the lock order on shared HUB structures.
 /// If type A implements `Access<B>`, that means we are allowed to proceed
