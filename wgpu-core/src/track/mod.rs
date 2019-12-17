@@ -19,7 +19,7 @@ use crate::{
 use std::{
     borrow::Borrow,
     collections::hash_map::Entry,
-    fmt::Debug,
+    fmt,
     marker::PhantomData,
     ops::Range,
     vec::Drain,
@@ -75,11 +75,11 @@ pub enum Stitch {
 /// a particular resource type, like a buffer or a texture.
 pub trait ResourceState: Clone {
     /// Corresponding `HUB` identifier.
-    type Id: Copy + Debug + TypedId;
+    type Id: Copy + fmt::Debug + TypedId;
     /// A type specifying the sub-resources.
-    type Selector: Debug;
+    type Selector: fmt::Debug;
     /// Usage type for a `Unit` of a sub-resource.
-    type Usage: Debug;
+    type Usage: fmt::Debug;
 
     /// Create a new resource state to track the specified subresources.
     fn new(full_selector: &Self::Selector) -> Self;
@@ -137,7 +137,7 @@ pub trait ResourceState: Clone {
 
 /// Structure wrapping the abstract tracking state with the relevant resource
 /// data, such as the reference count and the epoch.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Resource<S> {
     ref_count: RefCount,
     state: S,
@@ -155,7 +155,6 @@ pub struct PendingTransition<S: ResourceState> {
 }
 
 /// A tracker for all resources of a given type.
-#[derive(Debug)]
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
@@ -163,6 +162,18 @@ pub struct ResourceTracker<S: ResourceState> {
     temp: Vec<PendingTransition<S>>,
     /// The backend variant for all the tracked resources.
     backend: Backend,
+}
+
+impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        self.map
+            .iter()
+            .map(|(&index, res)| {
+                ((index, res.epoch), &res.state)
+            })
+            .collect::<FastHashMap<_, _>>()
+            .fmt(formatter)
+    }
 }
 
 impl<S: ResourceState> ResourceTracker<S> {
@@ -388,7 +399,7 @@ impl<S: ResourceState> ResourceTracker<S> {
 }
 
 
-impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
+impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
     type Id = I;
     type Selector = ();
     type Usage = ();

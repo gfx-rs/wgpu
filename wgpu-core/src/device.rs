@@ -1427,6 +1427,9 @@ impl<F: IdentityFilter<BindGroupId>> Global<F> {
         let id = hub
             .bind_groups
             .register_identity(id_in, bind_group, &mut token);
+        log::debug!("Bind group {:?} tracker : {:#?}",
+            id, hub.bind_groups.read(&mut token).0[id].used);
+
         let ok = device
             .trackers
             .lock()
@@ -1627,6 +1630,8 @@ impl<F: AllIdentityFilter + IdentityFilter<CommandBufferId>> Global<F> {
                     comb.raw.last_mut().unwrap().finish();
                 }
             }
+
+            log::debug!("Device tracker after submission: {:#?}", trackers);
 
             // now prepare the GPU submission
             let fence = device.raw.create_fence(false).unwrap();
