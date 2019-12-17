@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.4.2 (15-12-2019)
+  - fixed render pass transitions
+
 ## v0.4.1 (28-11-2019)
   - fixed depth/stencil transitions
   - fixed dynamic offset iteration

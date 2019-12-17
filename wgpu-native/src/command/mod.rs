@@ -201,6 +201,7 @@ pub fn command_encoder_finish<B: GfxBackend>(
     if let Some((ref view_id, _)) = comb.used_swap_chain {
         comb.trackers.views.remove(view_id.value);
     }
+    log::debug!("Command buffer {:?} tracker: {:#?}", encoder_id, comb.trackers);
     encoder_id
 }
 
@@ -292,8 +293,17 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                 let texture = &texture_guard[texture_id];
                 assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                let old_layout = match trackers.textures.query(texture_id, view.range.clone()) {
+                let consistent_usage = trackers.textures.query(texture_id, view.range.clone());
+                let pending = trackers.textures.change_replace(
+                    texture_id,
+                    &texture.life_guard.ref_count,
+                    view.range.clone(),
+                    TextureUsage::OUTPUT_ATTACHMENT,
+                );
+
+                let old_layout = match consistent_usage {
                     Some(usage) => {
+                        // Using render pass for transition.
                         conv::map_texture_state(
                             usage,
                             hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL,
@@ -303,13 +313,6 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                     None => {
                         // Required sub-resources have inconsistent states, we need to
                         // issue individual barriers instead of relying on the render pass.
-                        let pending = trackers.textures.change_replace(
-                            texture_id,
-                            &texture.life_guard.ref_count,
-                            view.range.clone(),
-                            TextureUsage::OUTPUT_ATTACHMENT,
-                        );
-
                         barriers.extend(pending.map(|pending| {
                             log::trace!("\tdepth-stencil {:?}", pending);
                             hal::memory::Barrier::Image {
@@ -355,32 +358,34 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         let texture = &texture_guard[source_id.value];
                         assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                        let old_layout =
-                            match trackers.textures.query(source_id.value, view.range.clone()) {
-                                Some(usage) => {
-                                    conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
-                                }
-                                None => {
-                                    // Required sub-resources have inconsistent states, we need to
-                                    // issue individual barriers instead of relying on the render pass.
-                                    let pending = trackers.textures.change_replace(
-                                        source_id.value,
-                                        &texture.life_guard.ref_count,
-                                        view.range.clone(),
-                                        TextureUsage::OUTPUT_ATTACHMENT,
-                                    );
-                                    barriers.extend(pending.map(|pending| {
-                                        log::trace!("\tcolor {:?}", pending);
-                                        hal::memory::Barrier::Image {
-                                            states: pending.to_states(),
-                                            target: &texture.raw,
-                                            families: None,
-                                            range: pending.selector,
-                                        }
-                                    }));
-                                    hal::image::Layout::ColorAttachmentOptimal
-                                }
-                            };
+                        let consistent_usage = trackers.textures.query(source_id.value, view.range.clone());
+                        let pending = trackers.textures.change_replace(
+                            source_id.value,
+                            &texture.life_guard.ref_count,
+                            view.range.clone(),
+                            TextureUsage::OUTPUT_ATTACHMENT,
+                        );
+
+                        let old_layout = match consistent_usage {
+                            Some(usage) => {
+                                // Using render pass for transition.
+                                conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
+                            }
+                            None => {
+                                // Required sub-resources have inconsistent states, we need to
+                                // issue individual barriers instead of relying on the render pass.
+                                barriers.extend(pending.map(|pending| {
+                                    log::trace!("\tcolor {:?}", pending);
+                                    hal::memory::Barrier::Image {
+                                        states: pending.to_states(),
+                                        target: &texture.raw,
+                                        families: None,
+                                        range: pending.selector,
+                                    }
+                                }));
+                                hal::image::Layout::ColorAttachmentOptimal
+                            }
+                        };
                         old_layout .. hal::image::Layout::ColorAttachmentOptimal
                     }
                     TextureViewInner::SwapChain { .. } => {
@@ -433,32 +438,34 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         let texture = &texture_guard[source_id.value];
                         assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                        let old_layout =
-                            match trackers.textures.query(source_id.value, view.range.clone()) {
-                                Some(usage) => {
-                                    conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
-                                }
-                                None => {
-                                    // Required sub-resources have inconsistent states, we need to
-                                    // issue individual barriers instead of relying on the render pass.
-                                    let pending = trackers.textures.change_replace(
-                                        source_id.value,
-                                        &texture.life_guard.ref_count,
-                                        view.range.clone(),
-                                        TextureUsage::OUTPUT_ATTACHMENT,
-                                    );
-                                    barriers.extend(pending.map(|pending| {
-                                        log::trace!("\tresolve {:?}", pending);
-                                        hal::memory::Barrier::Image {
-                                            states: pending.to_states(),
-                                            target: &texture.raw,
-                                            families: None,
-                                            range: pending.selector,
-                                        }
-                                    }));
-                                    hal::image::Layout::ColorAttachmentOptimal
-                                }
-                            };
+                        let consistent_usage = trackers.textures.query(source_id.value, view.range.clone());
+                        let pending = trackers.textures.change_replace(
+                            source_id.value,
+                            &texture.life_guard.ref_count,
+                            view.range.clone(),
+                            TextureUsage::OUTPUT_ATTACHMENT,
+                        );
+
+                        let old_layout = match consistent_usage {
+                            Some(usage) => {
+                                // Using render pass for transition.
+                                conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
+                            }
+                            None => {
+                                // Required sub-resources have inconsistent states, we need to
+                                // issue individual barriers instead of relying on the render pass.
+                                barriers.extend(pending.map(|pending| {
+                                    log::trace!("\tresolve {:?}", pending);
+                                    hal::memory::Barrier::Image {
+                                        states: pending.to_states(),
+                                        target: &texture.raw,
+                                        families: None,
+                                        range: pending.selector,
+                                    }
+                                }));
+                                hal::image::Layout::ColorAttachmentOptimal
+                            }
+                        };
                         old_layout .. hal::image::Layout::ColorAttachmentOptimal
                     }
                     TextureViewInner::SwapChain { .. } => {

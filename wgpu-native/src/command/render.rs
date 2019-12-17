@@ -190,6 +190,8 @@ pub fn render_pass_end_pass<B: GfxBackend>(global: &Global, pass_id: RenderPassI
         pass.raw.end_render_pass();
     }
     pass.trackers.optimize();
+    log::debug!("Render pass {:?} tracker: {:#?}", pass_id, pass.trackers);
+
     let cmb = &mut cmb_guard[pass.cmb_id.value];
     let (buffer_guard, mut token) = hub.buffers.read(&mut token);
     let (texture_guard, _) = hub.textures.read(&mut token);

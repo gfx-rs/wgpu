@@ -1413,6 +1413,8 @@ pub fn device_create_bind_group<B: GfxBackend>(
         dynamic_count: bind_group_layout.dynamic_count,
     };
     let (id, id_out) = hub.bind_groups.new_identity(id_in);
+
+    log::debug!("Bind group {:?} tracker: {:#?}", id, bind_group.used);
     let ok = device
         .trackers
         .lock()
@@ -1649,6 +1651,8 @@ pub fn queue_submit<B: GfxBackend>(
                 comb.raw.last_mut().unwrap().finish();
             }
         }
+
+        log::debug!("Device tracker after submission: {:#?}", trackers);
 
         // now prepare the GPU submission
         let fence = device.raw.create_fence(false).unwrap();
