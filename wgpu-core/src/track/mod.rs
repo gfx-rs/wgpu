@@ -35,7 +35,7 @@ pub const SEPARATE_DEPTH_STENCIL_STATES: bool = false;
 /// usage as well as the last/current one, similar to `Range`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Unit<U> {
-    init: U,
+    first: Option<U>,
     last: U,
 }
 
@@ -43,32 +43,15 @@ impl<U: Copy> Unit<U> {
     /// Create a new unit from a given usage.
     fn new(usage: U) -> Self {
         Unit {
-            init: usage,
+            first: None,
             last: usage,
         }
     }
 
-    /// Select one of the ends of the usage, based on the
-    /// given `Stitch`.
-    ///
-    /// In some scenarios, when merging two trackers
-    /// A and B for a resource, we want to connect A to the initial state
-    /// of B. In other scenarios, we want to reach the last state of B.
-    fn select(&self, stitch: Stitch) -> U {
-        match stitch {
-            Stitch::Init => self.init,
-            Stitch::Last => self.last,
-        }
+    /// Return a usage to link to.
+    fn port(&self) -> U {
+        self.first.unwrap_or(self.last)
     }
-}
-
-/// Mode of stitching to states together.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Stitch {
-    /// Stitch to the init state of the other resource.
-    Init,
-    /// Stitch to the last state of the other resource.
-    Last,
 }
 
 /// The main trait that abstracts away the tracking logic of
@@ -119,15 +102,10 @@ pub trait ResourceState: Clone {
     /// `PendingTransition` pushed to this vector, or extended with the
     /// other read-only usage, unless there is a usage conflict, and
     /// the error is generated (returning the conflict).
-    ///
-    /// `stitch` only defines the end points of generated transitions.
-    /// Last states of `self` are nevertheless updated to the *last* states
-    /// of `other`, if `output` is provided.
     fn merge(
         &mut self,
         id: Self::Id,
         other: &Self,
-        stitch: Stitch,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>>;
 
@@ -331,7 +309,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                     let id = S::Id::zip(index, new.epoch, self.backend);
                     e.into_mut()
                         .state
-                        .merge(id, &new.state, Stitch::Last, None)?;
+                        .merge(id, &new.state, None)?;
                 }
             }
         }
@@ -343,7 +321,6 @@ impl<S: ResourceState> ResourceTracker<S> {
     pub fn merge_replace<'a>(
         &'a mut self,
         other: &'a Self,
-        stitch: Stitch,
     ) -> Drain<PendingTransition<S>> {
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
@@ -355,7 +332,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                     let id = S::Id::zip(index, new.epoch, self.backend);
                     e.into_mut()
                         .state
-                        .merge(id, &new.state, stitch, Some(&mut self.temp))
+                        .merge(id, &new.state, Some(&mut self.temp))
                         .ok(); //TODO: unwrap?
                 }
             }
@@ -426,7 +403,6 @@ impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
         &mut self,
         _id: Self::Id,
         _other: &Self,
-        _stitch: Stitch,
         _output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         Ok(())

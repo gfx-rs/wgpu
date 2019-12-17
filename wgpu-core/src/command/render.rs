@@ -13,7 +13,7 @@ use crate::{
     id::{BindGroupId, BufferId, CommandBufferId, RenderPassId, RenderPipelineId},
     pipeline::{IndexFormat, InputStepMode, PipelineFlags},
     resource::BufferUsage,
-    track::{Stitch, TrackerSet},
+    track::TrackerSet,
     BufferAddress,
     Color,
     Stored,
@@ -199,7 +199,6 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     last,
                     &mut cmb.trackers,
                     &pass.trackers,
-                    Stitch::Last,
                     &*buffer_guard,
                     &*texture_guard,
                 );

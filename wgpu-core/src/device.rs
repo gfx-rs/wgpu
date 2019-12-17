@@ -29,7 +29,7 @@ use crate::{
     pipeline,
     resource,
     swap_chain,
-    track::{SEPARATE_DEPTH_STENCIL_STATES, Stitch, TrackerSet},
+    track::{SEPARATE_DEPTH_STENCIL_STATES, TrackerSet},
     BufferAddress,
     FastHashMap,
     Features,
@@ -1618,7 +1618,6 @@ impl<F: AllIdentityFilter + IdentityFilter<CommandBufferId>> Global<F> {
                     &mut transit,
                     &mut *trackers,
                     &comb.trackers,
-                    Stitch::Init,
                     &*buffer_guard,
                     &*texture_guard,
                 );

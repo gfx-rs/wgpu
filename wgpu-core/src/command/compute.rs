@@ -11,7 +11,7 @@ use crate::{
     hub::{GfxBackend, Global, IdentityFilter, Token},
     id::{BindGroupId, BufferId, CommandBufferId, ComputePassId, ComputePipelineId},
     resource::BufferUsage,
-    track::{Stitch, TrackerSet},
+    track::TrackerSet,
     BufferAddress,
     Stored,
 };
@@ -112,7 +112,6 @@ impl<F> Global<F> {
             &mut pass.raw,
             &mut pass.trackers,
             &bind_group.used,
-            Stitch::Last,
             &*buffer_guard,
             &*texture_guard,
         );

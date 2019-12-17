@@ -34,7 +34,7 @@ use crate::{
         TextureViewId,
     },
     resource::{Buffer, Texture, TextureUsage, TextureViewInner},
-    track::{Stitch, TrackerSet},
+    track::TrackerSet,
     Color,
     Features,
     LifeGuard,
@@ -118,17 +118,15 @@ impl<B: GfxBackend> CommandBuffer<B> {
         raw: &mut B::CommandBuffer,
         base: &mut TrackerSet,
         head: &TrackerSet,
-        stitch: Stitch,
         buffer_guard: &Storage<Buffer<B>, BufferId>,
         texture_guard: &Storage<Texture<B>, TextureId>,
     ) {
-        log::trace!("\tstitch {:?}", stitch);
         debug_assert_eq!(B::VARIANT, base.backend());
         debug_assert_eq!(B::VARIANT, head.backend());
 
         let buffer_barriers = base
             .buffers
-            .merge_replace(&head.buffers, stitch)
+            .merge_replace(&head.buffers)
             .map(|pending| {
                 log::trace!("\tbuffer -> {:?}", pending);
                 hal::memory::Barrier::Buffer {
@@ -140,7 +138,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
             });
         let texture_barriers = base
             .textures
-            .merge_replace(&head.textures, stitch)
+            .merge_replace(&head.textures)
             .map(|pending| {
                 log::trace!("\ttexture -> {:?}", pending);
                 hal::memory::Barrier::Image {

@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use super::{SEPARATE_DEPTH_STENCIL_STATES, range::RangedStates, PendingTransition, ResourceState, Stitch, Unit};
+use super::{SEPARATE_DEPTH_STENCIL_STATES, range::RangedStates, PendingTransition, ResourceState, Unit};
 use crate::{conv, device::MAX_MIP_LEVELS, id::TextureId, resource::TextureUsage};
 
 use arrayvec::ArrayVec;
@@ -26,34 +26,14 @@ impl PendingTransition<TextureState> {
             .. conv::map_texture_state(self.usage.end, self.selector.aspects)
     }
 
-    //TODO: make this less awkward!
-    /// Check for the validity of `self` with regards to the presence of `output`.
-    ///
-    /// Return the end usage if the `output` is provided and pushes self to it.
-    /// Otherwise, return the extended usage, or an error if extension is impossible.
-    ///
-    /// When a transition is generated, returns the specified `replace` usage.
-    fn record(
-        self,
-        output: Option<&mut &mut Vec<Self>>,
-        replace: TextureUsage,
-    ) -> Result<TextureUsage, Self> {
-        let u = self.usage.clone();
-        match output {
-            Some(out) => {
-                out.push(self);
-                Ok(replace)
-            }
-            None => {
-                if !u.start.is_empty()
-                    && u.start != u.end
-                    && TextureUsage::WRITE_ALL.intersects(u.start | u.end)
-                {
-                    Err(self)
-                } else {
-                    Ok(u.start | u.end)
-                }
-            }
+    fn collapse(self) -> Result<TextureUsage, Self> {
+        if self.usage.start.is_empty()
+            || self.usage.start == self.usage.end
+            || !TextureUsage::WRITE_ALL.intersects(self.usage.start | self.usage.end)
+        {
+            Ok(self.usage.start | self.usage.end)
+        } else {
+            Err(self)
         }
     }
 }
@@ -137,7 +117,17 @@ impl ResourceState for TextureState {
                         },
                         usage: unit.last .. usage,
                     };
-                    unit.last = pending.record(output.as_mut(), usage)?;
+
+                    unit.last = match output {
+                        None => pending.collapse()?,
+                        Some(ref mut out) => {
+                            out.push(pending);
+                            if unit.first.is_none() {
+                                unit.first = Some(unit.last);
+                            }
+                            usage
+                        }
+                    };
                 }
             }
         }
@@ -148,11 +138,8 @@ impl ResourceState for TextureState {
         &mut self,
         id: Self::Id,
         other: &Self,
-        stitch: Stitch,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
-        assert!(output.is_some() || stitch == Stitch::Last);
-
         let mut temp = Vec::new();
         while self.mips.len() < other.mips.len() as usize {
             self.mips.push(MipState::default());
@@ -183,9 +170,9 @@ impl ResourceState for TextureState {
                             start: Some(start),
                             end: Some(end),
                         } => {
-                            let mut final_usage = end.select(stitch);
-                            if start.last != final_usage
-                                || !TextureUsage::ORDERED.contains(final_usage)
+                            let to_usage = end.port();
+                            let final_usage = if start.last != to_usage
+                                || !TextureUsage::ORDERED.contains(to_usage)
                             {
                                 let pending = PendingTransition {
                                     id,
@@ -194,12 +181,21 @@ impl ResourceState for TextureState {
                                         levels: level .. level + 1,
                                         layers: layers.clone(),
                                     },
-                                    usage: start.last .. final_usage,
+                                    usage: start.last .. to_usage,
                                 };
-                                final_usage = pending.record(output.as_mut(), end.last)?;
-                            }
+
+                                match output {
+                                    None => pending.collapse()?,
+                                    Some(ref mut out) => {
+                                        out.push(pending);
+                                        end.last
+                                    }
+                                }
+                            } else {
+                                end.last
+                            };
                             Unit {
-                                init: start.init,
+                                first: Some(start.port()),
                                 last: final_usage,
                             }
                         }

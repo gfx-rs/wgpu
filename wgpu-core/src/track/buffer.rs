@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use super::{PendingTransition, ResourceState, Stitch, Unit};
+use super::{PendingTransition, ResourceState, Unit};
 use crate::{conv, id::BufferId, resource::BufferUsage};
 use std::ops::Range;
 
@@ -14,6 +14,17 @@ impl PendingTransition<BufferState> {
     pub fn to_states(&self) -> Range<hal::buffer::State> {
         conv::map_buffer_state(self.usage.start) .. conv::map_buffer_state(self.usage.end)
     }
+
+    fn collapse(self) -> Result<BufferUsage, Self> {
+        if self.usage.start.is_empty()
+            || self.usage.start == self.usage.end
+            || !BufferUsage::WRITE_ALL.intersects(self.usage.start | self.usage.end)
+        {
+            Ok(self.usage.start | self.usage.end)
+        } else {
+            Err(self)
+        }
+    }
 }
 
 impl ResourceState for BufferState {
@@ -23,7 +34,7 @@ impl ResourceState for BufferState {
 
     fn new(_full_selector: &Self::Selector) -> Self {
         BufferState {
-            init: BufferUsage::empty(),
+            first: None,
             last: BufferUsage::empty(),
         }
     }
@@ -47,20 +58,15 @@ impl ResourceState for BufferState {
                 usage: old .. usage,
             };
             self.last = match output {
+                None => pending.collapse()?,
                 Some(transitions) => {
                     transitions.push(pending);
+                    if self.first.is_none() {
+                        self.first = Some(old);
+                    }
                     usage
                 }
-                None => {
-                    if !old.is_empty()
-                        && old != usage
-                        && BufferUsage::WRITE_ALL.intersects(old | usage)
-                    {
-                        return Err(pending);
-                    }
-                    old | usage
-                }
-            };
+            }
         }
         Ok(())
     }
@@ -69,12 +75,14 @@ impl ResourceState for BufferState {
         &mut self,
         id: Self::Id,
         other: &Self,
-        stitch: Stitch,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
-        let new = other.select(stitch);
+        let new = other.port();
         self.last = if old == new && BufferUsage::ORDERED.contains(new) {
+            if self.first.is_none() {
+                self.first = Some(old);
+            }
             other.last
         } else {
             let pending = PendingTransition {
@@ -83,15 +91,13 @@ impl ResourceState for BufferState {
                 usage: old .. new,
             };
             match output {
+                None => pending.collapse()?,
                 Some(transitions) => {
                     transitions.push(pending);
-                    other.last
-                }
-                None => {
-                    if !old.is_empty() && BufferUsage::WRITE_ALL.intersects(old | new) {
-                        return Err(pending);
+                    if self.first.is_none() {
+                        self.first = Some(old);
                     }
-                    old | new
+                    other.last
                 }
             }
         };
@@ -109,7 +115,7 @@ mod test {
     #[test]
     fn change() {
         let mut bs = Unit {
-            init: BufferUsage::INDEX,
+            first: Some(BufferUsage::INDEX),
             last: BufferUsage::STORAGE,
         };
         let id = TypedId::zip(0, 0, Backend::Empty);
