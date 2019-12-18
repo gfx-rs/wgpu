@@ -3,7 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/wgpu.svg)](https://crates.io/crates/wgpu)
 [![Gitter](https://badges.gitter.im/gfx-rs/webgpu.svg)](https://gitter.im/gfx-rs/webgpu)
 
-This is an idiomatic Rust wrapper over [wgpu-native](https://github.com/gfx-rs/wgpu). It's designed to be suitable for general purpose graphics and computation needs of Rust community. It currently only works for the native platform, in the future aims to support WASM/Emscripten platforms as well.
+This is an idiomatic Rust wrapper over [wgpu-core](https://github.com/gfx-rs/wgpu). It's designed to be suitable for general purpose graphics and computation needs of Rust community. It currently only works for the native platform, in the future aims to support WASM/Emscripten platforms as well.
 
 ## Gallery
 
@@ -35,9 +35,11 @@ More examples can be found under the [examples](examples) directory.
 Shout out to the following projects that work best with wgpu-rs:
   - [wgpu_glyph](https://github.com/hecrj/wgpu_glyph) - for your text-y rendering needs
   - [coffee](https://github.com/hecrj/coffee) - a whole 2D engine
+  - [iced](https://github.com/hecrj/iced) - a cross-platform GUI library
   - [rgx](https://github.com/cloudhead/rgx) - a 2D graphics library
   - [imgui-wgpu](https://github.com/Yatekii/imgui-wgpu-rs) - Dear ImGui interfacing
   - [pixels](https://github.com/parasyte/pixels) - the easiest way to create a hardware-accelerated pixel frame buffer
+  - [kas](https://github.com/dhardy/kas) - tooKit Abstraction System
 
 ## Development
 
