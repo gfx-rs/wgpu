@@ -66,7 +66,7 @@ package: lib-native lib-native-release lib-remote lib-remote-release
 		if [ $(ZIP_TOOL) = zip ]; then \
 			zip -j dist/$$ARCHIVE target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) dist/commit-sha; \
 		else \
-			7z a dist/$$ARCHIVE ./target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) ./dist/commit-sha; \
+			7z a -tzip dist/$$ARCHIVE ./target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) ./dist/commit-sha; \
 		fi; \
 	done
 
