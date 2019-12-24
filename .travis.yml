@@ -75,7 +75,7 @@ script:
       make example-compute example-triangle VERBOSE=1;
     fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then make VERBOSE=1; fi
-  - make package
+  - if [[ $TRAVIS_RUST_VERSION == "stable" ]]; then make package; fi
 
 deploy:
   provider: releases
