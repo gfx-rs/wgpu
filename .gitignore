@@ -6,3 +6,4 @@
 .vs
 build
 ffi/dawn*.h
+dist

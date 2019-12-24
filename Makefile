@@ -11,6 +11,10 @@ CREATE_BUILD_DIR:=
 WILDCARD_WGPU_NATIVE:=$(wildcard wgpu-native/**/*.rs wgpu-core/**/*.rs)
 WILDCARD_WGPU_REMOTE:=$(wildcard wgpu-remote/**/*.rs wgpu-core/**/*.rs)
 
+GIT_TAG=$(shell git describe --abbrev=0 --tags)
+GIT_TAG_FULL=$(shell git describe --tags)
+OS_NAME=
+
 ifeq (,$(TARGET))
 	CHECK_TARGET_FLAG=
 else
@@ -26,12 +30,37 @@ else
 	CREATE_BUILD_DIR=mkdir -p $(BUILD_DIR)
 endif
 
-.PHONY: all check test doc clear lib-native lib-remote \
+ifeq ($(OS),Windows_NT)
+	LIB_EXTENSION=dll
+	OS_NAME=windows
+else
+	UNAME_S:=$(shell uname -s)
+	ifeq ($(UNAME_S),Linux)
+		LIB_EXTENSION=so
+		OS_NAME=linux
+	endif
+	ifeq ($(UNAME_S),Darwin)
+		LIB_EXTENSION=dylib
+		OS_NAME=macos
+	endif
+endif
+
+
+.PHONY: all check test doc clear \
 	example-compute example-triangle example-remote \
-	run-example-compute run-example-triangle run-example-remote
+	run-example-compute run-example-triangle run-example-remote \
+	lib-native lib-native-release \
+	lib-remote lib-remote-release
 
 #TODO: example-remote
 all: example-compute example-triangle lib-remote
+
+package: lib-native lib-native-release lib-remote lib-remote-release
+	mkdir -p dist
+	echo "$(GIT_TAG_FULL)" > dist/commit-sha
+	for RELEASE in debug release; do \
+		zip -j dist/wgpu-$$RELEASE-$(OS_NAME)-$(GIT_TAG).zip target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) dist/commit-sha; \
+	done
 
 check:
 	cargo check --all
@@ -49,8 +78,14 @@ clear:
 lib-native: Cargo.lock wgpu-native/Cargo.toml $(WILDCARD_WGPU_NATIVE)
 	cargo build --manifest-path wgpu-native/Cargo.toml
 
+lib-native-release: Cargo.lock wgpu-native/Cargo.toml $(WILDCARD_WGPU_NATIVE)
+	cargo build --manifest-path wgpu-native/Cargo.toml --release
+
 lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_REMOTE)
 	cargo build --manifest-path wgpu-remote/Cargo.toml
+
+lib-remote-release: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_REMOTE)
+	cargo build --manifest-path wgpu-remote/Cargo.toml --release
 
 $(FFI_DIR)/wgpu.h: wgpu-native/cbindgen.toml $(WILDCARD_WGPU_NATIVE)
 	rustup run nightly cbindgen -o $(FFI_DIR)/wgpu.h wgpu-native

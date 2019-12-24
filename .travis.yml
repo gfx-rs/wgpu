@@ -75,3 +75,17 @@ script:
       make example-compute example-triangle VERBOSE=1;
     fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then make VERBOSE=1; fi
+  - make package
+
+deploy:
+  provider: releases
+  api_key:
+    secure: TODO
+  file_glob: true
+  file: dist/wgpu-*.zip
+  skip_cleanup: true
+  overwrite: true
+  on:
+    tags: true
+    condition: $TRAVIS_RUST_VERSION == "stable" && $TRAVIS_BRANCH == $TRAVIS_TAG
+    skip_cleanup: true
