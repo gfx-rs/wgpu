@@ -940,12 +940,19 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
     pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: BufferId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (buffer_guard, _) = hub.buffers.read(&mut token);
-        let buffer = &buffer_guard[buffer_id];
-        device_guard[buffer.device_id.value].pending.lock().destroy(
+
+        // Deadlock hotfix, pending doesn't have a token
+        let (device_id, ref_count) = {
+            let (buffer_guard, _) = hub.buffers.read(&mut token);
+            let buffer = &buffer_guard[buffer_id];
+
+            (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+        };
+
+        let (device_guard, _) = hub.devices.read(&mut token);
+        device_guard[device_id].pending.lock().destroy(
             ResourceId::Buffer(buffer_id),
-            buffer.life_guard.ref_count.clone(),
+            ref_count,
         );
     }
 }
@@ -981,15 +988,21 @@ impl<F: IdentityFilter<TextureId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (texture_guard, _) = hub.textures.read(&mut token);
-        let texture = &texture_guard[texture_id];
-        device_guard[texture.device_id.value]
+        // Deadlock hotfix, pending doesn't have a token
+        let (device_id, ref_count) = {
+            let (texture_guard, _) = hub.textures.read(&mut token);
+            let texture = &texture_guard[texture_id];
+
+            (texture.device_id.value, texture.life_guard.ref_count.clone())
+        };
+        
+        let (device_guard, _) = hub.devices.read(&mut token);
+        device_guard[device_id]
             .pending
             .lock()
             .destroy(
                 ResourceId::Texture(texture_id),
-                texture.life_guard.ref_count.clone(),
+                ref_count,
             );
     }
 }
@@ -1087,21 +1100,29 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
     pub fn texture_view_destroy<B: GfxBackend>(&self, texture_view_id: TextureViewId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (texture_guard, mut token) = hub.textures.read(&mut token);
-        let (texture_view_guard, _) = hub.texture_views.read(&mut token);
-        let view = &texture_view_guard[texture_view_id];
-        let device_id = match view.inner {
-            resource::TextureViewInner::Native { ref source_id, .. } => {
-                texture_guard[source_id.value].device_id.value
-            }
-            resource::TextureViewInner::SwapChain { .. } => {
-                panic!("Can't destroy a swap chain image")
-            }
+
+        // Deadlock hotfix, pending doesn't have a token
+        let (device_id, ref_count) = {
+            let (texture_guard, mut token) = hub.textures.read(&mut token);
+            let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+
+            let view = &texture_view_guard[texture_view_id];
+            let device_id = match view.inner {
+                resource::TextureViewInner::Native { ref source_id, .. } => {
+                    texture_guard[source_id.value].device_id.value
+                }
+                resource::TextureViewInner::SwapChain { .. } => {
+                    panic!("Can't destroy a swap chain image")
+                }
+            };
+
+            (device_id, view.life_guard.ref_count.clone())
         };
+
+        let (device_guard, _) = hub.devices.read(&mut token);
         device_guard[device_id].pending.lock().destroy(
             ResourceId::TextureView(texture_view_id),
-            view.life_guard.ref_count.clone(),
+            ref_count,
         );
     }
 }
@@ -1158,15 +1179,22 @@ impl<F: IdentityFilter<SamplerId>> Global<F> {
     pub fn sampler_destroy<B: GfxBackend>(&self, sampler_id: SamplerId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (sampler_guard, _) = hub.samplers.read(&mut token);
-        let sampler = &sampler_guard[sampler_id];
-        device_guard[sampler.device_id.value]
+
+        // Deadlock hotfix, pending doesn't have a token
+        let (device_id, ref_count) = {
+            let (sampler_guard, _) = hub.samplers.read(&mut token);
+            let sampler = &sampler_guard[sampler_id];
+
+            (sampler.device_id.value, sampler.life_guard.ref_count.clone())
+        };
+
+        let (device_guard, _) = hub.devices.read(&mut token);
+        device_guard[device_id]
             .pending
             .lock()
             .destroy(
                 ResourceId::Sampler(sampler_id),
-                sampler.life_guard.ref_count.clone(),
+                ref_count,
             );
     }
 }
@@ -1461,15 +1489,22 @@ impl<F: IdentityFilter<BindGroupId>> Global<F> {
     pub fn bind_group_destroy<B: GfxBackend>(&self, bind_group_id: BindGroupId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (bind_group_guard, _) = hub.bind_groups.read(&mut token);
-        let bind_group = &bind_group_guard[bind_group_id];
-        device_guard[bind_group.device_id.value]
+
+        // Deadlock hotfix, pending doesn't have a token
+        let (device_id, ref_count) = {
+            let (bind_group_guard, _) = hub.bind_groups.read(&mut token);
+            let bind_group = &bind_group_guard[bind_group_id];
+
+            (bind_group.device_id.value, bind_group.life_guard.ref_count.clone())
+        };
+
+        let (device_guard, _) = hub.devices.read(&mut token);
+        device_guard[device_id]
             .pending
             .lock()
             .destroy(
                 ResourceId::BindGroup(bind_group_id),
-                bind_group.life_guard.ref_count.clone(),
+                ref_count,
             );
     }
 }
