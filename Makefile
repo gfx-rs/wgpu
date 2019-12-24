@@ -33,8 +33,10 @@ endif
 ifeq ($(OS),Windows_NT)
 	LIB_EXTENSION=dll
 	OS_NAME=windows
+	ZIP_TOOL=7z
 else
 	UNAME_S:=$(shell uname -s)
+	ZIP_TOOL=zip
 	ifeq ($(UNAME_S),Linux)
 		LIB_EXTENSION=so
 		OS_NAME=linux
@@ -61,7 +63,11 @@ package: lib-native lib-native-release lib-remote lib-remote-release
 	for RELEASE in debug release; do \
 		ARCHIVE=wgpu-$$RELEASE-$(OS_NAME)-$(GIT_TAG).zip; \
 		rm -f dist/$$ARCHIVE; \
-		zip -j dist/$$ARCHIVE target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) dist/commit-sha; \
+		if [ $(ZIP_TOOL) = zip ]; then \
+			zip -j dist/$$ARCHIVE target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) dist/commit-sha; \
+		else \
+			7z a dist/$$ARCHIVE ./target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) ./dist/commit-sha; \
+		fi; \
 	done
 
 check:
