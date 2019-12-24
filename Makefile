@@ -59,7 +59,9 @@ package: lib-native lib-native-release lib-remote lib-remote-release
 	mkdir -p dist
 	echo "$(GIT_TAG_FULL)" > dist/commit-sha
 	for RELEASE in debug release; do \
-		zip -j dist/wgpu-$$RELEASE-$(OS_NAME)-$(GIT_TAG).zip target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) dist/commit-sha; \
+		ARCHIVE=wgpu-$$RELEASE-$(OS_NAME)-$(GIT_TAG).zip; \
+		rm -f dist/$$ARCHIVE; \
+		zip -j dist/$$ARCHIVE target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) dist/commit-sha; \
 	done
 
 check:
