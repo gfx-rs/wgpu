@@ -52,12 +52,12 @@ endif
 	example-compute example-triangle example-remote \
 	run-example-compute run-example-triangle run-example-remote \
 	lib-native lib-native-release \
-	lib-remote lib-remote-release
+	lib-remote
 
 #TODO: example-remote
 all: example-compute example-triangle lib-remote
 
-package: lib-native lib-native-release lib-remote lib-remote-release
+package: lib-native lib-native-release
 	mkdir -p dist
 	echo "$(GIT_TAG_FULL)" > dist/commit-sha
 	for RELEASE in debug release; do \
@@ -91,9 +91,6 @@ lib-native-release: Cargo.lock wgpu-native/Cargo.toml $(WILDCARD_WGPU_NATIVE)
 
 lib-remote: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_REMOTE)
 	cargo build --manifest-path wgpu-remote/Cargo.toml
-
-lib-remote-release: Cargo.lock wgpu-remote/Cargo.toml $(WILDCARD_WGPU_REMOTE)
-	cargo build --manifest-path wgpu-remote/Cargo.toml --release
 
 $(FFI_DIR)/wgpu.h: wgpu-native/cbindgen.toml $(WILDCARD_WGPU_NATIVE)
 	rustup run nightly cbindgen -o $(FFI_DIR)/wgpu.h wgpu-native
