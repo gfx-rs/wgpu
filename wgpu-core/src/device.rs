@@ -2015,6 +2015,34 @@ impl<F: IdentityFilter<ComputePipelineId>> Global<F> {
     }
 }
 
+fn validate_swap_chain_descriptor(
+    config: &mut hal::window::SwapchainConfig,
+    caps: &hal::window::SurfaceCapabilities,
+) {
+    let width = config.extent.width;
+    let height = config.extent.height;
+    if width < caps.extents.start().width
+        || width > caps.extents.end().width
+        || height < caps.extents.start().height
+        || height > caps.extents.end().height
+    {
+        log::warn!(
+            "Requested size {}x{} is outside of the supported range: {:?}",
+            width,
+            height,
+            caps.extents
+        );
+    }
+    if !caps.present_modes.contains(config.present_mode) {
+        log::warn!(
+            "Surface does not support present mode: {:?}, falling back to {:?}",
+            config.present_mode,
+            hal::window::PresentMode::FIFO
+        );
+        config.present_mode = hal::window::PresentMode::FIFO;
+    }
+}
+
 impl<F: IdentityFilter<SwapChainId>> Global<F> {
     pub fn device_create_swap_chain<B: GfxBackend>(
         &self,
@@ -2044,8 +2072,7 @@ impl<F: IdentityFilter<SwapChainId>> Global<F> {
         let num_frames = swap_chain::DESIRED_NUM_FRAMES
             .max(*caps.image_count.start())
             .min(*caps.image_count.end());
-        let config = desc.to_hal(num_frames, &device.features);
-
+        let mut config = desc.to_hal(num_frames, &device.features);
         if let Some(formats) = formats {
             assert!(
                 formats.contains(&config.format),
@@ -2054,18 +2081,7 @@ impl<F: IdentityFilter<SwapChainId>> Global<F> {
                 formats
             );
         }
-        if desc.width < caps.extents.start().width
-            || desc.width > caps.extents.end().width
-            || desc.height < caps.extents.start().height
-            || desc.height > caps.extents.end().height
-        {
-            log::warn!(
-                "Requested size {}x{} is outside of the supported range: {:?}",
-                desc.width,
-                desc.height,
-                caps.extents
-            );
-        }
+        validate_swap_chain_descriptor(&mut config, &caps);
 
         unsafe {
             B::get_surface_mut(surface)
