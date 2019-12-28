@@ -66,7 +66,7 @@ package: lib-native lib-native-release
 		if [ $(ZIP_TOOL) = zip ]; then \
 			zip -j dist/$$ARCHIVE target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) ffi/*.h dist/commit-sha; \
 		else \
-			7z a -tzip dist/$$ARCHIVE ./target/$$RELEASE/libwgpu_*.$(LIB_EXTENSION) ./ffi/*.h ./dist/commit-sha; \
+			7z a -tzip dist/$$ARCHIVE ./target/$$RELEASE/wgpu_*.$(LIB_EXTENSION) ./ffi/*.h ./dist/commit-sha; \
 		fi; \
 	done
 
