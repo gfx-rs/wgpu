@@ -236,6 +236,9 @@ pub struct CommandBuffer {
 #[derive(Debug)]
 pub struct CommandEncoder {
     id: wgc::id::CommandEncoderId,
+    /// This type should be !Send !Sync, because it represents an allocation on this thread's
+    /// command buffer.
+    _p: std::marker::PhantomData<*const u8>,
 }
 
 /// An in-progress recording of a render pass.
@@ -599,6 +602,7 @@ impl Device {
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
         CommandEncoder {
             id: wgn::wgpu_device_create_command_encoder(self.id, Some(desc)),
+            _p: Default::default(),
         }
     }
 
