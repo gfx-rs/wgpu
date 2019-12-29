@@ -5,6 +5,7 @@ use future::GpuFutureCompletion;
 pub use future::GpuFuture;
 
 use arrayvec::ArrayVec;
+use smallvec::SmallVec;
 
 use std::ffi::CString;
 use std::ops::Range;
@@ -261,7 +262,6 @@ pub struct ComputePass<'a> {
 #[derive(Debug)]
 pub struct Queue {
     id: wgc::id::QueueId,
-    temp_command_buffers: Vec<wgc::id::CommandBufferId>,
 }
 
 /// A resource that can be bound to a pipeline.
@@ -569,7 +569,6 @@ impl Adapter {
         };
         let queue = Queue {
             id: wgn::wgpu_device_get_queue(device.id),
-            temp_command_buffers: Vec::new(),
         };
         (device, queue)
     }
@@ -1382,14 +1381,14 @@ impl<'a> Drop for ComputePass<'a> {
 
 impl Queue {
     /// Submits a series of finished command buffers for execution.
-    pub fn submit(&mut self, command_buffers: &[CommandBuffer]) {
-        self.temp_command_buffers.clear();
-        self.temp_command_buffers
-            .extend(command_buffers.iter().map(|cb| cb.id));
+    pub fn submit(&self, command_buffers: &[CommandBuffer]) {
+        let temp_command_buffers = command_buffers.iter()
+            .map(|cb| cb.id)
+            .collect::<SmallVec<[_; 4]>>();
 
         wgn::wgpu_queue_submit(
             self.id,
-            self.temp_command_buffers.as_ptr(),
+            temp_command_buffers.as_ptr(),
             command_buffers.len(),
         );
     }

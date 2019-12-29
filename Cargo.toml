@@ -36,6 +36,7 @@ rev = "b51053dc2dc3bbe9b2ba050fde42eeb6405fe092"
 
 [dependencies]
 arrayvec = "0.5"
+smallvec = "1"
 raw-window-handle = "0.3"
 
 [dev-dependencies]
