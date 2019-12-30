@@ -159,16 +159,16 @@ impl Color {
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Origin3d {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
 }
 
 impl Origin3d {
     pub const ZERO: Self = Origin3d {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
+        x: 0,
+        y: 0,
+        z: 0,
     };
 }
 

@@ -77,3 +77,17 @@ script:
       make example-compute example-triangle VERBOSE=1;
     fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then make VERBOSE=1; fi
+  - if [[ $TRAVIS_RUST_VERSION == "stable" ]]; then make package; fi
+
+deploy:
+  provider: releases
+  api_key:
+    secure: kS8vjHOnLEknb2qxf2dPxMW8S5KcpjSkSgoi23WXiX3DZ2v8DIJMxVLanJhD3mbr1oI1NGXQHrTeeA/HBEEJcOVzlQo38MgNo/Jyt1k4jLRyCEDL0LjO+M1zAQGoEDWlyyjeu+Alw3SFKqGoZeuYDZ/mxUpEapFMD++8w4IjON2fI6iNumcIMeAg3Ns6Y4wHYQPzfIQQf5svI9dh1lf7PhlFB/btONBPi6rXxU/UwCnHBoOPydl5OwjggaUAjCJSf8i/FDLWt5XpvA2UsML2AbcFNuwFhNGhf6ArwEsqgcMCGL6jACetvI/l3ZL96h5dsgzRLW0ruvnvpEm3y3aw9wCjEAcnQMZCBPlIfOpj5MH/guh526QWCVQ3rwRUJOhua9T2yvwda3ICYspyVShzlbwscA9yLwvsuO+6Hl+upuE2IPfLvS6QpnXVlIWHe/3HqOoQggDdsWvnZhhGNKASKsi9vNgTvec/1iX846/KGcV3nYeHIWFrvP0IgWtEqQrgcWj9w6X7LDdaTFmrkKwKnNn4ClLQYPnlWQS71iX0gwRhONGaSAEfFca6vwVTa8AGSQUEHphe5lT7LtAy6UhlbjZNuKvUR+pn+l0EoWlZzm+uxKMtGR+mG9h6My+GA3hCWWtX/Xc94TvuJ1cg+uRu48+rD21vv3cr2fEVDRq7pGg=
+  file_glob: true
+  file: dist/wgpu-*.zip
+  skip_cleanup: true
+  overwrite: true
+  on:
+    tags: true
+    condition: $TRAVIS_RUST_VERSION == "stable" && $TRAVIS_BRANCH == $TRAVIS_TAG
+    skip_cleanup: true
