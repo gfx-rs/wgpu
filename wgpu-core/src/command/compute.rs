@@ -11,7 +11,7 @@ use crate::{
     hub::{GfxBackend, Global, IdentityFilter, Token},
     id::{BindGroupId, BufferId, CommandBufferId, ComputePassId, ComputePipelineId},
     resource::BufferUsage,
-    track::{Stitch, TrackerSet},
+    track::TrackerSet,
     BufferAddress,
     Stored,
 };
@@ -56,7 +56,7 @@ impl<F: IdentityFilter<ComputePassId>> Global<F> {
 
         // There are no transitions to be made: we've already been inserting barriers
         // into the parent command buffer while recording this compute pass.
-        log::debug!("Compute pass {:?} tracker: {:#?}", pass_id, pass.trackers);
+        log::debug!("Compute pass {:?} {:#?}", pass_id, pass.trackers);
         cmb.trackers = pass.trackers;
         cmb.raw.push(pass.raw);
     }
@@ -112,7 +112,6 @@ impl<F> Global<F> {
             &mut pass.raw,
             &mut pass.trackers,
             &bind_group.used,
-            Stitch::Last,
             &*buffer_guard,
             &*texture_guard,
         );

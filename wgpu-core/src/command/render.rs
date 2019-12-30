@@ -13,7 +13,7 @@ use crate::{
     id::{BindGroupId, BufferId, CommandBufferId, RenderPassId, RenderPipelineId},
     pipeline::{IndexFormat, InputStepMode, PipelineFlags},
     resource::BufferUsage,
-    track::{Stitch, TrackerSet},
+    track::TrackerSet,
     BufferAddress,
     Color,
     Stored,
@@ -129,6 +129,7 @@ impl<B: GfxBackend> RenderPass<B> {
         raw: B::CommandBuffer,
         cmb_id: Stored<CommandBufferId>,
         context: RenderPassContext,
+        trackers: TrackerSet,
         sample_count: u8,
         max_bind_groups: u32,
     ) -> Self {
@@ -137,7 +138,7 @@ impl<B: GfxBackend> RenderPass<B> {
             cmb_id,
             context,
             binder: Binder::new(max_bind_groups),
-            trackers: TrackerSet::new(B::VARIANT),
+            trackers,
             blend_color_status: OptionalState::Unused,
             stencil_reference_status: OptionalState::Unused,
             index_state: IndexState {
@@ -185,7 +186,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             pass.raw.end_render_pass();
         }
         pass.trackers.optimize();
-        log::debug!("Render pass {:?} tracker: {:#?}", pass_id, pass.trackers);
+        log::debug!("Render pass {:?} {:#?}", pass_id, pass.trackers);
 
         let cmb = &mut cmb_guard[pass.cmb_id.value];
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
@@ -198,7 +199,6 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     last,
                     &mut cmb.trackers,
                     &pass.trackers,
-                    Stitch::Last,
                     &*buffer_guard,
                     &*texture_guard,
                 );
@@ -207,6 +207,11 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             None => {
                 cmb.trackers.merge_extend(&pass.trackers);
             }
+        }
+
+        if false {
+            log::debug!("Command buffer {:?} after render pass {:#?}",
+                pass.cmb_id.value, cmb.trackers);
         }
 
         cmb.raw.push(pass.raw);
