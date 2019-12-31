@@ -48,15 +48,16 @@ use hal::{
     queue::CommandQueue as _,
     window::{PresentationSurface as _, Surface as _},
 };
-use parking_lot::Mutex;
+use parking_lot::{Mutex, MutexGuard};
 use rendy_descriptor::{DescriptorAllocator, DescriptorRanges, DescriptorSet};
 use rendy_memory::{Block, Heaps, MemoryBlock};
 
 use std::{
     collections::hash_map::Entry,
     ffi,
+    fmt,
     iter,
-    ops::Range,
+    ops,
     ptr,
     slice,
     sync::atomic::Ordering,
@@ -125,67 +126,167 @@ pub(crate) type RenderPassKey = AttachmentData<hal::pass::Attachment>;
 pub(crate) type FramebufferKey = AttachmentData<TextureViewId>;
 pub(crate) type RenderPassContext = AttachmentData<resource::TextureFormat>;
 
-#[derive(Debug, PartialEq)]
-enum ResourceId {
-    Buffer(BufferId),
-    Texture(TextureId),
-    TextureView(TextureViewId),
-    BindGroup(BindGroupId),
-    Sampler(SamplerId),
+/// A struct that keeps lists of resources that are no longer needed by the user.
+#[derive(Debug, Default)]
+struct InternallyReferencedResources {
+    buffers: Vec<Stored<BufferId>>,
+    textures: Vec<Stored<TextureId>>,
+    texture_views: Vec<Stored<TextureViewId>>,
+    samplers: Vec<Stored<SamplerId>>,
+    bind_groups: Vec<Stored<BindGroupId>>,
 }
 
+/// Before destruction, a resource is expected to have the following strong refs:
+///  - in resource itself
+///  - in the device tracker
+///  - in this unlinked reference list
+const MIN_INTERNAL_REF_COUNT: usize = 3;
+
+struct ReferenceFilter<'a, I> {
+    vec: &'a mut Vec<Stored<I>>,
+    index: usize,
+}
+
+impl<'a, I> ReferenceFilter<'a, I> {
+    fn new(vec: &'a mut Vec<Stored<I>>) -> Option<Self> {
+        if vec.is_empty() {
+            None
+        } else {
+            Some(ReferenceFilter {
+                index: vec.len(),
+                vec,
+            })
+        }
+    }
+}
+
+impl<I: fmt::Debug> Iterator for ReferenceFilter<'_, I> {
+    type Item = I;
+    fn next(&mut self) -> Option<I> {
+        while self.index != 0 {
+            self.index -= 1;
+            let num_refs = self.vec[self.index].ref_count.load();
+            if num_refs <= MIN_INTERNAL_REF_COUNT {
+                let stored = self.vec.swap_remove(self.index);
+                assert_eq!(
+                    num_refs, MIN_INTERNAL_REF_COUNT,
+                    "Resource {:?} is missing some internal references",
+                    stored.value
+                );
+                return Some(stored.value)
+            }
+        }
+        None
+    }
+}
+
+/// A struct that keeps lists of resources that are no longer needed.
 #[derive(Debug)]
-enum NativeResource<B: hal::Backend> {
-    Buffer(B::Buffer, MemoryBlock<B>),
-    Image(B::Image, MemoryBlock<B>),
-    ImageView(B::ImageView),
-    Framebuffer(B::Framebuffer),
-    DescriptorSet(DescriptorSet<B>),
-    Sampler(B::Sampler),
+struct NonReferencedResources<B: hal::Backend> {
+    buffers: Vec<(B::Buffer, MemoryBlock<B>)>,
+    images: Vec<(B::Image, MemoryBlock<B>)>,
+    // Note: we keep the associated ID here in order to be able to check
+    // at any point what resources are used in a submission.
+    image_views: Vec<(TextureViewId, B::ImageView)>,
+    samplers: Vec<B::Sampler>,
+    framebuffers: Vec<B::Framebuffer>,
+    desc_sets: Vec<DescriptorSet<B>>,
+}
+
+impl<B: hal::Backend> NonReferencedResources<B> {
+    fn new() -> Self {
+        NonReferencedResources {
+            buffers: Vec::new(),
+            images: Vec::new(),
+            image_views: Vec::new(),
+            samplers: Vec::new(),
+            framebuffers: Vec::new(),
+            desc_sets: Vec::new(),
+        }
+    }
+
+    fn extend(&mut self, other: Self) {
+        self.buffers.extend(other.buffers);
+        self.images.extend(other.images);
+        self.image_views.extend(other.image_views);
+        self.samplers.extend(other.samplers);
+        self.framebuffers.extend(other.framebuffers);
+        self.desc_sets.extend(other.desc_sets);
+    }
+
+    unsafe fn clean(
+        &mut self,
+        device: &B::Device,
+        heaps_mutex: &Mutex<Heaps<B>>,
+        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
+    ) {
+        if !self.buffers.is_empty() {
+            let mut heaps = heaps_mutex.lock();
+            for (raw, memory) in self.buffers.drain(..) {
+                device.destroy_buffer(raw);
+                heaps.free(device, memory);
+            }
+        }
+        if !self.images.is_empty() {
+            let mut heaps = heaps_mutex.lock();
+            for (raw, memory) in self.images.drain(..) {
+                device.destroy_image(raw);
+                heaps.free(device, memory);
+            }
+        }
+
+        for (_, raw) in self.image_views.drain(..) {
+            device.destroy_image_view(raw);
+        }
+        for raw in self.samplers.drain(..) {
+            device.destroy_sampler(raw);
+        }
+        for raw in self.framebuffers.drain(..) {
+            device.destroy_framebuffer(raw);
+        }
+
+        if !self.desc_sets.is_empty() {
+            descriptor_allocator_mutex
+                .lock()
+                .free(self.desc_sets.drain(..));
+        }
+    }
 }
 
 #[derive(Debug)]
 struct ActiveSubmission<B: hal::Backend> {
     index: SubmissionIndex,
     fence: B::Fence,
-    // Note: we keep the associated ID here in order to be able to check
-    // at any point what resources are used in a submission.
-    resources: Vec<(Option<ResourceId>, NativeResource<B>)>,
+    last_resources: NonReferencedResources<B>,
     mapped: Vec<BufferId>,
 }
 
 /// A struct responsible for tracking resource lifetimes.
 ///
 /// Here is how host mapping is handled:
-///   1. When mapping is requested we add the buffer to the pending list of `mapped` buffers.
+///   1. When mapping is requested we add the buffer to the life_tracker list of `mapped` buffers.
 ///   2. When `triage_referenced` is called, it checks the last submission index associated with each of the mapped buffer,
 /// and register the buffer with either a submission in flight, or straight into `ready_to_map` vector.
 ///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
-
 #[derive(Debug)]
-struct PendingResources<B: hal::Backend> {
+struct LifetimeTracker<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<BufferId>>,
-    /// Resources that are destroyed by the user but still referenced by
+    /// Resources that are not linked by the user but still referenced by
     /// other objects or command buffers.
-    referenced: Vec<(ResourceId, RefCount)>,
+    unlinked_resources: InternallyReferencedResources,
     /// Resources that are not referenced any more but still used by GPU.
     /// Grouped by submissions associated with a fence and a submission index.
     /// The active submissions have to be stored in FIFO order: oldest come first.
     active: Vec<ActiveSubmission<B>>,
-    /// Resources that are neither referenced or used, just pending
+    /// Resources that are neither referenced or used, just life_tracker
     /// actual deletion.
-    free: Vec<NativeResource<B>>,
+    free_resources: NonReferencedResources<B>,
     ready_to_map: Vec<BufferId>,
 }
 
-impl<B: GfxBackend> PendingResources<B> {
-    fn destroy(&mut self, resource_id: ResourceId, ref_count: RefCount) {
-        debug_assert!(!self.referenced.iter().any(|r| r.0 == resource_id));
-        self.referenced.push((resource_id, ref_count));
-    }
-
+impl<B: GfxBackend> LifetimeTracker<B> {
     fn map(&mut self, buffer: BufferId, ref_count: RefCount) {
         self.mapped.push(Stored {
             value: buffer,
@@ -194,11 +295,9 @@ impl<B: GfxBackend> PendingResources<B> {
     }
 
     /// Returns the last submission index that is done.
-    fn cleanup(
+    fn check_last_done(
         &mut self,
         device: &B::Device,
-        heaps_mutex: &Mutex<Heaps<B>>,
-        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
         force_wait: bool,
     ) {
         if force_wait && !self.active.is_empty() {
@@ -222,37 +321,10 @@ impl<B: GfxBackend> PendingResources<B> {
 
         for a in self.active.drain(.. done_count) {
             log::trace!("Active submission {} is done", a.index);
-            self.free.extend(a.resources.into_iter().map(|(_, r)| r));
+            self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
             unsafe {
                 device.destroy_fence(a.fence);
-            }
-        }
-
-        let mut heaps = heaps_mutex.lock();
-        let mut descriptor_allocator = descriptor_allocator_mutex.lock();
-        for resource in self.free.drain(..) {
-            match resource {
-                NativeResource::Buffer(raw, memory) => unsafe {
-                    device.destroy_buffer(raw);
-                    heaps.free(device, memory);
-                },
-                NativeResource::Image(raw, memory) => unsafe {
-                    device.destroy_image(raw);
-                    heaps.free(device, memory);
-                },
-                NativeResource::ImageView(raw) => unsafe {
-                    device.destroy_image_view(raw);
-                },
-                NativeResource::Framebuffer(raw) => unsafe {
-                    device.destroy_framebuffer(raw);
-                },
-                NativeResource::DescriptorSet(raw) => unsafe {
-                    descriptor_allocator.free(iter::once(raw));
-                },
-                NativeResource::Sampler(raw) => unsafe {
-                    device.destroy_sampler(raw);
-                },
             }
         }
     }
@@ -260,86 +332,96 @@ impl<B: GfxBackend> PendingResources<B> {
     fn triage_referenced<F: AllIdentityFilter>(
         &mut self,
         global: &Global<F>,
-        trackers: &mut TrackerSet,
-        mut token: &mut Token<Device<B>>,
+        trackers: &Mutex<TrackerSet>,
+        token: &mut Token<Device<B>>,
     ) {
-        // Before destruction, a resource is expected to have the following strong refs:
-        //  - in resource itself
-        //  - in the device tracker
-        //  - in this list
-        const MIN_REFS: usize = 4;
+        let hub = B::hub(global);
 
-        if self.referenced.iter().all(|r| r.1.load() >= MIN_REFS) {
-            return;
+        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.buffers) {
+            let (mut guard, _) = hub.buffers.write(token);
+            for id in filter {
+                if guard[id].pending_map_operation.is_some() {
+                    continue;
+                }
+                let buf = guard.remove(id).unwrap();
+                hub.buffers.identity.free(id);
+                trackers.lock().buffers.remove(id);
+
+                let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .buffers.push((buf.raw, buf.memory));
+            }
         }
 
-        let hub = B::hub(global);
-        //TODO: lock less, if possible
-        let (mut bind_group_guard, mut token) = hub.bind_groups.write(&mut token);
-        let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-        let (mut texture_guard, mut token) = hub.textures.write(&mut token);
-        let (mut teview_view_guard, mut token) = hub.texture_views.write(&mut token);
-        let (mut sampler_guard, _) = hub.samplers.write(&mut token);
+        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.textures) {
+            let (mut guard, _) = hub.textures.write(token);
+            for id in filter {
+                let tex = guard.remove(id).unwrap();
+                hub.textures.identity.free(id);
+                trackers.lock().textures.remove(id);
 
-        for i in (0 .. self.referenced.len()).rev() {
-            let num_refs = self.referenced[i].1.load();
-            if num_refs <= 3 {
-                let resource_id = self.referenced.swap_remove(i).0;
-                assert_eq!(
-                    num_refs, 3,
-                    "Resource {:?} misses some references",
-                    resource_id
-                );
-                let (life_guard, resource) = match resource_id {
-                    ResourceId::Buffer(id) => {
-                        if buffer_guard[id].pending_map_operation.is_some() {
-                            continue;
-                        }
-                        trackers.buffers.remove(id);
-                        let buf = buffer_guard.remove(id).unwrap();
-                        hub.buffers.identity.free(id);
-                        (buf.life_guard, NativeResource::Buffer(buf.raw, buf.memory))
-                    }
-                    ResourceId::Texture(id) => {
-                        trackers.textures.remove(id);
-                        let tex = texture_guard.remove(id).unwrap();
-                        hub.textures.identity.free(id);
-                        (tex.life_guard, NativeResource::Image(tex.raw, tex.memory))
-                    }
-                    ResourceId::TextureView(id) => {
-                        trackers.views.remove(id);
-                        let view = teview_view_guard.remove(id).unwrap();
-                        let raw = match view.inner {
-                            resource::TextureViewInner::Native { raw, .. } => raw,
-                            resource::TextureViewInner::SwapChain { .. } => unreachable!(),
-                        };
-                        hub.texture_views.identity.free(id);
-                        (view.life_guard, NativeResource::ImageView(raw))
-                    }
-                    ResourceId::BindGroup(id) => {
-                        trackers.bind_groups.remove(id);
-                        let bind_group = bind_group_guard.remove(id).unwrap();
-                        hub.bind_groups.identity.free(id);
-                        (
-                            bind_group.life_guard,
-                            NativeResource::DescriptorSet(bind_group.raw),
-                        )
-                    }
-                    ResourceId::Sampler(id) => {
-                        trackers.samplers.remove(id);
-                        let sampler = sampler_guard.remove(id).unwrap();
-                        hub.samplers.identity.free(id);
-                        (sampler.life_guard, NativeResource::Sampler(sampler.raw))
-                    }
+                let submit_index = tex.life_guard.submission_index.load(Ordering::Acquire);
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .images.push((tex.raw, tex.memory));
+            }
+        }
+
+        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.texture_views) {
+            let (mut guard, _) = hub.texture_views.write(token);
+            for id in filter {
+                let view = guard.remove(id).unwrap();
+                hub.texture_views.identity.free(id);
+                trackers.lock().views.remove(id);
+
+                let raw = match view.inner {
+                    resource::TextureViewInner::Native { raw, .. } => raw,
+                    resource::TextureViewInner::SwapChain { .. } => unreachable!(),
                 };
 
-                let submit_index = life_guard.submission_index.load(Ordering::Acquire);
-                match self.active.iter_mut().find(|a| a.index == submit_index) {
-                    Some(a) => {
-                        a.resources.alloc().init((Some(resource_id), resource));
-                    }
-                    None => self.free.push(resource),
-                }
+                let submit_index = view.life_guard.submission_index.load(Ordering::Acquire);
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .image_views.push((id, raw));
+            }
+        }
+
+        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.samplers) {
+            let (mut guard, _) = hub.samplers.write(token);
+            for id in filter {
+                let sampler = guard.remove(id).unwrap();
+                hub.samplers.identity.free(id);
+                trackers.lock().samplers.remove(id);
+
+                let submit_index = sampler.life_guard.submission_index.load(Ordering::Acquire);
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .samplers.push(sampler.raw);
+            }
+        }
+
+        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.bind_groups) {
+            let (mut guard, _) = hub.bind_groups.write(token);
+            for id in filter {
+                let bind_group = guard.remove(id).unwrap();
+                hub.bind_groups.identity.free(id);
+                trackers.lock().bind_groups.remove(id);
+
+                let submit_index = bind_group.life_guard.submission_index.load(Ordering::Acquire);
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .desc_sets.push(bind_group.raw);
             }
         }
     }
@@ -387,9 +469,8 @@ impl<B: GfxBackend> PendingResources<B> {
                     }
                     // This attachment is no longer registered.
                     // Let's see if it's used by any of the active submissions.
-                    let res_id = &Some(ResourceId::TextureView(at));
                     for a in &self.active {
-                        if a.resources.iter().any(|&(ref id, _)| id == res_id) {
+                        if a.last_resources.image_views.iter().any(|&(id, _)| id == at) {
                             last_submit = last_submit.max(a.index);
                         }
                     }
@@ -399,13 +480,12 @@ impl<B: GfxBackend> PendingResources<B> {
             .collect::<FastHashMap<_, _>>();
 
         for (ref key, submit_index) in remove_list {
-            let resource = NativeResource::Framebuffer(framebuffers.remove(key).unwrap());
-            match self.active.iter_mut().find(|a| a.index == submit_index) {
-                Some(a) => {
-                    a.resources.alloc().init((None, resource));
-                }
-                None => self.free.push(resource),
-            }
+            let framebuffer = framebuffers.remove(key).unwrap();
+            self.active
+                .iter_mut()
+                .find(|a| a.index == submit_index)
+                .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                .framebuffers.push(framebuffer);
         }
     }
 
@@ -444,7 +524,7 @@ type BufferMapPendingCallback = (resource::BufferMapOperation, BufferMapResult);
 fn map_buffer<B: hal::Backend>(
     raw: &B::Device,
     buffer: &mut resource::Buffer<B>,
-    buffer_range: Range<BufferAddress>,
+    buffer_range: ops::Range<BufferAddress>,
     kind: HostMap,
 ) -> BufferMapResult {
     let is_coherent = buffer
@@ -507,7 +587,8 @@ pub struct Device<B: hal::Backend> {
     pub(crate) trackers: Mutex<TrackerSet>,
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
-    pending: Mutex<PendingResources<B>>,
+    // Life tracker should be locked right after the device and before anything else.
+    life_tracker: Mutex<LifetimeTracker<B>>,
     pub(crate) features: Features,
 }
 
@@ -557,11 +638,11 @@ impl<B: GfxBackend> Device<B> {
             trackers: Mutex::new(TrackerSet::new(B::VARIANT)),
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
-            pending: Mutex::new(PendingResources {
+            life_tracker: Mutex::new(LifetimeTracker {
                 mapped: Vec::new(),
-                referenced: Vec::new(),
+                unlinked_resources: InternallyReferencedResources::default(),
                 active: Vec::new(),
-                free: Vec::new(),
+                free_resources: NonReferencedResources::new(),
                 ready_to_map: Vec::new(),
             }),
             features: Features {
@@ -571,25 +652,32 @@ impl<B: GfxBackend> Device<B> {
         }
     }
 
-    fn maintain<F: AllIdentityFilter>(
-        &self,
+    fn lock_life<'a>(
+        &'a self, _token: &mut Token<'a, Self>
+    ) -> MutexGuard<'a, LifetimeTracker<B>> {
+        self.life_tracker.lock()
+    }
+
+    fn maintain<'a, F: AllIdentityFilter>(
+        &'a self,
         global: &Global<F>,
         force_wait: bool,
-        token: &mut Token<Self>,
+        token: &mut Token<'a, Self>,
     ) -> Vec<BufferMapPendingCallback> {
-        let mut pending = self.pending.lock();
-        let mut trackers = self.trackers.lock();
+        let mut life_tracker = self.lock_life(token);
 
-        pending.triage_referenced(global, &mut *trackers, token);
-        pending.triage_mapped(global, token);
-        pending.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
-        pending.cleanup(
-            &self.raw,
-            &self.mem_allocator,
-            &self.desc_allocator,
-            force_wait,
-        );
-        let callbacks = pending.handle_mapping(global, &self.raw, token);
+        life_tracker.triage_referenced(global, &self.trackers, token);
+        life_tracker.triage_mapped(global, token);
+        life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
+        life_tracker.check_last_done(&self.raw, force_wait);
+        unsafe {
+            life_tracker.free_resources.clean(
+                &self.raw,
+                &self.mem_allocator,
+                &self.desc_allocator,
+            );
+        }
+        let callbacks = life_tracker.handle_mapping(global, &self.raw, token);
 
         unsafe {
             self.desc_allocator.lock().cleanup(&self.raw);
@@ -927,7 +1015,6 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        // Deadlock hotfix, pending doesn't have a token
         let (device_id, ref_count) = {
             let (buffer_guard, _) = hub.buffers.read(&mut token);
             let buffer = &buffer_guard[buffer_id];
@@ -935,11 +1022,13 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
             (buffer.device_id.value, buffer.life_guard.ref_count.clone())
         };
 
-        let (device_guard, _) = hub.devices.read(&mut token);
-        device_guard[device_id].pending.lock().destroy(
-            ResourceId::Buffer(buffer_id),
-            ref_count,
-        );
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        device_guard[device_id]
+            .lock_life(&mut token)
+            .unlinked_resources.buffers.push(Stored {
+                value: buffer_id,
+                ref_count,
+            });
     }
 }
 
@@ -976,22 +1065,20 @@ impl<F: IdentityFilter<TextureId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        // Deadlock hotfix, pending doesn't have a token
         let (device_id, ref_count) = {
             let (texture_guard, _) = hub.textures.read(&mut token);
             let texture = &texture_guard[texture_id];
 
             (texture.device_id.value, texture.life_guard.ref_count.clone())
         };
-
-        let (device_guard, _) = hub.devices.read(&mut token);
+        
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
-            .pending
-            .lock()
-            .destroy(
-                ResourceId::Texture(texture_id),
+            .lock_life(&mut token)
+            .unlinked_resources.textures.push(Stored {
+                value: texture_id,
                 ref_count,
-            );
+            });
     }
 }
 
@@ -1091,7 +1178,6 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        // Deadlock hotfix, pending doesn't have a token
         let (device_id, ref_count) = {
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (texture_view_guard, _) = hub.texture_views.read(&mut token);
@@ -1109,11 +1195,13 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
             (device_id, view.life_guard.ref_count.clone())
         };
 
-        let (device_guard, _) = hub.devices.read(&mut token);
-        device_guard[device_id].pending.lock().destroy(
-            ResourceId::TextureView(texture_view_id),
-            ref_count,
-        );
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        device_guard[device_id]
+            .lock_life(&mut token)
+            .unlinked_resources.texture_views.push(Stored {
+                value: texture_view_id,
+                ref_count,
+            });
     }
 }
 
@@ -1172,7 +1260,6 @@ impl<F: IdentityFilter<SamplerId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        // Deadlock hotfix, pending doesn't have a token
         let (device_id, ref_count) = {
             let (sampler_guard, _) = hub.samplers.read(&mut token);
             let sampler = &sampler_guard[sampler_id];
@@ -1180,14 +1267,13 @@ impl<F: IdentityFilter<SamplerId>> Global<F> {
             (sampler.device_id.value, sampler.life_guard.ref_count.clone())
         };
 
-        let (device_guard, _) = hub.devices.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
-            .pending
-            .lock()
-            .destroy(
-                ResourceId::Sampler(sampler_id),
+            .lock_life(&mut token)
+            .unlinked_resources.samplers.push(Stored {
+                value: sampler_id,
                 ref_count,
-            );
+            });
     }
 }
 
@@ -1482,7 +1568,6 @@ impl<F: IdentityFilter<BindGroupId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        // Deadlock hotfix, pending doesn't have a token
         let (device_id, ref_count) = {
             let (bind_group_guard, _) = hub.bind_groups.read(&mut token);
             let bind_group = &bind_group_guard[bind_group_id];
@@ -1490,14 +1575,13 @@ impl<F: IdentityFilter<BindGroupId>> Global<F> {
             (bind_group.device_id.value, bind_group.life_guard.ref_count.clone())
         };
 
-        let (device_guard, _) = hub.devices.read(&mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
-            .pending
-            .lock()
-            .destroy(
-                ResourceId::BindGroup(bind_group_id),
+            .lock_life(&mut token)
+            .unlinked_resources.bind_groups.push(Stored {
+                value: bind_group_id,
                 ref_count,
-            );
+            });
     }
 }
 
@@ -1548,7 +1632,7 @@ impl<F: IdentityFilter<CommandEncoderId>> Global<F> {
 
         // Find the pending entry with the lowest active index. If none can be found that means
         // everything in the allocator can be cleaned up, so std::usize::MAX is correct.
-        let lowest_active_index = device.pending.lock()
+        let lowest_active_index = device.lock_life(&mut token)
             .active
             .iter()
             .fold(std::usize::MAX, |v, active| active.index.min(v));
@@ -1582,9 +1666,6 @@ impl<F: AllIdentityFilter + IdentityFilter<CommandBufferId>> Global<F> {
             let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
             let device = &mut device_guard[queue_id];
 
-            let mut trackers = device.trackers.lock();
-            let mut signal_semaphores = Vec::new();
-
             let submit_index = 1 + device
                 .life_guard
                 .submission_index
@@ -1596,6 +1677,10 @@ impl<F: AllIdentityFilter + IdentityFilter<CommandBufferId>> Global<F> {
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (mut texture_view_guard, mut token) = hub.texture_views.write(&mut token);
             let (sampler_guard, _) = hub.samplers.read(&mut token);
+
+            //Note: locking the trackers has to be done after the storages
+            let mut signal_semaphores = Vec::new();
+            let mut trackers = device.trackers.lock();
 
             //TODO: if multiple command buffers are submitted, we can re-use the last
             // native command buffer of the previous chain instead of always creating
@@ -1710,12 +1795,15 @@ impl<F: AllIdentityFilter + IdentityFilter<CommandBufferId>> Global<F> {
             let device = &device_guard[queue_id];
 
             let callbacks = device.maintain(self, false, &mut token);
-            device.pending.lock().active.alloc().init(ActiveSubmission {
-                index: submit_index,
-                fence,
-                resources: Vec::new(),
-                mapped: Vec::new(),
-            });
+            device
+                .lock_life(&mut token)
+                .active.alloc()
+                .init(ActiveSubmission {
+                    index: submit_index,
+                    fence,
+                    last_resources: NonReferencedResources::new(),
+                    mapped: Vec::new(),
+                });
 
             // finally, return the command buffers to the allocator
             for &cmb_id in command_buffer_ids {
@@ -2163,6 +2251,7 @@ impl<F: AllIdentityFilter + IdentityFilter<DeviceId>> Global<F> {
         let mut token = Token::root();
         let (device, mut token) = hub.devices.unregister(device_id, &mut token);
         device.maintain(self, true, &mut token);
+        drop(token);
         device.com_allocator.destroy(&device.raw);
     }
 }
@@ -2207,7 +2296,9 @@ impl<F> Global<F> {
             .buffers
             .change_replace(buffer_id, &ref_count, (), usage, &full_range);
 
-        device.pending.lock().map(buffer_id, ref_count);
+        device
+            .lock_life(&mut token)
+            .map(buffer_id, ref_count);
     }
 
     pub fn buffer_unmap<B: GfxBackend>(&self, buffer_id: BufferId) {
