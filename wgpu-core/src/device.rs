@@ -516,6 +516,9 @@ pub struct Device<B: hal::Backend> {
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     pending: Mutex<PendingResources<B>>,
     pub(crate) features: Features,
+    /// The last submission index that is done, used to reclaim command buffers on encoder creation.
+    /// Because of AtomicUsize not having fetch_max stabilized, this has to be a mutex right now.
+    last_done: Mutex<usize>,
 }
 
 impl<B: GfxBackend> Device<B> {
@@ -575,6 +578,7 @@ impl<B: GfxBackend> Device<B> {
                 max_bind_groups,
                 supports_texture_d24_s8,
             },
+            last_done: Mutex::new(0),
         }
     }
 
@@ -596,14 +600,14 @@ impl<B: GfxBackend> Device<B> {
             &self.desc_allocator,
             force_wait,
         );
+        {
+            let mut last_done_guard = self.last_done.lock();
+            *last_done_guard = last_done_guard.max(last_done);
+        }
         let callbacks = pending.handle_mapping(global, &self.raw, token);
 
         unsafe {
             self.desc_allocator.lock().cleanup(&self.raw);
-        }
-
-        if last_done != 0 {
-            self.com_allocator.maintain(last_done);
         }
 
         callbacks
@@ -1562,7 +1566,7 @@ impl<F: IdentityFilter<CommandEncoderId>> Global<F> {
         };
         let mut comb = device
             .com_allocator
-            .allocate(dev_stored, &device.raw, device.features);
+            .allocate(dev_stored, &device.raw, device.features, *device.last_done.lock());
         unsafe {
             comb.raw.last_mut().unwrap().begin(
                 hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
