@@ -34,9 +34,7 @@ use crate::{
     FastHashMap,
     Features,
     LifeGuard,
-    RefCount,
     Stored,
-    SubmissionIndex,
 };
 
 use arrayvec::ArrayVec;
@@ -49,13 +47,12 @@ use hal::{
     window::{PresentationSurface as _, Surface as _},
 };
 use parking_lot::{Mutex, MutexGuard};
-use rendy_descriptor::{DescriptorAllocator, DescriptorRanges, DescriptorSet};
-use rendy_memory::{Block, Heaps, MemoryBlock};
+use rendy_descriptor::{DescriptorAllocator, DescriptorRanges};
+use rendy_memory::{Block, Heaps};
 
 use std::{
     collections::hash_map::Entry,
     ffi,
-    fmt,
     iter,
     ops,
     ptr,
@@ -63,8 +60,8 @@ use std::{
     sync::atomic::Ordering,
 };
 
+mod life;
 
-const CLEANUP_WAIT_MS: u64 = 5000;
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 8;
@@ -125,398 +122,6 @@ impl RenderPassContext {
 pub(crate) type RenderPassKey = AttachmentData<hal::pass::Attachment>;
 pub(crate) type FramebufferKey = AttachmentData<TextureViewId>;
 pub(crate) type RenderPassContext = AttachmentData<resource::TextureFormat>;
-
-/// A struct that keeps lists of resources that are no longer needed by the user.
-#[derive(Debug, Default)]
-struct InternallyReferencedResources {
-    buffers: Vec<Stored<BufferId>>,
-    textures: Vec<Stored<TextureId>>,
-    texture_views: Vec<Stored<TextureViewId>>,
-    samplers: Vec<Stored<SamplerId>>,
-    bind_groups: Vec<Stored<BindGroupId>>,
-}
-
-/// Before destruction, a resource is expected to have the following strong refs:
-///  - in resource itself
-///  - in the device tracker
-///  - in this unlinked reference list
-const MIN_INTERNAL_REF_COUNT: usize = 3;
-
-struct ReferenceFilter<'a, I> {
-    vec: &'a mut Vec<Stored<I>>,
-    index: usize,
-}
-
-impl<'a, I> ReferenceFilter<'a, I> {
-    fn new(vec: &'a mut Vec<Stored<I>>) -> Option<Self> {
-        if vec.is_empty() {
-            None
-        } else {
-            Some(ReferenceFilter {
-                index: vec.len(),
-                vec,
-            })
-        }
-    }
-}
-
-impl<I: fmt::Debug> Iterator for ReferenceFilter<'_, I> {
-    type Item = I;
-    fn next(&mut self) -> Option<I> {
-        while self.index != 0 {
-            self.index -= 1;
-            let num_refs = self.vec[self.index].ref_count.load();
-            if num_refs <= MIN_INTERNAL_REF_COUNT {
-                let stored = self.vec.swap_remove(self.index);
-                assert_eq!(
-                    num_refs, MIN_INTERNAL_REF_COUNT,
-                    "Resource {:?} is missing some internal references",
-                    stored.value
-                );
-                return Some(stored.value)
-            }
-        }
-        None
-    }
-}
-
-/// A struct that keeps lists of resources that are no longer needed.
-#[derive(Debug)]
-struct NonReferencedResources<B: hal::Backend> {
-    buffers: Vec<(B::Buffer, MemoryBlock<B>)>,
-    images: Vec<(B::Image, MemoryBlock<B>)>,
-    // Note: we keep the associated ID here in order to be able to check
-    // at any point what resources are used in a submission.
-    image_views: Vec<(TextureViewId, B::ImageView)>,
-    samplers: Vec<B::Sampler>,
-    framebuffers: Vec<B::Framebuffer>,
-    desc_sets: Vec<DescriptorSet<B>>,
-}
-
-impl<B: hal::Backend> NonReferencedResources<B> {
-    fn new() -> Self {
-        NonReferencedResources {
-            buffers: Vec::new(),
-            images: Vec::new(),
-            image_views: Vec::new(),
-            samplers: Vec::new(),
-            framebuffers: Vec::new(),
-            desc_sets: Vec::new(),
-        }
-    }
-
-    fn extend(&mut self, other: Self) {
-        self.buffers.extend(other.buffers);
-        self.images.extend(other.images);
-        self.image_views.extend(other.image_views);
-        self.samplers.extend(other.samplers);
-        self.framebuffers.extend(other.framebuffers);
-        self.desc_sets.extend(other.desc_sets);
-    }
-
-    unsafe fn clean(
-        &mut self,
-        device: &B::Device,
-        heaps_mutex: &Mutex<Heaps<B>>,
-        descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
-    ) {
-        if !self.buffers.is_empty() {
-            let mut heaps = heaps_mutex.lock();
-            for (raw, memory) in self.buffers.drain(..) {
-                device.destroy_buffer(raw);
-                heaps.free(device, memory);
-            }
-        }
-        if !self.images.is_empty() {
-            let mut heaps = heaps_mutex.lock();
-            for (raw, memory) in self.images.drain(..) {
-                device.destroy_image(raw);
-                heaps.free(device, memory);
-            }
-        }
-
-        for (_, raw) in self.image_views.drain(..) {
-            device.destroy_image_view(raw);
-        }
-        for raw in self.samplers.drain(..) {
-            device.destroy_sampler(raw);
-        }
-        for raw in self.framebuffers.drain(..) {
-            device.destroy_framebuffer(raw);
-        }
-
-        if !self.desc_sets.is_empty() {
-            descriptor_allocator_mutex
-                .lock()
-                .free(self.desc_sets.drain(..));
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ActiveSubmission<B: hal::Backend> {
-    index: SubmissionIndex,
-    fence: B::Fence,
-    last_resources: NonReferencedResources<B>,
-    mapped: Vec<BufferId>,
-}
-
-/// A struct responsible for tracking resource lifetimes.
-///
-/// Here is how host mapping is handled:
-///   1. When mapping is requested we add the buffer to the life_tracker list of `mapped` buffers.
-///   2. When `triage_referenced` is called, it checks the last submission index associated with each of the mapped buffer,
-/// and register the buffer with either a submission in flight, or straight into `ready_to_map` vector.
-///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
-///   4. Finally, `handle_mapping` issues all the callbacks.
-#[derive(Debug)]
-struct LifetimeTracker<B: hal::Backend> {
-    /// Resources that the user has requested be mapped, but are still in use.
-    mapped: Vec<Stored<BufferId>>,
-    /// Resources that are not linked by the user but still referenced by
-    /// other objects or command buffers.
-    unlinked_resources: InternallyReferencedResources,
-    /// Resources that are not referenced any more but still used by GPU.
-    /// Grouped by submissions associated with a fence and a submission index.
-    /// The active submissions have to be stored in FIFO order: oldest come first.
-    active: Vec<ActiveSubmission<B>>,
-    /// Resources that are neither referenced or used, just life_tracker
-    /// actual deletion.
-    free_resources: NonReferencedResources<B>,
-    ready_to_map: Vec<BufferId>,
-}
-
-impl<B: GfxBackend> LifetimeTracker<B> {
-    fn map(&mut self, buffer: BufferId, ref_count: RefCount) {
-        self.mapped.push(Stored {
-            value: buffer,
-            ref_count,
-        });
-    }
-
-    /// Returns the last submission index that is done.
-    fn check_last_done(
-        &mut self,
-        device: &B::Device,
-        force_wait: bool,
-    ) {
-        if force_wait && !self.active.is_empty() {
-            let status = unsafe {
-                device.wait_for_fences(
-                    self.active.iter().map(|a| &a.fence),
-                    hal::device::WaitFor::All,
-                    CLEANUP_WAIT_MS * 1_000_000,
-                )
-            };
-            assert_eq!(status, Ok(true), "GPU got stuck :(");
-        }
-
-        //TODO: enable when `is_sorted_by_key` is stable
-        //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
-        let done_count = self
-            .active
-            .iter()
-            .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
-            .unwrap_or_else(|| self.active.len());
-
-        for a in self.active.drain(.. done_count) {
-            log::trace!("Active submission {} is done", a.index);
-            self.free_resources.extend(a.last_resources);
-            self.ready_to_map.extend(a.mapped);
-            unsafe {
-                device.destroy_fence(a.fence);
-            }
-        }
-    }
-
-    fn triage_referenced<F: AllIdentityFilter>(
-        &mut self,
-        global: &Global<F>,
-        trackers: &Mutex<TrackerSet>,
-        token: &mut Token<Device<B>>,
-    ) {
-        let hub = B::hub(global);
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.buffers) {
-            let (mut guard, _) = hub.buffers.write(token);
-            for id in filter {
-                if guard[id].pending_map_operation.is_some() {
-                    continue;
-                }
-                let buf = guard.remove(id).unwrap();
-                hub.buffers.identity.free(id);
-                trackers.lock().buffers.remove(id);
-
-                let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .buffers.push((buf.raw, buf.memory));
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.textures) {
-            let (mut guard, _) = hub.textures.write(token);
-            for id in filter {
-                let tex = guard.remove(id).unwrap();
-                hub.textures.identity.free(id);
-                trackers.lock().textures.remove(id);
-
-                let submit_index = tex.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .images.push((tex.raw, tex.memory));
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.texture_views) {
-            let (mut guard, _) = hub.texture_views.write(token);
-            for id in filter {
-                let view = guard.remove(id).unwrap();
-                hub.texture_views.identity.free(id);
-                trackers.lock().views.remove(id);
-
-                let raw = match view.inner {
-                    resource::TextureViewInner::Native { raw, .. } => raw,
-                    resource::TextureViewInner::SwapChain { .. } => unreachable!(),
-                };
-
-                let submit_index = view.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .image_views.push((id, raw));
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.samplers) {
-            let (mut guard, _) = hub.samplers.write(token);
-            for id in filter {
-                let sampler = guard.remove(id).unwrap();
-                hub.samplers.identity.free(id);
-                trackers.lock().samplers.remove(id);
-
-                let submit_index = sampler.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .samplers.push(sampler.raw);
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.bind_groups) {
-            let (mut guard, _) = hub.bind_groups.write(token);
-            for id in filter {
-                let bind_group = guard.remove(id).unwrap();
-                hub.bind_groups.identity.free(id);
-                trackers.lock().bind_groups.remove(id);
-
-                let submit_index = bind_group.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .desc_sets.push(bind_group.raw);
-            }
-        }
-    }
-
-    fn triage_mapped<F>(&mut self, global: &Global<F>, token: &mut Token<Device<B>>) {
-        if self.mapped.is_empty() {
-            return;
-        }
-        let (buffer_guard, _) = B::hub(global).buffers.read(token);
-
-        for stored in self.mapped.drain(..) {
-            let resource_id = stored.value;
-            let buf = &buffer_guard[resource_id];
-
-            let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-            log::trace!(
-                "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
-                resource_id,
-                submit_index,
-                self.active.iter().position(|a| a.index == submit_index)
-            );
-
-            self.active
-                .iter_mut()
-                .find(|a| a.index == submit_index)
-                .map_or(&mut self.ready_to_map, |a| &mut a.mapped)
-                .push(resource_id);
-        }
-    }
-
-    fn triage_framebuffers<F>(
-        &mut self,
-        global: &Global<F>,
-        framebuffers: &mut FastHashMap<FramebufferKey, B::Framebuffer>,
-        token: &mut Token<Device<B>>,
-    ) {
-        let (texture_view_guard, _) = B::hub(global).texture_views.read(token);
-        let remove_list = framebuffers
-            .keys()
-            .filter_map(|key| {
-                let mut last_submit: SubmissionIndex = 0;
-                for &at in key.all() {
-                    if texture_view_guard.contains(at) {
-                        return None;
-                    }
-                    // This attachment is no longer registered.
-                    // Let's see if it's used by any of the active submissions.
-                    for a in &self.active {
-                        if a.last_resources.image_views.iter().any(|&(id, _)| id == at) {
-                            last_submit = last_submit.max(a.index);
-                        }
-                    }
-                }
-                Some((key.clone(), last_submit))
-            })
-            .collect::<FastHashMap<_, _>>();
-
-        for (ref key, submit_index) in remove_list {
-            let framebuffer = framebuffers.remove(key).unwrap();
-            self.active
-                .iter_mut()
-                .find(|a| a.index == submit_index)
-                .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                .framebuffers.push(framebuffer);
-        }
-    }
-
-    fn handle_mapping<F>(
-        &mut self,
-        global: &Global<F>,
-        raw: &B::Device,
-        token: &mut Token<Device<B>>,
-    ) -> Vec<BufferMapPendingCallback> {
-        if self.ready_to_map.is_empty() {
-            return Vec::new();
-        }
-        let (mut buffer_guard, _) = B::hub(global).buffers.write(token);
-        self.ready_to_map
-            .drain(..)
-            .map(|buffer_id| {
-                let buffer = &mut buffer_guard[buffer_id];
-                let operation = buffer.pending_map_operation.take().unwrap();
-                let result = match operation {
-                    resource::BufferMapOperation::Read(ref range, ..) => {
-                        map_buffer(raw, buffer, range.clone(), HostMap::Read)
-                    }
-                    resource::BufferMapOperation::Write(ref range, ..) => {
-                        map_buffer(raw, buffer, range.clone(), HostMap::Write)
-                    }
-                };
-                (operation, result)
-            })
-            .collect()
-    }
-}
 
 type BufferMapResult = Result<*mut u8, hal::device::MapError>;
 type BufferMapPendingCallback = (resource::BufferMapOperation, BufferMapResult);
@@ -588,7 +193,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     // Life tracker should be locked right after the device and before anything else.
-    life_tracker: Mutex<LifetimeTracker<B>>,
+    life_tracker: Mutex<life::LifetimeTracker<B>>,
     pub(crate) features: Features,
 }
 
@@ -638,13 +243,7 @@ impl<B: GfxBackend> Device<B> {
             trackers: Mutex::new(TrackerSet::new(B::VARIANT)),
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
-            life_tracker: Mutex::new(LifetimeTracker {
-                mapped: Vec::new(),
-                unlinked_resources: InternallyReferencedResources::default(),
-                active: Vec::new(),
-                free_resources: NonReferencedResources::new(),
-                ready_to_map: Vec::new(),
-            }),
+            life_tracker: Mutex::new(life::LifetimeTracker::new()),
             features: Features {
                 max_bind_groups,
                 supports_texture_d24_s8,
@@ -654,7 +253,7 @@ impl<B: GfxBackend> Device<B> {
 
     fn lock_life<'a>(
         &'a self, _token: &mut Token<'a, Self>
-    ) -> MutexGuard<'a, LifetimeTracker<B>> {
+    ) -> MutexGuard<'a, life::LifetimeTracker<B>> {
         self.life_tracker.lock()
     }
 
@@ -669,14 +268,12 @@ impl<B: GfxBackend> Device<B> {
         life_tracker.triage_referenced(global, &self.trackers, token);
         life_tracker.triage_mapped(global, token);
         life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
-        life_tracker.check_last_done(&self.raw, force_wait);
-        unsafe {
-            life_tracker.free_resources.clean(
-                &self.raw,
-                &self.mem_allocator,
-                &self.desc_allocator,
-            );
-        }
+        life_tracker.cleanup(
+            &self.raw,
+            force_wait,
+            &self.mem_allocator,
+            &self.desc_allocator,
+        );
         let callbacks = life_tracker.handle_mapping(global, &self.raw, token);
 
         unsafe {
@@ -1630,12 +1227,9 @@ impl<F: IdentityFilter<CommandEncoderId>> Global<F> {
             ref_count: device.life_guard.ref_count.clone(),
         };
 
-        // Find the pending entry with the lowest active index. If none can be found that means
-        // everything in the allocator can be cleaned up, so std::usize::MAX is correct.
-        let lowest_active_index = device.lock_life(&mut token)
-            .active
-            .iter()
-            .fold(std::usize::MAX, |v, active| active.index.min(v));
+        let lowest_active_index = device
+            .lock_life(&mut token)
+            .lowest_active_submission();
 
         let mut comb = device
             .com_allocator
@@ -1797,13 +1391,7 @@ impl<F: AllIdentityFilter + IdentityFilter<CommandBufferId>> Global<F> {
             let callbacks = device.maintain(self, false, &mut token);
             device
                 .lock_life(&mut token)
-                .active.alloc()
-                .init(ActiveSubmission {
-                    index: submit_index,
-                    fence,
-                    last_resources: NonReferencedResources::new(),
-                    mapped: Vec::new(),
-                });
+                .track_submission(submit_index, fence);
 
             // finally, return the command buffers to the allocator
             for &cmb_id in command_buffer_ids {
