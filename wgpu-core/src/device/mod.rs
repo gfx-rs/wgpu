@@ -1069,13 +1069,16 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
                                 ref raw,
                                 ref source_id,
                             } => {
-                                let texture = used
-                                    .textures
-                                    .use_extend(
-                                        &*texture_guard,
+                                // Careful here: the texture may no longer have its own ref count,
+                                // if it was deleted by the user.
+                                let texture = &texture_guard[source_id.value];
+                                used.textures
+                                    .change_extend(
                                         source_id.value,
+                                        &source_id.ref_count,
                                         view.range.clone(),
                                         usage,
+                                        &texture.full_range,
                                     )
                                     .unwrap();
                                 assert!(texture.usage.contains(usage));
