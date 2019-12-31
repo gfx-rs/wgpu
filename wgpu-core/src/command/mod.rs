@@ -323,7 +323,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     );
                     let first_use = cmb.trackers.views.init(
                         at.attachment,
-                        view.life_guard.ref_count.clone(),
+                        view.life_guard.add_ref(),
                         &(),
                     ).is_some();
 
@@ -348,7 +348,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                 assert!(used_swap_chain_image.is_none());
                                 used_swap_chain_image = Some(Stored {
                                     value: at.attachment,
-                                    ref_count: view.life_guard.ref_count.clone(),
+                                    ref_count: view.life_guard.add_ref(),
                                 });
                             }
 
@@ -383,7 +383,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     );
                     let first_use = cmb.trackers.views.init(
                         resolve_target,
-                        view.life_guard.ref_count.clone(),
+                        view.life_guard.add_ref(),
                         &(),
                     ).is_some();
 
@@ -408,7 +408,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                 assert!(used_swap_chain_image.is_none());
                                 used_swap_chain_image = Some(Stored {
                                     value: resolve_target,
-                                    ref_count: view.life_guard.ref_count.clone(),
+                                    ref_count: view.life_guard.add_ref(),
                                 });
                             }
 
@@ -447,9 +447,10 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
                 let usage = consistent_usage.unwrap_or(TextureUsage::OUTPUT_ATTACHMENT);
+                let ref_count = texture.life_guard.ref_count.as_ref().unwrap();
                 match trackers.textures.init(
                     texture_id,
-                    texture.life_guard.ref_count.clone(),
+                    ref_count.clone(),
                     &texture.full_range,
                 ) {
                     Some(mut init) => init.set(view_range.clone(), usage),
@@ -461,7 +462,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     // render pass configuration, make the tracker aware of that.
                     let _ = trackers.textures.change_replace(
                         texture_id,
-                        &texture.life_guard.ref_count,
+                        ref_count,
                         view_range.clone(),
                         TextureUsage::OUTPUT_ATTACHMENT,
                         &texture.full_range,
@@ -674,7 +675,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 current_comb,
                 Stored {
                     value: encoder_id,
-                    ref_count: cmb.life_guard.ref_count.clone(),
+                    ref_count: cmb.life_guard.add_ref(),
                 },
                 context,
                 trackers,
@@ -703,7 +704,7 @@ impl<F: IdentityFilter<ComputePassId>> Global<F> {
         let trackers = mem::replace(&mut cmb.trackers, TrackerSet::new(encoder_id.backend()));
         let stored = Stored {
             value: encoder_id,
-            ref_count: cmb.life_guard.ref_count.clone(),
+            ref_count: cmb.life_guard.add_ref(),
         };
 
         let pass = ComputePass::new(raw, stored, trackers, cmb.features.max_bind_groups);

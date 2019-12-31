@@ -247,7 +247,7 @@ impl<B: GfxBackend> Device<B> {
     ) -> Vec<BufferMapPendingCallback> {
         let mut life_tracker = self.lock_life(token);
 
-        life_tracker.triage_referenced(global, &self.trackers, token);
+        life_tracker.triage_suspected(global, &self.trackers, token);
         life_tracker.triage_mapped(global, token);
         life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
         life_tracker.cleanup(
@@ -277,10 +277,10 @@ impl<B: GfxBackend> Device<B> {
                 }
             };
             match operation {
-                resource::BufferMapOperation::Read(_, on_read) => {
+                resource::BufferMapOperation::Read(on_read) => {
                     on_read(status, ptr)
                 }
-                resource::BufferMapOperation::Write(_, on_write) => {
+                resource::BufferMapOperation::Write(on_write) => {
                     on_write(status, ptr)
                 }
             }
@@ -334,14 +334,14 @@ impl<B: GfxBackend> Device<B> {
             raw: buffer,
             device_id: Stored {
                 value: self_id,
-                ref_count: self.life_guard.ref_count.clone(),
+                ref_count: self.life_guard.add_ref(),
             },
             usage: desc.usage,
             memory,
             size: desc.size,
             full_range: (),
             mapped_write_ranges: Vec::new(),
-            pending_map_operation: None,
+            pending_mapping: None,
             life_guard: LifeGuard::new(),
         }
     }
@@ -419,7 +419,7 @@ impl<B: GfxBackend> Device<B> {
             raw: image,
             device_id: Stored {
                 value: self_id,
-                ref_count: self.life_guard.ref_count.clone(),
+                ref_count: self.life_guard.add_ref(),
             },
             usage: desc.usage,
             kind,
@@ -470,7 +470,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let buffer = device.create_buffer(device_id, desc);
-        let ref_count = buffer.life_guard.ref_count.clone();
+        let ref_count = buffer.life_guard.add_ref();
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         device
@@ -496,7 +496,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = device.create_buffer(device_id, &desc);
-        let ref_count = buffer.life_guard.ref_count.clone();
+        let ref_count = buffer.life_guard.add_ref();
 
         let pointer = match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
             Ok(ptr) => ptr,
@@ -594,20 +594,17 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_id, ref_count) = {
-            let (buffer_guard, _) = hub.buffers.read(&mut token);
-            let buffer = &buffer_guard[buffer_id];
-
-            (buffer.device_id.value, buffer.life_guard.ref_count.clone())
+        let device_id = {
+            let (mut buffer_guard, _) = hub.buffers.write(&mut token);
+            let buffer = &mut buffer_guard[buffer_id];
+            buffer.life_guard.ref_count.take();
+            buffer.device_id.value
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .unlinked_resources.buffers.push(Stored {
-                value: buffer_id,
-                ref_count,
-            });
+            .suspected_resources.buffers.push(buffer_id);
     }
 }
 
@@ -625,7 +622,7 @@ impl<F: IdentityFilter<id::TextureId>> Global<F> {
         let device = &device_guard[device_id];
         let texture = device.create_texture(device_id, desc);
         let range = texture.full_range.clone();
-        let ref_count = texture.life_guard.ref_count.clone();
+        let ref_count = texture.life_guard.add_ref();
 
         let id = hub.textures.register_identity(id_in, texture, &mut token);
         device.trackers
@@ -644,20 +641,17 @@ impl<F: IdentityFilter<id::TextureId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_id, ref_count) = {
-            let (texture_guard, _) = hub.textures.read(&mut token);
-            let texture = &texture_guard[texture_id];
-
-            (texture.device_id.value, texture.life_guard.ref_count.clone())
+        let device_id = {
+            let (mut texture_guard, _) = hub.textures.write(&mut token);
+            let texture = &mut texture_guard[texture_id];
+            texture.life_guard.ref_count.take();
+            texture.device_id.value
         };
         
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .unlinked_resources.textures.push(Stored {
-                value: texture_id,
-                ref_count,
-            });
+            .suspected_resources.textures.push(texture_id);
     }
 }
 
@@ -734,7 +728,7 @@ impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
                 raw,
                 source_id: Stored {
                     value: texture_id,
-                    ref_count: texture.life_guard.ref_count.clone(),
+                    ref_count: texture.life_guard.add_ref(),
                 },
             },
             format: texture.format,
@@ -743,7 +737,7 @@ impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
             range,
             life_guard: LifeGuard::new(),
         };
-        let ref_count = view.life_guard.ref_count.clone();
+        let ref_count = view.life_guard.add_ref();
 
         let id = hub.texture_views.register_identity(id_in, view, &mut token);
         device.trackers
@@ -757,30 +751,26 @@ impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_id, ref_count) = {
+        let device_id = {
             let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (texture_view_guard, _) = hub.texture_views.read(&mut token);
+            let (mut texture_view_guard, _) = hub.texture_views.write(&mut token);
 
-            let view = &texture_view_guard[texture_view_id];
-            let device_id = match view.inner {
+            let view = &mut texture_view_guard[texture_view_id];
+            view.life_guard.ref_count.take();
+            match view.inner {
                 resource::TextureViewInner::Native { ref source_id, .. } => {
                     texture_guard[source_id.value].device_id.value
                 }
                 resource::TextureViewInner::SwapChain { .. } => {
                     panic!("Can't destroy a swap chain image")
                 }
-            };
-
-            (device_id, view.life_guard.ref_count.clone())
+            }
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .unlinked_resources.texture_views.push(Stored {
-                value: texture_view_id,
-                ref_count,
-            });
+            .suspected_resources.texture_views.push(texture_view_id);
     }
 }
 
@@ -821,11 +811,11 @@ impl<F: IdentityFilter<id::SamplerId>> Global<F> {
             raw: unsafe { device.raw.create_sampler(&info).unwrap() },
             device_id: Stored {
                 value: device_id,
-                ref_count: device.life_guard.ref_count.clone(),
+                ref_count: device.life_guard.add_ref(),
             },
             life_guard: LifeGuard::new(),
         };
-        let ref_count = sampler.life_guard.ref_count.clone();
+        let ref_count = sampler.life_guard.add_ref();
 
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
         device.trackers
@@ -839,20 +829,17 @@ impl<F: IdentityFilter<id::SamplerId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_id, ref_count) = {
-            let (sampler_guard, _) = hub.samplers.read(&mut token);
-            let sampler = &sampler_guard[sampler_id];
-
-            (sampler.device_id.value, sampler.life_guard.ref_count.clone())
+        let device_id = {
+            let (mut sampler_guard, _) = hub.samplers.write(&mut token);
+            let sampler = &mut sampler_guard[sampler_id];
+            sampler.life_guard.ref_count.take();
+            sampler.device_id.value
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .unlinked_resources.samplers.push(Stored {
-                value: sampler_id,
-                ref_count,
-            });
+            .suspected_resources.samplers.push(sampler_id);
     }
 }
 
@@ -1118,14 +1105,14 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
             raw: desc_set,
             device_id: Stored {
                 value: device_id,
-                ref_count: device.life_guard.ref_count.clone(),
+                ref_count: device.life_guard.add_ref(),
             },
             layout_id: desc.layout,
             life_guard: LifeGuard::new(),
             used,
             dynamic_count: bind_group_layout.dynamic_count,
         };
-        let ref_count = bind_group.life_guard.ref_count.clone();
+        let ref_count = bind_group.life_guard.add_ref();
 
 
         let id = hub
@@ -1147,20 +1134,17 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_id, ref_count) = {
-            let (bind_group_guard, _) = hub.bind_groups.read(&mut token);
-            let bind_group = &bind_group_guard[bind_group_id];
-
-            (bind_group.device_id.value, bind_group.life_guard.ref_count.clone())
+        let device_id = {
+            let (mut bind_group_guard, _) = hub.bind_groups.write(&mut token);
+            let bind_group = &mut bind_group_guard[bind_group_id];
+            bind_group.life_guard.ref_count.take();
+            bind_group.device_id.value
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .unlinked_resources.bind_groups.push(Stored {
-                value: bind_group_id,
-                ref_count,
-            });
+            .suspected_resources.bind_groups.push(bind_group_id);
     }
 }
 
@@ -1206,7 +1190,7 @@ impl<F: IdentityFilter<id::CommandEncoderId>> Global<F> {
 
         let dev_stored = Stored {
             value: device_id,
-            ref_count: device.life_guard.ref_count.clone(),
+            ref_count: device.life_guard.add_ref(),
         };
 
         let lowest_active_index = device
@@ -1289,7 +1273,7 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
                     let buffer = &buffer_guard[id];
-                    assert!(buffer.pending_map_operation.is_none());
+                    assert!(buffer.pending_mapping.is_none());
                     buffer
                         .life_guard
                         .submission_index
@@ -1791,7 +1775,7 @@ impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
             life_guard: LifeGuard::new(),
             device_id: Stored {
                 value: device_id,
-                ref_count: device.life_guard.ref_count.clone(),
+                ref_count: device.life_guard.add_ref(),
             },
             desc: desc.clone(),
             num_frames,
@@ -1831,6 +1815,7 @@ impl<F> Global<F> {
         &self,
         buffer_id: id::BufferId,
         usage: resource::BufferUsage,
+        range: std::ops::Range<BufferAddress>,
         operation: resource::BufferMapOperation,
     ) {
         let hub = B::hub(self);
@@ -1849,13 +1834,21 @@ impl<F> Global<F> {
                 assert!(buffer.usage.contains(resource::BufferUsage::MAP_WRITE));
             }
 
-            if buffer.pending_map_operation.is_some() {
+            if buffer.pending_mapping.is_some() {
                 operation.call_error();
                 return;
             }
 
-            buffer.pending_map_operation = Some(operation);
-            (buffer.device_id.value, buffer.life_guard.ref_count.clone(), buffer.full_range)
+            buffer.pending_mapping = Some(resource::BufferPendingMapping {
+                range,
+                op: operation,
+                parent_ref_count: buffer.life_guard.add_ref()
+            });
+            (
+                buffer.device_id.value,
+                buffer.life_guard.add_ref(),
+                buffer.full_range,
+            )
         };
 
         let device = &device_guard[device_id];

@@ -20,7 +20,6 @@ use rendy_descriptor::{DescriptorAllocator, DescriptorSet};
 use rendy_memory::{Heaps, MemoryBlock};
 
 use std::{
-    fmt,
     sync::atomic::Ordering,
 };
 
@@ -29,56 +28,12 @@ const CLEANUP_WAIT_MS: u64 = 5000;
 
 /// A struct that keeps lists of resources that are no longer needed by the user.
 #[derive(Debug, Default)]
-pub struct InternallyReferencedResources {
-    pub(crate) buffers: Vec<Stored<id::BufferId>>,
-    pub(crate) textures: Vec<Stored<id::TextureId>>,
-    pub(crate) texture_views: Vec<Stored<id::TextureViewId>>,
-    pub(crate) samplers: Vec<Stored<id::SamplerId>>,
-    pub(crate) bind_groups: Vec<Stored<id::BindGroupId>>,
-}
-
-/// Before destruction, a resource is expected to have the following strong refs:
-///  - in resource itself
-///  - in the device tracker
-///  - in this unlinked reference list
-const MIN_INTERNAL_REF_COUNT: usize = 3;
-
-struct ReferenceFilter<'a, I> {
-    vec: &'a mut Vec<Stored<I>>,
-    index: usize,
-}
-
-impl<'a, I> ReferenceFilter<'a, I> {
-    fn new(vec: &'a mut Vec<Stored<I>>) -> Option<Self> {
-        if vec.is_empty() {
-            None
-        } else {
-            Some(ReferenceFilter {
-                index: vec.len(),
-                vec,
-            })
-        }
-    }
-}
-
-impl<I: fmt::Debug> Iterator for ReferenceFilter<'_, I> {
-    type Item = I;
-    fn next(&mut self) -> Option<I> {
-        while self.index != 0 {
-            self.index -= 1;
-            let num_refs = self.vec[self.index].ref_count.load();
-            if num_refs <= MIN_INTERNAL_REF_COUNT {
-                let stored = self.vec.swap_remove(self.index);
-                assert_eq!(
-                    num_refs, MIN_INTERNAL_REF_COUNT,
-                    "Resource {:?} is missing some internal references",
-                    stored.value
-                );
-                return Some(stored.value)
-            }
-        }
-        None
-    }
+pub struct SuspectedResources {
+    pub(crate) buffers: Vec<id::BufferId>,
+    pub(crate) textures: Vec<id::TextureId>,
+    pub(crate) texture_views: Vec<id::TextureViewId>,
+    pub(crate) samplers: Vec<id::SamplerId>,
+    pub(crate) bind_groups: Vec<id::BindGroupId>,
 }
 
 /// A struct that keeps lists of resources that are no longer needed.
@@ -166,7 +121,7 @@ struct ActiveSubmission<B: hal::Backend> {
 ///
 /// Here is how host mapping is handled:
 ///   1. When mapping is requested we add the buffer to the life_tracker list of `mapped` buffers.
-///   2. When `triage_referenced` is called, it checks the last submission index associated with each of the mapped buffer,
+///   2. When `triage_suspected` is called, it checks the last submission index associated with each of the mapped buffer,
 /// and register the buffer with either a submission in flight, or straight into `ready_to_map` vector.
 ///   3. When `ActiveSubmission` is retired, the mapped buffers associated with it are moved to `ready_to_map` vector.
 ///   4. Finally, `handle_mapping` issues all the callbacks.
@@ -174,9 +129,8 @@ struct ActiveSubmission<B: hal::Backend> {
 pub struct LifetimeTracker<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<id::BufferId>>,
-    /// Resources that are not linked by the user but still referenced by
-    /// other objects or command buffers.
-    pub unlinked_resources: InternallyReferencedResources,
+    /// Resources that are suspected for destruction.
+    pub suspected_resources: SuspectedResources,
     /// Resources that are not referenced any more but still used by GPU.
     /// Grouped by submissions associated with a fence and a submission index.
     /// The active submissions have to be stored in FIFO order: oldest come first.
@@ -191,7 +145,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
     pub fn new() -> Self {
         LifetimeTracker {
             mapped: Vec::new(),
-            unlinked_resources: InternallyReferencedResources::default(),
+            suspected_resources: SuspectedResources::default(),
             active: Vec::new(),
             free_resources: NonReferencedResources::new(),
             ready_to_map: Vec::new(),
@@ -286,7 +240,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         last_done
     }
 
-    pub(crate) fn triage_referenced<F: AllIdentityFilter>(
+    pub(crate) fn triage_suspected<F: AllIdentityFilter>(
         &mut self,
         global: &Global<F>,
         trackers: &Mutex<TrackerSet>,
@@ -294,101 +248,112 @@ impl<B: GfxBackend> LifetimeTracker<B> {
     ) {
         let hub = B::hub(global);
 
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.buffers) {
-            let mut trackers = trackers.lock();
-            let (mut guard, _) = hub.buffers.write(token);
-
-            for id in filter {
-                if guard[id].pending_map_operation.is_some() {
-                    continue;
-                }
-                let buf = guard.remove(id).unwrap();
-                hub.buffers.identity.free(id);
-                trackers.buffers.remove(id);
-
-                let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .buffers.push((buf.raw, buf.memory));
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.textures) {
-            let mut trackers = trackers.lock();
-            let (mut guard, _) = hub.textures.write(token);
-
-            for id in filter {
-                let tex = guard.remove(id).unwrap();
-                hub.textures.identity.free(id);
-                trackers.textures.remove(id);
-
-                let submit_index = tex.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .images.push((tex.raw, tex.memory));
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.texture_views) {
-            let mut trackers = trackers.lock();
-            let (mut guard, _) = hub.texture_views.write(token);
-
-            for id in filter {
-                let view = guard.remove(id).unwrap();
-                hub.texture_views.identity.free(id);
-                trackers.views.remove(id);
-
-                let raw = match view.inner {
-                    resource::TextureViewInner::Native { raw, .. } => raw,
-                    resource::TextureViewInner::SwapChain { .. } => unreachable!(),
-                };
-
-                let submit_index = view.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .image_views.push((id, raw));
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.samplers) {
-            let mut trackers = trackers.lock();
-            let (mut guard, _) = hub.samplers.write(token);
-
-            for id in filter {
-                let sampler = guard.remove(id).unwrap();
-                hub.samplers.identity.free(id);
-                trackers.samplers.remove(id);
-
-                let submit_index = sampler.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .samplers.push(sampler.raw);
-            }
-        }
-
-        if let Some(filter) = ReferenceFilter::new(&mut self.unlinked_resources.bind_groups) {
+        if !self.suspected_resources.bind_groups.is_empty() {
             let mut trackers = trackers.lock();
             let (mut guard, _) = hub.bind_groups.write(token);
 
-            for id in filter {
-                let bind_group = guard.remove(id).unwrap();
-                hub.bind_groups.identity.free(id);
-                trackers.bind_groups.remove(id);
+            for id in self.suspected_resources.bind_groups.drain(..) {
+                if trackers.bind_groups.remove_abandoned(id) {
+                    hub.bind_groups.identity.free(id);
+                    let res = guard.remove(id).unwrap();
 
-                let submit_index = bind_group.life_guard.submission_index.load(Ordering::Acquire);
-                self.active
-                    .iter_mut()
-                    .find(|a| a.index == submit_index)
-                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                    .desc_sets.push(bind_group.raw);
+                    assert!(res.used.bind_groups.is_empty());
+                    self.suspected_resources.buffers.extend(res.used.buffers.used());
+                    self.suspected_resources.textures.extend(res.used.textures.used());
+                    self.suspected_resources.texture_views.extend(res.used.views.used());
+                    self.suspected_resources.samplers.extend(res.used.samplers.used());
+
+                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .desc_sets.push(res.raw);
+                }
+            }
+        }
+
+        if !self.suspected_resources.texture_views.is_empty() {
+            let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.texture_views.write(token);
+
+            for id in self.suspected_resources.texture_views.drain(..) {
+                if trackers.views.remove_abandoned(id) {
+                    hub.texture_views.identity.free(id);
+                    let res = guard.remove(id).unwrap();
+
+                    let raw = match res.inner {
+                        resource::TextureViewInner::Native { raw, source_id } => {
+                            self.suspected_resources.textures.push(source_id.value);
+                            raw
+                        }
+                        resource::TextureViewInner::SwapChain { .. } => unreachable!(),
+                    };
+
+                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .image_views.push((id, raw));
+                }
+            }
+        }
+
+        if !self.suspected_resources.textures.is_empty() {
+            let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.textures.write(token);
+
+            for id in self.suspected_resources.textures.drain(..) {
+                if trackers.textures.remove_abandoned(id) {
+                    hub.textures.identity.free(id);
+                    let res = guard.remove(id).unwrap();
+
+                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .images.push((res.raw, res.memory));
+                }
+            }
+        }
+
+        if !self.suspected_resources.samplers.is_empty() {
+            let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.samplers.write(token);
+
+            for id in self.suspected_resources.samplers.drain(..) {
+                if trackers.samplers.remove_abandoned(id) {
+                    hub.samplers.identity.free(id);
+                    let res = guard.remove(id).unwrap();
+
+                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .samplers.push(res.raw);
+                }
+            }
+        }
+
+        if !self.suspected_resources.buffers.is_empty() {
+            let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.buffers.write(token);
+
+            for id in self.suspected_resources.buffers.drain(..) {
+                if trackers.buffers.remove_abandoned(id) {
+                    hub.buffers.identity.free(id);
+                    let res = guard.remove(id).unwrap();
+
+                    let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
+                    self.active
+                        .iter_mut()
+                        .find(|a| a.index == submit_index)
+                        .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                        .buffers.push((res.raw, res.memory));
+                }
             }
         }
     }
@@ -472,16 +437,16 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             .drain(..)
             .map(|buffer_id| {
                 let buffer = &mut buffer_guard[buffer_id];
-                let operation = buffer.pending_map_operation.take().unwrap();
-                let result = match operation {
-                    resource::BufferMapOperation::Read(ref range, ..) => {
-                        super::map_buffer(raw, buffer, range.clone(), super::HostMap::Read)
+                let mapping = buffer.pending_mapping.take().unwrap();
+                let result = match mapping.op {
+                    resource::BufferMapOperation::Read(..) => {
+                        super::map_buffer(raw, buffer, mapping.range, super::HostMap::Read)
                     }
-                    resource::BufferMapOperation::Write(ref range, ..) => {
-                        super::map_buffer(raw, buffer, range.clone(), super::HostMap::Write)
+                    resource::BufferMapOperation::Write(..) => {
+                        super::map_buffer(raw, buffer, mapping.range, super::HostMap::Write)
                     }
                 };
-                (operation, result)
+                (mapping.op, result)
             })
             .collect()
     }

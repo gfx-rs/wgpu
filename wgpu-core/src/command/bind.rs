@@ -88,7 +88,7 @@ impl BindGroupEntry {
             layout_id: bind_group.layout_id,
             group_id: Stored {
                 value: bind_group_id,
-                ref_count: bind_group.life_guard.ref_count.clone(),
+                ref_count: bind_group.life_guard.add_ref(),
             },
         });
         //TODO: validate the count of dynamic offsets to match the layout
