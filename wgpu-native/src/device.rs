@@ -285,6 +285,16 @@ pub extern "C" fn wgpu_device_create_command_encoder(
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_command_encoder_destroy(command_encoder_id: id::CommandEncoderId) {
+    gfx_select!(command_encoder_id => GLOBAL.command_encoder_destroy(command_encoder_id))
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_command_buffer_destroy(command_buffer_id: id::CommandBufferId) {
+    gfx_select!(command_buffer_id => GLOBAL.command_buffer_destroy(command_buffer_id))
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_get_queue(device_id: id::DeviceId) -> id::QueueId {
     device_id
 }

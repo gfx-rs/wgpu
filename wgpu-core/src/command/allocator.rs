@@ -140,6 +140,16 @@ impl<B: hal::Backend> CommandAllocator<B> {
         pool.available.pop().unwrap()
     }
 
+    pub fn discard(&self, mut cmd_buf: CommandBuffer<B>) {
+        cmd_buf.trackers.clear();
+        self.inner
+            .lock()
+            .pools
+            .get_mut(&cmd_buf.recorded_thread_id)
+            .unwrap()
+            .recycle(cmd_buf);
+    }
+
     pub fn after_submit(&self, mut cmd_buf: CommandBuffer<B>, submit_index: SubmissionIndex) {
         cmd_buf.trackers.clear();
         cmd_buf

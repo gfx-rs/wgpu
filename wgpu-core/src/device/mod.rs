@@ -1215,6 +1215,70 @@ impl<F: IdentityFilter<id::CommandEncoderId>> Global<F> {
         hub.command_buffers
             .register_identity(id_in, comb, &mut token)
     }
+
+    pub fn command_encoder_destroy<B: GfxBackend>(
+        &self, command_encoder_id: id::CommandEncoderId
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let comb = {
+            let (mut command_buffer_guard, _) = hub.command_buffers.write(&mut token);
+            command_buffer_guard.remove(command_encoder_id).unwrap()
+        };
+
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let device = &mut device_guard[comb.device_id.value];
+        device.temp_suspected.clear();
+        // As the tracker is cleared/dropped, we need to consider all the resources
+        // that it references for destruction in the next GC pass.
+        {
+            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+            let (texture_guard, mut token) = hub.textures.read(&mut token);
+            let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
+            let (sampler_guard, _) = hub.samplers.read(&mut token);
+
+            for id in comb.trackers.buffers.used() {
+                if buffer_guard[id].life_guard.ref_count.is_none() {
+                    device.temp_suspected.buffers.push(id);
+                }
+            }
+            for id in comb.trackers.textures.used() {
+                if texture_guard[id].life_guard.ref_count.is_none() {
+                    device.temp_suspected.textures.push(id);
+                }
+            }
+            for id in comb.trackers.views.used() {
+                if texture_view_guard[id].life_guard.ref_count.is_none() {
+                    device.temp_suspected.texture_views.push(id);
+                }
+            }
+            for id in comb.trackers.bind_groups.used() {
+                if bind_group_guard[id].life_guard.ref_count.is_none() {
+                    device.temp_suspected.bind_groups.push(id);
+                }
+            }
+            for id in comb.trackers.samplers.used() {
+                if sampler_guard[id].life_guard.ref_count.is_none() {
+                    device.temp_suspected.samplers.push(id);
+                }
+            }
+        }
+
+        device
+            .lock_life(&mut token)
+            .suspected_resources.extend(&device.temp_suspected);
+        device.com_allocator.discard(comb);
+    }
+}
+
+impl<F: IdentityFilter<id::CommandBufferId>> Global<F> {
+    pub fn command_buffer_destroy<B: GfxBackend>(
+        &self, command_buffer_id: id::CommandBufferId
+    ) {
+        self.command_encoder_destroy::<B>(command_buffer_id)
+    }
 }
 
 impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {

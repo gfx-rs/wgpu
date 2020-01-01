@@ -45,7 +45,7 @@ impl SuspectedResources {
         self.bind_groups.clear();
     }
 
-    fn extend(&mut self, other: &Self) {
+    pub fn extend(&mut self, other: &Self) {
         self.buffers.extend_from_slice(&other.buffers);
         self.textures.extend_from_slice(&other.textures);
         self.texture_views.extend_from_slice(&other.texture_views);

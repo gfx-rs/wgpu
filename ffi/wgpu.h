@@ -278,13 +278,13 @@ typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const
 
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
-typedef uint64_t WGPUId_ComputePass_Dummy;
-
-typedef WGPUId_ComputePass_Dummy WGPUComputePassId;
-
 typedef uint64_t WGPUId_CommandBuffer_Dummy;
 
 typedef WGPUId_CommandBuffer_Dummy WGPUCommandBufferId;
+
+typedef uint64_t WGPUId_ComputePass_Dummy;
+
+typedef WGPUId_ComputePass_Dummy WGPUComputePassId;
 
 typedef WGPUCommandBufferId WGPUCommandEncoderId;
 
@@ -686,6 +686,8 @@ void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
 
 void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
+void wgpu_command_buffer_destroy(WGPUCommandBufferId command_buffer_id);
+
 WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encoder_id,
                                                           const WGPUComputePassDescriptor *desc);
 
@@ -713,6 +715,8 @@ void wgpu_command_encoder_copy_texture_to_texture(WGPUCommandEncoderId command_e
                                                   const WGPUTextureCopyView *source,
                                                   const WGPUTextureCopyView *destination,
                                                   WGPUExtent3d copy_size);
+
+void wgpu_command_encoder_destroy(WGPUCommandEncoderId command_encoder_id);
 
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId encoder_id,
                                                 const WGPUCommandBufferDescriptor *desc);
