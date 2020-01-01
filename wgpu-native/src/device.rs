@@ -8,6 +8,8 @@ use core::{gfx_select, hub::Token, id};
 
 use std::{marker::PhantomData, slice};
 
+use libc::{c_ulong};
+
 pub type RequestAdapterCallback =
     unsafe extern "C" fn(id: id::AdapterId, userdata: *mut std::ffi::c_void);
 pub type BufferMapReadCallback =
@@ -78,7 +80,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
-    window: u64,
+    window: c_ulong,
 ) -> id::SurfaceId {
     use raw_window_handle::unix::XlibHandle;
     wgpu_create_surface(raw_window_handle::RawWindowHandle::Xlib(XlibHandle {
