@@ -36,6 +36,24 @@ pub struct SuspectedResources {
     pub(crate) bind_groups: Vec<id::BindGroupId>,
 }
 
+impl SuspectedResources {
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.textures.clear();
+        self.texture_views.clear();
+        self.samplers.clear();
+        self.bind_groups.clear();
+    }
+
+    fn extend(&mut self, other: &Self) {
+        self.buffers.extend_from_slice(&other.buffers);
+        self.textures.extend_from_slice(&other.textures);
+        self.texture_views.extend_from_slice(&other.texture_views);
+        self.samplers.extend_from_slice(&other.samplers);
+        self.bind_groups.extend_from_slice(&other.bind_groups);
+    }
+}
+
 /// A struct that keeps lists of resources that are no longer needed.
 #[derive(Debug)]
 struct NonReferencedResources<B: hal::Backend> {
@@ -153,8 +171,12 @@ impl<B: GfxBackend> LifetimeTracker<B> {
     }
 
     pub fn track_submission(
-        &mut self, index: SubmissionIndex, fence: B::Fence
+        &mut self,
+        index: SubmissionIndex,
+        fence: B::Fence,
+        new_suspects: &SuspectedResources,
     ) {
+        self.suspected_resources.extend(new_suspects);
         self.active
             .alloc()
             .init(ActiveSubmission {

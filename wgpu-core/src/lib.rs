@@ -104,6 +104,13 @@ impl LifeGuard {
     fn add_ref(&self) -> RefCount {
         self.ref_count.clone().unwrap()
     }
+
+    /// Returns `true` if the resource is still needed by the user.
+    fn use_at(&self, submit_index: SubmissionIndex) -> bool {
+        self.submission_index
+            .store(submit_index, Ordering::Release);
+        self.ref_count.is_some()
+    }
 }
 
 #[derive(Clone, Debug)]

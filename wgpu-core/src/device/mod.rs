@@ -176,6 +176,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<life::LifetimeTracker<B>>,
+    temp_suspected: life::SuspectedResources,
     pub(crate) features: Features,
 }
 
@@ -226,6 +227,7 @@ impl<B: GfxBackend> Device<B> {
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
+            temp_suspected: life::SuspectedResources::default(),
             features: Features {
                 max_bind_groups,
                 supports_texture_d24_s8,
@@ -1226,14 +1228,15 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
         let (submit_index, fence) = {
             let mut token = Token::root();
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
-            let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
             let device = &mut device_guard[queue_id];
+            device.temp_suspected.clear();
 
             let submit_index = 1 + device
                 .life_guard
                 .submission_index
                 .fetch_add(1, Ordering::Relaxed);
 
+            let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
             let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
@@ -1275,36 +1278,30 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
 
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
-                    let buffer = &buffer_guard[id];
-                    assert!(buffer.pending_mapping.is_none());
-                    buffer
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
+                    assert!(buffer_guard[id].pending_mapping.is_none());
+                    if !buffer_guard[id].life_guard.use_at(submit_index) {
+                        device.temp_suspected.buffers.push(id);
+                    }
                 }
                 for id in comb.trackers.textures.used() {
-                    texture_guard[id]
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
+                    if !texture_guard[id].life_guard.use_at(submit_index) {
+                        device.temp_suspected.textures.push(id);
+                    }
                 }
                 for id in comb.trackers.views.used() {
-                    texture_view_guard[id]
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
+                    if !texture_view_guard[id].life_guard.use_at(submit_index) {
+                        device.temp_suspected.texture_views.push(id);
+                    }
                 }
                 for id in comb.trackers.bind_groups.used() {
-                    bind_group_guard[id]
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
+                    if !bind_group_guard[id].life_guard.use_at(submit_index) {
+                        device.temp_suspected.bind_groups.push(id);
+                    }
                 }
                 for id in comb.trackers.samplers.used() {
-                    sampler_guard[id]
-                        .life_guard
-                        .submission_index
-                        .store(submit_index, Ordering::Release);
+                    if !sampler_guard[id].life_guard.use_at(submit_index) {
+                        device.temp_suspected.samplers.push(id);
+                    }
                 }
 
                 // execute resource transitions
@@ -1360,7 +1357,7 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
             let callbacks = device.maintain(self, false, &mut token);
             device
                 .lock_life(&mut token)
-                .track_submission(submit_index, fence);
+                .track_submission(submit_index, fence, &device.temp_suspected);
 
             // finally, return the command buffers to the allocator
             for &cmb_id in command_buffer_ids {
