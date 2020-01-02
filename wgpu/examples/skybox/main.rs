@@ -209,9 +209,9 @@ impl framework::Example for Skybox {
                     mip_level: 0,
                     array_layer: i as u32,
                     origin: wgpu::Origin3d {
-                        x: 0.0,
-                        y: 0.0,
-                        z: 0.0,
+                        x: 0,
+                        y: 0,
+                        z: 0,
                     },
                 },
                 texture_extent,
