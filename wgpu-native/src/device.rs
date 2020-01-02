@@ -90,6 +90,19 @@ pub extern "C" fn wgpu_create_surface_from_xlib(
     }))
 }
 
+#[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
+#[no_mangle]
+pub extern "C" fn wgpu_create_surface_from_wayland(
+    surface: *mut std::ffi::c_void,
+    display: *mut std::ffi::c_void,
+) -> id::SurfaceId {
+    use raw_window_handle::unix::WaylandHandle;
+    wgpu_create_surface(raw_window_handle::RawWindowHandle::Wayland(WaylandHandle {
+        surface, display,
+        ..WaylandHandle::empty()
+    }))
+}
+
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_metal_layer(

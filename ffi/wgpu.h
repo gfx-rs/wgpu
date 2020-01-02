@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.11.1 */
+/* Generated with cbindgen:0.12.1 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -741,9 +741,11 @@ void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipeli
 
 WGPUSurfaceId wgpu_create_surface_from_metal_layer(void *layer);
 
+WGPUSurfaceId wgpu_create_surface_from_wayland(void *surface, void *display);
+
 WGPUSurfaceId wgpu_create_surface_from_windows_hwnd(void *_hinstance, void *hwnd);
 
-WGPUSurfaceId wgpu_create_surface_from_xlib(const void **display, uint64_t window);
+WGPUSurfaceId wgpu_create_surface_from_xlib(const void **display, unsigned long window);
 
 WGPUBindGroupId wgpu_device_create_bind_group(WGPUDeviceId device_id,
                                               const WGPUBindGroupDescriptor *desc);
