@@ -273,9 +273,9 @@ impl framework::Example for Example {
                 mip_level: 0,
                 array_layer: 0,
                 origin: wgpu::Origin3d {
-                    x: 0.0,
-                    y: 0.0,
-                    z: 0.0,
+                    x: 0,
+                    y: 0,
+                    z: 0,
                 },
             },
             texture_extent,
