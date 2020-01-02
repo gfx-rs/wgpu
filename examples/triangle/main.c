@@ -12,8 +12,9 @@
 #include <stdlib.h>
 
 #define WGPU_TARGET_MACOS 1
-#define WGPU_TARGET_LINUX 2
+#define WGPU_TARGET_LINUX_X11 2
 #define WGPU_TARGET_WINDOWS 3
+#define WGPU_TARGET_LINUX_WAYLAND 4
 
 #if WGPU_TARGET == WGPU_TARGET_MACOS
 #include <Foundation/Foundation.h>
@@ -23,8 +24,9 @@
 #include <GLFW/glfw3.h>
 #if WGPU_TARGET == WGPU_TARGET_MACOS
 #define GLFW_EXPOSE_NATIVE_COCOA
-#elif WGPU_TARGET == WGPU_TARGET_LINUX
+#elif WGPU_TARGET == WGPU_TARGET_LINUX_X11
 #define GLFW_EXPOSE_NATIVE_X11
+#elif WGPU_TARGET == WGPU_TARGET_LINUX_WAYLAND
 #define GLFW_EXPOSE_NATIVE_WAYLAND
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
 #define GLFW_EXPOSE_NATIVE_WIN32
@@ -174,11 +176,17 @@ int main() {
         [ns_window.contentView setLayer:metal_layer];
         surface = wgpu_create_surface_from_metal_layer(metal_layer);
     }
-#elif WGPU_TARGET == WGPU_TARGET_LINUX
+#elif WGPU_TARGET == WGPU_TARGET_LINUX_X11
     {
         Display *x11_display = glfwGetX11Display();
         Window x11_window = glfwGetX11Window(window);
         surface = wgpu_create_surface_from_xlib((const void **)x11_display, x11_window);
+    }
+#elif WGPU_TARGET == WGPU_TARGET_LINUX_WAYLAND
+    {
+        struct wl_display *wayland_display = glfwGetWaylandDisplay();
+        struct wl_surface *wayland_surface = glfwGetWaylandWindow(window);
+        surface = wgpu_create_surface_from_wayland(wayland_surface, wayland_display);
     }
 #elif WGPU_TARGET == WGPU_TARGET_WINDOWS
     {
