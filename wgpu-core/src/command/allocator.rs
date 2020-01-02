@@ -26,18 +26,18 @@ struct CommandPool<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> CommandPool<B> {
-    fn maintain(&mut self, last_done: usize) {
+    fn maintain(&mut self, lowest_active_index: SubmissionIndex) {
         for i in (0 .. self.pending.len()).rev() {
             let index = self.pending[i]
                 .life_guard
                 .submission_index
                 .load(Ordering::Acquire);
-            if index <= last_done {
+            if index < lowest_active_index {
                 let cmd_buf = self.pending.swap_remove(i);
                 log::trace!(
                     "recycling comb submitted in {} when {} is done",
                     index,
-                    last_done
+                    lowest_active_index,
                 );
                 self.recycle(cmd_buf);
             }
@@ -82,7 +82,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
         device_id: Stored<DeviceId>,
         device: &B::Device,
         features: Features,
-        last_done: usize,
+        lowest_active_index: SubmissionIndex,
     ) -> CommandBuffer<B> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
         let thread_id = thread::current().id();
@@ -101,7 +101,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
         });
 
         // Recycle completed command buffers
-        pool.maintain(last_done);
+        pool.maintain(lowest_active_index);
 
         let init = pool.allocate();
 

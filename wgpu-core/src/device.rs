@@ -200,7 +200,7 @@ impl<B: GfxBackend> PendingResources<B> {
         heaps_mutex: &Mutex<Heaps<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
         force_wait: bool,
-    ) -> SubmissionIndex {
+    ) {
         if force_wait && !self.active.is_empty() {
             let status = unsafe {
                 device.wait_for_fences(
@@ -219,11 +219,6 @@ impl<B: GfxBackend> PendingResources<B> {
             .iter()
             .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
             .unwrap_or(self.active.len());
-        let last_done = if done_count != 0 {
-            self.active[done_count - 1].index
-        } else {
-            return 0;
-        };
 
         for a in self.active.drain(.. done_count) {
             log::trace!("Active submission {} is done", a.index);
@@ -260,8 +255,6 @@ impl<B: GfxBackend> PendingResources<B> {
                 },
             }
         }
-
-        last_done
     }
 
     fn triage_referenced<F: AllIdentityFilter>(
@@ -516,9 +509,6 @@ pub struct Device<B: hal::Backend> {
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
     pending: Mutex<PendingResources<B>>,
     pub(crate) features: Features,
-    /// The last submission index that is done, used to reclaim command buffers on encoder creation.
-    /// Because of AtomicUsize not having fetch_max stabilized, this has to be a mutex right now.
-    last_done: Mutex<usize>,
 }
 
 impl<B: GfxBackend> Device<B> {
@@ -578,7 +568,6 @@ impl<B: GfxBackend> Device<B> {
                 max_bind_groups,
                 supports_texture_d24_s8,
             },
-            last_done: Mutex::new(0),
         }
     }
 
@@ -594,16 +583,12 @@ impl<B: GfxBackend> Device<B> {
         pending.triage_referenced(global, &mut *trackers, token);
         pending.triage_mapped(global, token);
         pending.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
-        let last_done = pending.cleanup(
+        pending.cleanup(
             &self.raw,
             &self.mem_allocator,
             &self.desc_allocator,
             force_wait,
         );
-        {
-            let mut last_done_guard = self.last_done.lock();
-            *last_done_guard = last_done_guard.max(last_done);
-        }
         let callbacks = pending.handle_mapping(global, &self.raw, token);
 
         unsafe {
@@ -1564,9 +1549,16 @@ impl<F: IdentityFilter<CommandEncoderId>> Global<F> {
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
         };
+
+        // The first entry in the active list should have the lowest index
+        let lowest_active_index = device.pending.lock()
+            .active.get(0)
+            .map(|active| active.index)
+            .unwrap_or(0);
+
         let mut comb = device
             .com_allocator
-            .allocate(dev_stored, &device.raw, device.features, *device.last_done.lock());
+            .allocate(dev_stored, &device.raw, device.features, lowest_active_index);
         unsafe {
             comb.raw.last_mut().unwrap().begin(
                 hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
