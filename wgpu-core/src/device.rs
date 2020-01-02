@@ -200,7 +200,7 @@ impl<B: GfxBackend> PendingResources<B> {
         heaps_mutex: &Mutex<Heaps<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
         force_wait: bool,
-    ) -> SubmissionIndex {
+    ) {
         if force_wait && !self.active.is_empty() {
             let status = unsafe {
                 device.wait_for_fences(
@@ -219,11 +219,6 @@ impl<B: GfxBackend> PendingResources<B> {
             .iter()
             .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
             .unwrap_or(self.active.len());
-        let last_done = if done_count != 0 {
-            self.active[done_count - 1].index
-        } else {
-            return 0;
-        };
 
         for a in self.active.drain(.. done_count) {
             log::trace!("Active submission {} is done", a.index);
@@ -260,8 +255,6 @@ impl<B: GfxBackend> PendingResources<B> {
                 },
             }
         }
-
-        last_done
     }
 
     fn triage_referenced<F: AllIdentityFilter>(
@@ -590,7 +583,7 @@ impl<B: GfxBackend> Device<B> {
         pending.triage_referenced(global, &mut *trackers, token);
         pending.triage_mapped(global, token);
         pending.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
-        let last_done = pending.cleanup(
+        pending.cleanup(
             &self.raw,
             &self.mem_allocator,
             &self.desc_allocator,
@@ -600,10 +593,6 @@ impl<B: GfxBackend> Device<B> {
 
         unsafe {
             self.desc_allocator.lock().cleanup(&self.raw);
-        }
-
-        if last_done != 0 {
-            self.com_allocator.maintain(last_done);
         }
 
         callbacks
@@ -1560,9 +1549,16 @@ impl<F: IdentityFilter<CommandEncoderId>> Global<F> {
             value: device_id,
             ref_count: device.life_guard.ref_count.clone(),
         };
+
+        // The first entry in the active list should have the lowest index
+        let lowest_active_index = device.pending.lock()
+            .active.get(0)
+            .map(|active| active.index)
+            .unwrap_or(0);
+
         let mut comb = device
             .com_allocator
-            .allocate(dev_stored, &device.raw, device.features);
+            .allocate(dev_stored, &device.raw, device.features, lowest_active_index);
         unsafe {
             comb.raw.last_mut().unwrap().begin(
                 hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
