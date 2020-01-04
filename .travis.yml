@@ -82,12 +82,12 @@ script:
 deploy:
   provider: releases
   api_key:
-    secure: kS8vjHOnLEknb2qxf2dPxMW8S5KcpjSkSgoi23WXiX3DZ2v8DIJMxVLanJhD3mbr1oI1NGXQHrTeeA/HBEEJcOVzlQo38MgNo/Jyt1k4jLRyCEDL0LjO+M1zAQGoEDWlyyjeu+Alw3SFKqGoZeuYDZ/mxUpEapFMD++8w4IjON2fI6iNumcIMeAg3Ns6Y4wHYQPzfIQQf5svI9dh1lf7PhlFB/btONBPi6rXxU/UwCnHBoOPydl5OwjggaUAjCJSf8i/FDLWt5XpvA2UsML2AbcFNuwFhNGhf6ArwEsqgcMCGL6jACetvI/l3ZL96h5dsgzRLW0ruvnvpEm3y3aw9wCjEAcnQMZCBPlIfOpj5MH/guh526QWCVQ3rwRUJOhua9T2yvwda3ICYspyVShzlbwscA9yLwvsuO+6Hl+upuE2IPfLvS6QpnXVlIWHe/3HqOoQggDdsWvnZhhGNKASKsi9vNgTvec/1iX846/KGcV3nYeHIWFrvP0IgWtEqQrgcWj9w6X7LDdaTFmrkKwKnNn4ClLQYPnlWQS71iX0gwRhONGaSAEfFca6vwVTa8AGSQUEHphe5lT7LtAy6UhlbjZNuKvUR+pn+l0EoWlZzm+uxKMtGR+mG9h6My+GA3hCWWtX/Xc94TvuJ1cg+uRu48+rD21vv3cr2fEVDRq7pGg=
-  file_glob: true
-  file: dist/wgpu-*.zip
+    secure: GcBxH6M6X9UU+5QBR4nEdNbXDfGpCrggZkPaztfK1vGAjmOyvHnK6P3M00C5Pf0nLmyWhGT5P0I4Rpy0z8WyQLOaHNWUuRGlRqlehWiJEmi6MpS2O8noJEfbLut9vYPpl0sdrtFrU5e0F77fWm5UWYQLMaeqXj66xv4lVxZp/JkXwhChTpU0PRJtSBuYiLFzbwz9CEjsvBXjw5ZzxmGTHnbw5p19B63yy3mORV91QQrRfCAHMg9z9zthpoZHEGqXXTIFuvh1DZqC5SHhUbt865MHMJS/2IaPH5zA/fOzZCCk6IvbNKLJ/ghE0zRJjHeVU4vjxNMxrFEBKVFCmQB7CpTqGCLy2qTB0tnSmNzqY82xUehl23jZ0LxnKODzCjx4hgfskWnr5p7Pv1Ql9UcAZXDV8UG+7JL34BQY4yyvknpTxK4MTXN9ZNahKJv+zSB9jDuLnB6uVbNV1hwFOUNm7KyAWA7XjFN7k8p4h678Xfg+EUWYxtV1auOItuXdxvzMWgDUDGmk74FdUWxy+GVzjboAmBMVRW/KMQFp4INIaS0gPRPK/jodLqrrZ+1otgYvMM/CsnOh4GLl86RTewuyid2jNnUeXepHPuU+JsDLLCJfyYoAfSxDCdQEuqNLAvpFPJJrBcWREVoqXWVUlWmwhEIWbLRUi2l5AhHnu+PfVhE=
   skip_cleanup: true
   overwrite: true
+  file_glob: true
+  file: dist/wgpu-*.zip
   on:
+    repo: gfx-rs/wgpu
     tags: true
-    condition: $TRAVIS_RUST_VERSION == "stable" && $TRAVIS_BRANCH == $TRAVIS_TAG
-    skip_cleanup: true
+    condition: $TRAVIS_RUST_VERSION == "stable" && $TRAVIS_BRANCH == $TRAVIS_TAG && ${TRAVIS_TAG::1} == "v"
