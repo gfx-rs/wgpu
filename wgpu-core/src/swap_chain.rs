@@ -82,12 +82,12 @@ impl SwapChainDescriptor {
     pub(crate) fn to_hal(
         &self,
         num_frames: u32,
-        features: &Features,
+        features: Features,
     ) -> hal::window::SwapchainConfig {
         let mut config = hal::window::SwapchainConfig::new(
             self.width,
             self.height,
-            conv::map_texture_format(self.format, *features),
+            conv::map_texture_format(self.format, features),
             num_frames,
         );
         //TODO: check for supported
@@ -153,7 +153,7 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
                 }
                 Err(e) => {
                     log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
-                    let desc = sc.desc.to_hal(sc.num_frames, &device.features);
+                    let desc = sc.desc.to_hal(sc.num_frames, device.features);
                     unsafe {
                         suf.configure_swapchain(&device.raw, desc).unwrap();
                         suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000).unwrap()

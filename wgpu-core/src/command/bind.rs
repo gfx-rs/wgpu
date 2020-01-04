@@ -211,6 +211,6 @@ impl Binder {
         self.entries
             .iter()
             .position(|entry| !entry.is_valid())
-            .unwrap_or(self.entries.len())
+            .unwrap_or_else(|| self.entries.len())
     }
 }

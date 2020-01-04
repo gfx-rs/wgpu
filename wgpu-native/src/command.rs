@@ -92,7 +92,7 @@ pub extern "C" fn wgpu_render_pass_end_pass(pass_id: id::RenderPassId) {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_set_bind_group(
+pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
     pass_id: id::RenderPassId,
     index: u32,
     bind_group_id: id::BindGroupId,
@@ -100,7 +100,7 @@ pub extern "C" fn wgpu_render_pass_set_bind_group(
     offsets_length: usize,
 ) {
     let offsets = if offsets_length != 0 {
-        unsafe { slice::from_raw_parts(offsets, offsets_length) }
+        slice::from_raw_parts(offsets, offsets_length)
     } else {
         &[]
     };
@@ -138,15 +138,15 @@ pub extern "C" fn wgpu_render_pass_set_index_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_render_pass_set_vertex_buffers(
+pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffers(
     pass_id: id::RenderPassId,
     start_slot: u32,
     buffers: *const id::BufferId,
     offsets: *const core::BufferAddress,
     length: usize,
 ) {
-    let buffers = unsafe { slice::from_raw_parts(buffers, length) };
-    let offsets = unsafe { slice::from_raw_parts(offsets, length) };
+    let buffers = slice::from_raw_parts(buffers, length);
+    let offsets = slice::from_raw_parts(offsets, length);
     gfx_select!(pass_id => GLOBAL.render_pass_set_vertex_buffers(pass_id, start_slot, buffers, offsets))
 }
 
@@ -258,7 +258,7 @@ pub extern "C" fn wgpu_compute_pass_end_pass(pass_id: id::ComputePassId) {
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_compute_pass_set_bind_group(
+pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
     pass_id: id::ComputePassId,
     index: u32,
     bind_group_id: id::BindGroupId,
@@ -266,7 +266,7 @@ pub extern "C" fn wgpu_compute_pass_set_bind_group(
     offsets_length: usize,
 ) {
     let offsets = if offsets_length != 0 {
-        unsafe { slice::from_raw_parts(offsets, offsets_length) }
+        slice::from_raw_parts(offsets, offsets_length)
     } else {
         &[]
     };
