@@ -63,7 +63,7 @@ pub fn run<E: Example>(title: &str) {
     log::info!("Initializing the window...");
 
     #[cfg(not(feature = "gl"))]
-    let (_window, hidpi_factor, size, surface) = {
+    let (window, hidpi_factor, size, surface) = {
         let window = winit::window::Window::new(&event_loop).unwrap();
         window.set_title(title);
         let hidpi_factor = window.hidpi_factor();
@@ -73,7 +73,7 @@ pub fn run<E: Example>(title: &str) {
     };
 
     #[cfg(feature = "gl")]
-    let (_window, instance, hidpi_factor, size, surface) = {
+    let (window, instance, hidpi_factor, size, surface) = {
         let wb = winit::WindowBuilder::new();
         let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
         let context = cb.build_windowed(wb, &event_loop).unwrap();
@@ -132,6 +132,7 @@ pub fn run<E: Example>(title: &str) {
             ControlFlow::Poll
         };
         match event {
+            event::Event::MainEventsCleared => window.request_redraw(),
             event::Event::WindowEvent {
                 event: WindowEvent::Resized(size),
                 ..
@@ -162,15 +163,15 @@ pub fn run<E: Example>(title: &str) {
                 _ => {
                     example.update(event);
                 }
-            },
-            event::Event::EventsCleared => {
+            }
+            event::Event::RedrawRequested(_) => {
                 let frame = swap_chain
                     .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
                 let command_buf = example.render(&frame, &device);
                 queue.submit(&[command_buf]);
             }
-            _ => (),
+            _ => {}
         }
     });
 }

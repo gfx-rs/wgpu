@@ -8,7 +8,7 @@ fn main() {
     let event_loop = EventLoop::new();
 
     #[cfg(not(feature = "gl"))]
-    let (_window, size, surface) = {
+    let (window, size, surface) = {
         let window = winit::window::Window::new(&event_loop).unwrap();
         let size = window.inner_size().to_physical(window.hidpi_factor());
 
@@ -17,7 +17,7 @@ fn main() {
     };
 
     #[cfg(feature = "gl")]
-    let (_window, instance, size, surface) = {
+    let (window, instance, size, surface) = {
         let wb = winit::WindowBuilder::new();
         let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
         let context = cb.build_windowed(wb, &event_loop).unwrap();
@@ -113,28 +113,10 @@ fn main() {
     );
 
     event_loop.run(move |event, _, control_flow| {
-        *control_flow = if cfg!(feature = "metal-auto-capture") {
-            ControlFlow::Exit
-        } else {
-            ControlFlow::Poll
-        };
+        *control_flow = ControlFlow::Poll;
         match event {
-            event::Event::WindowEvent { event, .. } => match event {
-                event::WindowEvent::KeyboardInput {
-                    input:
-                        event::KeyboardInput {
-                            virtual_keycode: Some(event::VirtualKeyCode::Escape),
-                            state: event::ElementState::Pressed,
-                            ..
-                        },
-                    ..
-                }
-                | event::WindowEvent::CloseRequested => {
-                    *control_flow = ControlFlow::Exit;
-                }
-                _ => {}
-            },
-            event::Event::EventsCleared => {
+            event::Event::MainEventsCleared => window.request_redraw(),
+            event::Event::RedrawRequested(_) => {
                 let frame = swap_chain
                     .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
@@ -158,7 +140,11 @@ fn main() {
 
                 queue.submit(&[encoder.finish()]);
             }
-            _ => (),
+            event::Event::WindowEvent {
+                event: event::WindowEvent::CloseRequested,
+                ..
+            } => *control_flow = ControlFlow::Exit,
+            _ => {}
         }
     });
 }
