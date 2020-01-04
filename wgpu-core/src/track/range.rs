@@ -65,7 +65,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
             Some(elem) => elem,
             None => return,
         };
-        while let Some(next) = iter.next() {
+        for next in iter {
             if cur.0.end == next.0.start && cur.1 == next.1 {
                 num_removed += 1;
                 cur.0.end = next.0.end;

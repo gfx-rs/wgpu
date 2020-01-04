@@ -18,7 +18,7 @@ pub struct Id<T>(u64, PhantomData<T>);
 impl<T> Id<T> {
     pub const ERROR: Self = Self(0, PhantomData);
 
-    pub fn backend(&self) -> Backend {
+    pub fn backend(self) -> Backend {
         match self.0 >> (64 - BACKEND_BITS) as u8 {
             0 => Backend::Empty,
             1 => Backend::Vulkan,
@@ -107,13 +107,13 @@ pub type ComputePassId = Id<crate::command::ComputePass<Dummy>>;
 pub type SwapChainId = Id<crate::swap_chain::SwapChain<Dummy>>;
 
 impl SurfaceId {
-    pub(crate) fn to_swap_chain_id(&self, backend: Backend) -> SwapChainId {
+    pub(crate) fn to_swap_chain_id(self, backend: Backend) -> SwapChainId {
         let (index, epoch, _) = self.unzip();
         Id::zip(index, epoch, backend)
     }
 }
 impl SwapChainId {
-    pub(crate) fn to_surface_id(&self) -> SurfaceId {
+    pub(crate) fn to_surface_id(self) -> SurfaceId {
         let (index, epoch, _) = self.unzip();
         Id::zip(index, epoch, Backend::Empty)
     }

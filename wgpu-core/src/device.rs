@@ -218,7 +218,7 @@ impl<B: GfxBackend> PendingResources<B> {
             .active
             .iter()
             .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
-            .unwrap_or(self.active.len());
+            .unwrap_or_else(|| self.active.len());
 
         for a in self.active.drain(.. done_count) {
             log::trace!("Active submission {} is done", a.index);
@@ -541,7 +541,7 @@ impl<B: GfxBackend> Device<B> {
                         min_device_allocation: 0x1_00_00,
                     }),
                 };
-                (mt.properties.into(), mt.heap_index as u32, config)
+                (mt.properties, mt.heap_index as u32, config)
             });
             unsafe { Heaps::new(types, mem_props.memory_heaps.iter().cloned()) }
         };
@@ -819,9 +819,8 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         &self,
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
-        mapped_ptr_out: *mut *mut u8,
         id_in: F::Input,
-    ) -> BufferId {
+    ) -> (BufferId, *mut u8) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let mut desc = desc.clone();
@@ -832,17 +831,13 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         let mut buffer = device.create_buffer(device_id, &desc);
         let ref_count = buffer.life_guard.ref_count.clone();
 
-        match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
-            Ok(ptr) => unsafe {
-                *mapped_ptr_out = ptr;
-            },
+        let pointer = match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
+            Ok(ptr) => ptr,
             Err(e) => {
                 log::error!("failed to create buffer in a mapped state: {:?}", e);
-                unsafe {
-                    *mapped_ptr_out = ptr::null_mut();
-                }
+                ptr::null_mut()
             }
-        }
+        };
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         device.trackers
@@ -854,7 +849,8 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
             )
             .unwrap()
             .set((), resource::BufferUsage::MAP_WRITE);
-        id
+
+        (id, pointer)
     }
 
     pub fn device_set_buffer_sub_data<B: GfxBackend>(
@@ -987,7 +983,7 @@ impl<F: IdentityFilter<TextureId>> Global<F> {
 
             (texture.device_id.value, texture.life_guard.ref_count.clone())
         };
-        
+
         let (device_guard, _) = hub.devices.read(&mut token);
         device_guard[device_id]
             .pending
@@ -2109,7 +2105,7 @@ impl<F: IdentityFilter<SwapChainId>> Global<F> {
         let num_frames = swap_chain::DESIRED_NUM_FRAMES
             .max(*caps.image_count.start())
             .min(*caps.image_count.end());
-        let mut config = desc.to_hal(num_frames, &device.features);
+        let mut config = desc.to_hal(num_frames, device.features);
         if let Some(formats) = formats {
             assert!(
                 formats.contains(&config.format),
