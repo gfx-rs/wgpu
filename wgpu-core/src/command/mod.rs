@@ -44,7 +44,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::{adapter::PhysicalDevice as _, command::CommandBuffer as _, device::Device as _};
 
-use std::{borrow::Borrow, collections::hash_map::Entry, iter, mem, ptr, slice, thread::ThreadId};
+use std::{borrow::Borrow, collections::hash_map::Entry, iter, mem, slice, thread::ThreadId};
 
 
 pub struct RenderBundle<B: hal::Backend> {
@@ -528,10 +528,10 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     let mut attachment_index = color_attachments.len();
                     if color_attachments
                         .iter()
-                        .any(|at| at.resolve_target != ptr::null())
+                        .any(|at| !at.resolve_target.is_null())
                     {
                         for (i, at) in color_attachments.iter().enumerate() {
-                            if at.resolve_target == ptr::null() {
+                            if at.resolve_target.is_null() {
                                 resolve_ids.push((
                                     hal::pass::ATTACHMENT_UNUSED,
                                     hal::image::Layout::ColorAttachmentOptimal,

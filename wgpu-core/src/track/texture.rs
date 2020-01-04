@@ -191,7 +191,7 @@ impl ResourceState for TextureState {
                                     id,
                                     selector: hal::image::SubresourceRange {
                                         aspects,
-                                        levels: level .. level + 1,
+                                        levels: level .. level+1,
                                         layers: layers.clone(),
                                     },
                                     usage: start.last .. final_usage,

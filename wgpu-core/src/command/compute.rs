@@ -210,9 +210,9 @@ impl<F> Global<F> {
         }
 
         // Rebind resources
-        if pass.binder.pipeline_layout_id != Some(pipeline.layout_id.clone()) {
+        if pass.binder.pipeline_layout_id != Some(pipeline.layout_id) {
             let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-            pass.binder.pipeline_layout_id = Some(pipeline.layout_id.clone());
+            pass.binder.pipeline_layout_id = Some(pipeline.layout_id);
             pass.binder
                 .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
             let mut is_compatible = true;

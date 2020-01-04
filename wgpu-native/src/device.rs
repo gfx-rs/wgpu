@@ -123,7 +123,7 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_request_adapter_async(
+pub unsafe extern "C" fn wgpu_request_adapter_async(
     desc: Option<&core::instance::RequestAdapterOptions>,
     mask: core::instance::BackendBit,
     callback: RequestAdapterCallback,
@@ -133,12 +133,10 @@ pub extern "C" fn wgpu_request_adapter_async(
         &desc.cloned().unwrap_or_default(),
         core::instance::AdapterInputs::Mask(mask, || PhantomData),
     );
-    unsafe {
-        callback(
-            id.unwrap_or(id::AdapterId::ERROR),
-            userdata,
-        )
-    };
+    callback(
+        id.unwrap_or(id::AdapterId::ERROR),
+        userdata,
+    );
 }
 
 #[no_mangle]
@@ -171,12 +169,14 @@ pub extern "C" fn wgpu_device_create_buffer(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_device_create_buffer_mapped(
+pub unsafe extern "C" fn wgpu_device_create_buffer_mapped(
     device_id: id::DeviceId,
     desc: &core::resource::BufferDescriptor,
     mapped_ptr_out: *mut *mut u8,
 ) -> id::BufferId {
-    gfx_select!(device_id => GLOBAL.device_create_buffer_mapped(device_id, desc, mapped_ptr_out, PhantomData))
+    let (id, ptr) = gfx_select!(device_id => GLOBAL.device_create_buffer_mapped(device_id, desc, PhantomData));
+    *mapped_ptr_out = ptr;
+    id
 }
 
 #[no_mangle]
@@ -275,13 +275,13 @@ pub extern "C" fn wgpu_device_get_queue(device_id: id::DeviceId) -> id::QueueId 
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_queue_submit(
+pub unsafe extern "C" fn wgpu_queue_submit(
     queue_id: id::QueueId,
     command_buffers: *const id::CommandBufferId,
     command_buffers_length: usize,
 ) {
     let command_buffer_ids =
-        unsafe { slice::from_raw_parts(command_buffers, command_buffers_length) };
+        slice::from_raw_parts(command_buffers, command_buffers_length);
     gfx_select!(queue_id => GLOBAL.queue_submit(queue_id, command_buffer_ids))
 }
 

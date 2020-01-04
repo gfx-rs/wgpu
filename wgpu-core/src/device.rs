@@ -218,7 +218,7 @@ impl<B: GfxBackend> PendingResources<B> {
             .active
             .iter()
             .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
-            .unwrap_or(self.active.len());
+            .unwrap_or_else(|| self.active.len());
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
         } else {
@@ -548,7 +548,7 @@ impl<B: GfxBackend> Device<B> {
                         min_device_allocation: 0x1_00_00,
                     }),
                 };
-                (mt.properties.into(), mt.heap_index as u32, config)
+                (mt.properties, mt.heap_index as u32, config)
             });
             unsafe { Heaps::new(types, mem_props.memory_heaps.iter().cloned()) }
         };
@@ -831,9 +831,8 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         &self,
         device_id: DeviceId,
         desc: &resource::BufferDescriptor,
-        mapped_ptr_out: *mut *mut u8,
         id_in: F::Input,
-    ) -> BufferId {
+    ) -> (BufferId, *mut u8) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let mut desc = desc.clone();
@@ -844,17 +843,13 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
         let mut buffer = device.create_buffer(device_id, &desc);
         let ref_count = buffer.life_guard.ref_count.clone();
 
-        match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
-            Ok(ptr) => unsafe {
-                *mapped_ptr_out = ptr;
-            },
+        let pointer = match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
+            Ok(ptr) => ptr,
             Err(e) => {
                 log::error!("failed to create buffer in a mapped state: {:?}", e);
-                unsafe {
-                    *mapped_ptr_out = ptr::null_mut();
-                }
+                ptr::null_mut()
             }
-        }
+        };
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         let ok = device.trackers.lock().buffers.init(
@@ -864,7 +859,7 @@ impl<F: IdentityFilter<BufferId>> Global<F> {
             resource::BufferUsage::MAP_WRITE,
         );
         assert!(ok);
-        id
+        (id, pointer)
     }
 
     pub fn device_set_buffer_sub_data<B: GfxBackend>(
@@ -2020,7 +2015,7 @@ impl<F: IdentityFilter<SwapChainId>> Global<F> {
         let num_frames = swap_chain::DESIRED_NUM_FRAMES
             .max(*caps.image_count.start())
             .min(*caps.image_count.end());
-        let config = desc.to_hal(num_frames, &device.features);
+        let config = desc.to_hal(num_frames, device.features);
 
         if let Some(formats) = formats {
             assert!(
