@@ -1,5 +1,5 @@
 language: rust
-cache: cargo
+
 os:
   - linux
   - osx
