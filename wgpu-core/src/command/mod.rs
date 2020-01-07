@@ -44,7 +44,15 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::{adapter::PhysicalDevice as _, command::CommandBuffer as _, device::Device as _};
 
-use std::{borrow::Borrow, collections::hash_map::Entry, iter, mem, slice, thread::ThreadId};
+use std::{
+    borrow::Borrow,
+    collections::hash_map::Entry,
+    iter,
+    marker::PhantomData,
+    mem,
+    slice,
+    thread::ThreadId,
+};
 
 
 pub struct RenderBundle<B: hal::Backend> {
@@ -128,25 +136,15 @@ impl<B: GfxBackend> CommandBuffer<B> {
             .buffers
             .merge_replace(&head.buffers)
             .map(|pending| {
-                log::trace!("\tbuffer -> {:?}", pending);
-                hal::memory::Barrier::Buffer {
-                    states: pending.to_states(),
-                    target: &buffer_guard[pending.id].raw,
-                    range: None .. None,
-                    families: None,
-                }
+                let buf = &buffer_guard[pending.id];
+                pending.into_hal(buf)
             });
         let texture_barriers = base
             .textures
             .merge_replace(&head.textures)
             .map(|pending| {
-                log::trace!("\ttexture -> {:?}", pending);
-                hal::memory::Barrier::Image {
-                    states: pending.to_states(),
-                    target: &texture_guard[pending.id].raw,
-                    range: pending.selector,
-                    families: None,
-                }
+                let tex = &texture_guard[pending.id];
+                pending.into_hal(tex)
             });
         base.views.merge_extend(&head.views).unwrap();
         base.bind_groups.merge_extend(&head.bind_groups).unwrap();
@@ -328,7 +326,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     let first_use = cmb.trackers.views.init(
                         at.attachment,
                         view.life_guard.add_ref(),
-                        &(),
+                        PhantomData,
                     ).is_some();
 
                     let layouts = match view.inner {
@@ -388,7 +386,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     let first_use = cmb.trackers.views.init(
                         resolve_target,
                         view.life_guard.add_ref(),
-                        &(),
+                        PhantomData,
                     ).is_some();
 
                     let layouts = match view.inner {
@@ -451,15 +449,13 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
                 let usage = consistent_usage.unwrap_or(TextureUsage::OUTPUT_ATTACHMENT);
-                match trackers.textures.init(
+                // this is important to record the `first` state.
+                let _ = trackers.textures.change_replace(
                     source_id.value,
-                    source_id.ref_count.clone(),
-                    &texture.full_range,
-                ) {
-                    Some(mut init) => init.set(view_range.clone(), usage),
-                    None => panic!("Your texture {:?} is in the another attachment!", source_id.value),
-                };
-
+                    &source_id.ref_count,
+                    view_range.clone(),
+                    usage,
+                );
                 if consistent_usage.is_some() {
                     // If we expect the texture to be transited to a new state by the
                     // render pass configuration, make the tracker aware of that.
@@ -468,7 +464,6 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         &source_id.ref_count,
                         view_range.clone(),
                         TextureUsage::OUTPUT_ATTACHMENT,
-                        &texture.full_range,
                     );
                 };
             }

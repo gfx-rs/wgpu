@@ -2,7 +2,15 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use std::{cmp::Ordering, fmt::Debug, iter::Peekable, ops::Range, slice::Iter};
+use smallvec::SmallVec;
+
+use std::{
+    cmp::Ordering,
+    fmt::Debug,
+    iter,
+    ops::Range,
+    slice::Iter,
+};
 
 /// Structure that keeps track of a I -> T mapping,
 /// optimized for a case where keys of the same values
@@ -11,21 +19,27 @@ use std::{cmp::Ordering, fmt::Debug, iter::Peekable, ops::Range, slice::Iter};
 pub struct RangedStates<I, T> {
     /// List of ranges, each associated with a singe value.
     /// Ranges of keys have to be non-intersecting and ordered.
-    ranges: Vec<(Range<I>, T)>,
-}
-
-impl<I, T> Default for RangedStates<I, T> {
-    fn default() -> Self {
-        RangedStates { ranges: Vec::new() }
-    }
+    ranges: SmallVec<[(Range<I>, T); 1]>,
 }
 
 impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
+    pub fn empty() -> Self {
+        RangedStates {
+            ranges: SmallVec::new(),
+        }
+    }
+
+    pub fn from_range(range: Range<I>, value: T) -> Self {
+        RangedStates {
+            ranges: iter::once((range, value)).collect(),
+        }
+    }
+
     /// Construct a new instance from a slice of ranges.
     #[cfg(test)]
-    pub fn new(values: &[(Range<I>, T)]) -> Self {
+    pub fn from_slice(values: &[(Range<I>, T)]) -> Self {
         RangedStates {
-            ranges: values.to_vec(),
+            ranges: values.iter().cloned().collect(),
         }
     }
 
@@ -189,8 +203,8 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
 #[derive(Debug)]
 pub struct Merge<'a, I, T> {
     base: I,
-    sa: Peekable<Iter<'a, (Range<I>, T)>>,
-    sb: Peekable<Iter<'a, (Range<I>, T)>>,
+    sa: iter::Peekable<Iter<'a, (Range<I>, T)>>,
+    sb: iter::Peekable<Iter<'a, (Range<I>, T)>>,
 }
 
 impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
@@ -268,55 +282,58 @@ mod test {
     use std::{fmt::Debug, ops::Range};
 
     fn easy_merge<T: PartialEq + Copy + Debug>(
-        ra: Vec<(Range<usize>, T)>,
-        rb: Vec<(Range<usize>, T)>,
+        ra: &[(Range<usize>, T)],
+        rb: &[(Range<usize>, T)],
     ) -> Vec<(Range<usize>, Range<Option<T>>)> {
-        RangedStates { ranges: ra }
-            .merge(&RangedStates { ranges: rb }, 0)
+        RangedStates::from_slice(ra)
+            .merge(&RangedStates::from_slice(rb), 0)
             .collect()
     }
 
     #[test]
     fn sane_good() {
-        let rs = RangedStates {
-            ranges: vec![(1 .. 4, 9u8), (4 .. 5, 9)],
-        };
+        let rs = RangedStates::from_slice(
+            &[(1 .. 4, 9u8), (4 .. 5, 9)],
+        );
         rs.check_sanity();
     }
 
     #[test]
     #[should_panic]
     fn sane_empty() {
-        let rs = RangedStates {
-            ranges: vec![(1 .. 4, 9u8), (5 .. 5, 9)],
-        };
+        let rs = RangedStates::from_slice(
+            &[(1 .. 4, 9u8), (5 .. 5, 9)],
+        );
         rs.check_sanity();
     }
 
     #[test]
     #[should_panic]
     fn sane_intersect() {
-        let rs = RangedStates {
-            ranges: vec![(1 .. 4, 9u8), (3 .. 5, 9)],
-        };
+        let rs = RangedStates::from_slice(
+            &[(1 .. 4, 9u8), (3 .. 5, 9)],
+        );
         rs.check_sanity();
     }
 
     #[test]
     fn coalesce() {
-        let mut rs = RangedStates {
-            ranges: vec![(1 .. 4, 9u8), (4 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1)],
-        };
+        let mut rs = RangedStates::from_slice(
+            &[(1 .. 4, 9u8), (4 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1)],
+        );
         rs.coalesce();
         rs.check_sanity();
-        assert_eq!(rs.ranges, vec![(1 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1),]);
+        assert_eq!(
+            rs.ranges.as_slice(),
+            &[(1 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1),]
+        );
     }
 
     #[test]
     fn query() {
-        let rs = RangedStates {
-            ranges: vec![(1 .. 4, 1u8), (5 .. 7, 2)],
-        };
+        let rs = RangedStates::from_slice(
+            &[(1 .. 4, 1u8), (5 .. 7, 2)],
+        );
         assert_eq!(rs.query(&(0 .. 1), |v| *v), None);
         assert_eq!(rs.query(&(1 .. 3), |v| *v), Some(Ok(1)));
         assert_eq!(rs.query(&(1 .. 6), |v| *v), Some(Err(())));
@@ -324,9 +341,9 @@ mod test {
 
     #[test]
     fn isolate() {
-        let rs = RangedStates {
-            ranges: vec![(1 .. 4, 9u8), (4 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1)],
-        };
+        let rs = RangedStates::from_slice(
+            &[(1 .. 4, 9u8), (4 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1)],
+        );
         assert_eq!(&rs.sanely_isolated(4 .. 5, 0), &[(4 .. 5, 9u8),]);
         assert_eq!(
             &rs.sanely_isolated(0 .. 6, 0),
@@ -345,28 +362,31 @@ mod test {
     #[test]
     fn merge_same() {
         assert_eq!(
-            easy_merge(vec![(1 .. 4, 0u8),], vec![(1 .. 4, 2u8),],),
-            vec![(1 .. 4, Some(0) .. Some(2)),]
+            &easy_merge(&[(1 .. 4, 0u8),], &[(1 .. 4, 2u8),],),
+            &[(1 .. 4, Some(0) .. Some(2)),]
         );
     }
 
     #[test]
     fn merge_empty() {
         assert_eq!(
-            easy_merge(vec![(1 .. 2, 0u8),], vec![],),
-            vec![(1 .. 2, Some(0) .. None),]
+            &easy_merge(&[(1 .. 2, 0u8),], &[],),
+            &[(1 .. 2, Some(0) .. None),]
         );
         assert_eq!(
-            easy_merge(vec![], vec![(3 .. 4, 1u8),],),
-            vec![(3 .. 4, None .. Some(1)),]
+            &easy_merge(&[], &[(3 .. 4, 1u8),],),
+            &[(3 .. 4, None .. Some(1)),]
         );
     }
 
     #[test]
     fn merge_separate() {
         assert_eq!(
-            easy_merge(vec![(1 .. 2, 0u8), (5 .. 6, 1u8),], vec![(2 .. 4, 2u8),],),
-            vec![
+            &easy_merge(
+                &[(1 .. 2, 0u8), (5 .. 6, 1u8),],
+                &[(2 .. 4, 2u8),],
+            ),
+            &[
                 (1 .. 2, Some(0) .. None),
                 (2 .. 4, None .. Some(2)),
                 (5 .. 6, Some(1) .. None),
@@ -377,27 +397,30 @@ mod test {
     #[test]
     fn merge_subset() {
         assert_eq!(
-            easy_merge(vec![(1 .. 6, 0u8),], vec![(2 .. 4, 2u8),],),
-            vec![
+            &easy_merge(
+                &[(1 .. 6, 0u8),],
+                &[(2 .. 4, 2u8),],
+            ),
+            &[
                 (1 .. 2, Some(0) .. None),
                 (2 .. 4, Some(0) .. Some(2)),
                 (4 .. 6, Some(0) .. None),
             ]
         );
         assert_eq!(
-            easy_merge(vec![(2 .. 4, 0u8),], vec![(1 .. 4, 2u8),],),
-            vec![(1 .. 2, None .. Some(2)), (2 .. 4, Some(0) .. Some(2)),]
+            &easy_merge(&[(2 .. 4, 0u8),], &[(1 .. 4, 2u8),],),
+            &[(1 .. 2, None .. Some(2)), (2 .. 4, Some(0) .. Some(2)),]
         );
     }
 
     #[test]
     fn merge_all() {
         assert_eq!(
-            easy_merge(
-                vec![(1 .. 4, 0u8), (5 .. 8, 1u8),],
-                vec![(2 .. 6, 2u8), (7 .. 9, 3u8),],
+            &easy_merge(
+                &[(1 .. 4, 0u8), (5 .. 8, 1u8),],
+                &[(2 .. 6, 2u8), (7 .. 9, 3u8),],
             ),
-            vec![
+            &[
                 (1 .. 2, Some(0) .. None),
                 (2 .. 4, Some(0) .. Some(2)),
                 (4 .. 5, None .. Some(2)),

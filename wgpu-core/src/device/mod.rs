@@ -11,7 +11,7 @@ use crate::{
     pipeline,
     resource,
     swap_chain,
-    track::{SEPARATE_DEPTH_STENCIL_STATES, TrackerSet},
+    track::{BufferState, TextureState, TrackerSet},
     BufferAddress,
     FastHashMap,
     Features,
@@ -36,6 +36,7 @@ use std::{
     collections::hash_map::Entry,
     ffi,
     iter,
+    marker::PhantomData,
     ops,
     ptr,
     slice,
@@ -473,13 +474,18 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let device = &device_guard[device_id];
         let buffer = device.create_buffer(device_id, desc);
         let ref_count = buffer.life_guard.add_ref();
+        let range = buffer.full_range;
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         device
             .trackers
             .lock()
             .buffers
-            .init(id, ref_count, &())
+            .init(
+                id,
+                ref_count,
+                BufferState::from_selector(&range),
+            )
             .unwrap();
         id
     }
@@ -499,6 +505,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let device = &device_guard[device_id];
         let mut buffer = device.create_buffer(device_id, &desc);
         let ref_count = buffer.life_guard.add_ref();
+        let range = buffer.full_range;
 
         let pointer = match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
             Ok(ptr) => ptr,
@@ -514,7 +521,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
             .buffers.init(
                 id,
                 ref_count,
-                &(),
+                BufferState::from_selector(&range),
             )
             .unwrap()
             .set((), resource::BufferUsage::MAP_WRITE);
@@ -632,7 +639,7 @@ impl<F: IdentityFilter<id::TextureId>> Global<F> {
             .textures.init(
                 id,
                 ref_count,
-                &range,
+                TextureState::from_selector(&range),
             )
             .unwrap()
             .set(range, resource::TextureUsage::UNINITIALIZED);
@@ -686,15 +693,7 @@ impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
                     (desc.base_array_layer + desc.array_layer_count) as u16
                 };
                 let range = hal::image::SubresourceRange {
-                    aspects: if SEPARATE_DEPTH_STENCIL_STATES {
-                        match desc.aspect {
-                            resource::TextureAspect::All => texture.full_range.aspects,
-                            resource::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
-                            resource::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
-                        }
-                    } else {
-                        texture.full_range.aspects
-                    },
+                    aspects: texture.full_range.aspects,
                     levels: desc.base_mip_level as u8 .. end_level,
                     layers: desc.base_array_layer as u16 .. end_layer,
                 };
@@ -744,7 +743,7 @@ impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
         let id = hub.texture_views.register_identity(id_in, view, &mut token);
         device.trackers
             .lock()
-            .views.init(id, ref_count, &())
+            .views.init(id, ref_count, PhantomData)
             .unwrap();
         id
     }
@@ -822,7 +821,7 @@ impl<F: IdentityFilter<id::SamplerId>> Global<F> {
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
         device.trackers
             .lock()
-            .samplers.init(id, ref_count, &())
+            .samplers.init(id, ref_count, PhantomData)
             .unwrap();
         id
     }
@@ -1080,7 +1079,6 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
                                         &source_id.ref_count,
                                         view.range.clone(),
                                         usage,
-                                        &texture.full_range,
                                     )
                                     .unwrap();
                                 assert!(texture.usage.contains(usage));
@@ -1130,7 +1128,7 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
             .trackers
             .lock()
             .bind_groups
-            .init(id, ref_count, &())
+            .init(id, ref_count, PhantomData)
             .unwrap();
         id
     }
@@ -1886,7 +1884,7 @@ impl<F> Global<F> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (device_id, ref_count, full_range) = {
+        let (device_id, ref_count) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
@@ -1906,13 +1904,9 @@ impl<F> Global<F> {
             buffer.pending_mapping = Some(resource::BufferPendingMapping {
                 range,
                 op: operation,
-                parent_ref_count: buffer.life_guard.add_ref()
+                parent_ref_count: buffer.life_guard.add_ref(),
             });
-            (
-                buffer.device_id.value,
-                buffer.life_guard.add_ref(),
-                buffer.full_range,
-            )
+            (buffer.device_id.value, buffer.life_guard.add_ref())
         };
 
         let device = &device_guard[device_id];
@@ -1921,7 +1915,7 @@ impl<F> Global<F> {
             .trackers
             .lock()
             .buffers
-            .change_replace(buffer_id, &ref_count, (), usage, &full_range);
+            .change_replace(buffer_id, &ref_count, (), usage);
 
         device
             .lock_life(&mut token)
