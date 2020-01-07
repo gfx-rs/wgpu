@@ -166,21 +166,6 @@ impl PendingTransition<TextureState> {
     }
 }
 
-/// Helper initialization structure that allows setting the usage on
-/// various sub-resources.
-#[derive(Debug)]
-pub struct Initializer<'a, S: ResourceState> {
-    id: S::Id,
-    state: &'a mut S,
-}
-
-impl<S: ResourceState> Initializer<'_, S> {
-    pub fn set(&mut self, selector: S::Selector, usage: S::Usage) -> bool {
-        self.state.change(self.id, selector, usage, None)
-            .is_ok()
-    }
-}
-
 /// A tracker for all resources of a given type.
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
@@ -267,28 +252,27 @@ impl<S: ResourceState> ResourceTracker<S> {
 
     /// Initialize a resource to be used.
     ///
-    /// Returns `false` if the resource is already tracked.
+    /// Returns false if the resource is already registered.
     pub fn init(
         &mut self,
         id: S::Id,
         ref_count: RefCount,
         state: S,
-    ) -> Option<Initializer<S>> {
+    ) -> Result<(), &S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.entry(index) {
             Entry::Vacant(e) => {
-                let res = e.insert(Resource {
+                e.insert(Resource {
                     ref_count,
                     state,
                     epoch,
                 });
-                Some(Initializer {
-                    id,
-                    state: &mut res.state,
-                })
+                Ok(())
             }
-            Entry::Occupied(_) => None,
+            Entry::Occupied(e) => {
+                Err(&e.into_mut().state)
+            }
         }
     }
 

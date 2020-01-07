@@ -327,7 +327,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         at.attachment,
                         view.life_guard.add_ref(),
                         PhantomData,
-                    ).is_some();
+                    ).is_ok();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -387,7 +387,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         resolve_target,
                         view.life_guard.add_ref(),
                         PhantomData,
-                    ).is_some();
+                    ).is_ok();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {

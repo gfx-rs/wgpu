@@ -34,17 +34,17 @@ impl PendingTransition<TextureState> {
 }
 
 impl TextureState {
-    pub fn from_selector(full_selector: &hal::image::SubresourceRange) -> Self {
-        debug_assert_eq!(full_selector.layers.start, 0);
-        debug_assert_eq!(full_selector.levels.start, 0);
+    pub fn with_range(range: &hal::image::SubresourceRange) -> Self {
+        debug_assert_eq!(range.layers.start, 0);
+        debug_assert_eq!(range.levels.start, 0);
         TextureState {
             mips: iter::repeat_with(|| {
                     PlaneStates::from_range(
-                        0 .. full_selector.layers.end,
+                        0 .. range.layers.end,
                         Unit::new(TextureUsage::UNINITIALIZED),
                     )
                 })
-                .take(full_selector.levels.end as usize)
+                .take(range.levels.end as usize)
                 .collect(),
             full: true,
         }

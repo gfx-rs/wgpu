@@ -474,7 +474,6 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let device = &device_guard[device_id];
         let buffer = device.create_buffer(device_id, desc);
         let ref_count = buffer.life_guard.add_ref();
-        let range = buffer.full_range;
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         device
@@ -484,7 +483,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
             .init(
                 id,
                 ref_count,
-                BufferState::from_selector(&range),
+                BufferState::with_usage(resource::BufferUsage::empty()),
             )
             .unwrap();
         id
@@ -505,7 +504,6 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let device = &device_guard[device_id];
         let mut buffer = device.create_buffer(device_id, &desc);
         let ref_count = buffer.life_guard.add_ref();
-        let range = buffer.full_range;
 
         let pointer = match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
             Ok(ptr) => ptr,
@@ -521,10 +519,9 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
             .buffers.init(
                 id,
                 ref_count,
-                BufferState::from_selector(&range),
+                BufferState::with_usage(resource::BufferUsage::MAP_WRITE),
             )
-            .unwrap()
-            .set((), resource::BufferUsage::MAP_WRITE);
+            .unwrap();
 
         (id, pointer)
     }
@@ -639,10 +636,9 @@ impl<F: IdentityFilter<id::TextureId>> Global<F> {
             .textures.init(
                 id,
                 ref_count,
-                TextureState::from_selector(&range),
+                TextureState::with_range(&range),
             )
-            .unwrap()
-            .set(range, resource::TextureUsage::UNINITIALIZED);
+            .unwrap();
         id
     }
 

@@ -31,8 +31,8 @@ impl Default for BufferState {
 }
 
 impl BufferState {
-    pub fn from_selector(_full_selector: &()) -> Self {
-        BufferState::default()
+    pub fn with_usage(usage: BufferUsage) -> Self {
+        Unit::new(usage)
     }
 }
 
