@@ -20,6 +20,7 @@ struct IdentityHub {
     adapters: IdentityManager,
     devices: IdentityManager,
     buffers: IdentityManager,
+    command_buffers: IdentityManager,
 }
 
 #[derive(Debug, Default)]
@@ -151,5 +152,32 @@ pub extern "C" fn wgpu_client_kill_buffer_id(client: &Client, id: id::BufferId) 
         .lock()
         .select(id.backend())
         .buffers
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_encoder_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::CommandEncoderId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .command_buffers
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_encoder_id(
+    client: &Client,
+    id: id::CommandEncoderId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .command_buffers
         .free(id)
 }

@@ -55,6 +55,8 @@ use std::{
 };
 
 
+pub type OffsetIndex = u16;
+
 pub struct RenderBundle<B: hal::Backend> {
     _raw: B::CommandBuffer,
 }

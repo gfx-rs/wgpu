@@ -101,3 +101,51 @@ pub extern "C" fn wgpu_server_device_get_buffer_sub_data(
 pub extern "C" fn wgpu_server_buffer_destroy(global: &Global, self_id: id::BufferId) {
     gfx_select!(self_id => global.buffer_destroy(self_id));
 }
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_device_create_encoder(
+    global: &Global,
+    self_id: id::DeviceId,
+    encoder_id: id::CommandEncoderId,
+) {
+    let desc = core::command::CommandEncoderDescriptor {
+        todo: 0,
+    };
+    gfx_select!(self_id => global.device_create_command_encoder(self_id, &desc, encoder_id));
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_encoder_destroy(
+    _global: &Global,
+    _self_id: id::CommandEncoderId,
+) {
+    //TODO
+    //gfx_select!(self_id => global.command_encoder_destroy(self_id));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_server_encode_compute_pass(
+    global: &Global,
+    self_id: id::CommandEncoderId,
+    commands: *const core::command::ComputeCommand,
+    command_length: usize,
+    offsets:  *const core::BufferAddress,
+    offset_length: usize,
+) {
+    let pass = core::command::StandaloneComputePass {
+        commands: slice::from_raw_parts(commands, command_length),
+        offsets: slice::from_raw_parts(offsets, offset_length),
+    };
+    gfx_select!(self_id => global.command_encoder_run_compute_pass(self_id, pass));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_server_queue_submit(
+    global: &Global,
+    self_id: id::QueueId,
+    command_buffer_ids: *const id::CommandBufferId,
+    command_buffer_id_length: usize,
+) {
+    let command_buffers = slice::from_raw_parts(command_buffer_ids, command_buffer_id_length);
+    gfx_select!(self_id => global.queue_submit(self_id, command_buffers));
+}

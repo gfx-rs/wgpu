@@ -170,6 +170,7 @@ impl<B: hal::Backend> Access<Device<B>> for Adapter<B> {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
+impl<B: hal::Backend> Access<PipelineLayout<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Root {}
@@ -187,8 +188,10 @@ impl<B: hal::Backend> Access<RenderPass<B>> for Root {}
 impl<B: hal::Backend> Access<RenderPass<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPass<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for Root {}
+impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for ComputePass<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Root {}
+impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for RenderPass<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Root {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for PipelineLayout<B> {}
