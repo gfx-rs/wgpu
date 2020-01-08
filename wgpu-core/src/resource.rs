@@ -66,8 +66,8 @@ pub enum BufferMapAsyncStatus {
 }
 
 pub enum BufferMapOperation {
-    Read(std::ops::Range<u64>, Box<dyn FnOnce(BufferMapAsyncStatus, *const u8)>),
-    Write(std::ops::Range<u64>, Box<dyn FnOnce(BufferMapAsyncStatus, *mut u8)>),
+    Read(Box<dyn FnOnce(BufferMapAsyncStatus, *const u8)>),
+    Write(Box<dyn FnOnce(BufferMapAsyncStatus, *mut u8)>),
 }
 
 //TODO: clarify if/why this is needed here
@@ -76,27 +76,35 @@ unsafe impl Sync for BufferMapOperation {}
 
 impl fmt::Debug for BufferMapOperation {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let (op, range) = match *self {
-            BufferMapOperation::Read(ref range, _) => ("read", range),
-            BufferMapOperation::Write(ref range, _) => ("write", range),
+        let op = match *self {
+            BufferMapOperation::Read(_) => "read",
+            BufferMapOperation::Write(_) => "write",
         };
-        write!(fmt, "BufferMapOperation <{}> of range {:?}", op, range)
+        write!(fmt, "BufferMapOperation <{}>", op)
     }
 }
 
 impl BufferMapOperation {
     pub(crate) fn call_error(self) {
         match self {
-            BufferMapOperation::Read(_, callback) => {
+            BufferMapOperation::Read(callback) => {
                 log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
                 callback(BufferMapAsyncStatus::Error, std::ptr::null());
             }
-            BufferMapOperation::Write(_, callback) => {
+            BufferMapOperation::Write(callback) => {
                 log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
                 callback(BufferMapAsyncStatus::Error, std::ptr::null_mut());
             }
         }
     }
+}
+
+#[derive(Debug)]
+pub struct BufferPendingMapping {
+    pub range: std::ops::Range<BufferAddress>,
+    pub op: BufferMapOperation,
+    // hold the parent alive while the mapping is active
+    pub parent_ref_count: RefCount,
 }
 
 #[derive(Debug)]
@@ -107,14 +115,14 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: BufferAddress,
     pub(crate) full_range: (),
-    pub(crate) mapped_write_ranges: Vec<std::ops::Range<u64>>,
-    pub(crate) pending_map_operation: Option<BufferMapOperation>,
+    pub(crate) mapped_write_ranges: Vec<std::ops::Range<BufferAddress>>,
+    pub(crate) pending_mapping: Option<BufferPendingMapping>,
     pub(crate) life_guard: LifeGuard,
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
     fn borrow(&self) -> &RefCount {
-        &self.life_guard.ref_count
+        self.life_guard.ref_count.as_ref().unwrap()
     }
 }
 
@@ -242,7 +250,7 @@ pub struct Texture<B: hal::Backend> {
 
 impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
     fn borrow(&self) -> &RefCount {
-        &self.life_guard.ref_count
+        self.life_guard.ref_count.as_ref().unwrap()
     }
 }
 
@@ -315,7 +323,7 @@ pub struct TextureView<B: hal::Backend> {
 
 impl<B: hal::Backend> Borrow<RefCount> for TextureView<B> {
     fn borrow(&self) -> &RefCount {
-        &self.life_guard.ref_count
+        self.life_guard.ref_count.as_ref().unwrap()
     }
 }
 
@@ -397,7 +405,7 @@ pub struct Sampler<B: hal::Backend> {
 
 impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {
     fn borrow(&self) -> &RefCount {
-        &self.life_guard.ref_count
+        self.life_guard.ref_count.as_ref().unwrap()
     }
 }
 

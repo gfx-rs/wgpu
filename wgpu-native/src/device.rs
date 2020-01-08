@@ -285,6 +285,16 @@ pub extern "C" fn wgpu_device_create_command_encoder(
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_command_encoder_destroy(command_encoder_id: id::CommandEncoderId) {
+    gfx_select!(command_encoder_id => GLOBAL.command_encoder_destroy(command_encoder_id))
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_command_buffer_destroy(command_buffer_id: id::CommandBufferId) {
+    gfx_select!(command_buffer_id => GLOBAL.command_buffer_destroy(command_buffer_id))
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_get_queue(device_id: id::DeviceId) -> id::QueueId {
     device_id
 }
@@ -344,12 +354,11 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     userdata: *mut u8,
 ) {
     let operation = core::resource::BufferMapOperation::Read(
-        start .. start + size,
         Box::new(move |status, data| unsafe {
             callback(status, data, userdata)
         }),
     );
-    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_READ, operation))
+    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_READ, start .. start + size, operation))
 }
 
 #[no_mangle]
@@ -361,12 +370,11 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     userdata: *mut u8,
 ) {
     let operation = core::resource::BufferMapOperation::Write(
-        start .. start + size,
         Box::new(move |status, data| unsafe {
             callback(status, data, userdata)
         }),
     );
-    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_WRITE, operation))
+    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_WRITE, start .. start + size, operation))
 }
 
 #[no_mangle]

@@ -88,7 +88,7 @@ impl Drop for RefCount {
 
 #[derive(Debug)]
 struct LifeGuard {
-    ref_count: RefCount,
+    ref_count: Option<RefCount>,
     submission_index: AtomicUsize,
 }
 
@@ -96,9 +96,20 @@ impl LifeGuard {
     fn new() -> Self {
         let bx = Box::new(AtomicUsize::new(1));
         LifeGuard {
-            ref_count: RefCount(ptr::NonNull::new(Box::into_raw(bx)).unwrap()),
+            ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
             submission_index: AtomicUsize::new(0),
         }
+    }
+
+    fn add_ref(&self) -> RefCount {
+        self.ref_count.clone().unwrap()
+    }
+
+    /// Returns `true` if the resource is still needed by the user.
+    fn use_at(&self, submit_index: SubmissionIndex) -> bool {
+        self.submission_index
+            .store(submit_index, Ordering::Release);
+        self.ref_count.is_some()
     }
 }
 

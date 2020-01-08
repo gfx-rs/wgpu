@@ -123,7 +123,7 @@ pub struct BindGroup<B: hal::Backend> {
 
 impl<B: hal::Backend> Borrow<RefCount> for BindGroup<B> {
     fn borrow(&self) -> &RefCount {
-        &self.life_guard.ref_count
+        self.life_guard.ref_count.as_ref().unwrap()
     }
 }
 

@@ -192,6 +192,20 @@ impl<S: ResourceState> ResourceTracker<S> {
         }
     }
 
+    /// Removes the resource from the tracker if we are holding the last reference.
+    pub fn remove_abandoned(&mut self, id: S::Id) -> bool {
+        let (index, epoch, backend) = id.unzip();
+        debug_assert_eq!(backend, self.backend);
+        match self.map.entry(index) {
+            Entry::Occupied(e) if e.get().ref_count.load() == 1 => {
+                let res = e.remove();
+                assert_eq!(res.epoch, epoch);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Try to optimize the internal representation.
     pub fn optimize(&mut self) {
         for resource in self.map.values_mut() {
@@ -210,6 +224,11 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Clear the tracked contents.
     fn clear(&mut self) {
         self.map.clear();
+    }
+
+    /// Returns true if the tracker is empty.
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
     }
 
     /// Initialize a resource to be used.

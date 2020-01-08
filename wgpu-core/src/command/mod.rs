@@ -252,7 +252,11 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             );
 
             const MAX_TOTAL_ATTACHMENTS: usize = 10;
-            type OutputAttachment<'a> = (TextureId, &'a hal::image::SubresourceRange, Option<TextureUsage>);
+            type OutputAttachment<'a> = (
+                &'a Stored<TextureId>,
+                &'a hal::image::SubresourceRange,
+                Option<TextureUsage>,
+            );
             let mut output_attachments = ArrayVec::<[OutputAttachment; MAX_TOTAL_ATTACHMENTS]>::new();
 
             log::trace!(
@@ -271,8 +275,8 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         } else {
                             extent = Some(view.extent);
                         }
-                        let texture_id = match view.inner {
-                            TextureViewInner::Native { ref source_id, .. } => source_id.value,
+                        let source_id = match view.inner {
+                            TextureViewInner::Native { ref source_id, .. } => source_id,
                             TextureViewInner::SwapChain { .. } => {
                                 panic!("Unexpected depth/stencil use of swapchain image!")
                             }
@@ -280,10 +284,10 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
 
                         // Using render pass for transition.
                         let consistent_usage = cmb.trackers.textures.query(
-                            texture_id,
+                            source_id.value,
                             view.range.clone(),
                         );
-                        output_attachments.push((texture_id, &view.range, consistent_usage));
+                        output_attachments.push((source_id, &view.range, consistent_usage));
 
                         let old_layout = match consistent_usage {
                             Some(usage) => conv::map_texture_state(
@@ -323,7 +327,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     );
                     let first_use = cmb.trackers.views.init(
                         at.attachment,
-                        view.life_guard.ref_count.clone(),
+                        view.life_guard.add_ref(),
                         &(),
                     ).is_some();
 
@@ -333,7 +337,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                 source_id.value,
                                 view.range.clone(),
                             );
-                            output_attachments.push((source_id.value, &view.range, consistent_usage));
+                            output_attachments.push((source_id, &view.range, consistent_usage));
 
                             let old_layout = match consistent_usage {
                                 Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
@@ -348,7 +352,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                 assert!(used_swap_chain_image.is_none());
                                 used_swap_chain_image = Some(Stored {
                                     value: at.attachment,
-                                    ref_count: view.life_guard.ref_count.clone(),
+                                    ref_count: view.life_guard.add_ref(),
                                 });
                             }
 
@@ -383,7 +387,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     );
                     let first_use = cmb.trackers.views.init(
                         resolve_target,
-                        view.life_guard.ref_count.clone(),
+                        view.life_guard.add_ref(),
                         &(),
                     ).is_some();
 
@@ -393,7 +397,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                 source_id.value,
                                 view.range.clone(),
                             );
-                            output_attachments.push((source_id.value, &view.range, consistent_usage));
+                            output_attachments.push((source_id, &view.range, consistent_usage));
 
                             let old_layout = match consistent_usage {
                                 Some(usage) => conv::map_texture_state(usage, hal::format::Aspects::COLOR).1,
@@ -408,7 +412,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                                 assert!(used_swap_chain_image.is_none());
                                 used_swap_chain_image = Some(Stored {
                                     value: resolve_target,
-                                    ref_count: view.life_guard.ref_count.clone(),
+                                    ref_count: view.life_guard.add_ref(),
                                 });
                             }
 
@@ -442,26 +446,26 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             };
 
             let mut trackers = TrackerSet::new(B::VARIANT);
-            for (texture_id, view_range, consistent_usage) in output_attachments {
-                let texture = &texture_guard[texture_id];
+            for (source_id, view_range, consistent_usage) in output_attachments {
+                let texture = &texture_guard[source_id.value];
                 assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
                 let usage = consistent_usage.unwrap_or(TextureUsage::OUTPUT_ATTACHMENT);
                 match trackers.textures.init(
-                    texture_id,
-                    texture.life_guard.ref_count.clone(),
+                    source_id.value,
+                    source_id.ref_count.clone(),
                     &texture.full_range,
                 ) {
                     Some(mut init) => init.set(view_range.clone(), usage),
-                    None => panic!("Your texture {:?} is in the another attachment!", texture_id),
+                    None => panic!("Your texture {:?} is in the another attachment!", source_id.value),
                 };
 
                 if consistent_usage.is_some() {
                     // If we expect the texture to be transited to a new state by the
                     // render pass configuration, make the tracker aware of that.
                     let _ = trackers.textures.change_replace(
-                        texture_id,
-                        &texture.life_guard.ref_count,
+                        source_id.value,
+                        &source_id.ref_count,
                         view_range.clone(),
                         TextureUsage::OUTPUT_ATTACHMENT,
                         &texture.full_range,
@@ -674,7 +678,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 current_comb,
                 Stored {
                     value: encoder_id,
-                    ref_count: cmb.life_guard.ref_count.clone(),
+                    ref_count: cmb.life_guard.add_ref(),
                 },
                 context,
                 trackers,
@@ -703,7 +707,7 @@ impl<F: IdentityFilter<ComputePassId>> Global<F> {
         let trackers = mem::replace(&mut cmb.trackers, TrackerSet::new(encoder_id.backend()));
         let stored = Stored {
             value: encoder_id,
-            ref_count: cmb.life_guard.ref_count.clone(),
+            ref_count: cmb.life_guard.add_ref(),
         };
 
         let pass = ComputePass::new(raw, stored, trackers, cmb.features.max_bind_groups);
