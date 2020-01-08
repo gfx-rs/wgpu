@@ -127,16 +127,11 @@ pub extern "C" fn wgpu_server_encoder_destroy(
 pub unsafe extern "C" fn wgpu_server_encode_compute_pass(
     global: &Global,
     self_id: id::CommandEncoderId,
-    commands: *const core::command::ComputeCommand,
-    command_length: usize,
-    offsets:  *const core::BufferAddress,
-    offset_length: usize,
+    bytes: *const u8,
+    byte_length: usize,
 ) {
-    let pass = core::command::StandaloneComputePass {
-        commands: slice::from_raw_parts(commands, command_length),
-        offsets: slice::from_raw_parts(offsets, offset_length),
-    };
-    gfx_select!(self_id => global.command_encoder_run_compute_pass(self_id, pass));
+    let raw_data = slice::from_raw_parts(bytes, byte_length);
+    gfx_select!(self_id => global.command_encoder_run_compute_pass(self_id, raw_data));
 }
 
 #[no_mangle]

@@ -6,7 +6,6 @@ use crate::{
     command::{
         bind::{Binder, LayoutChange},
         CommandBuffer,
-        OffsetIndex,
     },
     conv,
     device::{
@@ -37,6 +36,8 @@ use std::{
     ops::Range,
 };
 
+
+type OffsetIndex = u16;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

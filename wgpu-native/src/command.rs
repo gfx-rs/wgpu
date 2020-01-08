@@ -315,3 +315,32 @@ pub extern "C" fn wgpu_compute_pass_set_pipeline(
 ) {
     gfx_select!(pass_id => GLOBAL.compute_pass_set_pipeline(pass_id, pipeline_id))
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_compute_pass(
+    self_id: id::CommandEncoderId,
+    pass: &core::command::RawPass,
+) {
+    let raw_data = pass.to_slice();
+    gfx_select!(self_id => GLOBAL.command_encoder_run_compute_pass(self_id, raw_data));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_render_pass(
+    self_id: id::CommandEncoderId,
+    color_attachments: *const core::command::RenderPassColorAttachmentDescriptor,
+    color_attachment_length: usize,
+    depth_stencil_attachment: Option<&core::command::RenderPassDepthStencilAttachmentDescriptor>,
+    commands: *const core::command::RenderCommand,
+    command_length: usize,
+    offsets:  *const core::BufferAddress,
+    offset_length: usize,
+) {
+    let pass = core::command::StandaloneRenderPass {
+        color_attachments: slice::from_raw_parts(color_attachments, color_attachment_length),
+        depth_stencil_attachment,
+        commands: slice::from_raw_parts(commands, command_length),
+        offsets: slice::from_raw_parts(offsets, offset_length),
+    };
+    gfx_select!(self_id => GLOBAL.command_encoder_run_render_pass(self_id, pass));
+}

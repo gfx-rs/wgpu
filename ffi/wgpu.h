@@ -243,6 +243,10 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
+typedef struct WGPURawPass WGPURawPass;
+
+typedef struct WGPURenderCommand WGPURenderCommand;
+
 typedef uint64_t WGPUId_Device_Dummy;
 
 typedef WGPUId_Device_Dummy WGPUDeviceId;
@@ -698,6 +702,8 @@ WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId e
 WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId encoder_id,
                                                         const WGPURenderPassDescriptor *desc);
 
+void wgpu_command_encoder_compute_pass(WGPUCommandEncoderId self_id, const WGPURawPass *pass);
+
 void wgpu_command_encoder_copy_buffer_to_buffer(WGPUCommandEncoderId command_encoder_id,
                                                 WGPUBufferId source,
                                                 WGPUBufferAddress source_offset,
@@ -724,6 +730,15 @@ void wgpu_command_encoder_destroy(WGPUCommandEncoderId command_encoder_id);
 
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId encoder_id,
                                                 const WGPUCommandBufferDescriptor *desc);
+
+void wgpu_command_encoder_render_pass(WGPUCommandEncoderId self_id,
+                                      const WGPURenderPassColorAttachmentDescriptor *color_attachments,
+                                      uintptr_t color_attachment_length,
+                                      const WGPURenderPassDepthStencilAttachmentDescriptor *depth_stencil_attachment,
+                                      const WGPURenderCommand *commands,
+                                      uintptr_t command_length,
+                                      const WGPUBufferAddress *offsets,
+                                      uintptr_t offset_length);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 

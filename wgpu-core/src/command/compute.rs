@@ -6,7 +6,7 @@ use crate::{
     command::{
         bind::{Binder, LayoutChange},
         CommandBuffer,
-        OffsetIndex,
+        RawPass,
     },
     device::{all_buffer_stages, BIND_BUFFER_ALIGNMENT},
     hub::{GfxBackend, Global, IdentityFilter, Token},
@@ -18,17 +18,17 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
+use peek_poke::{Peek, PeekCopy, Poke};
 
-use std::{iter, ops::Range};
+use std::{convert::TryInto, iter, mem, ptr, slice};
 
 
-#[non_exhaustive]
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
 pub enum ComputeCommand {
     SetBindGroup {
         index: u32,
+        num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        offset_indices: Range<OffsetIndex>,
     },
     SetPipeline(id::ComputePipelineId),
     Dispatch([u32; 3]),
@@ -36,12 +36,6 @@ pub enum ComputeCommand {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     },
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct StandaloneComputePass<'a> {
-    pub commands: &'a [ComputeCommand],
-    pub offsets: &'a [BufferAddress],
 }
 
 #[repr(C)]
@@ -96,7 +90,7 @@ impl<F> Global<F> {
     pub fn command_encoder_run_compute_pass<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        pass: StandaloneComputePass,
+        raw_data: &[u8],
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -112,10 +106,23 @@ impl<F> Global<F> {
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
 
-        for command in pass.commands {
-            match *command {
-                ComputeCommand::SetBindGroup { index, bind_group_id, ref offset_indices } => {
-                    let offsets = &pass.offsets[offset_indices.start as usize .. offset_indices.end as usize];
+        let mut peeker = raw_data.as_ptr();
+        let raw_data_end = unsafe {
+            raw_data.as_ptr().add(raw_data.len())
+        };
+        let mut command = ComputeCommand::Dispatch([0; 3]); // dummy
+        while unsafe { peeker.add(mem::size_of::<ComputeCommand>()) } <= raw_data_end {
+            peeker = unsafe { command.peek_from(peeker) };
+            match command {
+                ComputeCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id } => {
+                    debug_assert_eq!(peeker.align_offset(mem::align_of::<BufferAddress>()), 0);
+                    let extra_size = (num_dynamic_offsets as usize) * mem::size_of::<BufferAddress>();
+                    let end = unsafe { peeker.add(extra_size) };
+                    assert!(end <= raw_data_end);
+                    let offsets = unsafe {
+                        slice::from_raw_parts(peeker as *const BufferAddress, num_dynamic_offsets as usize)
+                    };
+                    peeker = end;
                     if cfg!(debug_assertions) {
                         for off in offsets {
                             assert_eq!(
@@ -234,6 +241,8 @@ impl<F> Global<F> {
                 }
             }
         }
+
+        assert_eq!(peeker, raw_data_end);
     }
 
     pub fn compute_pass_set_bind_group<B: GfxBackend>(
@@ -411,5 +420,75 @@ impl<F> Global<F> {
                 }
             }
         }
+    }
+}
+
+impl RawPass {
+    #[inline]
+    unsafe fn encode(&mut self, command: &ComputeCommand) {
+        self.ensure_extra_size(mem::size_of::<ComputeCommand>());
+        self.data = command.poke_into(self.data);
+    }
+
+    #[inline]
+    unsafe fn encode_with<T>(&mut self, command: &ComputeCommand, extra: &[T]) {
+        let extra_size = extra.len() * mem::size_of::<T>();
+        self.ensure_extra_size(mem::size_of::<ComputeCommand>() + extra_size);
+        self.data = command.poke_into(self.data);
+        debug_assert_eq!(self.data.align_offset(mem::align_of::<T>()), 0);
+        ptr::copy_nonoverlapping(extra.as_ptr(), self.data as *mut T, extra.len());
+        self.data = self.data.add(extra_size);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_raw_compute_pass_set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group_id: id::BindGroupId,
+        offsets: *const BufferAddress,
+        offset_length: usize,
+    ) {
+        self.encode_with(
+            &ComputeCommand::SetBindGroup {
+                index,
+                num_dynamic_offsets: offset_length.try_into().unwrap(),
+                bind_group_id,
+            },
+            slice::from_raw_parts(offsets, offset_length),
+        );
+
+        for offset in slice::from_raw_parts(offsets, offset_length) {
+            self.data = offset.poke_into(self.data);
+        }
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_standalone_compute_pass_set_pipeline(
+        &mut self,
+        pipeline_id: id::ComputePipelineId,
+    ) {
+        self.encode(&ComputeCommand::SetPipeline(pipeline_id));
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_standalone_compute_pass_dispatch(
+        &mut self,
+        groups_x: u32,
+        groups_y: u32,
+        groups_z: u32,
+    ) {
+        self.encode(&ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_standalone_compute_pass_dispatch_indirect(
+        &mut self,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+    ) {
+        self.encode(&ComputeCommand::DispatchIndirect {
+            buffer_id,
+            offset,
+        });
     }
 }

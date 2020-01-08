@@ -5,7 +5,7 @@
 use crate::{Backend, Epoch, Index};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::{fmt, marker::PhantomData};
+use std::{fmt, marker::PhantomData, mem};
 
 const BACKEND_BITS: usize = 3;
 const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
@@ -54,6 +54,21 @@ impl<T> std::hash::Hash for Id<T> {
 impl<T> PartialEq for Id<T> {
     fn eq(&self, other: &Self) -> bool {
         self.0 == other.0
+    }
+}
+
+unsafe impl<T> peek_poke::Poke for Id<T> {
+    fn max_size() -> usize {
+         mem::size_of::<u64>()
+    }
+    unsafe fn poke_into(&self, data: *mut u8) -> *mut u8 {
+        self.0.poke_into(data)
+    }
+}
+
+impl<T> peek_poke::Peek for Id<T> {
+    unsafe fn peek_from(&mut self, data: *const u8) -> *const u8 {
+        self.0.peek_from(data)
     }
 }
 

@@ -54,7 +54,45 @@ use std::{
 };
 
 
-pub type OffsetIndex = u16;
+pub struct RawPass {
+    data: *mut u8,
+    base: *mut u8,
+    capacity: usize,
+}
+
+impl RawPass {
+    pub fn new() -> Self {
+        let mut vec = Vec::with_capacity(16);
+        RawPass {
+            data: vec.as_mut_ptr(),
+            base: vec.as_mut_ptr(),
+            capacity: vec.capacity(),
+        }
+    }
+
+    pub unsafe fn delete(self) {
+        let size = self.data as usize - self.base as usize;
+        let _ = Vec::from_raw_parts(self.base, size, self.capacity);
+    }
+
+    pub unsafe fn to_slice(&self) -> &[u8] {
+        let size = self.data as usize - self.base as usize;
+        assert!(size <= self.capacity);
+        slice::from_raw_parts(self.base, size)
+    }
+
+    unsafe fn ensure_extra_size(&mut self, extra_size: usize) {
+        let size = self.data as usize - self.base as usize;
+        if let Some(extra_capacity) = (size + extra_size).checked_sub(self.capacity) {
+            let mut vec = Vec::from_raw_parts(self.base, size, self.capacity);
+            vec.reserve(extra_capacity);
+            //let (data, size, capacity) = vec.into_raw_parts(); //TODO: when stable
+            self.data = vec.as_mut_ptr().add(vec.len());
+            self.base = vec.as_mut_ptr();
+            self.capacity = vec.capacity();
+        }
+    }
+}
 
 pub struct RenderBundle<B: hal::Backend> {
     _raw: B::CommandBuffer,
