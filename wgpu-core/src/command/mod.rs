@@ -35,7 +35,6 @@ use crate::{
     },
     resource::{Buffer, Texture, TextureUsage, TextureViewInner},
     track::TrackerSet,
-    Color,
     Features,
     LifeGuard,
     Stored,
@@ -59,56 +58,6 @@ pub type OffsetIndex = u16;
 
 pub struct RenderBundle<B: hal::Backend> {
     _raw: B::CommandBuffer,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum LoadOp {
-    Clear = 0,
-    Load = 1,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum StoreOp {
-    Clear = 0,
-    Store = 1,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct RenderPassColorAttachmentDescriptor {
-    pub attachment: TextureViewId,
-    pub resolve_target: *const TextureViewId,
-    pub load_op: LoadOp,
-    pub store_op: StoreOp,
-    pub clear_color: Color,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct RenderPassDepthStencilAttachmentDescriptor<T> {
-    pub attachment: T,
-    pub depth_load_op: LoadOp,
-    pub depth_store_op: StoreOp,
-    pub clear_depth: f32,
-    pub stencil_load_op: LoadOp,
-    pub stencil_store_op: StoreOp,
-    pub clear_stencil: u32,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct RenderPassDescriptor {
-    pub color_attachments: *const RenderPassColorAttachmentDescriptor,
-    pub color_attachments_length: usize,
-    pub depth_stencil_attachment: *const RenderPassDepthStencilAttachmentDescriptor<TextureViewId>,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Default)]
-pub struct ComputePassDescriptor {
-    pub todo: u32,
 }
 
 #[derive(Debug)]
@@ -377,7 +326,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
 
                 for &resolve_target in color_attachments
                     .iter()
-                    .flat_map(|at| unsafe { at.resolve_target.as_ref() })
+                    .flat_map(|at| at.resolve_target)
                 {
                     let view = &view_guard[resolve_target];
                     assert_eq!(extent, Some(view.extent));
@@ -485,10 +434,10 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     let mut attachment_index = color_attachments.len();
                     if color_attachments
                         .iter()
-                        .any(|at| !at.resolve_target.is_null())
+                        .any(|at| at.resolve_target.is_some())
                     {
                         for (i, at) in color_attachments.iter().enumerate() {
-                            if at.resolve_target.is_null() {
+                            if at.resolve_target.is_none() {
                                 resolve_ids.push((
                                     hal::pass::ATTACHMENT_UNUSED,
                                     hal::image::Layout::ColorAttachmentOptimal,
@@ -534,7 +483,8 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                 colors: color_attachments.iter().map(|at| at.attachment).collect(),
                 resolves: color_attachments
                     .iter()
-                    .filter_map(|at| unsafe { at.resolve_target.as_ref() }.cloned())
+                    .filter_map(|at| at.resolve_target)
+                    .cloned()
                     .collect(),
                 depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
             };
@@ -665,7 +615,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                     .collect(),
                 resolves: color_attachments
                     .iter()
-                    .filter_map(|at| unsafe { at.resolve_target.as_ref() })
+                    .filter_map(|at| at.resolve_target)
                     .map(|resolve| view_guard[*resolve].format)
                     .collect(),
                 depth_stencil: depth_stencil_attachment.map(|at| view_guard[at.attachment].format),

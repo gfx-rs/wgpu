@@ -44,6 +44,12 @@ pub struct StandaloneComputePass<'a> {
     pub offsets: &'a [BufferAddress],
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, Default)]
+pub struct ComputePassDescriptor {
+    pub todo: u32,
+}
+
 #[derive(Debug)]
 pub struct ComputePass<B: hal::Backend> {
     raw: B::CommandBuffer,
