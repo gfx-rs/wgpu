@@ -35,7 +35,7 @@ impl<B: hal::Backend> CommandPool<B> {
             if index < lowest_active_index {
                 let cmd_buf = self.pending.swap_remove(i);
                 log::trace!(
-                    "recycling comb submitted in {} when {} is done",
+                    "recycling comb submitted in {} when {} is lowest active",
                     index,
                     lowest_active_index,
                 );

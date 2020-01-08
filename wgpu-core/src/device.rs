@@ -1546,11 +1546,12 @@ impl<F: IdentityFilter<CommandEncoderId>> Global<F> {
             ref_count: device.life_guard.ref_count.clone(),
         };
 
-        // The first entry in the active list should have the lowest index
+        // Find the pending entry with the lowest active index. If none can be found that means
+        // everything in the allocator can be cleaned up, so std::usize::MAX is correct.
         let lowest_active_index = device.pending.lock()
-            .active.get(0)
-            .map(|active| active.index)
-            .unwrap_or(0);
+            .active
+            .iter()
+            .fold(std::usize::MAX, |v, active| active.index.min(v));
 
         let mut comb = device
             .com_allocator
