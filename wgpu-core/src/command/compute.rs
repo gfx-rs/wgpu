@@ -174,12 +174,7 @@ impl<F> Global<F> {
         );
         assert!(src_buffer.usage.contains(BufferUsage::INDIRECT));
 
-        let barriers = src_pending.map(|pending| hal::memory::Barrier::Buffer {
-            states: pending.to_states(),
-            target: &src_buffer.raw,
-            families: None,
-            range: None .. None,
-        });
+        let barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 
         unsafe {
             pass.raw.pipeline_barrier(

@@ -3,18 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{PendingTransition, ResourceState, Unit};
-use crate::{conv, id::BufferId, resource::BufferUsage};
-use std::ops::Range;
+use crate::{id::BufferId, resource::BufferUsage};
 
 //TODO: store `hal::buffer::State` here to avoid extra conversions
 pub type BufferState = Unit<BufferUsage>;
 
 impl PendingTransition<BufferState> {
-    /// Produce the gfx-hal buffer states corresponding to the transition.
-    pub fn to_states(&self) -> Range<hal::buffer::State> {
-        conv::map_buffer_state(self.usage.start) .. conv::map_buffer_state(self.usage.end)
-    }
-
     fn collapse(self) -> Result<BufferUsage, Self> {
         if self.usage.start.is_empty()
             || self.usage.start == self.usage.end
@@ -27,17 +21,25 @@ impl PendingTransition<BufferState> {
     }
 }
 
-impl ResourceState for BufferState {
-    type Id = BufferId;
-    type Selector = ();
-    type Usage = BufferUsage;
-
-    fn new(_full_selector: &Self::Selector) -> Self {
+impl Default for BufferState {
+    fn default() -> Self {
         BufferState {
             first: None,
             last: BufferUsage::empty(),
         }
     }
+}
+
+impl BufferState {
+    pub fn with_usage(usage: BufferUsage) -> Self {
+        Unit::new(usage)
+    }
+}
+
+impl ResourceState for BufferState {
+    type Id = BufferId;
+    type Selector = ();
+    type Usage = BufferUsage;
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(self.last)
