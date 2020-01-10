@@ -127,7 +127,7 @@ int main(
             .todo = 0
         });
 
-    WGPUComputePassId command_pass =
+    WGPURawComputePassId command_pass = //temp name
         wgpu_command_encoder_begin_compute_pass(encoder, NULL);
     wgpu_compute_pass_set_pipeline(command_pass, compute_pipeline);
 

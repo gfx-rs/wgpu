@@ -7,7 +7,7 @@ use crate::{
         bind::{Binder, LayoutChange},
         CommandBuffer,
         PhantomSlice,
-        RawPass,
+        RawRenderTargets,
     },
     conv,
     device::{
@@ -16,6 +16,7 @@ use crate::{
         RenderPassKey,
         BIND_BUFFER_ALIGNMENT,
         MAX_VERTEX_BUFFERS,
+        MAX_COLOR_TARGETS,
     },
     hub::{GfxBackend, Global, IdentityFilter, Token},
     id,
@@ -34,12 +35,9 @@ use peek_poke::{Peek, PeekCopy, Poke};
 use std::{
     borrow::Borrow,
     collections::hash_map::Entry,
-    convert::TryInto,
     iter,
     marker::PhantomData,
-    mem,
     ops::Range,
-    slice,
 };
 
 
@@ -59,16 +57,16 @@ pub enum StoreOp {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct RenderPassColorAttachmentDescriptorBase<'a, T> {
-    pub attachment: id::TextureViewId,
-    pub resolve_target: Option<&'a T>,
+pub struct RenderPassColorAttachmentDescriptorBase<T, R> {
+    pub attachment: T,
+    pub resolve_target: R,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     pub attachment: T,
     pub depth_load_op: LoadOp,
@@ -79,15 +77,20 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     pub clear_stencil: u32,
 }
 
-pub type RenderPassDepthStencilAttachmentDescriptor = RenderPassDepthStencilAttachmentDescriptorBase<id::TextureViewId>;
-pub type RenderPassColorAttachmentDescriptor<'a> = RenderPassColorAttachmentDescriptorBase<'a, id::TextureViewId>;
+//Note: this could look better if `cbindgen` wasn't confused by &T used in place of
+// a generic paramter, it's not able to mange
+pub type OptionRef<'a, T> = Option<&'a T>;
+pub type RenderPassColorAttachmentDescriptor<'a> =
+    RenderPassColorAttachmentDescriptorBase<id::TextureViewId, OptionRef<'a, id::TextureViewId>>;
+pub type RenderPassDepthStencilAttachmentDescriptor =
+    RenderPassDepthStencilAttachmentDescriptorBase<id::TextureViewId>;
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct RenderPassDescriptor<'a> {
     pub color_attachments: *const RenderPassColorAttachmentDescriptor<'a>,
     pub color_attachments_length: usize,
-    pub depth_stencil_attachment: *const RenderPassDepthStencilAttachmentDescriptor,
+    pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachmentDescriptor>,
 }
 
 #[derive(Clone, Copy, Debug, PeekCopy, Poke)]
@@ -101,7 +104,7 @@ pub struct Rect<T> {
 #[derive(Clone, Copy, Debug, PeekCopy, Poke)]
 enum RenderCommand {
     SetBindGroup {
-        index: u32,
+        index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
         phantom_offsets: PhantomSlice<BufferAddress>,
@@ -147,6 +150,20 @@ enum RenderCommand {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     },
+    End,
+}
+
+impl super::RawPass {
+    pub fn new_render(parent_id: id::CommandEncoderId) -> Self {
+        Self::from_vec(Vec::<RenderCommand>::with_capacity(1), parent_id)
+    }
+}
+
+impl super::RawRenderPass {
+    pub unsafe fn finish_render(self) -> (Vec<u8>, id::CommandEncoderId, RawRenderTargets) {
+        let (vec, parent_id) = self.raw.finish_with(RenderCommand::End);
+        (vec, parent_id, self.targets)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -650,7 +667,7 @@ impl<F> Global<F> {
                         (3, hal::image::Layout::ColorAttachmentOptimal),
                     ];
 
-                    let mut resolve_ids = ArrayVec::<[_; crate::device::MAX_COLOR_TARGETS]>::new();
+                    let mut resolve_ids = ArrayVec::<[_; MAX_COLOR_TARGETS]>::new();
                     let mut attachment_index = color_attachments.len();
                     if color_attachments
                         .iter()
@@ -869,7 +886,8 @@ impl<F> Global<F> {
             first_vertex: 0,
             first_instance: 0,
         };
-        while unsafe { peeker.add(mem::size_of::<RenderCommand>()) } <= raw_data_end {
+        loop {
+            assert!(unsafe { peeker.add(RenderCommand::max_size()) } <= raw_data_end);
             peeker = unsafe { command.peek_from(peeker) };
             match command {
                 RenderCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
@@ -1179,10 +1197,9 @@ impl<F> Global<F> {
                         raw.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                     }
                 }
+                RenderCommand::End => break,
             }
         }
-
-        assert_eq!(peeker, raw_data_end);
     }
 
     pub fn render_pass_set_bind_group<B: GfxBackend>(
@@ -1651,85 +1668,99 @@ impl<F> Global<F> {
     }
 }
 
-impl RawPass {
+mod ffi {
+    use super::{
+        RenderCommand,
+        super::{PhantomSlice, RawRenderPass, Rect},
+    };
+    use crate::{
+        id,
+        BufferAddress,
+        Color,
+        RawString,
+    };
+    use std::{convert::TryInto, slice};
+
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_bind_group(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
+        pass: &mut RawRenderPass,
         index: u32,
         bind_group_id: id::BindGroupId,
         offsets: *const BufferAddress,
         offset_length: usize,
     ) {
-        self.encode_with1(
-            &RenderCommand::SetBindGroup {
-                index,
-                num_dynamic_offsets: offset_length.try_into().unwrap(),
-                bind_group_id,
-                phantom_offsets: PhantomSlice::new(),
-            },
+        pass.raw.encode(&RenderCommand::SetBindGroup {
+            index: index.try_into().unwrap(),
+            num_dynamic_offsets: offset_length.try_into().unwrap(),
+            bind_group_id,
+            phantom_offsets: PhantomSlice::new(),
+        });
+        pass.raw.encode_slice(
             slice::from_raw_parts(offsets, offset_length),
         );
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_pipeline(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_pipeline(
+        pass: &mut RawRenderPass,
         pipeline_id: id::RenderPipelineId,
     ) {
-        self.encode(&RenderCommand::SetPipeline(pipeline_id));
+        pass.raw.encode(&RenderCommand::SetPipeline(pipeline_id));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_index_buffer(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_index_buffer(
+        pass: &mut RawRenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        self.encode(&RenderCommand::SetIndexBuffer {
+        pass.raw.encode(&RenderCommand::SetIndexBuffer {
             buffer_id,
             offset,
         });
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_vertex_buffers(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffers(
+        pass: &mut RawRenderPass,
         start_slot: u32,
         buffer_ids: *const id::BufferId,
         offsets: *const BufferAddress,
         length: usize,
     ) {
-        self.encode_with2(
-            &RenderCommand::SetVertexBuffers {
-                start_index: start_slot.try_into().unwrap(),
-                count: length.try_into().unwrap(),
-                phantom_buffer_ids: PhantomSlice::new(),
-                phantom_offsets: PhantomSlice::new(),
-            },
+        pass.raw.encode(&RenderCommand::SetVertexBuffers {
+            start_index: start_slot.try_into().unwrap(),
+            count: length.try_into().unwrap(),
+            phantom_buffer_ids: PhantomSlice::new(),
+            phantom_offsets: PhantomSlice::new(),
+        });
+        pass.raw.encode_slice(
             slice::from_raw_parts(buffer_ids, length),
+        );
+        pass.raw.encode_slice(
             slice::from_raw_parts(offsets, length),
         );
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_blend_color(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_blend_color(
+        pass: &mut RawRenderPass,
         color: &Color,
     ) {
-        self.encode(&RenderCommand::SetBlendColor(*color));
+        pass.raw.encode(&RenderCommand::SetBlendColor(*color));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_stencil_reference(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_stencil_reference(
+        pass: &mut RawRenderPass,
         value: u32,
     ) {
-        self.encode(&RenderCommand::SetStencilReference(value));
+        pass.raw.encode(&RenderCommand::SetStencilReference(value));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_viewport(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_viewport(
+        pass: &mut RawRenderPass,
         x: f32,
         y: f32,
         w: f32,
@@ -1737,7 +1768,7 @@ impl RawPass {
         depth_min: f32,
         depth_max: f32,
     ) {
-        self.encode(&RenderCommand::SetViewport {
+        pass.raw.encode(&RenderCommand::SetViewport {
             rect: Rect { x, y, w, h },
             depth_min,
             depth_max,
@@ -1745,25 +1776,25 @@ impl RawPass {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_set_scissor(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_set_scissor(
+        pass: &mut RawRenderPass,
         x: u32,
         y: u32,
         w: u32,
         h: u32,
     ) {
-        self.encode(&RenderCommand::SetScissor(Rect { x, y, w, h }));
+        pass.raw.encode(&RenderCommand::SetScissor(Rect { x, y, w, h }));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_draw(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_draw(
+        pass: &mut RawRenderPass,
         vertex_count: u32,
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
     ) {
-        self.encode(&RenderCommand::Draw {
+        pass.raw.encode(&RenderCommand::Draw {
             vertex_count,
             instance_count,
             first_vertex,
@@ -1772,14 +1803,46 @@ impl RawPass {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_render_pass_draw_indirect(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_render_pass_draw_indirect(
+        pass: &mut RawRenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        self.encode(&RenderCommand::DrawIndirect {
+        pass.raw.encode(&RenderCommand::DrawIndirect {
             buffer_id,
             offset,
         });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_execute_bundles(
+        _pass: &mut RawRenderPass,
+        _bundles: *const id::RenderBundleId,
+        _bundles_length: usize,
+    ) {
+        unimplemented!()
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_push_debug_group(
+        _pass: &mut RawRenderPass,
+        _label: RawString,
+    ) {
+        //TODO
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_pop_debug_group(
+        _pass: &mut RawRenderPass,
+    ) {
+        //TODO
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_insert_debug_marker(
+        _pass: &mut RawRenderPass,
+        _label: RawString,
+    ) {
+        //TODO
     }
 }

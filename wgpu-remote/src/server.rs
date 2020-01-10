@@ -116,11 +116,10 @@ pub extern "C" fn wgpu_server_device_create_encoder(
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_encoder_destroy(
-    _global: &Global,
-    _self_id: id::CommandEncoderId,
+    global: &Global,
+    self_id: id::CommandEncoderId,
 ) {
-    //TODO
-    //gfx_select!(self_id => global.command_encoder_destroy(self_id));
+    gfx_select!(self_id => global.command_encoder_destroy(self_id));
 }
 
 #[no_mangle]

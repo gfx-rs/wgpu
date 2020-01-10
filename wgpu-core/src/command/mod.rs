@@ -16,6 +16,7 @@ pub use self::transfer::*;
 use crate::{
     conv,
     device::{
+        MAX_COLOR_TARGETS,
         all_buffer_stages,
         all_image_stages,
         FramebufferKey,
@@ -23,16 +24,7 @@ use crate::{
         RenderPassKey,
     },
     hub::{GfxBackend, Global, IdentityFilter, Storage, Token},
-    id::{
-        BufferId,
-        CommandBufferId,
-        CommandEncoderId,
-        ComputePassId,
-        DeviceId,
-        RenderPassId,
-        TextureId,
-        TextureViewId,
-    },
+    id,
     resource::{Buffer, Texture, TextureUsage, TextureViewInner},
     track::TrackerSet,
     Features,
@@ -41,7 +33,11 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use hal::{adapter::PhysicalDevice as _, command::CommandBuffer as _, device::Device as _};
+use hal::{
+    adapter::PhysicalDevice as _,
+    command::CommandBuffer as _,
+    device::Device as _,
+};
 
 use std::{
     borrow::Borrow,
@@ -49,11 +45,13 @@ use std::{
     iter,
     marker::PhantomData,
     mem,
-    ptr,
     slice,
     thread::ThreadId,
 };
 
+
+pub type RawRenderPassId = *mut RawRenderPass;
+pub type RawComputePassId = *mut RawPass;
 
 #[derive(Clone, Copy, Debug, peek_poke::PeekCopy, peek_poke::Poke)]
 struct PhantomSlice<T>(PhantomData<T>);
@@ -66,88 +64,80 @@ impl<T> PhantomSlice<T> {
     unsafe fn decode<'a>(
         self, pointer: *const u8, count: usize, bound: *const u8
     ) -> (*const u8, &'a [T]) {
-        debug_assert_eq!(pointer.align_offset(mem::align_of::<T>()), 0);
-        let extra_size = count * mem::size_of::<T>();
-        let end = pointer.add(extra_size);
+        let align_offset = pointer.align_offset(mem::align_of::<T>());
+        let aligned = pointer.add(align_offset);
+        let size = count * mem::size_of::<T>();
+        let end = aligned.add(size);
         assert!(end <= bound);
-        (end, slice::from_raw_parts(pointer as *const T, count))
+        (end, slice::from_raw_parts(aligned as *const T, count))
     }
 }
 
+#[repr(C)]
 pub struct RawPass {
     data: *mut u8,
     base: *mut u8,
     capacity: usize,
+    parent: id::CommandEncoderId,
 }
 
 impl RawPass {
-    pub fn new() -> Self {
-        let mut vec = Vec::with_capacity(16);
+    fn from_vec<T>(
+        mut vec: Vec<T>,
+        encoder_id: id::CommandEncoderId,
+    ) -> Self {
+        let ptr = vec.as_mut_ptr() as *mut u8;
+        let capacity = vec.capacity() * mem::size_of::<T>();
+        mem::forget(vec);
         RawPass {
-            data: vec.as_mut_ptr(),
-            base: vec.as_mut_ptr(),
-            capacity: vec.capacity(),
+            data: ptr,
+            base: ptr,
+            capacity,
+            parent: encoder_id,
         }
     }
 
-    pub unsafe fn delete(self) {
-        let size = self.data as usize - self.base as usize;
-        let _ = Vec::from_raw_parts(self.base, size, self.capacity);
-    }
-
-    pub unsafe fn to_slice(&self) -> &[u8] {
-        let size = self.data as usize - self.base as usize;
+    /// Finish encoding a raw pass.
+    ///
+    /// The last command is provided, yet the encoder
+    /// is guaranteed to have exactly `C::max_size()` space for it.
+    unsafe fn finish_with<C: peek_poke::Poke>(
+        mut self, command: C
+    ) -> (Vec<u8>, id::CommandEncoderId) {
+        self.ensure_extra_size(C::max_size());
+        command.poke_into(self.data);
+        let size = self.data as usize + C::max_size() - self.base as usize;
         assert!(size <= self.capacity);
-        slice::from_raw_parts(self.base, size)
+        (Vec::from_raw_parts(self.base, size, self.capacity), self.parent)
     }
 
     unsafe fn ensure_extra_size(&mut self, extra_size: usize) {
         let size = self.data as usize - self.base as usize;
-        if let Some(extra_capacity) = (size + extra_size).checked_sub(self.capacity) {
+        if size + extra_size > self.capacity {
             let mut vec = Vec::from_raw_parts(self.base, size, self.capacity);
-            vec.reserve(extra_capacity);
+            vec.reserve(extra_size);
             //let (data, size, capacity) = vec.into_raw_parts(); //TODO: when stable
             self.data = vec.as_mut_ptr().add(vec.len());
             self.base = vec.as_mut_ptr();
             self.capacity = vec.capacity();
+            mem::forget(vec);
         }
     }
 
     #[inline]
     unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
-        self.ensure_extra_size(mem::size_of::<C>());
+        self.ensure_extra_size(C::max_size());
         self.data = command.poke_into(self.data);
     }
 
     #[inline]
-    unsafe fn encode_with1<C: peek_poke::Poke, T>(
-        &mut self, command: &C, extra: &[T]
-    ) {
-        let extra_size = extra.len() * mem::size_of::<T>();
-        self.ensure_extra_size(mem::size_of::<C>() + extra_size);
-        self.data = command.poke_into(self.data);
-
-        debug_assert_eq!(self.data.align_offset(mem::align_of::<T>()), 0);
-        ptr::copy_nonoverlapping(extra.as_ptr(), self.data as *mut T, extra.len());
-        self.data = self.data.add(extra_size);
-    }
-
-    #[inline]
-    unsafe fn encode_with2<C: peek_poke::Poke, T, V>(
-        &mut self, command: &C, extra1: &[T], extra2: &[V]
-    ) {
-        let extra1_size = extra1.len() * mem::size_of::<T>();
-        let extra2_size = extra2.len() * mem::size_of::<V>();
-        self.ensure_extra_size(mem::size_of::<C>() + extra1_size + extra2_size);
-        self.data = command.poke_into(self.data);
-
-        debug_assert_eq!(self.data.align_offset(mem::align_of::<T>()), 0);
-        ptr::copy_nonoverlapping(extra1.as_ptr(), self.data as *mut T, extra1.len());
-        self.data = self.data.add(extra1_size);
-
-        debug_assert_eq!(self.data.align_offset(mem::align_of::<V>()), 0);
-        ptr::copy_nonoverlapping(extra2.as_ptr(), self.data as *mut V, extra2.len());
-        self.data = self.data.add(extra2_size);
+    unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
+        let align_offset = self.data.align_offset(mem::align_of::<T>());
+        let extra = align_offset + mem::size_of::<T>() * data.len();
+        self.ensure_extra_size(extra);
+        slice::from_raw_parts_mut(self.data.add(align_offset) as *mut T, data.len())
+            .copy_from_slice(data);
+        self.data = self.data.add(extra);
     }
 }
 
@@ -160,10 +150,10 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
     is_recording: bool,
     recorded_thread_id: ThreadId,
-    pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
-    pub(crate) used_swap_chain: Option<(Stored<TextureViewId>, B::Framebuffer)>,
+    pub(crate) used_swap_chain: Option<(Stored<id::TextureViewId>, B::Framebuffer)>,
     pub(crate) features: Features,
 }
 
@@ -172,8 +162,8 @@ impl<B: GfxBackend> CommandBuffer<B> {
         raw: &mut B::CommandBuffer,
         base: &mut TrackerSet,
         head: &TrackerSet,
-        buffer_guard: &Storage<Buffer<B>, BufferId>,
-        texture_guard: &Storage<Texture<B>, TextureId>,
+        buffer_guard: &Storage<Buffer<B>, id::BufferId>,
+        texture_guard: &Storage<Texture<B>, id::TextureId>,
     ) {
         debug_assert_eq!(B::VARIANT, base.backend());
         debug_assert_eq!(B::VARIANT, head.backend());
@@ -221,12 +211,66 @@ pub struct CommandBufferDescriptor {
     pub todo: u32,
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
+    encoder_id: id::CommandEncoderId,
+    _desc: Option<&ComputePassDescriptor>,
+) -> RawComputePassId {
+    let pass = RawPass::new_compute(encoder_id);
+    Box::into_raw(Box::new(pass))
+}
+
+type RawRenderPassColorAttachmentDescriptor =
+    RenderPassColorAttachmentDescriptorBase<id::TextureViewId, id::TextureViewId>;
+
+#[repr(C)]
+pub struct RawRenderTargets {
+    pub colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
+    pub depth_stencil: RenderPassDepthStencilAttachmentDescriptor,
+}
+
+#[repr(C)]
+pub struct RawRenderPass {
+    raw: RawPass,
+    targets: RawRenderTargets,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
+    encoder_id: id::CommandEncoderId,
+    desc: &RenderPassDescriptor,
+) -> RawRenderPassId {
+    let mut colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS] = mem::zeroed();
+    for (color, at) in colors
+        .iter_mut()
+        .zip(slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length))
+    {
+        *color = RawRenderPassColorAttachmentDescriptor {
+            attachment: at.attachment,
+            resolve_target: at.resolve_target.map_or(id::TextureViewId::ERROR, |rt| *rt),
+            load_op: at.load_op,
+            store_op: at.store_op,
+            clear_color: at.clear_color,
+        };
+    }
+    let pass = RawRenderPass {
+        raw: RawPass::new_render(encoder_id),
+        targets: RawRenderTargets {
+            colors,
+            depth_stencil: desc.depth_stencil_attachment
+                .cloned()
+                .unwrap_or_else(|| mem::zeroed()),
+        },
+    };
+    Box::into_raw(Box::new(pass))
+}
+
 impl<F> Global<F> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,
-        encoder_id: CommandEncoderId,
+        encoder_id: id::CommandEncoderId,
         _desc: &CommandBufferDescriptor,
-    ) -> CommandBufferId {
+    ) -> id::CommandBufferId {
         let hub = B::hub(self);
         let mut token = Token::root();
         //TODO: actually close the last recorded command buffer
@@ -243,13 +287,13 @@ impl<F> Global<F> {
     }
 }
 
-impl<F: IdentityFilter<RenderPassId>> Global<F> {
+impl<F: IdentityFilter<id::RenderPassId>> Global<F> {
     pub fn command_encoder_begin_render_pass<B: GfxBackend>(
         &self,
-        encoder_id: CommandEncoderId,
+        encoder_id: id::CommandEncoderId,
         desc: &RenderPassDescriptor,
         id_in: F::Input,
-    ) -> RenderPassId {
+    ) -> id::RenderPassId {
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -279,12 +323,12 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
             let (view_guard, _) = hub.texture_views.read(&mut token);
 
             let mut extent = None;
-            let mut used_swap_chain_image = None::<Stored<TextureViewId>>;
+            let mut used_swap_chain_image = None::<Stored<id::TextureViewId>>;
 
             let color_attachments = unsafe {
                 slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length)
             };
-            let depth_stencil_attachment = unsafe { desc.depth_stencil_attachment.as_ref() };
+            let depth_stencil_attachment = desc.depth_stencil_attachment;
 
             let sample_count = color_attachments
                 .get(0)
@@ -297,7 +341,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
 
             const MAX_TOTAL_ATTACHMENTS: usize = 10;
             type OutputAttachment<'a> = (
-                &'a Stored<TextureId>,
+                &'a Stored<id::TextureId>,
                 &'a hal::image::SubresourceRange,
                 Option<TextureUsage>,
             );
@@ -525,7 +569,7 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
                         (3, hal::image::Layout::ColorAttachmentOptimal),
                     ];
 
-                    let mut resolve_ids = ArrayVec::<[_; crate::device::MAX_COLOR_TARGETS]>::new();
+                    let mut resolve_ids = ArrayVec::<[_; MAX_COLOR_TARGETS]>::new();
                     let mut attachment_index = color_attachments.len();
                     if color_attachments
                         .iter()
@@ -732,13 +776,13 @@ impl<F: IdentityFilter<RenderPassId>> Global<F> {
     }
 }
 
-impl<F: IdentityFilter<ComputePassId>> Global<F> {
+impl<F: IdentityFilter<id::ComputePassId>> Global<F> {
     pub fn command_encoder_begin_compute_pass<B: GfxBackend>(
         &self,
-        encoder_id: CommandEncoderId,
+        encoder_id: id::CommandEncoderId,
         _desc: &ComputePassDescriptor,
         id_in: F::Input,
-    ) -> ComputePassId {
+    ) -> id::ComputePassId {
         let hub = B::hub(self);
         let mut token = Token::root();
 

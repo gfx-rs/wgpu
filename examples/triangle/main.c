@@ -249,7 +249,7 @@ int main() {
                 },
             };
 
-        WGPURenderPassId rpass =
+        WGPURawRenderPassId rpass =
             wgpu_command_encoder_begin_render_pass(cmd_encoder,
                 &(WGPURenderPassDescriptor){
                     .color_attachments = color_attachments,

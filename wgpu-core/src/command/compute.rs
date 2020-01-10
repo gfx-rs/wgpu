@@ -7,7 +7,6 @@ use crate::{
         bind::{Binder, LayoutChange},
         CommandBuffer,
         PhantomSlice,
-        RawPass,
     },
     device::{all_buffer_stages, BIND_BUFFER_ALIGNMENT},
     hub::{GfxBackend, Global, IdentityFilter, Token},
@@ -21,13 +20,13 @@ use crate::{
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekCopy, Poke};
 
-use std::{convert::TryInto, iter, mem, slice};
+use std::iter;
 
 
 #[derive(Clone, Copy, Debug, PeekCopy, Poke)]
 enum ComputeCommand {
     SetBindGroup {
-        index: u32,
+        index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
         phantom_offsets: PhantomSlice<BufferAddress>,
@@ -38,6 +37,17 @@ enum ComputeCommand {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     },
+    End,
+}
+
+impl super::RawPass {
+    pub fn new_compute(parent: id::CommandEncoderId) -> Self {
+        Self::from_vec(Vec::<ComputeCommand>::with_capacity(1), parent)
+    }
+
+    pub unsafe fn finish_compute(self) -> (Vec<u8>, id::CommandEncoderId) {
+        self.finish_with(ComputeCommand::End)
+    }
 }
 
 #[repr(C)]
@@ -113,7 +123,8 @@ impl<F> Global<F> {
             raw_data.as_ptr().add(raw_data.len())
         };
         let mut command = ComputeCommand::Dispatch([0; 3]); // dummy
-        while unsafe { peeker.add(mem::size_of::<ComputeCommand>()) } <= raw_data_end {
+        loop {
+            assert!(unsafe { peeker.add(ComputeCommand::max_size()) } <= raw_data_end);
             peeker = unsafe { command.peek_from(peeker) };
             match command {
                 ComputeCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
@@ -238,10 +249,9 @@ impl<F> Global<F> {
                         raw.dispatch_indirect(&src_buffer.raw, offset);
                     }
                 }
+                ComputeCommand::End => break,
             }
         }
-
-        assert_eq!(peeker, raw_data_end);
     }
 
     pub fn compute_pass_set_bind_group<B: GfxBackend>(
@@ -422,53 +432,87 @@ impl<F> Global<F> {
     }
 }
 
-impl RawPass {
+mod ffi {
+    use super::{
+        ComputeCommand,
+        super::{PhantomSlice, RawPass},
+    };
+    use crate::{
+        id,
+        BufferAddress,
+        RawString,
+    };
+    use std::{convert::TryInto, slice};
+
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_compute_pass_set_bind_group(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
+        pass: &mut RawPass,
         index: u32,
         bind_group_id: id::BindGroupId,
         offsets: *const BufferAddress,
         offset_length: usize,
     ) {
-        self.encode_with1(
-            &ComputeCommand::SetBindGroup {
-                index,
-                num_dynamic_offsets: offset_length.try_into().unwrap(),
-                bind_group_id,
-                phantom_offsets: PhantomSlice::new(),
-            },
+        pass.encode(&ComputeCommand::SetBindGroup {
+            index: index.try_into().unwrap(),
+            num_dynamic_offsets: offset_length.try_into().unwrap(),
+            bind_group_id,
+            phantom_offsets: PhantomSlice::new(),
+        });
+        pass.encode_slice(
             slice::from_raw_parts(offsets, offset_length),
         );
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_compute_pass_set_pipeline(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_compute_pass_set_pipeline(
+        pass: &mut RawPass,
         pipeline_id: id::ComputePipelineId,
     ) {
-        self.encode(&ComputeCommand::SetPipeline(pipeline_id));
+        pass.encode(&ComputeCommand::SetPipeline(pipeline_id));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_compute_pass_dispatch(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_compute_pass_dispatch(
+        pass: &mut RawPass,
         groups_x: u32,
         groups_y: u32,
         groups_z: u32,
     ) {
-        self.encode(&ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
+        pass.encode(&ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_raw_compute_pass_dispatch_indirect(
-        &mut self,
+    pub unsafe extern "C" fn wgpu_compute_pass_dispatch_indirect(
+        pass: &mut RawPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        self.encode(&ComputeCommand::DispatchIndirect {
+        pass.encode(&ComputeCommand::DispatchIndirect {
             buffer_id,
             offset,
         });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_compute_pass_push_debug_group(
+        _pass: &mut RawPass,
+        _label: RawString,
+    ) {
+        //TODO
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_compute_pass_pop_debug_group(
+        _pass: &mut RawPass,
+    ) {
+        //TODO
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_compute_pass_insert_debug_marker(
+        _pass: &mut RawPass,
+        _label: RawString,
+    ) {
+        //TODO
     }
 }
