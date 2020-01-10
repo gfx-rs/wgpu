@@ -49,10 +49,30 @@ use std::{
     iter,
     marker::PhantomData,
     mem,
+    ptr,
     slice,
     thread::ThreadId,
 };
 
+
+#[derive(Clone, Copy, Debug, peek_poke::PeekCopy, peek_poke::Poke)]
+struct PhantomSlice<T>(PhantomData<T>);
+
+impl<T> PhantomSlice<T> {
+    fn new() -> Self {
+        PhantomSlice(PhantomData)
+    }
+
+    unsafe fn decode<'a>(
+        self, pointer: *const u8, count: usize, bound: *const u8
+    ) -> (*const u8, &'a [T]) {
+        debug_assert_eq!(pointer.align_offset(mem::align_of::<T>()), 0);
+        let extra_size = count * mem::size_of::<T>();
+        let end = pointer.add(extra_size);
+        assert!(end <= bound);
+        (end, slice::from_raw_parts(pointer as *const T, count))
+    }
+}
 
 pub struct RawPass {
     data: *mut u8,
@@ -91,6 +111,43 @@ impl RawPass {
             self.base = vec.as_mut_ptr();
             self.capacity = vec.capacity();
         }
+    }
+
+    #[inline]
+    unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
+        self.ensure_extra_size(mem::size_of::<C>());
+        self.data = command.poke_into(self.data);
+    }
+
+    #[inline]
+    unsafe fn encode_with1<C: peek_poke::Poke, T>(
+        &mut self, command: &C, extra: &[T]
+    ) {
+        let extra_size = extra.len() * mem::size_of::<T>();
+        self.ensure_extra_size(mem::size_of::<C>() + extra_size);
+        self.data = command.poke_into(self.data);
+
+        debug_assert_eq!(self.data.align_offset(mem::align_of::<T>()), 0);
+        ptr::copy_nonoverlapping(extra.as_ptr(), self.data as *mut T, extra.len());
+        self.data = self.data.add(extra_size);
+    }
+
+    #[inline]
+    unsafe fn encode_with2<C: peek_poke::Poke, T, V>(
+        &mut self, command: &C, extra1: &[T], extra2: &[V]
+    ) {
+        let extra1_size = extra1.len() * mem::size_of::<T>();
+        let extra2_size = extra2.len() * mem::size_of::<V>();
+        self.ensure_extra_size(mem::size_of::<C>() + extra1_size + extra2_size);
+        self.data = command.poke_into(self.data);
+
+        debug_assert_eq!(self.data.align_offset(mem::align_of::<T>()), 0);
+        ptr::copy_nonoverlapping(extra1.as_ptr(), self.data as *mut T, extra1.len());
+        self.data = self.data.add(extra1_size);
+
+        debug_assert_eq!(self.data.align_offset(mem::align_of::<V>()), 0);
+        ptr::copy_nonoverlapping(extra2.as_ptr(), self.data as *mut V, extra2.len());
+        self.data = self.data.add(extra2_size);
     }
 }
 

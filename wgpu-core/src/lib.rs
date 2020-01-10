@@ -31,6 +31,7 @@ pub mod swap_chain;
 pub mod track;
 
 pub use hal::pso::read_spirv;
+use peek_poke::{PeekCopy, Poke};
 
 use std::{
     os::raw::c_char,
@@ -121,7 +122,7 @@ struct Stored<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
 pub struct Color {
     pub r: f64,
     pub g: f64,

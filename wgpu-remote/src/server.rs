@@ -141,18 +141,12 @@ pub unsafe extern "C" fn wgpu_server_encode_render_pass(
     color_attachments: *const core::command::RenderPassColorAttachmentDescriptor,
     color_attachment_length: usize,
     depth_stencil_attachment: Option<&core::command::RenderPassDepthStencilAttachmentDescriptor>,
-    commands: *const core::command::RenderCommand,
+    commands: *const u8,
     command_length: usize,
-    offsets:  *const core::BufferAddress,
-    offset_length: usize,
 ) {
-    let pass = core::command::StandaloneRenderPass {
-        color_attachments: slice::from_raw_parts(color_attachments, color_attachment_length),
-        depth_stencil_attachment,
-        commands: slice::from_raw_parts(commands, command_length),
-        offsets: slice::from_raw_parts(offsets, offset_length),
-    };
-    gfx_select!(self_id => global.command_encoder_run_render_pass(self_id, pass));
+    let color_attachments = slice::from_raw_parts(color_attachments, color_attachment_length);
+    let raw_pass = slice::from_raw_parts(commands, command_length);
+    gfx_select!(self_id => global.command_encoder_run_render_pass(self_id, color_attachments, depth_stencil_attachment, raw_pass));
 }
 
 #[no_mangle]

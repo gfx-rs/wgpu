@@ -245,8 +245,6 @@ typedef enum {
 
 typedef struct WGPURawPass WGPURawPass;
 
-typedef struct WGPURenderCommand WGPURenderCommand;
-
 typedef uint64_t WGPUId_Device_Dummy;
 
 typedef WGPUId_Device_Dummy WGPUDeviceId;
@@ -735,10 +733,7 @@ void wgpu_command_encoder_render_pass(WGPUCommandEncoderId self_id,
                                       const WGPURenderPassColorAttachmentDescriptor *color_attachments,
                                       uintptr_t color_attachment_length,
                                       const WGPURenderPassDepthStencilAttachmentDescriptor *depth_stencil_attachment,
-                                      const WGPURenderCommand *commands,
-                                      uintptr_t command_length,
-                                      const WGPUBufferAddress *offsets,
-                                      uintptr_t offset_length);
+                                      const WGPURawPass *pass);
 
 void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
 

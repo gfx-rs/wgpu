@@ -6,6 +6,7 @@ use crate::{
     command::{
         bind::{Binder, LayoutChange},
         CommandBuffer,
+        PhantomSlice,
         RawPass,
     },
     device::{all_buffer_stages, BIND_BUFFER_ALIGNMENT},
@@ -20,15 +21,16 @@ use crate::{
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekCopy, Poke};
 
-use std::{convert::TryInto, iter, mem, ptr, slice};
+use std::{convert::TryInto, iter, mem, slice};
 
 
 #[derive(Clone, Copy, Debug, PeekCopy, Poke)]
-pub enum ComputeCommand {
+enum ComputeCommand {
     SetBindGroup {
         index: u32,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
+        phantom_offsets: PhantomSlice<BufferAddress>,
     },
     SetPipeline(id::ComputePipelineId),
     Dispatch([u32; 3]),
@@ -114,15 +116,12 @@ impl<F> Global<F> {
         while unsafe { peeker.add(mem::size_of::<ComputeCommand>()) } <= raw_data_end {
             peeker = unsafe { command.peek_from(peeker) };
             match command {
-                ComputeCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id } => {
-                    debug_assert_eq!(peeker.align_offset(mem::align_of::<BufferAddress>()), 0);
-                    let extra_size = (num_dynamic_offsets as usize) * mem::size_of::<BufferAddress>();
-                    let end = unsafe { peeker.add(extra_size) };
-                    assert!(end <= raw_data_end);
-                    let offsets = unsafe {
-                        slice::from_raw_parts(peeker as *const BufferAddress, num_dynamic_offsets as usize)
+                ComputeCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
+                    let (new_peeker, offsets) = unsafe {
+                        phantom_offsets.decode(peeker, num_dynamic_offsets as usize, raw_data_end)
                     };
-                    peeker = end;
+                    peeker = new_peeker;
+
                     if cfg!(debug_assertions) {
                         for off in offsets {
                             assert_eq!(
@@ -424,22 +423,6 @@ impl<F> Global<F> {
 }
 
 impl RawPass {
-    #[inline]
-    unsafe fn encode(&mut self, command: &ComputeCommand) {
-        self.ensure_extra_size(mem::size_of::<ComputeCommand>());
-        self.data = command.poke_into(self.data);
-    }
-
-    #[inline]
-    unsafe fn encode_with<T>(&mut self, command: &ComputeCommand, extra: &[T]) {
-        let extra_size = extra.len() * mem::size_of::<T>();
-        self.ensure_extra_size(mem::size_of::<ComputeCommand>() + extra_size);
-        self.data = command.poke_into(self.data);
-        debug_assert_eq!(self.data.align_offset(mem::align_of::<T>()), 0);
-        ptr::copy_nonoverlapping(extra.as_ptr(), self.data as *mut T, extra.len());
-        self.data = self.data.add(extra_size);
-    }
-
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_raw_compute_pass_set_bind_group(
         &mut self,
@@ -448,22 +431,19 @@ impl RawPass {
         offsets: *const BufferAddress,
         offset_length: usize,
     ) {
-        self.encode_with(
+        self.encode_with1(
             &ComputeCommand::SetBindGroup {
                 index,
                 num_dynamic_offsets: offset_length.try_into().unwrap(),
                 bind_group_id,
+                phantom_offsets: PhantomSlice::new(),
             },
             slice::from_raw_parts(offsets, offset_length),
         );
-
-        for offset in slice::from_raw_parts(offsets, offset_length) {
-            self.data = offset.poke_into(self.data);
-        }
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_standalone_compute_pass_set_pipeline(
+    pub unsafe extern "C" fn wgpu_raw_compute_pass_set_pipeline(
         &mut self,
         pipeline_id: id::ComputePipelineId,
     ) {
@@ -471,7 +451,7 @@ impl RawPass {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_standalone_compute_pass_dispatch(
+    pub unsafe extern "C" fn wgpu_raw_compute_pass_dispatch(
         &mut self,
         groups_x: u32,
         groups_y: u32,
@@ -481,7 +461,7 @@ impl RawPass {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_standalone_compute_pass_dispatch_indirect(
+    pub unsafe extern "C" fn wgpu_raw_compute_pass_dispatch_indirect(
         &mut self,
         buffer_id: id::BufferId,
         offset: BufferAddress,
