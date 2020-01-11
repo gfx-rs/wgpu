@@ -271,7 +271,7 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::Default => integrated.or(discrete).or(other).or(virt),
+            PowerPreference::Default => discrete.or(integrated).or(other).or(virt),
             PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
