@@ -6,6 +6,7 @@ extern crate rand;
 #[path = "../framework.rs"]
 mod framework;
 
+use std::fmt::Write;
 use zerocopy::{AsBytes};
 
 
@@ -40,13 +41,13 @@ impl framework::Example for Example {
 
         // loads comp shader source and adds shared constants as defines to comp shader
 
-        let mut boids_source_str = String::from(include_str!("boids.comp"));
-        let version_header_str = "#version 450\n";
-        assert!(boids_source_str.starts_with(version_header_str));
-        boids_source_str.insert_str(version_header_str.len(), 
-            &format!("#define NUM_PARTICLES {}\n#define PARTICLES_PER_GROUP {}\n", 
-                NUM_PARTICLES, PARTICLES_PER_GROUP));
+        const BOIDS_SOURCE: &str = include_str!("boids.comp");
+        const HEADER: &str = "#version 450";
+        assert_eq!(BOIDS_SOURCE.lines().next(), Some(HEADER));
 
+        let mut boids_source_str = String::from(HEADER);
+        write!(boids_source_str, "\n#define NUM_PARTICLES {}\n#define PARTICLES_PER_GROUP {}", NUM_PARTICLES, PARTICLES_PER_GROUP).unwrap();
+        boids_source_str += &BOIDS_SOURCE[HEADER.len()..];
 
         // load (and compile) shaders and create shader modules
 
