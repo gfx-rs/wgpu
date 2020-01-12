@@ -101,21 +101,26 @@ fn main() {
         alpha_to_coverage_enabled: false,
     });
 
-    let mut swap_chain = device.create_swap_chain(
-        &surface,
-        &wgpu::SwapChainDescriptor {
-            usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-            format: wgpu::TextureFormat::Bgra8UnormSrgb,
-            width: size.width.round() as u32,
-            height: size.height.round() as u32,
-            present_mode: wgpu::PresentMode::Vsync,
-        },
-    );
+    let mut sc_desc = wgpu::SwapChainDescriptor {
+        usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+        width: size.width.round() as u32,
+        height: size.height.round() as u32,
+        present_mode: wgpu::PresentMode::Vsync,
+    };
+
+    let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
             event::Event::MainEventsCleared => window.request_redraw(),
+            event::Event::WindowEvent { event: event::WindowEvent::Resized(size), .. } => {
+                let physical = size.to_physical(window.hidpi_factor());
+                sc_desc.width = physical.width.round() as u32;
+                sc_desc.height = physical.height.round() as u32;
+                swap_chain = device.create_swap_chain(&surface, &sc_desc);
+            }
             event::Event::RedrawRequested(_) => {
                 let frame = swap_chain
                     .get_next_texture()
