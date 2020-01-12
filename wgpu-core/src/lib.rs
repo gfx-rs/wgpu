@@ -25,6 +25,7 @@ pub mod hub;
 pub mod id;
 pub mod instance;
 pub mod pipeline;
+pub mod power;
 pub mod resource;
 pub mod swap_chain;
 pub mod track;

@@ -46,3 +46,6 @@ gfx-backend-vulkan = { version = "0.4", features = ["x11"] }
 gfx-backend-dx12 = { version = "0.4.1" }
 gfx-backend-dx11 = { version = "0.4" }
 gfx-backend-vulkan = { version = "0.4" }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "dragonfly", target_os = "freebsd"))'.dependencies]
+battery = "0.7"
