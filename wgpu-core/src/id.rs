@@ -115,9 +115,9 @@ pub type ComputePipelineId = Id<crate::pipeline::ComputePipeline<Dummy>>;
 // Command
 pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
 pub type CommandEncoderId = CommandBufferId;
+pub type RenderPassId = *mut crate::command::RawRenderPass;
+pub type ComputePassId = *mut crate::command::RawPass;
 pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
-pub type RenderPassId = Id<crate::command::RenderPass<Dummy>>;
-pub type ComputePassId = Id<crate::command::ComputePass<Dummy>>;
 // Swap chain
 pub type SwapChainId = Id<crate::swap_chain::SwapChain<Dummy>>;
 

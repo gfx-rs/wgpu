@@ -77,17 +77,17 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
 
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: core::command::RawRenderPassId) {
+pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: id::RenderPassId) {
     let (pass_data, encoder_id, targets) = Box::from_raw(pass_id).finish_render();
     let color_attachments: arrayvec::ArrayVec<[_; core::device::MAX_COLOR_TARGETS]> = targets.colors
         .iter()
         .flat_map(|at| {
-            if at.attachment == core::id::TextureViewId::ERROR {
+            if at.attachment == id::TextureViewId::ERROR {
                 None
             } else {
                 Some(core::command::RenderPassColorAttachmentDescriptor {
                     attachment: at.attachment,
-                    resolve_target: if at.resolve_target == core::id::TextureViewId::ERROR {
+                    resolve_target: if at.resolve_target == id::TextureViewId::ERROR {
                         None
                     } else {
                         Some(&at.resolve_target)
@@ -99,7 +99,7 @@ pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: core::command::RawRe
             }
         })
         .collect();
-    let depth_stencil_attachment = if targets.depth_stencil.attachment == core::id::TextureViewId::ERROR {
+    let depth_stencil_attachment = if targets.depth_stencil.attachment == id::TextureViewId::ERROR {
         None
     } else {
         Some(&targets.depth_stencil)
@@ -108,7 +108,7 @@ pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: core::command::RawRe
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_compute_pass_end_pass(pass_id: core::command::RawComputePassId) {
+pub unsafe extern "C" fn wgpu_compute_pass_end_pass(pass_id: id::ComputePassId) {
     let (pass_data, encoder_id) = Box::from_raw(pass_id).finish_compute();
     gfx_select!(encoder_id => GLOBAL.command_encoder_run_compute_pass(encoder_id, &pass_data))
 }
