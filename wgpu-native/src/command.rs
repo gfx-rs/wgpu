@@ -4,6 +4,13 @@
 
 use crate::GLOBAL;
 
+pub use core::command::{
+    wgpu_command_encoder_begin_compute_pass,
+    wgpu_command_encoder_begin_render_pass,
+    compute_ffi::*,
+    render_ffi::*,
+};
+
 use core::{gfx_select, id};
 
 

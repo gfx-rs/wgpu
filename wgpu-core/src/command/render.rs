@@ -1096,7 +1096,7 @@ impl<F> Global<F> {
     }
 }
 
-mod ffi {
+pub mod render_ffi {
     use super::{
         RenderCommand,
         super::{PhantomSlice, RawRenderPass, Rect},
@@ -1204,7 +1204,7 @@ mod ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_set_scissor(
+    pub unsafe extern "C" fn wgpu_render_pass_set_scissor_rect(
         pass: &mut RawRenderPass,
         x: u32,
         y: u32,
@@ -1231,12 +1231,42 @@ mod ffi {
     }
 
     #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_draw_indexed(
+        pass: &mut RawRenderPass,
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        base_vertex: i32,
+        first_instance: u32,
+    ) {
+        pass.raw.encode(&RenderCommand::DrawIndexed {
+            index_count,
+            instance_count,
+            first_index,
+            base_vertex,
+            first_instance,
+        });
+    }
+
+    #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_draw_indirect(
         pass: &mut RawRenderPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
         pass.raw.encode(&RenderCommand::DrawIndirect {
+            buffer_id,
+            offset,
+        });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_draw_indexed_indirect(
+        pass: &mut RawRenderPass,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+    ) {
+        pass.raw.encode(&RenderCommand::DrawIndexedIndirect {
             buffer_id,
             offset,
         });

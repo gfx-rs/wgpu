@@ -213,7 +213,7 @@ impl<F> Global<F> {
     }
 }
 
-mod ffi {
+pub mod compute_ffi {
     use super::{
         ComputeCommand,
         super::{PhantomSlice, RawPass},

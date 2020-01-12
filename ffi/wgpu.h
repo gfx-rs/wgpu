@@ -848,6 +848,17 @@ void wgpu_render_pass_draw(WGPURawRenderPass *pass,
                            uint32_t first_vertex,
                            uint32_t first_instance);
 
+void wgpu_render_pass_draw_indexed(WGPURawRenderPass *pass,
+                                   uint32_t index_count,
+                                   uint32_t instance_count,
+                                   uint32_t first_index,
+                                   int32_t base_vertex,
+                                   uint32_t first_instance);
+
+void wgpu_render_pass_draw_indexed_indirect(WGPURawRenderPass *pass,
+                                            WGPUBufferId buffer_id,
+                                            WGPUBufferAddress offset);
+
 void wgpu_render_pass_draw_indirect(WGPURawRenderPass *pass,
                                     WGPUBufferId buffer_id,
                                     WGPUBufferAddress offset);
@@ -878,11 +889,11 @@ void wgpu_render_pass_set_index_buffer(WGPURawRenderPass *pass,
 
 void wgpu_render_pass_set_pipeline(WGPURawRenderPass *pass, WGPURenderPipelineId pipeline_id);
 
-void wgpu_render_pass_set_scissor(WGPURawRenderPass *pass,
-                                  uint32_t x,
-                                  uint32_t y,
-                                  uint32_t w,
-                                  uint32_t h);
+void wgpu_render_pass_set_scissor_rect(WGPURawRenderPass *pass,
+                                       uint32_t x,
+                                       uint32_t y,
+                                       uint32_t w,
+                                       uint32_t h);
 
 void wgpu_render_pass_set_stencil_reference(WGPURawRenderPass *pass, uint32_t value);
 
