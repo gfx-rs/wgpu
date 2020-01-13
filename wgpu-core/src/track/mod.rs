@@ -280,7 +280,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     ///
     /// Returns `Some(Usage)` only if this usage is consistent
     /// across the given selector.
-    pub fn query(&mut self, id: S::Id, selector: S::Selector) -> Option<S::Usage> {
+    pub fn query(&self, id: S::Id, selector: S::Selector) -> Option<S::Usage> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         let res = self.map.get(&index)?;

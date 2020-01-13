@@ -297,9 +297,15 @@ impl<F> Global<F> {
         let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmb = &mut cmb_guard[encoder_id];
-        let raw = cmb.raw.last_mut().unwrap();
+
         let mut trackers = TrackerSet::new(B::VARIANT);
+        let cmb = &mut cmb_guard[encoder_id];
+        let device = &device_guard[cmb.device_id.value];
+        let mut raw = device.com_allocator.extend(cmb);
+
+        unsafe {
+            raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+        }
 
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -311,13 +317,12 @@ impl<F> Global<F> {
         let (context, sample_count) = {
             use hal::{adapter::PhysicalDevice as _, device::Device as _};
 
-            let device = &device_guard[cmb.device_id.value];
-
             let limits = adapter_guard[device.adapter_id]
                 .raw
                 .physical_device
                 .limits();
             let samples_count_limit = limits.framebuffer_color_sample_counts;
+            let base_trackers = &cmb.trackers;
 
             let mut extent = None;
             let mut used_swap_chain_image = None::<Stored<id::TextureViewId>>;
@@ -346,7 +351,7 @@ impl<F> Global<F> {
             let rp_key = {
                 let depth_stencil = match depth_stencil_attachment {
                     Some(at) => {
-                        let view = cmb.trackers
+                        let view = trackers
                             .views
                             .use_extend(&*view_guard, at.attachment, (), ())
                             .unwrap();
@@ -363,7 +368,7 @@ impl<F> Global<F> {
                         };
 
                         // Using render pass for transition.
-                        let consistent_usage = cmb.trackers.textures.query(
+                        let consistent_usage = base_trackers.textures.query(
                             source_id.value,
                             view.range.clone(),
                         );
@@ -405,7 +410,7 @@ impl<F> Global<F> {
                         view.samples, sample_count,
                         "All attachments must have the same sample_count"
                     );
-                    let first_use = cmb.trackers.views.init(
+                    let first_use = trackers.views.init(
                         at.attachment,
                         view.life_guard.add_ref(),
                         PhantomData,
@@ -413,7 +418,7 @@ impl<F> Global<F> {
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
-                            let consistent_usage = cmb.trackers.textures.query(
+                            let consistent_usage = base_trackers.textures.query(
                                 source_id.value,
                                 view.range.clone(),
                             );
@@ -465,7 +470,7 @@ impl<F> Global<F> {
                         view.samples, 1,
                         "All resolve_targets must have a sample_count of 1"
                     );
-                    let first_use = cmb.trackers.views.init(
+                    let first_use = trackers.views.init(
                         resolve_target,
                         view.life_guard.add_ref(),
                         PhantomData,
@@ -473,7 +478,7 @@ impl<F> Global<F> {
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
-                            let consistent_usage = cmb.trackers.textures.query(
+                            let consistent_usage = base_trackers.textures.query(
                                 source_id.value,
                                 view.range.clone(),
                             );
@@ -1093,6 +1098,19 @@ impl<F> Global<F> {
                 RenderCommand::End => break,
             }
         }
+
+        super::CommandBuffer::insert_barriers(
+            cmb.raw.last_mut().unwrap(),
+            &mut cmb.trackers,
+            &trackers,
+            &*buffer_guard,
+            &*texture_guard,
+        );
+        unsafe {
+            cmb.raw.last_mut().unwrap().finish();
+            raw.end_render_pass();
+        }
+        cmb.raw.push(raw);
     }
 }
 
