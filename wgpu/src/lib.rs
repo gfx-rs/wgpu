@@ -547,12 +547,14 @@ impl Adapter {
         }
 
         let mut id = wgc::id::AdapterId::ERROR;
-        wgn::wgpu_request_adapter_async(
-            Some(options),
-            backends,
-            adapter_callback,
-            &mut id as *mut _ as *mut std::ffi::c_void,
-        );
+        unsafe {
+            wgn::wgpu_request_adapter_async(
+                Some(options),
+                backends,
+                adapter_callback,
+                &mut id as *mut _ as *mut std::ffi::c_void,
+            )
+        };
         Some(Adapter { id })
     }
 
@@ -820,9 +822,11 @@ impl Device {
         };
         let mut ptr: *mut u8 = std::ptr::null_mut();
 
-        let id = wgn::wgpu_device_create_buffer_mapped(self.id, &desc, &mut ptr as *mut *mut u8);
-
-        let data = unsafe { std::slice::from_raw_parts_mut(ptr as *mut u8, size) };
+        let (id, data) = unsafe {
+            let id = wgn::wgpu_device_create_buffer_mapped(self.id, &desc, &mut ptr as *mut *mut u8);
+            let data = std::slice::from_raw_parts_mut(ptr as *mut u8, size);
+            (id, data)
+        };
 
         CreateBufferMapped { device_id: self.id, id, data }
     }
@@ -1206,13 +1210,15 @@ impl<'a> RenderPass<'a> {
         bind_group: &BindGroup,
         offsets: &[BufferAddress],
     ) {
-        wgn::wgpu_render_pass_set_bind_group(
-            self.id,
-            index,
-            bind_group.id,
-            offsets.as_ptr(),
-            offsets.len(),
-        );
+        unsafe {
+            wgn::wgpu_render_pass_set_bind_group(
+                self.id,
+                index,
+                bind_group.id,
+                offsets.as_ptr(),
+                offsets.len(),
+            );
+        }
     }
 
     /// Sets the active render pipeline.
@@ -1249,13 +1255,15 @@ impl<'a> RenderPass<'a> {
             buffers.push(buffer.id);
             offsets.push(offset);
         }
-        wgn::wgpu_render_pass_set_vertex_buffers(
-            self.id,
-            start_slot,
-            buffers.as_ptr(),
-            offsets.as_ptr(),
-            buffer_pairs.len(),
-        );
+        unsafe {
+            wgn::wgpu_render_pass_set_vertex_buffers(
+                self.id,
+                start_slot,
+                buffers.as_ptr(),
+                offsets.as_ptr(),
+                buffer_pairs.len(),
+            )
+        };
     }
 
     /// Sets the scissor region.
@@ -1344,13 +1352,15 @@ impl<'a> ComputePass<'a> {
         bind_group: &BindGroup,
         offsets: &[BufferAddress],
     ) {
-        wgn::wgpu_compute_pass_set_bind_group(
-            self.id,
-            index,
-            bind_group.id,
-            offsets.as_ptr(),
-            offsets.len(),
-        );
+        unsafe {
+            wgn::wgpu_compute_pass_set_bind_group(
+                self.id,
+                index,
+                bind_group.id,
+                offsets.as_ptr(),
+                offsets.len(),
+            );
+        }
     }
 
     /// Sets the active compute pipeline.
@@ -1386,11 +1396,13 @@ impl Queue {
             .map(|cb| cb.id)
             .collect::<SmallVec<[_; 4]>>();
 
-        wgn::wgpu_queue_submit(
-            self.id,
-            temp_command_buffers.as_ptr(),
-            command_buffers.len(),
-        );
+        unsafe {
+            wgn::wgpu_queue_submit(
+                self.id,
+                temp_command_buffers.as_ptr(),
+                command_buffers.len(),
+            )
+        };
     }
 }
 
