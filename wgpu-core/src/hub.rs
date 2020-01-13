@@ -438,19 +438,11 @@ impl<B: hal::Backend, F> Drop for Hub<B, F> {
             }
         }
         for (_, (texture, _)) in self.textures.data.write().map.drain() {
-            unsafe {
-                devices[texture.device_id.value]
-                    .raw
-                    .destroy_image(texture.raw);
-            }
+            devices[texture.device_id.value].destroy_texture(texture);
         }
         for (_, (buffer, _)) in self.buffers.data.write().map.drain() {
             //TODO: unmap if needed
-            unsafe {
-                devices[buffer.device_id.value]
-                    .raw
-                    .destroy_buffer(buffer.raw);
-            }
+            devices[buffer.device_id.value].destroy_buffer(buffer);
         }
         for (_, (command_buffer, _)) in self.command_buffers.data.write().map.drain() {
             devices[command_buffer.device_id.value]
