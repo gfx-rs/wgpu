@@ -1193,7 +1193,7 @@ impl<'a> RenderPass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &BindGroup,
+        bind_group: &'a BindGroup,
         offsets: &[BufferAddress],
     ) {
         unsafe {
@@ -1210,7 +1210,7 @@ impl<'a> RenderPass<'a> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
         unsafe {
             wgn::wgpu_render_pass_set_pipeline(
                 self.id.as_mut().unwrap(),
@@ -1232,7 +1232,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer: &Buffer, offset: BufferAddress) {
+    pub fn set_index_buffer(&mut self, buffer: &'a Buffer, offset: BufferAddress) {
         unsafe {
             wgn::wgpu_render_pass_set_index_buffer(
                 self.id.as_mut().unwrap(),
@@ -1249,7 +1249,7 @@ impl<'a> RenderPass<'a> {
     pub fn set_vertex_buffers(
         &mut self,
         start_slot: u32,
-        buffer_pairs: &[(&Buffer, BufferAddress)],
+        buffer_pairs: &[(&'a Buffer, BufferAddress)],
     ) {
         let mut buffers = Vec::new();
         let mut offsets = Vec::new();
@@ -1340,7 +1340,7 @@ impl<'a> RenderPass<'a> {
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
-    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         unsafe {
             wgn::wgpu_render_pass_draw_indirect(
                 self.id.as_mut().unwrap(),
@@ -1357,7 +1357,7 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
     pub fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &Buffer,
+        indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
         unsafe {
@@ -1385,7 +1385,7 @@ impl<'a> ComputePass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &BindGroup,
+        bind_group: &'a BindGroup,
         offsets: &[BufferAddress],
     ) {
         unsafe {
@@ -1400,7 +1400,7 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
+    pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
         unsafe {
             wgn::wgpu_compute_pass_set_pipeline(
                 self.id.as_mut().unwrap(),
@@ -1422,7 +1422,7 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
-    pub fn dispatch_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
+    pub fn dispatch_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         unsafe {
             wgn::wgpu_compute_pass_dispatch_indirect(
                 self.id.as_mut().unwrap(),
