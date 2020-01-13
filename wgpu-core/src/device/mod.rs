@@ -445,11 +445,27 @@ impl<B: hal::Backend> Device<B> {
         }
     }
 
+    pub(crate) fn destroy_buffer(&self, buffer: resource::Buffer<B>) {
+        unsafe {
+            self.mem_allocator.lock().free(&self.raw, buffer.memory);
+            self.raw.destroy_buffer(buffer.raw);
+        }
+    }
+
+    pub(crate) fn destroy_texture(&self, texture: resource::Texture<B>) {
+        unsafe {
+            self.mem_allocator.lock().free(&self.raw, texture.memory);
+            self.raw.destroy_image(texture.raw);
+        }
+    }
+
     pub(crate) fn dispose(self) {
         self.com_allocator.destroy(&self.raw);
         let desc_alloc = self.desc_allocator.into_inner();
+        let mem_alloc = self.mem_allocator.into_inner();
         unsafe {
             desc_alloc.dispose(&self.raw);
+            mem_alloc.dispose(&self.raw);
         }
     }
 }
