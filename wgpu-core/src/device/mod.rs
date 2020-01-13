@@ -448,8 +448,10 @@ impl<B: hal::Backend> Device<B> {
     pub(crate) fn dispose(self) {
         self.com_allocator.destroy(&self.raw);
         let desc_alloc = self.desc_allocator.into_inner();
+        let mem_alloc = self.mem_allocator.into_inner();
         unsafe {
             desc_alloc.dispose(&self.raw);
+            mem_alloc.dispose(&self.raw);
         }
     }
 }
