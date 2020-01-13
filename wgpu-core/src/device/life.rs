@@ -418,20 +418,45 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         let remove_list = framebuffers
             .keys()
             .filter_map(|key| {
-                let mut last_submit: SubmissionIndex = 0;
+                let mut last_submit = None;
+                let mut needs_cleanup = false;
+
+                // A framebuffer needs to be scheduled for cleanup, if there's at least one
+                // attachment is no longer valid.
+
                 for &at in key.all() {
+                    // If this attachment is still registered, it's still valid
                     if texture_view_guard.contains(at) {
-                        return None;
+                        continue;
                     }
-                    // This attachment is no longer registered.
-                    // Let's see if it's used by any of the active submissions.
+
+                    // This attachment is no longer registered, this framebuffer needs cleanup
+                    needs_cleanup = true;
+
+                    // Check if there's any active submissions that are still referring to this
+                    // attachment, if there are we need to get the greatest submission index, as
+                    // that's the last time this attachment is still valid
+                    let mut attachment_last_submit = None;
                     for a in &self.active {
                         if a.last_resources.image_views.iter().any(|&(id, _)| id == at) {
-                            last_submit = last_submit.max(a.index);
+                            let max = attachment_last_submit.unwrap_or(0).max(a.index);
+                            attachment_last_submit = Some(max);
                         }
                     }
+
+                    // Between all attachments, we need the smallest index, because that's the last
+                    // time this framebuffer is still valid
+                    if let Some(attachment_last_submit) = attachment_last_submit {
+                        let min = last_submit.unwrap_or(std::usize::MAX).min(attachment_last_submit);
+                        last_submit = Some(min);
+                    }
                 }
-                Some((key.clone(), last_submit))
+
+                if needs_cleanup {
+                    Some((key.clone(), last_submit.unwrap_or(0)))
+                } else {
+                    None
+                }
             })
             .collect::<FastHashMap<_, _>>();
 
