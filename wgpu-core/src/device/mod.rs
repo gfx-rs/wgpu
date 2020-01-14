@@ -1216,9 +1216,8 @@ impl<F: IdentityFilter<id::CommandEncoderId>> Global<F> {
             .com_allocator
             .allocate(dev_stored, &device.raw, device.features, lowest_active_index);
         unsafe {
-            comb.raw.last_mut().unwrap().begin(
+            comb.raw.last_mut().unwrap().begin_primary(
                 hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-                hal::command::CommandBufferInheritanceInfo::default(),
             );
         }
 
@@ -1381,9 +1380,8 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
                 // execute resource transitions
                 let mut transit = device.com_allocator.extend(comb);
                 unsafe {
-                    transit.begin(
+                    transit.begin_primary(
                         hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-                        hal::command::CommandBufferInheritanceInfo::default(),
                     );
                 }
                 log::trace!("Stitching command buffer {:?} before submission", cmb_id);
