@@ -276,6 +276,7 @@ impl Default for TextureAspect {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureViewDimension {
     D1,
     D2,
