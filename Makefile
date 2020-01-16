@@ -24,7 +24,11 @@ endif
 ifeq ($(OS),Windows_NT)
 	CLEAN_FFI_DIR=del $(FFI_DIR)\*.* /Q /S
 	CREATE_BUILD_DIR=mkdir $(BUILD_DIR)
-	GENERATOR_PLATFORM=-DCMAKE_GENERATOR_PLATFORM=x64
+	ifneq ($(ARCH),32)
+		GENERATOR_PLATFORM=-DCMAKE_GENERATOR_PLATFORM=x64
+	else
+		GENERATOR_PLATFORM=
+	endif
 else
 	CLEAN_FFI_DIR=rm $(FFI_DIR)/**
 	CREATE_BUILD_DIR=mkdir -p $(BUILD_DIR)
@@ -69,6 +73,24 @@ package: lib-native lib-native-release
 			7z a -tzip dist/$$ARCHIVE ./target/$$RELEASE/wgpu_*.$(LIB_EXTENSION) ./ffi/*.h ./dist/commit-sha; \
 		fi; \
 	done
+
+# builds a distribution for linux/rust-stable/x64 that adheres to the PEP 571
+# manylinux2010 standard, ensuring wide binary compatibility and allowing the binaries
+# to be uploaded to pypi. the approach below ensures that the container does not
+# pollute the host's working directory and that the resulting files are not owned
+# by the root user
+manylinux:
+	CID=$$(docker create -t -w /tmp/wgpu -v $$PWD:/tmp/src:ro quay.io/pypa/manylinux2010_x86_64 bash -c "\
+	  cp -r /tmp/src/. . && \
+	  export PATH=/root/.cargo/bin:\$$PATH && \
+	  export USER=root && \
+	  curl https://sh.rustup.rs -sSf | sh -s -- -y && \
+	  yum install zip -y && \
+	  make package") &&	\
+	docker start -ai $$CID && \
+	mkdir -p dist && \
+	docker cp $$CID:/tmp/wgpu/dist/. dist/. && \
+	docker rm $$CID
 
 check:
 	cargo check --all
