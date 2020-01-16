@@ -19,7 +19,6 @@ pub use wgc::{
         CommandBufferDescriptor,
         CommandEncoderDescriptor,
         LoadOp,
-        RenderPassDepthStencilAttachmentDescriptor,
         StoreOp,
     },
     device::{
@@ -410,6 +409,11 @@ pub struct ComputePipelineDescriptor<'a> {
     pub compute_stage: ProgrammableStageDescriptor<'a>,
 }
 
+pub type RenderPassColorAttachmentDescriptor<'a> =
+    wgc::command::RenderPassColorAttachmentDescriptorBase<&'a TextureView, Option<&'a TextureView>>;
+pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
+    wgc::command::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
+
 /// A description of all the attachments of a render pass.
 #[derive(Debug)]
 pub struct RenderPassDescriptor<'a> {
@@ -418,26 +422,7 @@ pub struct RenderPassDescriptor<'a> {
 
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment:
-        Option<RenderPassDepthStencilAttachmentDescriptor<&'a TextureView>>,
-}
-
-/// A description of a color attachment.
-#[derive(Clone, Debug)]
-pub struct RenderPassColorAttachmentDescriptor<'a> {
-    /// The actual color attachment.
-    pub attachment: &'a TextureView,
-
-    /// The resolve target for this color attachment, if any.
-    pub resolve_target: Option<&'a TextureView>,
-
-    /// The beginning-of-pass load operation for this color attachment.
-    pub load_op: LoadOp,
-
-    /// The end-of-pass store operation for this color attachment.
-    pub store_op: StoreOp,
-
-    /// The color that will be assigned to every pixel of this attachment when cleared.
-    pub clear_color: Color,
+        Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
 }
 
 /// A swap chain image that can be rendered to.
@@ -1092,7 +1077,7 @@ impl CommandEncoder {
             .iter()
             .map(|ca| wgc::command::RenderPassColorAttachmentDescriptor {
                 attachment: ca.attachment.id,
-                resolve_target: ca.resolve_target.map_or(ptr::null(), |v| &v.id as *const _),
+                resolve_target: ca.resolve_target.map(|rt| &rt.id),
                 load_op: ca.load_op,
                 store_op: ca.store_op,
                 clear_color: ca.clear_color,
@@ -1100,7 +1085,7 @@ impl CommandEncoder {
             .collect::<ArrayVec<[_; 4]>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
-            RenderPassDepthStencilAttachmentDescriptor {
+            wgc::command::RenderPassDepthStencilAttachmentDescriptor {
                 attachment: dsa.attachment.id,
                 depth_load_op: dsa.depth_load_op,
                 depth_store_op: dsa.depth_store_op,
@@ -1112,17 +1097,16 @@ impl CommandEncoder {
         });
 
         RenderPass {
-            id: wgn::wgpu_command_encoder_begin_render_pass(
-                self.id,
-                &wgc::command::RenderPassDescriptor {
-                    color_attachments: colors.as_ptr(),
-                    color_attachments_length: colors.len(),
-                    depth_stencil_attachment: depth_stencil
-                        .as_ref()
-                        .map(|at| at as *const _)
-                        .unwrap_or(ptr::null()),
-                },
-            ),
+            id: unsafe {
+                wgn::wgpu_command_encoder_begin_render_pass(
+                    self.id,
+                    &wgc::command::RenderPassDescriptor {
+                        color_attachments: colors.as_ptr(),
+                        color_attachments_length: colors.len(),
+                        depth_stencil_attachment: depth_stencil.as_ref(),
+                    },
+                )
+            },
             _parent: self,
         }
     }
@@ -1132,7 +1116,9 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: wgn::wgpu_command_encoder_begin_compute_pass(self.id, None),
+            id: unsafe {
+                wgn::wgpu_command_encoder_begin_compute_pass(self.id, None)
+            },
             _parent: self,
         }
     }
@@ -1207,12 +1193,12 @@ impl<'a> RenderPass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &BindGroup,
+        bind_group: &'a BindGroup,
         offsets: &[BufferAddress],
     ) {
         unsafe {
             wgn::wgpu_render_pass_set_bind_group(
-                self.id,
+                self.id.as_mut().unwrap(),
                 index,
                 bind_group.id,
                 offsets.as_ptr(),
@@ -1224,20 +1210,36 @@ impl<'a> RenderPass<'a> {
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
-    pub fn set_pipeline(&mut self, pipeline: &RenderPipeline) {
-        wgn::wgpu_render_pass_set_pipeline(self.id, pipeline.id);
+    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+        unsafe {
+            wgn::wgpu_render_pass_set_pipeline(
+                self.id.as_mut().unwrap(),
+                pipeline.id,
+            );
+        }
     }
 
     pub fn set_blend_color(&mut self, color: Color) {
-        wgn::wgpu_render_pass_set_blend_color(self.id, &color);
+        unsafe {
+            wgn::wgpu_render_pass_set_blend_color(
+                self.id.as_mut().unwrap(),
+                &color,
+            );
+        }
     }
 
     /// Sets the active index buffer.
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer: &Buffer, offset: BufferAddress) {
-        wgn::wgpu_render_pass_set_index_buffer(self.id, buffer.id, offset);
+    pub fn set_index_buffer(&mut self, buffer: &'a Buffer, offset: BufferAddress) {
+        unsafe {
+            wgn::wgpu_render_pass_set_index_buffer(
+                self.id.as_mut().unwrap(),
+                buffer.id,
+                offset,
+            );
+        }
     }
 
     /// Sets the active vertex buffers, starting from `start_slot`.
@@ -1247,7 +1249,7 @@ impl<'a> RenderPass<'a> {
     pub fn set_vertex_buffers(
         &mut self,
         start_slot: u32,
-        buffer_pairs: &[(&Buffer, BufferAddress)],
+        buffer_pairs: &[(&'a Buffer, BufferAddress)],
     ) {
         let mut buffers = Vec::new();
         let mut offsets = Vec::new();
@@ -1257,7 +1259,7 @@ impl<'a> RenderPass<'a> {
         }
         unsafe {
             wgn::wgpu_render_pass_set_vertex_buffers(
-                self.id,
+                self.id.as_mut().unwrap(),
                 start_slot,
                 buffers.as_ptr(),
                 offsets.as_ptr(),
@@ -1270,34 +1272,52 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent draw calls will discard any fragments that fall outside this region.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
-        wgn::wgpu_render_pass_set_scissor_rect(self.id, x, y, w, h)
+        unsafe {
+            wgn::wgpu_render_pass_set_scissor_rect(
+                self.id.as_mut().unwrap(),
+                x, y, w, h,
+            );
+        }
     }
 
     /// Sets the viewport region.
     ///
     /// Subsequent draw calls will draw any fragments in this region.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
-        wgn::wgpu_render_pass_set_viewport(self.id, x, y, w, h, min_depth, max_depth)
+        unsafe {
+            wgn::wgpu_render_pass_set_viewport(
+                self.id.as_mut().unwrap(),
+                x, y, w, h,
+                min_depth, max_depth,
+            );
+        }
     }
 
     /// Sets the stencil reference.
     ///
     /// Subsequent stencil tests will test against this value.
     pub fn set_stencil_reference(&mut self, reference: u32) {
-        wgn::wgpu_render_pass_set_stencil_reference(self.id, reference)
+        unsafe {
+            wgn::wgpu_render_pass_set_stencil_reference(
+                self.id.as_mut().unwrap(),
+                reference,
+            );
+        }
     }
 
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        wgn::wgpu_render_pass_draw(
-            self.id,
-            vertices.end - vertices.start,
-            instances.end - instances.start,
-            vertices.start,
-            instances.start,
-        );
+        unsafe {
+            wgn::wgpu_render_pass_draw(
+                self.id.as_mut().unwrap(),
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            );
+        }
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
@@ -1305,21 +1325,29 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        wgn::wgpu_render_pass_draw_indexed(
-            self.id,
-            indices.end - indices.start,
-            instances.end - instances.start,
-            indices.start,
-            base_vertex,
-            instances.start,
-        );
+        unsafe {
+            wgn::wgpu_render_pass_draw_indexed(
+                self.id.as_mut().unwrap(),
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            );
+        }
     }
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
-    pub fn draw_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
-        wgn::wgpu_render_pass_draw_indirect(self.id, indirect_buffer.id, indirect_offset);
+    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+        unsafe {
+            wgn::wgpu_render_pass_draw_indirect(
+                self.id.as_mut().unwrap(),
+                indirect_buffer.id,
+                indirect_offset,
+            );
+        }
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -1329,17 +1357,25 @@ impl<'a> RenderPass<'a> {
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
     pub fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &Buffer,
+        indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
-        wgn::wgpu_render_pass_draw_indexed_indirect(self.id, indirect_buffer.id, indirect_offset);
+        unsafe {
+            wgn::wgpu_render_pass_draw_indexed_indirect(
+                self.id.as_mut().unwrap(),
+                indirect_buffer.id,
+                indirect_offset,
+            );
+        }
     }
 }
 
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            wgn::wgpu_render_pass_end_pass(self.id);
+            unsafe {
+                wgn::wgpu_render_pass_end_pass(self.id);
+            }
         }
     }
 }
@@ -1349,12 +1385,12 @@ impl<'a> ComputePass<'a> {
     pub fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &BindGroup,
+        bind_group: &'a BindGroup,
         offsets: &[BufferAddress],
     ) {
         unsafe {
             wgn::wgpu_compute_pass_set_bind_group(
-                self.id,
+                self.id.as_mut().unwrap(),
                 index,
                 bind_group.id,
                 offsets.as_ptr(),
@@ -1364,27 +1400,45 @@ impl<'a> ComputePass<'a> {
     }
 
     /// Sets the active compute pipeline.
-    pub fn set_pipeline(&mut self, pipeline: &ComputePipeline) {
-        wgn::wgpu_compute_pass_set_pipeline(self.id, pipeline.id);
+    pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
+        unsafe {
+            wgn::wgpu_compute_pass_set_pipeline(
+                self.id.as_mut().unwrap(),
+                pipeline.id,
+            );
+        }
     }
 
     /// Dispatches compute work operations.
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        wgn::wgpu_compute_pass_dispatch(self.id, x, y, z);
+        unsafe {
+            wgn::wgpu_compute_pass_dispatch(
+                self.id.as_mut().unwrap(),
+                x, y, z,
+            );
+        }
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
-    pub fn dispatch_indirect(&mut self, indirect_buffer: &Buffer, indirect_offset: BufferAddress) {
-        wgn::wgpu_compute_pass_dispatch_indirect(self.id, indirect_buffer.id, indirect_offset);
+    pub fn dispatch_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+        unsafe {
+            wgn::wgpu_compute_pass_dispatch_indirect(
+                self.id.as_mut().unwrap(),
+                indirect_buffer.id,
+                indirect_offset,
+            );
+        }
     }
 }
 
 impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            wgn::wgpu_compute_pass_end_pass(self.id);
+            unsafe {
+                wgn::wgpu_compute_pass_end_pass(self.id);
+            }
         }
     }
 }
