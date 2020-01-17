@@ -43,19 +43,31 @@ impl TextureCopyView {
     fn to_selector(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceRange {
         let level = self.mip_level as hal::image::Level;
         let layer = self.array_layer as hal::image::Layer;
-        hal::image::SubresourceRange {
-            aspects,
-            levels: level .. level + 1,
-            layers: layer .. layer + 1,
+
+        // TODO: Can't satisfy clippy here unless we modify
+        // `hal::image::SubresourceRange` in gfx to use `std::ops::RangeBounds`.
+        #[allow(clippy::range_plus_one)]
+        {
+            hal::image::SubresourceRange {
+                aspects,
+                levels: level .. level + 1,
+                layers: layer .. layer + 1,
+            }
         }
     }
 
     fn to_sub_layers(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceLayers {
         let layer = self.array_layer as hal::image::Layer;
-        hal::image::SubresourceLayers {
-            aspects,
-            level: self.mip_level as hal::image::Level,
-            layers: layer .. layer + 1,
+        // TODO: Can't satisfy clippy here unless we modify
+        // `hal::image::SubresourceLayers` in gfx to use
+        // `std::ops::RangeBounds`.
+        #[allow(clippy::range_plus_one)]
+        {
+            hal::image::SubresourceLayers {
+                aspects,
+                level: self.mip_level as hal::image::Level,
+                layers: layer .. layer + 1,
+            }
         }
     }
 }
