@@ -195,7 +195,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
     }
 
     /// Find the pending entry with the lowest active index. If none can be found that means
-    /// everything in the allocator can be cleaned up, so std::usize::MAX is correct.    
+    /// everything in the allocator can be cleaned up, so std::usize::MAX is correct.
     pub fn lowest_active_submission(&self) -> SubmissionIndex {
         self.active
             .iter()
@@ -225,7 +225,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             .active
             .iter()
             .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
-            .unwrap_or(self.active.len());
+            .unwrap_or_else(|| self.active.len());
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
         } else {
