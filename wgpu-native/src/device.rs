@@ -135,6 +135,9 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     ))
 }
 
+/// # Safety
+///
+/// This function is unsafe as it calls an unsafe extern callback.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_request_adapter_async(
     desc: Option<&core::instance::RequestAdapterOptions>,
@@ -181,6 +184,10 @@ pub extern "C" fn wgpu_device_create_buffer(
     gfx_select!(device_id => GLOBAL.device_create_buffer(device_id, desc, PhantomData))
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer
+/// dereferenced in this function is valid.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_device_create_buffer_mapped(
     device_id: id::DeviceId,
@@ -297,6 +304,10 @@ pub extern "C" fn wgpu_device_get_queue(device_id: id::DeviceId) -> id::QueueId 
     device_id
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer is
+/// valid for `command_buffers_length` elements.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_queue_submit(
     queue_id: id::QueueId,
