@@ -8,6 +8,9 @@ use core::{gfx_select, hub::Token, id};
 
 use std::{marker::PhantomData, slice};
 
+#[cfg(target_os = "macos")]
+use objc::{msg_send, runtime::Object, sel, sel_impl};
+
 pub type RequestAdapterCallback =
     unsafe extern "C" fn(id: id::AdapterId, userdata: *mut std::ffi::c_void);
 pub type BufferMapReadCallback =
@@ -29,15 +32,24 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 .create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
         },
         #[cfg(target_os = "macos")]
-        Rwh::MacOS(h) => core::instance::Surface {
-            #[cfg(feature = "vulkan-portability")]
-            vulkan: instance
-                .vulkan
-                .as_ref()
-                .map(|inst| inst.create_surface_from_ns_view(h.ns_view)),
-            metal: instance
-                .metal
-                .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+        Rwh::MacOS(h) => {
+            let ns_view =
+                if h.ns_view.is_null() {
+                    let ns_window = h.ns_window as *mut Object;
+                    unsafe { msg_send![ns_window, contentView] }
+                } else {
+                    h.ns_view
+                };
+            core::instance::Surface {
+                #[cfg(feature = "vulkan-portability")]
+                vulkan: instance
+                    .vulkan
+                    .as_ref()
+                    .map(|inst| inst.create_surface_from_ns_view(ns_view)),
+                metal: instance
+                    .metal
+                    .create_surface_from_nsview(ns_view, cfg!(debug_assertions)),
+            }
         },
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::Xlib(h) => core::instance::Surface {
