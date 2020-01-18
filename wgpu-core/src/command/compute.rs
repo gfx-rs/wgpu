@@ -225,6 +225,12 @@ pub mod compute_ffi {
     };
     use std::{convert::TryInto, slice};
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `offset_length` elements.
+    // TODO: There might be other safety issues, such as using the unsafe
+    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
         pass: &mut RawPass,

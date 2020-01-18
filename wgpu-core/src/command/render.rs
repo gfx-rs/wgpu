@@ -1127,6 +1127,12 @@ pub mod render_ffi {
     };
     use std::{convert::TryInto, slice};
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `offset_length` elements.
+    // TODO: There might be other safety issues, such as using the unsafe
+    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
         pass: &mut RawRenderPass,
@@ -1166,6 +1172,12 @@ pub mod render_ffi {
         });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointers
+    /// (`buffer_ids` and `offsets`) are valid for `length` elements.
+    // TODO: There might be other safety issues, such as using the unsafe
+    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffers(
         pass: &mut RawRenderPass,

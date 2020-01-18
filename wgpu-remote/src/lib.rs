@@ -70,21 +70,30 @@ pub extern "C" fn wgpu_client_new() -> Infrastructure {
     }
 }
 
+/// # Safety
+///
+/// This function is unsafe because improper use may lead to memory
+/// problems. For example, a double-free may occur if the function is called
+/// twice on the same raw pointer.
 #[no_mangle]
-pub extern "C" fn wgpu_client_delete(client: *mut Client) {
+pub unsafe extern "C" fn wgpu_client_delete(client: *mut Client) {
     log::info!("Terminating WGPU client");
-    let _client = unsafe { Box::from_raw(client) };
+    let _client = Box::from_raw(client);
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer is
+/// valid for `id_length` elements.
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_adapter_ids(
+pub unsafe extern "C" fn wgpu_client_make_adapter_ids(
     client: &Client,
     ids: *mut id::AdapterId,
     id_length: usize,
 ) -> usize {
     let mut identities = client.identities.lock();
     assert_ne!(id_length, 0);
-    let mut ids = unsafe { slice::from_raw_parts_mut(ids, id_length) }.iter_mut();
+    let mut ids = slice::from_raw_parts_mut(ids, id_length).iter_mut();
 
     *ids.next().unwrap() = identities.vulkan.adapters.alloc(Backend::Vulkan);
 
@@ -100,14 +109,18 @@ pub extern "C" fn wgpu_client_make_adapter_ids(
     id_length - ids.len()
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer is
+/// valid for `id_length` elements.
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_adapter_ids(
+pub unsafe extern "C" fn wgpu_client_kill_adapter_ids(
     client: &Client,
     ids: *const id::AdapterId,
     id_length: usize,
 ) {
     let mut identity = client.identities.lock();
-    let ids = unsafe { slice::from_raw_parts(ids, id_length) };
+    let ids = slice::from_raw_parts(ids, id_length);
     for &id in ids {
         identity.select(id.backend()).adapters.free(id)
     }

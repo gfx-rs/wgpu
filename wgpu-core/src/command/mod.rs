@@ -197,7 +197,7 @@ pub struct CommandBufferDescriptor {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
+pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
     encoder_id: id::CommandEncoderId,
     _desc: Option<&ComputePassDescriptor>,
 ) -> *mut RawPass {
@@ -220,6 +220,11 @@ pub struct RawRenderPass {
     targets: RawRenderTargets,
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer
+/// (`RenderPassDescriptor::color_attachments`) is valid for
+/// `RenderPassDescriptor::color_attachments_length` elements.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
     encoder_id: id::CommandEncoderId,

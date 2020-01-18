@@ -83,6 +83,11 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
 }
 
 
+/// # Safety
+///
+/// This function is unsafe because improper use may lead to memory
+/// problems. For example, a double-free may occur if the function is called
+/// twice on the same raw pointer.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: id::RenderPassId) {
     let (pass_data, encoder_id, targets) = Box::from_raw(pass_id).finish_render();
@@ -114,6 +119,11 @@ pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: id::RenderPassId) {
     gfx_select!(encoder_id => GLOBAL.command_encoder_run_render_pass(encoder_id, &color_attachments, depth_stencil_attachment, &pass_data))
 }
 
+/// # Safety
+///
+/// This function is unsafe because improper use may lead to memory
+/// problems. For example, a double-free may occur if the function is called
+/// twice on the same raw pointer.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_compute_pass_end_pass(pass_id: id::ComputePassId) {
     let (pass_data, encoder_id) = Box::from_raw(pass_id).finish_compute();
