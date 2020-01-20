@@ -35,7 +35,7 @@ pub fn map_buffer_usage(
     if usage.contains(W::UNIFORM) {
         hal_usage |= U::UNIFORM;
     }
-    if usage.contains(W::STORAGE) {
+    if usage.intersects(W::STORAGE | W::STORAGE_READ) {
         hal_usage |= U::STORAGE;
     }
     if usage.contains(W::INDIRECT) {
@@ -514,6 +514,9 @@ pub fn map_buffer_state(usage: resource::BufferUsage) -> hal::buffer::State {
     if usage.contains(W::UNIFORM) {
         access |= A::UNIFORM_READ | A::SHADER_READ;
     }
+    if usage.contains(W::STORAGE_READ) {
+        access |= A::SHADER_READ;
+    }
     if usage.contains(W::STORAGE) {
         access |= A::SHADER_WRITE;
     }
@@ -550,7 +553,7 @@ pub fn map_texture_state(
         access |= A::SHADER_READ;
     }
     if usage.contains(W::STORAGE) {
-        access |= A::SHADER_WRITE;
+        access |= A::SHADER_READ | A::SHADER_WRITE;
     }
     if usage.contains(W::OUTPUT_ATTACHMENT) {
         //TODO: read-only attachments
