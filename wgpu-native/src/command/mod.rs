@@ -37,6 +37,7 @@ use crate::{
     LifeGuard,
     RenderPassId,
     Stored,
+    SwapChainId,
     Texture,
     TextureId,
     TextureUsage,
@@ -115,7 +116,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
-    pub(crate) used_swap_chain: Option<(Stored<TextureViewId>, B::Framebuffer)>,
+    pub(crate) used_swap_chain: Option<(Stored<SwapChainId>, B::Framebuffer)>,
     pub(crate) features: Features,
 }
 
@@ -193,12 +194,15 @@ pub fn command_encoder_finish<B: GfxBackend>(
     let hub = B::hub(global);
     let mut token = Token::root();
     //TODO: actually close the last recorded command buffer
+    let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
     let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
     let comb = &mut comb_guard[encoder_id];
     assert!(comb.is_recording);
     comb.is_recording = false;
-    // stop tracking the swapchain image, if used
-    if let Some((ref view_id, _)) = comb.used_swap_chain {
+    if let Some((ref sc_id, _)) = comb.used_swap_chain {
+        let view_id = swap_chain_guard[sc_id.value].acquired_view_id
+            .as_ref()
+            .expect("Used swap chain frame has already presented");
         comb.trackers.views.remove(view_id.value);
     }
     log::debug!("Command buffer {:?} tracker: {:#?}", encoder_id, comb.trackers);
@@ -251,7 +255,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
 
         let mut extent = None;
         let mut barriers = Vec::new();
-        let mut used_swap_chain_image = None::<Stored<TextureViewId>>;
+        let mut used_swap_chain = None::<Stored<SwapChainId>>;
 
         let color_attachments =
             unsafe { slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length) };
@@ -388,15 +392,12 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         };
                         old_layout .. hal::image::Layout::ColorAttachmentOptimal
                     }
-                    TextureViewInner::SwapChain { .. } => {
-                        if let Some((ref view_id, _)) = cmb.used_swap_chain {
-                            assert_eq!(view_id.value, at.attachment);
+                    TextureViewInner::SwapChain { ref source_id, .. } => {
+                        if let Some((ref sc_id, _)) = cmb.used_swap_chain {
+                            assert_eq!(source_id.value, sc_id.value);
                         } else {
-                            assert!(used_swap_chain_image.is_none());
-                            used_swap_chain_image = Some(Stored {
-                                value: at.attachment,
-                                ref_count: view.life_guard.ref_count.clone(),
-                            });
+                            assert!(used_swap_chain.is_none());
+                            used_swap_chain = Some(source_id.clone());
                         }
 
                         let end = hal::image::Layout::Present;
@@ -468,15 +469,12 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         };
                         old_layout .. hal::image::Layout::ColorAttachmentOptimal
                     }
-                    TextureViewInner::SwapChain { .. } => {
-                        if let Some((ref view_id, _)) = cmb.used_swap_chain {
-                            assert_eq!(view_id.value, resolve_target);
+                    TextureViewInner::SwapChain { ref source_id, .. } => {
+                        if let Some((ref sc_id, _)) = cmb.used_swap_chain {
+                            assert_eq!(sc_id.value, source_id.value);
                         } else {
-                            assert!(used_swap_chain_image.is_none());
-                            used_swap_chain_image = Some(Stored {
-                                value: resolve_target,
-                                ref_count: view.life_guard.ref_count.clone(),
-                            });
+                            assert!(used_swap_chain.is_none());
+                            used_swap_chain = Some(source_id.clone());
                         }
 
                         let end = hal::image::Layout::Present;
@@ -587,8 +585,8 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
             depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
         };
 
-        let framebuffer = match used_swap_chain_image.take() {
-            Some(view_id) => {
+        let framebuffer = match used_swap_chain.take() {
+            Some(sc_id) => {
                 assert!(cmb.used_swap_chain.is_none());
                 // Always create a new framebuffer and delete it after presentation.
                 let attachments = fb_key.all().map(|&id| match view_guard[id].inner {
@@ -601,7 +599,7 @@ pub fn command_encoder_begin_render_pass<B: GfxBackend>(
                         .create_framebuffer(&render_pass, attachments, extent.unwrap())
                         .unwrap()
                 };
-                cmb.used_swap_chain = Some((view_id, framebuffer));
+                cmb.used_swap_chain = Some((sc_id, framebuffer));
                 &mut cmb.used_swap_chain.as_mut().unwrap().1
             }
             None => {
