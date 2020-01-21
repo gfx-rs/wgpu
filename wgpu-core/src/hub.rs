@@ -165,6 +165,7 @@ impl<B: hal::Backend> Access<Adapter<B>> for Surface {}
 impl<B: hal::Backend> Access<Device<B>> for Root {}
 impl<B: hal::Backend> Access<Device<B>> for Surface {}
 impl<B: hal::Backend> Access<Device<B>> for Adapter<B> {}
+impl<B: hal::Backend> Access<SwapChain<B>> for Root {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}

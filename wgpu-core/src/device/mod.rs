@@ -31,6 +31,7 @@ use hal::{
 use parking_lot::{Mutex, MutexGuard};
 use rendy_descriptor::{DescriptorAllocator, DescriptorRanges};
 use rendy_memory::{Block, Heaps};
+use smallvec::SmallVec;
 
 use std::{
     collections::hash_map::Entry,
@@ -668,7 +669,7 @@ impl<F: IdentityFilter<id::TextureId>> Global<F> {
             texture.life_guard.ref_count.take();
             texture.device_id.value
         };
-        
+
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
@@ -1309,16 +1310,16 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
                 .submission_index
                 .fetch_add(1, Ordering::Relaxed);
 
-            let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
+            let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
             let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (mut texture_view_guard, mut token) = hub.texture_views.write(&mut token);
+            let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
             let (sampler_guard, _) = hub.samplers.read(&mut token);
 
             //Note: locking the trackers has to be done after the storages
-            let mut signal_semaphores = Vec::new();
+            let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
             let mut trackers = device.trackers.lock();
 
             //TODO: if multiple command buffers are submitted, we can re-use the last
@@ -1329,21 +1330,12 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
             for &cmb_id in command_buffer_ids {
                 let comb = &mut command_buffer_guard[cmb_id];
 
-                if let Some((view_id, fbo)) = comb.used_swap_chain.take() {
-                    match texture_view_guard[view_id.value].inner {
-                        resource::TextureViewInner::Native { .. } => unreachable!(),
-                        resource::TextureViewInner::SwapChain {
-                            ref source_id,
-                            ref mut framebuffers,
-                            ..
-                        } => {
-                            if framebuffers.is_empty() {
-                                let sem = &swap_chain_guard[source_id.value].semaphore;
-                                signal_semaphores.push(sem);
-                            }
-                            framebuffers.push(fbo);
-                        }
-                    };
+                if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
+                    let sc = &mut swap_chain_guard[sc_id.value];
+                    if sc.acquired_framebuffers.is_empty() {
+                        signal_swapchain_semaphores.push(sc_id.value);
+                    }
+                    sc.acquired_framebuffers.push(fbo);
                 }
 
                 // optimize the tracked states
@@ -1405,12 +1397,15 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
 
             // now prepare the GPU submission
             let fence = device.raw.create_fence(false).unwrap();
-            let submission = hal::queue::Submission::<_, _, Vec<&B::Semaphore>> {
+            let submission = hal::queue::Submission {
                 command_buffers: command_buffer_ids
                     .iter()
                     .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
                 wait_semaphores: Vec::new(),
-                signal_semaphores,
+                signal_semaphores: signal_swapchain_semaphores
+                    .into_iter()
+                    .map(|sc_id| &swap_chain_guard[sc_id].semaphore),
+
             };
 
             unsafe {
@@ -1853,6 +1848,7 @@ impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
             num_frames,
             semaphore: device.raw.create_semaphore().unwrap(),
             acquired_view_id: None,
+            acquired_framebuffers: Vec::new(),
         };
         swap_chain_guard.insert(sc_id, swap_chain);
         sc_id

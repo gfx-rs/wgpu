@@ -136,7 +136,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
-    pub(crate) used_swap_chain: Option<(Stored<id::TextureViewId>, B::Framebuffer)>,
+    pub(crate) used_swap_chain: Option<(Stored<id::SwapChainId>, B::Framebuffer)>,
     pub(crate) features: Features,
 }
 
@@ -263,13 +263,17 @@ impl<F> Global<F> {
     ) -> id::CommandBufferId {
         let hub = B::hub(self);
         let mut token = Token::root();
+        let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         //TODO: actually close the last recorded command buffer
         let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
         let comb = &mut comb_guard[encoder_id];
         assert!(comb.is_recording);
         comb.is_recording = false;
         // stop tracking the swapchain image, if used
-        if let Some((ref view_id, _)) = comb.used_swap_chain {
+        if let Some((ref sc_id, _)) = comb.used_swap_chain {
+            let view_id = swap_chain_guard[sc_id.value].acquired_view_id
+                .as_ref()
+                .expect("Used swap chain frame has already presented");
             comb.trackers.views.remove(view_id.value);
         }
         log::debug!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
