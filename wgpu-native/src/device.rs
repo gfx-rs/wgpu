@@ -59,6 +59,7 @@ use hal::{
 use parking_lot::Mutex;
 use rendy_descriptor::{DescriptorAllocator, DescriptorRanges, DescriptorSet};
 use rendy_memory::{Block, Heaps, MemoryBlock};
+use smallvec::SmallVec;
 
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
@@ -1546,11 +1547,11 @@ pub fn queue_submit<B: GfxBackend>(
     let (submit_index, fence) = {
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
+        let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
         let device = &mut device_guard[queue_id];
 
         let mut trackers = device.trackers.lock();
-        let mut signal_semaphores = Vec::new();
+        let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
 
         let submit_index = 1 + device
             .life_guard
@@ -1561,7 +1562,7 @@ pub fn queue_submit<B: GfxBackend>(
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, mut token) = hub.textures.read(&mut token);
-        let (mut texture_view_guard, mut token) = hub.texture_views.write(&mut token);
+        let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
         let (sampler_guard, _) = hub.samplers.read(&mut token);
 
         //TODO: if multiple command buffers are submitted, we can re-use the last
@@ -1572,21 +1573,12 @@ pub fn queue_submit<B: GfxBackend>(
         for &cmb_id in command_buffer_ids {
             let comb = &mut command_buffer_guard[cmb_id];
 
-            if let Some((view_id, fbo)) = comb.used_swap_chain.take() {
-                match texture_view_guard[view_id.value].inner {
-                    resource::TextureViewInner::Native { .. } => unreachable!(),
-                    resource::TextureViewInner::SwapChain {
-                        ref source_id,
-                        ref mut framebuffers,
-                        ..
-                    } => {
-                        if framebuffers.is_empty() {
-                            let sem = &swap_chain_guard[source_id.value].semaphore;
-                            signal_semaphores.push(sem);
-                        }
-                        framebuffers.push(fbo);
-                    }
-                };
+            if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
+                let sc = &mut swap_chain_guard[sc_id.value];
+                if sc.acquired_framebuffers.is_empty() {
+                    signal_swapchain_semaphores.push(sc_id.value);
+                }
+                sc.acquired_framebuffers.push(fbo);
             }
 
             // optimize the tracked states
@@ -1656,12 +1648,14 @@ pub fn queue_submit<B: GfxBackend>(
 
         // now prepare the GPU submission
         let fence = device.raw.create_fence(false).unwrap();
-        let submission = hal::queue::Submission::<_, _, Vec<&B::Semaphore>> {
+        let submission = hal::queue::Submission {
             command_buffers: command_buffer_ids
                 .iter()
                 .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
             wait_semaphores: Vec::new(),
-            signal_semaphores,
+            signal_semaphores: signal_swapchain_semaphores
+                .into_iter()
+                .map(|sc_id| &swap_chain_guard[sc_id].semaphore),
         };
 
         unsafe {
@@ -2115,6 +2109,7 @@ pub fn device_create_swap_chain<B: GfxBackend>(
         num_frames,
         semaphore: device.raw.create_semaphore().unwrap(),
         acquired_view_id: None,
+        acquired_framebuffers: Vec::new(),
     };
     swap_chain_guard.insert(sc_id, swap_chain);
     sc_id

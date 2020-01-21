@@ -18,7 +18,6 @@ use crate::{
 use bitflags::bitflags;
 use hal;
 use rendy_memory::MemoryBlock;
-use smallvec::SmallVec;
 
 use std::borrow::Borrow;
 
@@ -275,7 +274,6 @@ pub(crate) enum TextureViewInner<B: hal::Backend> {
     SwapChain {
         image: <B::Surface as hal::window::PresentationSurface<B>>::SwapchainImage,
         source_id: Stored<SwapChainId>,
-        framebuffers: SmallVec<[B::Framebuffer; 1]>,
     },
 }
 

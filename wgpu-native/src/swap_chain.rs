@@ -50,8 +50,6 @@ use crate::{gfx_select, hub::GLOBAL};
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
 
-use smallvec::SmallVec;
-
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
 
@@ -67,6 +65,7 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) num_frames: hal::window::SwapImageIndex,
     pub(crate) semaphore: B::Semaphore,
     pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,
+    pub(crate) acquired_framebuffers: Vec<B::Framebuffer>,
 }
 
 #[repr(C)]
@@ -176,7 +175,6 @@ pub fn swap_chain_get_next_texture<B: GfxBackend>(
                 value: swap_chain_id,
                 ref_count: sc.life_guard.ref_count.clone(),
             },
-            framebuffers: SmallVec::new(),
         },
         format: sc.desc.format,
         extent: hal::image::Extent {
@@ -232,11 +230,9 @@ pub fn swap_chain_present<B: GfxBackend>(global: &Global, swap_chain_id: SwapCha
         .take()
         .expect("Swap chain image is not acquired");
     let (view, _) = hub.texture_views.unregister(view_id.value, &mut token);
-    let (image, framebuffers) = match view.inner {
+    let image = match view.inner {
         resource::TextureViewInner::Native { .. } => unreachable!(),
-        resource::TextureViewInner::SwapChain {
-            image, framebuffers, ..
-        } => (image, framebuffers),
+        resource::TextureViewInner::SwapChain { image, .. } => image,
     };
 
     let err = unsafe {
@@ -247,7 +243,7 @@ pub fn swap_chain_present<B: GfxBackend>(global: &Global, swap_chain_id: SwapCha
         log::warn!("present failed: {:?}", e);
     }
 
-    for fbo in framebuffers {
+    for fbo in sc.acquired_framebuffers.drain(..) {
         unsafe {
             device.raw.destroy_framebuffer(fbo);
         }

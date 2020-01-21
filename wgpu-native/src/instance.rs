@@ -22,7 +22,7 @@ use bitflags::bitflags;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
+use hal::{adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
 #[cfg(feature = "local")]
 use std::marker::PhantomData;
 
@@ -485,6 +485,9 @@ pub fn adapter_request_device<B: GfxBackend>(
     let device = {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id].raw;
+        let wishful_features =
+            hal::Features::VERTEX_STORES_AND_ATOMICS |
+            hal::Features::FRAGMENT_STORES_AND_ATOMICS;
 
         let family = adapter
             .queue_families
@@ -494,7 +497,10 @@ pub fn adapter_request_device<B: GfxBackend>(
         let mut gpu = unsafe {
             adapter
                 .physical_device
-                .open(&[(family, &[1.0])], hal::Features::empty())
+                .open(
+                    &[(family, &[1.0])],
+                    adapter.physical_device.features() & wishful_features,
+                )
                 .unwrap()
         };
 

@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.4.3 (20-01-2020)
+  - improved swap chain error handling
+
 ## v0.4.2 (15-12-2019)
   - fixed render pass transitions
 
