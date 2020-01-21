@@ -516,6 +516,9 @@ pub fn map_buffer_state(usage: resource::BufferUsage) -> hal::buffer::State {
     if usage.contains(W::UNIFORM) {
         access |= A::UNIFORM_READ | A::SHADER_READ;
     }
+    if usage.contains(W::STORAGE_READ) {
+        access |= A::SHADER_READ;
+    }
     if usage.contains(W::STORAGE) {
         access |= A::SHADER_WRITE;
     }
