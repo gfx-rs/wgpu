@@ -14,7 +14,6 @@ use crate::{
 
 use hal;
 use rendy_memory::MemoryBlock;
-use smallvec::SmallVec;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -307,7 +306,6 @@ pub(crate) enum TextureViewInner<B: hal::Backend> {
     SwapChain {
         image: <B::Surface as hal::window::PresentationSurface<B>>::SwapchainImage,
         source_id: Stored<SwapChainId>,
-        framebuffers: SmallVec<[B::Framebuffer; 1]>,
     },
 }
 

@@ -45,8 +45,6 @@ use crate::{
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
 
-use smallvec::SmallVec;
-
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
 pub const DESIRED_NUM_FRAMES: u32 = 3;
@@ -59,6 +57,7 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) num_frames: hal::window::SwapImageIndex,
     pub(crate) semaphore: B::Semaphore,
     pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,
+    pub(crate) acquired_framebuffers: Vec<B::Framebuffer>,
 }
 
 #[repr(C)]
@@ -169,7 +168,6 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
                     value: swap_chain_id,
                     ref_count: sc.life_guard.add_ref(),
                 },
-                framebuffers: SmallVec::new(),
             },
             format: sc.desc.format,
             extent: hal::image::Extent {
@@ -218,13 +216,9 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
             .take()
             .expect("Swap chain image is not acquired");
         let (view, _) = hub.texture_views.unregister(view_id.value, &mut token);
-        let (image, framebuffers) = match view.inner {
+        let image = match view.inner {
             resource::TextureViewInner::Native { .. } => unreachable!(),
-            resource::TextureViewInner::SwapChain {
-                image,
-                framebuffers,
-                ..
-            } => (image, framebuffers),
+            resource::TextureViewInner::SwapChain { image, .. } => image,
         };
 
         let err = unsafe {
@@ -235,7 +229,7 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
             log::warn!("present failed: {:?}", e);
         }
 
-        for fbo in framebuffers {
+        for fbo in sc.acquired_framebuffers.drain(..) {
             unsafe {
                 device.raw.destroy_framebuffer(fbo);
             }

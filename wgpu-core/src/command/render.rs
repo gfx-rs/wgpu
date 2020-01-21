@@ -325,7 +325,7 @@ impl<F> Global<F> {
             let base_trackers = &cmb.trackers;
 
             let mut extent = None;
-            let mut used_swap_chain_image = None::<Stored<id::TextureViewId>>;
+            let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
 
             let sample_count = color_attachments
                 .get(0)
@@ -430,15 +430,12 @@ impl<F> Global<F> {
                             };
                             old_layout .. hal::image::Layout::ColorAttachmentOptimal
                         }
-                        TextureViewInner::SwapChain { .. } => {
-                            if let Some((ref view_id, _)) = cmb.used_swap_chain {
-                                assert_eq!(view_id.value, at.attachment);
+                        TextureViewInner::SwapChain { ref source_id, .. } => {
+                            if let Some((ref sc_id, _)) = cmb.used_swap_chain {
+                                assert_eq!(source_id.value, sc_id.value);
                             } else {
-                                assert!(used_swap_chain_image.is_none());
-                                used_swap_chain_image = Some(Stored {
-                                    value: at.attachment,
-                                    ref_count: view.life_guard.add_ref(),
-                                });
+                                assert!(used_swap_chain.is_none());
+                                used_swap_chain = Some(source_id.clone());
                             }
 
                             let end = hal::image::Layout::Present;
@@ -490,15 +487,12 @@ impl<F> Global<F> {
                             };
                             old_layout .. hal::image::Layout::ColorAttachmentOptimal
                         }
-                        TextureViewInner::SwapChain { .. } => {
-                            if let Some((ref view_id, _)) = cmb.used_swap_chain {
-                                assert_eq!(view_id.value, resolve_target);
+                        TextureViewInner::SwapChain { ref source_id, .. } => {
+                            if let Some((ref sc_id, _)) = cmb.used_swap_chain {
+                                assert_eq!(source_id.value, sc_id.value);
                             } else {
-                                assert!(used_swap_chain_image.is_none());
-                                used_swap_chain_image = Some(Stored {
-                                    value: resolve_target,
-                                    ref_count: view.life_guard.add_ref(),
-                                });
+                                assert!(used_swap_chain.is_none());
+                                used_swap_chain = Some(source_id.clone());
                             }
 
                             let end = hal::image::Layout::Present;
@@ -624,8 +618,8 @@ impl<F> Global<F> {
                 depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
             };
 
-            let framebuffer = match used_swap_chain_image.take() {
-                Some(view_id) => {
+            let framebuffer = match used_swap_chain.take() {
+                Some(sc_id) => {
                     assert!(cmb.used_swap_chain.is_none());
                     // Always create a new framebuffer and delete it after presentation.
                     let attachments = fb_key.all().map(|&id| match view_guard[id].inner {
@@ -638,7 +632,7 @@ impl<F> Global<F> {
                             .create_framebuffer(&render_pass, attachments, extent.unwrap())
                             .unwrap()
                     };
-                    cmb.used_swap_chain = Some((view_id, framebuffer));
+                    cmb.used_swap_chain = Some((sc_id, framebuffer));
                     &mut cmb.used_swap_chain.as_mut().unwrap().1
                 }
                 None => {
