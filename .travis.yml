@@ -54,6 +54,8 @@ branches:
 
 before_install:
 - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
+- if [[ $TRAVIS_RUST_VERSION != "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then rustup default stable-msvc; fi
+- if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then rustup default nightly-msvc; fi
 
 script:
   - cargo test
@@ -75,3 +77,17 @@ script:
       make example-compute example-triangle VERBOSE=1;
     fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then make VERBOSE=1; fi
+  - if [[ $TRAVIS_RUST_VERSION == "stable" ]]; then make package; fi
+
+deploy:
+  provider: releases
+  api_key:
+    secure: GcBxH6M6X9UU+5QBR4nEdNbXDfGpCrggZkPaztfK1vGAjmOyvHnK6P3M00C5Pf0nLmyWhGT5P0I4Rpy0z8WyQLOaHNWUuRGlRqlehWiJEmi6MpS2O8noJEfbLut9vYPpl0sdrtFrU5e0F77fWm5UWYQLMaeqXj66xv4lVxZp/JkXwhChTpU0PRJtSBuYiLFzbwz9CEjsvBXjw5ZzxmGTHnbw5p19B63yy3mORV91QQrRfCAHMg9z9zthpoZHEGqXXTIFuvh1DZqC5SHhUbt865MHMJS/2IaPH5zA/fOzZCCk6IvbNKLJ/ghE0zRJjHeVU4vjxNMxrFEBKVFCmQB7CpTqGCLy2qTB0tnSmNzqY82xUehl23jZ0LxnKODzCjx4hgfskWnr5p7Pv1Ql9UcAZXDV8UG+7JL34BQY4yyvknpTxK4MTXN9ZNahKJv+zSB9jDuLnB6uVbNV1hwFOUNm7KyAWA7XjFN7k8p4h678Xfg+EUWYxtV1auOItuXdxvzMWgDUDGmk74FdUWxy+GVzjboAmBMVRW/KMQFp4INIaS0gPRPK/jodLqrrZ+1otgYvMM/CsnOh4GLl86RTewuyid2jNnUeXepHPuU+JsDLLCJfyYoAfSxDCdQEuqNLAvpFPJJrBcWREVoqXWVUlWmwhEIWbLRUi2l5AhHnu+PfVhE=
+  skip_cleanup: true
+  overwrite: true
+  file_glob: true
+  file: dist/wgpu-*.zip
+  on:
+    repo: gfx-rs/wgpu
+    tags: true
+    condition: $TRAVIS_RUST_VERSION == "stable" && $TRAVIS_BRANCH == $TRAVIS_TAG && ${TRAVIS_TAG::1} == "v"

@@ -22,9 +22,37 @@ use std::{collections::HashMap, sync::atomic::Ordering, thread};
 struct CommandPool<B: hal::Backend> {
     raw: B::CommandPool,
     available: Vec<B::CommandBuffer>,
+    pending: Vec<CommandBuffer<B>>,
 }
 
 impl<B: hal::Backend> CommandPool<B> {
+    fn maintain(&mut self, lowest_active_index: SubmissionIndex) {
+        for i in (0 .. self.pending.len()).rev() {
+            let index = self.pending[i]
+                .life_guard
+                .submission_index
+                .load(Ordering::Acquire);
+            if index < lowest_active_index {
+                let cmd_buf = self.pending.swap_remove(i);
+                log::trace!(
+                    "recycling comb submitted in {} when {} is lowest active",
+                    index,
+                    lowest_active_index,
+                );
+                self.recycle(cmd_buf);
+            }
+        }
+    }
+
+    fn recycle(&mut self, cmd_buf: CommandBuffer<B>) {
+        for mut raw in cmd_buf.raw {
+            unsafe {
+                raw.reset(false);
+            }
+            self.available.push(raw);
+        }
+    }
+
     fn allocate(&mut self) -> B::CommandBuffer {
         if self.available.is_empty() {
             let extra = unsafe { self.raw.allocate_vec(20, hal::command::Level::Primary) };
@@ -37,20 +65,9 @@ impl<B: hal::Backend> CommandPool<B> {
 
 #[derive(Debug)]
 struct Inner<B: hal::Backend> {
+    // TODO: Currently pools from threads that are stopped or no longer call into wgpu will never be
+    // cleaned up.
     pools: HashMap<thread::ThreadId, CommandPool<B>>,
-    pending: Vec<CommandBuffer<B>>,
-}
-
-impl<B: hal::Backend> Inner<B> {
-    fn recycle(&mut self, cmd_buf: CommandBuffer<B>) {
-        let pool = self.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
-        for mut raw in cmd_buf.raw {
-            unsafe {
-                raw.reset(false);
-            }
-            pool.available.push(raw);
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -65,6 +82,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
         device_id: Stored<DeviceId>,
         device: &B::Device,
         features: Features,
+        lowest_active_index: SubmissionIndex,
     ) -> CommandBuffer<B> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
         let thread_id = thread::current().id();
@@ -79,7 +97,12 @@ impl<B: GfxBackend> CommandAllocator<B> {
             }
             .unwrap(),
             available: Vec::new(),
+            pending: Vec::new(),
         });
+
+        // Recycle completed command buffers
+        pool.maintain(lowest_active_index);
+
         let init = pool.allocate();
 
         CommandBuffer {
@@ -101,7 +124,6 @@ impl<B: hal::Backend> CommandAllocator<B> {
             queue_family,
             inner: Mutex::new(Inner {
                 pools: HashMap::new(),
-                pending: Vec::new(),
             }),
         }
     }
@@ -118,40 +140,35 @@ impl<B: hal::Backend> CommandAllocator<B> {
         pool.available.pop().unwrap()
     }
 
+    pub fn discard(&self, mut cmd_buf: CommandBuffer<B>) {
+        cmd_buf.trackers.clear();
+        self.inner
+            .lock()
+            .pools
+            .get_mut(&cmd_buf.recorded_thread_id)
+            .unwrap()
+            .recycle(cmd_buf);
+    }
+
     pub fn after_submit(&self, mut cmd_buf: CommandBuffer<B>, submit_index: SubmissionIndex) {
         cmd_buf.trackers.clear();
         cmd_buf
             .life_guard
             .submission_index
             .store(submit_index, Ordering::Release);
-        self.inner.lock().pending.push(cmd_buf);
-    }
 
-    pub fn maintain(&self, last_done: SubmissionIndex) {
+        // Record this command buffer as pending
         let mut inner = self.inner.lock();
-        for i in (0 .. inner.pending.len()).rev() {
-            let index = inner.pending[i]
-                .life_guard
-                .submission_index
-                .load(Ordering::Acquire);
-            if index <= last_done {
-                let cmd_buf = inner.pending.swap_remove(i);
-                log::trace!(
-                    "recycling comb submitted in {} when {} is done",
-                    index,
-                    last_done
-                );
-                inner.recycle(cmd_buf);
-            }
-        }
+        let pool = inner.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
+        pool.pending.push(cmd_buf);
     }
 
     pub fn destroy(self, device: &B::Device) {
         let mut inner = self.inner.lock();
-        while let Some(cmd_buf) = inner.pending.pop() {
-            inner.recycle(cmd_buf);
-        }
         for (_, mut pool) in inner.pools.drain() {
+            while let Some(cmd_buf) = pool.pending.pop() {
+                pool.recycle(cmd_buf);
+            }
             unsafe {
                 pool.raw.free(pool.available);
                 device.destroy_command_pool(pool.raw);

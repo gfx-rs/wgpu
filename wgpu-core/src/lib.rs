@@ -25,11 +25,13 @@ pub mod hub;
 pub mod id;
 pub mod instance;
 pub mod pipeline;
+pub mod power;
 pub mod resource;
 pub mod swap_chain;
 pub mod track;
 
 pub use hal::pso::read_spirv;
+use peek_poke::{PeekCopy, Poke};
 
 use std::{
     os::raw::c_char,
@@ -88,7 +90,7 @@ impl Drop for RefCount {
 
 #[derive(Debug)]
 struct LifeGuard {
-    ref_count: RefCount,
+    ref_count: Option<RefCount>,
     submission_index: AtomicUsize,
 }
 
@@ -96,9 +98,20 @@ impl LifeGuard {
     fn new() -> Self {
         let bx = Box::new(AtomicUsize::new(1));
         LifeGuard {
-            ref_count: RefCount(ptr::NonNull::new(Box::into_raw(bx)).unwrap()),
+            ref_count: ptr::NonNull::new(Box::into_raw(bx)).map(RefCount),
             submission_index: AtomicUsize::new(0),
         }
+    }
+
+    fn add_ref(&self) -> RefCount {
+        self.ref_count.clone().unwrap()
+    }
+
+    /// Returns `true` if the resource is still needed by the user.
+    fn use_at(&self, submit_index: SubmissionIndex) -> bool {
+        self.submission_index
+            .store(submit_index, Ordering::Release);
+        self.ref_count.is_some()
     }
 }
 
@@ -109,7 +122,7 @@ struct Stored<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
 pub struct Color {
     pub r: f64,
     pub g: f64,
@@ -159,16 +172,16 @@ impl Color {
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Origin3d {
-    pub x: f32,
-    pub y: f32,
-    pub z: f32,
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
 }
 
 impl Origin3d {
     pub const ZERO: Self = Origin3d {
-        x: 0.0,
-        y: 0.0,
-        z: 0.0,
+        x: 0,
+        y: 0,
+        z: 0,
     };
 }
 

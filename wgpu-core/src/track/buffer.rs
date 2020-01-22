@@ -2,17 +2,37 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use super::{PendingTransition, ResourceState, Stitch, Unit};
-use crate::{conv, id::BufferId, resource::BufferUsage};
-use std::ops::Range;
+use super::{PendingTransition, ResourceState, Unit};
+use crate::{id::BufferId, resource::BufferUsage};
 
 //TODO: store `hal::buffer::State` here to avoid extra conversions
 pub type BufferState = Unit<BufferUsage>;
 
 impl PendingTransition<BufferState> {
-    /// Produce the gfx-hal buffer states corresponding to the transition.
-    pub fn to_states(&self) -> Range<hal::buffer::State> {
-        conv::map_buffer_state(self.usage.start) .. conv::map_buffer_state(self.usage.end)
+    fn collapse(self) -> Result<BufferUsage, Self> {
+        if self.usage.start.is_empty()
+            || self.usage.start == self.usage.end
+            || !BufferUsage::WRITE_ALL.intersects(self.usage.start | self.usage.end)
+        {
+            Ok(self.usage.start | self.usage.end)
+        } else {
+            Err(self)
+        }
+    }
+}
+
+impl Default for BufferState {
+    fn default() -> Self {
+        BufferState {
+            first: None,
+            last: BufferUsage::empty(),
+        }
+    }
+}
+
+impl BufferState {
+    pub fn with_usage(usage: BufferUsage) -> Self {
+        Unit::new(usage)
     }
 }
 
@@ -20,13 +40,6 @@ impl ResourceState for BufferState {
     type Id = BufferId;
     type Selector = ();
     type Usage = BufferUsage;
-
-    fn new(_full_selector: &Self::Selector) -> Self {
-        BufferState {
-            init: BufferUsage::empty(),
-            last: BufferUsage::empty(),
-        }
-    }
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(self.last)
@@ -47,20 +60,15 @@ impl ResourceState for BufferState {
                 usage: old .. usage,
             };
             self.last = match output {
+                None => pending.collapse()?,
                 Some(transitions) => {
                     transitions.push(pending);
+                    if self.first.is_none() {
+                        self.first = Some(old);
+                    }
                     usage
                 }
-                None => {
-                    if !old.is_empty()
-                        && old != usage
-                        && BufferUsage::WRITE_ALL.intersects(old | usage)
-                    {
-                        return Err(pending);
-                    }
-                    old | usage
-                }
-            };
+            }
         }
         Ok(())
     }
@@ -69,12 +77,14 @@ impl ResourceState for BufferState {
         &mut self,
         id: Self::Id,
         other: &Self,
-        stitch: Stitch,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
-        let new = other.select(stitch);
+        let new = other.port();
         self.last = if old == new && BufferUsage::ORDERED.contains(new) {
+            if self.first.is_none() {
+                self.first = Some(old);
+            }
             other.last
         } else {
             let pending = PendingTransition {
@@ -83,15 +93,13 @@ impl ResourceState for BufferState {
                 usage: old .. new,
             };
             match output {
+                None => pending.collapse()?,
                 Some(transitions) => {
                     transitions.push(pending);
-                    other.last
-                }
-                None => {
-                    if !old.is_empty() && BufferUsage::WRITE_ALL.intersects(old | new) {
-                        return Err(pending);
+                    if self.first.is_none() {
+                        self.first = Some(old);
                     }
-                    old | new
+                    other.last
                 }
             }
         };
@@ -109,7 +117,7 @@ mod test {
     #[test]
     fn change() {
         let mut bs = Unit {
-            init: BufferUsage::INDEX,
+            first: Some(BufferUsage::INDEX),
             last: BufferUsage::STORAGE,
         };
         let id = TypedId::zip(0, 0, Backend::Empty);

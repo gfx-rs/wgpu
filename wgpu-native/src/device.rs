@@ -10,10 +10,6 @@ use std::{marker::PhantomData, slice};
 
 pub type RequestAdapterCallback =
     unsafe extern "C" fn(id: id::AdapterId, userdata: *mut std::ffi::c_void);
-pub type BufferMapReadCallback =
-    unsafe extern "C" fn(status: core::resource::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8);
-pub type BufferMapWriteCallback =
-    unsafe extern "C" fn(status: core::resource::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8);
 
 pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id::SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
@@ -78,13 +74,26 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
 #[no_mangle]
 pub extern "C" fn wgpu_create_surface_from_xlib(
     display: *mut *const std::ffi::c_void,
-    window: u64,
+    window: libc::c_ulong,
 ) -> id::SurfaceId {
     use raw_window_handle::unix::XlibHandle;
     wgpu_create_surface(raw_window_handle::RawWindowHandle::Xlib(XlibHandle {
         window,
         display: display as *mut _,
         ..XlibHandle::empty()
+    }))
+}
+
+#[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
+#[no_mangle]
+pub extern "C" fn wgpu_create_surface_from_wayland(
+    surface: *mut std::ffi::c_void,
+    display: *mut std::ffi::c_void,
+) -> id::SurfaceId {
+    use raw_window_handle::unix::WaylandHandle;
+    wgpu_create_surface(raw_window_handle::RawWindowHandle::Wayland(WaylandHandle {
+        surface, display,
+        ..WaylandHandle::empty()
     }))
 }
 
@@ -148,8 +157,13 @@ pub extern "C" fn wgpu_adapter_request_device(
     gfx_select!(adapter_id => GLOBAL.adapter_request_device(adapter_id, desc, PhantomData))
 }
 
-pub fn wgpu_adapter_get_info(adapter_id: id::AdapterId) -> core::instance::AdapterInfo {
+pub fn adapter_get_info(adapter_id: id::AdapterId) -> core::instance::AdapterInfo {
     gfx_select!(adapter_id => GLOBAL.adapter_get_info(adapter_id))
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_adapter_destroy(adapter_id: id::AdapterId) {
+    gfx_select!(adapter_id => GLOBAL.adapter_destroy(adapter_id))
 }
 
 #[no_mangle]
@@ -270,6 +284,16 @@ pub extern "C" fn wgpu_device_create_command_encoder(
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_command_encoder_destroy(command_encoder_id: id::CommandEncoderId) {
+    gfx_select!(command_encoder_id => GLOBAL.command_encoder_destroy(command_encoder_id))
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_command_buffer_destroy(command_buffer_id: id::CommandBufferId) {
+    gfx_select!(command_buffer_id => GLOBAL.command_buffer_destroy(command_buffer_id))
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_device_get_queue(device_id: id::DeviceId) -> id::QueueId {
     device_id
 }
@@ -325,16 +349,15 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     buffer_id: id::BufferId,
     start: core::BufferAddress,
     size: core::BufferAddress,
-    callback: BufferMapReadCallback,
+    callback: core::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
     let operation = core::resource::BufferMapOperation::Read(
-        start .. start + size,
         Box::new(move |status, data| unsafe {
             callback(status, data, userdata)
         }),
     );
-    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_READ, operation))
+    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_READ, start .. start + size, operation))
 }
 
 #[no_mangle]
@@ -342,16 +365,15 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     buffer_id: id::BufferId,
     start: core::BufferAddress,
     size: core::BufferAddress,
-    callback: BufferMapWriteCallback,
+    callback: core::device::BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
     let operation = core::resource::BufferMapOperation::Write(
-        start .. start + size,
         Box::new(move |status, data| unsafe {
             callback(status, data, userdata)
         }),
     );
-    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_WRITE, operation))
+    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_WRITE, start .. start + size, operation))
 }
 
 #[no_mangle]

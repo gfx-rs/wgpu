@@ -25,6 +25,8 @@ exclude = ["BufferMapResult"]
 parse_deps = true
 include = ["wgpu-core"]
 
+extra_bindings = ["wgpu-core"]
+
 [fn]
 
 [struct]
@@ -38,3 +40,7 @@ derive_helper_methods = true
 bitflags = true
 
 [defines]
+#"target_os = ios" = "WGPU_TARGET_IOS"
+#"target_os = macos" = "WGPU_TARGET_MACOS"
+#"unix" = "WGPU_TARGET_FAMILY_UNIX"
+#"windows" = "WGPU_TARGET_WINDOWS"

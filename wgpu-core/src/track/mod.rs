@@ -7,8 +7,10 @@ mod range;
 mod texture;
 
 use crate::{
+    conv,
     hub::Storage,
     id::{BindGroupId, SamplerId, TextureViewId, TypedId},
+    resource,
     Backend,
     Epoch,
     FastHashMap,
@@ -19,23 +21,21 @@ use crate::{
 use std::{
     borrow::Borrow,
     collections::hash_map::Entry,
-    fmt::Debug,
+    fmt,
     marker::PhantomData,
-    ops::Range,
+    ops,
     vec::Drain,
 };
 
-use buffer::BufferState;
-use texture::TextureState;
+pub use buffer::BufferState;
+pub use texture::TextureState;
 
-
-pub const SEPARATE_DEPTH_STENCIL_STATES: bool = false;
 
 /// A single unit of state tracking. It keeps an initial
 /// usage as well as the last/current one, similar to `Range`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Unit<U> {
-    init: U,
+    first: Option<U>,
     last: U,
 }
 
@@ -43,46 +43,26 @@ impl<U: Copy> Unit<U> {
     /// Create a new unit from a given usage.
     fn new(usage: U) -> Self {
         Unit {
-            init: usage,
+            first: None,
             last: usage,
         }
     }
 
-    /// Select one of the ends of the usage, based on the
-    /// given `Stitch`.
-    ///
-    /// In some scenarios, when merging two trackers
-    /// A and B for a resource, we want to connect A to the initial state
-    /// of B. In other scenarios, we want to reach the last state of B.
-    fn select(&self, stitch: Stitch) -> U {
-        match stitch {
-            Stitch::Init => self.init,
-            Stitch::Last => self.last,
-        }
+    /// Return a usage to link to.
+    fn port(&self) -> U {
+        self.first.unwrap_or(self.last)
     }
-}
-
-/// Mode of stitching to states together.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum Stitch {
-    /// Stitch to the init state of the other resource.
-    Init,
-    /// Stitch to the last state of the other resource.
-    Last,
 }
 
 /// The main trait that abstracts away the tracking logic of
 /// a particular resource type, like a buffer or a texture.
-pub trait ResourceState: Clone {
+pub trait ResourceState: Clone + Default {
     /// Corresponding `HUB` identifier.
-    type Id: Copy + Debug + TypedId;
+    type Id: Copy + fmt::Debug + TypedId;
     /// A type specifying the sub-resources.
-    type Selector: Debug;
+    type Selector: fmt::Debug;
     /// Usage type for a `Unit` of a sub-resource.
-    type Usage: Debug;
-
-    /// Create a new resource state to track the specified subresources.
-    fn new(full_selector: &Self::Selector) -> Self;
+    type Usage: fmt::Debug;
 
     /// Check if all the selected sub-resources have the same
     /// usage, and return it.
@@ -119,15 +99,10 @@ pub trait ResourceState: Clone {
     /// `PendingTransition` pushed to this vector, or extended with the
     /// other read-only usage, unless there is a usage conflict, and
     /// the error is generated (returning the conflict).
-    ///
-    /// `stitch` only defines the end points of generated transitions.
-    /// Last states of `self` are nevertheless updated to the *last* states
-    /// of `other`, if `output` is provided.
     fn merge(
         &mut self,
         id: Self::Id,
         other: &Self,
-        stitch: Stitch,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>>;
 
@@ -137,7 +112,7 @@ pub trait ResourceState: Clone {
 
 /// Structure wrapping the abstract tracking state with the relevant resource
 /// data, such as the reference count and the epoch.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Resource<S> {
     ref_count: RefCount,
     state: S,
@@ -151,11 +126,47 @@ struct Resource<S> {
 pub struct PendingTransition<S: ResourceState> {
     pub id: S::Id,
     pub selector: S::Selector,
-    pub usage: Range<S::Usage>,
+    pub usage: ops::Range<S::Usage>,
+}
+
+impl PendingTransition<BufferState> {
+    /// Produce the gfx-hal barrier corresponding to the transition.
+    pub fn into_hal<'a, B: hal::Backend>(
+        self,
+        buf: &'a resource::Buffer<B>,
+    ) -> hal::memory::Barrier<'a, B> {
+        log::trace!("\tbuffer -> {:?}", self);
+        hal::memory::Barrier::Buffer {
+            states: conv::map_buffer_state(self.usage.start) .. conv::map_buffer_state(self.usage.end),
+            target: &buf.raw,
+            range: None .. None,
+            families: None,
+        }
+    }
+}
+
+impl PendingTransition<TextureState> {
+    /// Produce the gfx-hal barrier corresponding to the transition.
+    pub fn into_hal<'a, B: hal::Backend>(
+        self,
+        tex: &'a resource::Texture<B>,
+    ) -> hal::memory::Barrier<'a, B> {
+        log::trace!("\ttexture -> {:?}", self);
+        let aspects = tex.full_range.aspects;
+        hal::memory::Barrier::Image {
+            states: conv::map_texture_state(self.usage.start, aspects)
+                .. conv::map_texture_state(self.usage.end, aspects),
+            target: &tex.raw,
+            range: hal::image::SubresourceRange {
+                aspects,
+                .. self.selector
+            },
+            families: None,
+        }
+    }
 }
 
 /// A tracker for all resources of a given type.
-#[derive(Debug)]
 pub struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
@@ -163,6 +174,18 @@ pub struct ResourceTracker<S: ResourceState> {
     temp: Vec<PendingTransition<S>>,
     /// The backend variant for all the tracked resources.
     backend: Backend,
+}
+
+impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        self.map
+            .iter()
+            .map(|(&index, res)| {
+                ((index, res.epoch), &res.state)
+            })
+            .collect::<FastHashMap<_, _>>()
+            .fmt(formatter)
+    }
 }
 
 impl<S: ResourceState> ResourceTracker<S> {
@@ -188,6 +211,20 @@ impl<S: ResourceState> ResourceTracker<S> {
         }
     }
 
+    /// Removes the resource from the tracker if we are holding the last reference.
+    pub fn remove_abandoned(&mut self, id: S::Id) -> bool {
+        let (index, epoch, backend) = id.unzip();
+        debug_assert_eq!(backend, self.backend);
+        match self.map.entry(index) {
+            Entry::Occupied(e) if e.get().ref_count.load() == 1 => {
+                let res = e.remove();
+                assert_eq!(res.epoch, epoch);
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Try to optimize the internal representation.
     pub fn optimize(&mut self) {
         for resource in self.map.values_mut() {
@@ -208,41 +245,42 @@ impl<S: ResourceState> ResourceTracker<S> {
         self.map.clear();
     }
 
+    /// Returns true if the tracker is empty.
+    pub fn is_empty(&self) -> bool {
+        self.map.is_empty()
+    }
+
     /// Initialize a resource to be used.
     ///
-    /// Returns `false` if the resource is already tracked.
+    /// Returns false if the resource is already registered.
     pub fn init(
         &mut self,
         id: S::Id,
         ref_count: RefCount,
-        selector: S::Selector,
-        default: S::Usage,
-    ) -> bool {
-        let mut state = S::new(&selector);
-        match state.change(id, selector, default, None) {
-            Ok(()) => (),
-            Err(_) => unreachable!(),
-        }
-
+        state: S,
+    ) -> Result<(), &S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
-        self.map
-            .insert(
-                index,
-                Resource {
+        match self.map.entry(index) {
+            Entry::Vacant(e) => {
+                e.insert(Resource {
                     ref_count,
                     state,
                     epoch,
-                },
-            )
-            .is_none()
+                });
+                Ok(())
+            }
+            Entry::Occupied(e) => {
+                Err(&e.into_mut().state)
+            }
+        }
     }
 
     /// Query the usage of a resource selector.
     ///
     /// Returns `Some(Usage)` only if this usage is consistent
     /// across the given selector.
-    pub fn query(&mut self, id: S::Id, selector: S::Selector) -> Option<S::Usage> {
+    pub fn query(&self, id: S::Id, selector: S::Selector) -> Option<S::Usage> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         let res = self.map.get(&index)?;
@@ -257,14 +295,13 @@ impl<S: ResourceState> ResourceTracker<S> {
         map: &'a mut FastHashMap<Index, Resource<S>>,
         id: S::Id,
         ref_count: &RefCount,
-        full_selector: &S::Selector,
     ) -> &'a mut Resource<S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(self_backend, backend);
         match map.entry(index) {
             Entry::Vacant(e) => e.insert(Resource {
                 ref_count: ref_count.clone(),
-                state: S::new(full_selector),
+                state: S::default(),
                 epoch,
             }),
             Entry::Occupied(e) => {
@@ -283,9 +320,8 @@ impl<S: ResourceState> ResourceTracker<S> {
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
-        full_selector: &S::Selector,
     ) -> Result<(), PendingTransition<S>> {
-        Self::get_or_insert(self.backend, &mut self.map, id, ref_count, full_selector)
+        Self::get_or_insert(self.backend, &mut self.map, id, ref_count)
             .state
             .change(id, selector, usage, None)
     }
@@ -297,9 +333,8 @@ impl<S: ResourceState> ResourceTracker<S> {
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
-        full_selector: &S::Selector,
     ) -> Drain<PendingTransition<S>> {
-        let res = Self::get_or_insert(self.backend, &mut self.map, id, ref_count, full_selector);
+        let res = Self::get_or_insert(self.backend, &mut self.map, id, ref_count);
         res.state
             .change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
@@ -320,7 +355,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                     let id = S::Id::zip(index, new.epoch, self.backend);
                     e.into_mut()
                         .state
-                        .merge(id, &new.state, Stitch::Last, None)?;
+                        .merge(id, &new.state, None)?;
                 }
             }
         }
@@ -332,7 +367,6 @@ impl<S: ResourceState> ResourceTracker<S> {
     pub fn merge_replace<'a>(
         &'a mut self,
         other: &'a Self,
-        stitch: Stitch,
     ) -> Drain<PendingTransition<S>> {
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
@@ -344,7 +378,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                     let id = S::Id::zip(index, new.epoch, self.backend);
                     e.into_mut()
                         .state
-                        .merge(id, &new.state, stitch, Some(&mut self.temp))
+                        .merge(id, &new.state, Some(&mut self.temp))
                         .ok(); //TODO: unwrap?
                 }
             }
@@ -357,7 +391,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// the last read-only usage, if possible.
     ///
     /// Returns the old usage as an error if there is a conflict.
-    pub fn use_extend<'a, T: 'a + Borrow<RefCount> + Borrow<S::Selector>>(
+    pub fn use_extend<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
@@ -365,7 +399,7 @@ impl<S: ResourceState> ResourceTracker<S> {
         usage: S::Usage,
     ) -> Result<&'a T, S::Usage> {
         let item = &storage[id];
-        self.change_extend(id, item.borrow(), selector, usage, item.borrow())
+        self.change_extend(id, item.borrow(), selector, usage)
             .map(|()| item)
             .map_err(|pending| pending.usage.start)
     }
@@ -374,7 +408,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Combines storage access by 'Id' with the transition that replaces
     /// the last usage with a new one, returning an iterator over these
     /// transitions.
-    pub fn use_replace<'a, T: 'a + Borrow<RefCount> + Borrow<S::Selector>>(
+    pub fn use_replace<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
@@ -382,20 +416,16 @@ impl<S: ResourceState> ResourceTracker<S> {
         usage: S::Usage,
     ) -> (&'a T, Drain<PendingTransition<S>>) {
         let item = &storage[id];
-        let drain = self.change_replace(id, item.borrow(), selector, usage, item.borrow());
+        let drain = self.change_replace(id, item.borrow(), selector, usage);
         (item, drain)
     }
 }
 
 
-impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
+impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
     type Id = I;
     type Selector = ();
     type Usage = ();
-
-    fn new(_full_selector: &Self::Selector) -> Self {
-        PhantomData
-    }
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(())
@@ -415,7 +445,6 @@ impl<I: Copy + Debug + TypedId> ResourceState for PhantomData<I> {
         &mut self,
         _id: Self::Id,
         _other: &Self,
-        _stitch: Stitch,
         _output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         Ok(())

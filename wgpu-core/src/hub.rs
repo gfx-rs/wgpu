@@ -5,7 +5,7 @@
 use crate::{
     backend,
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::{CommandBuffer, ComputePass, RenderPass},
+    command::CommandBuffer,
     device::{Device, ShaderModule},
     id::{
         AdapterId,
@@ -13,11 +13,9 @@ use crate::{
         BindGroupLayoutId,
         BufferId,
         CommandBufferId,
-        ComputePassId,
         ComputePipelineId,
         DeviceId,
         PipelineLayoutId,
-        RenderPassId,
         RenderPipelineId,
         SamplerId,
         ShaderModuleId,
@@ -136,8 +134,15 @@ impl<T, I: TypedId> Storage<T, I> {
                 value
             })
     }
-}
 
+    pub fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
+        self.map
+            .iter()
+            .map(move |(index, (value, storage_epoch))| {
+                (I::zip(index as Index, *storage_epoch, backend), value)
+            })
+    }
+}
 
 /// Type system for enforcing the lock order on shared HUB structures.
 /// If type A implements `Access<B>`, that means we are allowed to proceed
@@ -163,6 +168,7 @@ impl<B: hal::Backend> Access<Device<B>> for Adapter<B> {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
+impl<B: hal::Backend> Access<PipelineLayout<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Root {}
@@ -173,16 +179,10 @@ impl<B: hal::Backend> Access<BindGroup<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Root {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for SwapChain<B> {}
-impl<B: hal::Backend> Access<ComputePass<B>> for Root {}
-impl<B: hal::Backend> Access<ComputePass<B>> for BindGroup<B> {}
-impl<B: hal::Backend> Access<ComputePass<B>> for CommandBuffer<B> {}
-impl<B: hal::Backend> Access<RenderPass<B>> for Root {}
-impl<B: hal::Backend> Access<RenderPass<B>> for BindGroup<B> {}
-impl<B: hal::Backend> Access<RenderPass<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for Root {}
-impl<B: hal::Backend> Access<ComputePipeline<B>> for ComputePass<B> {}
+impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Root {}
-impl<B: hal::Backend> Access<RenderPipeline<B>> for RenderPass<B> {}
+impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Root {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for PipelineLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}
@@ -190,9 +190,7 @@ impl<B: hal::Backend> Access<Buffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for BindGroupLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for CommandBuffer<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for ComputePass<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for ComputePipeline<B> {}
-impl<B: hal::Backend> Access<Buffer<B>> for RenderPass<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for RenderPipeline<B> {}
 impl<B: hal::Backend> Access<Texture<B>> for Root {}
 impl<B: hal::Backend> Access<Texture<B>> for Device<B> {}
@@ -369,9 +367,7 @@ pub struct Hub<B: hal::Backend, F> {
     pub bind_group_layouts: Registry<BindGroupLayout<B>, BindGroupLayoutId, F>,
     pub bind_groups: Registry<BindGroup<B>, BindGroupId, F>,
     pub command_buffers: Registry<CommandBuffer<B>, CommandBufferId, F>,
-    pub render_passes: Registry<RenderPass<B>, RenderPassId, F>,
     pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId, F>,
-    pub compute_passes: Registry<ComputePass<B>, ComputePassId, F>,
     pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId, F>,
     pub buffers: Registry<Buffer<B>, BufferId, F>,
     pub textures: Registry<Texture<B>, TextureId, F>,
@@ -390,9 +386,7 @@ impl<B: GfxBackend, F: Default> Default for Hub<B, F> {
             bind_group_layouts: Registry::new(B::VARIANT),
             bind_groups: Registry::new(B::VARIANT),
             command_buffers: Registry::new(B::VARIANT),
-            render_passes: Registry::new(B::VARIANT),
             render_pipelines: Registry::new(B::VARIANT),
-            compute_passes: Registry::new(B::VARIANT),
             compute_pipelines: Registry::new(B::VARIANT),
             buffers: Registry::new(B::VARIANT),
             textures: Registry::new(B::VARIANT),
@@ -431,19 +425,11 @@ impl<B: hal::Backend, F> Drop for Hub<B, F> {
             }
         }
         for (_, (texture, _)) in self.textures.data.write().map.drain() {
-            unsafe {
-                devices[texture.device_id.value]
-                    .raw
-                    .destroy_image(texture.raw);
-            }
+            devices[texture.device_id.value].destroy_texture(texture);
         }
         for (_, (buffer, _)) in self.buffers.data.write().map.drain() {
             //TODO: unmap if needed
-            unsafe {
-                devices[buffer.device_id.value]
-                    .raw
-                    .destroy_buffer(buffer.raw);
-            }
+            devices[buffer.device_id.value].destroy_buffer(buffer);
         }
         for (_, (command_buffer, _)) in self.command_buffers.data.write().map.drain() {
             devices[command_buffer.device_id.value]
@@ -457,9 +443,7 @@ impl<B: hal::Backend, F> Drop for Hub<B, F> {
 
         //TODO:
         // self.compute_pipelines
-        // self.compute_passes
         // self.render_pipelines
-        // self.render_passes
         // self.bind_group_layouts
         // self.pipeline_layouts
         // self.shader_modules

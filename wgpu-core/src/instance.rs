@@ -8,6 +8,7 @@ use crate::{
     device::{Device, BIND_BUFFER_ALIGNMENT},
     hub::{GfxBackend, Global, IdentityFilter, Token},
     id::{AdapterId, DeviceId},
+    power,
     Backend,
 };
 
@@ -51,27 +52,25 @@ impl Instance {
     }
 
     pub(crate) fn destroy_surface(&mut self, surface: Surface) {
-        //TODO: fill out the proper destruction once we are on gfx-0.4
         #[cfg(any(
             not(any(target_os = "ios", target_os = "macos")),
             feature = "gfx-backend-vulkan"
         ))]
-        {
-            if let Some(_suf) = surface.vulkan {
-                //self.vulkan.as_mut().unwrap().destroy_surface(suf);
+        unsafe {
+            if let Some(suf) = surface.vulkan {
+                self.vulkan.as_mut().unwrap().destroy_surface(suf);
             }
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
-        {
-            let _ = surface;
-            //self.metal.destroy_surface(surface.metal);
+        unsafe {
+            self.metal.destroy_surface(surface.metal);
         }
         #[cfg(windows)]
-        {
-            if let Some(_suf) = surface.dx12 {
-                //self.dx12.as_mut().unwrap().destroy_surface(suf);
+        unsafe {
+            if let Some(suf) = surface.dx12 {
+                self.dx12.as_mut().unwrap().destroy_surface(suf);
             }
-            //self.dx11.destroy_surface(surface.dx11);
+            self.dx11.destroy_surface(surface.dx11);
         }
     }
 }
@@ -271,7 +270,16 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::Default => integrated.or(discrete).or(other).or(virt),
+            PowerPreference::Default => {
+                match power::is_battery_discharging() {
+                    Ok(false) => discrete.or(integrated).or(other).or(virt),
+                    Ok(true) => integrated.or(discrete).or(other).or(virt),
+                    Err(err) => {
+                        log::debug!("Power info unavailable, preferring integrated gpu ({})", err);
+                        integrated.or(discrete).or(other).or(virt)
+                    }
+                }
+            },
             PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
@@ -344,7 +352,8 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         }
 
         let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
-        unreachable!()
+        log::warn!("Some adapters are present, but enumerating them failed!");
+        None
     }
 
     pub fn adapter_get_info<B: GfxBackend>(&self, adapter_id: AdapterId) -> AdapterInfo {
@@ -353,6 +362,12 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
         adapter.raw.info.clone()
+    }
+
+    pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (_adapter, _) = hub.adapters.unregister(adapter_id, &mut token);
     }
 }
 

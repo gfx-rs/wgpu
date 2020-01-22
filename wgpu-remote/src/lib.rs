@@ -8,6 +8,12 @@ use core::{
     Backend,
 };
 
+pub use core::command::{
+    wgpu_command_encoder_begin_render_pass,
+    compute_ffi::*,
+    render_ffi::*,
+};
+
 use parking_lot::Mutex;
 
 use std::{ptr, slice};
@@ -20,6 +26,7 @@ struct IdentityHub {
     adapters: IdentityManager,
     devices: IdentityManager,
     buffers: IdentityManager,
+    command_buffers: IdentityManager,
 }
 
 #[derive(Debug, Default)]
@@ -152,4 +159,44 @@ pub extern "C" fn wgpu_client_kill_buffer_id(client: &Client, id: id::BufferId) 
         .select(id.backend())
         .buffers
         .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_encoder_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::CommandEncoderId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .command_buffers
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_encoder_id(
+    client: &Client,
+    id: id::CommandEncoderId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .command_buffers
+        .free(id)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
+    encoder_id: id::CommandEncoderId,
+    _desc: Option<&core::command::ComputePassDescriptor>,
+) -> core::command::RawPass {
+    core::command::RawPass::new_compute(encoder_id)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: core::command::RawPass) {
+    let _ = pass.into_vec();
 }

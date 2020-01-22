@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.12.0 */
+/* Generated with cbindgen:0.12.2 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -18,6 +18,18 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#define WGPUDEFAULT_BIND_GROUPS 4
+
+#define WGPUDESIRED_NUM_FRAMES 3
+
+#define WGPUMAX_BIND_GROUPS 4
+
+#define WGPUMAX_COLOR_TARGETS 4
+
+#define WGPUMAX_MIP_LEVELS 16
+
+#define WGPUMAX_VERTEX_BUFFERS 8
 
 typedef enum {
   WGPUAddressMode_ClampToEdge = 0,
@@ -243,13 +255,13 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
-typedef uint64_t WGPUId_Device_Dummy;
-
-typedef WGPUId_Device_Dummy WGPUDeviceId;
-
 typedef uint64_t WGPUId_Adapter_Dummy;
 
 typedef WGPUId_Adapter_Dummy WGPUAdapterId;
+
+typedef uint64_t WGPUId_Device_Dummy;
+
+typedef WGPUId_Device_Dummy WGPUDeviceId;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -278,10 +290,6 @@ typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const
 
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
-typedef uint64_t WGPUId_ComputePass_Dummy;
-
-typedef WGPUId_ComputePass_Dummy WGPUComputePassId;
-
 typedef uint64_t WGPUId_CommandBuffer_Dummy;
 
 typedef WGPUId_CommandBuffer_Dummy WGPUCommandBufferId;
@@ -289,12 +297,15 @@ typedef WGPUId_CommandBuffer_Dummy WGPUCommandBufferId;
 typedef WGPUCommandBufferId WGPUCommandEncoderId;
 
 typedef struct {
+  uint8_t *data;
+  uint8_t *base;
+  uintptr_t capacity;
+  WGPUCommandEncoderId parent;
+} WGPURawPass;
+
+typedef struct {
   uint32_t todo;
 } WGPUComputePassDescriptor;
-
-typedef uint64_t WGPUId_RenderPass_Dummy;
-
-typedef WGPUId_RenderPass_Dummy WGPURenderPassId;
 
 typedef uint64_t WGPUId_TextureView_Dummy;
 
@@ -315,11 +326,13 @@ typedef struct {
 
 typedef struct {
   WGPUTextureViewId attachment;
-  const WGPUTextureViewId *resolve_target;
+  WGPUTextureViewId resolve_target;
   WGPULoadOp load_op;
   WGPUStoreOp store_op;
   WGPUColor clear_color;
-} WGPURenderPassColorAttachmentDescriptor;
+} WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__TextureViewId;
+
+typedef WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__TextureViewId WGPURawRenderPassColorAttachmentDescriptor;
 
 typedef struct {
   WGPUTextureViewId attachment;
@@ -329,12 +342,36 @@ typedef struct {
   WGPULoadOp stencil_load_op;
   WGPUStoreOp stencil_store_op;
   uint32_t clear_stencil;
-} WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId;
+} WGPURenderPassDepthStencilAttachmentDescriptorBase_TextureViewId;
+
+typedef WGPURenderPassDepthStencilAttachmentDescriptorBase_TextureViewId WGPURenderPassDepthStencilAttachmentDescriptor;
+
+typedef struct {
+  WGPURawRenderPassColorAttachmentDescriptor colors[WGPUMAX_COLOR_TARGETS];
+  WGPURenderPassDepthStencilAttachmentDescriptor depth_stencil;
+} WGPURawRenderTargets;
+
+typedef struct {
+  WGPURawPass raw;
+  WGPURawRenderTargets targets;
+} WGPURawRenderPass;
+
+typedef const WGPUTextureViewId *WGPUOptionRef_TextureViewId;
+
+typedef struct {
+  WGPUTextureViewId attachment;
+  WGPUOptionRef_TextureViewId resolve_target;
+  WGPULoadOp load_op;
+  WGPUStoreOp store_op;
+  WGPUColor clear_color;
+} WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId;
+
+typedef WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId WGPURenderPassColorAttachmentDescriptor;
 
 typedef struct {
   const WGPURenderPassColorAttachmentDescriptor *color_attachments;
   uintptr_t color_attachments_length;
-  const WGPURenderPassDepthStencilAttachmentDescriptor_TextureViewId *depth_stencil_attachment;
+  const WGPURenderPassDepthStencilAttachmentDescriptor *depth_stencil_attachment;
 } WGPURenderPassDescriptor;
 
 typedef struct {
@@ -349,11 +386,11 @@ typedef uint64_t WGPUId_Texture_Dummy;
 typedef WGPUId_Texture_Dummy WGPUTextureId;
 
 typedef struct {
-  float x;
-  float y;
-  float z;
+  uint32_t x;
+  uint32_t y;
+  uint32_t z;
 } WGPUOrigin3d;
-#define WGPUOrigin3d_ZERO (WGPUOrigin3d){ .x = 0.0, .y = 0.0, .z = 0.0 }
+#define WGPUOrigin3d_ZERO (WGPUOrigin3d){ .x = 0, .y = 0, .z = 0 }
 
 typedef struct {
   WGPUTextureId texture;
@@ -371,6 +408,8 @@ typedef struct {
 typedef struct {
   uint32_t todo;
 } WGPUCommandBufferDescriptor;
+
+typedef WGPURawPass *WGPUComputePassId;
 
 typedef const char *WGPURawString;
 
@@ -639,6 +678,8 @@ typedef struct {
 
 typedef WGPUDeviceId WGPUQueueId;
 
+typedef WGPURawRenderPass *WGPURenderPassId;
+
 typedef uint64_t WGPUId_RenderBundle_Dummy;
 
 typedef WGPUId_RenderBundle_Dummy WGPURenderBundleId;
@@ -665,6 +706,8 @@ typedef struct {
   uint32_t array_layer_count;
 } WGPUTextureViewDescriptor;
 
+void wgpu_adapter_destroy(WGPUAdapterId adapter_id);
+
 WGPUDeviceId wgpu_adapter_request_device(WGPUAdapterId adapter_id,
                                          const WGPUDeviceDescriptor *desc);
 
@@ -686,11 +729,13 @@ void wgpu_buffer_map_write_async(WGPUBufferId buffer_id,
 
 void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
-WGPUComputePassId wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encoder_id,
-                                                          const WGPUComputePassDescriptor *desc);
+void wgpu_command_buffer_destroy(WGPUCommandBufferId command_buffer_id);
 
-WGPURenderPassId wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId encoder_id,
-                                                        const WGPURenderPassDescriptor *desc);
+WGPURawPass *wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encoder_id,
+                                                     const WGPUComputePassDescriptor *_desc);
+
+WGPURawRenderPass *wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId encoder_id,
+                                                          const WGPURenderPassDescriptor *desc);
 
 void wgpu_command_encoder_copy_buffer_to_buffer(WGPUCommandEncoderId command_encoder_id,
                                                 WGPUBufferId source,
@@ -714,36 +759,47 @@ void wgpu_command_encoder_copy_texture_to_texture(WGPUCommandEncoderId command_e
                                                   const WGPUTextureCopyView *destination,
                                                   WGPUExtent3d copy_size);
 
+void wgpu_command_encoder_destroy(WGPUCommandEncoderId command_encoder_id);
+
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId encoder_id,
                                                 const WGPUCommandBufferDescriptor *desc);
 
-void wgpu_compute_pass_dispatch(WGPUComputePassId pass_id, uint32_t x, uint32_t y, uint32_t z);
+void wgpu_compute_pass_destroy(WGPURawPass *pass);
 
-void wgpu_compute_pass_dispatch_indirect(WGPUComputePassId pass_id,
-                                         WGPUBufferId indirect_buffer_id,
-                                         WGPUBufferAddress indirect_offset);
+void wgpu_compute_pass_dispatch(WGPURawPass *pass,
+                                uint32_t groups_x,
+                                uint32_t groups_y,
+                                uint32_t groups_z);
+
+void wgpu_compute_pass_dispatch_indirect(WGPURawPass *pass,
+                                         WGPUBufferId buffer_id,
+                                         WGPUBufferAddress offset);
 
 void wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
-void wgpu_compute_pass_insert_debug_marker(WGPUComputePassId _pass_id, WGPURawString _label);
+const uint8_t *wgpu_compute_pass_finish(WGPURawPass *pass, uintptr_t *length);
 
-void wgpu_compute_pass_pop_debug_group(WGPUComputePassId _pass_id);
+void wgpu_compute_pass_insert_debug_marker(WGPURawPass *_pass, WGPURawString _label);
 
-void wgpu_compute_pass_push_debug_group(WGPUComputePassId _pass_id, WGPURawString _label);
+void wgpu_compute_pass_pop_debug_group(WGPURawPass *_pass);
 
-void wgpu_compute_pass_set_bind_group(WGPUComputePassId pass_id,
+void wgpu_compute_pass_push_debug_group(WGPURawPass *_pass, WGPURawString _label);
+
+void wgpu_compute_pass_set_bind_group(WGPURawPass *pass,
                                       uint32_t index,
                                       WGPUBindGroupId bind_group_id,
                                       const WGPUBufferAddress *offsets,
-                                      uintptr_t offsets_length);
+                                      uintptr_t offset_length);
 
-void wgpu_compute_pass_set_pipeline(WGPUComputePassId pass_id, WGPUComputePipelineId pipeline_id);
+void wgpu_compute_pass_set_pipeline(WGPURawPass *pass, WGPUComputePipelineId pipeline_id);
 
 WGPUSurfaceId wgpu_create_surface_from_metal_layer(void *layer);
 
+WGPUSurfaceId wgpu_create_surface_from_wayland(void *surface, void *display);
+
 WGPUSurfaceId wgpu_create_surface_from_windows_hwnd(void *_hinstance, void *hwnd);
 
-WGPUSurfaceId wgpu_create_surface_from_xlib(const void **display, uint64_t window);
+WGPUSurfaceId wgpu_create_surface_from_xlib(const void **display, unsigned long window);
 
 WGPUBindGroupId wgpu_device_create_bind_group(WGPUDeviceId device_id,
                                               const WGPUBindGroupDescriptor *desc);
@@ -792,74 +848,78 @@ void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffers,
                        uintptr_t command_buffers_length);
 
-void wgpu_render_pass_draw(WGPURenderPassId pass_id,
+void wgpu_render_pass_destroy(WGPURawRenderPass *pass);
+
+void wgpu_render_pass_draw(WGPURawRenderPass *pass,
                            uint32_t vertex_count,
                            uint32_t instance_count,
                            uint32_t first_vertex,
                            uint32_t first_instance);
 
-void wgpu_render_pass_draw_indexed(WGPURenderPassId pass_id,
+void wgpu_render_pass_draw_indexed(WGPURawRenderPass *pass,
                                    uint32_t index_count,
                                    uint32_t instance_count,
                                    uint32_t first_index,
                                    int32_t base_vertex,
                                    uint32_t first_instance);
 
-void wgpu_render_pass_draw_indexed_indirect(WGPURenderPassId pass_id,
-                                            WGPUBufferId indirect_buffer_id,
-                                            WGPUBufferAddress indirect_offset);
+void wgpu_render_pass_draw_indexed_indirect(WGPURawRenderPass *pass,
+                                            WGPUBufferId buffer_id,
+                                            WGPUBufferAddress offset);
 
-void wgpu_render_pass_draw_indirect(WGPURenderPassId pass_id,
-                                    WGPUBufferId indirect_buffer_id,
-                                    WGPUBufferAddress indirect_offset);
+void wgpu_render_pass_draw_indirect(WGPURawRenderPass *pass,
+                                    WGPUBufferId buffer_id,
+                                    WGPUBufferAddress offset);
 
 void wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
 
-void wgpu_render_pass_execute_bundles(WGPURenderPassId _pass_id,
+void wgpu_render_pass_execute_bundles(WGPURawRenderPass *_pass,
                                       const WGPURenderBundleId *_bundles,
                                       uintptr_t _bundles_length);
 
-void wgpu_render_pass_insert_debug_marker(WGPURenderPassId _pass_id, WGPURawString _label);
+const uint8_t *wgpu_render_pass_finish(WGPURawRenderPass *pass, uintptr_t *length);
 
-void wgpu_render_pass_pop_debug_group(WGPURenderPassId _pass_id);
+void wgpu_render_pass_insert_debug_marker(WGPURawRenderPass *_pass, WGPURawString _label);
 
-void wgpu_render_pass_push_debug_group(WGPURenderPassId _pass_id, WGPURawString _label);
+void wgpu_render_pass_pop_debug_group(WGPURawRenderPass *_pass);
 
-void wgpu_render_pass_set_bind_group(WGPURenderPassId pass_id,
+void wgpu_render_pass_push_debug_group(WGPURawRenderPass *_pass, WGPURawString _label);
+
+void wgpu_render_pass_set_bind_group(WGPURawRenderPass *pass,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
                                      const WGPUBufferAddress *offsets,
-                                     uintptr_t offsets_length);
+                                     uintptr_t offset_length);
 
-void wgpu_render_pass_set_blend_color(WGPURenderPassId pass_id, const WGPUColor *color);
+void wgpu_render_pass_set_blend_color(WGPURawRenderPass *pass, const WGPUColor *color);
 
-void wgpu_render_pass_set_index_buffer(WGPURenderPassId pass_id,
+void wgpu_render_pass_set_index_buffer(WGPURawRenderPass *pass,
                                        WGPUBufferId buffer_id,
                                        WGPUBufferAddress offset);
 
-void wgpu_render_pass_set_pipeline(WGPURenderPassId pass_id, WGPURenderPipelineId pipeline_id);
+void wgpu_render_pass_set_pipeline(WGPURawRenderPass *pass, WGPURenderPipelineId pipeline_id);
 
-void wgpu_render_pass_set_scissor_rect(WGPURenderPassId pass_id,
+void wgpu_render_pass_set_scissor_rect(WGPURawRenderPass *pass,
                                        uint32_t x,
                                        uint32_t y,
                                        uint32_t w,
                                        uint32_t h);
 
-void wgpu_render_pass_set_stencil_reference(WGPURenderPassId pass_id, uint32_t value);
+void wgpu_render_pass_set_stencil_reference(WGPURawRenderPass *pass, uint32_t value);
 
-void wgpu_render_pass_set_vertex_buffers(WGPURenderPassId pass_id,
+void wgpu_render_pass_set_vertex_buffers(WGPURawRenderPass *pass,
                                          uint32_t start_slot,
-                                         const WGPUBufferId *buffers,
+                                         const WGPUBufferId *buffer_ids,
                                          const WGPUBufferAddress *offsets,
                                          uintptr_t length);
 
-void wgpu_render_pass_set_viewport(WGPURenderPassId pass_id,
+void wgpu_render_pass_set_viewport(WGPURawRenderPass *pass,
                                    float x,
                                    float y,
                                    float w,
                                    float h,
-                                   float min_depth,
-                                   float max_depth);
+                                   float depth_min,
+                                   float depth_max);
 
 void wgpu_request_adapter_async(const WGPURequestAdapterOptions *desc,
                                 WGPUBackendBit mask,

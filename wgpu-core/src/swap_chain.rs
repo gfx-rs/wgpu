@@ -167,7 +167,7 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
                 image,
                 source_id: Stored {
                     value: swap_chain_id,
-                    ref_count: sc.life_guard.ref_count.clone(),
+                    ref_count: sc.life_guard.add_ref(),
                 },
                 framebuffers: SmallVec::new(),
             },
@@ -185,7 +185,7 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
             },
             life_guard: LifeGuard::new(),
         };
-        let ref_count = view.life_guard.ref_count.clone();
+        let ref_count = view.life_guard.add_ref();
         let view_id = hub
             .texture_views
             .register_identity(view_id_in, view, &mut token);
