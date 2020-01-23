@@ -502,8 +502,8 @@ typedef uint32_t WGPUBufferUsage;
 #define WGPUBufferUsage_VERTEX 32
 #define WGPUBufferUsage_UNIFORM 64
 #define WGPUBufferUsage_STORAGE 128
-#define WGPUBufferUsage_STORAGE_READ 256
-#define WGPUBufferUsage_INDIRECT 512
+#define WGPUBufferUsage_INDIRECT 256
+#define WGPUBufferUsage_STORAGE_READ 512
 #define WGPUBufferUsage_NONE 0
 
 typedef struct {
