@@ -55,6 +55,7 @@ pub enum Backend {
 }
 
 pub type BufferAddress = u64;
+pub type DynamicOffset = u32;
 pub type RawString = *const c_char;
 
 //TODO: make it private. Currently used for swapchain creation impl.

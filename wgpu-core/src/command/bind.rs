@@ -6,7 +6,7 @@ use crate::{
     binding_model::BindGroup,
     hub::GfxBackend,
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId},
-    BufferAddress,
+    DynamicOffset,
     Stored,
 };
 
@@ -26,7 +26,7 @@ pub struct BindGroupPair {
 #[derive(Debug)]
 pub enum LayoutChange<'a> {
     Unchanged,
-    Match(BindGroupId, &'a [BufferAddress]),
+    Match(BindGroupId, &'a [DynamicOffset]),
     Mismatch,
 }
 
@@ -41,7 +41,7 @@ pub struct FollowUpIter<'a> {
     iter: slice::Iter<'a, BindGroupEntry>,
 }
 impl<'a> Iterator for FollowUpIter<'a> {
-    type Item = (BindGroupId, &'a [BufferAddress]);
+    type Item = (BindGroupId, &'a [DynamicOffset]);
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
@@ -58,7 +58,7 @@ impl<'a> Iterator for FollowUpIter<'a> {
 pub struct BindGroupEntry {
     expected_layout_id: Option<BindGroupLayoutId>,
     provided: Option<BindGroupPair>,
-    dynamic_offsets: Vec<BufferAddress>,
+    dynamic_offsets: Vec<DynamicOffset>,
 }
 
 impl BindGroupEntry {
@@ -66,7 +66,7 @@ impl BindGroupEntry {
         &mut self,
         bind_group_id: BindGroupId,
         bind_group: &BindGroup<B>,
-        offsets: &[BufferAddress],
+        offsets: &[DynamicOffset],
     ) -> Provision {
         debug_assert_eq!(B::VARIANT, bind_group_id.backend());
 
@@ -167,7 +167,7 @@ impl Binder {
         index: usize,
         bind_group_id: BindGroupId,
         bind_group: &BindGroup<B>,
-        offsets: &[BufferAddress],
+        offsets: &[DynamicOffset],
     ) -> Option<(PipelineLayoutId, FollowUpIter<'a>)> {
         log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         debug_assert_eq!(B::VARIANT, bind_group_id.backend());

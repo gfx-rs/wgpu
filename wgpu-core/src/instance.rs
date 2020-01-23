@@ -52,27 +52,25 @@ impl Instance {
     }
 
     pub(crate) fn destroy_surface(&mut self, surface: Surface) {
-        //TODO: fill out the proper destruction once we are on gfx-0.4
         #[cfg(any(
             not(any(target_os = "ios", target_os = "macos")),
             feature = "gfx-backend-vulkan"
         ))]
-        {
-            if let Some(_suf) = surface.vulkan {
-                //self.vulkan.as_mut().unwrap().destroy_surface(suf);
+        unsafe {
+            if let Some(suf) = surface.vulkan {
+                self.vulkan.as_mut().unwrap().destroy_surface(suf);
             }
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
-        {
-            let _ = surface;
-            //self.metal.destroy_surface(surface.metal);
+        unsafe {
+            self.metal.destroy_surface(surface.metal);
         }
         #[cfg(windows)]
-        {
-            if let Some(_suf) = surface.dx12 {
-                //self.dx12.as_mut().unwrap().destroy_surface(suf);
+        unsafe {
+            if let Some(suf) = surface.dx12 {
+                self.dx12.as_mut().unwrap().destroy_surface(suf);
             }
-            //self.dx11.destroy_surface(surface.dx11);
+            self.dx11.destroy_surface(surface.dx11);
         }
     }
 }
@@ -364,6 +362,12 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
         adapter.raw.info.clone()
+    }
+
+    pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (_adapter, _) = hub.adapters.unregister(adapter_id, &mut token);
     }
 }
 

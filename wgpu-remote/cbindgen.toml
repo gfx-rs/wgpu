@@ -16,6 +16,7 @@ braces = "SameLine"
 line_length = 100
 tab_width = 2
 language = "C"
+style = "tag"
 
 [export]
 prefix = "WGPU"
@@ -24,6 +25,8 @@ exclude = ["BufferMapResult"]
 [parse]
 parse_deps = true
 include = ["wgpu-core"]
+
+extra_bindings = ["wgpu-core"]
 
 [fn]
 prefix = "WGPU_INLINE"
