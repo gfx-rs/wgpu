@@ -216,10 +216,14 @@ impl<S: ResourceState> ResourceTracker<S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.entry(index) {
-            Entry::Occupied(e) if e.get().ref_count.load() == 1 => {
-                let res = e.remove();
-                assert_eq!(res.epoch, epoch);
-                true
+            Entry::Occupied(e) => {
+                if e.get().ref_count.load() == 1 {
+                    let res = e.remove();
+                    assert_eq!(res.epoch, epoch);
+                    true
+                } else {
+                    false
+                }
             }
             _ => false,
         }
