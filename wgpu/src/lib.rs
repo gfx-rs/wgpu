@@ -1116,9 +1116,7 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: unsafe {
-                wgn::wgpu_command_encoder_begin_compute_pass(self.id, None)
-            },
+            id: wgn::wgpu_command_encoder_begin_compute_pass(self.id, None),
             _parent: self,
         }
     }
