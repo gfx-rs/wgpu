@@ -32,8 +32,8 @@ bitflags::bitflags! {
         const VERTEX = 32;
         const UNIFORM = 64;
         const STORAGE = 128;
-        const INDIRECT = 256;
-        const STORAGE_READ = 512;
+        const STORAGE_READ = 256;
+        const INDIRECT = 512;
         const NONE = 0;
         /// The combination of all read-only usages.
         const READ_ALL = Self::MAP_READ.bits | Self::COPY_SRC.bits |

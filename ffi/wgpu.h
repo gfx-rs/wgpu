@@ -413,8 +413,6 @@ typedef WGPURawPass *WGPUComputePassId;
 
 typedef const char *WGPURawString;
 
-typedef uint32_t WGPUDynamicOffset;
-
 typedef uint64_t WGPUId_ComputePipeline_Dummy;
 
 typedef WGPUId_ComputePipeline_Dummy WGPUComputePipelineId;
@@ -504,8 +502,8 @@ typedef uint32_t WGPUBufferUsage;
 #define WGPUBufferUsage_VERTEX 32
 #define WGPUBufferUsage_UNIFORM 64
 #define WGPUBufferUsage_STORAGE 128
-#define WGPUBufferUsage_INDIRECT 256
-#define WGPUBufferUsage_STORAGE_READ 512
+#define WGPUBufferUsage_STORAGE_READ 256
+#define WGPUBufferUsage_INDIRECT 512
 #define WGPUBufferUsage_NONE 0
 
 typedef struct {
@@ -790,7 +788,7 @@ void wgpu_compute_pass_push_debug_group(WGPURawPass *_pass, WGPURawString _label
 void wgpu_compute_pass_set_bind_group(WGPURawPass *pass,
                                       uint32_t index,
                                       WGPUBindGroupId bind_group_id,
-                                      const WGPUDynamicOffset *offsets,
+                                      const WGPUBufferAddress *offsets,
                                       uintptr_t offset_length);
 
 void wgpu_compute_pass_set_pipeline(WGPURawPass *pass, WGPUComputePipelineId pipeline_id);
@@ -890,7 +888,7 @@ void wgpu_render_pass_push_debug_group(WGPURawRenderPass *_pass, WGPURawString _
 void wgpu_render_pass_set_bind_group(WGPURawRenderPass *pass,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
-                                     const WGPUDynamicOffset *offsets,
+                                     const WGPUBufferAddress *offsets,
                                      uintptr_t offset_length);
 
 void wgpu_render_pass_set_blend_color(WGPURawRenderPass *pass, const WGPUColor *color);

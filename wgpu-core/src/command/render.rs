@@ -24,7 +24,6 @@ use crate::{
     track::TrackerSet,
     BufferAddress,
     Color,
-    DynamicOffset,
     Stored,
 };
 
@@ -107,7 +106,7 @@ enum RenderCommand {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        phantom_offsets: PhantomSlice<DynamicOffset>,
+        phantom_offsets: PhantomSlice<BufferAddress>,
     },
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
@@ -799,7 +798,7 @@ impl<F> Global<F> {
                     if cfg!(debug_assertions) {
                         for off in offsets {
                             assert_eq!(
-                                *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
+                                *off % BIND_BUFFER_ALIGNMENT,
                                 0,
                                 "Misaligned dynamic buffer offset: {} does not align with {}",
                                 off,
@@ -1125,7 +1124,6 @@ pub mod render_ffi {
         id,
         BufferAddress,
         Color,
-        DynamicOffset,
         RawString,
     };
     use std::{convert::TryInto, slice};
@@ -1135,7 +1133,7 @@ pub mod render_ffi {
         pass: &mut RawRenderPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: *const DynamicOffset,
+        offsets: *const BufferAddress,
         offset_length: usize,
     ) {
         pass.raw.encode(&RenderCommand::SetBindGroup {

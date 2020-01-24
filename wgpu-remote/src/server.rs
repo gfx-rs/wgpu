@@ -127,9 +127,9 @@ pub extern "C" fn wgpu_server_device_create_encoder(
     global: &Global,
     self_id: id::DeviceId,
     desc: &core::command::CommandEncoderDescriptor,
-    new_id: id::CommandEncoderId,
+    encoder_id: id::CommandEncoderId,
 ) {
-    gfx_select!(self_id => global.device_create_command_encoder(self_id, &desc, new_id));
+    gfx_select!(self_id => global.device_create_command_encoder(self_id, &desc, encoder_id));
 }
 
 #[no_mangle]
@@ -155,19 +155,6 @@ pub extern "C" fn wgpu_server_command_buffer_destroy(
     self_id: id::CommandBufferId,
 ) {
     gfx_select!(self_id => global.command_buffer_destroy(self_id));
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_buffer(
-    global: &Global,
-    self_id: id::CommandEncoderId,
-    source_id: id::BufferId,
-    source_offset: core::BufferAddress,
-    destination_id: id::BufferId,
-    destination_offset: core::BufferAddress,
-    size: core::BufferAddress,
-) {
-    gfx_select!(self_id => global.command_encoder_copy_buffer_to_buffer(self_id, source_id, source_offset, destination_id, destination_offset, size));
 }
 
 #[no_mangle]
@@ -205,94 +192,4 @@ pub unsafe extern "C" fn wgpu_server_queue_submit(
 ) {
     let command_buffers = slice::from_raw_parts(command_buffer_ids, command_buffer_id_length);
     gfx_select!(self_id => global.queue_submit(self_id, command_buffers));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_device_create_bind_group_layout(
-    global: &Global,
-    self_id: id::DeviceId,
-    desc: &core::binding_model::BindGroupLayoutDescriptor,
-    new_id: id::BindGroupLayoutId,
-) {
-    gfx_select!(self_id => global.device_create_bind_group_layout(self_id, desc, new_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_bind_group_layout_destroy(
-    global: &Global,
-    self_id: id::BindGroupLayoutId,
-) {
-    gfx_select!(self_id => global.bind_group_layout_destroy(self_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_device_create_pipeline_layout(
-    global: &Global,
-    self_id: id::DeviceId,
-    desc: &core::binding_model::PipelineLayoutDescriptor,
-    new_id: id::PipelineLayoutId,
-) {
-    gfx_select!(self_id => global.device_create_pipeline_layout(self_id, desc, new_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_pipeline_layout_destroy(
-    global: &Global,
-    self_id: id::PipelineLayoutId,
-) {
-    gfx_select!(self_id => global.pipeline_layout_destroy(self_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_device_create_bind_group(
-    global: &Global,
-    self_id: id::DeviceId,
-    desc: &core::binding_model::BindGroupDescriptor,
-    new_id: id::BindGroupId,
-) {
-    gfx_select!(self_id => global.device_create_bind_group(self_id, desc, new_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_bind_group_destroy(
-    global: &Global,
-    self_id: id::BindGroupId,
-) {
-    gfx_select!(self_id => global.bind_group_destroy(self_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_device_create_shader_module(
-    global: &Global,
-    self_id: id::DeviceId,
-    desc: &core::pipeline::ShaderModuleDescriptor,
-    new_id: id::ShaderModuleId,
-) {
-    gfx_select!(self_id => global.device_create_shader_module(self_id, desc, new_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_shader_module_destroy(
-    global: &Global,
-    self_id: id::ShaderModuleId,
-) {
-    gfx_select!(self_id => global.shader_module_destroy(self_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_device_create_compute_pipeline(
-    global: &Global,
-    self_id: id::DeviceId,
-    desc: &core::pipeline::ComputePipelineDescriptor,
-    new_id: id::ComputePipelineId,
-) {
-    gfx_select!(self_id => global.device_create_compute_pipeline(self_id, desc, new_id));
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_server_compute_pipeline_destroy(
-    global: &Global,
-    self_id: id::ComputePipelineId,
-) {
-    gfx_select!(self_id => global.compute_pipeline_destroy(self_id));
 }
