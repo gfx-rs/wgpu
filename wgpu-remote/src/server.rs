@@ -20,9 +20,9 @@ pub extern "C" fn wgpu_server_new() -> *mut Global {
 /// problems. For example, a double-free may occur if the function is called
 /// twice on the same raw pointer.
 #[no_mangle]
-pub extern "C" fn wgpu_server_delete(global: *mut Global) {
+pub unsafe extern "C" fn wgpu_server_delete(global: *mut Global) {
     log::info!("Terminating WGPU server");
-    unsafe { Box::from_raw(global) }.delete();
+    Box::from_raw(global).delete();
     log::info!("\t...done");
 }
 
@@ -41,13 +41,13 @@ pub extern "C" fn wgpu_server_poll_all_devices(global: &Global, force_wait: bool
 /// This function is unsafe as there is no guarantee that the given pointer is
 /// valid for `id_length` elements.
 #[no_mangle]
-pub extern "C" fn wgpu_server_instance_request_adapter(
+pub unsafe extern "C" fn wgpu_server_instance_request_adapter(
     global: &Global,
     desc: &core::instance::RequestAdapterOptions,
     ids: *const id::AdapterId,
     id_length: usize,
 ) -> i8 {
-    let ids = unsafe { slice::from_raw_parts(ids, id_length) };
+    let ids = slice::from_raw_parts(ids, id_length);
     match global.pick_adapter(
         desc,
         core::instance::AdapterInputs::IdSet(ids, |i| i.backend()),
@@ -95,7 +95,7 @@ pub extern "C" fn wgpu_server_device_create_buffer(
 /// This function is unsafe as there is no guarantee that the given pointer is
 /// valid for `size` elements.
 #[no_mangle]
-pub extern "C" fn wgpu_server_device_set_buffer_sub_data(
+pub unsafe extern "C" fn wgpu_server_device_set_buffer_sub_data(
     global: &Global,
     self_id: id::DeviceId,
     buffer_id: id::BufferId,
@@ -103,9 +103,7 @@ pub extern "C" fn wgpu_server_device_set_buffer_sub_data(
     data: *const u8,
     size: core::BufferAddress,
 ) {
-    let slice = unsafe {
-        slice::from_raw_parts(data, size as usize)
-    };
+    let slice = slice::from_raw_parts(data, size as usize);
     gfx_select!(self_id => global.device_set_buffer_sub_data(self_id, buffer_id, offset, slice));
 }
 
