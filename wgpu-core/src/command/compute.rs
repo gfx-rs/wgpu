@@ -13,6 +13,7 @@ use crate::{
     id,
     resource::BufferUsage,
     BufferAddress,
+    DynamicOffset,
 };
 
 use hal::command::CommandBuffer as _;
@@ -27,7 +28,7 @@ enum ComputeCommand {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        phantom_offsets: PhantomSlice<BufferAddress>,
+        phantom_offsets: PhantomSlice<DynamicOffset>,
     },
     SetPipeline(id::ComputePipelineId),
     Dispatch([u32; 3]),
@@ -95,7 +96,7 @@ impl<F> Global<F> {
                     if cfg!(debug_assertions) {
                         for off in offsets {
                             assert_eq!(
-                                *off % BIND_BUFFER_ALIGNMENT,
+                                *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
                                 0,
                                 "Misaligned dynamic buffer offset: {} does not align with {}",
                                 off,
@@ -222,6 +223,7 @@ pub mod compute_ffi {
     use crate::{
         id,
         BufferAddress,
+        DynamicOffset,
         RawString,
     };
     use std::{convert::TryInto, slice};
@@ -231,7 +233,7 @@ pub mod compute_ffi {
         pass: &mut RawPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: *const BufferAddress,
+        offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
         pass.encode(&ComputeCommand::SetBindGroup {

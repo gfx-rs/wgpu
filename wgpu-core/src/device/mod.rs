@@ -498,6 +498,8 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        log::info!("Create buffer {:?} with ID {:?}", desc, id_in);
+
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let buffer = device.create_buffer(device_id, desc);
@@ -884,14 +886,16 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
             .map(|b| (b.binding, b))
             .collect();
 
-        {
-            let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
-            let bind_group_layout =
-                bind_group_layout_guard
-                    .iter(device_id.backend())
-                    .find(|(_, bgl)| bgl.bindings == bindings_map);
+        // TODO: deduplicate the bind group layouts at some level.
+        // We can't do it right here, because in the remote scenario
+        // the client need to know if the same ID can be used, or not.
+        if false {
+            let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
+            let bind_group_layout_id = bgl_guard
+                .iter(device_id.backend())
+                .find(|(_, bgl)| bgl.bindings == bindings_map);
 
-            if let Some((id, _)) = bind_group_layout {
+            if let Some((id, _)) = bind_group_layout_id {
                 return id;
             }
         }
@@ -924,6 +928,13 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
 
         hub.bind_group_layouts
             .register_identity(id_in, layout, &mut token)
+    }
+
+    pub fn bind_group_layout_destroy<B: GfxBackend>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.bind_group_layouts.unregister(bind_group_layout_id, &mut token);
     }
 }
 
@@ -966,6 +977,13 @@ impl<F: IdentityFilter<id::PipelineLayoutId>> Global<F> {
         };
         hub.pipeline_layouts
             .register_identity(id_in, layout, &mut token)
+    }
+
+    pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.pipeline_layouts.unregister(pipeline_layout_id, &mut token);
     }
 }
 
@@ -1199,6 +1217,13 @@ impl<F: IdentityFilter<id::ShaderModuleId>> Global<F> {
         };
         hub.shader_modules
             .register_identity(id_in, shader, &mut token)
+    }
+
+    pub fn shader_module_destroy<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.shader_modules.unregister(shader_module_id, &mut token);
     }
 }
 
@@ -1718,6 +1743,13 @@ impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
         hub.render_pipelines
             .register_identity(id_in, pipeline, &mut token)
     }
+
+    pub fn render_pipeline_destroy<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.render_pipelines.unregister(render_pipeline_id, &mut token);
+    }
 }
 
 impl<F: IdentityFilter<id::ComputePipelineId>> Global<F> {
@@ -1772,6 +1804,13 @@ impl<F: IdentityFilter<id::ComputePipelineId>> Global<F> {
         };
         hub.compute_pipelines
             .register_identity(id_in, pipeline, &mut token)
+    }
+
+    pub fn compute_pipeline_destroy<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.compute_pipelines.unregister(compute_pipeline_id, &mut token);
     }
 }
 
