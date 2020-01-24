@@ -25,7 +25,7 @@ impl<T> Future for GpuFuture<T>
 
     fn poll(self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
         // grab a clone of the Arc
-        let arc = Arc::clone(&Pin::into_inner(self).inner);
+        let arc = Arc::clone(&self.get_mut().inner);
 
         // grab the device id and set the waker, but release the lock, so that the native callback can write to it
         let device_id = {
