@@ -15,8 +15,13 @@ use crate::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use hal::adapter::{AdapterInfo, DeviceType};
-use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
+pub use hal::adapter::DeviceType;
+use hal::{
+    self,
+    adapter::{AdapterInfo as GfxAdapterInfo, PhysicalDevice as _},
+    queue::QueueFamily as _,
+    Instance as _,
+};
 
 
 #[derive(Debug)]
@@ -172,6 +177,40 @@ bitflags::bitflags! {
 impl From<Backend> for BackendBit {
     fn from(backend: Backend) -> Self {
         BackendBit::from_bits(1 << backend as u32).unwrap()
+    }
+}
+
+/// Metadata about a backend adapter.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AdapterInfo {
+    /// Adapter name
+    pub name: String,
+    /// Vendor PCI id of the adapter
+    pub vendor: usize,
+    /// PCI id of the adapter
+    pub device: usize,
+    /// Type of device
+    pub device_type: DeviceType,
+    /// Backend used for device
+    pub backend: Backend,
+}
+
+impl AdapterInfo {
+    fn from_gfx(adapter_info: GfxAdapterInfo, backend: Backend) -> Self {
+        let GfxAdapterInfo {
+            name,
+            vendor,
+            device,
+            device_type,
+        } = adapter_info;
+
+        AdapterInfo {
+            name,
+            vendor,
+            device,
+            device_type,
+            backend,
+        }
     }
 }
 
@@ -363,7 +402,7 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
-        adapter.raw.info.clone()
+        AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend())
     }
 }
 
