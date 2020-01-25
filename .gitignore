@@ -7,3 +7,4 @@
 build
 ffi/dawn*.h
 dist
+.idea

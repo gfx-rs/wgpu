@@ -226,7 +226,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             .active
             .iter()
             .position(|a| unsafe { !device.get_fence_status(&a.fence).unwrap() })
-            .unwrap_or(self.active.len());
+            .unwrap_or_else(|| self.active.len());
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
         } else {

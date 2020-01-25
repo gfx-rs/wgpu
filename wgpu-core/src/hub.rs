@@ -39,7 +39,7 @@ use vec_map::VecMap;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{marker::PhantomData, ops};
+use std::{fmt::Debug, marker::PhantomData, ops};
 
 
 /// A simple structure to manage identities of objects.
@@ -165,6 +165,7 @@ impl<B: hal::Backend> Access<Adapter<B>> for Surface {}
 impl<B: hal::Backend> Access<Device<B>> for Root {}
 impl<B: hal::Backend> Access<Device<B>> for Surface {}
 impl<B: hal::Backend> Access<Device<B>> for Adapter<B> {}
+impl<B: hal::Backend> Access<SwapChain<B>> for Root {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
@@ -251,13 +252,13 @@ impl<'a, T> Drop for Token<'a, T> {
 }
 
 
-pub trait IdentityFilter<I> {
-    type Input: Clone;
+pub trait IdentityFilter<I>: Debug {
+    type Input: Clone + Debug;
     fn process(&self, id: Self::Input, backend: Backend) -> I;
     fn free(&self, id: I);
 }
 
-impl<I: TypedId + Clone> IdentityFilter<I> for () {
+impl<I: TypedId + Clone + Debug> IdentityFilter<I> for () {
     type Input = I;
     fn process(&self, id: I, _backend: Backend) -> I {
         //debug_assert_eq!(id.unzip().2, backend);
@@ -266,7 +267,7 @@ impl<I: TypedId + Clone> IdentityFilter<I> for () {
     fn free(&self, _id: I) {}
 }
 
-impl<I: TypedId> IdentityFilter<I> for Mutex<IdentityManager> {
+impl<I: TypedId + Debug> IdentityFilter<I> for Mutex<IdentityManager> {
     type Input = PhantomData<I>;
     fn process(&self, _id: Self::Input, backend: Backend) -> I {
         self.lock().alloc(backend)

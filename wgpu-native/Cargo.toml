@@ -32,3 +32,5 @@ parking_lot = "0.9"
 raw-window-handle = "0.3"
 libc = {version="0.2", features=[]}
 
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2.7"

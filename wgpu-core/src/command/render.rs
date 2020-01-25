@@ -24,6 +24,7 @@ use crate::{
     track::TrackerSet,
     BufferAddress,
     Color,
+    DynamicOffset,
     Stored,
 };
 
@@ -106,7 +107,7 @@ enum RenderCommand {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        phantom_offsets: PhantomSlice<BufferAddress>,
+        phantom_offsets: PhantomSlice<DynamicOffset>,
     },
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
@@ -326,7 +327,7 @@ impl<F> Global<F> {
             let base_trackers = &cmb.trackers;
 
             let mut extent = None;
-            let mut used_swap_chain_image = None::<Stored<id::TextureViewId>>;
+            let mut used_swap_chain = None::<Stored<id::SwapChainId>>;
 
             let sample_count = color_attachments
                 .get(0)
@@ -431,15 +432,12 @@ impl<F> Global<F> {
                             };
                             old_layout .. hal::image::Layout::ColorAttachmentOptimal
                         }
-                        TextureViewInner::SwapChain { .. } => {
-                            if let Some((ref view_id, _)) = cmb.used_swap_chain {
-                                assert_eq!(view_id.value, at.attachment);
+                        TextureViewInner::SwapChain { ref source_id, .. } => {
+                            if let Some((ref sc_id, _)) = cmb.used_swap_chain {
+                                assert_eq!(source_id.value, sc_id.value);
                             } else {
-                                assert!(used_swap_chain_image.is_none());
-                                used_swap_chain_image = Some(Stored {
-                                    value: at.attachment,
-                                    ref_count: view.life_guard.add_ref(),
-                                });
+                                assert!(used_swap_chain.is_none());
+                                used_swap_chain = Some(source_id.clone());
                             }
 
                             let end = hal::image::Layout::Present;
@@ -491,15 +489,12 @@ impl<F> Global<F> {
                             };
                             old_layout .. hal::image::Layout::ColorAttachmentOptimal
                         }
-                        TextureViewInner::SwapChain { .. } => {
-                            if let Some((ref view_id, _)) = cmb.used_swap_chain {
-                                assert_eq!(view_id.value, resolve_target);
+                        TextureViewInner::SwapChain { ref source_id, .. } => {
+                            if let Some((ref sc_id, _)) = cmb.used_swap_chain {
+                                assert_eq!(source_id.value, sc_id.value);
                             } else {
-                                assert!(used_swap_chain_image.is_none());
-                                used_swap_chain_image = Some(Stored {
-                                    value: resolve_target,
-                                    ref_count: view.life_guard.add_ref(),
-                                });
+                                assert!(used_swap_chain.is_none());
+                                used_swap_chain = Some(source_id.clone());
                             }
 
                             let end = hal::image::Layout::Present;
@@ -625,8 +620,8 @@ impl<F> Global<F> {
                 depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
             };
 
-            let framebuffer = match used_swap_chain_image.take() {
-                Some(view_id) => {
+            let framebuffer = match used_swap_chain.take() {
+                Some(sc_id) => {
                     assert!(cmb.used_swap_chain.is_none());
                     // Always create a new framebuffer and delete it after presentation.
                     let attachments = fb_key.all().map(|&id| match view_guard[id].inner {
@@ -639,7 +634,7 @@ impl<F> Global<F> {
                             .create_framebuffer(&render_pass, attachments, extent.unwrap())
                             .unwrap()
                     };
-                    cmb.used_swap_chain = Some((view_id, framebuffer));
+                    cmb.used_swap_chain = Some((sc_id, framebuffer));
                     &mut cmb.used_swap_chain.as_mut().unwrap().1
                 }
                 None => {
@@ -798,7 +793,7 @@ impl<F> Global<F> {
                     if cfg!(debug_assertions) {
                         for off in offsets {
                             assert_eq!(
-                                *off % BIND_BUFFER_ALIGNMENT,
+                                *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
                                 0,
                                 "Misaligned dynamic buffer offset: {} does not align with {}",
                                 off,
@@ -1124,16 +1119,23 @@ pub mod render_ffi {
         id,
         BufferAddress,
         Color,
+        DynamicOffset,
         RawString,
     };
     use std::{convert::TryInto, slice};
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointer is
+    /// valid for `offset_length` elements.
+    // TODO: There might be other safety issues, such as using the unsafe
+    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_bind_group(
         pass: &mut RawRenderPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: *const BufferAddress,
+        offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
         pass.raw.encode(&RenderCommand::SetBindGroup {
@@ -1167,6 +1169,12 @@ pub mod render_ffi {
         });
     }
 
+    /// # Safety
+    ///
+    /// This function is unsafe as there is no guarantee that the given pointers
+    /// (`buffer_ids` and `offsets`) are valid for `length` elements.
+    // TODO: There might be other safety issues, such as using the unsafe
+    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffers(
         pass: &mut RawRenderPass,

@@ -106,6 +106,10 @@ impl ResourceState for TextureState {
                 if unit.last == usage && TextureUsage::ORDERED.contains(usage) {
                     continue;
                 }
+                // TODO: Can't satisfy clippy here unless we modify
+                // `hal::image::SubresourceRange` in gfx to use
+                // `std::ops::RangeBounds`.
+                #[allow(clippy::range_plus_one)]
                 let pending = PendingTransition {
                     id,
                     selector: hal::image::SubresourceRange {
@@ -178,11 +182,15 @@ impl ResourceState for TextureState {
                                 last: end.last,
                             }
                         } else {
+                            // TODO: Can't satisfy clippy here unless we modify
+                            // `hal::image::SubresourceRange` in gfx to use
+                            // `std::ops::RangeBounds`.
+                            #[allow(clippy::range_plus_one)]
                             let pending = PendingTransition {
                                 id,
                                 selector: hal::image::SubresourceRange {
                                     aspects: hal::format::Aspects::empty(),
-                                    levels: level .. level+1,
+                                    levels: level .. level + 1,
                                     layers: layers.clone(),
                                 },
                                 usage: start.last .. to_usage,

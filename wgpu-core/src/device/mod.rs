@@ -31,6 +31,7 @@ use hal::{
 use parking_lot::{Mutex, MutexGuard};
 use rendy_descriptor::{DescriptorAllocator, DescriptorRanges};
 use rendy_memory::{Block, Heaps};
+use smallvec::SmallVec;
 
 use std::{
     collections::hash_map::Entry,
@@ -498,6 +499,8 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        log::info!("Create buffer {:?} with ID {:?}", desc, id_in);
+
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let buffer = device.create_buffer(device_id, desc);
@@ -884,14 +887,16 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
             .map(|b| (b.binding, b))
             .collect();
 
-        {
-            let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
-            let bind_group_layout =
-                bind_group_layout_guard
-                    .iter(device_id.backend())
-                    .find(|(_, bgl)| bgl.bindings == bindings_map);
+        // TODO: deduplicate the bind group layouts at some level.
+        // We can't do it right here, because in the remote scenario
+        // the client need to know if the same ID can be used, or not.
+        if false {
+            let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
+            let bind_group_layout_id = bgl_guard
+                .iter(device_id.backend())
+                .find(|(_, bgl)| bgl.bindings == bindings_map);
 
-            if let Some((id, _)) = bind_group_layout {
+            if let Some((id, _)) = bind_group_layout_id {
                 return id;
             }
         }
@@ -924,6 +929,13 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
 
         hub.bind_group_layouts
             .register_identity(id_in, layout, &mut token)
+    }
+
+    pub fn bind_group_layout_destroy<B: GfxBackend>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.bind_group_layouts.unregister(bind_group_layout_id, &mut token);
     }
 }
 
@@ -966,6 +978,13 @@ impl<F: IdentityFilter<id::PipelineLayoutId>> Global<F> {
         };
         hub.pipeline_layouts
             .register_identity(id_in, layout, &mut token)
+    }
+
+    pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.pipeline_layouts.unregister(pipeline_layout_id, &mut token);
     }
 }
 
@@ -1200,6 +1219,13 @@ impl<F: IdentityFilter<id::ShaderModuleId>> Global<F> {
         hub.shader_modules
             .register_identity(id_in, shader, &mut token)
     }
+
+    pub fn shader_module_destroy<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.shader_modules.unregister(shader_module_id, &mut token);
+    }
 }
 
 impl<F: IdentityFilter<id::CommandEncoderId>> Global<F> {
@@ -1321,16 +1347,16 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
                 .submission_index
                 .fetch_add(1, Ordering::Relaxed);
 
-            let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
+            let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
             let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (mut texture_view_guard, mut token) = hub.texture_views.write(&mut token);
+            let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
             let (sampler_guard, _) = hub.samplers.read(&mut token);
 
             //Note: locking the trackers has to be done after the storages
-            let mut signal_semaphores = Vec::new();
+            let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
             let mut trackers = device.trackers.lock();
 
             //TODO: if multiple command buffers are submitted, we can re-use the last
@@ -1341,21 +1367,12 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
             for &cmb_id in command_buffer_ids {
                 let comb = &mut command_buffer_guard[cmb_id];
 
-                if let Some((view_id, fbo)) = comb.used_swap_chain.take() {
-                    match texture_view_guard[view_id.value].inner {
-                        resource::TextureViewInner::Native { .. } => unreachable!(),
-                        resource::TextureViewInner::SwapChain {
-                            ref source_id,
-                            ref mut framebuffers,
-                            ..
-                        } => {
-                            if framebuffers.is_empty() {
-                                let sem = &swap_chain_guard[source_id.value].semaphore;
-                                signal_semaphores.push(sem);
-                            }
-                            framebuffers.push(fbo);
-                        }
-                    };
+                if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
+                    let sc = &mut swap_chain_guard[sc_id.value];
+                    if sc.acquired_framebuffers.is_empty() {
+                        signal_swapchain_semaphores.push(sc_id.value);
+                    }
+                    sc.acquired_framebuffers.push(fbo);
                 }
 
                 // optimize the tracked states
@@ -1417,12 +1434,15 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
 
             // now prepare the GPU submission
             let fence = device.raw.create_fence(false).unwrap();
-            let submission = hal::queue::Submission::<_, _, Vec<&B::Semaphore>> {
+            let submission = hal::queue::Submission {
                 command_buffers: command_buffer_ids
                     .iter()
                     .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
                 wait_semaphores: Vec::new(),
-                signal_semaphores,
+                signal_semaphores: signal_swapchain_semaphores
+                    .into_iter()
+                    .map(|sc_id| &swap_chain_guard[sc_id].semaphore),
+
             };
 
             unsafe {
@@ -1718,6 +1738,13 @@ impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
         hub.render_pipelines
             .register_identity(id_in, pipeline, &mut token)
     }
+
+    pub fn render_pipeline_destroy<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.render_pipelines.unregister(render_pipeline_id, &mut token);
+    }
 }
 
 impl<F: IdentityFilter<id::ComputePipelineId>> Global<F> {
@@ -1772,6 +1799,13 @@ impl<F: IdentityFilter<id::ComputePipelineId>> Global<F> {
         };
         hub.compute_pipelines
             .register_identity(id_in, pipeline, &mut token)
+    }
+
+    pub fn compute_pipeline_destroy<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        //TODO: track usage by GPU
+        hub.compute_pipelines.unregister(compute_pipeline_id, &mut token);
     }
 }
 
@@ -1865,6 +1899,7 @@ impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
             num_frames,
             semaphore: device.raw.create_semaphore().unwrap(),
             acquired_view_id: None,
+            acquired_framebuffers: Vec::new(),
         };
         swap_chain_guard.insert(sc_id, swap_chain);
         sc_id

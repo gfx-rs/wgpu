@@ -383,6 +383,9 @@ impl<F: IdentityFilter<DeviceId>> Global<F> {
         let device = {
             let (adapter_guard, _) = hub.adapters.read(&mut token);
             let adapter = &adapter_guard[adapter_id].raw;
+            let wishful_features =
+                hal::Features::VERTEX_STORES_AND_ATOMICS |
+                hal::Features::FRAGMENT_STORES_AND_ATOMICS;
 
             let family = adapter
                 .queue_families
@@ -392,7 +395,10 @@ impl<F: IdentityFilter<DeviceId>> Global<F> {
             let mut gpu = unsafe {
                 adapter
                     .physical_device
-                    .open(&[(family, &[1.0])], hal::Features::empty())
+                    .open(
+                        &[(family, &[1.0])],
+                        adapter.physical_device.features() & wishful_features,
+                    )
                     .unwrap()
             };
 

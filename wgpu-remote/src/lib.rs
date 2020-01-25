@@ -27,6 +27,11 @@ struct IdentityHub {
     devices: IdentityManager,
     buffers: IdentityManager,
     command_buffers: IdentityManager,
+    bind_group_layouts: IdentityManager,
+    pipeline_layouts: IdentityManager,
+    bind_groups: IdentityManager,
+    shader_modules: IdentityManager,
+    compute_pipelines: IdentityManager,
 }
 
 #[derive(Debug, Default)]
@@ -76,21 +81,30 @@ pub extern "C" fn wgpu_client_new() -> Infrastructure {
     }
 }
 
+/// # Safety
+///
+/// This function is unsafe because improper use may lead to memory
+/// problems. For example, a double-free may occur if the function is called
+/// twice on the same raw pointer.
 #[no_mangle]
-pub extern "C" fn wgpu_client_delete(client: *mut Client) {
+pub unsafe extern "C" fn wgpu_client_delete(client: *mut Client) {
     log::info!("Terminating WGPU client");
-    let _client = unsafe { Box::from_raw(client) };
+    let _client = Box::from_raw(client);
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer is
+/// valid for `id_length` elements.
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_adapter_ids(
+pub unsafe extern "C" fn wgpu_client_make_adapter_ids(
     client: &Client,
     ids: *mut id::AdapterId,
     id_length: usize,
 ) -> usize {
     let mut identities = client.identities.lock();
     assert_ne!(id_length, 0);
-    let mut ids = unsafe { slice::from_raw_parts_mut(ids, id_length) }.iter_mut();
+    let mut ids = slice::from_raw_parts_mut(ids, id_length).iter_mut();
 
     *ids.next().unwrap() = identities.vulkan.adapters.alloc(Backend::Vulkan);
 
@@ -106,14 +120,18 @@ pub extern "C" fn wgpu_client_make_adapter_ids(
     id_length - ids.len()
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer is
+/// valid for `id_length` elements.
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_adapter_ids(
+pub unsafe extern "C" fn wgpu_client_kill_adapter_ids(
     client: &Client,
     ids: *const id::AdapterId,
     id_length: usize,
 ) {
     let mut identity = client.identities.lock();
-    let ids = unsafe { slice::from_raw_parts(ids, id_length) };
+    let ids = slice::from_raw_parts(ids, id_length);
     for &id in ids {
         identity.select(id.backend()).adapters.free(id)
     }
@@ -199,4 +217,139 @@ pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: core::command::RawPass) {
     let _ = pass.into_vec();
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_bind_group_layout_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::BindGroupLayoutId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .bind_group_layouts
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_bind_group_layout_id(
+    client: &Client,
+    id: id::BindGroupLayoutId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .bind_group_layouts
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_pipeline_layout_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::PipelineLayoutId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .pipeline_layouts
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_pipeline_layout_id(
+    client: &Client,
+    id: id::PipelineLayoutId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .pipeline_layouts
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_bind_group_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::BindGroupId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .bind_groups
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_bind_group_id(
+    client: &Client,
+    id: id::BindGroupId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .bind_groups
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_shader_module_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::ShaderModuleId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .shader_modules
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_shader_module_id(
+    client: &Client,
+    id: id::ShaderModuleId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .shader_modules
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_compute_pipeline_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::ComputePipelineId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .compute_pipelines
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_compute_pipeline_id(
+    client: &Client,
+    id: id::ComputePipelineId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .compute_pipelines
+        .free(id)
 }

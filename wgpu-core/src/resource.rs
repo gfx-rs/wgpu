@@ -14,7 +14,6 @@ use crate::{
 
 use hal;
 use rendy_memory::MemoryBlock;
-use smallvec::SmallVec;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
@@ -32,8 +31,8 @@ bitflags::bitflags! {
         const VERTEX = 32;
         const UNIFORM = 64;
         const STORAGE = 128;
-        const STORAGE_READ = 256;
-        const INDIRECT = 512;
+        const INDIRECT = 256;
+        const STORAGE_READ = 512;
         const NONE = 0;
         /// The combination of all read-only usages.
         const READ_ALL = Self::MAP_READ.bits | Self::COPY_SRC.bits |
@@ -307,7 +306,6 @@ pub(crate) enum TextureViewInner<B: hal::Backend> {
     SwapChain {
         image: <B::Surface as hal::window::PresentationSurface<B>>::SwapchainImage,
         source_id: Stored<SwapChainId>,
-        framebuffers: SmallVec<[B::Framebuffer; 1]>,
     },
 }
 

@@ -8,34 +8,49 @@ matrix:
     - os: linux
       rust: stable
       compiler: gcc
+      env:
+        - BUILD_COMMAND=clippy
     #TODO: unlock when libglfw3 on Ubuntu comes with Vulkan support
     # or when we add a GL backend.
     #- os: linux
     #  rust: nightly
     #  compiler: gcc
+    #  env:
+    #    - BUILD_COMMAND=check
+
     # Windows 64bit
     - os: windows
       rust: stable
+      env:
+        - BUILD_COMMAND=clippy
     - os: windows
       rust: nightly
+      env:
+        - BUILD_COMMAND=check
 
     # macOS 64bit
-    - env: MACOSX_DEPLOYMENT_TARGET=10.9
-      os: osx
+    - os: osx
+      osx_image: xcode9.4
       rust: stable
-      osx_image: xcode9.4
       compiler: clang
-    - env: MACOSX_DEPLOYMENT_TARGET=10.9
-      os: osx
+      env:
+        - MACOSX_DEPLOYMENT_TARGET=10.9
+        - BUILD_COMMAND=clippy
+    - os: osx
+      osx_image: xcode9.4
       rust: nightly
-      osx_image: xcode9.4
       compiler: clang
+      env:
+        - MACOSX_DEPLOYMENT_TARGET=10.9
+        - BUILD_COMMAND=check
 
     # iPhoneOS 64bit
-    - env: TARGET=aarch64-apple-ios
-      os: osx
+    - os: osx
       osx_image: xcode11
       rust: stable
+      env:
+        - TARGET=aarch64-apple-ios
+        - BUILD_COMMAND=clippy
 
 addons:
   apt:
@@ -57,12 +72,17 @@ before_install:
 - if [[ $TRAVIS_RUST_VERSION != "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then rustup default stable-msvc; fi
 - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then rustup default nightly-msvc; fi
 
+before_script:
+  - if [[ $BUILD_COMMAND == "clippy" ]]; then rustup component add clippy; fi
+
 script:
   - cargo test
   # TODO: enable GL backend
-  - (cd wgpu-core && cargo check --all-features)
-  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then (cd wgpu-native && cargo check --features vulkan-portability); fi
-  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo check --release; fi
+  - (cd wgpu-core && cargo $BUILD_COMMAND --all-features)
+  - (cd wgpu-native && cargo $BUILD_COMMAND)
+  - (cd wgpu-remote && cargo $BUILD_COMMAND --all-features)
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then (cd wgpu-native && cargo $BUILD_COMMAND --features vulkan-portability); fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo $BUILD_COMMAND --release; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen; fi
   - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then
       wget -nc -O glfw.zip https://github.com/glfw/glfw/archive/3.3.zip &&
