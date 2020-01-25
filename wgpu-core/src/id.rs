@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{Backend, Epoch, Index};
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData, mem};
 
@@ -12,7 +12,7 @@ const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Id<T>(u64, PhantomData<T>);
 
 impl<T> Id<T> {

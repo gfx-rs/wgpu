@@ -12,7 +12,7 @@ use crate::{
     Backend,
 };
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 
 pub use hal::adapter::{AdapterInfo, DeviceType};
@@ -101,7 +101,7 @@ pub struct Adapter<B: hal::Backend> {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
@@ -110,7 +110,7 @@ pub enum PowerPreference {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
 }
@@ -125,14 +125,14 @@ impl Default for RequestAdapterOptions {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
 }
@@ -147,7 +147,7 @@ impl Default for Limits {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
     pub limits: Limits,
@@ -155,7 +155,7 @@ pub struct DeviceDescriptor {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
     pub struct BackendBit: u32 {
         const VULKAN = 1 << Backend::Vulkan as u32;
         const GL = 1 << Backend::Gl as u32;

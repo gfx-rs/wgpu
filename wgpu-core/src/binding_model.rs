@@ -16,7 +16,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use rendy_descriptor::{DescriptorRanges, DescriptorSet};
 
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 use std::borrow::Borrow;
 
@@ -24,7 +24,7 @@ pub const MAX_BIND_GROUPS: usize = 4;
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
     pub struct ShaderStage: u32 {
         const NONE = 0;
         const VERTEX = 1;
@@ -35,7 +35,7 @@ bitflags::bitflags! {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub enum BindingType {
     UniformBuffer = 0,
     StorageBuffer = 1,
@@ -47,7 +47,7 @@ pub enum BindingType {
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub struct BindGroupLayoutBinding {
     pub binding: u32,
     pub visibility: ShaderStage,

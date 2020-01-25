@@ -14,14 +14,14 @@ use crate::{
 
 use hal;
 use rendy_memory::MemoryBlock;
-#[cfg(feature = "serde")]
+#[cfg(feature = "serde1")]
 use serde::{Deserialize, Serialize};
 
 use std::{borrow::Borrow, fmt};
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
     pub struct BufferUsage: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
@@ -48,7 +48,7 @@ bitflags::bitflags! {
 }
 
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug)]
 pub struct BufferDescriptor {
     pub size: BufferAddress,
@@ -275,7 +275,7 @@ impl Default for TextureAspect {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde1", derive(Serialize, Deserialize))]
 pub enum TextureViewDimension {
     D1,
     D2,

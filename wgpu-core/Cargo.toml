@@ -17,6 +17,7 @@ license = "MPL-2.0"
 [features]
 default = []
 metal-auto-capture = ["gfx-backend-metal/auto-capture"]
+serde1 = ["serde", "hal/serde"]
 #NOTE: glutin feature is not stable, use at your own risk
 #glutin = ["gfx-backend-gl/glutin"]
 
