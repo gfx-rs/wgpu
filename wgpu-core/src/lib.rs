@@ -30,6 +30,9 @@ pub mod resource;
 pub mod swap_chain;
 pub mod track;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 pub use hal::pso::read_spirv;
 use peek_poke::{PeekCopy, Poke};
 
@@ -45,6 +48,7 @@ type Epoch = u32;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Backend {
     Empty = 0,
     Vulkan = 1,

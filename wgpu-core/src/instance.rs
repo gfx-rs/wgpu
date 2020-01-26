@@ -15,10 +15,9 @@ use crate::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use hal::adapter::DeviceType;
 use hal::{
     self,
-    adapter::{AdapterInfo as GfxAdapterInfo, PhysicalDevice as _},
+    adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
     queue::QueueFamily as _,
     Instance as _,
 };
@@ -182,6 +181,7 @@ impl From<Backend> for BackendBit {
 
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -196,8 +196,8 @@ pub struct AdapterInfo {
 }
 
 impl AdapterInfo {
-    fn from_gfx(adapter_info: GfxAdapterInfo, backend: Backend) -> Self {
-        let GfxAdapterInfo {
+    fn from_gfx(adapter_info: HalAdapterInfo, backend: Backend) -> Self {
+        let HalAdapterInfo {
             name,
             vendor,
             device,
@@ -208,8 +208,36 @@ impl AdapterInfo {
             name,
             vendor,
             device,
-            device_type,
+            device_type: device_type.into(),
             backend,
+        }
+    }
+}
+
+/// Supported physical device types
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum DeviceType {
+    /// Other
+    Other,
+    /// Integrated
+    IntegratedGpu,
+    /// Discrete
+    DiscreteGpu,
+    /// Virtual / Hosted
+    VirtualGpu,
+    /// Cpu / Software Rendering
+    Cpu,
+}
+
+impl From<HalDeviceType> for DeviceType {
+    fn from(device_type: HalDeviceType) -> Self {
+        match device_type {
+            HalDeviceType::Other => Self::Other,
+            HalDeviceType::IntegratedGpu => Self::IntegratedGpu,
+            HalDeviceType::DiscreteGpu => Self::DiscreteGpu,
+            HalDeviceType::VirtualGpu => Self::VirtualGpu,
+            HalDeviceType::Cpu => Self::Cpu,
         }
     }
 }
