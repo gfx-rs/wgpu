@@ -218,11 +218,11 @@ impl<F: IdentityFilter<AdapterId>> BackendIds<F> {
             ))]
             vulkan: inputs.find(Backend::Vulkan),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: inputs.find(Backend::Vulkan),
+            metal: inputs.find(Backend::Metal),
             #[cfg(windows)]
-            dx12: inputs.find(Backend::Vulkan),
+            dx12: inputs.find(Backend::Dx12),
             #[cfg(windows)]
-            dx11: inputs.find(Backend::Vulkan),
+            dx11: inputs.find(Backend::Dx11),
         }
     }
 }
@@ -236,11 +236,11 @@ impl<F: IdentityFilter<AdapterId>> Clone for BackendIds<F> {
             ))]
             vulkan: self.vulkan.clone(),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: self.vulkan.clone(),
+            metal: self.metal.clone(),
             #[cfg(windows)]
-            dx12: self.vulkan.clone(),
+            dx12: self.dx12.clone(),
             #[cfg(windows)]
-            dx11: self.vulkan.clone(),
+            dx11: self.dx11.clone(),
         }
     }
 }
