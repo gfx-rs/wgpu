@@ -94,7 +94,7 @@ impl<T> TypedId for Id<T> {
 }
 
 
-pub type AdapterId = Id<crate::instance::Adapter<Dummy>>;
+pub type AdapterId = Id<crate::adapter::RawAdapter<Dummy>>;
 pub type SurfaceId = Id<crate::instance::Surface>;
 // Device
 pub type DeviceId = Id<crate::device::Device<Dummy>>;

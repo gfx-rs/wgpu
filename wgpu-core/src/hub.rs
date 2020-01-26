@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    adapter::RawAdapter,
     backend,
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::CommandBuffer,
@@ -25,7 +26,7 @@ use crate::{
         TextureViewId,
         TypedId,
     },
-    instance::{Adapter, Instance, Surface},
+    instance::{Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{Buffer, Sampler, Texture, TextureView},
     swap_chain::SwapChain,
@@ -160,11 +161,11 @@ pub enum Root {}
 impl Access<Instance> for Root {}
 impl Access<Surface> for Root {}
 impl Access<Surface> for Instance {}
-impl<B: hal::Backend> Access<Adapter<B>> for Root {}
-impl<B: hal::Backend> Access<Adapter<B>> for Surface {}
+impl<B: hal::Backend> Access<RawAdapter<B>> for Root {}
+impl<B: hal::Backend> Access<RawAdapter<B>> for Surface {}
 impl<B: hal::Backend> Access<Device<B>> for Root {}
 impl<B: hal::Backend> Access<Device<B>> for Surface {}
-impl<B: hal::Backend> Access<Device<B>> for Adapter<B> {}
+impl<B: hal::Backend> Access<Device<B>> for RawAdapter<B> {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Root {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
@@ -360,7 +361,7 @@ impl<T, I: TypedId + Copy, F: IdentityFilter<I>> Registry<T, I, F> {
 
 #[derive(Debug)]
 pub struct Hub<B: hal::Backend, F> {
-    pub adapters: Registry<Adapter<B>, AdapterId, F>,
+    pub adapters: Registry<RawAdapter<B>, AdapterId, F>,
     pub devices: Registry<Device<B>, DeviceId, F>,
     pub swap_chains: Registry<SwapChain<B>, SwapChainId, F>,
     pub pipeline_layouts: Registry<PipelineLayout<B>, PipelineLayoutId, F>,

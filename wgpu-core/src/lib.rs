@@ -17,6 +17,7 @@ pub mod backend {
     pub use gfx_backend_vulkan::Backend as Vulkan;
 }
 
+pub mod adapter;
 pub mod binding_model;
 pub mod command;
 pub mod conv;

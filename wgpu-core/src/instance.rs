@@ -3,19 +3,19 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    adapter::{Adapter, AdapterInfo, AdapterInputs},
     backend,
     binding_model::MAX_BIND_GROUPS,
     device::{Device, BIND_BUFFER_ALIGNMENT},
     hub::{GfxBackend, Global, IdentityFilter, Token},
     id::{AdapterId, DeviceId},
     power,
-    Backend,
 };
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use hal::adapter::{AdapterInfo, DeviceType};
+pub use hal::adapter::DeviceType;
 use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
 
 
@@ -94,11 +94,6 @@ pub struct Surface {
     pub dx11: GfxSurface<backend::Dx11>,
 }
 
-#[derive(Debug)]
-pub struct Adapter<B: hal::Backend> {
-    pub(crate) raw: hal::adapter::Adapter<B>,
-}
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -153,120 +148,42 @@ pub struct DeviceDescriptor {
     pub limits: Limits,
 }
 
-bitflags::bitflags! {
-    #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct BackendBit: u32 {
-        const VULKAN = 1 << Backend::Vulkan as u32;
-        const GL = 1 << Backend::Gl as u32;
-        const METAL = 1 << Backend::Metal as u32;
-        const DX12 = 1 << Backend::Dx12 as u32;
-        const DX11 = 1 << Backend::Dx11 as u32;
-        /// Vulkan + METAL + DX12
-        const PRIMARY = Self::VULKAN.bits | Self::METAL.bits | Self::DX12.bits;
-        /// OpenGL + DX11
-        const SECONDARY = Self::GL.bits | Self::DX11.bits;
-    }
-}
-
-impl From<Backend> for BackendBit {
-    fn from(backend: Backend) -> Self {
-        BackendBit::from_bits(1 << backend as u32).unwrap()
-    }
-}
-
-pub enum AdapterInputs<'a, I> {
-    IdSet(&'a [I], fn(&I) -> Backend),
-    Mask(BackendBit, fn() -> I),
-}
-
-impl<I: Clone> AdapterInputs<'_, I> {
-    fn find(&self, b: Backend) -> Option<I> {
-        match *self {
-            AdapterInputs::IdSet(ids, ref fun) => ids.iter().find(|id| fun(id) == b).cloned(),
-            AdapterInputs::Mask(bits, ref fun) => {
-                if bits.contains(b.into()) {
-                    Some(fun())
-                } else {
-                    None
-                }
-            }
-        }
-    }
-}
-
 impl<F: IdentityFilter<AdapterId>> Global<F> {
+    pub fn enumerate_adapters(&self, inputs: AdapterInputs<F::Input>) -> Vec<AdapterId> {
+        let (adapters, backend_ids) = Adapter::enumerate(self, inputs);
+
+        adapters
+            .into_iter()
+            .map(|adapter| adapter.register(self, backend_ids.clone()))
+            .collect()
+    }
+
     pub fn pick_adapter(
         &self,
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<F::Input>,
     ) -> Option<AdapterId> {
-        let instance = &self.instance;
-        let mut device_types = Vec::new();
+        let (adapters, backend_ids) = Adapter::enumerate(self, inputs);
 
-        let id_vulkan = inputs.find(Backend::Vulkan);
-        let id_metal = inputs.find(Backend::Metal);
-        let id_dx12 = inputs.find(Backend::Dx12);
-        let id_dx11 = inputs.find(Backend::Dx11);
-
-        #[cfg(any(
-            not(any(target_os = "ios", target_os = "macos")),
-            feature = "gfx-backend-vulkan"
-        ))]
-        let mut adapters_vk = match instance.vulkan {
-            Some(ref inst) if id_vulkan.is_some() => {
-                let adapters = inst.enumerate_adapters();
-                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-                adapters
-            }
-            _ => Vec::new(),
-        };
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        let mut adapters_mtl = if id_metal.is_some() {
-            let adapters = instance.metal.enumerate_adapters();
-            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-            adapters
-        } else {
-            Vec::new()
-        };
-        #[cfg(windows)]
-        let mut adapters_dx12 = match instance.dx12 {
-            Some(ref inst) if id_dx12.is_some() => {
-                let adapters = inst.enumerate_adapters();
-                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-                adapters
-            }
-            _ => Vec::new(),
-        };
-        #[cfg(windows)]
-        let mut adapters_dx11 = if id_dx11.is_some() {
-            let adapters = instance.dx11.enumerate_adapters();
-            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-            adapters
-        } else {
-            Vec::new()
-        };
-
-        if device_types.is_empty() {
-            log::warn!("No adapters are available!");
+        if adapters.is_empty() {
             return None;
         }
 
         let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
 
-        for (i, ty) in device_types.into_iter().enumerate() {
-            match ty {
-                hal::adapter::DeviceType::IntegratedGpu => {
-                    integrated = integrated.or(Some(i));
+        for adapter in adapters {
+            match adapter.info().device_type {
+                DeviceType::IntegratedGpu => {
+                    integrated = integrated.or(Some(adapter));
                 }
-                hal::adapter::DeviceType::DiscreteGpu => {
-                    discrete = discrete.or(Some(i));
+                DeviceType::DiscreteGpu => {
+                    discrete = discrete.or(Some(adapter));
                 }
-                hal::adapter::DeviceType::VirtualGpu => {
-                    virt = virt.or(Some(i));
+                DeviceType::VirtualGpu => {
+                    virt = virt.or(Some(adapter));
                 }
                 _ => {
-                    other = other.or(Some(i));
+                    other = other.or(Some(adapter));
                 }
             }
         }
@@ -286,76 +203,9 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
 
-        let mut token = Token::root();
-        let mut selected = preferred_gpu.unwrap_or(0);
-        #[cfg(any(
-            not(any(target_os = "ios", target_os = "macos")),
-            feature = "gfx-backend-vulkan"
-        ))]
-        {
-            if selected < adapters_vk.len() {
-                let adapter = Adapter {
-                    raw: adapters_vk.swap_remove(selected),
-                };
-                log::info!("Adapter Vulkan {:?}", adapter.raw.info);
-                let id = backend::Vulkan::hub(self).adapters.register_identity(
-                    id_vulkan.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_vk.len();
-        }
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        {
-            if selected < adapters_mtl.len() {
-                let adapter = Adapter {
-                    raw: adapters_mtl.swap_remove(selected),
-                };
-                log::info!("Adapter Metal {:?}", adapter.raw.info);
-                let id = backend::Metal::hub(self).adapters.register_identity(
-                    id_metal.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_mtl.len();
-        }
-        #[cfg(windows)]
-        {
-            if selected < adapters_dx12.len() {
-                let adapter = Adapter {
-                    raw: adapters_dx12.swap_remove(selected),
-                };
-                log::info!("Adapter Dx12 {:?}", adapter.raw.info);
-                let id = backend::Dx12::hub(self).adapters.register_identity(
-                    id_dx12.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_dx12.len();
-            if selected < adapters_dx11.len() {
-                let adapter = Adapter {
-                    raw: adapters_dx11.swap_remove(selected),
-                };
-                log::info!("Adapter Dx11 {:?}", adapter.raw.info);
-                let id = backend::Dx11::hub(self).adapters.register_identity(
-                    id_dx11.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_dx11.len();
-        }
+        let selected = preferred_gpu.unwrap();
 
-        let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
-        log::warn!("Some adapters are present, but enumerating them failed!");
-        None
+        Some(selected.register(self, backend_ids))
     }
 
     pub fn adapter_get_info<B: GfxBackend>(&self, adapter_id: AdapterId) -> AdapterInfo {

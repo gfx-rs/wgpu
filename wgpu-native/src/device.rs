@@ -153,13 +153,13 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_request_adapter_async(
     desc: Option<&core::instance::RequestAdapterOptions>,
-    mask: core::instance::BackendBit,
+    mask: core::adapter::BackendBit,
     callback: RequestAdapterCallback,
     userdata: *mut std::ffi::c_void,
 ) {
     let id = GLOBAL.pick_adapter(
         &desc.cloned().unwrap_or_default(),
-        core::instance::AdapterInputs::Mask(mask, || PhantomData),
+        core::adapter::AdapterInputs::Mask(mask, || PhantomData),
     );
     callback(
         id.unwrap_or(id::AdapterId::ERROR),
@@ -176,7 +176,7 @@ pub extern "C" fn wgpu_adapter_request_device(
     gfx_select!(adapter_id => GLOBAL.adapter_request_device(adapter_id, desc, PhantomData))
 }
 
-pub fn wgpu_adapter_get_info(adapter_id: id::AdapterId) -> core::instance::AdapterInfo {
+pub fn wgpu_adapter_get_info(adapter_id: id::AdapterId) -> core::adapter::AdapterInfo {
     gfx_select!(adapter_id => GLOBAL.adapter_get_info(adapter_id))
 }
 

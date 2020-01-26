@@ -45,7 +45,7 @@ pub unsafe extern "C" fn wgpu_server_instance_request_adapter(
     let ids = slice::from_raw_parts(ids, id_length);
     match global.pick_adapter(
         desc,
-        core::instance::AdapterInputs::IdSet(ids, |i| i.backend()),
+        core::adapter::AdapterInputs::IdSet(ids, |i| i.backend()),
     ) {
         Some(id) => ids.iter().position(|&i| i == id).unwrap() as i8,
         None => -1,
