@@ -203,9 +203,12 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
 
-        let selected = preferred_gpu.unwrap();
-
-        Some(selected.register(self, backend_ids))
+        if let Some(selected) = preferred_gpu {
+            Some(selected.register(self, backend_ids))
+        } else {
+            log::warn!("Some adapters are present, but enumerating them failed!");
+            None
+        }
     }
 
     pub fn adapter_get_info<B: GfxBackend>(&self, adapter_id: AdapterId) -> AdapterInfo {
