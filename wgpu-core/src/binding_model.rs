@@ -87,6 +87,7 @@ pub struct PipelineLayout<B: hal::Backend> {
 
 #[repr(C)]
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BufferBinding {
     pub buffer: BufferId,
     pub offset: BufferAddress,
@@ -95,6 +96,7 @@ pub struct BufferBinding {
 
 #[repr(C)]
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BindingResource {
     Buffer(BufferBinding),
     Sampler(SamplerId),
@@ -103,6 +105,7 @@ pub enum BindingResource {
 
 #[repr(C)]
 #[derive(Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BindGroupBinding {
     pub binding: u32,
     pub resource: BindingResource,
