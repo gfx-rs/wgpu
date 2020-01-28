@@ -15,8 +15,12 @@ use crate::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use hal::adapter::{AdapterInfo, DeviceType};
-use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
+use hal::{
+    self,
+    adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
+    queue::QueueFamily as _,
+    Instance as _,
+};
 
 
 #[derive(Debug)]
@@ -172,6 +176,69 @@ bitflags::bitflags! {
 impl From<Backend> for BackendBit {
     fn from(backend: Backend) -> Self {
         BackendBit::from_bits(1 << backend as u32).unwrap()
+    }
+}
+
+/// Metadata about a backend adapter.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AdapterInfo {
+    /// Adapter name
+    pub name: String,
+    /// Vendor PCI id of the adapter
+    pub vendor: usize,
+    /// PCI id of the adapter
+    pub device: usize,
+    /// Type of device
+    pub device_type: DeviceType,
+    /// Backend used for device
+    pub backend: Backend,
+}
+
+impl AdapterInfo {
+    fn from_gfx(adapter_info: HalAdapterInfo, backend: Backend) -> Self {
+        let HalAdapterInfo {
+            name,
+            vendor,
+            device,
+            device_type,
+        } = adapter_info;
+
+        AdapterInfo {
+            name,
+            vendor,
+            device,
+            device_type: device_type.into(),
+            backend,
+        }
+    }
+}
+
+/// Supported physical device types
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum DeviceType {
+    /// Other
+    Other,
+    /// Integrated
+    IntegratedGpu,
+    /// Discrete
+    DiscreteGpu,
+    /// Virtual / Hosted
+    VirtualGpu,
+    /// Cpu / Software Rendering
+    Cpu,
+}
+
+impl From<HalDeviceType> for DeviceType {
+    fn from(device_type: HalDeviceType) -> Self {
+        match device_type {
+            HalDeviceType::Other => Self::Other,
+            HalDeviceType::IntegratedGpu => Self::IntegratedGpu,
+            HalDeviceType::DiscreteGpu => Self::DiscreteGpu,
+            HalDeviceType::VirtualGpu => Self::VirtualGpu,
+            HalDeviceType::Cpu => Self::Cpu,
+        }
     }
 }
 
@@ -363,7 +430,7 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
-        adapter.raw.info.clone()
+        AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend())
     }
 }
 
