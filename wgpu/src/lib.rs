@@ -416,9 +416,9 @@ pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
 
 /// A description of all the attachments of a render pass.
 #[derive(Debug)]
-pub struct RenderPassDescriptor<'a> {
+pub struct RenderPassDescriptor<'a, 'b> {
     /// The color attachments of the render pass.
-    pub color_attachments: &'a [RenderPassColorAttachmentDescriptor<'a>],
+    pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
 
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment:
@@ -1071,7 +1071,10 @@ impl CommandEncoder {
     /// Begins recording of a render pass.
     ///
     /// This function returns a [`RenderPass`] object which records a single render pass.
-    pub fn begin_render_pass(&mut self, desc: &RenderPassDescriptor) -> RenderPass {
+    pub fn begin_render_pass<'a>(
+        &'a mut self,
+        desc: &RenderPassDescriptor<'a, '_>,
+    ) -> RenderPass<'a> {
         let colors = desc
             .color_attachments
             .iter()
