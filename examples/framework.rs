@@ -64,8 +64,14 @@ pub fn run<E: Example>(title: &str) {
 
     #[cfg(not(feature = "gl"))]
     let (window, size, surface) = {
-        let window = winit::window::Window::new(&event_loop).unwrap();
-        window.set_title(title);
+        let mut builder = winit::window::WindowBuilder::new();
+        builder = builder.with_title(title);
+        #[cfg(windows)]
+        {
+            use winit::platform::windows::WindowBuilderExtWindows;
+            builder = builder.with_no_redirection_bitmap(true);
+        }
+        let window = builder.build(&event_loop).unwrap();
         let size = window.inner_size();
         let surface = wgpu::Surface::create(&window);
         (window, size, surface)
