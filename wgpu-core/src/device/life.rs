@@ -159,7 +159,7 @@ pub struct LifetimeTracker<B: hal::Backend> {
     ready_to_map: Vec<id::BufferId>,
 }
 
-impl<B: GfxBackend> LifetimeTracker<B> {
+impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn new() -> Self {
         LifetimeTracker {
             mapped: Vec::new(),
@@ -202,13 +202,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             .fold(std::usize::MAX, |v, active| active.index.min(v))
     }
 
-    /// Returns the last submission index that is done.
-    fn check_last_done(
-        &mut self,
-        device: &B::Device,
-        force_wait: bool,
-    ) -> SubmissionIndex {
-        if force_wait && !self.active.is_empty() {
+    fn wait_idle(&self, device: &B::Device) {
+        if !self.active.is_empty() {
             let status = unsafe {
                 device.wait_for_fences(
                     self.active.iter().map(|a| &a.fence),
@@ -218,7 +213,13 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             };
             assert_eq!(status, Ok(true), "GPU got stuck :(");
         }
+    }
 
+    /// Returns the last submission index that is done.
+    fn check_last_done(
+        &mut self,
+        device: &B::Device,
+    ) -> SubmissionIndex {
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
         let done_count = self
@@ -251,7 +252,10 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         heaps_mutex: &Mutex<Heaps<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
     ) -> SubmissionIndex {
-        let last_done = self.check_last_done(device, force_wait);
+        if force_wait {
+            self.wait_idle(device);
+        }
+        let last_done = self.check_last_done(device);
         unsafe {
             self.free_resources.clean(
                 device,
@@ -261,7 +265,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
         last_done
     }
+}
 
+impl<B: GfxBackend> LifetimeTracker<B> {
     pub(crate) fn triage_suspected<F: AllIdentityFilter>(
         &mut self,
         global: &Global<F>,

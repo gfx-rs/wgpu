@@ -31,6 +31,7 @@ use crate::{
 use std::{
     marker::PhantomData,
     mem,
+    ptr,
     slice,
     thread::ThreadId,
 };
@@ -44,7 +45,7 @@ impl<T> PhantomSlice<T> {
         PhantomSlice(PhantomData)
     }
 
-    unsafe fn decode<'a>(
+    unsafe fn decode_unaligned<'a>(
         self, pointer: *const u8, count: usize, bound: *const u8
     ) -> (*const u8, &'a [T]) {
         let align_offset = pointer.align_offset(mem::align_of::<T>());
@@ -84,18 +85,29 @@ impl RawPass {
     ///
     /// The last command is provided, yet the encoder
     /// is guaranteed to have exactly `C::max_size()` space for it.
-    unsafe fn finish_with<C: peek_poke::Poke>(
-        mut self, command: C
-    ) -> (Vec<u8>, id::CommandEncoderId) {
+    unsafe fn finish<C: peek_poke::Poke>(
+        &mut self, command: C
+    ) {
         self.ensure_extra_size(C::max_size());
-        command.poke_into(self.data);
-        let size = self.data as usize + C::max_size() - self.base as usize;
+        let extended_end = self.data.add(C::max_size());
+        let end = command.poke_into(self.data);
+        ptr::write_bytes(end, 0, extended_end as usize - end as usize);
+        self.data = extended_end;
+    }
+
+    fn size(&self) -> usize {
+        self.data as usize - self.base as usize
+    }
+
+    pub unsafe fn into_vec(self) -> (Vec<u8>, id::CommandEncoderId) {
+        let size = self.size();
         assert!(size <= self.capacity);
-        (Vec::from_raw_parts(self.base, size, self.capacity), self.parent)
+        let vec = Vec::from_raw_parts(self.base, size, self.capacity);
+        (vec, self.parent)
     }
 
     unsafe fn ensure_extra_size(&mut self, extra_size: usize) {
-        let size = self.data as usize - self.base as usize;
+        let size = self.size();
         if size + extra_size > self.capacity {
             let mut vec = Vec::from_raw_parts(self.base, size, self.capacity);
             vec.reserve(extra_size);
@@ -194,15 +206,6 @@ pub struct CommandEncoderDescriptor {
 #[derive(Clone, Debug, Default)]
 pub struct CommandBufferDescriptor {
     pub todo: u32,
-}
-
-#[no_mangle]
-pub extern "C" fn wgpu_command_encoder_begin_compute_pass(
-    encoder_id: id::CommandEncoderId,
-    _desc: Option<&ComputePassDescriptor>,
-) -> *mut RawPass {
-    let pass = RawPass::new_compute(encoder_id);
-    Box::into_raw(Box::new(pass))
 }
 
 type RawRenderPassColorAttachmentDescriptor =
