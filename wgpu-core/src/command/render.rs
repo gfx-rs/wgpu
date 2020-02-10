@@ -24,6 +24,7 @@ use crate::{
     track::TrackerSet,
     BufferAddress,
     Color,
+    DynamicOffset,
     Stored,
 };
 
@@ -106,7 +107,7 @@ enum RenderCommand {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        phantom_offsets: PhantomSlice<BufferAddress>,
+        phantom_offsets: PhantomSlice<DynamicOffset>,
     },
     SetPipeline(id::RenderPipelineId),
     SetIndexBuffer {
@@ -159,8 +160,9 @@ impl super::RawPass {
 }
 
 impl super::RawRenderPass {
-    pub unsafe fn finish_render(self) -> (Vec<u8>, id::CommandEncoderId, RawRenderTargets) {
-        let (vec, parent_id) = self.raw.finish_with(RenderCommand::End);
+    pub unsafe fn finish_render(mut self) -> (Vec<u8>, id::CommandEncoderId, RawRenderTargets) {
+        self.raw.finish(RenderCommand::End);
+        let (vec, parent_id) = self.raw.into_vec();
         (vec, parent_id, self.targets)
     }
 }
@@ -784,14 +786,14 @@ impl<F> Global<F> {
             match command {
                 RenderCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
                     let (new_peeker, offsets) = unsafe {
-                        phantom_offsets.decode(peeker, num_dynamic_offsets as usize, raw_data_end)
+                        phantom_offsets.decode_unaligned(peeker, num_dynamic_offsets as usize, raw_data_end)
                     };
                     peeker = new_peeker;
 
                     if cfg!(debug_assertions) {
                         for off in offsets {
                             assert_eq!(
-                                *off % BIND_BUFFER_ALIGNMENT,
+                                *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
                                 0,
                                 "Misaligned dynamic buffer offset: {} does not align with {}",
                                 off,
@@ -943,10 +945,10 @@ impl<F> Global<F> {
                 }
                 RenderCommand::SetVertexBuffers { start_index, count, phantom_buffer_ids, phantom_offsets } => {
                     let (new_peeker, buffer_ids) = unsafe {
-                        phantom_buffer_ids.decode(peeker, count as usize, raw_data_end)
+                        phantom_buffer_ids.decode_unaligned(peeker, count as usize, raw_data_end)
                     };
                     let (new_peeker, offsets) = unsafe {
-                        phantom_offsets.decode(new_peeker, count as usize, raw_data_end)
+                        phantom_offsets.decode_unaligned(new_peeker, count as usize, raw_data_end)
                     };
                     peeker = new_peeker;
 
@@ -1117,6 +1119,7 @@ pub mod render_ffi {
         id,
         BufferAddress,
         Color,
+        DynamicOffset,
         RawString,
     };
     use std::{convert::TryInto, slice};
@@ -1132,7 +1135,7 @@ pub mod render_ffi {
         pass: &mut RawRenderPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: *const BufferAddress,
+        offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
         pass.raw.encode(&RenderCommand::SetBindGroup {
@@ -1326,5 +1329,21 @@ pub mod render_ffi {
         _label: RawString,
     ) {
         //TODO
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_finish(
+        pass: &mut RawRenderPass,
+        length: &mut usize,
+    ) -> *const u8 {
+        //TODO: put target information into the byte stream
+        pass.raw.finish(RenderCommand::End);
+        *length = pass.raw.size();
+        pass.raw.base
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_destroy(pass: *mut RawRenderPass) {
+        let _ = Box::from_raw(pass).raw.into_vec();
     }
 }

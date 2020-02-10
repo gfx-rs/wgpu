@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
+
 use std::fmt;
 
 #[derive(Debug)]
@@ -15,13 +19,13 @@ impl fmt::Display for Error {
     }
 }
 
-#[cfg(any(
+#[cfg(all(feature = "battery", any(
     target_os = "linux",
     target_os = "macos",
     target_os = "windows",
     target_os = "dragonfly",
     target_os = "freebsd"
-))]
+)))]
 mod platform {
     use super::Error;
     use battery::{self, Manager, State};
@@ -45,13 +49,13 @@ mod platform {
     }
 }
 
-#[cfg(not(any(
+#[cfg(any(not(feature = "battery"), not(any(
     target_os = "linux",
     target_os = "macos",
     target_os = "windows",
     target_os = "dragonfly",
     target_os = "freebsd"
-)))]
+))))]
 mod platform {
     use super::Error;
 

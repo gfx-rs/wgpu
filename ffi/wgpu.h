@@ -255,13 +255,13 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
-typedef uint64_t WGPUId_Device_Dummy;
-
-typedef WGPUId_Device_Dummy WGPUDeviceId;
-
 typedef uint64_t WGPUId_Adapter_Dummy;
 
 typedef WGPUId_Adapter_Dummy WGPUAdapterId;
+
+typedef uint64_t WGPUId_Device_Dummy;
+
+typedef WGPUId_Device_Dummy WGPUDeviceId;
 
 typedef struct {
   bool anisotropic_filtering;
@@ -412,6 +412,8 @@ typedef struct {
 typedef WGPURawPass *WGPUComputePassId;
 
 typedef const char *WGPURawString;
+
+typedef uint32_t WGPUDynamicOffset;
 
 typedef uint64_t WGPUId_ComputePipeline_Dummy;
 
@@ -706,6 +708,8 @@ typedef struct {
   uint32_t array_layer_count;
 } WGPUTextureViewDescriptor;
 
+void wgpu_adapter_destroy(WGPUAdapterId adapter_id);
+
 WGPUDeviceId wgpu_adapter_request_device(WGPUAdapterId adapter_id,
                                          const WGPUDeviceDescriptor *desc);
 
@@ -729,6 +733,13 @@ void wgpu_buffer_unmap(WGPUBufferId buffer_id);
 
 void wgpu_command_buffer_destroy(WGPUCommandBufferId command_buffer_id);
 
+/**
+ * # Safety
+ *
+ * This function is unsafe because improper use may lead to memory
+ * problems. For example, a double-free may occur if the function is called
+ * twice on the same raw pointer.
+ */
 WGPURawPass *wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encoder_id,
                                                      const WGPUComputePassDescriptor *_desc);
 
@@ -769,6 +780,8 @@ void wgpu_command_encoder_destroy(WGPUCommandEncoderId command_encoder_id);
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId encoder_id,
                                                 const WGPUCommandBufferDescriptor *desc);
 
+void wgpu_compute_pass_destroy(WGPURawPass *pass);
+
 void wgpu_compute_pass_dispatch(WGPURawPass *pass,
                                 uint32_t groups_x,
                                 uint32_t groups_y,
@@ -778,14 +791,9 @@ void wgpu_compute_pass_dispatch_indirect(WGPURawPass *pass,
                                          WGPUBufferId buffer_id,
                                          WGPUBufferAddress offset);
 
-/**
- * # Safety
- *
- * This function is unsafe because improper use may lead to memory
- * problems. For example, a double-free may occur if the function is called
- * twice on the same raw pointer.
- */
 void wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
+
+const uint8_t *wgpu_compute_pass_finish(WGPURawPass *pass, uintptr_t *length);
 
 void wgpu_compute_pass_insert_debug_marker(WGPURawPass *_pass, WGPURawString _label);
 
@@ -802,7 +810,7 @@ void wgpu_compute_pass_push_debug_group(WGPURawPass *_pass, WGPURawString _label
 void wgpu_compute_pass_set_bind_group(WGPURawPass *pass,
                                       uint32_t index,
                                       WGPUBindGroupId bind_group_id,
-                                      const WGPUBufferAddress *offsets,
+                                      const WGPUDynamicOffset *offsets,
                                       uintptr_t offset_length);
 
 void wgpu_compute_pass_set_pipeline(WGPURawPass *pass, WGPUComputePipelineId pipeline_id);
@@ -874,6 +882,8 @@ void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffers,
                        uintptr_t command_buffers_length);
 
+void wgpu_render_pass_destroy(WGPURawRenderPass *pass);
+
 void wgpu_render_pass_draw(WGPURawRenderPass *pass,
                            uint32_t vertex_count,
                            uint32_t instance_count,
@@ -908,6 +918,8 @@ void wgpu_render_pass_execute_bundles(WGPURawRenderPass *_pass,
                                       const WGPURenderBundleId *_bundles,
                                       uintptr_t _bundles_length);
 
+const uint8_t *wgpu_render_pass_finish(WGPURawRenderPass *pass, uintptr_t *length);
+
 void wgpu_render_pass_insert_debug_marker(WGPURawRenderPass *_pass, WGPURawString _label);
 
 void wgpu_render_pass_pop_debug_group(WGPURawRenderPass *_pass);
@@ -923,7 +935,7 @@ void wgpu_render_pass_push_debug_group(WGPURawRenderPass *_pass, WGPURawString _
 void wgpu_render_pass_set_bind_group(WGPURawRenderPass *pass,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
-                                     const WGPUBufferAddress *offsets,
+                                     const WGPUDynamicOffset *offsets,
                                      uintptr_t offset_length);
 
 void wgpu_render_pass_set_blend_color(WGPURawRenderPass *pass, const WGPUColor *color);

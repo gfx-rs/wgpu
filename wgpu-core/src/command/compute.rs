@@ -13,6 +13,7 @@ use crate::{
     id,
     resource::BufferUsage,
     BufferAddress,
+    DynamicOffset,
 };
 
 use hal::command::CommandBuffer as _;
@@ -27,7 +28,7 @@ enum ComputeCommand {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        phantom_offsets: PhantomSlice<BufferAddress>,
+        phantom_offsets: PhantomSlice<DynamicOffset>,
     },
     SetPipeline(id::ComputePipelineId),
     Dispatch([u32; 3]),
@@ -43,8 +44,9 @@ impl super::RawPass {
         Self::from_vec(Vec::<ComputeCommand>::with_capacity(1), parent)
     }
 
-    pub unsafe fn finish_compute(self) -> (Vec<u8>, id::CommandEncoderId) {
-        self.finish_with(ComputeCommand::End)
+    pub unsafe fn finish_compute(mut self) -> (Vec<u8>, id::CommandEncoderId) {
+        self.finish(ComputeCommand::End);
+        self.into_vec()
     }
 }
 
@@ -87,14 +89,14 @@ impl<F> Global<F> {
             match command {
                 ComputeCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
                     let (new_peeker, offsets) = unsafe {
-                        phantom_offsets.decode(peeker, num_dynamic_offsets as usize, raw_data_end)
+                        phantom_offsets.decode_unaligned(peeker, num_dynamic_offsets as usize, raw_data_end)
                     };
                     peeker = new_peeker;
 
                     if cfg!(debug_assertions) {
                         for off in offsets {
                             assert_eq!(
-                                *off % BIND_BUFFER_ALIGNMENT,
+                                *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
                                 0,
                                 "Misaligned dynamic buffer offset: {} does not align with {}",
                                 off,
@@ -221,6 +223,7 @@ pub mod compute_ffi {
     use crate::{
         id,
         BufferAddress,
+        DynamicOffset,
         RawString,
     };
     use std::{convert::TryInto, slice};
@@ -236,7 +239,7 @@ pub mod compute_ffi {
         pass: &mut RawPass,
         index: u32,
         bind_group_id: id::BindGroupId,
-        offsets: *const BufferAddress,
+        offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
         pass.encode(&ComputeCommand::SetBindGroup {
@@ -301,5 +304,15 @@ pub mod compute_ffi {
         _label: RawString,
     ) {
         //TODO
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_finish(
+        pass: &mut RawPass,
+        length: &mut usize,
+    ) -> *const u8 {
+        pass.finish(ComputeCommand::End);
+        *length = pass.size();
+        pass.base
     }
 }

@@ -13,10 +13,6 @@ use objc::{msg_send, runtime::Object, sel, sel_impl};
 
 pub type RequestAdapterCallback =
     unsafe extern "C" fn(id: id::AdapterId, userdata: *mut std::ffi::c_void);
-pub type BufferMapReadCallback =
-    unsafe extern "C" fn(status: core::resource::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8);
-pub type BufferMapWriteCallback =
-    unsafe extern "C" fn(status: core::resource::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8);
 
 pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id::SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
@@ -176,8 +172,13 @@ pub extern "C" fn wgpu_adapter_request_device(
     gfx_select!(adapter_id => GLOBAL.adapter_request_device(adapter_id, desc, PhantomData))
 }
 
-pub fn wgpu_adapter_get_info(adapter_id: id::AdapterId) -> core::instance::AdapterInfo {
+pub fn adapter_get_info(adapter_id: id::AdapterId) -> core::instance::AdapterInfo {
     gfx_select!(adapter_id => GLOBAL.adapter_get_info(adapter_id))
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_adapter_destroy(adapter_id: id::AdapterId) {
+    gfx_select!(adapter_id => GLOBAL.adapter_destroy(adapter_id))
 }
 
 #[no_mangle]
@@ -371,7 +372,7 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     buffer_id: id::BufferId,
     start: core::BufferAddress,
     size: core::BufferAddress,
-    callback: BufferMapReadCallback,
+    callback: core::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
     let operation = core::resource::BufferMapOperation::Read(
@@ -387,7 +388,7 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     buffer_id: id::BufferId,
     start: core::BufferAddress,
     size: core::BufferAddress,
-    callback: BufferMapWriteCallback,
+    callback: core::device::BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
     let operation = core::resource::BufferMapOperation::Write(

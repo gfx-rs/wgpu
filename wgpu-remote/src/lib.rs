@@ -8,6 +8,12 @@ use core::{
     Backend,
 };
 
+pub use core::command::{
+    wgpu_command_encoder_begin_render_pass,
+    compute_ffi::*,
+    render_ffi::*,
+};
+
 use parking_lot::Mutex;
 
 use std::{ptr, slice};
@@ -21,6 +27,11 @@ struct IdentityHub {
     devices: IdentityManager,
     buffers: IdentityManager,
     command_buffers: IdentityManager,
+    bind_group_layouts: IdentityManager,
+    pipeline_layouts: IdentityManager,
+    bind_groups: IdentityManager,
+    shader_modules: IdentityManager,
+    compute_pipelines: IdentityManager,
 }
 
 #[derive(Debug, Default)]
@@ -192,5 +203,153 @@ pub extern "C" fn wgpu_client_kill_encoder_id(
         .lock()
         .select(id.backend())
         .command_buffers
+        .free(id)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
+    encoder_id: id::CommandEncoderId,
+    _desc: Option<&core::command::ComputePassDescriptor>,
+) -> core::command::RawPass {
+    core::command::RawPass::new_compute(encoder_id)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: core::command::RawPass) {
+    let _ = pass.into_vec();
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_bind_group_layout_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::BindGroupLayoutId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .bind_group_layouts
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_bind_group_layout_id(
+    client: &Client,
+    id: id::BindGroupLayoutId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .bind_group_layouts
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_pipeline_layout_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::PipelineLayoutId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .pipeline_layouts
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_pipeline_layout_id(
+    client: &Client,
+    id: id::PipelineLayoutId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .pipeline_layouts
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_bind_group_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::BindGroupId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .bind_groups
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_bind_group_id(
+    client: &Client,
+    id: id::BindGroupId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .bind_groups
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_shader_module_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::ShaderModuleId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .shader_modules
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_shader_module_id(
+    client: &Client,
+    id: id::ShaderModuleId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .shader_modules
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_compute_pipeline_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::ComputePipelineId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .compute_pipelines
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_compute_pipeline_id(
+    client: &Client,
+    id: id::ComputePipelineId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .compute_pipelines
         .free(id)
 }
