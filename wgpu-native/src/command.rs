@@ -89,33 +89,8 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
 /// twice on the same raw pointer.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: id::RenderPassId) {
-    let (pass_data, encoder_id, targets) = Box::from_raw(pass_id).finish_render();
-    let color_attachments: arrayvec::ArrayVec<[_; core::device::MAX_COLOR_TARGETS]> = targets.colors
-        .iter()
-        .flat_map(|at| {
-            if at.attachment == id::TextureViewId::ERROR {
-                None
-            } else {
-                Some(core::command::RenderPassColorAttachmentDescriptor {
-                    attachment: at.attachment,
-                    resolve_target: if at.resolve_target == id::TextureViewId::ERROR {
-                        None
-                    } else {
-                        Some(&at.resolve_target)
-                    },
-                    load_op: at.load_op,
-                    store_op: at.store_op,
-                    clear_color: at.clear_color,
-                })
-            }
-        })
-        .collect();
-    let depth_stencil_attachment = if targets.depth_stencil.attachment == id::TextureViewId::ERROR {
-        None
-    } else {
-        Some(&targets.depth_stencil)
-    };
-    gfx_select!(encoder_id => GLOBAL.command_encoder_run_render_pass(encoder_id, &color_attachments, depth_stencil_attachment, &pass_data))
+    let (pass_data, encoder_id) = Box::from_raw(pass_id).finish_render();
+    gfx_select!(encoder_id => GLOBAL.command_encoder_run_render_pass(encoder_id, &pass_data))
 }
 
 /// # Safety
