@@ -66,7 +66,7 @@ pub fn run<E: Example>(title: &str) {
     let (window, size, surface) = {
         let mut builder = winit::window::WindowBuilder::new();
         builder = builder.with_title(title);
-        #[cfg(windows)]
+        #[cfg(windows_OFF)] //TODO
         {
             use winit::platform::windows::WindowBuilderExtWindows;
             builder = builder.with_no_redirection_bitmap(true);
