@@ -210,15 +210,11 @@ pub unsafe extern "C" fn wgpu_server_encode_compute_pass(
 pub unsafe extern "C" fn wgpu_server_encode_render_pass(
     global: &Global,
     self_id: id::CommandEncoderId,
-    color_attachments: *const core::command::RenderPassColorAttachmentDescriptor,
-    color_attachment_length: usize,
-    depth_stencil_attachment: Option<&core::command::RenderPassDepthStencilAttachmentDescriptor>,
     commands: *const u8,
     command_length: usize,
 ) {
-    let color_attachments = slice::from_raw_parts(color_attachments, color_attachment_length);
     let raw_pass = slice::from_raw_parts(commands, command_length);
-    gfx_select!(self_id => global.command_encoder_run_render_pass(self_id, color_attachments, depth_stencil_attachment, raw_pass));
+    gfx_select!(self_id => global.command_encoder_run_render_pass(self_id, raw_pass));
 }
 
 /// # Safety
