@@ -41,6 +41,9 @@ Shout out to the following projects that work best with wgpu-rs:
   - [imgui-wgpu](https://github.com/Yatekii/imgui-wgpu-rs) - Dear ImGui interfacing
   - [pixels](https://github.com/parasyte/pixels) - the easiest way to create a hardware-accelerated pixel frame buffer
   - [kas](https://github.com/dhardy/kas) - tooKit Abstraction System
+
+Also, libraries that have support for wgpu-rs:
+  - [conrod](https://github.com/PistonDevelopers/conrod) - shader-based UI
   - [lyon](https://github.com/nical/lyon) - a path tessellation library
 
 ## Development
