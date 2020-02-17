@@ -73,6 +73,7 @@ pub use wgc::{
     swap_chain::{PresentMode, SwapChainDescriptor},
     BufferAddress,
     Color,
+    DynamicOffset,
     Extent3d,
     Origin3d,
 };
@@ -561,7 +562,7 @@ impl Adapter {
     }
 
     pub fn get_info(&self) -> AdapterInfo {
-        wgn::wgpu_adapter_get_info(self.id)
+        wgn::adapter_get_info(self.id)
     }
 }
 
@@ -1119,7 +1120,9 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: wgn::wgpu_command_encoder_begin_compute_pass(self.id, None),
+            id: unsafe {
+                wgn::wgpu_command_encoder_begin_compute_pass(self.id, None)
+            },
             _parent: self,
         }
     }
@@ -1195,7 +1198,7 @@ impl<'a> RenderPass<'a> {
         &mut self,
         index: u32,
         bind_group: &'a BindGroup,
-        offsets: &[BufferAddress],
+        offsets: &[DynamicOffset],
     ) {
         unsafe {
             wgn::wgpu_render_pass_set_bind_group(
@@ -1387,7 +1390,7 @@ impl<'a> ComputePass<'a> {
         &mut self,
         index: u32,
         bind_group: &'a BindGroup,
-        offsets: &[BufferAddress],
+        offsets: &[DynamicOffset],
     ) {
         unsafe {
             wgn::wgpu_compute_pass_set_bind_group(
