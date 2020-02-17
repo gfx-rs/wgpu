@@ -81,7 +81,7 @@ impl BindGroupEntry {
                 }
                 self.expected_layout_id == Some(layout_id)
             }
-            None => true,
+            None => false,
         };
 
         self.provided = Some(BindGroupPair {
