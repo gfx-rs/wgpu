@@ -23,7 +23,7 @@ use std::iter;
 
 
 #[derive(Clone, Copy, Debug, PeekCopy, Poke)]
-enum ComputeCommand {
+pub enum ComputeCommand {
     SetBindGroup {
         index: u8,
         num_dynamic_offsets: u8,
