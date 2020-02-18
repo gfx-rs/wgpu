@@ -9,8 +9,8 @@ fn main() {
     let args = env::args().collect::<Vec<_>>();
     let input = fs::read(&args[1]).unwrap();
 
-    let mut transpiler = javelin::Transpiler::new();
-    let module = transpiler.load(&input).unwrap();
+    let module = javelin::parse_u8_slice(&input).unwrap();
+    //println!("{:?}", module);
 
     let options = javelin::msl::Options {};
     let msl = module.to_msl(&options).unwrap();

@@ -1,69 +1,104 @@
-extern crate rspirv;
-extern crate spirv_headers;
+extern crate spirv_headers as spirv;
 
 pub mod msl;
+mod parse;
+mod storage;
+
+pub use parse::{parse, parse_u8_slice, ParseError};
+
+use crate::storage::{Storage, Token};
 
 use std::collections::HashMap;
 
+use smallvec::SmallVec;
 
-pub struct Transpiler {
+
+
+#[derive(Debug)]
+pub struct Header {
+    pub version: (u8, u8, u8),
+    pub generator: u32,
 }
 
-pub struct Module {
-    raw: rspirv::mr::Module,
-    entry_points: HashMap<String, EntryPoint>,
+pub type Bytes = u8;
+
+#[derive(Debug)]
+pub struct StructDeclaration {
+
 }
 
+#[derive(Debug)]
+pub enum Type {
+    Void,
+    Int { width: Bytes },
+    Uint { width: Bytes },
+    Float { width: Bytes },
+    Struct(Token<StructDeclaration>),
+}
+
+#[derive(Debug)]
+pub struct Jump {
+    pub target: Token<Block>,
+    pub arguments: SmallVec<[Token<Operation>; 1]>,
+}
+
+#[derive(Debug)]
+pub enum Branch {
+    Jump(Jump),
+    JumpIf {
+        condition: Token<Operation>, //bool
+        accept: Jump,
+        reject: Jump,
+    },
+    Switch {
+        selector: Token<Operation>, //int
+        cases: HashMap<i32, Jump>,
+        default: Jump,
+    },
+    Return {
+        value: Option<Token<Operation>>,
+    },
+}
+
+#[derive(Debug)]
+pub enum Operation {
+    Arithmetic,
+}
+
+#[derive(Debug)]
+pub enum Terminator {
+    Branch(Branch),
+    Kill,
+    Unreachable,
+}
+
+#[derive(Debug)]
+pub struct Block {
+    pub label: Option<String>,
+    pub argument_types: Vec<Type>,
+    pub operations: Storage<Operation>,
+    pub terminator: Terminator,
+}
+
+#[derive(Debug)]
+pub struct Function {
+    pub name: Option<String>,
+    pub parameter_types: Vec<Type>,
+    pub return_type: Type,
+    pub blocks: Storage<Block>,
+}
+
+#[derive(Debug)]
 pub struct EntryPoint {
-    pub cleansed_name: String,
-    pub exec_model: spirv_headers::ExecutionModel,
+    pub exec_model: spirv::ExecutionModel,
+    pub name: String,
+    pub function: Token<Function>,
 }
 
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub enum LoadError {
-    Parsing,
-}
-
-impl Transpiler {
-    pub fn new() -> Self {
-        Transpiler {
-        }
-    }
-
-    pub fn load(&mut self, spv: &[u8]) -> Result<Module, LoadError> {
-        let mut loader = rspirv::mr::Loader::new();
-        rspirv::binary::Parser::new(spv, &mut loader)
-            .parse()
-            .map_err(|_| LoadError::Parsing)?;
-        let raw = loader.module();
-
-        let entry_points = raw.entry_points
-            .iter()
-            .map(|ep| {
-                let name = match ep.operands[2] {
-                    rspirv::mr::Operand::LiteralString(ref name) => name.to_string(),
-                    ref other => panic!("Unexpected entry point operand {:?}", other),
-                };
-                let ep = EntryPoint {
-                    cleansed_name: name.clone(), //TODO
-                    exec_model: match ep.operands[0] {
-                        rspirv::mr::Operand::ExecutionModel(model) => model,
-                        ref other => panic!("Unexpected execution model operand {:?}", other),
-                    },
-                };
-                (name, ep)
-            })
-            .collect();
-
-        Ok(Module {
-            raw,
-            entry_points,
-        })
-    }
-}
-
-impl Module {
-    pub fn entry_points(&self) -> &HashMap<String, EntryPoint> {
-        &self.entry_points
-    }
+#[derive(Debug)]
+pub struct Module {
+    pub header: Header,
+    pub struct_declarations: Storage<StructDeclaration>,
+    pub functions: Storage<Function>,
+    pub entry_points: Vec<EntryPoint>,
 }

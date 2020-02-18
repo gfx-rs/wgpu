@@ -2,10 +2,12 @@
 name = "javelin"
 version = "0.1.0"
 authors = ["Dzmitry Malyshau <kvarkus@gmail.com>"]
+edition = "2018"
 
 [dependencies]
-rspirv = "0.5"
+log = "0.4"
+smallvec = "1"
 spirv_headers = "1"
 
 [dev-dependencies]
-env_logger = "0.5"
+env_logger = "0.6"

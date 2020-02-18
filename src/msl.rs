@@ -1,8 +1,5 @@
 use std::fmt::{Error as FmtError, Write};
 
-use Module;
-
-
 pub struct Options {
 }
 
@@ -17,7 +14,7 @@ impl From<FmtError> for Error {
     }
 }
 
-impl Module {
+impl super::Module {
     pub fn to_msl(&self, _options: &Options) -> Result<String, Error> {
         let mut out = String::new();
 
