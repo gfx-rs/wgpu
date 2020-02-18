@@ -4,7 +4,7 @@ pub mod msl;
 mod parse;
 mod storage;
 
-pub use parse::{parse, parse_u8_slice, ParseError};
+pub use parse::{Parser, ParseError, parse_u8_slice};
 
 use crate::storage::{Storage, Token};
 
