@@ -5,6 +5,8 @@ mod framework;
 
 use zerocopy::{AsBytes, FromBytes};
 
+use wgpu::vertex_attr_array;
+
 #[repr(C)]
 #[derive(Clone, Copy, AsBytes, FromBytes)]
 
@@ -394,18 +396,7 @@ impl framework::Example for Example {
         let vb_desc = wgpu::VertexBufferDescriptor {
             stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttributeDescriptor {
-                    format: wgpu::VertexFormat::Char4,
-                    offset: 0,
-                    shader_location: 0,
-                },
-                wgpu::VertexAttributeDescriptor {
-                    format: wgpu::VertexFormat::Char4,
-                    offset: 4 * 1,
-                    shader_location: 1,
-                },
-            ],
+            attributes: &vertex_attr_array![0 => Char4, 1 => Char4],
         };
 
         let shadow_pass = {

@@ -4,6 +4,9 @@ mod future;
 use future::GpuFutureCompletion;
 pub use future::GpuFuture;
 
+#[macro_use]
+mod macros;
+
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 
