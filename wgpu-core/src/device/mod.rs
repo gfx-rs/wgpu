@@ -1369,6 +1369,9 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
 
                 if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
                     let sc = &mut swap_chain_guard[sc_id.value];
+                    assert!(sc.acquired_view_id.is_some(),
+                        "SwapChainOutput for {:?} was dropped before the respective command buffer {:?} got submitted!",
+                        sc_id.value, cmb_id);
                     if sc.acquired_framebuffers.is_empty() {
                         signal_swapchain_semaphores.push(sc_id.value);
                     }

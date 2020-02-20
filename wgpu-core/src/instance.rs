@@ -15,8 +15,12 @@ use crate::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-pub use hal::adapter::{AdapterInfo, DeviceType};
-use hal::{self, adapter::PhysicalDevice as _, queue::QueueFamily as _, Instance as _};
+use hal::{
+    self,
+    adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
+    queue::QueueFamily as _,
+    Instance as _,
+};
 
 
 #[derive(Debug)]
@@ -173,6 +177,69 @@ impl From<Backend> for BackendBit {
     }
 }
 
+/// Metadata about a backend adapter.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct AdapterInfo {
+    /// Adapter name
+    pub name: String,
+    /// Vendor PCI id of the adapter
+    pub vendor: usize,
+    /// PCI id of the adapter
+    pub device: usize,
+    /// Type of device
+    pub device_type: DeviceType,
+    /// Backend used for device
+    pub backend: Backend,
+}
+
+impl AdapterInfo {
+    fn from_gfx(adapter_info: HalAdapterInfo, backend: Backend) -> Self {
+        let HalAdapterInfo {
+            name,
+            vendor,
+            device,
+            device_type,
+        } = adapter_info;
+
+        AdapterInfo {
+            name,
+            vendor,
+            device,
+            device_type: device_type.into(),
+            backend,
+        }
+    }
+}
+
+/// Supported physical device types
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum DeviceType {
+    /// Other
+    Other,
+    /// Integrated
+    IntegratedGpu,
+    /// Discrete
+    DiscreteGpu,
+    /// Virtual / Hosted
+    VirtualGpu,
+    /// Cpu / Software Rendering
+    Cpu,
+}
+
+impl From<HalDeviceType> for DeviceType {
+    fn from(device_type: HalDeviceType) -> Self {
+        match device_type {
+            HalDeviceType::Other => Self::Other,
+            HalDeviceType::IntegratedGpu => Self::IntegratedGpu,
+            HalDeviceType::DiscreteGpu => Self::DiscreteGpu,
+            HalDeviceType::VirtualGpu => Self::VirtualGpu,
+            HalDeviceType::Cpu => Self::Cpu,
+        }
+    }
+}
+
 pub enum AdapterInputs<'a, I> {
     IdSet(&'a [I], fn(&I) -> Backend),
     Mask(BackendBit, fn() -> I),
@@ -194,6 +261,76 @@ impl<I: Clone> AdapterInputs<'_, I> {
 }
 
 impl<F: IdentityFilter<AdapterId>> Global<F> {
+    pub fn enumerate_adapters(&self, inputs: AdapterInputs<F::Input>) -> Vec<AdapterId> {
+        let instance = &self.instance;
+        let mut token = Token::root();
+        let mut adapters = Vec::new();
+
+        #[cfg(any(
+            not(any(target_os = "ios", target_os = "macos")),
+            feature = "gfx-backend-vulkan"
+        ))]
+        {
+            if let Some(ref inst) = instance.vulkan {
+                if let Some(id_vulkan) = inputs.find(Backend::Vulkan) {
+                    for raw in inst.enumerate_adapters() {
+                        let adapter = Adapter { raw };
+                        log::info!("Adapter Vulkan {:?}", adapter.raw.info);
+                        adapters.push(backend::Vulkan::hub(self).adapters.register_identity(
+                            id_vulkan.clone(),
+                            adapter,
+                            &mut token,
+                        ));
+                    }
+                }
+            }
+        }
+        #[cfg(any(target_os = "ios", target_os = "macos"))]
+        {
+            if let Some(id_metal) = inputs.find(Backend::Metal) {
+                for raw in instance.metal.enumerate_adapters() {
+                    let adapter = Adapter { raw };
+                    log::info!("Adapter Metal {:?}", adapter.raw.info);
+                    adapters.push(backend::Metal::hub(self).adapters.register_identity(
+                        id_metal.clone(),
+                        adapter,
+                        &mut token,
+                    ));
+                }
+            }
+        }
+        #[cfg(windows)]
+        {
+            if let Some(ref inst) = instance.dx12 {
+                if let Some(id_dx12) = inputs.find(Backend::Dx12) {
+                    for raw in inst.enumerate_adapters() {
+                        let adapter = Adapter { raw };
+                        log::info!("Adapter Dx12 {:?}", adapter.raw.info);
+                        adapters.push(backend::Dx12::hub(self).adapters.register_identity(
+                            id_dx12.clone(),
+                            adapter,
+                            &mut token,
+                        ));
+                    }
+                }
+            }
+
+            if let Some(id_dx11) = inputs.find(Backend::Dx11) {
+                for raw in instance.dx11.enumerate_adapters() {
+                    let adapter = Adapter { raw };
+                    log::info!("Adapter Dx11 {:?}", adapter.raw.info);
+                    adapters.push(backend::Dx11::hub(self).adapters.register_identity(
+                        id_dx11.clone(),
+                        adapter,
+                        &mut token,
+                    ));
+                }
+            }
+        }
+
+        adapters
+    }
+
     pub fn pick_adapter(
         &self,
         desc: &RequestAdapterOptions,
@@ -361,7 +498,7 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
-        adapter.raw.info.clone()
+        AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend())
     }
 
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {

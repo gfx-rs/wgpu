@@ -190,6 +190,11 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_buffer(
     gfx_select!(self_id => global.command_encoder_copy_buffer_to_buffer(self_id, source_id, source_offset, destination_id, destination_offset, size));
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointers are
+/// valid for `color_attachments_length` and `command_length` elements,
+/// respectively.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_server_encode_compute_pass(
     global: &Global,
@@ -210,15 +215,11 @@ pub unsafe extern "C" fn wgpu_server_encode_compute_pass(
 pub unsafe extern "C" fn wgpu_server_encode_render_pass(
     global: &Global,
     self_id: id::CommandEncoderId,
-    color_attachments: *const core::command::RenderPassColorAttachmentDescriptor,
-    color_attachment_length: usize,
-    depth_stencil_attachment: Option<&core::command::RenderPassDepthStencilAttachmentDescriptor>,
     commands: *const u8,
     command_length: usize,
 ) {
-    let color_attachments = slice::from_raw_parts(color_attachments, color_attachment_length);
     let raw_pass = slice::from_raw_parts(commands, command_length);
-    gfx_select!(self_id => global.command_encoder_run_render_pass(self_id, color_attachments, depth_stencil_attachment, raw_pass));
+    gfx_select!(self_id => global.command_encoder_run_render_pass(self_id, raw_pass));
 }
 
 /// # Safety
@@ -324,4 +325,12 @@ pub extern "C" fn wgpu_server_compute_pipeline_destroy(
     self_id: id::ComputePipelineId,
 ) {
     gfx_select!(self_id => global.compute_pipeline_destroy(self_id));
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_render_pipeline_destroy(
+    global: &Global,
+    self_id: id::RenderPipelineId,
+) {
+    gfx_select!(self_id => global.render_pipeline_destroy(self_id));
 }

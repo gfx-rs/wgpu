@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.12.2 */
+/* Generated with cbindgen:0.13.1 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -311,6 +311,8 @@ typedef uint64_t WGPUId_TextureView_Dummy;
 
 typedef WGPUId_TextureView_Dummy WGPUTextureViewId;
 
+typedef const WGPUTextureViewId *WGPUOptionRef_TextureViewId;
+
 typedef struct {
   double r;
   double g;
@@ -326,13 +328,13 @@ typedef struct {
 
 typedef struct {
   WGPUTextureViewId attachment;
-  WGPUTextureViewId resolve_target;
+  WGPUOptionRef_TextureViewId resolve_target;
   WGPULoadOp load_op;
   WGPUStoreOp store_op;
   WGPUColor clear_color;
-} WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__TextureViewId;
+} WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId;
 
-typedef WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__TextureViewId WGPURawRenderPassColorAttachmentDescriptor;
+typedef WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId WGPURenderPassColorAttachmentDescriptor;
 
 typedef struct {
   WGPUTextureViewId attachment;
@@ -345,28 +347,6 @@ typedef struct {
 } WGPURenderPassDepthStencilAttachmentDescriptorBase_TextureViewId;
 
 typedef WGPURenderPassDepthStencilAttachmentDescriptorBase_TextureViewId WGPURenderPassDepthStencilAttachmentDescriptor;
-
-typedef struct {
-  WGPURawRenderPassColorAttachmentDescriptor colors[WGPUMAX_COLOR_TARGETS];
-  WGPURenderPassDepthStencilAttachmentDescriptor depth_stencil;
-} WGPURawRenderTargets;
-
-typedef struct {
-  WGPURawPass raw;
-  WGPURawRenderTargets targets;
-} WGPURawRenderPass;
-
-typedef const WGPUTextureViewId *WGPUOptionRef_TextureViewId;
-
-typedef struct {
-  WGPUTextureViewId attachment;
-  WGPUOptionRef_TextureViewId resolve_target;
-  WGPULoadOp load_op;
-  WGPUStoreOp store_op;
-  WGPUColor clear_color;
-} WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId;
-
-typedef WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId WGPURenderPassColorAttachmentDescriptor;
 
 typedef struct {
   const WGPURenderPassColorAttachmentDescriptor *color_attachments;
@@ -680,7 +660,7 @@ typedef struct {
 
 typedef WGPUDeviceId WGPUQueueId;
 
-typedef WGPURawRenderPass *WGPURenderPassId;
+typedef WGPURawPass *WGPURenderPassId;
 
 typedef uint64_t WGPUId_RenderBundle_Dummy;
 
@@ -746,12 +726,12 @@ WGPURawPass *wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encode
 /**
  * # Safety
  *
- * This function is unsafe as there is no guarantee that the given pointer
- * (`RenderPassDescriptor::color_attachments`) is valid for
- * `RenderPassDescriptor::color_attachments_length` elements.
+ * This function is unsafe because improper use may lead to memory
+ * problems. For example, a double-free may occur if the function is called
+ * twice on the same raw pointer.
  */
-WGPURawRenderPass *wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId encoder_id,
-                                                          const WGPURenderPassDescriptor *desc);
+WGPURawPass *wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId encoder_id,
+                                                    const WGPURenderPassDescriptor *desc);
 
 void wgpu_command_encoder_copy_buffer_to_buffer(WGPUCommandEncoderId command_encoder_id,
                                                 WGPUBufferId source,
@@ -882,26 +862,26 @@ void wgpu_queue_submit(WGPUQueueId queue_id,
                        const WGPUCommandBufferId *command_buffers,
                        uintptr_t command_buffers_length);
 
-void wgpu_render_pass_destroy(WGPURawRenderPass *pass);
+void wgpu_render_pass_destroy(WGPURawPass *pass);
 
-void wgpu_render_pass_draw(WGPURawRenderPass *pass,
+void wgpu_render_pass_draw(WGPURawPass *pass,
                            uint32_t vertex_count,
                            uint32_t instance_count,
                            uint32_t first_vertex,
                            uint32_t first_instance);
 
-void wgpu_render_pass_draw_indexed(WGPURawRenderPass *pass,
+void wgpu_render_pass_draw_indexed(WGPURawPass *pass,
                                    uint32_t index_count,
                                    uint32_t instance_count,
                                    uint32_t first_index,
                                    int32_t base_vertex,
                                    uint32_t first_instance);
 
-void wgpu_render_pass_draw_indexed_indirect(WGPURawRenderPass *pass,
+void wgpu_render_pass_draw_indexed_indirect(WGPURawPass *pass,
                                             WGPUBufferId buffer_id,
                                             WGPUBufferAddress offset);
 
-void wgpu_render_pass_draw_indirect(WGPURawRenderPass *pass,
+void wgpu_render_pass_draw_indirect(WGPURawPass *pass,
                                     WGPUBufferId buffer_id,
                                     WGPUBufferAddress offset);
 
@@ -914,17 +894,17 @@ void wgpu_render_pass_draw_indirect(WGPURawRenderPass *pass,
  */
 void wgpu_render_pass_end_pass(WGPURenderPassId pass_id);
 
-void wgpu_render_pass_execute_bundles(WGPURawRenderPass *_pass,
+void wgpu_render_pass_execute_bundles(WGPURawPass *_pass,
                                       const WGPURenderBundleId *_bundles,
                                       uintptr_t _bundles_length);
 
-const uint8_t *wgpu_render_pass_finish(WGPURawRenderPass *pass, uintptr_t *length);
+const uint8_t *wgpu_render_pass_finish(WGPURawPass *pass, uintptr_t *length);
 
-void wgpu_render_pass_insert_debug_marker(WGPURawRenderPass *_pass, WGPURawString _label);
+void wgpu_render_pass_insert_debug_marker(WGPURawPass *_pass, WGPURawString _label);
 
-void wgpu_render_pass_pop_debug_group(WGPURawRenderPass *_pass);
+void wgpu_render_pass_pop_debug_group(WGPURawPass *_pass);
 
-void wgpu_render_pass_push_debug_group(WGPURawRenderPass *_pass, WGPURawString _label);
+void wgpu_render_pass_push_debug_group(WGPURawPass *_pass, WGPURawString _label);
 
 /**
  * # Safety
@@ -932,27 +912,27 @@ void wgpu_render_pass_push_debug_group(WGPURawRenderPass *_pass, WGPURawString _
  * This function is unsafe as there is no guarantee that the given pointer is
  * valid for `offset_length` elements.
  */
-void wgpu_render_pass_set_bind_group(WGPURawRenderPass *pass,
+void wgpu_render_pass_set_bind_group(WGPURawPass *pass,
                                      uint32_t index,
                                      WGPUBindGroupId bind_group_id,
                                      const WGPUDynamicOffset *offsets,
                                      uintptr_t offset_length);
 
-void wgpu_render_pass_set_blend_color(WGPURawRenderPass *pass, const WGPUColor *color);
+void wgpu_render_pass_set_blend_color(WGPURawPass *pass, const WGPUColor *color);
 
-void wgpu_render_pass_set_index_buffer(WGPURawRenderPass *pass,
+void wgpu_render_pass_set_index_buffer(WGPURawPass *pass,
                                        WGPUBufferId buffer_id,
                                        WGPUBufferAddress offset);
 
-void wgpu_render_pass_set_pipeline(WGPURawRenderPass *pass, WGPURenderPipelineId pipeline_id);
+void wgpu_render_pass_set_pipeline(WGPURawPass *pass, WGPURenderPipelineId pipeline_id);
 
-void wgpu_render_pass_set_scissor_rect(WGPURawRenderPass *pass,
+void wgpu_render_pass_set_scissor_rect(WGPURawPass *pass,
                                        uint32_t x,
                                        uint32_t y,
                                        uint32_t w,
                                        uint32_t h);
 
-void wgpu_render_pass_set_stencil_reference(WGPURawRenderPass *pass, uint32_t value);
+void wgpu_render_pass_set_stencil_reference(WGPURawPass *pass, uint32_t value);
 
 /**
  * # Safety
@@ -960,13 +940,13 @@ void wgpu_render_pass_set_stencil_reference(WGPURawRenderPass *pass, uint32_t va
  * This function is unsafe as there is no guarantee that the given pointers
  * (`buffer_ids` and `offsets`) are valid for `length` elements.
  */
-void wgpu_render_pass_set_vertex_buffers(WGPURawRenderPass *pass,
+void wgpu_render_pass_set_vertex_buffers(WGPURawPass *pass,
                                          uint32_t start_slot,
                                          const WGPUBufferId *buffer_ids,
                                          const WGPUBufferAddress *offsets,
                                          uintptr_t length);
 
-void wgpu_render_pass_set_viewport(WGPURawRenderPass *pass,
+void wgpu_render_pass_set_viewport(WGPURawPass *pass,
                                    float x,
                                    float y,
                                    float w,

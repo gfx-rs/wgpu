@@ -40,7 +40,7 @@ enum ComputeCommand {
 }
 
 impl super::RawPass {
-    pub fn new_compute(parent: id::CommandEncoderId) -> Self {
+    pub unsafe fn new_compute(parent: id::CommandEncoderId) -> Self {
         Self::from_vec(Vec::<ComputeCommand>::with_capacity(1), parent)
     }
 

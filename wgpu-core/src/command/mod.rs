@@ -208,54 +208,14 @@ pub struct CommandBufferDescriptor {
     pub todo: u32,
 }
 
-type RawRenderPassColorAttachmentDescriptor =
+pub type RawRenderPassColorAttachmentDescriptor =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId, id::TextureViewId>;
 
 #[repr(C)]
+#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
 pub struct RawRenderTargets {
     pub colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
     pub depth_stencil: RenderPassDepthStencilAttachmentDescriptor,
-}
-
-#[repr(C)]
-pub struct RawRenderPass {
-    raw: RawPass,
-    targets: RawRenderTargets,
-}
-
-/// # Safety
-///
-/// This function is unsafe as there is no guarantee that the given pointer
-/// (`RenderPassDescriptor::color_attachments`) is valid for
-/// `RenderPassDescriptor::color_attachments_length` elements.
-#[no_mangle]
-pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
-    encoder_id: id::CommandEncoderId,
-    desc: &RenderPassDescriptor,
-) -> *mut RawRenderPass {
-    let mut colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS] = mem::zeroed();
-    for (color, at) in colors
-        .iter_mut()
-        .zip(slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length))
-    {
-        *color = RawRenderPassColorAttachmentDescriptor {
-            attachment: at.attachment,
-            resolve_target: at.resolve_target.map_or(id::TextureViewId::ERROR, |rt| *rt),
-            load_op: at.load_op,
-            store_op: at.store_op,
-            clear_color: at.clear_color,
-        };
-    }
-    let pass = RawRenderPass {
-        raw: RawPass::new_render(encoder_id),
-        targets: RawRenderTargets {
-            colors,
-            depth_stencil: desc.depth_stencil_attachment
-                .cloned()
-                .unwrap_or_else(|| mem::zeroed()),
-        },
-    };
-    Box::into_raw(Box::new(pass))
 }
 
 impl<F> Global<F> {
