@@ -218,40 +218,6 @@ pub struct RawRenderTargets {
     pub depth_stencil: RenderPassDepthStencilAttachmentDescriptor,
 }
 
-/// # Safety
-///
-/// This function is unsafe as there is no guarantee that the given pointer
-/// (`RenderPassDescriptor::color_attachments`) is valid for
-/// `RenderPassDescriptor::color_attachments_length` elements.
-#[no_mangle]
-pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
-    encoder_id: id::CommandEncoderId,
-    desc: &RenderPassDescriptor,
-) -> *mut RawPass {
-    let mut targets = RawRenderTargets {
-        depth_stencil: desc.depth_stencil_attachment
-            .cloned()
-            .unwrap_or_else(|| mem::zeroed()),
-        colors: mem::zeroed(),
-    };
-    for (color, at) in targets.colors
-        .iter_mut()
-        .zip(slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length))
-    {
-        *color = RawRenderPassColorAttachmentDescriptor {
-            attachment: at.attachment,
-            resolve_target: at.resolve_target.map_or(id::TextureViewId::ERROR, |rt| *rt),
-            load_op: at.load_op,
-            store_op: at.store_op,
-            clear_color: at.clear_color,
-        };
-    }
-
-    let mut pass = RawPass::new_render(encoder_id);
-    pass.encode(&targets);
-    Box::into_raw(Box::new(pass))
-}
-
 impl<F> Global<F> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,

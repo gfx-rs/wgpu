@@ -190,6 +190,11 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_buffer(
     gfx_select!(self_id => global.command_encoder_copy_buffer_to_buffer(self_id, source_id, source_offset, destination_id, destination_offset, size));
 }
 
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointers are
+/// valid for `color_attachments_length` and `command_length` elements,
+/// respectively.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_server_encode_compute_pass(
     global: &Global,
@@ -320,4 +325,12 @@ pub extern "C" fn wgpu_server_compute_pipeline_destroy(
     self_id: id::ComputePipelineId,
 ) {
     gfx_select!(self_id => global.compute_pipeline_destroy(self_id));
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_server_render_pipeline_destroy(
+    global: &Global,
+    self_id: id::RenderPipelineId,
+) {
+    gfx_select!(self_id => global.render_pipeline_destroy(self_id));
 }

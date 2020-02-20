@@ -5,7 +5,6 @@
 use crate::GLOBAL;
 
 pub use core::command::{
-    wgpu_command_encoder_begin_render_pass,
     compute_ffi::*,
     render_ffi::*,
 };
@@ -88,9 +87,28 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
 /// problems. For example, a double-free may occur if the function is called
 /// twice on the same raw pointer.
 #[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
+    encoder_id: id::CommandEncoderId,
+    desc: &core::command::RenderPassDescriptor,
+) -> *mut core::command::RawPass {
+    let pass = core::command::RawPass::new_render(encoder_id, desc);
+    Box::into_raw(Box::new(pass))
+}
+
+/// # Safety
+///
+/// This function is unsafe because improper use may lead to memory
+/// problems. For example, a double-free may occur if the function is called
+/// twice on the same raw pointer.
+#[no_mangle]
 pub unsafe extern "C" fn wgpu_render_pass_end_pass(pass_id: id::RenderPassId) {
     let (pass_data, encoder_id) = Box::from_raw(pass_id).finish_render();
     gfx_select!(encoder_id => GLOBAL.command_encoder_run_render_pass(encoder_id, &pass_data))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_render_pass_destroy(pass: *mut core::command::RawPass) {
+    let _ = Box::from_raw(pass).into_vec();
 }
 
 /// # Safety
