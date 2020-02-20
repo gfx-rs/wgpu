@@ -13,11 +13,11 @@
 #[macro_export]
 macro_rules! vertex_attr_array {
     ($($loc:expr => $fmt:ident),*) => {
-        vertex_attr_array!([] ; 0; $($loc => $fmt ,)*)
+        $crate::vertex_attr_array!([] ; 0; $($loc => $fmt ,)*)
     };
     ([$($t:expr,)*] ; $off:expr ;) => { [$($t,)*] };
     ([$($t:expr,)*] ; $off:expr ; $loc:expr => $item:ident, $($ll:expr => $ii:ident ,)*) => {
-        vertex_attr_array!(
+        $crate::vertex_attr_array!(
             [$($t,)*
             $crate::VertexAttributeDescriptor {
                 format: $crate::VertexFormat :: $item,
