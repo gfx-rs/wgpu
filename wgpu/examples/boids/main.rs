@@ -9,6 +9,8 @@ mod framework;
 use std::fmt::Write;
 use zerocopy::{AsBytes};
 
+use wgpu::vertex_attr_array;
+
 
 // number of boid particles to simulate
 
@@ -123,32 +125,12 @@ impl framework::Example for Example {
                 wgpu::VertexBufferDescriptor {
                     stride: 4 * 4,
                     step_mode: wgpu::InputStepMode::Instance,
-                    attributes: &[
-                        // instance position
-                        wgpu::VertexAttributeDescriptor {
-                            offset: 0,
-                            format: wgpu::VertexFormat::Float2,
-                            shader_location: 0,
-                        },
-                        // instance velocity
-                        wgpu::VertexAttributeDescriptor {
-                            offset: 2 * 4,
-                            format: wgpu::VertexFormat::Float2,
-                            shader_location: 1,
-                        },
-                    ]
+                    attributes: &vertex_attr_array![0 => Float2, 1 => Float2],
                 },
                 wgpu::VertexBufferDescriptor {
                     stride: 2 * 4,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &[
-                        // vertex positions
-                        wgpu::VertexAttributeDescriptor {
-                            offset: 0,
-                            format: wgpu::VertexFormat::Float2,
-                            shader_location: 2,
-                        },
-                    ]
+                    attributes: &vertex_attr_array![2 => Float2],
                 },
             ],
             sample_count: 1,

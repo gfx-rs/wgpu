@@ -3,6 +3,8 @@ mod framework;
 
 use zerocopy::{AsBytes, FromBytes};
 
+use wgpu::vertex_attr_array;
+
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 #[repr(C)]
@@ -359,11 +361,7 @@ impl framework::Example for Example {
             vertex_buffers: &[wgpu::VertexBufferDescriptor {
                 stride: vertex_size as wgpu::BufferAddress,
                 step_mode: wgpu::InputStepMode::Vertex,
-                attributes: &[wgpu::VertexAttributeDescriptor {
-                    format: wgpu::VertexFormat::Float4,
-                    offset: 0,
-                    shader_location: 0,
-                }],
+                attributes: &vertex_attr_array![0 => Float4],
             }],
             sample_count: 1,
             sample_mask: !0,
