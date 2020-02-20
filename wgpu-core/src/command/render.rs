@@ -6,6 +6,7 @@ use crate::{
     command::{
         bind::{Binder, LayoutChange},
         PhantomSlice,
+        RawRenderPassColorAttachmentDescriptor,
         RawRenderTargets,
     },
     conv,
@@ -39,6 +40,7 @@ use std::{
     marker::PhantomData,
     mem,
     ops::Range,
+    slice,
 };
 
 
@@ -155,8 +157,30 @@ enum RenderCommand {
 }
 
 impl super::RawPass {
-    pub fn new_render(parent_id: id::CommandEncoderId) -> Self {
-        Self::from_vec(Vec::<RenderCommand>::with_capacity(1), parent_id)
+    pub unsafe fn new_render(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
+        let mut pass = Self::from_vec(Vec::<RenderCommand>::with_capacity(1), parent_id);
+
+        let mut targets = RawRenderTargets {
+            depth_stencil: desc.depth_stencil_attachment
+                .cloned()
+                .unwrap_or_else(|| mem::zeroed()),
+            colors: mem::zeroed(),
+        };
+        for (color, at) in targets.colors
+            .iter_mut()
+            .zip(slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length))
+        {
+            *color = RawRenderPassColorAttachmentDescriptor {
+                attachment: at.attachment,
+                resolve_target: at.resolve_target.map_or(id::TextureViewId::ERROR, |rt| *rt),
+                load_op: at.load_op,
+                store_op: at.store_op,
+                clear_color: at.clear_color,
+            };
+        }
+
+        pass.encode(&targets);
+        pass
     }
 
     pub unsafe fn finish_render(mut self) -> (Vec<u8>, id::CommandEncoderId) {
@@ -1364,10 +1388,5 @@ pub mod render_ffi {
         pass.finish(RenderCommand::End);
         *length = pass.size();
         pass.base
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_destroy(pass: *mut RawPass) {
-        let _ = Box::from_raw(pass).into_vec();
     }
 }

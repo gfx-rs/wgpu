@@ -9,7 +9,6 @@ use core::{
 };
 
 pub use core::command::{
-    wgpu_command_encoder_begin_render_pass,
     compute_ffi::*,
     render_ffi::*,
 };
@@ -32,6 +31,7 @@ struct IdentityHub {
     bind_groups: IdentityManager,
     shader_modules: IdentityManager,
     compute_pipelines: IdentityManager,
+    render_pipelines: IdentityManager,
 }
 
 #[derive(Debug, Default)]
@@ -220,6 +220,19 @@ pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: core::command::RawPass)
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
+    encoder_id: id::CommandEncoderId,
+    desc: &core::command::RenderPassDescriptor,
+) -> core::command::RawPass {
+    core::command::RawPass::new_render(encoder_id, desc)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_render_pass_destroy(pass: core::command::RawPass) {
+    let _ = pass.into_vec();
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_client_make_bind_group_layout_id(
     client: &Client,
     device_id: id::DeviceId,
@@ -351,5 +364,18 @@ pub extern "C" fn wgpu_client_kill_compute_pipeline_id(
         .lock()
         .select(id.backend())
         .compute_pipelines
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_render_pipeline_id(
+    client: &Client,
+    id: id::RenderPipelineId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .render_pipelines
         .free(id)
 }

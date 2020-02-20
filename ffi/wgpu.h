@@ -726,9 +726,9 @@ WGPURawPass *wgpu_command_encoder_begin_compute_pass(WGPUCommandEncoderId encode
 /**
  * # Safety
  *
- * This function is unsafe as there is no guarantee that the given pointer
- * (`RenderPassDescriptor::color_attachments`) is valid for
- * `RenderPassDescriptor::color_attachments_length` elements.
+ * This function is unsafe because improper use may lead to memory
+ * problems. For example, a double-free may occur if the function is called
+ * twice on the same raw pointer.
  */
 WGPURawPass *wgpu_command_encoder_begin_render_pass(WGPUCommandEncoderId encoder_id,
                                                     const WGPURenderPassDescriptor *desc);
