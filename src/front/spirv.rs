@@ -28,6 +28,7 @@ pub enum ParseError {
     UnsupportedCapability(spirv::Capability),
     UnsupportedExtension(String),
     UnsupportedExtSet(String),
+    UnsupportedType(crate::Type),
     UnsupportedExecModel(u32),
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
@@ -122,6 +123,7 @@ pub struct Parser<I> {
     future_decor: FastHashMap<spirv::Word, Decoration>,
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), MemberDecoration>,
     lookup_type: FastHashMap<spirv::Word, crate::Type>,
+    lookup_constant: FastHashMap<spirv::Word, crate::Constant>,
     lookup_function: FastHashMap<spirv::Word, Token<crate::Function>>,
 }
 
@@ -134,6 +136,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             future_decor: FastHashMap::default(),
             future_member_decor: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
+            lookup_constant: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
         }
     }
@@ -189,21 +192,26 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 
     pub fn parse(&mut self) -> Result<crate::Module, ParseError> {
-        let header = {
-            if self.next()? != spirv::MAGIC_NUMBER {
-                return Err(ParseError::InvalidHeader);
-            }
-            let version_raw = self.next()?.to_le_bytes();
-            let generator = self.next()?;
-            let _bound = self.next()?;
-            let _schema = self.next()?;
-            crate::Header {
-                version: (version_raw[2], version_raw[1], version_raw[0]),
-                generator,
-            }
+        let mut module = crate::Module {
+            header: {
+                if self.next()? != spirv::MAGIC_NUMBER {
+                    return Err(ParseError::InvalidHeader);
+                }
+                let version_raw = self.next()?.to_le_bytes();
+                let generator = self.next()?;
+                let _bound = self.next()?;
+                let _schema = self.next()?;
+                crate::Header {
+                    version: (version_raw[2], version_raw[1], version_raw[0]),
+                    generator,
+                }
+            },
+            array_declarations: Storage::new(),
+            struct_declarations: Storage::new(),
+            functions: Storage::new(),
+            entry_points: Vec::new(),
         };
         let mut raw_entry_points = Vec::new();
-        let mut functions = Storage::new();
 
         while let Ok(inst) = self.next_inst() {
             use spirv::Op;
@@ -258,7 +266,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let function_id = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 3)?;
                     for _ in 0 .. left {
-                        let _var = self.next()?; //TODO
+                        let _var = self.next()?; //TODO: in/out variables
                     }
                     raw_entry_points.push((
                         unsafe {
@@ -382,7 +390,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let ty = self.lookup_type.lookup(type_id)?.clone();
                         parameter_types.push(ty);
                     }
-                    let token = functions.append(crate::Function {
+                    let token = module.functions.append(crate::Function {
                         name: None,
                         return_type: self.lookup_type.lookup(ret_type_id)?.clone(),
                         parameter_types,
@@ -390,26 +398,117 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     });
                     self.lookup_function.insert(id, token);
                 }
+                Op::TypeArray => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(4)?;
+                    let id = self.next()?;
+                    let type_id = self.next()?;
+                    let length = self.next()?;
+                    let decl = crate::ArrayDeclaration {
+                        base: self.lookup_type.lookup(type_id)?.clone(),
+                        length,
+                    };
+                    let ty = crate::Type::Array(module.array_declarations.append(decl));
+                    self.lookup_type.insert(id, ty);
+                }
+                Op::TypeStruct => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect_at_least(2)?;
+                    let id = self.next()?;
+                    let mut decl = crate::StructDeclaration {
+                        name: self.future_decor
+                            .remove(&id)
+                            .and_then(|dec| dec.name),
+                        members: Vec::with_capacity(inst.wc as usize - 2),
+                    };
+                    for i in 0 .. inst.wc as u32 - 2 {
+                        let type_id = self.next()?;
+                        let ty = self.lookup_type.lookup(type_id)?.clone();
+                        decl.members.push(crate::StructMember {
+                            name: self.future_member_decor
+                                .remove(&(id, i))
+                                .and_then(|dec| dec.name),
+                            ty,
+                        });
+                    }
+                    let ty = crate::Type::Struct(module.struct_declarations.append(decl));
+                    self.lookup_type.insert(id, ty);
+                }
+                Op::Constant => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect_at_least(3)?;
+                    let result_type_id = self.next()?;
+                    let id = self.next()?;
+                    let constant = match *self.lookup_type.lookup(result_type_id)? {
+                        crate::Type::Scalar { kind: crate::ScalarKind::Uint, width } => {
+                            let low = self.next()?;
+                            let high = if width > 32 {
+                                inst.expect(4)?;
+                                self.next()?
+                            } else {
+                                0
+                            };
+                            crate::Constant::Uint(((high as u64) << 32) | low as u64)
+                        }
+                        crate::Type::Scalar { kind: crate::ScalarKind::Sint, width } => {
+                            let low = self.next()?;
+                            let high = if width < 32 {
+                                return Err(ParseError::InvalidTypeWidth(width as u32));
+                            } else if width > 32 {
+                                inst.expect(4)?;
+                                self.next()?
+                            } else {
+                                !0
+                            };
+                            crate::Constant::Sint(unsafe {
+                                std::mem::transmute(((high as u64) << 32) | low as u64)
+                            })
+                        }
+                        crate::Type::Scalar { kind: crate::ScalarKind::Float, width } => {
+                            let low = self.next()?;
+                            let extended = if width < 32 {
+                                return Err(ParseError::InvalidTypeWidth(width as u32));
+                            } else if width > 32 {
+                                inst.expect(4)?;
+                                let high = self.next()?;
+                                unsafe {
+                                    std::mem::transmute(((high as u64) << 32) | low as u64)
+                                }
+                            } else {
+                                unsafe {
+                                    std::mem::transmute::<_, f32>(low) as f64
+                                }
+                            };
+                            crate::Constant::Float(extended)
+                        }
+                        ref other => return Err(ParseError::UnsupportedType(other.clone()))
+                    };
+                    self.lookup_constant.insert(id, constant);
+                }
                 _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op))
                 //TODO
             }
         }
 
-        let mut entry_points = Vec::with_capacity(raw_entry_points.len());
+        if !self.future_decor.is_empty() {
+            log::warn!("Unused item decorations: {:?}", self.future_decor);
+            self.future_decor.clear();
+        }
+        if !self.future_member_decor.is_empty() {
+            log::warn!("Unused member decorations: {:?}", self.future_member_decor);
+            self.future_member_decor.clear();
+        }
+
+        module.entry_points.reserve(raw_entry_points.len());
         for (exec_model, name, fun_id) in raw_entry_points {
-            entry_points.push(crate::EntryPoint {
+            module.entry_points.push(crate::EntryPoint {
                 exec_model,
                 name,
                 function: *self.lookup_function.lookup(fun_id)?,
             });
         }
 
-        Ok(crate::Module {
-            header,
-            struct_declarations: Storage::new(),
-            functions,
-            entry_points,
-        })
+        Ok(module)
     }
 }
 

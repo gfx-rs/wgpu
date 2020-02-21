@@ -41,8 +41,21 @@ pub enum ScalarKind {
 }
 
 #[derive(Debug)]
-pub struct StructDeclaration {
+pub struct ArrayDeclaration {
+    pub base: Type,
+    pub length: u32,
+}
 
+#[derive(Debug)]
+pub struct StructMember {
+    pub name: Option<String>,
+    pub ty: Type,
+}
+
+#[derive(Debug)]
+pub struct StructDeclaration {
+    pub name: Option<String>,
+    pub members: Vec<StructMember>,
 }
 
 #[derive(Clone, Debug)]
@@ -50,11 +63,20 @@ pub enum Type {
     Void,
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
+    Array(Token<ArrayDeclaration>),
     Struct(Token<StructDeclaration>),
+}
+
+#[derive(Clone, Debug)]
+pub enum Constant {
+    Sint(i64),
+    Uint(u64),
+    Float(f64),
 }
 
 #[derive(Debug)]
 pub enum Expression {
+    Constant(Constant),
     Arithmetic,
 }
 
@@ -100,6 +122,7 @@ pub struct EntryPoint {
 #[derive(Debug)]
 pub struct Module {
     pub header: Header,
+    pub array_declarations: Storage<ArrayDeclaration>,
     pub struct_declarations: Storage<StructDeclaration>,
     pub functions: Storage<Function>,
     pub entry_points: Vec<EntryPoint>,
