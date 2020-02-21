@@ -7,7 +7,6 @@ edition = "2018"
 [dependencies]
 fxhash = "0.2"
 log = "0.4"
-smallvec = "1"
 spirv_headers = "1"
 
 [dev-dependencies]

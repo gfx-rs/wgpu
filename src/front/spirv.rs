@@ -7,7 +7,8 @@ use std::convert::TryInto;
 
 const LAST_KNOWN_OPCODE: spirv::Op = spirv::Op::MemberDecorateStringGOOGLE;
 const LAST_KNOWN_CAPABILITY: spirv::Capability = spirv::Capability::VulkanMemoryModelDeviceScopeKHR;
-const LAST_KNOWN_EXEC_MODEL: spirv::ExecutionModel = spirv::ExecutionModel::Kernel;
+const LAST_KNOWN_EXECUTION_MODEL: spirv::ExecutionModel = spirv::ExecutionModel::Kernel;
+const LAST_KNOWN_STORAGE_CLASS: spirv::StorageClass = spirv::StorageClass::StorageBuffer;
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
@@ -23,20 +24,25 @@ pub enum ParseError {
     InvalidHeader,
     InvalidWordCount,
     UnknownInstruction(u16),
-    UnsupportedInstruction(ModuleState, spirv::Op),
     UnknownCapability(u32),
+    UnsupportedInstruction(ModuleState, spirv::Op),
     UnsupportedCapability(spirv::Capability),
     UnsupportedExtension(String),
     UnsupportedExtSet(String),
     UnsupportedType(crate::Type),
-    UnsupportedExecModel(u32),
+    UnsupportedExecutionModel(u32),
+    UnsupportedStorageClass(u32),
+    UnsupportedFunctionControl(u32),
+    InvalidParameter(spirv::Op),
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
     InvalidId(spirv::Word),
     InvalidTypeWidth(spirv::Word),
     InvalidSign(spirv::Word),
-    InvalidScalar(spirv::Word),
+    InvalidInnerType(spirv::Word),
     InvalidVectorSize(spirv::Word),
+    WrongFunctionResultType(spirv::Word),
+    WrongFunctionParameterType(spirv::Word),
     BadString,
     IncompleteData,
 }
@@ -104,6 +110,14 @@ fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, ParseError> {
     }
 }
 
+fn map_storage_class(word: spirv::Word) -> Result<spirv::StorageClass, ParseError> {
+    if word > LAST_KNOWN_STORAGE_CLASS as u32 {
+        Err(ParseError::UnsupportedStorageClass(word))
+    } else {
+        Ok(unsafe { std::mem::transmute(word) })
+    }
+}
+
 type MemberIndex = u32;
 
 #[derive(Debug, Default)]
@@ -116,6 +130,13 @@ struct MemberDecoration {
     name: Option<String>,
 }
 
+//TODO: avoid cloning this
+#[derive(Clone, Debug)]
+struct FunctionType {
+    parameter_type_ids: Vec<spirv::Word>,
+    return_type_id: spirv::Word,
+}
+
 pub struct Parser<I> {
     data: I,
     state: ModuleState,
@@ -124,6 +145,8 @@ pub struct Parser<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), MemberDecoration>,
     lookup_type: FastHashMap<spirv::Word, crate::Type>,
     lookup_constant: FastHashMap<spirv::Word, crate::Constant>,
+    lookup_variable: FastHashMap<spirv::Word, Token<crate::GlobalVariable>>,
+    lookup_function_type: FastHashMap<spirv::Word, FunctionType>,
     lookup_function: FastHashMap<spirv::Word, Token<crate::Function>>,
 }
 
@@ -137,6 +160,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             future_member_decor: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_constant: FastHashMap::default(),
+            lookup_variable: FastHashMap::default(),
+            lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
         }
     }
@@ -206,8 +231,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     generator,
                 }
             },
-            array_declarations: Storage::new(),
             struct_declarations: Storage::new(),
+            global_variables: Storage::new(),
             functions: Storage::new(),
             entry_points: Vec::new(),
         };
@@ -260,8 +285,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::EntryPoint => {
                     self.switch(ModuleState::EntryPoint, inst.op)?;
                     let exec_model = self.next()?;
-                    if exec_model > LAST_KNOWN_EXEC_MODEL as u32 {
-                        return Err(ParseError::UnsupportedExecModel(exec_model));
+                    if exec_model > LAST_KNOWN_EXECUTION_MODEL as u32 {
+                        return Err(ParseError::UnsupportedExecutionModel(exec_model));
                     }
                     let function_id = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 3)?;
@@ -370,7 +395,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let type_id = self.next()?;
                     let (kind, width) = match self.lookup_type.lookup(type_id)? {
                         &crate::Type::Scalar { ref kind, width } => (kind.clone(), width),
-                        _ => return Err(ParseError::InvalidScalar(type_id)),
+                        _ => return Err(ParseError::InvalidInnerType(type_id)),
                     };
                     let component_count = self.next()?;
                     self.lookup_type.insert(id, crate::Type::Vector {
@@ -379,24 +404,48 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         width,
                     });
                 }
+                Op::TypeMatrix => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(4)?;
+                    let id = self.next()?;
+                    let vector_type_id = self.next()?;
+                    let num_columns = self.next()?;
+                    let (rows, kind, width) = match self.lookup_type.lookup(vector_type_id)? {
+                        &crate::Type::Vector { ref size, ref kind, width } => (size.clone(), kind.clone(), width),
+                        _ => return Err(ParseError::InvalidInnerType(vector_type_id)),
+                    };
+                    self.lookup_type.insert(id, crate::Type::Matrix {
+                        columns: map_vector_size(num_columns)?,
+                        rows,
+                        kind,
+                        width,
+                    });
+                }
                 Op::TypeFunction => {
                     self.switch(ModuleState::Type, inst.op)?;
                     inst.expect_at_least(3)?;
                     let id = self.next()?;
-                    let ret_type_id = self.next()?;
-                    let mut parameter_types = Vec::new();
-                    for _ in 3 .. inst.wc {
-                        let type_id = self.next()?;
-                        let ty = self.lookup_type.lookup(type_id)?.clone();
-                        parameter_types.push(ty);
-                    }
-                    let token = module.functions.append(crate::Function {
-                        name: None,
-                        return_type: self.lookup_type.lookup(ret_type_id)?.clone(),
-                        parameter_types,
-                        body: Vec::new(),
+                    let return_type_id = self.next()?;
+                    let parameter_type_ids = self.data
+                        .by_ref()
+                        .take(inst.wc as usize - 3)
+                        .collect();
+                    self.lookup_function_type.insert(id, FunctionType {
+                        parameter_type_ids,
+                        return_type_id,
                     });
-                    self.lookup_function.insert(id, token);
+                }
+                Op::TypePointer => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(4)?;
+                    let id = self.next()?;
+                    let storage = self.next()?;
+                    let type_id = self.next()?;
+                    let ty = crate::Type::Pointer {
+                        base: Box::new(self.lookup_type.lookup(type_id)?.clone()),
+                        class: map_storage_class(storage)?,
+                    };
+                    self.lookup_type.insert(id, ty);
                 }
                 Op::TypeArray => {
                     self.switch(ModuleState::Type, inst.op)?;
@@ -404,11 +453,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let type_id = self.next()?;
                     let length = self.next()?;
-                    let decl = crate::ArrayDeclaration {
-                        base: self.lookup_type.lookup(type_id)?.clone(),
+                    let ty = crate::Type::Array {
+                        base: Box::new(self.lookup_type.lookup(type_id)?.clone()),
                         length,
                     };
-                    let ty = crate::Type::Array(module.array_declarations.append(decl));
                     self.lookup_type.insert(id, ty);
                 }
                 Op::TypeStruct => {
@@ -484,6 +532,72 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         ref other => return Err(ParseError::UnsupportedType(other.clone()))
                     };
                     self.lookup_constant.insert(id, constant);
+                }
+                Op::Variable => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect_at_least(4)?;
+                    let result_type = self.next()?;
+                    let id = self.next()?;
+                    let storage = self.next()?;
+                    if inst.wc != 4 {
+                        inst.expect(5)?;
+                        let _init = self.next()?; //TODO
+                    }
+                    let var = crate::GlobalVariable {
+                        name: self.future_decor
+                            .remove(&id)
+                            .and_then(|dec| dec.name),
+                        class: map_storage_class(storage)?,
+                        ty: self.lookup_type.lookup(result_type)?.clone(),
+                    };
+                    let token = module.global_variables.append(var);
+                    self.lookup_variable.insert(id, token);
+                }
+                Op::Function => {
+                    self.switch(ModuleState::FunctionDecl, inst.op)?;
+                    inst.expect(5)?;
+                    let result_type = self.next()?;
+                    let fun_id = self.next()?;
+                    let fun_control = self.next()?;
+                    let fun_type = self.next()?;
+                    let ft = self.lookup_function_type.lookup(fun_type)?.clone();
+                    if ft.return_type_id != result_type {
+                        return Err(ParseError::WrongFunctionResultType(result_type))
+                    }
+                    let mut fun = crate::Function {
+                        name: None,
+                        control: spirv::FunctionControl::from_bits(fun_control)
+                            .ok_or(ParseError::UnsupportedFunctionControl(fun_control))?,
+                        parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
+                        return_type: self.lookup_type.lookup(result_type)?.clone(),
+                        body: Vec::new(),
+                    };
+                    for &par_type_id in ft.parameter_type_ids.iter() {
+                        match self.next_inst()? {
+                            Instruction { op: Op::FunctionParameter, wc: 3 } => {
+                                let type_id = self.next()?;
+                                let _id = self.next()?;
+                                if type_id != par_type_id {
+                                    return Err(ParseError::WrongFunctionParameterType(type_id))
+                                }
+                                let ty = self.lookup_type.lookup(type_id)?.clone();
+                                fun.parameter_types.push(ty);
+                            }
+                            Instruction { op, .. } => return Err(ParseError::InvalidParameter(op)),
+                        }
+                    }
+                    loop {
+                        let fun_inst = self.next_inst()?;
+                        match fun_inst.op {
+                            Op::FunctionEnd => {
+                                fun_inst.expect(1)?;
+                                break
+                            }
+                            _ => return Err(ParseError::UnsupportedInstruction(self.state, fun_inst.op))
+                        }
+                    }
+                    let token = module.functions.append(fun);
+                    self.lookup_function.insert(fun_id, token);
                 }
                 _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op))
                 //TODO

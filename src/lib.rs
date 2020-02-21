@@ -41,7 +41,7 @@ pub enum ScalarKind {
 }
 
 #[derive(Debug)]
-pub struct ArrayDeclaration {
+pub struct PointerDeclaration {
     pub base: Type,
     pub length: u32,
 }
@@ -63,7 +63,9 @@ pub enum Type {
     Void,
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
-    Array(Token<ArrayDeclaration>),
+    Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
+    Pointer { base: Box<Type>, class: spirv::StorageClass },
+    Array { base: Box<Type>, length: u32 },
     Struct(Token<StructDeclaration>),
 }
 
@@ -72,6 +74,13 @@ pub enum Constant {
     Sint(i64),
     Uint(u64),
     Float(f64),
+}
+
+#[derive(Clone, Debug)]
+pub struct GlobalVariable {
+    pub name: Option<String>,
+    pub class: spirv::StorageClass,
+    pub ty: Type,
 }
 
 #[derive(Debug)]
@@ -107,6 +116,7 @@ pub enum Statement {
 #[derive(Debug)]
 pub struct Function {
     pub name: Option<String>,
+    pub control: spirv::FunctionControl,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
     pub body: Block,
@@ -122,8 +132,8 @@ pub struct EntryPoint {
 #[derive(Debug)]
 pub struct Module {
     pub header: Header,
-    pub array_declarations: Storage<ArrayDeclaration>,
     pub struct_declarations: Storage<StructDeclaration>,
+    pub global_variables: Storage<GlobalVariable>,
     pub functions: Storage<Function>,
     pub entry_points: Vec<EntryPoint>,
 }
