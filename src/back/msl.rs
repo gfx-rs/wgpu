@@ -14,7 +14,7 @@ impl From<FmtError> for Error {
     }
 }
 
-impl super::Module {
+impl crate::Module {
     pub fn to_msl(&self, _options: &Options) -> Result<String, Error> {
         let mut out = String::new();
 

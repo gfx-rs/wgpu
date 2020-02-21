@@ -1,16 +1,18 @@
 extern crate spirv_headers as spirv;
 
-pub mod msl;
-mod parse;
+pub mod back;
+pub mod front;
 mod storage;
 
-pub use parse::{Parser, ParseError, parse_u8_slice};
 
 use crate::storage::{Storage, Token};
 
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    hash::BuildHasherDefault,
+};
 
-use smallvec::SmallVec;
+type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
 
 
 
@@ -37,47 +39,32 @@ pub enum Type {
 }
 
 #[derive(Debug)]
-pub struct Jump {
-    pub target: Token<Block>,
-    pub arguments: SmallVec<[Token<Operation>; 1]>,
-}
-
-#[derive(Debug)]
-pub enum Branch {
-    Jump(Jump),
-    JumpIf {
-        condition: Token<Operation>, //bool
-        accept: Jump,
-        reject: Jump,
-    },
-    Switch {
-        selector: Token<Operation>, //int
-        cases: HashMap<i32, Jump>,
-        default: Jump,
-    },
-    Return {
-        value: Option<Token<Operation>>,
-    },
-}
-
-#[derive(Debug)]
-pub enum Operation {
+pub enum Expression {
     Arithmetic,
 }
 
+pub type Block = Vec<Statement>;
 #[derive(Debug)]
-pub enum Terminator {
-    Branch(Branch),
-    Kill,
-    Unreachable,
-}
+pub struct FallThrough;
 
 #[derive(Debug)]
-pub struct Block {
-    pub label: Option<String>,
-    pub argument_types: Vec<Type>,
-    pub operations: Storage<Operation>,
-    pub terminator: Terminator,
+pub enum Statement {
+    Expression(Expression),
+    Block(Block),
+    If {
+        condition: Expression, //bool
+        accept: Block,
+        reject: Block,
+    },
+    Switch {
+        selector: Expression, //int
+        cases: FastHashMap<i32, (Block, Option<FallThrough>)>,
+        default: Block,
+    },
+    Return {
+        value: Option<Expression>,
+    },
+    Kill,
 }
 
 #[derive(Debug)]
@@ -85,7 +72,7 @@ pub struct Function {
     pub name: Option<String>,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
-    pub blocks: Storage<Block>,
+    pub body: Block,
 }
 
 #[derive(Debug)]

@@ -1,8 +1,6 @@
-use crate::storage::{Storage, Token};
-
-use std::{
-    collections::HashMap,
-    hash::BuildHasherDefault,
+use crate::{
+    storage::{Storage, Token},
+    FastHashMap,
 };
 
 const LAST_KNOWN_OPCODE: spirv::Op = spirv::Op::MemberDecorateStringGOOGLE;
@@ -74,8 +72,6 @@ trait Lookup {
     fn lookup(&self, key: spirv::Word) -> Result<&Self::Target, ParseError>;
 }
 
-type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
-
 impl<T> Lookup for FastHashMap<spirv::Word, T> {
     type Target = T;
     fn lookup(&self, key: spirv::Word) -> Result<&T, ParseError> {
@@ -92,7 +88,7 @@ pub struct Parser<I> {
     temp_bytes: Vec<u8>,
     future_names: FastHashMap<spirv::Word, String>,
     future_member_names: FastHashMap<(spirv::Word, MemberIndex), String>,
-    lookup_function: FastHashMap<spirv::Word, Token<super::Function>>,
+    lookup_function: FastHashMap<spirv::Word, Token<crate::Function>>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -101,9 +97,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             data,
             state: ModuleState::Empty,
             temp_bytes: Vec::new(),
-            future_names: HashMap::default(),
-            future_member_names: HashMap::default(),
-            lookup_function: HashMap::default(),
+            future_names: FastHashMap::default(),
+            future_member_names: FastHashMap::default(),
+            lookup_function: FastHashMap::default(),
         }
     }
 
@@ -157,7 +153,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
     }
 
-    pub fn parse(&mut self) -> Result<super::Module, ParseError> {
+    pub fn parse(&mut self) -> Result<crate::Module, ParseError> {
         let header = {
             if self.next()? != spirv::MAGIC_NUMBER {
                 return Err(ParseError::InvalidHeader);
@@ -166,7 +162,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let generator = self.next()?;
             let _bound = self.next()?;
             let _schema = self.next()?;
-            super::Header {
+            crate::Header {
                 version: (version_raw[2], version_raw[1], version_raw[0]),
                 generator,
             }
@@ -274,14 +270,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let mut entry_points = Vec::with_capacity(raw_entry_points.len());
         for (exec_model, name, fun_id) in raw_entry_points {
-            entry_points.push(super::EntryPoint {
+            entry_points.push(crate::EntryPoint {
                 exec_model,
                 name,
                 function: *self.lookup_function.lookup(fun_id)?,
             });
         }
 
-        Ok(super::Module {
+        Ok(crate::Module {
             header,
             struct_declarations: Storage::new(),
             functions: Storage::new(),
@@ -290,7 +286,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 }
 
-pub fn parse_u8_slice(data: &[u8]) -> Result<super::Module, ParseError> {
+pub fn parse_u8_slice(data: &[u8]) -> Result<crate::Module, ParseError> {
     use std::convert::TryInto;
 
     if data.len() % 4 != 0 {

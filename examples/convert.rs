@@ -9,10 +9,10 @@ fn main() {
     let args = env::args().collect::<Vec<_>>();
     let input = fs::read(&args[1]).unwrap();
 
-    let module = javelin::parse_u8_slice(&input).unwrap();
+    let module = javelin::front::spirv::parse_u8_slice(&input).unwrap();
     //println!("{:?}", module);
 
-    let options = javelin::msl::Options {};
+    let options = javelin::back::msl::Options {};
     let msl = module.to_msl(&options).unwrap();
     println!("{}", msl);
 }
