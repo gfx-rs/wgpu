@@ -126,6 +126,8 @@ pub struct Function {
 pub struct EntryPoint {
     pub exec_model: spirv::ExecutionModel,
     pub name: String,
+    pub inputs: Vec<Token<GlobalVariable>>,
+    pub outputs: Vec<Token<GlobalVariable>>,
     pub function: Token<Function>,
 }
 

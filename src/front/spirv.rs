@@ -41,6 +41,7 @@ pub enum ParseError {
     InvalidSign(spirv::Word),
     InvalidInnerType(spirv::Word),
     InvalidVectorSize(spirv::Word),
+    InvalidVariableClass(spirv::StorageClass),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionParameterType(spirv::Word),
     BadString,
@@ -84,8 +85,7 @@ pub enum ModuleState {
     ModuleProcessed,
     Annotation,
     Type,
-    FunctionDecl,
-    FunctionDef,
+    Function,
 }
 
 trait Lookup {
@@ -135,6 +135,14 @@ struct MemberDecoration {
 struct FunctionType {
     parameter_type_ids: Vec<spirv::Word>,
     return_type_id: spirv::Word,
+}
+
+#[derive(Debug)]
+struct EntryPoint {
+    exec_model: spirv::ExecutionModel,
+    name: String,
+    function_id: spirv::Word,
+    variable_ids: Vec<spirv::Word>,
 }
 
 pub struct Parser<I> {
@@ -207,6 +215,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             .map_err(|_| ParseError::BadString)
     }
 
+    fn next_block(&mut self) -> Result<(), ParseError> {
+        //TODO
+        Ok(())
+    }
+
     fn switch(&mut self, state: ModuleState, op: spirv::Op) -> Result<(), ParseError> {
         if state < self.state {
             return Err(ParseError::UnsupportedInstruction(self.state, op))
@@ -236,7 +249,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             functions: Storage::new(),
             entry_points: Vec::new(),
         };
-        let mut raw_entry_points = Vec::new();
+        let mut entry_points = Vec::new();
 
         while let Ok(inst) = self.next_inst() {
             use spirv::Op;
@@ -290,16 +303,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     let function_id = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 3)?;
-                    for _ in 0 .. left {
-                        let _var = self.next()?; //TODO: in/out variables
-                    }
-                    raw_entry_points.push((
-                        unsafe {
+                    let ep = EntryPoint {
+                        exec_model: unsafe {
                             std::mem::transmute(exec_model)
                         },
-                        name.to_owned(),
+                        name: name.to_owned(),
                         function_id,
-                    ));
+                        variable_ids: self.data
+                            .by_ref()
+                            .take(left as usize)
+                            .collect(),
+                    };
+                    entry_points.push(ep);
                 }
                 Op::Source => {
                     self.switch(ModuleState::Source, inst.op)?;
@@ -554,7 +569,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_variable.insert(id, token);
                 }
                 Op::Function => {
-                    self.switch(ModuleState::FunctionDecl, inst.op)?;
+                    self.switch(ModuleState::Function, inst.op)?;
                     inst.expect(5)?;
                     let result_type = self.next()?;
                     let fun_id = self.next()?;
@@ -589,6 +604,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     loop {
                         let fun_inst = self.next_inst()?;
                         match fun_inst.op {
+                            Op::Label => {
+                                fun_inst.expect(2)?;
+                                let _id = self.next()?;
+                                self.next_block()?;
+                                break
+                            }
                             Op::FunctionEnd => {
                                 fun_inst.expect(1)?;
                                 break
@@ -613,13 +634,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             self.future_member_decor.clear();
         }
 
-        module.entry_points.reserve(raw_entry_points.len());
-        for (exec_model, name, fun_id) in raw_entry_points {
-            module.entry_points.push(crate::EntryPoint {
-                exec_model,
-                name,
-                function: *self.lookup_function.lookup(fun_id)?,
-            });
+        module.entry_points.reserve(entry_points.len());
+        for raw in entry_points {
+            let mut ep = crate::EntryPoint {
+                exec_model: raw.exec_model,
+                name: raw.name,
+                function: *self.lookup_function.lookup(raw.function_id)?,
+                inputs: Vec::new(),
+                outputs: Vec::new(),
+            };
+            for var_id in raw.variable_ids {
+                let token = *self.lookup_variable.lookup(var_id)?;
+                match module.global_variables[token].class {
+                    spirv::StorageClass::Input => ep.inputs.push(token),
+                    spirv::StorageClass::Output => ep.outputs.push(token),
+                    other => return Err(ParseError::InvalidVariableClass(other))
+                }
+            }
+            module.entry_points.push(ep);
         }
 
         Ok(module)
