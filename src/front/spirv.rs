@@ -3,6 +3,8 @@ use crate::{
     FastHashMap,
 };
 
+use std::convert::TryInto;
+
 const LAST_KNOWN_OPCODE: spirv::Op = spirv::Op::MemberDecorateStringGOOGLE;
 const LAST_KNOWN_CAPABILITY: spirv::Capability = spirv::Capability::VulkanMemoryModelDeviceScopeKHR;
 const LAST_KNOWN_EXEC_MODEL: spirv::ExecutionModel = spirv::ExecutionModel::Kernel;
@@ -30,6 +32,10 @@ pub enum ParseError {
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
     InvalidId(spirv::Word),
+    InvalidTypeWidth(spirv::Word),
+    InvalidSign(spirv::Word),
+    InvalidScalar(spirv::Word),
+    InvalidVectorSize(spirv::Word),
     BadString,
     IncompleteData,
 }
@@ -42,6 +48,14 @@ struct Instruction {
 impl Instruction {
     fn expect(&self, count: u16) -> Result<(), ParseError> {
         if self.wc == count {
+            Ok(())
+        } else {
+            Err(ParseError::InvalidOperandCount(self.op, self.wc))
+        }
+    }
+
+    fn expect_at_least(&self, count: u16) -> Result<(), ParseError> {
+        if self.wc >= count {
             Ok(())
         } else {
             Err(ParseError::InvalidOperandCount(self.op, self.wc))
@@ -80,14 +94,34 @@ impl<T> Lookup for FastHashMap<spirv::Word, T> {
     }
 }
 
+fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, ParseError> {
+    match word {
+        2 => Ok(crate::VectorSize::Bi),
+        3 => Ok(crate::VectorSize::Tri),
+        4 => Ok(crate::VectorSize::Quad),
+        _ => Err(ParseError::InvalidVectorSize(word))
+    }
+}
+
 type MemberIndex = u32;
+
+#[derive(Debug, Default)]
+struct Decoration {
+    name: Option<String>,
+}
+
+#[derive(Debug, Default)]
+struct MemberDecoration {
+    name: Option<String>,
+}
 
 pub struct Parser<I> {
     data: I,
     state: ModuleState,
     temp_bytes: Vec<u8>,
-    future_names: FastHashMap<spirv::Word, String>,
-    future_member_names: FastHashMap<(spirv::Word, MemberIndex), String>,
+    future_decor: FastHashMap<spirv::Word, Decoration>,
+    future_member_decor: FastHashMap<(spirv::Word, MemberIndex), MemberDecoration>,
+    lookup_type: FastHashMap<spirv::Word, crate::Type>,
     lookup_function: FastHashMap<spirv::Word, Token<crate::Function>>,
 }
 
@@ -97,8 +131,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             data,
             state: ModuleState::Empty,
             temp_bytes: Vec::new(),
-            future_names: FastHashMap::default(),
-            future_member_names: FastHashMap::default(),
+            future_decor: FastHashMap::default(),
+            future_member_decor: FastHashMap::default(),
+            lookup_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
         }
     }
@@ -168,6 +203,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         };
         let mut raw_entry_points = Vec::new();
+        let mut functions = Storage::new();
 
         while let Ok(inst) = self.next_inst() {
             use spirv::Op;
@@ -240,28 +276,119 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Name => {
                     self.switch(ModuleState::Name, inst.op)?;
-                    if inst.wc < 3 {
-                        return Err(ParseError::InvalidOperandCount(inst.op, inst.wc));
-                    }
+                    inst.expect_at_least(3)?;
                     let id = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 2)?;
                     if left != 0 {
                         return Err(ParseError::InvalidOperand);
                     }
-                    self.future_names.insert(id, name.to_owned());
+                    self.future_decor
+                        .entry(id)
+                        .or_default()
+                        .name = Some(name.to_owned());
                 }
                 Op::MemberName => {
                     self.switch(ModuleState::Name, inst.op)?;
-                    if inst.wc < 4 {
-                        return Err(ParseError::InvalidOperandCount(inst.op, inst.wc));
-                    }
+                    inst.expect_at_least(4)?;
                     let id = self.next()?;
                     let member = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 3)?;
                     if left != 0 {
                         return Err(ParseError::InvalidOperand);
                     }
-                    self.future_member_names.insert((id, member), name.to_owned());
+                    self.future_member_decor
+                        .entry((id, member))
+                        .or_default()
+                        .name = Some(name.to_owned());
+                }
+                Op::Decorate => {
+                    self.switch(ModuleState::Annotation, inst.op)?;
+                    inst.expect_at_least(3)?;
+                    let _id = self.next()?;
+                    let _decoration = self.next()?;
+                    for _ in 3 .. inst.wc {
+                        let _var = self.next()?; //TODO
+                    }
+                }
+                Op::MemberDecorate => {
+                    self.switch(ModuleState::Annotation, inst.op)?;
+                    inst.expect_at_least(4)?;
+                    let _id = self.next()?;
+                    let _member = self.next()?;
+                    let _decoration = self.next()?;
+                    for _ in 4 .. inst.wc {
+                        let _var = self.next()?; //TODO
+                    }
+                }
+                Op::TypeVoid => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(2)?;
+                    let id = self.next()?;
+                    self.lookup_type.insert(id, crate::Type::Void);
+                }
+                Op::TypeInt => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(4)?;
+                    let id = self.next()?;
+                    let width = self.next()?;
+                    let sign = self.next()?;
+                    self.lookup_type.insert(id, crate::Type::Scalar {
+                        kind: match sign {
+                            0 => crate::ScalarKind::Uint,
+                            1 => crate::ScalarKind::Sint,
+                            _ => return Err(ParseError::InvalidSign(sign)),
+                        },
+                        width: width
+                            .try_into()
+                            .map_err(|_| ParseError::InvalidTypeWidth(width))?,
+                    });
+                }
+                Op::TypeFloat => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(3)?;
+                    let id = self.next()?;
+                    let width = self.next()?;
+                    self.lookup_type.insert(id, crate::Type::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width: width
+                            .try_into()
+                            .map_err(|_| ParseError::InvalidTypeWidth(width))?,
+                    });
+                }
+                Op::TypeVector => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(4)?;
+                    let id = self.next()?;
+                    let type_id = self.next()?;
+                    let (kind, width) = match self.lookup_type.lookup(type_id)? {
+                        &crate::Type::Scalar { ref kind, width } => (kind.clone(), width),
+                        _ => return Err(ParseError::InvalidScalar(type_id)),
+                    };
+                    let component_count = self.next()?;
+                    self.lookup_type.insert(id, crate::Type::Vector {
+                        size: map_vector_size(component_count)?,
+                        kind,
+                        width,
+                    });
+                }
+                Op::TypeFunction => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect_at_least(3)?;
+                    let id = self.next()?;
+                    let ret_type_id = self.next()?;
+                    let mut parameter_types = Vec::new();
+                    for _ in 3 .. inst.wc {
+                        let type_id = self.next()?;
+                        let ty = self.lookup_type.lookup(type_id)?.clone();
+                        parameter_types.push(ty);
+                    }
+                    let token = functions.append(crate::Function {
+                        name: None,
+                        return_type: self.lookup_type.lookup(ret_type_id)?.clone(),
+                        parameter_types,
+                        body: Vec::new(),
+                    });
+                    self.lookup_function.insert(id, token);
                 }
                 _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op))
                 //TODO
@@ -280,15 +407,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(crate::Module {
             header,
             struct_declarations: Storage::new(),
-            functions: Storage::new(),
+            functions,
             entry_points,
         })
     }
 }
 
 pub fn parse_u8_slice(data: &[u8]) -> Result<crate::Module, ParseError> {
-    use std::convert::TryInto;
-
     if data.len() % 4 != 0 {
         return Err(ParseError::IncompleteData);
     }

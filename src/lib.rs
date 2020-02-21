@@ -24,17 +24,32 @@ pub struct Header {
 
 pub type Bytes = u8;
 
+#[repr(u8)]
+#[derive(Clone, Debug)]
+pub enum VectorSize {
+    Bi = 2,
+    Tri = 3,
+    Quad = 4,
+}
+
+#[repr(u8)]
+#[derive(Clone, Debug)]
+pub enum ScalarKind {
+    Sint,
+    Uint,
+    Float,
+}
+
 #[derive(Debug)]
 pub struct StructDeclaration {
 
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Type {
     Void,
-    Int { width: Bytes },
-    Uint { width: Bytes },
-    Float { width: Bytes },
+    Scalar { kind: ScalarKind, width: Bytes },
+    Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
     Struct(Token<StructDeclaration>),
 }
 
