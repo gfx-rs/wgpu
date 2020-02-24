@@ -97,6 +97,9 @@ pub enum Expression {
     Constant(Constant),
     FunctionParameter(u32),
     GlobalVariable(Token<GlobalVariable>),
+    Load {
+        pointer: Token<Expression>,
+    },
 }
 
 pub type Block = Vec<Statement>;

@@ -44,6 +44,7 @@ pub enum ParseError {
     InvalidVariableClass(spirv::StorageClass),
     InvalidAccessType(spirv::Word),
     InvalidAccessIndex(crate::Expression),
+    InvalidLoadType(spirv::Word),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionParameterType(spirv::Word),
     BadString,
@@ -314,6 +315,32 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
                     self.lookup_expression.insert(id, LookupExpression {
                         token: acex.base_token,
+                        type_id: result_type_id,
+                    });
+                }
+                Op::Load => {
+                    inst.expect_at_least(4)?;
+                    let result_type_id = self.next()?;
+                    let id = self.next()?;
+                    let pointer_id = self.next()?;
+                    if inst.wc != 4 {
+                        inst.expect(5)?;
+                        let _memory_access = self.next()?;
+                    }
+                    let base_expr = self.lookup_expression.lookup(pointer_id)?;
+                    let base_type = self.lookup_type.lookup(base_expr.type_id)?;
+                    if base_type.base_id != Some(result_type_id) {
+                        return Err(ParseError::InvalidLoadType(result_type_id));
+                    }
+                    match base_type.value {
+                        crate::Type::Pointer { .. } => (),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    }
+                    let expr = crate::Expression::Load {
+                        pointer: base_expr.token,
+                    };
+                    self.lookup_expression.insert(id, LookupExpression {
+                        token: fun.expressions.append(expr),
                         type_id: result_type_id,
                     });
                 }
