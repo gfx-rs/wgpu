@@ -13,7 +13,7 @@ fn main() {
     //println!("{:?}", module);
 
     let options = javelin::back::msl::Options {};
-    let msl = module.to_msl(&options).unwrap();
+    let msl = javelin::back::msl::write_string(&module, &options).unwrap();
     println!("{}", msl);
 }
 

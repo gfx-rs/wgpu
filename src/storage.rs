@@ -1,5 +1,6 @@
 use std::{
     fmt,
+    hash,
     marker::PhantomData,
 };
 
@@ -35,6 +36,11 @@ impl<T> Eq for Token<T> {}
 impl<T> fmt::Debug for Token<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "Token({})", self.index)
+    }
+}
+impl<T> hash::Hash for Token<T> {
+    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
+        self.index.hash(hasher)
     }
 }
 
