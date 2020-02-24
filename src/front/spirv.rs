@@ -45,6 +45,7 @@ pub enum ParseError {
     InvalidAccessType(spirv::Word),
     InvalidAccessIndex(crate::Expression),
     InvalidLoadType(spirv::Word),
+    InvalidStoreType(spirv::Word),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionParameterType(spirv::Word),
     BadString,
@@ -258,7 +259,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     inst.expect_at_least(4)?;
                     let result_type_id = self.next()?;
-                    let id = self.next()?;
+                    let result_id = self.next()?;
                     let base_id = self.next()?;
                     log::trace!("\t\t\tlooking up expr {:?}", base_id);
                     let mut acex = {
@@ -288,7 +289,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     ref other => return Err(ParseError::InvalidAccessIndex(other.clone()))
                                 };
                                 AccessExpression {
-                                    base_token: fun.expressions.append(crate::Expression::AccessMember {
+                                    base_token: fun.expressions.append(crate::Expression::AccessIndex {
                                         base: acex.base_token,
                                         index,
                                     }),
@@ -313,15 +314,79 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         };
                     }
 
-                    self.lookup_expression.insert(id, LookupExpression {
+                    self.lookup_expression.insert(result_id, LookupExpression {
                         token: acex.base_token,
+                        type_id: result_type_id,
+                    });
+                }
+                Op::CompositeExtract => {
+                    inst.expect_at_least(4)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let base_id = self.next()?;
+                    log::trace!("\t\t\tlooking up expr {:?}", base_id);
+                    let mut lexp = {
+                        let expr = self.lookup_expression.lookup(base_id)?;
+                        LookupExpression {
+                            token: expr.token,
+                            type_id: expr.type_id,
+                        }
+                    };
+                    for _ in 4 .. inst.wc {
+                        let index = self.next()?;
+                        log::trace!("\t\t\tlooking up type {:?}", lexp.type_id);
+                        let ty = self.lookup_type.lookup(lexp.type_id)?;
+                        let type_id = match ty.value {
+                            crate::Type::Struct(_) => {
+                                *self.lookup_member_type_id
+                                    .get(&(lexp.type_id, index))
+                                    .ok_or(ParseError::InvalidAccessType(lexp.type_id))?
+                            }
+                            crate::Type::Array { .. } |
+                            crate::Type::Vector { .. } |
+                            crate::Type::Matrix { .. } => {
+                                ty.base_id
+                                    .ok_or(ParseError::InvalidAccessType(lexp.type_id))?
+                            }
+                            ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        };
+                        lexp = LookupExpression {
+                            token: fun.expressions.append(crate::Expression::AccessIndex {
+                                base: lexp.token,
+                                index,
+                            }),
+                            type_id,
+                        };
+                    }
+
+                    self.lookup_expression.insert(result_id, LookupExpression {
+                        token: lexp.token,
+                        type_id: result_type_id,
+                    });
+                }
+                Op::CompositeConstruct => {
+                    inst.expect_at_least(3)?;
+                    let result_type_id = self.next()?;
+                    let id = self.next()?;
+                    let mut components = Vec::with_capacity(inst.wc as usize  - 2);
+                    for _ in 3 .. inst.wc {
+                        let comp_id = self.next()?;
+                        log::trace!("\t\t\tlooking up expr {:?}", comp_id);
+                        let lexp = self.lookup_expression.lookup(comp_id)?;
+                        components.push(lexp.token);
+                    }
+                    let expr = crate::Expression::Compose {
+                        components,
+                    };
+                    self.lookup_expression.insert(id, LookupExpression {
+                        token: fun.expressions.append(expr),
                         type_id: result_type_id,
                     });
                 }
                 Op::Load => {
                     inst.expect_at_least(4)?;
                     let result_type_id = self.next()?;
-                    let id = self.next()?;
+                    let result_id = self.next()?;
                     let pointer_id = self.next()?;
                     if inst.wc != 4 {
                         inst.expect(5)?;
@@ -339,7 +404,64 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let expr = crate::Expression::Load {
                         pointer: base_expr.token,
                     };
-                    self.lookup_expression.insert(id, LookupExpression {
+                    self.lookup_expression.insert(result_id, LookupExpression {
+                        token: fun.expressions.append(expr),
+                        type_id: result_type_id,
+                    });
+                }
+                Op::Store => {
+                    inst.expect_at_least(3)?;
+                    let pointer_id = self.next()?;
+                    let value_id = self.next()?;
+                    if inst.wc != 3 {
+                        inst.expect(4)?;
+                        let _memory_access = self.next()?;
+                    }
+                    let base_expr = self.lookup_expression.lookup(pointer_id)?;
+                    let base_type = self.lookup_type.lookup(base_expr.type_id)?;
+                    match base_type.value {
+                        crate::Type::Pointer { .. } => (),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    };
+                    let value_expr = self.lookup_expression.lookup(value_id)?;
+                    if base_type.base_id != Some(value_expr.type_id) {
+                        return Err(ParseError::InvalidStoreType(value_expr.type_id));
+                    }
+                    fun.body.push(crate::Statement::Store {
+                        pointer: base_expr.token,
+                        value: value_expr.token,
+                    })
+                }
+                Op::Return => {
+                    inst.expect(1)?;
+                    fun.body.push(crate::Statement::Return { value: None });
+                    break
+                }
+                Op::MatrixTimesVector => {
+                    inst.expect(5)?;
+                    let result_type_id = self.next()?;
+                    let (res_size, res_width) = match self.lookup_type.lookup(result_type_id)?.value {
+                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    };
+                    let result_id = self.next()?;
+                    let matrix_id = self.next()?;
+                    let vector_id = self.next()?;
+                    let matrix_lexp = self.lookup_expression.lookup(matrix_id)?;
+                    let columns = match self.lookup_type.lookup(matrix_lexp.type_id)?.value {
+                        crate::Type::Matrix { columns, rows, kind: crate::ScalarKind::Float, width } if rows == res_size && width == res_width => columns,
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    };
+                    let vector_lexp = self.lookup_expression.lookup(vector_id)?.clone();
+                    match self.lookup_type.lookup(vector_lexp.type_id)?.value {
+                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } if size == columns && width == res_width => (),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    };
+                    let expr = crate::Expression::MatrixTimesVector {
+                        matrix: matrix_lexp.token,
+                        vector: vector_lexp.token,
+                    };
+                    self.lookup_expression.insert(result_id, LookupExpression {
                         token: fun.expressions.append(expr),
                         type_id: result_type_id,
                     });
@@ -347,6 +469,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op)),
             }
         }
+        Ok(())
     }
 
     fn make_expression_storage(&mut self) -> Storage<crate::Expression> {
@@ -763,7 +886,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             return Err(ParseError::WrongFunctionResultType(result_type))
                         }
                         crate::Function {
-                            name: None,
+                            name: self.future_decor
+                                .remove(&fun_id)
+                                .and_then(|dec| dec.name),
                             control: spirv::FunctionControl::from_bits(fun_control)
                                 .ok_or(ParseError::UnsupportedFunctionControl(fun_control))?,
                             parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
@@ -800,7 +925,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 fun_inst.expect(2)?;
                                 let _id = self.next()?;
                                 self.next_block(&mut fun)?;
-                                break
                             }
                             Op::FunctionEnd => {
                                 fun_inst.expect(1)?;

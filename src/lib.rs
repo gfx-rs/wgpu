@@ -25,7 +25,7 @@ pub struct Header {
 pub type Bytes = u8;
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VectorSize {
     Bi = 2,
     Tri = 3,
@@ -33,7 +33,7 @@ pub enum VectorSize {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ScalarKind {
     Sint,
     Uint,
@@ -89,16 +89,22 @@ pub enum Expression {
         base: Token<Expression>,
         index: Token<Expression>, //int
     },
-    AccessMember {
+    AccessIndex {
         base: Token<Expression>,
         index: u32,
     },
-    Arithmetic,
     Constant(Constant),
+    Compose {
+        components: Vec<Token<Expression>>,
+    },
     FunctionParameter(u32),
     GlobalVariable(Token<GlobalVariable>),
     Load {
         pointer: Token<Expression>,
+    },
+    MatrixTimesVector {
+        matrix: Token<Expression>,
+        vector: Token<Expression>,
     },
 }
 
@@ -123,6 +129,10 @@ pub enum Statement {
         value: Option<Token<Expression>>,
     },
     Kill,
+    Store {
+        pointer: Token<Expression>,
+        value: Token<Expression>,
+    },
 }
 
 #[derive(Debug)]
