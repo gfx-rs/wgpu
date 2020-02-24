@@ -25,7 +25,7 @@ pub struct Header {
 pub type Bytes = u8;
 
 #[repr(u8)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum VectorSize {
     Bi = 2,
     Tri = 3,
@@ -33,7 +33,7 @@ pub enum VectorSize {
 }
 
 #[repr(u8)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum ScalarKind {
     Sint,
     Uint,
@@ -83,10 +83,20 @@ pub struct GlobalVariable {
     pub ty: Type,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expression {
-    Constant(Constant),
+    Access {
+        base: Token<Expression>,
+        index: Token<Expression>, //int
+    },
+    AccessMember {
+        base: Token<Expression>,
+        index: u32,
+    },
     Arithmetic,
+    Constant(Constant),
+    FunctionParameter(u32),
+    GlobalVariable(Token<GlobalVariable>),
 }
 
 pub type Block = Vec<Statement>;
@@ -95,20 +105,19 @@ pub struct FallThrough;
 
 #[derive(Debug)]
 pub enum Statement {
-    Expression(Expression),
     Block(Block),
     If {
-        condition: Expression, //bool
+        condition: Token<Expression>, //bool
         accept: Block,
         reject: Block,
     },
     Switch {
-        selector: Expression, //int
+        selector: Token<Expression>, //int
         cases: FastHashMap<i32, (Block, Option<FallThrough>)>,
         default: Block,
     },
     Return {
-        value: Option<Expression>,
+        value: Option<Token<Expression>>,
     },
     Kill,
 }
@@ -119,6 +128,7 @@ pub struct Function {
     pub control: spirv::FunctionControl,
     pub parameter_types: Vec<Type>,
     pub return_type: Type,
+    pub expressions: Storage<Expression>,
     pub body: Block,
 }
 
