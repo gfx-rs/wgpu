@@ -4,17 +4,16 @@ pub mod back;
 pub mod front;
 mod storage;
 
-
 use crate::storage::{Storage, Token};
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::BuildHasherDefault,
 };
 
+
 type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
-
-
+type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
 #[derive(Debug)]
 pub struct Header {
