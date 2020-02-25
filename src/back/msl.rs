@@ -4,10 +4,27 @@ use std::{
     },
 };
 
-use crate::FastHashSet;
+use crate::{FastHashMap, FastHashSet};
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct BindTarget {
+    pub buffer: Option<u8>,
+    pub texture: Option<u8>,
+    pub sampler: Option<u8>,
+}
 
-pub struct Options {
+#[derive(Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
+pub struct BindSource {
+    pub set: spirv::Word,
+    pub binding: spirv::Word,
+}
+
+pub type BindingMap = FastHashMap<BindSource, BindTarget>;
+
+enum ResolvedBinding {
+    BuiltIn(spirv::BuiltIn),
+    User { prefix: &'static str, index: spirv::Word },
+    Resource(BindTarget),
 }
 
 #[derive(Debug)]
@@ -15,6 +32,8 @@ pub enum Error {
     Format(FmtError),
     UnsupportedExecutionModel(spirv::ExecutionModel),
     MixedExecutionModels(crate::Token<crate::Function>),
+    MissingBinding(crate::Token<crate::GlobalVariable>),
+    MissingBindTarget(BindSource),
     BadName(String),
 }
 
@@ -23,6 +42,32 @@ impl From<FmtError> for Error {
         Error::Format(e)
     }
 }
+
+pub struct Options<'a> {
+    pub binding_map: &'a BindingMap,
+}
+
+impl Options<'_> {
+    fn resolve_binding(&self, binding: &crate::Binding) -> Result<ResolvedBinding, Error> {
+        match *binding {
+            crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
+            crate::Binding::Location(index) => Ok(ResolvedBinding::User {
+                prefix: "loc",
+                index,
+            }),
+            crate::Binding::Descriptor { set, binding } => {
+                let source = BindSource { set, binding };
+                self.binding_map
+                    .get(&source)
+                    .cloned()
+                    .map(ResolvedBinding::Resource)
+                    .ok_or(Error::MissingBindTarget(source))
+
+            }
+        }
+    }
+}
+
 
 trait Indexed {
     const CLASS: &'static str;
@@ -71,15 +116,14 @@ enum NameSource<'a> {
     Index(usize),
 }
 
-struct Name<'a> {
-    class: &'static str,
-    source: NameSource<'a>,
-}
-
 const RESERVED_NAMES: &[&str] = &[
     "main",
 ];
 
+struct Name<'a> {
+    class: &'static str,
+    source: NameSource<'a>,
+}
 impl Display for Name<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         match self.source {
@@ -95,7 +139,6 @@ impl Display for Name<'_> {
         }
     }
 }
-
 impl<I: Indexed> From<I> for Name<'_> {
     fn from(index: I) -> Self {
         Name {
@@ -108,7 +151,6 @@ impl<I: Indexed> From<I> for Name<'_> {
 trait AsName {
     fn or_index<I: Indexed>(&self, index: I) -> Name;
 }
-
 impl AsName for Option<String> {
     fn or_index<I: Indexed>(&self, index: I) -> Name {
         Name {
@@ -122,7 +164,6 @@ impl AsName for Option<String> {
 }
 
 struct TypedVar<'a, T>(&'a crate::Type, &'a T, &'a crate::Storage<crate::StructDeclaration>);
-
 impl<T: Display> Display for TypedVar<'_, T> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         match *self.0 {
@@ -155,7 +196,6 @@ struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
     token: crate::Token<crate::GlobalVariable>,
 }
-
 impl Display for TypedGlobalVariable<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         let var = &self.module.global_variables[self.token];
@@ -170,6 +210,36 @@ impl Display for TypedGlobalVariable<'_> {
     }
 }
 
+impl Display for ResolvedBinding {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
+        match *self {
+            ResolvedBinding::BuiltIn(built_in) => {
+                let name = match built_in {
+                    spirv::BuiltIn::ClipDistance => "clip_distance",
+                    spirv::BuiltIn::CullDistance => "cull_distance",
+                    spirv::BuiltIn::PointSize => "point_size",
+                    spirv::BuiltIn::Position => "position",
+                    _ => panic!("Built in {:?} is not implemented", built_in),
+                };
+                formatter.write_str(name)
+            }
+            ResolvedBinding::User { prefix, index } => {
+                write!(formatter, "user({}{})", prefix, index)
+            }
+            ResolvedBinding::Resource(ref target) => {
+                if let Some(id) = target.buffer {
+                    write!(formatter, "buffer({})", id)
+                } else if let Some(id) = target.texture {
+                    write!(formatter, "buffer({})", id)
+                } else if let Some(id) = target.sampler {
+                    write!(formatter, "sampler({})", id)
+                } else {
+                    unimplemented!()
+                }
+            }
+        }
+    }
+}
 
 pub struct Writer<W> {
     out: W,
@@ -195,7 +265,7 @@ const NAME_INPUT: &'static str = "input";
 const NAME_OUTPUT: &'static str = "output";
 
 impl<W: Write> Writer<W> {
-    pub fn write(&mut self, module: &crate::Module) -> Result<(), Error> {
+    pub fn write(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
         writeln!(self.out, "#include <metal_stdlib>")?;
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out, "using namespace metal;")?;
@@ -206,7 +276,12 @@ impl<W: Write> Writer<W> {
             for (index, member) in decl.members.iter().enumerate() {
                 let name = member.name.or_index(MemberIndex(index));
                 let tv = TypedVar(&member.ty, &name, &module.struct_declarations);
-                writeln!(self.out, "\t{};", tv)?;
+                write!(self.out, "\t{}", tv)?;
+                if let Some(ref binding) = member.binding {
+                    let resolved = options.resolve_binding(binding)?;
+                    write!(self.out, " [[{}]]", resolved)?;
+                }
+                writeln!(self.out, ";")?;
             }
             writeln!(self.out, "}};")?;
         }
@@ -302,8 +377,8 @@ impl<W: Write> Writer<W> {
     }
 }
 
-pub fn write_string(module: &crate::Module, _options: &Options) -> Result<String, Error> {
+pub fn write_string(module: &crate::Module, options: Options) -> Result<String, Error> {
     let mut w = Writer { out: String::new() };
-    w.write(module)?;
+    w.write(module, options)?;
     Ok(w.out)
 }

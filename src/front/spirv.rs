@@ -9,6 +9,8 @@ const LAST_KNOWN_OPCODE: spirv::Op = spirv::Op::MemberDecorateStringGOOGLE;
 const LAST_KNOWN_CAPABILITY: spirv::Capability = spirv::Capability::VulkanMemoryModelDeviceScopeKHR;
 const LAST_KNOWN_EXECUTION_MODEL: spirv::ExecutionModel = spirv::ExecutionModel::Kernel;
 const LAST_KNOWN_STORAGE_CLASS: spirv::StorageClass = spirv::StorageClass::StorageBuffer;
+const LAST_KNOWN_DECORATION: spirv::Decoration = spirv::Decoration::NonUniformEXT;
+const LAST_KNOWN_BUILT_IN: spirv::BuiltIn = spirv::BuiltIn::FullyCoveredEXT;
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
@@ -36,6 +38,7 @@ pub enum ParseError {
     InvalidParameter(spirv::Op),
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
+    InvalidDecoration(spirv::Word),
     InvalidId(spirv::Word),
     InvalidTypeWidth(spirv::Word),
     InvalidSign(spirv::Word),
@@ -46,6 +49,7 @@ pub enum ParseError {
     InvalidAccessIndex(crate::Expression),
     InvalidLoadType(spirv::Word),
     InvalidStoreType(spirv::Word),
+    InvalidBinding(spirv::Word),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionParameterType(spirv::Word),
     BadString,
@@ -127,11 +131,40 @@ type MemberIndex = u32;
 #[derive(Debug, Default)]
 struct Decoration {
     name: Option<String>,
+    built_in: Option<spirv::BuiltIn>,
+    location: Option<spirv::Word>,
+    desc_set: Option<spirv::Word>,
+    desc_index: Option<spirv::Word>,
 }
 
-#[derive(Debug, Default)]
-struct MemberDecoration {
-    name: Option<String>,
+impl Decoration {
+    fn get_binding(&self) -> Option<crate::Binding> {
+        //TODO: validate this better
+        match *self {
+            Decoration {
+                built_in: Some(built_in),
+                location: None,
+                desc_set: None,
+                desc_index: None,
+                ..
+            } => Some(crate::Binding::BuiltIn(built_in)),
+            Decoration {
+                built_in: None,
+                location: Some(loc),
+                desc_set: None,
+                desc_index: None,
+                ..
+            } => Some(crate::Binding::Location(loc)),
+            Decoration {
+                built_in: None,
+                location: None,
+                desc_set: Some(set),
+                desc_index: Some(binding),
+                ..
+            } => Some(crate::Binding::Descriptor { set, binding }),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -177,7 +210,7 @@ pub struct Parser<I> {
     state: ModuleState,
     temp_bytes: Vec<u8>,
     future_decor: FastHashMap<spirv::Word, Decoration>,
-    future_member_decor: FastHashMap<(spirv::Word, MemberIndex), MemberDecoration>,
+    future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member_type_id: FastHashMap<(spirv::Word, MemberIndex), spirv::Word>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_constant: FastHashMap<spirv::Word, LookupConstant>,
@@ -244,6 +277,54 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         std::str::from_utf8(&self.temp_bytes)
             .map(|s| (s.to_owned(), count))
             .map_err(|_| ParseError::BadString)
+    }
+
+    fn next_decoration(
+        &mut self,
+        inst: Instruction,
+        base_words: u16,
+        dec: &mut Decoration,
+    ) -> Result<(), ParseError> {
+        let raw = self.next()?;
+        if raw > LAST_KNOWN_DECORATION as spirv::Word {
+            return Err(ParseError::InvalidDecoration(raw));
+        }
+        let dec_typed = unsafe {
+            std::mem::transmute::<_, spirv::Decoration>(raw)
+        };
+        log::trace!("\t\t{:?}", dec_typed);
+        match dec_typed {
+            spirv::Decoration::BuiltIn => {
+                inst.expect(base_words + 2)?;
+                let raw = self.next()?;
+                if raw > LAST_KNOWN_BUILT_IN as spirv::Word {
+                    log::warn!("Unknown built in {:?}", raw);
+                } else {
+                    dec.built_in = Some(unsafe {
+                        std::mem::transmute(raw)
+                    });
+                }
+            }
+            spirv::Decoration::Location => {
+                inst.expect(base_words + 2)?;
+                dec.location = Some(self.next()?);
+            }
+            spirv::Decoration::DescriptorSet => {
+                inst.expect(base_words + 2)?;
+                dec.desc_set = Some(self.next()?);
+            }
+            spirv::Decoration::Binding => {
+                inst.expect(base_words + 2)?;
+                dec.desc_index = Some(self.next()?);
+            }
+            other => {
+                log::warn!("Unknown decoration {:?}", other);
+                for _ in base_words + 1 .. inst.wc {
+                    let _var = self.next()?;
+                }
+            }
+        }
+        Ok(())
     }
 
     fn next_block(&mut self, fun: &mut crate::Function) -> Result<(), ParseError> {
@@ -626,21 +707,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Decorate => {
                     self.switch(ModuleState::Annotation, inst.op)?;
                     inst.expect_at_least(3)?;
-                    let _id = self.next()?;
-                    let _decoration = self.next()?;
-                    for _ in 3 .. inst.wc {
-                        let _var = self.next()?; //TODO
-                    }
+                    let id = self.next()?;
+                    let mut dec = self.future_decor
+                        .remove(&id)
+                        .unwrap_or_default();
+                    self.next_decoration(inst, 2, &mut dec)?;
+                    self.future_decor.insert(id, dec);
                 }
                 Op::MemberDecorate => {
                     self.switch(ModuleState::Annotation, inst.op)?;
                     inst.expect_at_least(4)?;
-                    let _id = self.next()?;
-                    let _member = self.next()?;
-                    let _decoration = self.next()?;
-                    for _ in 4 .. inst.wc {
-                        let _var = self.next()?; //TODO
-                    }
+                    let id = self.next()?;
+                    let member = self.next()?;
+                    let mut dec = self.future_member_decor
+                        .remove(&(id, member))
+                        .unwrap_or_default();
+                    self.next_decoration(inst, 3, &mut dec)?;
+                    self.future_member_decor.insert((id, member), dec);
                 }
                 Op::TypeVoid => {
                     self.switch(ModuleState::Type, inst.op)?;
@@ -773,7 +856,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.switch(ModuleState::Type, inst.op)?;
                     inst.expect_at_least(2)?;
                     let id = self.next()?;
-                    let mut decl = crate::StructDeclaration {
+                    let mut sd = crate::StructDeclaration {
                         name: self.future_decor
                             .remove(&id)
                             .and_then(|dec| dec.name),
@@ -783,14 +866,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let type_id = self.next()?;
                         let ty = self.lookup_type.lookup(type_id)?.value.clone();
                         self.lookup_member_type_id.insert((id, i), type_id);
-                        decl.members.push(crate::StructMember {
-                            name: self.future_member_decor
-                                .remove(&(id, i))
-                                .and_then(|dec| dec.name),
+                        let dec = self.future_member_decor
+                            .remove(&(id, i))
+                            .unwrap_or_default();
+                        let binding = dec.get_binding();
+                        sd.members.push(crate::StructMember {
+                            name: dec.name,
+                            binding,
                             ty,
                         });
                     }
-                    let value = crate::Type::Struct(module.struct_declarations.append(decl));
+                    let value = crate::Type::Struct(module.struct_declarations.append(sd));
                     self.lookup_type.insert(id, LookupType {
                         value,
                         base_id: None,
@@ -860,12 +946,46 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         inst.expect(5)?;
                         let _init = self.next()?; //TODO
                     }
+                    let ty = self.lookup_type.lookup(type_id)?.value.clone();
+                    let dec = self.future_decor
+                        .remove(&id)
+                        .ok_or(ParseError::InvalidBinding(id))?;
+                    let binding = match ty {
+                        crate::Type::Pointer { ref base, class: spirv::StorageClass::Input } |
+                        crate::Type::Pointer { ref base, class: spirv::StorageClass::Output } => {
+                            match **base {
+                                crate::Type::Struct(token) => {
+                                    // we don't expect binding decoration on I/O structs,
+                                    // but we do expect them on all of the members
+                                    let sd = &module.struct_declarations[token];
+                                    for member in sd.members.iter() {
+                                        if member.binding.is_none() {
+                                            log::warn!("Struct {:?} member {:?} doesn't have a binding", token, member);
+                                            return Err(ParseError::InvalidBinding(id));
+                                        }
+                                    }
+                                    None
+                                }
+                                _ => {
+                                    Some(dec
+                                        .get_binding()
+                                        .ok_or(ParseError::InvalidBinding(id))?
+                                    )
+                                }
+                            }
+                        }
+                        _ => {
+                            Some(dec
+                                .get_binding()
+                                .ok_or(ParseError::InvalidBinding(id))?
+                            )
+                        }
+                    };
                     let var = crate::GlobalVariable {
-                        name: self.future_decor
-                            .remove(&id)
-                            .and_then(|dec| dec.name),
+                        name: dec.name,
                         class: map_storage_class(storage)?,
-                        ty: self.lookup_type.lookup(type_id)?.value.clone(),
+                        binding,
+                        ty,
                     };
                     let token = module.global_variables.append(var);
                     self.lookup_variable.insert(id, LookupVariable {

@@ -42,6 +42,7 @@ pub enum ScalarKind {
 #[derive(Debug)]
 pub struct StructMember {
     pub name: Option<String>,
+    pub binding: Option<Binding>,
     pub ty: Type,
 }
 
@@ -70,9 +71,17 @@ pub enum Constant {
 }
 
 #[derive(Clone, Debug)]
+pub enum Binding {
+    BuiltIn(spirv::BuiltIn),
+    Location(spirv::Word),
+    Descriptor { set: spirv::Word, binding: spirv::Word },
+}
+
+#[derive(Clone, Debug)]
 pub struct GlobalVariable {
     pub name: Option<String>,
     pub class: spirv::StorageClass,
+    pub binding: Option<Binding>,
     pub ty: Type,
 }
 
