@@ -41,12 +41,6 @@ pub enum ScalarKind {
 }
 
 #[derive(Debug)]
-pub struct PointerDeclaration {
-    pub base: Type,
-    pub length: u32,
-}
-
-#[derive(Debug)]
 pub struct StructMember {
     pub name: Option<String>,
     pub ty: Type,
