@@ -1,5 +1,5 @@
 extern crate env_logger;
-extern crate javelin;
+extern crate naga;
 
 use std::{env, fs};
 
@@ -9,11 +9,11 @@ fn main() {
     let args = env::args().collect::<Vec<_>>();
     let input = fs::read(&args[1]).unwrap();
 
-    let module = javelin::front::spirv::parse_u8_slice(&input).unwrap();
+    let module = naga::front::spirv::parse_u8_slice(&input).unwrap();
     //println!("{:?}", module);
 
-    let options = javelin::back::msl::Options {};
-    let msl = javelin::back::msl::write_string(&module, &options).unwrap();
+    let options = naga::back::msl::Options {};
+    let msl = naga::back::msl::write_string(&module, &options).unwrap();
     println!("{}", msl);
 }
 

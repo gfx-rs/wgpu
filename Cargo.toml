@@ -1,5 +1,5 @@
 [package]
-name = "javelin"
+name = "naga"
 version = "0.1.0"
 authors = ["Dzmitry Malyshau <kvarkus@gmail.com>"]
 edition = "2018"
