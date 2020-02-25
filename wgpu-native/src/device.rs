@@ -53,11 +53,21 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
+            gl: instance.gl.as_ref().map(|inst| {
+                inst.create_surface_from_xlib(
+                    h.window as std::os::raw::c_ulong,
+                    h.display as *mut std::ffi::c_void,
+                )
+            }),
         },
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::Wayland(h) => core::instance::Surface {
             vulkan: instance
                 .vulkan
+                .as_ref()
+                .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
+            gl: instance
+                .gl
                 .as_ref()
                 .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
         },

@@ -51,6 +51,8 @@ pub struct Instance {
         feature = "gfx-backend-vulkan"
     ))]
     pub vulkan: Option<gfx_backend_vulkan::Instance>,
+    #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+    pub gl: Option<gfx_backend_gl::Instance>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub metal: gfx_backend_metal::Instance,
     #[cfg(windows)]
@@ -67,6 +69,8 @@ impl Instance {
                 feature = "gfx-backend-vulkan"
             ))]
             vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
+            #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+            gl: gfx_backend_gl::Instance::create(name, version).ok(),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: gfx_backend_metal::Instance::create(name, version).unwrap(),
             #[cfg(windows)]
@@ -84,6 +88,12 @@ impl Instance {
         unsafe {
             if let Some(suf) = surface.vulkan {
                 self.vulkan.as_mut().unwrap().destroy_surface(suf);
+            }
+        }
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        unsafe {
+            if let Some(suf) = surface.gl {
+                self.gl.as_mut().unwrap().destroy_surface(suf);
             }
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -109,6 +119,8 @@ pub struct Surface {
         feature = "gfx-backend-vulkan"
     ))]
     pub vulkan: Option<GfxSurface<backend::Vulkan>>,
+    #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+    pub gl: Option<GfxSurface<backend::Gl>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub metal: GfxSurface<backend::Metal>,
     #[cfg(windows)]
@@ -238,6 +250,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
         }
+
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        {
+            if let Some(ref inst) = instance.gl {
+                if let Some(id_gl) = inputs.find(Backend::Gl) {
+                    for raw in inst.enumerate_adapters() {
+                        let adapter = Adapter { raw };
+                        log::info!("Adapter Gl {:?}", adapter.raw.info);
+                        adapters.push(backend::Gl::hub(self).adapters.register_identity(
+                            id_gl.clone(),
+                            adapter,
+                            &mut token,
+                        ));
+                    }
+                }
+            }
+        }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
             if let Some(id_metal) = inputs.find(Backend::Metal) {
@@ -296,6 +325,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut device_types = Vec::new();
 
         let id_vulkan = inputs.find(Backend::Vulkan);
+        let id_gl = inputs.find(Backend::Gl);
         let id_metal = inputs.find(Backend::Metal);
         let id_dx12 = inputs.find(Backend::Dx12);
         let id_dx11 = inputs.find(Backend::Dx11);
@@ -319,6 +349,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map_or(false, |qf| surface.supports_queue_family(qf))
                     });
                 }
+                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+                adapters
+            }
+            _ => Vec::new(),
+        };
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        dbg!(&instance);
+        let mut adapters_gl = match &instance.gl {
+            Some(inst) if id_gl.is_some() => {
+                dbg!(&inst);
+                let adapters = inst.enumerate_adapters();
                 device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
                 adapters
             }
@@ -438,6 +479,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             selected -= adapters_vk.len();
         }
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+        {
+            if selected < adapters_gl.len() {
+                let adapter = Adapter {
+                    raw: adapters_gl.swap_remove(selected),
+                };
+                log::info!("Adapter GL {:?}", adapter.raw.info);
+                let id = backend::Gl::hub(self).adapters.register_identity(
+                    id_gl.unwrap(),
+                    adapter,
+                    &mut token,
+                );
+                return Some(id);
+            }
+            selected -= adapters_gl.len();
+        }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
             if selected < adapters_mtl.len() {
@@ -484,7 +541,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             selected -= adapters_dx11.len();
         }
 
-        let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
+        let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11, id_gl);
         log::warn!("Some adapters are present, but enumerating them failed!");
         None
     }
@@ -540,16 +597,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let limits = adapter.physical_device.limits();
-            assert_eq!(
-                0,
-                BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
-                "Adapter storage buffer offset alignment not compatible with WGPU"
-            );
-            assert_eq!(
-                0,
-                BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
-                "Adapter uniform buffer offset alignment not compatible with WGPU"
-            );
+            // assert_eq!(
+            //     0,
+            //     BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
+            //     "Adapter storage buffer offset alignment not compatible with WGPU"
+            // );
+            // assert_eq!(
+            //     0,
+            //     BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
+            //     "Adapter uniform buffer offset alignment not compatible with WGPU"
+            // );
             if limits.max_bound_descriptor_sets == 0 {
                 log::warn!("max_bind_groups limit is missing");
             } else {

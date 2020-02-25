@@ -22,6 +22,8 @@ pub mod backend {
         feature = "gfx-backend-vulkan"
     ))]
     pub use gfx_backend_vulkan::Backend as Vulkan;
+     #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+    pub use gfx_backend_gl::Backend as Gl;
 }
 
 pub mod binding_model;
@@ -133,6 +135,8 @@ macro_rules! gfx_select {
         match $id.backend() {
             #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
             wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),+ ),
+            #[cfg(any(not(any(target_os = "ios", target_os = "macos"))))]
+            wgt::Backend::Gl => $global.$method::<$crate::backend::Gl>( $($param),+ ),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             wgt::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),+ ),
             #[cfg(windows)]
