@@ -40,6 +40,7 @@ derive_eq = true
 [enum]
 prefix_with_name = true
 derive_helper_methods = true
+add_sentinel = true
 
 [macro_expansion]
 bitflags = true
