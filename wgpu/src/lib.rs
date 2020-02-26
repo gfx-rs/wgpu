@@ -522,6 +522,14 @@ impl Surface {
 }
 
 impl Adapter {
+    /// Retrieves all available [`Adapter`]s that match the given backends.
+    pub fn enumerate(backends: BackendBit) -> Vec<Self> {
+        wgn::wgpu_enumerate_adapters(backends)
+            .into_iter()
+            .map(|id| Adapter { id })
+            .collect()
+    }
+
     /// Retrieves an [`Adapter`] which matches the given options.
     ///
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
