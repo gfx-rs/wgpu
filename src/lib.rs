@@ -40,6 +40,20 @@ pub enum ScalarKind {
 }
 
 #[derive(Debug)]
+pub struct PointerDeclaration {
+    pub name: Option<String>,
+    pub base: Type,
+    pub class: spirv::StorageClass,
+}
+
+#[derive(Debug)]
+pub struct ArrayDeclaration {
+    pub name: Option<String>,
+    pub base: Type,
+    pub length: u32,
+}
+
+#[derive(Debug)]
 pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
@@ -58,8 +72,8 @@ pub enum Type {
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
     Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
-    Pointer { base: Box<Type>, class: spirv::StorageClass },
-    Array { base: Box<Type>, length: u32 },
+    Pointer(Token<PointerDeclaration>),
+    Array(Token<ArrayDeclaration>),
     Struct(Token<StructDeclaration>),
 }
 
@@ -104,10 +118,7 @@ pub enum Expression {
     Load {
         pointer: Token<Expression>,
     },
-    MatrixTimesVector {
-        matrix: Token<Expression>,
-        vector: Token<Expression>,
-    },
+    Mul(Token<Expression>, Token<Expression>),
 }
 
 pub type Block = Vec<Statement>;
@@ -157,9 +168,16 @@ pub struct EntryPoint {
 }
 
 #[derive(Debug)]
+pub struct ComplexTypes {
+    pub pointers: Storage<PointerDeclaration>,
+    pub arrays: Storage<ArrayDeclaration>,
+    pub structs: Storage<StructDeclaration>,
+}
+
+#[derive(Debug)]
 pub struct Module {
     pub header: Header,
-    pub struct_declarations: Storage<StructDeclaration>,
+    pub complex_types: ComplexTypes,
     pub global_variables: Storage<GlobalVariable>,
     pub functions: Storage<Function>,
     pub entry_points: Vec<EntryPoint>,

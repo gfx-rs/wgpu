@@ -518,6 +518,32 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     fun.body.push(crate::Statement::Return { value: None });
                     break
                 }
+                Op::VectorTimesScalar => {
+                    inst.expect(5)?;
+                    let result_type_id = self.next()?;
+                    let (res_size, res_width) = match self.lookup_type.lookup(result_type_id)?.value {
+                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    };
+                    let result_id = self.next()?;
+                    let vector_id = self.next()?;
+                    let scalar_id = self.next()?;
+                    let vector_lexp = self.lookup_expression.lookup(vector_id)?;
+                    match self.lookup_type.lookup(vector_lexp.type_id)?.value {
+                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } if size == res_size && width == res_width => (),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    };
+                    let scalar_lexp = self.lookup_expression.lookup(scalar_id)?.clone();
+                    match self.lookup_type.lookup(scalar_lexp.type_id)?.value {
+                        crate::Type::Scalar { kind: crate::ScalarKind::Float, width } if width == res_width => (),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    };
+                    let expr = crate::Expression::Mul(vector_lexp.token, scalar_lexp.token);
+                    self.lookup_expression.insert(result_id, LookupExpression {
+                        token: fun.expressions.append(expr),
+                        type_id: result_type_id,
+                    });
+                }
                 Op::MatrixTimesVector => {
                     inst.expect(5)?;
                     let result_type_id = self.next()?;
@@ -538,10 +564,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } if size == columns && width == res_width => (),
                         ref other => return Err(ParseError::UnsupportedType(other.clone())),
                     };
-                    let expr = crate::Expression::MatrixTimesVector {
-                        matrix: matrix_lexp.token,
-                        vector: vector_lexp.token,
-                    };
+                    let expr = crate::Expression::Mul(matrix_lexp.token, vector_lexp.token);
                     self.lookup_expression.insert(result_id, LookupExpression {
                         token: fun.expressions.append(expr),
                         type_id: result_type_id,
@@ -598,7 +621,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     generator,
                 }
             },
-            struct_declarations: Storage::new(),
+            complex_types: crate::ComplexTypes {
+                pointers: Storage::new(),
+                arrays: Storage::new(),
+                structs: Storage::new(),
+            },
             global_variables: Storage::new(),
             functions: Storage::new(),
             entry_points: Vec::new(),
@@ -625,6 +652,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::Extension => {
                     self.switch(ModuleState::Extension, inst.op)?;
+                    inst.expect_at_least(2)?;
                     let (name, left) = self.next_string(inst.wc - 1)?;
                     if left != 0 {
                         return Err(ParseError::InvalidOperand);
@@ -635,6 +663,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::ExtInstImport => {
                     self.switch(ModuleState::Extension, inst.op)?;
+                    inst.expect_at_least(3)?;
                     let _result = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 2)?;
                     if left != 0 {
@@ -652,6 +681,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 }
                 Op::EntryPoint => {
                     self.switch(ModuleState::EntryPoint, inst.op)?;
+                    inst.expect_at_least(4)?;
                     let exec_model = self.next()?;
                     if exec_model > LAST_KNOWN_EXECUTION_MODEL as u32 {
                         return Err(ParseError::UnsupportedExecutionModel(exec_model));
@@ -671,11 +701,25 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     };
                     entry_points.push(ep);
                 }
+                Op::ExecutionMode => {
+                    self.switch(ModuleState::ExecutionMode, inst.op)?;
+                    inst.expect_at_least(3)?;
+                    let _ep_id = self.next()?;
+                    let _mode = self.next()?;
+                    for _ in 3 .. inst.wc {
+                        let _ = self.next()?; //TODO
+                    }
+                }
                 Op::Source => {
                     self.switch(ModuleState::Source, inst.op)?;
                     for _ in 1 .. inst.wc {
                         let _ = self.next()?;
                     }
+                }
+                Op::SourceExtension => {
+                    self.switch(ModuleState::Source, inst.op)?;
+                    inst.expect_at_least(2)?;
+                    let (_name, _) = self.next_string(inst.wc - 1)?;
                 }
                 Op::Name => {
                     self.switch(ModuleState::Name, inst.op)?;
@@ -828,12 +872,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let storage = self.next()?;
                     let type_id = self.next()?;
-                    let value = crate::Type::Pointer {
-                        base: Box::new(self.lookup_type.lookup(type_id)?.value.clone()),
+                    let pd = crate::PointerDeclaration {
+                        name: self.future_decor
+                            .remove(&id)
+                            .and_then(|dec| dec.name),
+                        base: self.lookup_type.lookup(type_id)?.value.clone(),
                         class: map_storage_class(storage)?,
                     };
+                    let token = module.complex_types.pointers.append(pd);
                     self.lookup_type.insert(id, LookupType {
-                        value,
+                        value: crate::Type::Pointer(token),
                         base_id: Some(type_id),
                     });
                 }
@@ -843,12 +891,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let type_id = self.next()?;
                     let length = self.next()?;
-                    let value = crate::Type::Array {
-                        base: Box::new(self.lookup_type.lookup(type_id)?.value.clone()),
+                    let ad = crate::ArrayDeclaration {
+                        name: self.future_decor
+                            .remove(&id)
+                            .and_then(|dec| dec.name),
+                        base: self.lookup_type.lookup(type_id)?.value.clone(),
                         length,
                     };
+                    let token = module.complex_types.arrays.append(ad);
                     self.lookup_type.insert(id, LookupType {
-                        value,
+                        value: crate::Type::Array(token),
                         base_id: Some(type_id),
                     });
                 }
@@ -876,13 +928,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             ty,
                         });
                     }
-                    let value = crate::Type::Struct(module.struct_declarations.append(sd));
+                    let token = module.complex_types.structs.append(sd);
                     self.lookup_type.insert(id, LookupType {
-                        value,
+                        value: crate::Type::Struct(token),
                         base_id: None,
                     });
                 }
-                Op::Constant => {
+                Op::Constant |
+                Op::SpecConstant => {
                     self.switch(ModuleState::Type, inst.op)?;
                     inst.expect_at_least(3)?;
                     let type_id = self.next()?;
@@ -951,13 +1004,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         .remove(&id)
                         .ok_or(ParseError::InvalidBinding(id))?;
                     let binding = match ty {
-                        crate::Type::Pointer { ref base, class: spirv::StorageClass::Input } |
-                        crate::Type::Pointer { ref base, class: spirv::StorageClass::Output } => {
-                            match **base {
-                                crate::Type::Struct(token) => {
+                        crate::Type::Pointer(pd) => {
+                            match module.complex_types.pointers[pd] {
+                                crate::PointerDeclaration {
+                                    base: crate::Type::Struct(token),
+                                    class: spirv::StorageClass::Input,
+                                    ..
+                                } |
+                                crate::PointerDeclaration {
+                                    base: crate::Type::Struct(token),
+                                    class: spirv::StorageClass::Output,
+                                    ..
+                                } => {
                                     // we don't expect binding decoration on I/O structs,
                                     // but we do expect them on all of the members
-                                    let sd = &module.struct_declarations[token];
+                                    let sd = &module.complex_types.structs[token];
                                     for member in sd.members.iter() {
                                         if member.binding.is_none() {
                                             log::warn!("Struct {:?} member {:?} doesn't have a binding", token, member);

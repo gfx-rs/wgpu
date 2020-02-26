@@ -1,3 +1,19 @@
+/*! Metal Shading Language (MSL) backend
+
+## Binding model
+
+Metal's bindings are flat per resource. Since there isn't an obvious mapping
+from SPIR-V's descriptor sets, we require a separate mapping provided in the options.
+This mapping may have one or more resource end points for each descriptor set + index
+pair.
+
+## Outputs
+
+In Metal, built-in shader outputs can not be nested into structures within
+the output struct. If there is a structure in the outputs, and it contains any built-ins,
+we move them up to the root output structure that we define ourselves.
+!*/
+
 use std::{
     fmt::{
         Display, Error as FmtError, Formatter, Write,
@@ -23,6 +39,8 @@ pub type BindingMap = FastHashMap<BindSource, BindTarget>;
 
 enum ResolvedBinding {
     BuiltIn(spirv::BuiltIn),
+    Attribute(spirv::Word),
+    Color(spirv::Word),
     User { prefix: &'static str, index: spirv::Word },
     Resource(BindTarget),
 }
@@ -43,17 +61,28 @@ impl From<FmtError> for Error {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+enum LocationMode {
+    VertexInput,
+    FragmentOutput,
+    Intermediate,
+}
+
 pub struct Options<'a> {
     pub binding_map: &'a BindingMap,
 }
 
 impl Options<'_> {
-    fn resolve_binding(&self, binding: &crate::Binding) -> Result<ResolvedBinding, Error> {
+    fn resolve_binding(&self, binding: &crate::Binding, mode: LocationMode) -> Result<ResolvedBinding, Error> {
         match *binding {
             crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
-            crate::Binding::Location(index) => Ok(ResolvedBinding::User {
-                prefix: "loc",
-                index,
+            crate::Binding::Location(index) => Ok(match mode {
+                LocationMode::VertexInput => ResolvedBinding::Attribute(index),
+                LocationMode::FragmentOutput => ResolvedBinding::Color(index),
+                LocationMode::Intermediate => ResolvedBinding::User {
+                    prefix: "loc",
+                    index,
+                },
             }),
             crate::Binding::Descriptor { set, binding } => {
                 let source = BindSource { set, binding };
@@ -75,6 +104,14 @@ trait Indexed {
     fn id(&self) -> usize;
 }
 
+impl Indexed for crate::Token<crate::PointerDeclaration> {
+    const CLASS: &'static str = "Pointer";
+    fn id(&self) -> usize { self.index() }
+}
+impl Indexed for crate::Token<crate::ArrayDeclaration> {
+    const CLASS: &'static str = "Array";
+    fn id(&self) -> usize { self.index() }
+}
 impl Indexed for crate::Token<crate::StructDeclaration> {
     const CLASS: &'static str = "Struct";
     fn id(&self) -> usize { self.index() }
@@ -163,7 +200,14 @@ impl AsName for Option<String> {
     }
 }
 
-struct TypedVar<'a, T>(&'a crate::Type, &'a T, &'a crate::Storage<crate::StructDeclaration>);
+struct Starred<T>(T);
+impl<T: Display> Display for Starred<T> {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
+        write!(formatter, "*{}", self.0)
+    }
+}
+
+struct TypedVar<'a, T>(&'a crate::Type, &'a T, &'a crate::ComplexTypes);
 impl<T: Display> Display for TypedVar<'_, T> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         match *self.0 {
@@ -179,14 +223,17 @@ impl<T: Display> Display for TypedVar<'_, T> {
             crate::Type::Matrix { columns, rows, kind, .. } => {
                 write!(formatter, "{}{}x{} {}", scalar_kind_string(kind), vector_size_string(columns), vector_size_string(rows), self.1)
             }
-            crate::Type::Array { ref base, length } => {
-                write!(formatter, "{}[{}]", TypedVar(base, self.1, self.2), length)
+            crate::Type::Pointer(token) => {
+                let decl = &self.2.pointers[token];
+                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
             }
-            crate::Type::Pointer { ref base, .. } => {
-                write!(formatter, "{}*{}", TypedVar(base, &"", self.2), self.1)
+            crate::Type::Array(token) => {
+                let decl = &self.2.arrays[token];
+                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
             }
             crate::Type::Struct(token) => {
-                write!(formatter, "{} {}", self.2[token].name.or_index(token), self.1)
+                let decl = &self.2.structs[token];
+                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
             }
         }
     }
@@ -200,13 +247,19 @@ impl Display for TypedGlobalVariable<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         let var = &self.module.global_variables[self.token];
         let name = var.name.or_index(self.token);
-        let tv = match var.ty {
-            crate::Type::Pointer { ref base, .. } => {
-                TypedVar(base, &name, &self.module.struct_declarations)
+        match var.ty {
+            crate::Type::Pointer(token) => {
+                let decl = &self.module.complex_types.pointers[token];
+                let ty = match decl.class {
+                    spirv::StorageClass::Input |
+                    spirv::StorageClass::Output => &decl.base,
+                    _ => &var.ty
+                };
+                let tv = TypedVar(ty, &name, &self.module.complex_types);
+                write!(formatter, "{}", tv)
             }
             _ => panic!("Unexpected global type {:?}", var.ty),
-        };
-        write!(formatter, "{}", tv)
+        }
     }
 }
 
@@ -216,12 +269,17 @@ impl Display for ResolvedBinding {
             ResolvedBinding::BuiltIn(built_in) => {
                 let name = match built_in {
                     spirv::BuiltIn::ClipDistance => "clip_distance",
-                    spirv::BuiltIn::CullDistance => "cull_distance",
                     spirv::BuiltIn::PointSize => "point_size",
                     spirv::BuiltIn::Position => "position",
                     _ => panic!("Built in {:?} is not implemented", built_in),
                 };
                 formatter.write_str(name)
+            }
+            ResolvedBinding::Attribute(index) => {
+                write!(formatter, "attribute({})", index)
+            }
+            ResolvedBinding::Color(index) => {
+                write!(formatter, "color({})", index)
             }
             ResolvedBinding::User { prefix, index } => {
                 write!(formatter, "user({}{})", prefix, index)
@@ -270,15 +328,42 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out, "using namespace metal;")?;
 
+        // write down complex types
         writeln!(self.out, "")?;
-        for (token, decl) in module.struct_declarations.iter() {
+        for (token, decl) in module.complex_types.pointers.iter() {
+            let name = Starred(decl.name.or_index(token));
+            // Input and output are always provided as pointers,
+            // but we are only interested in the contents.
+            //TODO: consider resolving this at the root
+            let class = match decl.class {
+                spirv::StorageClass::Input |
+                spirv::StorageClass::Output => continue,
+                spirv::StorageClass::Uniform => "constant",
+                other => {
+                    log::warn!("Unexpected pointer class {:?}", other);
+                    ""
+                }
+            };
+            if let crate::Type::Struct(st) = decl.base {
+                let var = module.complex_types.structs[st].name.or_index(st);
+                writeln!(self.out, "struct {}; //forward decl", var)?;
+            }
+            let tv = TypedVar(&decl.base, &name, &module.complex_types);
+            writeln!(self.out, "typedef {} {};", class, tv)?;
+        }
+        for (token, decl) in module.complex_types.arrays.iter() {
+            let name = decl.name.or_index(token);
+            let tv = TypedVar(&decl.base, &name, &module.complex_types);
+            writeln!(self.out, "typedef {}[{}];", tv, decl.length)?;
+        }
+        for (token, decl) in module.complex_types.structs.iter() {
             writeln!(self.out, "struct {} {{", decl.name.or_index(token))?;
             for (index, member) in decl.members.iter().enumerate() {
                 let name = member.name.or_index(MemberIndex(index));
-                let tv = TypedVar(&member.ty, &name, &module.struct_declarations);
+                let tv = TypedVar(&member.ty, &name, &module.complex_types);
                 write!(self.out, "\t{}", tv)?;
                 if let Some(ref binding) = member.binding {
-                    let resolved = options.resolve_binding(binding)?;
+                    let resolved = options.resolve_binding(binding, LocationMode::Intermediate)?;
                     write!(self.out, " [[{}]]", resolved)?;
                 }
                 writeln!(self.out, ";")?;
@@ -286,6 +371,7 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, "}};")?;
         }
 
+        // write down functions
         let mut uniforms_used = FastHashSet::default();
         writeln!(self.out, "")?;
         for (fun_token, fun) in module.functions.iter() {
@@ -309,23 +395,51 @@ impl<W: Write> Writer<W> {
             let output_name = fun.name.or_index(OutputStructIndex(fun_token));
             if let Some(em) = exec_model {
                 writeln!(self.out, "struct {} {{", input_name)?;
+                let (em_str, in_mode, out_mode) = match em {
+                    spirv::ExecutionModel::Vertex => ("vertex", LocationMode::VertexInput, LocationMode::Intermediate),
+                    spirv::ExecutionModel::Fragment => ("fragment", LocationMode::Intermediate, LocationMode::FragmentOutput),
+                    spirv::ExecutionModel::GLCompute => ("compute", LocationMode::Intermediate, LocationMode::Intermediate),
+                    _ => return Err(Error::UnsupportedExecutionModel(em)),
+                };
                 for &token in var_inputs.iter() {
-                    let var = TypedGlobalVariable { module, token };
-                    writeln!(self.out, "\t{};", var)?;
+                    let var = &module.global_variables[token];
+                    let tyvar = TypedGlobalVariable { module, token };
+                    write!(self.out, "\t{}", tyvar)?;
+                    if let Some(ref binding) = var.binding {
+                        let resolved = options.resolve_binding(binding, in_mode)?;
+                        write!(self.out, " [[{}]]", resolved)?;
+                    }
+                    writeln!(self.out, ";")?;
                 }
                 writeln!(self.out, "}};")?;
                 writeln!(self.out, "struct {} {{", output_name)?;
                 for &token in var_outputs.iter() {
-                    let var = TypedGlobalVariable { module, token };
-                    writeln!(self.out, "\t{};", var)?;
+                    let var = &module.global_variables[token];
+                    // if it's a struct, lift all the built-in contents up to the root
+                    if let crate::Type::Pointer(pt) = var.ty {
+                        if let crate::Type::Struct(st) = module.complex_types.pointers[pt].base {
+                            let sd = &module.complex_types.structs[st];
+                            for (index, member) in sd.members.iter().enumerate() {
+                                let name = member.name.or_index(MemberIndex(index));
+                                let tv = TypedVar(&member.ty, &name, &module.complex_types);
+                                let binding = member.binding
+                                    .as_ref()
+                                    .ok_or(Error::MissingBinding(token))?;
+                                let resolved = options.resolve_binding(binding, out_mode)?;
+                                writeln!(self.out, "\t{} [[{}]];", tv, resolved)?;
+                            }
+                            continue
+                        }
+                    }
+                    let tyvar = TypedGlobalVariable { module, token };
+                    write!(self.out, "\t{}", tyvar)?;
+                    if let Some(ref binding) = var.binding {
+                        let resolved = options.resolve_binding(binding, out_mode)?;
+                        write!(self.out, " [[{}]]", resolved)?;
+                    }
+                    writeln!(self.out, ";")?;
                 }
                 writeln!(self.out, "}};")?;
-                let em_str = match em {
-                    spirv::ExecutionModel::Vertex => "vertex",
-                    spirv::ExecutionModel::Fragment => "fragment",
-                    spirv::ExecutionModel::GLCompute => "compute",
-                    _ => return Err(Error::UnsupportedExecutionModel(em)),
-                };
                 write!(self.out, "{} ", em_str)?;
             }
 
@@ -334,11 +448,11 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "{} {}(", output_name, fun_name)?;
                 writeln!(self.out, "\t{} {} [[stage_in]],", input_name, NAME_INPUT)?;
             } else {
-                let fun_tv = TypedVar(&fun.return_type, &fun_name, &module.struct_declarations);
+                let fun_tv = TypedVar(&fun.return_type, &fun_name, &module.complex_types);
                 writeln!(self.out, "{}(", fun_tv)?;
                 for (index, ty) in fun.parameter_types.iter().enumerate() {
                     let name = Name::from(ParameterIndex(index));
-                    let tv = TypedVar(ty, &name, &module.struct_declarations);
+                    let tv = TypedVar(ty, &name, &module.complex_types);
                     writeln!(self.out, "\t{},", tv)?;
                 }
             }
