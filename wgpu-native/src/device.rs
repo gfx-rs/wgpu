@@ -143,6 +143,10 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     ))
 }
 
+pub fn wgpu_enumerate_adapters(mask: core::instance::BackendBit) -> Vec<id::AdapterId> {
+    GLOBAL.enumerate_adapters(core::instance::AdapterInputs::Mask(mask, || PhantomData))
+}
+
 /// # Safety
 ///
 /// This function is unsafe as it calls an unsafe extern callback.
