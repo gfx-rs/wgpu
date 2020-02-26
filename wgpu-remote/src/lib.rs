@@ -32,6 +32,9 @@ struct IdentityHub {
     shader_modules: IdentityManager,
     compute_pipelines: IdentityManager,
     render_pipelines: IdentityManager,
+    textures: IdentityManager,
+    texture_views: IdentityManager,
+    samplers: IdentityManager,
 }
 
 #[derive(Debug, Default)]
@@ -176,6 +179,79 @@ pub extern "C" fn wgpu_client_kill_buffer_id(client: &Client, id: id::BufferId) 
         .lock()
         .select(id.backend())
         .buffers
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_texture_id(client: &Client, device_id: id::DeviceId) -> id::TextureId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .textures
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_texture_id(
+    client: &Client,
+    id: id::TextureId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .textures
+        .free(id)
+}
+
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_texture_view_id(client: &Client, device_id: id::DeviceId) -> id::TextureViewId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .texture_views
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_texture_view_id(
+    client: &Client,
+    id: id::TextureViewId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .texture_views
+        .free(id)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_make_sampler_id(client: &Client, device_id: id::DeviceId) -> id::SamplerId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .samplers
+        .alloc(backend)
+}
+
+#[no_mangle]
+pub extern "C" fn wgpu_client_kill_sampler_id(
+    client: &Client,
+    id: id::SamplerId,
+) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .samplers
         .free(id)
 }
 
