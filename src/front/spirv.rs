@@ -1,3 +1,15 @@
+/*! SPIR-V frontend
+
+## ID lookups
+
+Our IR links to everything with `Token`, while SPIR-V uses IDs.
+In order to keep track of the associations, the parser has many lookup tables.
+There map `spirv::Word` into a specific IR token, plus potentially a bit of
+extra info, such as the related SPIR-V type ID.
+TODO: would be nice to find ways that avoid looking up as much
+
+!*/
+
 use crate::{
     storage::{Storage, Token},
     FastHashMap,
@@ -23,7 +35,7 @@ pub const SUPPORTED_EXT_SETS: &[&str] = &[
 ];
 
 #[derive(Debug)]
-pub enum ParseError {
+pub enum Error {
     InvalidHeader,
     InvalidWordCount,
     UnknownInstruction(u16),
@@ -64,19 +76,19 @@ struct Instruction {
 }
 
 impl Instruction {
-    fn expect(&self, count: u16) -> Result<(), ParseError> {
+    fn expect(&self, count: u16) -> Result<(), Error> {
         if self.wc == count {
             Ok(())
         } else {
-            Err(ParseError::InvalidOperandCount(self.op, self.wc))
+            Err(Error::InvalidOperandCount(self.op, self.wc))
         }
     }
 
-    fn expect_at_least(&self, count: u16) -> Result<(), ParseError> {
+    fn expect_at_least(&self, count: u16) -> Result<(), Error> {
         if self.wc >= count {
             Ok(())
         } else {
-            Err(ParseError::InvalidOperandCount(self.op, self.wc))
+            Err(Error::InvalidOperandCount(self.op, self.wc))
         }
     }
 }
@@ -100,29 +112,29 @@ pub enum ModuleState {
 
 trait Lookup {
     type Target;
-    fn lookup(&self, key: spirv::Word) -> Result<&Self::Target, ParseError>;
+    fn lookup(&self, key: spirv::Word) -> Result<&Self::Target, Error>;
 }
 
 impl<T> Lookup for FastHashMap<spirv::Word, T> {
     type Target = T;
-    fn lookup(&self, key: spirv::Word) -> Result<&T, ParseError> {
+    fn lookup(&self, key: spirv::Word) -> Result<&T, Error> {
         self.get(&key)
-            .ok_or(ParseError::InvalidId(key))
+            .ok_or(Error::InvalidId(key))
     }
 }
 
-fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, ParseError> {
+fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, Error> {
     match word {
         2 => Ok(crate::VectorSize::Bi),
         3 => Ok(crate::VectorSize::Tri),
         4 => Ok(crate::VectorSize::Quad),
-        _ => Err(ParseError::InvalidVectorSize(word))
+        _ => Err(Error::InvalidVectorSize(word))
     }
 }
 
-fn map_storage_class(word: spirv::Word) -> Result<spirv::StorageClass, ParseError> {
+fn map_storage_class(word: spirv::Word) -> Result<spirv::StorageClass, Error> {
     if word > LAST_KNOWN_STORAGE_CLASS as u32 {
-        Err(ParseError::UnsupportedStorageClass(word))
+        Err(Error::UnsupportedStorageClass(word))
     } else {
         Ok(unsafe { std::mem::transmute(word) })
     }
@@ -248,18 +260,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
     }
 
-    fn next(&mut self) -> Result<u32, ParseError> {
-        self.data.next().ok_or(ParseError::IncompleteData)
+    fn next(&mut self) -> Result<u32, Error> {
+        self.data.next().ok_or(Error::IncompleteData)
     }
 
-    fn next_inst(&mut self) -> Result<Instruction, ParseError> {
+    fn next_inst(&mut self) -> Result<Instruction, Error> {
         let word = self.next()?;
         let (wc, opcode) = ((word >> 16) as u16, (word & 0xffff) as u16);
         if wc == 0 {
-            return Err(ParseError::InvalidWordCount);
+            return Err(Error::InvalidWordCount);
         }
         if opcode > LAST_KNOWN_OPCODE as u16 {
-            return Err(ParseError::UnknownInstruction(opcode));
+            return Err(Error::UnknownInstruction(opcode));
         }
 
         Ok(Instruction {
@@ -270,11 +282,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         })
     }
 
-    fn next_string(&mut self, mut count: u16) -> Result<(String, u16), ParseError>{
+    fn next_string(&mut self, mut count: u16) -> Result<(String, u16), Error>{
         self.temp_bytes.clear();
         loop {
             if count == 0 {
-                return Err(ParseError::BadString);
+                return Err(Error::BadString);
             }
             count -= 1;
             let chars = self.next()?.to_le_bytes();
@@ -286,7 +298,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
         std::str::from_utf8(&self.temp_bytes)
             .map(|s| (s.to_owned(), count))
-            .map_err(|_| ParseError::BadString)
+            .map_err(|_| Error::BadString)
     }
 
     fn next_decoration(
@@ -294,10 +306,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst: Instruction,
         base_words: u16,
         dec: &mut Decoration,
-    ) -> Result<(), ParseError> {
+    ) -> Result<(), Error> {
         let raw = self.next()?;
         if raw > LAST_KNOWN_DECORATION as spirv::Word {
-            return Err(ParseError::InvalidDecoration(raw));
+            return Err(Error::InvalidDecoration(raw));
         }
         let dec_typed = unsafe {
             std::mem::transmute::<_, spirv::Decoration>(raw)
@@ -337,7 +349,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn next_block(&mut self, fun: &mut crate::Function) -> Result<(), ParseError> {
+    fn next_block(&mut self, fun: &mut crate::Function) -> Result<(), Error> {
         loop {
             use spirv::Op;
             let inst = self.next_inst()?;
@@ -368,7 +380,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         match self.lookup_type.lookup(index_expr.type_id)?.value {
                             crate::Type::Scalar { kind: crate::ScalarKind::Uint, .. } |
                             crate::Type::Scalar { kind: crate::ScalarKind::Sint, .. } => (),
-                            ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                            ref other => return Err(Error::UnsupportedType(other.clone())),
                         }
                         log::trace!("\t\t\tlooking up type {:?}", acex.type_id);
                         let ty = self.lookup_type.lookup(acex.type_id)?;
@@ -377,7 +389,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 let index = match fun.expressions[index_expr.token] {
                                     crate::Expression::Constant(crate::Constant::Sint(v)) => v as u32,
                                     crate::Expression::Constant(crate::Constant::Uint(v)) => v as u32,
-                                    ref other => return Err(ParseError::InvalidAccessIndex(other.clone()))
+                                    ref other => return Err(Error::InvalidAccessIndex(other.clone()))
                                 };
                                 AccessExpression {
                                     base_token: fun.expressions.append(crate::Expression::AccessIndex {
@@ -386,7 +398,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     }),
                                     type_id: *self.lookup_member_type_id
                                         .get(&(acex.type_id, index))
-                                        .ok_or(ParseError::InvalidAccessType(acex.type_id))?,
+                                        .ok_or(Error::InvalidAccessType(acex.type_id))?,
                                 }
                             }
                             crate::Type::Array { .. } |
@@ -398,10 +410,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         index: index_expr.token,
                                     }),
                                     type_id: ty.base_id
-                                        .ok_or(ParseError::InvalidAccessType(acex.type_id))?,
+                                        .ok_or(Error::InvalidAccessType(acex.type_id))?,
                                 }
                             }
-                            ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                            ref other => return Err(Error::UnsupportedType(other.clone())),
                         };
                     }
 
@@ -431,15 +443,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             crate::Type::Struct(_) => {
                                 *self.lookup_member_type_id
                                     .get(&(lexp.type_id, index))
-                                    .ok_or(ParseError::InvalidAccessType(lexp.type_id))?
+                                    .ok_or(Error::InvalidAccessType(lexp.type_id))?
                             }
                             crate::Type::Array { .. } |
                             crate::Type::Vector { .. } |
                             crate::Type::Matrix { .. } => {
                                 ty.base_id
-                                    .ok_or(ParseError::InvalidAccessType(lexp.type_id))?
+                                    .ok_or(Error::InvalidAccessType(lexp.type_id))?
                             }
-                            ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                            ref other => return Err(Error::UnsupportedType(other.clone())),
                         };
                         lexp = LookupExpression {
                             token: fun.expressions.append(crate::Expression::AccessIndex {
@@ -487,11 +499,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let base_expr = self.lookup_expression.lookup(pointer_id)?;
                     let base_type = self.lookup_type.lookup(base_expr.type_id)?;
                     if base_type.base_id != Some(result_type_id) {
-                        return Err(ParseError::InvalidLoadType(result_type_id));
+                        return Err(Error::InvalidLoadType(result_type_id));
                     }
                     match base_type.value {
                         crate::Type::Pointer { .. } => (),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     }
                     let expr = crate::Expression::Load {
                         pointer: base_expr.token,
@@ -513,11 +525,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let base_type = self.lookup_type.lookup(base_expr.type_id)?;
                     match base_type.value {
                         crate::Type::Pointer { .. } => (),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     };
                     let value_expr = self.lookup_expression.lookup(value_id)?;
                     if base_type.base_id != Some(value_expr.type_id) {
-                        return Err(ParseError::InvalidStoreType(value_expr.type_id));
+                        return Err(Error::InvalidStoreType(value_expr.type_id));
                     }
                     fun.body.push(crate::Statement::Store {
                         pointer: base_expr.token,
@@ -534,7 +546,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_type_id = self.next()?;
                     let (res_size, res_width) = match self.lookup_type.lookup(result_type_id)?.value {
                         crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     };
                     let result_id = self.next()?;
                     let vector_id = self.next()?;
@@ -542,12 +554,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let vector_lexp = self.lookup_expression.lookup(vector_id)?;
                     match self.lookup_type.lookup(vector_lexp.type_id)?.value {
                         crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } if size == res_size && width == res_width => (),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     };
                     let scalar_lexp = self.lookup_expression.lookup(scalar_id)?.clone();
                     match self.lookup_type.lookup(scalar_lexp.type_id)?.value {
                         crate::Type::Scalar { kind: crate::ScalarKind::Float, width } if width == res_width => (),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     };
                     let expr = crate::Expression::Mul(vector_lexp.token, scalar_lexp.token);
                     self.lookup_expression.insert(result_id, LookupExpression {
@@ -560,7 +572,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_type_id = self.next()?;
                     let (res_size, res_width) = match self.lookup_type.lookup(result_type_id)?.value {
                         crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     };
                     let result_id = self.next()?;
                     let matrix_id = self.next()?;
@@ -568,12 +580,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let matrix_lexp = self.lookup_expression.lookup(matrix_id)?;
                     let columns = match self.lookup_type.lookup(matrix_lexp.type_id)?.value {
                         crate::Type::Matrix { columns, rows, kind: crate::ScalarKind::Float, width } if rows == res_size && width == res_width => columns,
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     };
                     let vector_lexp = self.lookup_expression.lookup(vector_id)?.clone();
                     match self.lookup_type.lookup(vector_lexp.type_id)?.value {
                         crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } if size == columns && width == res_width => (),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     };
                     let expr = crate::Expression::Mul(matrix_lexp.token, vector_lexp.token);
                     self.lookup_expression.insert(result_id, LookupExpression {
@@ -606,7 +618,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     match self.lookup_type.lookup(coord_lexp.type_id)?.value {
                         crate::Type::Scalar { kind: crate::ScalarKind::Float, .. } |
                         crate::Type::Vector { kind: crate::ScalarKind::Float, .. } => (),
-                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                        ref other => return Err(Error::UnsupportedType(other.clone())),
                     }
                     //TODO: compare the result type
                     let expr = crate::Expression::ImageSample {
@@ -619,7 +631,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         type_id: result_type_id,
                     });
                 }
-                _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op)),
+                _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
         }
         Ok(())
@@ -646,20 +658,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         expressions
     }
 
-    fn switch(&mut self, state: ModuleState, op: spirv::Op) -> Result<(), ParseError> {
+    fn switch(&mut self, state: ModuleState, op: spirv::Op) -> Result<(), Error> {
         if state < self.state {
-            return Err(ParseError::UnsupportedInstruction(self.state, op))
+            return Err(Error::UnsupportedInstruction(self.state, op))
         } else {
             self.state = state;
             Ok(())
         }
     }
 
-    pub fn parse(&mut self) -> Result<crate::Module, ParseError> {
+    pub fn parse(&mut self) -> Result<crate::Module, Error> {
         let mut module = crate::Module {
             header: {
                 if self.next()? != spirv::MAGIC_NUMBER {
-                    return Err(ParseError::InvalidHeader);
+                    return Err(Error::InvalidHeader);
                 }
                 let version_raw = self.next()?.to_le_bytes();
                 let generator = self.next()?;
@@ -692,13 +704,13 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(2)?;
                     let capability = self.next()?;
                     if capability > LAST_KNOWN_CAPABILITY as u32 {
-                        return Err(ParseError::UnknownCapability(capability));
+                        return Err(Error::UnknownCapability(capability));
                     }
                     let cap = unsafe {
                         std::mem::transmute(capability)
                     };
                     if !SUPPORTED_CAPABILITIES.contains(&cap) {
-                        return Err(ParseError::UnsupportedCapability(cap));
+                        return Err(Error::UnsupportedCapability(cap));
                     }
                 }
                 Op::Extension => {
@@ -706,10 +718,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect_at_least(2)?;
                     let (name, left) = self.next_string(inst.wc - 1)?;
                     if left != 0 {
-                        return Err(ParseError::InvalidOperand);
+                        return Err(Error::InvalidOperand);
                     }
                     if !SUPPORTED_EXTENSIONS.contains(&name.as_str()) {
-                        return Err(ParseError::UnsupportedExtension(name.to_owned()));
+                        return Err(Error::UnsupportedExtension(name.to_owned()));
                     }
                 }
                 Op::ExtInstImport => {
@@ -718,10 +730,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let _result = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 2)?;
                     if left != 0 {
-                        return Err(ParseError::InvalidOperand)
+                        return Err(Error::InvalidOperand)
                     }
                     if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
-                        return Err(ParseError::UnsupportedExtSet(name.to_owned()));
+                        return Err(Error::UnsupportedExtSet(name.to_owned()));
                     }
                 }
                 Op::MemoryModel => {
@@ -735,7 +747,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect_at_least(4)?;
                     let exec_model = self.next()?;
                     if exec_model > LAST_KNOWN_EXECUTION_MODEL as u32 {
-                        return Err(ParseError::UnsupportedExecutionModel(exec_model));
+                        return Err(Error::UnsupportedExecutionModel(exec_model));
                     }
                     let function_id = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 3)?;
@@ -778,7 +790,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 2)?;
                     if left != 0 {
-                        return Err(ParseError::InvalidOperand);
+                        return Err(Error::InvalidOperand);
                     }
                     self.future_decor
                         .entry(id)
@@ -792,7 +804,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let member = self.next()?;
                     let (name, left) = self.next_string(inst.wc - 3)?;
                     if left != 0 {
-                        return Err(ParseError::InvalidOperand);
+                        return Err(Error::InvalidOperand);
                     }
                     self.future_member_decor
                         .entry((id, member))
@@ -840,11 +852,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             kind: match sign {
                                 0 => crate::ScalarKind::Uint,
                                 1 => crate::ScalarKind::Sint,
-                                _ => return Err(ParseError::InvalidSign(sign)),
+                                _ => return Err(Error::InvalidSign(sign)),
                             },
                             width: width
                                 .try_into()
-                                .map_err(|_| ParseError::InvalidTypeWidth(width))?,
+                                .map_err(|_| Error::InvalidTypeWidth(width))?,
                         },
                         base_id: None,
                     });
@@ -859,7 +871,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             kind: crate::ScalarKind::Float,
                             width: width
                                 .try_into()
-                                .map_err(|_| ParseError::InvalidTypeWidth(width))?,
+                                .map_err(|_| Error::InvalidTypeWidth(width))?,
                         },
                         base_id: None,
                     });
@@ -871,7 +883,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let type_id = self.next()?;
                     let (kind, width) = match self.lookup_type.lookup(type_id)?.value {
                         crate::Type::Scalar { kind, width } => (kind, width),
-                        _ => return Err(ParseError::InvalidInnerType(type_id)),
+                        _ => return Err(Error::InvalidInnerType(type_id)),
                     };
                     let component_count = self.next()?;
                     self.lookup_type.insert(id, LookupType {
@@ -891,7 +903,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let num_columns = self.next()?;
                     let (rows, kind, width) = match self.lookup_type.lookup(vector_type_id)?.value {
                         crate::Type::Vector { size, kind, width } => (size, kind, width),
-                        _ => return Err(ParseError::InvalidInnerType(vector_type_id)),
+                        _ => return Err(Error::InvalidInnerType(vector_type_id)),
                     };
                     self.lookup_type.insert(id, LookupType {
                         value: crate::Type::Matrix {
@@ -1026,7 +1038,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         binding,
                         ty: self.lookup_type.lookup(sample_type_id)?.value.clone(),
                         dim: if dim > LAST_KNOWN_DIM as u32 {
-                            return Err(ParseError::UnsupportedDim(dim));
+                            return Err(Error::UnsupportedDim(dim));
                         } else {
                             unsafe { std::mem::transmute(dim) }
                         },
@@ -1087,7 +1099,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::Type::Scalar { kind: crate::ScalarKind::Sint, width } => {
                             let low = self.next()?;
                             let high = if width < 32 {
-                                return Err(ParseError::InvalidTypeWidth(width as u32));
+                                return Err(Error::InvalidTypeWidth(width as u32));
                             } else if width > 32 {
                                 inst.expect(4)?;
                                 self.next()?
@@ -1101,7 +1113,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::Type::Scalar { kind: crate::ScalarKind::Float, width } => {
                             let low = self.next()?;
                             let extended = if width < 32 {
-                                return Err(ParseError::InvalidTypeWidth(width as u32));
+                                return Err(Error::InvalidTypeWidth(width as u32));
                             } else if width > 32 {
                                 inst.expect(4)?;
                                 let high = self.next()?;
@@ -1115,7 +1127,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             };
                             crate::Constant::Float(extended)
                         }
-                        ref other => return Err(ParseError::UnsupportedType(other.clone()))
+                        ref other => return Err(Error::UnsupportedType(other.clone()))
                     };
                     self.lookup_constant.insert(id, LookupConstant {
                         value,
@@ -1135,7 +1147,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let ty = self.lookup_type.lookup(type_id)?.value.clone();
                     let dec = self.future_decor
                         .remove(&id)
-                        .ok_or(ParseError::InvalidBinding(id))?;
+                        .ok_or(Error::InvalidBinding(id))?;
                     let binding = match ty {
                         crate::Type::Pointer(pd) => {
                             match module.complex_types.pointers[pd] {
@@ -1155,7 +1167,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     for member in sd.members.iter() {
                                         if member.binding.is_none() {
                                             log::warn!("Struct {:?} member {:?} doesn't have a binding", token, member);
-                                            return Err(ParseError::InvalidBinding(id));
+                                            return Err(Error::InvalidBinding(id));
                                         }
                                     }
                                     None
@@ -1163,7 +1175,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 _ => {
                                     Some(dec
                                         .get_binding()
-                                        .ok_or(ParseError::InvalidBinding(id))?
+                                        .ok_or(Error::InvalidBinding(id))?
                                     )
                                 }
                             }
@@ -1171,7 +1183,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => {
                             Some(dec
                                 .get_binding()
-                                .ok_or(ParseError::InvalidBinding(id))?
+                                .ok_or(Error::InvalidBinding(id))?
                             )
                         }
                     };
@@ -1197,14 +1209,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let mut fun = {
                         let ft = self.lookup_function_type.lookup(fun_type)?.clone();
                         if ft.return_type_id != result_type {
-                            return Err(ParseError::WrongFunctionResultType(result_type))
+                            return Err(Error::WrongFunctionResultType(result_type))
                         }
                         crate::Function {
                             name: self.future_decor
                                 .remove(&fun_id)
                                 .and_then(|dec| dec.name),
                             control: spirv::FunctionControl::from_bits(fun_control)
-                                .ok_or(ParseError::UnsupportedFunctionControl(fun_control))?,
+                                .ok_or(Error::UnsupportedFunctionControl(fun_control))?,
                             parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
                             return_type: self.lookup_type.lookup(result_type)?.value.clone(),
                             expressions: self.make_expression_storage(),
@@ -1222,12 +1234,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     .lookup(fun_type)?
                                     .parameter_type_ids[i]
                                 {
-                                    return Err(ParseError::WrongFunctionParameterType(type_id))
+                                    return Err(Error::WrongFunctionParameterType(type_id))
                                 }
                                 let ty = self.lookup_type.lookup(type_id)?.value.clone();
                                 fun.parameter_types.push(ty);
                             }
-                            Instruction { op, .. } => return Err(ParseError::InvalidParameter(op)),
+                            Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
                         }
                     }
                     // read body
@@ -1244,7 +1256,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 fun_inst.expect(1)?;
                                 break
                             }
-                            _ => return Err(ParseError::UnsupportedInstruction(self.state, fun_inst.op))
+                            _ => return Err(Error::UnsupportedInstruction(self.state, fun_inst.op))
                         }
                     }
                     // done
@@ -1253,7 +1265,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.clear();
                     self.lookup_sampled_image.clear();
                 }
-                _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op))
+                _ => return Err(Error::UnsupportedInstruction(self.state, inst.op))
                 //TODO
             }
         }
@@ -1281,7 +1293,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 match module.global_variables[token].class {
                     spirv::StorageClass::Input => ep.inputs.push(token),
                     spirv::StorageClass::Output => ep.outputs.push(token),
-                    other => return Err(ParseError::InvalidVariableClass(other))
+                    other => return Err(Error::InvalidVariableClass(other))
                 }
             }
             module.entry_points.push(ep);
@@ -1291,9 +1303,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 }
 
-pub fn parse_u8_slice(data: &[u8]) -> Result<crate::Module, ParseError> {
+pub fn parse_u8_slice(data: &[u8]) -> Result<crate::Module, Error> {
     if data.len() % 4 != 0 {
-        return Err(ParseError::IncompleteData);
+        return Err(Error::IncompleteData);
     }
 
     let words = data
