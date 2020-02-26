@@ -457,6 +457,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         components.push(lexp.token);
                     }
                     let expr = crate::Expression::Compose {
+                        ty: self.lookup_type.lookup(result_type_id)?.value.clone(),
                         components,
                     };
                     self.lookup_expression.insert(id, LookupExpression {

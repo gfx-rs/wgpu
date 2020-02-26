@@ -111,6 +111,7 @@ pub enum Expression {
     },
     Constant(Constant),
     Compose {
+        ty: Type,
         components: Vec<Token<Expression>>,
     },
     FunctionParameter(u32),
