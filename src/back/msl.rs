@@ -49,6 +49,7 @@ enum ResolvedBinding {
 pub enum Error {
     Format(FmtError),
     UnsupportedExecutionModel(spirv::ExecutionModel),
+    UnexpectedLocation,
     MixedExecutionModels(crate::Token<crate::Function>),
     MissingBinding(crate::Token<crate::GlobalVariable>),
     MissingBindTarget(BindSource),
@@ -66,6 +67,7 @@ enum LocationMode {
     VertexInput,
     FragmentOutput,
     Intermediate,
+    Uniform,
 }
 
 pub struct Options<'a> {
@@ -76,14 +78,15 @@ impl Options<'_> {
     fn resolve_binding(&self, binding: &crate::Binding, mode: LocationMode) -> Result<ResolvedBinding, Error> {
         match *binding {
             crate::Binding::BuiltIn(built_in) => Ok(ResolvedBinding::BuiltIn(built_in)),
-            crate::Binding::Location(index) => Ok(match mode {
-                LocationMode::VertexInput => ResolvedBinding::Attribute(index),
-                LocationMode::FragmentOutput => ResolvedBinding::Color(index),
-                LocationMode::Intermediate => ResolvedBinding::User {
+            crate::Binding::Location(index) => match mode {
+                LocationMode::VertexInput => Ok(ResolvedBinding::Attribute(index)),
+                LocationMode::FragmentOutput => Ok(ResolvedBinding::Color(index)),
+                LocationMode::Intermediate => Ok(ResolvedBinding::User {
                     prefix: "loc",
                     index,
-                },
-            }),
+                }),
+                LocationMode::Uniform => Err(Error::UnexpectedLocation),
+            },
             crate::Binding::Descriptor { set, binding } => {
                 let source = BindSource { set, binding };
                 self.binding_map
@@ -114,6 +117,14 @@ impl Indexed for crate::Token<crate::ArrayDeclaration> {
 }
 impl Indexed for crate::Token<crate::StructDeclaration> {
     const CLASS: &'static str = "Struct";
+    fn id(&self) -> usize { self.index() }
+}
+impl Indexed for crate::Token<crate::ImageDeclaration> {
+    const CLASS: &'static str = "Image";
+    fn id(&self) -> usize { self.index() }
+}
+impl Indexed for crate::Token<crate::SamplerDeclaration> {
+    const CLASS: &'static str = "Sampler";
     fn id(&self) -> usize { self.index() }
 }
 impl Indexed for crate::Token<crate::GlobalVariable> {
@@ -235,6 +246,14 @@ impl<T: Display> Display for TypedVar<'_, T> {
                 let decl = &self.2.structs[token];
                 write!(formatter, "{} {}", decl.name.or_index(token), self.1)
             }
+            crate::Type::Image(token) => {
+                let decl = &self.2.images[token];
+                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
+            }
+            crate::Type::Sampler(token) => {
+                let decl = &self.2.samplers[token];
+                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
+            }
         }
     }
 }
@@ -252,7 +271,8 @@ impl Display for TypedGlobalVariable<'_> {
                 let decl = &self.module.complex_types.pointers[token];
                 let ty = match decl.class {
                     spirv::StorageClass::Input |
-                    spirv::StorageClass::Output => &decl.base,
+                    spirv::StorageClass::Output |
+                    spirv::StorageClass::UniformConstant => &decl.base,
                     _ => &var.ty
                 };
                 let tv = TypedVar(ty, &name, &self.module.complex_types);
@@ -288,7 +308,7 @@ impl Display for ResolvedBinding {
                 if let Some(id) = target.buffer {
                     write!(formatter, "buffer({})", id)
                 } else if let Some(id) = target.texture {
-                    write!(formatter, "buffer({})", id)
+                    write!(formatter, "texture({})", id)
                 } else if let Some(id) = target.sampler {
                     write!(formatter, "sampler({})", id)
                 } else {
@@ -431,6 +451,18 @@ impl<W: Write> Writer<W> {
                     other => panic!("Unable to infer Mul for {:?}", other),
                 })
             }
+            crate::Expression::ImageSample { image, sampler, coordinate } => {
+                let ty_image = self.put_expression(image, expressions, module)?;
+                write!(self.out, ".sample(")?;
+                self.put_expression(sampler, expressions, module)?;
+                write!(self.out, ", ")?;
+                self.put_expression(coordinate, expressions, module)?;
+                write!(self.out, ")")?;
+                match ty_image {
+                    crate::Type::Image(token) => Ok(module.complex_types.images[token].ty.clone()),
+                    other => panic!("Unexpected image type {:?}", other),
+                }
+            }
             ref other => panic!("Unsupported {:?}", other),
         }
     }
@@ -442,6 +474,26 @@ impl<W: Write> Writer<W> {
 
         // write down complex types
         writeln!(self.out, "")?;
+        for (token, decl) in module.complex_types.images.iter() {
+            let name = decl.name.or_index(token);
+            let dim = match decl.dim {
+                spirv::Dim::Dim1D => "1d",
+                spirv::Dim::Dim2D => "2d",
+                spirv::Dim::Dim3D => "3d",
+                spirv::Dim::DimCube => "Cube",
+                _ => panic!("Unsupported dim {:?}", decl.dim),
+            };
+            let base = match decl.ty {
+                crate::Type::Scalar { kind, .. } |
+                crate::Type::Vector { kind, .. } => scalar_kind_string(kind),
+                _ => panic!("Unsupported image type {:?}", decl.ty),
+            };
+            writeln!(self.out, "typedef texture{}<{}> {};", dim, base, name)?;
+        }
+        for (token, decl) in module.complex_types.samplers.iter() {
+            let name = decl.name.or_index(token);
+            writeln!(self.out, "typedef sampler {};", name)?;
+        }
         for (token, decl) in module.complex_types.pointers.iter() {
             let name = Starred(decl.name.or_index(token));
             // Input and output are always provided as pointers,
@@ -450,7 +502,7 @@ impl<W: Write> Writer<W> {
             let class = match decl.class {
                 spirv::StorageClass::Input |
                 spirv::StorageClass::Output => continue,
-                spirv::StorageClass::Uniform => "constant",
+                spirv::StorageClass::UniformConstant => "constant",
                 other => {
                     log::warn!("Unexpected pointer class {:?}", other);
                     ""
@@ -513,7 +565,7 @@ impl<W: Write> Writer<W> {
                 let (em_str, in_mode, out_mode) = match em {
                     spirv::ExecutionModel::Vertex => ("vertex", LocationMode::VertexInput, LocationMode::Intermediate),
                     spirv::ExecutionModel::Fragment => ("fragment", LocationMode::Intermediate, LocationMode::FragmentOutput),
-                    spirv::ExecutionModel::GLCompute => ("compute", LocationMode::Intermediate, LocationMode::Intermediate),
+                    spirv::ExecutionModel::GLCompute => ("compute", LocationMode::Uniform, LocationMode::Uniform),
                     _ => return Err(Error::UnsupportedExecutionModel(em)),
                 };
                 for &token in var_inputs.iter() {
@@ -569,10 +621,14 @@ impl<W: Write> Writer<W> {
             for (_, expr) in fun.expressions.iter() {
                 if let crate::Expression::GlobalVariable(token) = *expr {
                     let var = &module.global_variables[token];
-                    if var.class == spirv::StorageClass::Uniform && !uniforms_used.contains(&token) {
+                    if var.class == spirv::StorageClass::UniformConstant && !uniforms_used.contains(&token) {
                         uniforms_used.insert(token);
+                        let binding = var.binding
+                            .as_ref()
+                            .ok_or(Error::MissingBinding(token))?;
+                        let resolved = options.resolve_binding(binding, LocationMode::Uniform)?;
                         let var = TypedGlobalVariable { module, token };
-                        writeln!(self.out, "\t{},", var)?;
+                        writeln!(self.out, "\t{} [[{}]],", var, resolved)?;
                     }
                 }
             }

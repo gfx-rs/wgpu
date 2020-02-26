@@ -12,7 +12,11 @@ fn main() {
     let mut binding_map = naga::back::msl::BindingMap::default();
     binding_map.insert(
         naga::back::msl::BindSource { set: 0, binding: 0 },
-        naga::back::msl::BindTarget { buffer: None, texture: None, sampler: None },
+        naga::back::msl::BindTarget { buffer: None, texture: Some(1), sampler: None },
+    );
+    binding_map.insert(
+        naga::back::msl::BindSource { set: 0, binding: 1 },
+        naga::back::msl::BindTarget { buffer: None, texture: None, sampler: Some(1) },
     );
     let options = naga::back::msl::Options {
         binding_map: &binding_map,

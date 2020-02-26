@@ -66,6 +66,30 @@ pub struct StructDeclaration {
     pub members: Vec<StructMember>,
 }
 
+bitflags::bitflags! {
+    pub struct ImageFlags: u32 {
+        const ARRAYED = 0x1;
+        const MULTISAMPLED = 0x2;
+        const READABLE = 0x4;
+        const WRITABLE = 0x8;
+    }
+}
+
+#[derive(Debug)]
+pub struct ImageDeclaration {
+    pub name: Option<String>,
+    pub binding: Option<Binding>,
+    pub ty: Type,
+    pub dim: spirv::Dim,
+    pub flags: ImageFlags,
+}
+
+#[derive(Debug)]
+pub struct SamplerDeclaration {
+    pub name: Option<String>,
+    pub binding: Option<Binding>,
+}
+
 #[derive(Clone, Debug)]
 pub enum Type {
     Void,
@@ -75,6 +99,8 @@ pub enum Type {
     Pointer(Token<PointerDeclaration>),
     Array(Token<ArrayDeclaration>),
     Struct(Token<StructDeclaration>),
+    Image(Token<ImageDeclaration>),
+    Sampler(Token<SamplerDeclaration>),
 }
 
 #[derive(Clone, Debug)]
@@ -120,6 +146,11 @@ pub enum Expression {
         pointer: Token<Expression>,
     },
     Mul(Token<Expression>, Token<Expression>),
+    ImageSample {
+        image: Token<Expression>,
+        sampler: Token<Expression>,
+        coordinate: Token<Expression>,
+    },
 }
 
 pub type Block = Vec<Statement>;
@@ -173,6 +204,8 @@ pub struct ComplexTypes {
     pub pointers: Storage<PointerDeclaration>,
     pub arrays: Storage<ArrayDeclaration>,
     pub structs: Storage<StructDeclaration>,
+    pub images: Storage<ImageDeclaration>,
+    pub samplers: Storage<SamplerDeclaration>,
 }
 
 #[derive(Debug)]

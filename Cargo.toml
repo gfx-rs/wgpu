@@ -5,6 +5,7 @@ authors = ["Dzmitry Malyshau <kvarkus@gmail.com>"]
 edition = "2018"
 
 [dependencies]
+bitflags = "1"
 fxhash = "0.2"
 log = "0.4"
 spirv_headers = "1"

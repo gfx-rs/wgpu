@@ -11,6 +11,7 @@ const LAST_KNOWN_EXECUTION_MODEL: spirv::ExecutionModel = spirv::ExecutionModel:
 const LAST_KNOWN_STORAGE_CLASS: spirv::StorageClass = spirv::StorageClass::StorageBuffer;
 const LAST_KNOWN_DECORATION: spirv::Decoration = spirv::Decoration::NonUniformEXT;
 const LAST_KNOWN_BUILT_IN: spirv::BuiltIn = spirv::BuiltIn::FullyCoveredEXT;
+const LAST_KNOWN_DIM: spirv::Dim = spirv::Dim::DimSubpassData;
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
@@ -35,6 +36,7 @@ pub enum ParseError {
     UnsupportedExecutionModel(u32),
     UnsupportedStorageClass(u32),
     UnsupportedFunctionControl(u32),
+    UnsupportedDim(u32),
     InvalidParameter(spirv::Op),
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
@@ -205,6 +207,12 @@ struct LookupExpression {
     type_id: spirv::Word,
 }
 
+#[derive(Clone, Debug)]
+struct LookupSampledImage {
+    image: Token<crate::Expression>,
+    sampler: Token<crate::Expression>,
+}
+
 pub struct Parser<I> {
     data: I,
     state: ModuleState,
@@ -216,6 +224,7 @@ pub struct Parser<I> {
     lookup_constant: FastHashMap<spirv::Word, LookupConstant>,
     lookup_variable: FastHashMap<spirv::Word, LookupVariable>,
     lookup_expression: FastHashMap<spirv::Word, LookupExpression>,
+    lookup_sampled_image: FastHashMap<spirv::Word, LookupSampledImage>,
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, Token<crate::Function>>,
 }
@@ -233,6 +242,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             lookup_constant: FastHashMap::default(),
             lookup_variable: FastHashMap::default(),
             lookup_expression: FastHashMap::default(),
+            lookup_sampled_image: FastHashMap::default(),
             lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
         }
@@ -571,6 +581,44 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         type_id: result_type_id,
                     });
                 }
+                Op::SampledImage => {
+                    inst.expect(5)?;
+                    let _result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let image_id = self.next()?;
+                    let sampler_id = self.next()?;
+                    let image_lexp = self.lookup_expression.lookup(image_id)?;
+                    let sampler_lexp = self.lookup_expression.lookup(sampler_id)?;
+                    //TODO: compare the result type
+                    self.lookup_sampled_image.insert(result_id, LookupSampledImage {
+                        image: image_lexp.token,
+                        sampler: sampler_lexp.token,
+                    });
+                }
+                Op::ImageSampleImplicitLod => {
+                    inst.expect_at_least(5)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let sampled_image_id = self.next()?;
+                    let coordinate_id = self.next()?;
+                    let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
+                    let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
+                    match self.lookup_type.lookup(coord_lexp.type_id)?.value {
+                        crate::Type::Scalar { kind: crate::ScalarKind::Float, .. } |
+                        crate::Type::Vector { kind: crate::ScalarKind::Float, .. } => (),
+                        ref other => return Err(ParseError::UnsupportedType(other.clone())),
+                    }
+                    //TODO: compare the result type
+                    let expr = crate::Expression::ImageSample {
+                        image: si_lexp.image,
+                        sampler: si_lexp.sampler,
+                        coordinate: coord_lexp.token,
+                    };
+                    self.lookup_expression.insert(result_id, LookupExpression {
+                        token: fun.expressions.append(expr),
+                        type_id: result_type_id,
+                    });
+                }
                 _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op)),
             }
         }
@@ -626,6 +674,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 pointers: Storage::new(),
                 arrays: Storage::new(),
                 structs: Storage::new(),
+                images: Storage::new(),
+                samplers: Storage::new(),
             },
             global_variables: Storage::new(),
             functions: Storage::new(),
@@ -873,14 +923,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let storage = self.next()?;
                     let type_id = self.next()?;
-                    let pd = crate::PointerDeclaration {
+                    let decl = crate::PointerDeclaration {
                         name: self.future_decor
                             .remove(&id)
                             .and_then(|dec| dec.name),
                         base: self.lookup_type.lookup(type_id)?.value.clone(),
                         class: map_storage_class(storage)?,
                     };
-                    let token = module.complex_types.pointers.append(pd);
+                    let token = module.complex_types.pointers.append(decl);
                     self.lookup_type.insert(id, LookupType {
                         value: crate::Type::Pointer(token),
                         base_id: Some(type_id),
@@ -892,14 +942,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let type_id = self.next()?;
                     let length = self.next()?;
-                    let ad = crate::ArrayDeclaration {
+                    let decl = crate::ArrayDeclaration {
                         name: self.future_decor
                             .remove(&id)
                             .and_then(|dec| dec.name),
                         base: self.lookup_type.lookup(type_id)?.value.clone(),
                         length,
                     };
-                    let token = module.complex_types.arrays.append(ad);
+                    let token = module.complex_types.arrays.append(decl);
                     self.lookup_type.insert(id, LookupType {
                         value: crate::Type::Array(token),
                         base_id: Some(type_id),
@@ -909,7 +959,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.switch(ModuleState::Type, inst.op)?;
                     inst.expect_at_least(2)?;
                     let id = self.next()?;
-                    let mut sd = crate::StructDeclaration {
+                    let mut decl = crate::StructDeclaration {
                         name: self.future_decor
                             .remove(&id)
                             .and_then(|dec| dec.name),
@@ -919,19 +969,101 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let type_id = self.next()?;
                         let ty = self.lookup_type.lookup(type_id)?.value.clone();
                         self.lookup_member_type_id.insert((id, i), type_id);
-                        let dec = self.future_member_decor
+                        let decor = self.future_member_decor
                             .remove(&(id, i))
                             .unwrap_or_default();
-                        let binding = dec.get_binding();
-                        sd.members.push(crate::StructMember {
-                            name: dec.name,
+                        let binding = decor.get_binding();
+                        decl.members.push(crate::StructMember {
+                            name: decor.name,
                             binding,
                             ty,
                         });
                     }
-                    let token = module.complex_types.structs.append(sd);
+                    let token = module.complex_types.structs.append(decl);
                     self.lookup_type.insert(id, LookupType {
                         value: crate::Type::Struct(token),
+                        base_id: None,
+                    });
+                }
+                Op::TypeImage => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect_at_least(9)?;
+
+                    let id = self.next()?;
+                    let sample_type_id = self.next()?;
+                    let dim = self.next()?;
+                    let mut flags = crate::ImageFlags::empty();
+                    let _is_depth = self.next()?;
+                    if self.next()? != 0 {
+                        flags |= crate::ImageFlags::ARRAYED;
+                    }
+                    if self.next()? != 0 {
+                        flags |= crate::ImageFlags::MULTISAMPLED;
+                    }
+                    let is_sampled = self.next()?;
+                    let _format = self.next()?;
+                    let access = if inst.wc > 9 {
+                        inst.expect(10)?;
+                        self.next()?
+                    } else if is_sampled == 1 {
+                        0 // read-only
+                    } else {
+                        2 // read-write
+                    };
+                    if access == 0 || access == 2 {
+                        flags |= crate::ImageFlags::READABLE;
+                    }
+                    if access == 1 || access == 2 {
+                        flags |= crate::ImageFlags::WRITABLE;
+                    }
+                    let decor = self.future_decor
+                        .remove(&id)
+                        .unwrap_or_default();
+                    let binding = decor.get_binding();
+
+                    let decl = crate::ImageDeclaration {
+                        name: decor.name,
+                        binding,
+                        ty: self.lookup_type.lookup(sample_type_id)?.value.clone(),
+                        dim: if dim > LAST_KNOWN_DIM as u32 {
+                            return Err(ParseError::UnsupportedDim(dim));
+                        } else {
+                            unsafe { std::mem::transmute(dim) }
+                        },
+                        flags,
+                    };
+                    let token = module.complex_types.images.append(decl);
+                    self.lookup_type.insert(id, LookupType {
+                        value: crate::Type::Image(token),
+                        base_id: Some(sample_type_id),
+                    });
+                }
+                Op::TypeSampledImage => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(3)?;
+                    let id = self.next()?;
+                    let image_id = self.next()?;
+                    self.lookup_type.insert(id, LookupType {
+                        value: self.lookup_type.lookup(image_id)?.value.clone(),
+                        base_id: Some(image_id),
+                    });
+                }
+                Op::TypeSampler => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(2)?;
+                    let id = self.next()?;
+                    let decor = self.future_decor
+                        .remove(&id)
+                        .unwrap_or_default();
+                    let binding = decor.get_binding();
+
+                    let decl = crate::SamplerDeclaration {
+                        name: decor.name,
+                        binding,
+                    };
+                    let token = module.complex_types.samplers.append(decl);
+                    self.lookup_type.insert(id, LookupType {
+                        value: crate::Type::Sampler(token),
                         base_id: None,
                     });
                 }
@@ -1119,6 +1251,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let token = module.functions.append(fun);
                     self.lookup_function.insert(fun_id, token);
                     self.lookup_expression.clear();
+                    self.lookup_sampled_image.clear();
                 }
                 _ => return Err(ParseError::UnsupportedInstruction(self.state, inst.op))
                 //TODO
