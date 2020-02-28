@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate pest_derive;
 extern crate spirv_headers as spirv;
 
 pub mod back;
@@ -15,7 +17,7 @@ use std::{
 type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
 type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Header {
     pub version: (u8, u8, u8),
     pub generator: u32,

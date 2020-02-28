@@ -1,0 +1,90 @@
+translation_unit = _{ SOI ~ global_decl* ~ EOI }
+
+global_decl = {
+      ";"
+    | import_decl ~ ";"
+    | global_variable_decl ~ ";"
+//  | global_constant_decl SEMICOLON
+//  | entry_point_decl SEMICOLON
+//  | type_alias SEMICOLON
+//  | function_decl
+}
+
+import_decl = { "import" ~ string ~ "as" ~ (ident ~ "::")* ~ ident}
+
+global_variable_decl = {
+    variable_decoration_list ~ variable_decl
+  | variable_decoration_list ~ variable_decl ~ "=" ~ const_expr
+}
+
+variable_decoration_list = { "[[" ~ (variable_decoration ~ ",")* ~ variable_decoration ~ "]]" }
+
+variable_decoration = {
+    "location" ~ int_literal
+//  | BUILTIN builtin_decoration
+//  | BINDING INT_LITERAL
+//  | SET INT_LITERAL
+}
+
+variable_decl = { "var" ~ variable_storage_decoration? ~ variable_ident_decl }
+variable_storage_decoration = _{ "<" ~ storage_class ~ ">" }
+variable_ident_decl = { ident ~ ":" ~ type_decl }
+
+storage_class = {
+    "in"
+  | "out"
+  | "uniform"
+//  | WORKGROUP
+//  | UNIFORM_CONSTANT
+//  | STORAGE_BUFFER
+//  | IMAGE
+//  | PUSH_CONSTANT
+  | "private"
+  | "function"
+}
+
+const_literal = {
+    int_literal
+//  | UINT_LITERAL
+//  | FLOAT_LITERAL
+  | "true"
+  | "false"
+}
+
+const_expr = {
+      type_decl ~ "(" ~ (const_expr ~ ",")? ~ const_expr ~ ")"
+    | const_literal
+}
+
+type_decl = {
+      scalar_type
+//  | VEC2 LESS_THAN type_decl GREATER_THAN
+//  | VEC3 LESS_THAN type_decl GREATER_THAN
+//  | VEC3 LESS_THAN type_decl GREATER_THAN
+//  | PTR LESS_THAN storage_class, type_decl GREATER_THAN
+//  | ARRAY LESS_THAN type_decl COMMA INT_LITERAL GREATER_THAN
+//  | ARRAY LESS_THAN type_decl GREATER_THAN
+//  | MAT2x2 LESS_THAN type_decl GREATER_THAN
+//  | MAT2x3 LESS_THAN type_decl GREATER_THAN
+//  | MAT2x4 LESS_THAN type_decl GREATER_THAN
+//  | MAT3x2 LESS_THAN type_decl GREATER_THAN
+//  | MAT3x3 LESS_THAN type_decl GREATER_THAN
+//  | MAT3x4 LESS_THAN type_decl GREATER_THAN
+//  | MAT4x2 LESS_THAN type_decl GREATER_THAN
+//  | MAT4x3 LESS_THAN type_decl GREATER_THAN
+//  | MAT4x4 LESS_THAN type_decl GREATER_THAN
+    | ident
+}
+
+scalar_type = {
+    "bool"
+  | "f32"
+  | "i32"
+  | "u32"
+}
+
+ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
+int_literal = @{ ("-"? ~ "0x"? ~ (ASCII_DIGIT | 'a'..'f' | 'A'..'F')+) | "0" | ("-"? ~ '1'..'9' ~ ASCII_DIGIT*) }
+string = @{ "\"" ~ ( "\"\"" | (!"\"" ~ ANY) )* ~ "\"" }
+
+WHITESPACE = _{ " " | "\t" | "\n" }

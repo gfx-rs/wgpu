@@ -12,14 +12,14 @@ This is an experimental shader translation library for the needs of gfx-rs proje
 Front-end       |       Status       | Notes |
 --------------- | ------------------ | ----- |
 SPIR-V (binary) | :construction:     |       |
-Tint            |                    |       |
+WGSL (Tint)     | :construction:     |       |
 GLSL (Vulkan)   |                    |       |
 Rust            |                    |       |
 
 Back-end        |       Status       | Notes |
 --------------- | ------------------ | ----- |
 SPIR-V (binary) |                    |       |
-Tint            |                    |       |
+WGSL            |                    |       |
 MSL             | :construction:     |       |
 HLSL            |                    |       |
 GLSL            |                    |       |

@@ -668,31 +668,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
     }
 
     pub fn parse(&mut self) -> Result<crate::Module, Error> {
-        let mut module = crate::Module {
-            header: {
-                if self.next()? != spirv::MAGIC_NUMBER {
-                    return Err(Error::InvalidHeader);
-                }
-                let version_raw = self.next()?.to_le_bytes();
-                let generator = self.next()?;
-                let _bound = self.next()?;
-                let _schema = self.next()?;
-                crate::Header {
-                    version: (version_raw[2], version_raw[1], version_raw[0]),
-                    generator,
-                }
-            },
-            complex_types: crate::ComplexTypes {
-                pointers: Storage::new(),
-                arrays: Storage::new(),
-                structs: Storage::new(),
-                images: Storage::new(),
-                samplers: Storage::new(),
-            },
-            global_variables: Storage::new(),
-            functions: Storage::new(),
-            entry_points: Vec::new(),
-        };
+        let mut module = crate::Module::from_header({
+            if self.next()? != spirv::MAGIC_NUMBER {
+                return Err(Error::InvalidHeader);
+            }
+            let version_raw = self.next()?.to_le_bytes();
+            let generator = self.next()?;
+            let _bound = self.next()?;
+            let _schema = self.next()?;
+            crate::Header {
+                version: (version_raw[2], version_raw[1], version_raw[0]),
+                generator,
+            }
+        });
         let mut entry_points = Vec::new();
 
         while let Ok(inst) = self.next_inst() {

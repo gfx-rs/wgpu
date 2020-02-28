@@ -13,6 +13,8 @@ license = "MPL-2.0"
 bitflags = "1"
 fxhash = "0.2"
 log = "0.4"
+pest = "2"
+pest_derive = "2"
 spirv_headers = "1"
 
 [dev-dependencies]
