@@ -13,6 +13,10 @@ async fn run() {
         .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
         .collect();
 
+    println!("Times: {:?}", execute_gpu(numbers).await);
+}
+
+async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let slice_size = numbers.len() * std::mem::size_of::<u32>();
     let size = slice_size as wgpu::BufferAddress;
 
@@ -92,18 +96,38 @@ async fn run() {
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
     queue.submit(&[encoder.finish()]);
-
     if let Ok(mapping) = staging_buffer.map_read(0u64, size).await {
-        let times : Box<[u32]> = mapping
+        mapping
             .as_slice()
             .chunks_exact(4)
             .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-            .collect();
-
-        println!("Times: {:?}", times);
+            .collect()
+    } else {
+        panic!("failed to run compute on gpu!")
     }
 }
 
 fn main() {
     futures::executor::block_on(run());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_1(){
+        let input = vec!(1, 2, 3, 4);
+        futures::executor::block_on(assert_execute_gpu(input, vec!(0, 1, 7, 2)));
+    }
+
+    #[test]
+    fn test_compute_2(){
+        let input = vec!(5, 23, 10, 9);
+        futures::executor::block_on(assert_execute_gpu(input, vec!(5, 15, 6, 19)));
+    }
+
+    async fn assert_execute_gpu(input: Vec<u32>, expected: Vec<u32>){
+        assert_eq!(execute_gpu(input).await, expected);
+    }
 }
