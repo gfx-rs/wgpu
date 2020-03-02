@@ -20,7 +20,10 @@ use std::{
     },
 };
 
-use crate::{FastHashMap, FastHashSet};
+use crate::{
+    storage::Token,
+    FastHashMap, FastHashSet
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct BindTarget {
@@ -107,24 +110,8 @@ trait Indexed {
     fn id(&self) -> usize;
 }
 
-impl Indexed for crate::Token<crate::PointerDeclaration> {
-    const CLASS: &'static str = "Pointer";
-    fn id(&self) -> usize { self.index() }
-}
-impl Indexed for crate::Token<crate::ArrayDeclaration> {
-    const CLASS: &'static str = "Array";
-    fn id(&self) -> usize { self.index() }
-}
-impl Indexed for crate::Token<crate::StructDeclaration> {
-    const CLASS: &'static str = "Struct";
-    fn id(&self) -> usize { self.index() }
-}
-impl Indexed for crate::Token<crate::ImageDeclaration> {
-    const CLASS: &'static str = "Image";
-    fn id(&self) -> usize { self.index() }
-}
-impl Indexed for crate::Token<crate::SamplerDeclaration> {
-    const CLASS: &'static str = "Sampler";
+impl Indexed for crate::Token<crate::Type> {
+    const CLASS: &'static str = "Type";
     fn id(&self) -> usize { self.index() }
 }
 impl Indexed for crate::Token<crate::GlobalVariable> {
@@ -218,46 +205,6 @@ impl<T: Display> Display for Starred<T> {
     }
 }
 
-struct TypedVar<'a, T>(&'a crate::Type, &'a T, &'a crate::ComplexTypes);
-impl<T: Display> Display for TypedVar<'_, T> {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
-        match *self.0 {
-            crate::Type::Void => {
-                write!(formatter, "void {}", self.1)
-            },
-            crate::Type::Scalar { kind, .. } => {
-                write!(formatter, "{} {}", scalar_kind_string(kind), self.1)
-            },
-            crate::Type::Vector { size, kind, .. } => {
-                write!(formatter, "{}{} {}", scalar_kind_string(kind), vector_size_string(size), self.1)
-            },
-            crate::Type::Matrix { columns, rows, kind, .. } => {
-                write!(formatter, "{}{}x{} {}", scalar_kind_string(kind), vector_size_string(columns), vector_size_string(rows), self.1)
-            }
-            crate::Type::Pointer(token) => {
-                let decl = &self.2.pointers[token];
-                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
-            }
-            crate::Type::Array(token) => {
-                let decl = &self.2.arrays[token];
-                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
-            }
-            crate::Type::Struct(token) => {
-                let decl = &self.2.structs[token];
-                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
-            }
-            crate::Type::Image(token) => {
-                let decl = &self.2.images[token];
-                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
-            }
-            crate::Type::Sampler(token) => {
-                let decl = &self.2.samplers[token];
-                write!(formatter, "{} {}", decl.name.or_index(token), self.1)
-            }
-        }
-    }
-}
-
 struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
     token: crate::Token<crate::GlobalVariable>,
@@ -266,17 +213,17 @@ impl Display for TypedGlobalVariable<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         let var = &self.module.global_variables[self.token];
         let name = var.name.or_index(self.token);
-        match var.ty {
-            crate::Type::Pointer(token) => {
-                let decl = &self.module.complex_types.pointers[token];
-                let ty = match decl.class {
+        let ty = &self.module.types[var.ty];
+        match ty.inner {
+            crate::TypeInner::Pointer { base, class }  => {
+                let ty_token = match class {
                     spirv::StorageClass::Input |
                     spirv::StorageClass::Output |
-                    spirv::StorageClass::UniformConstant => &decl.base,
-                    _ => &var.ty
+                    spirv::StorageClass::UniformConstant => base,
+                    _ => var.ty
                 };
-                let tv = TypedVar(ty, &name, &self.module.complex_types);
-                write!(formatter, "{}", tv)
+                let ty_name = self.module.types[ty_token].name.or_index(ty_token);
+                write!(formatter, "{} {}", ty_name, name)
             }
             _ => panic!("Unexpected global type {:?}", var.ty),
         }
@@ -343,59 +290,83 @@ const NAME_INPUT: &str = "input";
 const NAME_OUTPUT: &str = "output";
 const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
 
+#[derive(Debug)]
+enum MaybeOwned<'a, T: 'a> {
+    Borrowed(&'a T),
+    Owned(T),
+}
+
+impl<T> MaybeOwned<'_, T> {
+    fn borrow(&self) -> &T {
+        match *self {
+            MaybeOwned::Borrowed(inner) => inner,
+            MaybeOwned::Owned(ref inner) => inner,
+        }
+    }
+}
+
+impl crate::Module {
+    fn borrow_type(&self, token: Token<crate::Type>) -> MaybeOwned<crate::TypeInner> {
+        MaybeOwned::Borrowed(&self.types[token].inner)
+    }
+}
+
 impl<W: Write> Writer<W> {
     fn put_expression<'a>(
         &mut self,
         expr_token: crate::Token<crate::Expression>,
         expressions: &crate::Storage<crate::Expression>,
-        module: &crate::Module,
-    ) -> Result<crate::Type, Error> {
+        module: &'a crate::Module,
+    ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error> {
         let expression = &expressions[expr_token];
         log::trace!("expression {:?}", expression);
         match *expression {
             crate::Expression::AccessIndex { base, index } => {
-                match self.put_expression(base, expressions, module)? {
-                    crate::Type::Struct(token) => {
-                        let member = &module.complex_types.structs[token].members[index as usize];
+                match *self.put_expression(base, expressions, module)?.borrow() {
+                    crate::TypeInner::Struct { ref members } => {
+                        let member = &members[index as usize];
                         let name = member.name.or_index(MemberIndex(index as usize));
                         write!(self.out, ".{}", name)?;
-                        Ok(member.ty.clone())
+                        Ok(module.borrow_type(member.ty))
                     }
-                    crate::Type::Matrix { rows, kind, width, .. } => {
+                    crate::TypeInner::Matrix { rows, kind, width, .. } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
-                        Ok(crate::Type::Vector { size: rows, kind, width })
+                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector { size: rows, kind, width }))
                     }
-                    crate::Type::Vector { kind, width, .. } => {
+                    crate::TypeInner::Vector { kind, width, .. } => {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
-                        Ok(crate::Type::Scalar { kind, width })
+                        Ok(MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }))
                     }
-                    _ => {
+                    crate::TypeInner::Array { base, size } => {
+                        assert!(index < size);
                         write!(self.out, "[{}]", index)?;
-                        Ok(crate::Type::Void) //TODO
+                        Ok(module.borrow_type(base))
                     }
+                    ref other => panic!("Unexpected indexing of {:?}", other),
                 }
             }
-            crate::Expression::Constant(ref constant) => {
-                let kind = match *constant {
-                    crate::Constant::Sint(value) => {
+            crate::Expression::Constant(token) => {
+                let kind = match module.constants[token].inner {
+                    crate::ConstantInner::Sint(value) => {
                         write!(self.out, "{}", value)?;
                         crate::ScalarKind::Sint
                     }
-                    crate::Constant::Uint(value) => {
+                    crate::ConstantInner::Uint(value) => {
                         write!(self.out, "{}", value)?;
                         crate::ScalarKind::Uint
                     }
-                    crate::Constant::Float(value) => {
+                    crate::ConstantInner::Float(value) => {
                         write!(self.out, "{}", value)?;
                         crate::ScalarKind::Float
                     }
                 };
                 let width = 32; //TODO: not sure how to get that...
-                Ok(crate::Type::Scalar { kind, width })
+                Ok(MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }))
             }
-            crate::Expression::Compose { ref ty, ref components } => {
-                match *ty {
-                    crate::Type::Vector { size, kind, .. } => {
+            crate::Expression::Compose { ty, ref components } => {
+                let inner = &module.types[ty].inner;
+                match *inner {
+                    crate::TypeInner::Vector { size, kind, .. } => {
                         write!(self.out, "{}{}(", scalar_kind_string(kind), vector_size_string(size))?;
                         for (i, &token) in components.iter().enumerate() {
                             if i != 0 {
@@ -407,16 +378,18 @@ impl<W: Write> Writer<W> {
                     }
                     _ => panic!("Unsupported compose {:?}", ty),
                 }
-                Ok(ty.clone())
+                Ok(MaybeOwned::Borrowed(inner))
             }
             crate::Expression::GlobalVariable(token) => {
                 let var = &module.global_variables[token];
+                let inner = &module.types[var.ty].inner;
                 match var.class {
                     spirv::StorageClass::Output => {
                         self.out.write_str(NAME_OUTPUT)?;
-                        if let crate::Type::Pointer(pt) = var.ty {
-                            if let crate::Type::Struct(_) = module.complex_types.pointers[pt].base {
-                                return Ok(module.complex_types.pointers[pt].base.clone());
+                        if let crate::TypeInner::Pointer { base, .. } = *inner {
+                            let base_inner = &module.types[base].inner;
+                            if let crate::TypeInner::Struct { .. } = *base_inner {
+                                return Ok(MaybeOwned::Borrowed(base_inner));
                             }
                         }
                         self.out.write_str(".")?;
@@ -428,15 +401,15 @@ impl<W: Write> Writer<W> {
                 }
                 let name = var.name.or_index(token);
                 write!(self.out, "{}", name)?;
-                Ok(var.ty.clone())
+                Ok(MaybeOwned::Borrowed(inner))
             }
             crate::Expression::Load { pointer } => {
                 //write!(self.out, "*")?;
-                match self.put_expression(pointer, expressions, module)? {
-                    crate::Type::Pointer(token) => {
-                        Ok(module.complex_types.pointers[token].base.clone())
+                match *self.put_expression(pointer, expressions, module)?.borrow() {
+                    crate::TypeInner::Pointer { base, .. } => {
+                        Ok(module.borrow_type(base))
                     }
-                    other => panic!("Unexpected load pointer {:?}", other),
+                    ref other => panic!("Unexpected load pointer {:?}", other),
                 }
             }
             crate::Expression::Mul(left, right) => {
@@ -445,9 +418,9 @@ impl<W: Write> Writer<W> {
                 write!(self.out, " * ")?;
                 let ty_right = self.put_expression(right, expressions, module)?;
                 write!(self.out, ")")?;
-                Ok(match (ty_left, ty_right) {
-                    (crate::Type::Vector { size, kind, width }, crate::Type::Scalar { .. }) =>
-                        crate::Type::Vector { size, kind, width },
+                Ok(match (ty_left.borrow(), ty_right.borrow()) {
+                    (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Scalar { .. }) =>
+                        MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
                     other => panic!("Unable to infer Mul for {:?}", other),
                 })
             }
@@ -458,9 +431,9 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ", ")?;
                 self.put_expression(coordinate, expressions, module)?;
                 write!(self.out, ")")?;
-                match ty_image {
-                    crate::Type::Image(token) => Ok(module.complex_types.images[token].ty.clone()),
-                    other => panic!("Unexpected image type {:?}", other),
+                match *ty_image.borrow() {
+                    crate::TypeInner::Image { base, .. } => Ok(module.borrow_type(base)),
+                    ref other => panic!("Unexpected image type {:?}", other),
                 }
             }
             ref other => panic!("Unsupported {:?}", other),
@@ -474,65 +447,77 @@ impl<W: Write> Writer<W> {
 
         // write down complex types
         writeln!(self.out, "")?;
-        for (token, decl) in module.complex_types.images.iter() {
-            let name = decl.name.or_index(token);
-            let dim = match decl.dim {
-                spirv::Dim::Dim1D => "1d",
-                spirv::Dim::Dim2D => "2d",
-                spirv::Dim::Dim3D => "3d",
-                spirv::Dim::DimCube => "Cube",
-                _ => panic!("Unsupported dim {:?}", decl.dim),
-            };
-            let base = match decl.ty {
-                crate::Type::Scalar { kind, .. } |
-                crate::Type::Vector { kind, .. } => scalar_kind_string(kind),
-                _ => panic!("Unsupported image type {:?}", decl.ty),
-            };
-            writeln!(self.out, "typedef texture{}<{}> {};", dim, base, name)?;
-        }
-        for (token, decl) in module.complex_types.samplers.iter() {
-            let name = decl.name.or_index(token);
-            writeln!(self.out, "typedef sampler {};", name)?;
-        }
-        for (token, decl) in module.complex_types.pointers.iter() {
-            let name = Starred(decl.name.or_index(token));
-            // Input and output are always provided as pointers,
-            // but we are only interested in the contents.
-            //TODO: consider resolving this at the root
-            let class = match decl.class {
-                spirv::StorageClass::Input |
-                spirv::StorageClass::Output => continue,
-                spirv::StorageClass::UniformConstant => "constant",
-                other => {
-                    log::warn!("Unexpected pointer class {:?}", other);
-                    ""
+        for (token, ty) in module.types.iter() {
+            write!(self.out, "typedef ")?;
+            let name = ty.name.or_index(token);
+            match ty.inner {
+                crate::TypeInner::Void => {
+                    write!(self.out, "void {}", name)?;
+                },
+                crate::TypeInner::Scalar { kind, .. } => {
+                    write!(self.out, "{} {}", scalar_kind_string(kind), name)?;
+                },
+                crate::TypeInner::Vector { size, kind, .. } => {
+                    write!(self.out, "{}{} {}", scalar_kind_string(kind), vector_size_string(size), name)?;
+                },
+                crate::TypeInner::Matrix { columns, rows, kind, .. } => {
+                    write!(self.out, "{}{}x{} {}", scalar_kind_string(kind), vector_size_string(columns), vector_size_string(rows), name)?;
                 }
-            };
-            if let crate::Type::Struct(st) = decl.base {
-                let var = module.complex_types.structs[st].name.or_index(st);
-                writeln!(self.out, "struct {}; //forward decl", var)?;
-            }
-            let tv = TypedVar(&decl.base, &name, &module.complex_types);
-            writeln!(self.out, "typedef {} {};", class, tv)?;
-        }
-        for (token, decl) in module.complex_types.arrays.iter() {
-            let name = decl.name.or_index(token);
-            let tv = TypedVar(&decl.base, &name, &module.complex_types);
-            writeln!(self.out, "typedef {}[{}];", tv, decl.length)?;
-        }
-        for (token, decl) in module.complex_types.structs.iter() {
-            writeln!(self.out, "struct {} {{", decl.name.or_index(token))?;
-            for (index, member) in decl.members.iter().enumerate() {
-                let name = member.name.or_index(MemberIndex(index));
-                let tv = TypedVar(&member.ty, &name, &module.complex_types);
-                write!(self.out, "\t{}", tv)?;
-                if let Some(ref binding) = member.binding {
-                    let resolved = options.resolve_binding(binding, LocationMode::Intermediate)?;
-                    write!(self.out, " [[{}]]", resolved)?;
+                crate::TypeInner::Pointer { base, class } => {
+                    let base_name = module.types[base].name.or_index(base);
+                    let class_name = match class {
+                        spirv::StorageClass::Input |
+                        spirv::StorageClass::Output => continue,
+                        spirv::StorageClass::UniformConstant => "constant",
+                        other => {
+                            log::warn!("Unexpected pointer class {:?}", other);
+                            ""
+                        }
+                    };
+                    write!(self.out, "{} {} *{}", class_name, base_name, name)?;
                 }
-                writeln!(self.out, ";")?;
+                crate::TypeInner::Array { base, size } => {
+                    let base_name = module.types[base].name.or_index(base);
+                    write!(self.out, "{} {}[{}]", base_name, name, size)?;
+                }
+                crate::TypeInner::Struct { ref members } => {
+                    writeln!(self.out, "struct {} {{", name)?;
+                    for (index, member) in members.iter().enumerate() {
+                        let name = member.name.or_index(MemberIndex(index));
+                        let base_name = module.types[member.ty].name.or_index(member.ty);
+                        write!(self.out, "\t{} {}", base_name, name)?;
+                        if let Some(ref binding) = member.binding {
+                            let resolved = options.resolve_binding(binding, LocationMode::Intermediate)?;
+                            write!(self.out, " [[{}]]", resolved)?;
+                        }
+                        writeln!(self.out, ";")?;
+                    }
+                    writeln!(self.out, "}};")?;
+                }
+                crate::TypeInner::Image { base, dim, flags } => {
+                    let base_name = module.types[base].name.or_index(base);
+                    let dim = match dim {
+                        spirv::Dim::Dim1D => "1d",
+                        spirv::Dim::Dim2D => "2d",
+                        spirv::Dim::Dim3D => "3d",
+                        spirv::Dim::DimCube => "Cube",
+                        _ => panic!("Unsupported dim {:?}", dim),
+                    };
+                    let access = if flags.contains(crate::ImageFlags::READABLE | crate::ImageFlags::WRITABLE) {
+                        "read_write"
+                    } else if flags.contains(crate::ImageFlags::WRITABLE) {
+                        "write"
+                    } else {
+                        assert!(flags.contains(crate::ImageFlags::READABLE));
+                        "read"
+                    };
+                    write!(self.out, "texture{}<{}, access::{}> {}", dim, base_name, access, name)?;
+                }
+                crate::TypeInner::Sampler => {
+                    write!(self.out, "sampler {}", name)?;
+                }
             }
-            writeln!(self.out, "}};")?;
+            writeln!(self.out, ";")?;
         }
 
         // write down functions
@@ -583,17 +568,16 @@ impl<W: Write> Writer<W> {
                 for &token in var_outputs.iter() {
                     let var = &module.global_variables[token];
                     // if it's a struct, lift all the built-in contents up to the root
-                    if let crate::Type::Pointer(pt) = var.ty {
-                        if let crate::Type::Struct(st) = module.complex_types.pointers[pt].base {
-                            let sd = &module.complex_types.structs[st];
-                            for (index, member) in sd.members.iter().enumerate() {
+                    if let crate::TypeInner::Pointer { base, .. } = module.types[var.ty].inner {
+                        if let crate::TypeInner::Struct { ref members } = module.types[base].inner {
+                            for (index, member) in members.iter().enumerate() {
                                 let name = member.name.or_index(MemberIndex(index));
-                                let tv = TypedVar(&member.ty, &name, &module.complex_types);
+                                let ty_name = module.types[member.ty].name.or_index(member.ty);
                                 let binding = member.binding
                                     .as_ref()
                                     .ok_or(Error::MissingBinding(token))?;
                                 let resolved = options.resolve_binding(binding, out_mode)?;
-                                writeln!(self.out, "\t{} [[{}]];", tv, resolved)?;
+                                writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
                             }
                             continue
                         }
@@ -610,12 +594,12 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
                 writeln!(self.out, "\t{} {} [[stage_in]],", input_name, NAME_INPUT)?;
             } else {
-                let fun_tv = TypedVar(&fun.return_type, &fun_name, &module.complex_types);
-                writeln!(self.out, "{}(", fun_tv)?;
-                for (index, ty) in fun.parameter_types.iter().enumerate() {
+                let result_type_name = module.types[fun.return_type].name.or_index(fun.return_type);
+                writeln!(self.out, "{} {}(", result_type_name, fun_name)?;
+                for (index, &ty) in fun.parameter_types.iter().enumerate() {
                     let name = Name::from(ParameterIndex(index));
-                    let tv = TypedVar(ty, &name, &module.complex_types);
-                    writeln!(self.out, "\t{},", tv)?;
+                    let member_type_name = module.types[ty].name.or_index(ty);
+                    writeln!(self.out, "\t{} {},", member_type_name, name)?;
                 }
             }
             for (_, expr) in fun.expressions.iter() {

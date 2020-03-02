@@ -9,13 +9,8 @@ impl crate::Module {
     fn from_header(header: crate::Header) -> Self {
         crate::Module {
             header,
-            complex_types: crate::ComplexTypes {
-                pointers: Storage::new(),
-                arrays: Storage::new(),
-                structs: Storage::new(),
-                images: Storage::new(),
-                samplers: Storage::new(),
-            },
+            types: Storage::new(),
+            constants: Storage::new(),
             global_variables: Storage::new(),
             functions: Storage::new(),
             entry_points: Vec::new(),

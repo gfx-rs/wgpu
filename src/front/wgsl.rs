@@ -1,3 +1,6 @@
+use crate::storage::{Storage, Token};
+
+
 #[derive(Parser)]
 #[grammar = "../grammars/wgsl.pest"]
 struct Tokenizer;
@@ -62,19 +65,26 @@ impl Parser {
         }
     }
 
-    fn parse_type_decl(type_decl: pest::iterators::Pair<Rule>) -> Result<crate::Type, Error> {
+    fn parse_type_decl(
+        type_decl: pest::iterators::Pair<Rule>,
+        type_store: &mut Storage<crate::Type>,
+    ) -> Result<Token<crate::Type>, Error> {
         assert_eq!(type_decl.as_rule(), Rule::type_decl);
-        let inner = type_decl.into_inner().next().unwrap();
-        match inner.as_rule() {
-            Rule::scalar_type => match inner.as_str() {
-                "f32" => Ok(crate::Type::Scalar { kind: crate::ScalarKind::Float, width: 32 }),
-                "i32" => Ok(crate::Type::Scalar { kind: crate::ScalarKind::Sint, width: 32 }),
-                "u32" => Ok(crate::Type::Scalar { kind: crate::ScalarKind::Uint, width: 32 }),
+        let temp = type_decl.into_inner().next().unwrap();
+        let inner = match temp.as_rule() {
+            Rule::scalar_type => match temp.as_str() {
+                "f32" => crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width: 32 },
+                "i32" => crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, width: 32 },
+                "u32" => crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, width: 32 },
                 other => panic!("Unexpected scalar {:?}", other),
             },
             Rule::ident => unimplemented!(),
             other => panic!("Unexpected type {:?}", other),
-        }
+        };
+        Ok(type_store.append(crate::Type {
+            name: None, //TODO
+            inner,
+        }))
     }
 
     pub fn parse(&mut self, source: &str) -> Result<crate::Module, Error> {
@@ -108,7 +118,7 @@ impl Parser {
                             assert_eq!(body.as_rule(), Rule::variable_ident_decl);
                             let mut var_ident_decl_pairs = body.into_inner();
                             let name = var_ident_decl_pairs.next().unwrap().as_str().to_owned();
-                            let ty = Self::parse_type_decl(var_ident_decl_pairs.next().unwrap())?;
+                            let ty = Self::parse_type_decl(var_ident_decl_pairs.next().unwrap(), &mut module.types)?;
                             module.global_variables.append(crate::GlobalVariable {
                                 name: Some(name),
                                 class,

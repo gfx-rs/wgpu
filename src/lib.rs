@@ -42,30 +42,10 @@ pub enum ScalarKind {
 }
 
 #[derive(Debug)]
-pub struct PointerDeclaration {
-    pub name: Option<String>,
-    pub base: Type,
-    pub class: spirv::StorageClass,
-}
-
-#[derive(Debug)]
-pub struct ArrayDeclaration {
-    pub name: Option<String>,
-    pub base: Type,
-    pub length: u32,
-}
-
-#[derive(Debug)]
 pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
-    pub ty: Type,
-}
-
-#[derive(Debug)]
-pub struct StructDeclaration {
-    pub name: Option<String>,
-    pub members: Vec<StructMember>,
+    pub ty: Token<Type>,
 }
 
 bitflags::bitflags! {
@@ -78,35 +58,33 @@ bitflags::bitflags! {
 }
 
 #[derive(Debug)]
-pub struct ImageDeclaration {
+pub struct Type {
     pub name: Option<String>,
-    pub binding: Option<Binding>,
-    pub ty: Type,
-    pub dim: spirv::Dim,
-    pub flags: ImageFlags,
+    pub inner: TypeInner,
 }
 
 #[derive(Debug)]
-pub struct SamplerDeclaration {
-    pub name: Option<String>,
-    pub binding: Option<Binding>,
-}
-
-#[derive(Clone, Debug)]
-pub enum Type {
+pub enum TypeInner {
     Void,
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
     Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
-    Pointer(Token<PointerDeclaration>),
-    Array(Token<ArrayDeclaration>),
-    Struct(Token<StructDeclaration>),
-    Image(Token<ImageDeclaration>),
-    Sampler(Token<SamplerDeclaration>),
+    Pointer { base: Token<Type>, class: spirv::StorageClass },
+    Array { base: Token<Type>, size: u32 },
+    Struct { members: Vec<StructMember> },
+    Image { base: Token<Type>, dim: spirv::Dim, flags: ImageFlags },
+    Sampler,
 }
 
-#[derive(Clone, Debug)]
-pub enum Constant {
+#[derive(Debug)]
+pub struct Constant {
+    pub name: Option<String>,
+    pub specialization: Option<spirv::Word>,
+    pub inner: ConstantInner,
+}
+
+#[derive(Debug)]
+pub enum ConstantInner {
     Sint(i64),
     Uint(u64),
     Float(f64),
@@ -124,7 +102,7 @@ pub struct GlobalVariable {
     pub name: Option<String>,
     pub class: spirv::StorageClass,
     pub binding: Option<Binding>,
-    pub ty: Type,
+    pub ty: Token<Type>,
 }
 
 #[derive(Clone, Debug)]
@@ -137,9 +115,9 @@ pub enum Expression {
         base: Token<Expression>,
         index: u32,
     },
-    Constant(Constant),
+    Constant(Token<Constant>),
     Compose {
-        ty: Type,
+        ty: Token<Type>,
         components: Vec<Token<Expression>>,
     },
     FunctionParameter(u32),
@@ -186,8 +164,8 @@ pub enum Statement {
 pub struct Function {
     pub name: Option<String>,
     pub control: spirv::FunctionControl,
-    pub parameter_types: Vec<Type>,
-    pub return_type: Type,
+    pub parameter_types: Vec<Token<Type>>,
+    pub return_type: Token<Type>,
     pub expressions: Storage<Expression>,
     pub body: Block,
 }
@@ -202,18 +180,10 @@ pub struct EntryPoint {
 }
 
 #[derive(Debug)]
-pub struct ComplexTypes {
-    pub pointers: Storage<PointerDeclaration>,
-    pub arrays: Storage<ArrayDeclaration>,
-    pub structs: Storage<StructDeclaration>,
-    pub images: Storage<ImageDeclaration>,
-    pub samplers: Storage<SamplerDeclaration>,
-}
-
-#[derive(Debug)]
 pub struct Module {
     pub header: Header,
-    pub complex_types: ComplexTypes,
+    pub types: Storage<Type>,
+    pub constants: Storage<Constant>,
     pub global_variables: Storage<GlobalVariable>,
     pub functions: Storage<Function>,
     pub entry_points: Vec<EntryPoint>,

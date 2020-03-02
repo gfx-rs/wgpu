@@ -44,7 +44,7 @@ pub enum Error {
     UnsupportedCapability(spirv::Capability),
     UnsupportedExtension(String),
     UnsupportedExtSet(String),
-    UnsupportedType(crate::Type),
+    UnsupportedType(Token<crate::Type>),
     UnsupportedExecutionModel(u32),
     UnsupportedStorageClass(u32),
     UnsupportedFunctionControl(u32),
@@ -110,12 +110,12 @@ pub enum ModuleState {
     Function,
 }
 
-trait Lookup {
+trait LookupHelper {
     type Target;
     fn lookup(&self, key: spirv::Word) -> Result<&Self::Target, Error>;
 }
 
-impl<T> Lookup for FastHashMap<spirv::Word, T> {
+impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     type Target = T;
     fn lookup(&self, key: spirv::Word) -> Result<&T, Error> {
         self.get(&key)
@@ -197,13 +197,13 @@ struct EntryPoint {
 
 #[derive(Debug)]
 struct LookupType {
-    value: crate::Type,
+    token: Token<crate::Type>,
     base_id: Option<spirv::Word>,
 }
 
 #[derive(Debug)]
 struct LookupConstant {
-    value: crate::Constant,
+    token: Token<crate::Constant>,
     type_id: spirv::Word,
 }
 
@@ -349,7 +349,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
-    fn next_block(&mut self, fun: &mut crate::Function) -> Result<(), Error> {
+    fn next_block(
+        &mut self,
+        fun: &mut crate::Function,
+        type_store: &Storage<crate::Type>,
+        const_store: &Storage<crate::Constant>,
+    ) -> Result<(), Error> {
         loop {
             use spirv::Op;
             let inst = self.next_inst()?;
@@ -377,18 +382,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let access_id = self.next()?;
                         log::trace!("\t\t\tlooking up expr {:?}", access_id);
                         let index_expr = self.lookup_expression.lookup(access_id)?.clone();
-                        match self.lookup_type.lookup(index_expr.type_id)?.value {
-                            crate::Type::Scalar { kind: crate::ScalarKind::Uint, .. } |
-                            crate::Type::Scalar { kind: crate::ScalarKind::Sint, .. } => (),
-                            ref other => return Err(Error::UnsupportedType(other.clone())),
+                        let index_type_token = self.lookup_type.lookup(index_expr.type_id)?.token;
+                        match type_store[index_type_token].inner {
+                            crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, .. } |
+                            crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, .. } => (),
+                            _ => return Err(Error::UnsupportedType(index_type_token)),
                         }
                         log::trace!("\t\t\tlooking up type {:?}", acex.type_id);
-                        let ty = self.lookup_type.lookup(acex.type_id)?;
-                        acex = match ty.value {
-                            crate::Type::Struct(_) => {
+                        let type_lookup = self.lookup_type.lookup(acex.type_id)?;
+                        acex = match type_store[type_lookup.token].inner {
+                            crate::TypeInner::Struct { .. } => {
                                 let index = match fun.expressions[index_expr.token] {
-                                    crate::Expression::Constant(crate::Constant::Sint(v)) => v as u32,
-                                    crate::Expression::Constant(crate::Constant::Uint(v)) => v as u32,
+                                    crate::Expression::Constant(const_token) => {
+                                        match const_store[const_token].inner {
+                                            crate::ConstantInner::Uint(v) => v as u32,
+                                            crate::ConstantInner::Sint(v) => v as u32,
+                                            _ => return Err(Error::InvalidAccessIndex(crate::Expression::Constant(const_token))),
+                                        }
+                                    }
                                     ref other => return Err(Error::InvalidAccessIndex(other.clone()))
                                 };
                                 AccessExpression {
@@ -401,19 +412,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         .ok_or(Error::InvalidAccessType(acex.type_id))?,
                                 }
                             }
-                            crate::Type::Array { .. } |
-                            crate::Type::Vector { .. } |
-                            crate::Type::Matrix { .. } => {
+                            crate::TypeInner::Array { .. } |
+                            crate::TypeInner::Vector { .. } |
+                            crate::TypeInner::Matrix { .. } => {
                                 AccessExpression {
                                     base_token: fun.expressions.append(crate::Expression::Access {
                                         base: acex.base_token,
                                         index: index_expr.token,
                                     }),
-                                    type_id: ty.base_id
+                                    type_id: type_lookup.base_id
                                         .ok_or(Error::InvalidAccessType(acex.type_id))?,
                                 }
                             }
-                            ref other => return Err(Error::UnsupportedType(other.clone())),
+                            _ => return Err(Error::UnsupportedType(type_lookup.token)),
                         };
                     }
 
@@ -438,20 +449,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     for _ in 4 .. inst.wc {
                         let index = self.next()?;
                         log::trace!("\t\t\tlooking up type {:?}", lexp.type_id);
-                        let ty = self.lookup_type.lookup(lexp.type_id)?;
-                        let type_id = match ty.value {
-                            crate::Type::Struct(_) => {
+                        let type_lookup = self.lookup_type.lookup(lexp.type_id)?;
+                        let type_id = match type_store[type_lookup.token].inner {
+                            crate::TypeInner::Struct { .. } => {
                                 *self.lookup_member_type_id
                                     .get(&(lexp.type_id, index))
                                     .ok_or(Error::InvalidAccessType(lexp.type_id))?
                             }
-                            crate::Type::Array { .. } |
-                            crate::Type::Vector { .. } |
-                            crate::Type::Matrix { .. } => {
-                                ty.base_id
+                            crate::TypeInner::Array { .. } |
+                            crate::TypeInner::Vector { .. } |
+                            crate::TypeInner::Matrix { .. } => {
+                                type_lookup.base_id
                                     .ok_or(Error::InvalidAccessType(lexp.type_id))?
                             }
-                            ref other => return Err(Error::UnsupportedType(other.clone())),
+                            _ => return Err(Error::UnsupportedType(type_lookup.token)),
                         };
                         lexp = LookupExpression {
                             token: fun.expressions.append(crate::Expression::AccessIndex {
@@ -479,7 +490,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         components.push(lexp.token);
                     }
                     let expr = crate::Expression::Compose {
-                        ty: self.lookup_type.lookup(result_type_id)?.value.clone(),
+                        ty: self.lookup_type.lookup(result_type_id)?.token,
                         components,
                     };
                     self.lookup_expression.insert(id, LookupExpression {
@@ -501,9 +512,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     if base_type.base_id != Some(result_type_id) {
                         return Err(Error::InvalidLoadType(result_type_id));
                     }
-                    match base_type.value {
-                        crate::Type::Pointer { .. } => (),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    match type_store[base_type.token].inner {
+                        crate::TypeInner::Pointer { .. } => (),
+                        _ => return Err(Error::UnsupportedType(base_type.token)),
                     }
                     let expr = crate::Expression::Load {
                         pointer: base_expr.token,
@@ -523,9 +534,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     let base_expr = self.lookup_expression.lookup(pointer_id)?;
                     let base_type = self.lookup_type.lookup(base_expr.type_id)?;
-                    match base_type.value {
-                        crate::Type::Pointer { .. } => (),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    match type_store[base_type.token].inner {
+                        crate::TypeInner::Pointer { .. } => (),
+                        _ => return Err(Error::UnsupportedType(base_type.token)),
                     };
                     let value_expr = self.lookup_expression.lookup(value_id)?;
                     if base_type.base_id != Some(value_expr.type_id) {
@@ -544,22 +555,25 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::VectorTimesScalar => {
                     inst.expect(5)?;
                     let result_type_id = self.next()?;
-                    let (res_size, res_width) = match self.lookup_type.lookup(result_type_id)?.value {
-                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    let result_type_loookup = self.lookup_type.lookup(result_type_id)?;
+                    let (res_size, res_width) = match type_store[result_type_loookup.token].inner {
+                        crate::TypeInner::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
+                        _ => return Err(Error::UnsupportedType(result_type_loookup.token)),
                     };
                     let result_id = self.next()?;
                     let vector_id = self.next()?;
                     let scalar_id = self.next()?;
                     let vector_lexp = self.lookup_expression.lookup(vector_id)?;
-                    match self.lookup_type.lookup(vector_lexp.type_id)?.value {
-                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } if size == res_size && width == res_width => (),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    let vector_type_lookup = self.lookup_type.lookup(vector_lexp.type_id)?;
+                    match type_store[vector_type_lookup.token].inner {
+                        crate::TypeInner::Vector { size, kind: crate::ScalarKind::Float, width } if size == res_size && width == res_width => (),
+                        _ => return Err(Error::UnsupportedType(vector_type_lookup.token)),
                     };
                     let scalar_lexp = self.lookup_expression.lookup(scalar_id)?.clone();
-                    match self.lookup_type.lookup(scalar_lexp.type_id)?.value {
-                        crate::Type::Scalar { kind: crate::ScalarKind::Float, width } if width == res_width => (),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    let scalar_type_lookup = self.lookup_type.lookup(scalar_lexp.type_id)?;
+                    match type_store[scalar_type_lookup.token].inner {
+                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width } if width == res_width => (),
+                        _ => return Err(Error::UnsupportedType(scalar_type_lookup.token)),
                     };
                     let expr = crate::Expression::Mul(vector_lexp.token, scalar_lexp.token);
                     self.lookup_expression.insert(result_id, LookupExpression {
@@ -570,22 +584,25 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::MatrixTimesVector => {
                     inst.expect(5)?;
                     let result_type_id = self.next()?;
-                    let (res_size, res_width) = match self.lookup_type.lookup(result_type_id)?.value {
-                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    let result_type_loookup = self.lookup_type.lookup(result_type_id)?;
+                    let (res_size, res_width) = match type_store[result_type_loookup.token].inner {
+                        crate::TypeInner::Vector { size, kind: crate::ScalarKind::Float, width } => (size, width),
+                        _ => return Err(Error::UnsupportedType(result_type_loookup.token)),
                     };
                     let result_id = self.next()?;
                     let matrix_id = self.next()?;
                     let vector_id = self.next()?;
                     let matrix_lexp = self.lookup_expression.lookup(matrix_id)?;
-                    let columns = match self.lookup_type.lookup(matrix_lexp.type_id)?.value {
-                        crate::Type::Matrix { columns, rows, kind: crate::ScalarKind::Float, width } if rows == res_size && width == res_width => columns,
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    let matrix_type_lookup = self.lookup_type.lookup(matrix_lexp.type_id)?;
+                    let columns = match type_store[matrix_type_lookup.token].inner {
+                        crate::TypeInner::Matrix { columns, rows, kind: crate::ScalarKind::Float, width } if rows == res_size && width == res_width => columns,
+                        _ => return Err(Error::UnsupportedType(matrix_type_lookup.token)),
                     };
                     let vector_lexp = self.lookup_expression.lookup(vector_id)?.clone();
-                    match self.lookup_type.lookup(vector_lexp.type_id)?.value {
-                        crate::Type::Vector { size, kind: crate::ScalarKind::Float, width } if size == columns && width == res_width => (),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    let vector_type_lookup = self.lookup_type.lookup(vector_lexp.type_id)?;
+                    match type_store[vector_type_lookup.token].inner {
+                        crate::TypeInner::Vector { size, kind: crate::ScalarKind::Float, width } if size == columns && width == res_width => (),
+                        _ => return Err(Error::UnsupportedType(vector_type_lookup.token)),
                     };
                     let expr = crate::Expression::Mul(matrix_lexp.token, vector_lexp.token);
                     self.lookup_expression.insert(result_id, LookupExpression {
@@ -615,10 +632,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let coordinate_id = self.next()?;
                     let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
                     let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
-                    match self.lookup_type.lookup(coord_lexp.type_id)?.value {
-                        crate::Type::Scalar { kind: crate::ScalarKind::Float, .. } |
-                        crate::Type::Vector { kind: crate::ScalarKind::Float, .. } => (),
-                        ref other => return Err(Error::UnsupportedType(other.clone())),
+                    let coord_type_lookup = self.lookup_type.lookup(coord_lexp.type_id)?;
+                    match type_store[coord_type_lookup.token].inner {
+                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, .. } |
+                        crate::TypeInner::Vector { kind: crate::ScalarKind::Float, .. } => (),
+                        _ => return Err(Error::UnsupportedType(coord_type_lookup.token)),
                     }
                     //TODO: compare the result type
                     let expr = crate::Expression::ImageSample {
@@ -651,7 +669,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         for (&id, con) in self.lookup_constant.iter() {
             self.lookup_expression.insert(id, LookupExpression {
                 type_id: con.type_id,
-                token: expressions.append(crate::Expression::Constant(con.value.clone())),
+                token: expressions.append(crate::Expression::Constant(con.token)),
             });
         }
         // done
@@ -824,8 +842,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.switch(ModuleState::Type, inst.op)?;
                     inst.expect(2)?;
                     let id = self.next()?;
+                    let inner = crate::TypeInner::Void;
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Void,
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: None,
                     });
                 }
@@ -835,17 +859,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let width = self.next()?;
                     let sign = self.next()?;
-                    self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Scalar {
-                            kind: match sign {
-                                0 => crate::ScalarKind::Uint,
-                                1 => crate::ScalarKind::Sint,
-                                _ => return Err(Error::InvalidSign(sign)),
-                            },
-                            width: width
-                                .try_into()
-                                .map_err(|_| Error::InvalidTypeWidth(width))?,
+                    let inner = crate::TypeInner::Scalar {
+                        kind: match sign {
+                            0 => crate::ScalarKind::Uint,
+                            1 => crate::ScalarKind::Sint,
+                            _ => return Err(Error::InvalidSign(sign)),
                         },
+                        width: width
+                            .try_into()
+                            .map_err(|_| Error::InvalidTypeWidth(width))?,
+                    };
+                    self.lookup_type.insert(id, LookupType {
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: None,
                     });
                 }
@@ -854,13 +884,19 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(3)?;
                     let id = self.next()?;
                     let width = self.next()?;
+                    let inner = crate::TypeInner::Scalar {
+                        kind: crate::ScalarKind::Float,
+                        width: width
+                            .try_into()
+                            .map_err(|_| Error::InvalidTypeWidth(width))?,
+                    };
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Scalar {
-                            kind: crate::ScalarKind::Float,
-                            width: width
-                                .try_into()
-                                .map_err(|_| Error::InvalidTypeWidth(width))?,
-                        },
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: None,
                     });
                 }
@@ -869,17 +905,24 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     let id = self.next()?;
                     let type_id = self.next()?;
-                    let (kind, width) = match self.lookup_type.lookup(type_id)?.value {
-                        crate::Type::Scalar { kind, width } => (kind, width),
+                    let type_lookup = self.lookup_type.lookup(type_id)?;
+                    let (kind, width) = match module.types[type_lookup.token].inner {
+                        crate::TypeInner::Scalar { kind, width } => (kind, width),
                         _ => return Err(Error::InvalidInnerType(type_id)),
                     };
                     let component_count = self.next()?;
+                    let inner = crate::TypeInner::Vector {
+                        size: map_vector_size(component_count)?,
+                        kind,
+                        width,
+                    };
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Vector {
-                            size: map_vector_size(component_count)?,
-                            kind,
-                            width,
-                        },
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: Some(type_id),
                     });
                 }
@@ -889,17 +932,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let vector_type_id = self.next()?;
                     let num_columns = self.next()?;
-                    let (rows, kind, width) = match self.lookup_type.lookup(vector_type_id)?.value {
-                        crate::Type::Vector { size, kind, width } => (size, kind, width),
-                        _ => return Err(Error::InvalidInnerType(vector_type_id)),
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Matrix {
+                    let vector_type_lookup = self.lookup_type.lookup(vector_type_id)?;
+                    let inner = match module.types[vector_type_lookup.token].inner {
+                        crate::TypeInner::Vector { size, kind, width } => crate::TypeInner::Matrix {
                             columns: map_vector_size(num_columns)?,
-                            rows,
+                            rows: size,
                             kind,
                             width,
                         },
+                        _ => return Err(Error::InvalidInnerType(vector_type_id)),
+                    };
+                    self.lookup_type.insert(id, LookupType {
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: Some(vector_type_id),
                     });
                 }
@@ -923,16 +972,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let storage = self.next()?;
                     let type_id = self.next()?;
-                    let decl = crate::PointerDeclaration {
-                        name: self.future_decor
-                            .remove(&id)
-                            .and_then(|dec| dec.name),
-                        base: self.lookup_type.lookup(type_id)?.value.clone(),
+                    let inner = crate::TypeInner::Pointer {
+                        base: self.lookup_type.lookup(type_id)?.token,
                         class: map_storage_class(storage)?,
                     };
-                    let token = module.complex_types.pointers.append(decl);
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Pointer(token),
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: Some(type_id),
                     });
                 }
@@ -941,17 +991,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     let id = self.next()?;
                     let type_id = self.next()?;
-                    let length = self.next()?;
-                    let decl = crate::ArrayDeclaration {
-                        name: self.future_decor
-                            .remove(&id)
-                            .and_then(|dec| dec.name),
-                        base: self.lookup_type.lookup(type_id)?.value.clone(),
-                        length,
+                    let size = self.next()?;
+                    let inner = crate::TypeInner::Array {
+                        base: self.lookup_type.lookup(type_id)?.token,
+                        size,
                     };
-                    let token = module.complex_types.arrays.append(decl);
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Array(token),
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: Some(type_id),
                     });
                 }
@@ -959,29 +1010,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.switch(ModuleState::Type, inst.op)?;
                     inst.expect_at_least(2)?;
                     let id = self.next()?;
-                    let mut decl = crate::StructDeclaration {
-                        name: self.future_decor
-                            .remove(&id)
-                            .and_then(|dec| dec.name),
-                        members: Vec::with_capacity(inst.wc as usize - 2),
-                    };
+                    let mut members = Vec::with_capacity(inst.wc as usize - 2);
                     for i in 0 .. inst.wc as u32 - 2 {
                         let type_id = self.next()?;
-                        let ty = self.lookup_type.lookup(type_id)?.value.clone();
+                        let ty = self.lookup_type.lookup(type_id)?.token;
                         self.lookup_member_type_id.insert((id, i), type_id);
                         let decor = self.future_member_decor
                             .remove(&(id, i))
                             .unwrap_or_default();
                         let binding = decor.get_binding();
-                        decl.members.push(crate::StructMember {
+                        members.push(crate::StructMember {
                             name: decor.name,
                             binding,
                             ty,
                         });
                     }
-                    let token = module.complex_types.structs.append(decl);
+                    let inner = crate::TypeInner::Struct {
+                        members
+                    };
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Struct(token),
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
                         base_id: None,
                     });
                 }
@@ -1019,12 +1072,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let decor = self.future_decor
                         .remove(&id)
                         .unwrap_or_default();
-                    let binding = decor.get_binding();
 
-                    let decl = crate::ImageDeclaration {
-                        name: decor.name,
-                        binding,
-                        ty: self.lookup_type.lookup(sample_type_id)?.value.clone(),
+                    let inner = crate::TypeInner::Image {
+                        base: self.lookup_type.lookup(sample_type_id)?.token,
                         dim: if dim > LAST_KNOWN_DIM as u32 {
                             return Err(Error::UnsupportedDim(dim));
                         } else {
@@ -1032,9 +1082,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                         flags,
                     };
-                    let token = module.complex_types.images.append(decl);
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Image(token),
+                        token: module.types.append(crate::Type {
+                            name: decor.name,
+                            inner,
+                        }),
                         base_id: Some(sample_type_id),
                     });
                 }
@@ -1044,7 +1096,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let id = self.next()?;
                     let image_id = self.next()?;
                     self.lookup_type.insert(id, LookupType {
-                        value: self.lookup_type.lookup(image_id)?.value.clone(),
+                        token: self.lookup_type.lookup(image_id)?.token,
                         base_id: Some(image_id),
                     });
                 }
@@ -1055,15 +1107,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let decor = self.future_decor
                         .remove(&id)
                         .unwrap_or_default();
-                    let binding = decor.get_binding();
-
-                    let decl = crate::SamplerDeclaration {
-                        name: decor.name,
-                        binding,
-                    };
-                    let token = module.complex_types.samplers.append(decl);
+                    let inner = crate::TypeInner::Sampler;
                     self.lookup_type.insert(id, LookupType {
-                        value: crate::Type::Sampler(token),
+                        token: module.types.append(crate::Type {
+                            name: decor.name,
+                            inner,
+                        }),
                         base_id: None,
                     });
                 }
@@ -1073,8 +1122,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect_at_least(3)?;
                     let type_id = self.next()?;
                     let id = self.next()?;
-                    let value = match self.lookup_type.lookup(type_id)?.value {
-                        crate::Type::Scalar { kind: crate::ScalarKind::Uint, width } => {
+                    let type_lookup = self.lookup_type.lookup(type_id)?;
+                    let inner = match module.types[type_lookup.token].inner {
+                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, width } => {
                             let low = self.next()?;
                             let high = if width > 32 {
                                 inst.expect(4)?;
@@ -1082,9 +1132,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             } else {
                                 0
                             };
-                            crate::Constant::Uint(((high as u64) << 32) | low as u64)
+                            crate::ConstantInner::Uint(((high as u64) << 32) | low as u64)
                         }
-                        crate::Type::Scalar { kind: crate::ScalarKind::Sint, width } => {
+                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, width } => {
                             let low = self.next()?;
                             let high = if width < 32 {
                                 return Err(Error::InvalidTypeWidth(width as u32));
@@ -1094,11 +1144,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             } else {
                                 !0
                             };
-                            crate::Constant::Sint(unsafe {
+                            crate::ConstantInner::Sint(unsafe {
                                 std::mem::transmute(((high as u64) << 32) | low as u64)
                             })
                         }
-                        crate::Type::Scalar { kind: crate::ScalarKind::Float, width } => {
+                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width } => {
                             let low = self.next()?;
                             let extended = if width < 32 {
                                 return Err(Error::InvalidTypeWidth(width as u32));
@@ -1113,12 +1163,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     std::mem::transmute::<_, f32>(low) as f64
                                 }
                             };
-                            crate::Constant::Float(extended)
+                            crate::ConstantInner::Float(extended)
                         }
-                        ref other => return Err(Error::UnsupportedType(other.clone()))
+                        _ => return Err(Error::UnsupportedType(type_lookup.token))
                     };
                     self.lookup_constant.insert(id, LookupConstant {
-                        value,
+                        token: module.constants.append(crate::Constant {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            specialization: None, //TODO
+                            inner,
+                        }),
                         type_id,
                     });
                 }
@@ -1132,29 +1188,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         inst.expect(5)?;
                         let _init = self.next()?; //TODO
                     }
-                    let ty = self.lookup_type.lookup(type_id)?.value.clone();
+                    let lookup_type = self.lookup_type.lookup(type_id)?;
                     let dec = self.future_decor
                         .remove(&id)
                         .ok_or(Error::InvalidBinding(id))?;
-                    let binding = match ty {
-                        crate::Type::Pointer(pd) => {
-                            match module.complex_types.pointers[pd] {
-                                crate::PointerDeclaration {
-                                    base: crate::Type::Struct(token),
-                                    class: spirv::StorageClass::Input,
-                                    ..
-                                } |
-                                crate::PointerDeclaration {
-                                    base: crate::Type::Struct(token),
-                                    class: spirv::StorageClass::Output,
-                                    ..
-                                } => {
+                    let binding = match module.types[lookup_type.token].inner {
+                        crate::TypeInner::Pointer { base, class: spirv::StorageClass::Input } |
+                        crate::TypeInner::Pointer { base, class: spirv::StorageClass::Output } => {
+                            match module.types[base].inner {
+                                crate::TypeInner::Struct { ref members } => {
                                     // we don't expect binding decoration on I/O structs,
                                     // but we do expect them on all of the members
-                                    let sd = &module.complex_types.structs[token];
-                                    for member in sd.members.iter() {
+                                    for member in members {
                                         if member.binding.is_none() {
-                                            log::warn!("Struct {:?} member {:?} doesn't have a binding", token, member);
+                                            log::warn!("Struct {:?} member {:?} doesn't have a binding", base, member);
                                             return Err(Error::InvalidBinding(id));
                                         }
                                     }
@@ -1179,7 +1226,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         name: dec.name,
                         class: map_storage_class(storage)?,
                         binding,
-                        ty,
+                        ty: lookup_type.token,
                     };
                     let token = module.global_variables.append(var);
                     self.lookup_variable.insert(id, LookupVariable {
@@ -1206,7 +1253,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             control: spirv::FunctionControl::from_bits(fun_control)
                                 .ok_or(Error::UnsupportedFunctionControl(fun_control))?,
                             parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
-                            return_type: self.lookup_type.lookup(result_type)?.value.clone(),
+                            return_type: self.lookup_type.lookup(result_type)?.token,
                             expressions: self.make_expression_storage(),
                             body: Vec::new(),
                         }
@@ -1224,7 +1271,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 {
                                     return Err(Error::WrongFunctionParameterType(type_id))
                                 }
-                                let ty = self.lookup_type.lookup(type_id)?.value.clone();
+                                let ty = self.lookup_type.lookup(type_id)?.token;
                                 fun.parameter_types.push(ty);
                             }
                             Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
@@ -1238,7 +1285,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             Op::Label => {
                                 fun_inst.expect(2)?;
                                 let _id = self.next()?;
-                                self.next_block(&mut fun)?;
+                                self.next_block(&mut fun, &module.types, &module.constants)?;
                             }
                             Op::FunctionEnd => {
                                 fun_inst.expect(1)?;
