@@ -20,7 +20,7 @@ Back-end        |       Status       | Notes |
 --------------- | ------------------ | ----- |
 SPIR-V (binary) |                    |       |
 WGSL            |                    |       |
-MSL             | :construction:     |       |
+Metal           | :construction:     |       |
 HLSL            |                    |       |
 GLSL            |                    |       |
 AIR             |                    |       |

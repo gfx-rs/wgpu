@@ -448,20 +448,19 @@ impl<W: Write> Writer<W> {
         // write down complex types
         writeln!(self.out, "")?;
         for (token, ty) in module.types.iter() {
-            write!(self.out, "typedef ")?;
             let name = ty.name.or_index(token);
             match ty.inner {
                 crate::TypeInner::Void => {
-                    write!(self.out, "void {}", name)?;
+                    write!(self.out, "typedef void {}", name)?;
                 },
                 crate::TypeInner::Scalar { kind, .. } => {
-                    write!(self.out, "{} {}", scalar_kind_string(kind), name)?;
+                    write!(self.out, "typedef {} {}", scalar_kind_string(kind), name)?;
                 },
                 crate::TypeInner::Vector { size, kind, .. } => {
-                    write!(self.out, "{}{} {}", scalar_kind_string(kind), vector_size_string(size), name)?;
+                    write!(self.out, "typedef {}{} {}", scalar_kind_string(kind), vector_size_string(size), name)?;
                 },
                 crate::TypeInner::Matrix { columns, rows, kind, .. } => {
-                    write!(self.out, "{}{}x{} {}", scalar_kind_string(kind), vector_size_string(columns), vector_size_string(rows), name)?;
+                    write!(self.out, "typedef {}{}x{} {}", scalar_kind_string(kind), vector_size_string(columns), vector_size_string(rows), name)?;
                 }
                 crate::TypeInner::Pointer { base, class } => {
                     let base_name = module.types[base].name.or_index(base);
@@ -474,11 +473,11 @@ impl<W: Write> Writer<W> {
                             ""
                         }
                     };
-                    write!(self.out, "{} {} *{}", class_name, base_name, name)?;
+                    write!(self.out, "typedef {} {} *{}", class_name, base_name, name)?;
                 }
                 crate::TypeInner::Array { base, size } => {
                     let base_name = module.types[base].name.or_index(base);
-                    write!(self.out, "{} {}[{}]", base_name, name, size)?;
+                    write!(self.out, "typedef {} {}[{}]", base_name, name, size)?;
                 }
                 crate::TypeInner::Struct { ref members } => {
                     writeln!(self.out, "struct {} {{", name)?;
@@ -492,7 +491,7 @@ impl<W: Write> Writer<W> {
                         }
                         writeln!(self.out, ";")?;
                     }
-                    writeln!(self.out, "}};")?;
+                    write!(self.out, "}}")?;
                 }
                 crate::TypeInner::Image { base, dim, flags } => {
                     let base_name = module.types[base].name.or_index(base);
@@ -509,12 +508,13 @@ impl<W: Write> Writer<W> {
                         "write"
                     } else {
                         assert!(flags.contains(crate::ImageFlags::READABLE));
-                        "read"
+                        //TODO: figure out when to use `read`
+                        "sample"
                     };
-                    write!(self.out, "texture{}<{}, access::{}> {}", dim, base_name, access, name)?;
+                    write!(self.out, "typedef texture{}<{}, access::{}> {}", dim, base_name, access, name)?;
                 }
                 crate::TypeInner::Sampler => {
-                    write!(self.out, "sampler {}", name)?;
+                    write!(self.out, "typedef sampler {}", name)?;
                 }
             }
             writeln!(self.out, ";")?;
