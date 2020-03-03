@@ -452,9 +452,6 @@ impl<W: Write> Writer<W> {
         for (token, ty) in module.types.iter() {
             let name = ty.name.or_index(token);
             match ty.inner {
-                crate::TypeInner::Void => {
-                    write!(self.out, "typedef void {}", name)?;
-                },
                 crate::TypeInner::Scalar { kind, .. } => {
                     write!(self.out, "typedef {} {}", scalar_kind_string(kind), name)?;
                 },
@@ -600,7 +597,13 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
                 writeln!(self.out, "\t{} {} [[stage_in]],", input_name, NAME_INPUT)?;
             } else {
-                let result_type_name = module.types[fun.return_type].name.or_index(fun.return_type);
+                let result_type_name = match fun.return_type {
+                    Some(type_id) => module.types[type_id].name.or_index(type_id),
+                    None => Name {
+                        class: "",
+                        source: NameSource::Custom { name: "void", prefix: false },
+                    },
+                };
                 writeln!(self.out, "{} {}(", result_type_name, fun_name)?;
                 for (index, &ty) in fun.parameter_types.iter().enumerate() {
                     let name = Name::from(ParameterIndex(index));

@@ -12,7 +12,7 @@ TODO: would be nice to find ways that avoid looking up as much
 
 use crate::{
     storage::{Storage, Token},
-    FastHashMap,
+    FastHashMap, FastHashSet,
 };
 
 use std::convert::TryInto;
@@ -233,6 +233,7 @@ pub struct Parser<I> {
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member_type_id: FastHashMap<(spirv::Word, MemberIndex), spirv::Word>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
+    lookup_void_type: FastHashSet<spirv::Word>,
     lookup_constant: FastHashMap<spirv::Word, LookupConstant>,
     lookup_variable: FastHashMap<spirv::Word, LookupVariable>,
     lookup_expression: FastHashMap<spirv::Word, LookupExpression>,
@@ -251,6 +252,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             future_member_decor: FastHashMap::default(),
             lookup_member_type_id: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
+            lookup_void_type: FastHashSet::default(),
             lookup_constant: FastHashMap::default(),
             lookup_variable: FastHashMap::default(),
             lookup_expression: FastHashMap::default(),
@@ -842,16 +844,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.switch(ModuleState::Type, inst.op)?;
                     inst.expect(2)?;
                     let id = self.next()?;
-                    let inner = crate::TypeInner::Void;
-                    self.lookup_type.insert(id, LookupType {
-                        token: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: None,
-                    });
+                    self.lookup_void_type.insert(id);
                 }
                 Op::TypeInt => {
                     self.switch(ModuleState::Type, inst.op)?;
@@ -1272,7 +1265,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             control: spirv::FunctionControl::from_bits(fun_control)
                                 .ok_or(Error::UnsupportedFunctionControl(fun_control))?,
                             parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
-                            return_type: self.lookup_type.lookup(result_type)?.token,
+                            return_type: if self.lookup_void_type.contains(&result_type) {
+                                None
+                            } else {
+                                Some(self.lookup_type.lookup(result_type)?.token)
+                            },
                             expressions: self.make_expression_storage(),
                             body: Vec::new(),
                         }

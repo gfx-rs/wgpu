@@ -72,7 +72,6 @@ pub struct Type {
 
 #[derive(Debug, PartialEq)]
 pub enum TypeInner {
-    Void,
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
     Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
@@ -172,7 +171,7 @@ pub struct Function {
     pub name: Option<String>,
     pub control: spirv::FunctionControl,
     pub parameter_types: Vec<Token<Type>>,
-    pub return_type: Token<Type>,
+    pub return_type: Option<Token<Type>>,
     pub expressions: Storage<Expression>,
     pub body: Block,
 }

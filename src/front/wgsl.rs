@@ -179,12 +179,9 @@ impl Parser {
             control: spirv::FunctionControl::empty(),
             parameter_types: Vec::new(),
             return_type: if function_type_decl.as_rule() == Rule::type_decl {
-                self.parse_type_decl(function_type_decl, &mut module.types)?
+                Some(self.parse_type_decl(function_type_decl, &mut module.types)?)
             } else {
-                module.types.append(crate::Type {
-                    name: None,
-                    inner: crate::TypeInner::Void,
-                })
+                None
             },
             expressions: Storage::new(),
             body: Vec::new(),
