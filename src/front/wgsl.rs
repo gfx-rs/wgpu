@@ -159,6 +159,42 @@ impl Parser {
         Ok(crate::TypeInner::Struct { members })
     }
 
+    fn parse_function_decl(
+        &self,
+        function_decl: pest::iterators::Pair<Rule>,
+        module: &mut crate::Module,
+    ) -> Result<Token<crate::Function>, Error> {
+        assert_eq!(function_decl.as_rule(), Rule::function_decl);
+        let mut function_decl_pairs = function_decl.into_inner();
+
+        let function_header = function_decl_pairs.next().unwrap();
+        assert_eq!(function_header.as_rule(), Rule::function_header);
+        let mut function_header_pairs = function_header.into_inner();
+        let fun_name = function_header_pairs.next().unwrap().as_str().to_owned();
+        let param_list = function_header_pairs.next().unwrap();
+        assert_eq!(param_list.as_rule(), Rule::param_list);
+        let function_type_decl = function_header_pairs.next().unwrap();
+        let fun = crate::Function {
+            name: Some(fun_name),
+            control: spirv::FunctionControl::empty(),
+            parameter_types: Vec::new(),
+            return_type: if function_type_decl.as_rule() == Rule::type_decl {
+                self.parse_type_decl(function_type_decl, &mut module.types)?
+            } else {
+                module.types.append(crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Void,
+                })
+            },
+            expressions: Storage::new(),
+            body: Vec::new(),
+        };
+
+        let function_body = function_decl_pairs.next().unwrap();
+        assert_eq!(function_body.as_rule(), Rule::body_stmt);
+        Ok(module.functions.append(fun))
+    }
+
     pub fn parse(&mut self, source: &str) -> Result<crate::Module, Error> {
         use pest::Parser as _;
         let pairs = Tokenizer::parse(Rule::translation_unit, source)?;
@@ -221,6 +257,9 @@ impl Parser {
                                 }
                                 other => panic!("Unexpected type alias rule {:?}", other),
                             };
+                        }
+                        Rule::function_decl => {
+                            self.parse_function_decl(global_decl, &mut module)?;
                         }
                         unknown => panic!("Unexpected global decl: {:?}", unknown),
                     }

@@ -7,7 +7,7 @@ global_decl = {
     | global_constant_decl ~ ";"
 //  | entry_point_decl ~ ";"
     | type_alias ~ ";"
-//  | function_decl
+    | function_decl
 }
 
 import_decl = { "import" ~ string ~ "as" ~ (ident ~ "::")* ~ ident}
@@ -46,14 +46,17 @@ struct_decoration = {
 }
 
 struct_body_decl = { "{" ~ struct_member* ~ "}" }
-
 struct_member = { struct_member_decoration_decl? ~ variable_ident_decl ~ ";" }
-
 struct_member_decoration_decl = { "[[" ~ (struct_member_decoration ~ ",")* ~ struct_member_decoration ~ "]]" }
-
 struct_member_decoration = {
     "offset" ~ int_literal
 }
+
+function_decl = { function_header ~ body_stmt }
+function_header = { "fn" ~ ident ~ "(" ~ param_list ~ ")" ~ "->" ~ function_type_decl }
+function_type_decl = _{ type_decl | "void" }
+param_list = { (variable_ident_decl ~ ",")* ~ variable_ident_decl }
+body_stmt = { "{" ~ statement* ~ "}" }
 
 storage_class = {
     "in"
@@ -101,6 +104,26 @@ scalar_type = {
   | "f32"
   | "i32"
   | "u32"
+}
+
+statement = {
+    ";"
+  | "return" ~ primary_expression ~ ";"
+//  | if_stmt
+//  | unless_stmt
+//  | regardless_stmt
+//  | switch_stmt
+//  | loop_stmt
+//  | variable_stmt SEMICOLON
+//  | break_stmt SEMICOLON
+//  | continue_stmt SEMICOLON
+//  | KILL SEMICOLON
+//  | NOP SEMICOLON
+//  | assignment_stmt SEMICOLON
+}
+
+primary_expression = {
+    const_literal
 }
 
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
