@@ -481,11 +481,11 @@ impl<W: Write> Writer<W> {
                 }
                 crate::TypeInner::Array { base, size } => {
                     let base_name = module.types[base].name.or_index(base);
-                    write!(self.out, "typedef {} {}[", base_name, name)?;
-                    if let crate::ArraySize::Static(length) = size {
-                        write!(self.out, "{}", length)?;
-                    }
-                    write!(self.out, "]")?;
+                    let resolved_size = match size {
+                        crate::ArraySize::Static(length) => length,
+                        crate::ArraySize::Dynamic => 1,
+                    };
+                    write!(self.out, "typedef {} {}[{}]", base_name, name, resolved_size)?;
                 }
                 crate::TypeInner::Struct { ref members } => {
                     writeln!(self.out, "struct {} {{", name)?;
@@ -647,7 +647,9 @@ impl<W: Write> Writer<W> {
             }
             writeln!(self.out, ") {{")?;
             // write down function body
-            writeln!(self.out, "\t{} {};", output_name, NAME_OUTPUT)?;
+            if exec_model.is_some() {
+                writeln!(self.out, "\t{} {};", output_name, NAME_OUTPUT)?;
+            }
             for statement in fun.body.iter() {
                 log::trace!("statement {:?}", statement);
                 match *statement {
@@ -659,8 +661,19 @@ impl<W: Write> Writer<W> {
                         self.put_expression(value, &fun.expressions, module)?;
                         writeln!(self.out, ";")?;
                     }
-                    crate::Statement::Return { value: None } => {
-                        writeln!(self.out, "\treturn {};", NAME_OUTPUT)?;
+                    crate::Statement::Return { value } => {
+                        write!(self.out, "\treturn ")?;
+                        match (value, exec_model) {
+                            (None, None) => (),
+                            (None, Some(_)) => self.out.write_str(NAME_OUTPUT)?,
+                            (Some(expr_token), None) => {
+                                self.put_expression(expr_token, &fun.expressions, module)?;
+                            }
+                            (Some(expr_token), Some(_)) => {
+                                panic!("Unable to return value {:?} from an entry point!", expr_token)
+                            }
+                        }
+                        writeln!(self.out, ";")?;
                     }
                     _ => panic!("Unsupported {:?}", statement),
                 }
