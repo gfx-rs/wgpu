@@ -991,10 +991,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(4)?;
                     let id = self.next()?;
                     let type_id = self.next()?;
-                    let size = self.next()?;
+                    let length = self.next()?;
                     let inner = crate::TypeInner::Array {
                         base: self.lookup_type.lookup(type_id)?.token,
-                        size,
+                        size: crate::ArraySize::Static(length),
+                    };
+                    self.lookup_type.insert(id, LookupType {
+                        token: module.types.append(crate::Type {
+                            name: self.future_decor
+                                .remove(&id)
+                                .and_then(|dec| dec.name),
+                            inner,
+                        }),
+                        base_id: Some(type_id),
+                    });
+                }
+                Op::TypeRuntimeArray => {
+                    self.switch(ModuleState::Type, inst.op)?;
+                    inst.expect(4)?;
+                    let id = self.next()?;
+                    let type_id = self.next()?;
+                    let inner = crate::TypeInner::Array {
+                        base: self.lookup_type.lookup(type_id)?.token,
+                        size: crate::ArraySize::Dynamic,
                     };
                     self.lookup_type.insert(id, LookupType {
                         token: module.types.append(crate::Type {

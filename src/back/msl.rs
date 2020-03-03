@@ -338,7 +338,9 @@ impl<W: Write> Writer<W> {
                         Ok(MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }))
                     }
                     crate::TypeInner::Array { base, size } => {
-                        assert!(index < size);
+                        if let crate::ArraySize::Static(length) = size {
+                            assert!(index < length);
+                        }
                         write!(self.out, "[{}]", index)?;
                         Ok(module.borrow_type(base))
                     }
@@ -477,7 +479,11 @@ impl<W: Write> Writer<W> {
                 }
                 crate::TypeInner::Array { base, size } => {
                     let base_name = module.types[base].name.or_index(base);
-                    write!(self.out, "typedef {} {}[{}]", base_name, name, size)?;
+                    write!(self.out, "typedef {} {}[", base_name, name)?;
+                    if let crate::ArraySize::Static(length) = size {
+                        write!(self.out, "{}", length)?;
+                    }
+                    write!(self.out, "]")?;
                 }
                 crate::TypeInner::Struct { ref members } => {
                     writeln!(self.out, "struct {} {{", name)?;

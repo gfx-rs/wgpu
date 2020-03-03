@@ -41,7 +41,14 @@ pub enum ScalarKind {
     Float,
 }
 
-#[derive(Debug)]
+#[repr(u8)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ArraySize {
+    Static(spirv::Word),
+    Dynamic,
+}
+
+#[derive(Debug, PartialEq)]
 pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
@@ -63,14 +70,14 @@ pub struct Type {
     pub inner: TypeInner,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum TypeInner {
     Void,
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
     Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
     Pointer { base: Token<Type>, class: spirv::StorageClass },
-    Array { base: Token<Type>, size: u32 },
+    Array { base: Token<Type>, size: ArraySize },
     Struct { members: Vec<StructMember> },
     Image { base: Token<Type>, dim: spirv::Dim, flags: ImageFlags },
     Sampler,
@@ -90,7 +97,7 @@ pub enum ConstantInner {
     Float(f64),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Binding {
     BuiltIn(spirv::BuiltIn),
     Location(spirv::Word),

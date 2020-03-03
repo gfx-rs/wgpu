@@ -4,9 +4,9 @@ global_decl = {
       ";"
     | import_decl ~ ";"
     | global_variable_decl ~ ";"
-//  | global_constant_decl SEMICOLON
-//  | entry_point_decl SEMICOLON
-//  | type_alias SEMICOLON
+    | global_constant_decl ~ ";"
+//  | entry_point_decl ~ ";"
+    | type_alias ~ ";"
 //  | function_decl
 }
 
@@ -16,6 +16,8 @@ global_variable_decl = {
     variable_decoration_list ~ variable_decl
   | variable_decoration_list ~ variable_decl ~ "=" ~ const_expr
 }
+
+global_constant_decl = { "const" ~ variable_ident_decl ~ "=" ~ const_expr }
 
 variable_decoration_list = { "[[" ~ (variable_decoration ~ ",")* ~ variable_decoration ~ "]]" }
 
@@ -30,13 +32,36 @@ variable_decl = { "var" ~ variable_storage_decoration? ~ variable_ident_decl }
 variable_storage_decoration = _{ "<" ~ storage_class ~ ">" }
 variable_ident_decl = { ident ~ ":" ~ type_decl }
 
+type_alias = {
+    "type" ~ ident ~ "=" ~ type_decl
+  | "type" ~ ident ~ "=" ~ struct_decl
+}
+
+struct_decl = { struct_decoration_decl? ~ "struct" ~ struct_body_decl }
+
+struct_decoration_decl = { "[[" ~ struct_decoration ~ "]]" }
+
+struct_decoration = {
+    "block"
+}
+
+struct_body_decl = { "{" ~ struct_member* ~ "}" }
+
+struct_member = { struct_member_decoration_decl? ~ variable_ident_decl ~ ";" }
+
+struct_member_decoration_decl = { "[[" ~ (struct_member_decoration ~ ",")* ~ struct_member_decoration ~ "]]" }
+
+struct_member_decoration = {
+    "offset" ~ int_literal
+}
+
 storage_class = {
     "in"
   | "out"
   | "uniform"
 //  | WORKGROUP
 //  | UNIFORM_CONSTANT
-//  | STORAGE_BUFFER
+  | "storage_buffer"
 //  | IMAGE
 //  | PUSH_CONSTANT
   | "private"
@@ -56,23 +81,18 @@ const_expr = {
     | const_literal
 }
 
+type_pointer_kind = { "ptr" }
+type_array_kind = { "array" }
+type_vec_kind = { "vec2" | "vec3" | "vec4" }
+type_mat_kind = { "mat2x2" | "mat3x3" | "mat4x4" }
+
 type_decl = {
       scalar_type
-//  | VEC2 LESS_THAN type_decl GREATER_THAN
-//  | VEC3 LESS_THAN type_decl GREATER_THAN
-//  | VEC3 LESS_THAN type_decl GREATER_THAN
-//  | PTR LESS_THAN storage_class, type_decl GREATER_THAN
-//  | ARRAY LESS_THAN type_decl COMMA INT_LITERAL GREATER_THAN
-//  | ARRAY LESS_THAN type_decl GREATER_THAN
-//  | MAT2x2 LESS_THAN type_decl GREATER_THAN
-//  | MAT2x3 LESS_THAN type_decl GREATER_THAN
-//  | MAT2x4 LESS_THAN type_decl GREATER_THAN
-//  | MAT3x2 LESS_THAN type_decl GREATER_THAN
-//  | MAT3x3 LESS_THAN type_decl GREATER_THAN
-//  | MAT3x4 LESS_THAN type_decl GREATER_THAN
-//  | MAT4x2 LESS_THAN type_decl GREATER_THAN
-//  | MAT4x3 LESS_THAN type_decl GREATER_THAN
-//  | MAT4x4 LESS_THAN type_decl GREATER_THAN
+    | type_vec_kind ~ "<" ~ type_decl ~ ">"
+    | type_pointer_kind  ~ "<" ~ storage_class ~ "," ~ type_decl ~ ">"
+    | type_array_kind ~ "<" ~ type_decl ~ "," ~ int_literal ~ ">"
+    | type_array_kind ~ "<" ~ type_decl ~ ">"
+    | type_mat_kind ~ "<" ~ type_decl ~ ">"
     | ident
 }
 
