@@ -39,6 +39,7 @@ pub enum ScalarKind {
     Sint,
     Uint,
     Float,
+    Bool,
 }
 
 #[repr(u8)]
@@ -94,6 +95,7 @@ pub enum ConstantInner {
     Sint(i64),
     Uint(u64),
     Float(f64),
+    Bool(bool),
 }
 
 #[derive(Clone, Debug, PartialEq)]

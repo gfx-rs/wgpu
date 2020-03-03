@@ -275,6 +275,7 @@ fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
         crate::ScalarKind::Float => "float",
         crate::ScalarKind::Sint => "signed int",
         crate::ScalarKind::Uint => "unsigned int",
+        crate::ScalarKind::Bool => "bool",
     }
 }
 
@@ -360,6 +361,10 @@ impl<W: Write> Writer<W> {
                     crate::ConstantInner::Float(value) => {
                         write!(self.out, "{}", value)?;
                         crate::ScalarKind::Float
+                    }
+                    crate::ConstantInner::Bool(value) => {
+                        write!(self.out, "{}", value)?;
+                        crate::ScalarKind::Bool
                     }
                 };
                 let width = 32; //TODO: not sure how to get that...

@@ -13,6 +13,7 @@ pub enum Error {
     Pest(pest::error::Error<Rule>),
     BadInt(std::num::ParseIntError),
     BadStorageClass(String),
+    BadBool(String),
     UnknownType(String),
 }
 impl From<pest::error::Error<Rule>> for Error {
@@ -41,7 +42,7 @@ impl Parser {
         Ok(pair.as_str().parse()?)
     }
 
-    fn _parse_int_literal(pair: pest::iterators::Pair<Rule>) -> Result<i32, Error> {
+    fn parse_int_literal(pair: pest::iterators::Pair<Rule>) -> Result<i32, Error> {
         let istr = pair.as_str();
         let (sign, istr) = match &istr[..1] {
             "_" => (-1, &istr[1..]),
@@ -159,11 +160,58 @@ impl Parser {
         Ok(crate::TypeInner::Struct { members })
     }
 
+    fn parse_const_literal(
+        const_literal: pest::iterators::Pair<Rule>,
+        const_store: &mut Storage<crate::Constant>,
+    ) -> Result<Token<crate::Constant>, Error> {
+        let inner = match const_literal.as_rule() {
+            Rule::int_literal => {
+                let value = Self::parse_int_literal(const_literal)?;
+                crate::ConstantInner::Sint(value as i64)
+            }
+            Rule::bool_literal => {
+                let value = match const_literal.as_str() {
+                    "true" => true,
+                    "false" => false,
+                    other => return Err(Error::BadBool(other.to_owned())),
+                };
+                crate::ConstantInner::Bool(value)
+            }
+            ref other => panic!("Unknown const literal {:?}", other),
+        };
+        Ok(const_store.append(crate::Constant {
+            name: None,
+            specialization: None,
+            inner,
+        }))
+    }
+
+    fn parse_primary_expression(
+        &self,
+        primary_expression: pest::iterators::Pair<Rule>,
+        function: &mut crate::Function,
+        const_store: &mut Storage<crate::Constant>,
+    ) -> Result<Token<crate::Expression>, Error> {
+        let expression = match primary_expression.as_rule() {
+            Rule::const_literal => {
+                let const_literal = primary_expression.into_inner().next().unwrap();
+                let token = Self::parse_const_literal(const_literal, const_store)?;
+                crate::Expression::Constant(token)
+            }
+            ref other => panic!("Unknown expression {:?}", other),
+        };
+        Ok(function.expressions.append(expression))
+    }
+
     fn parse_function_decl(
         &self,
         function_decl: pest::iterators::Pair<Rule>,
         module: &mut crate::Module,
     ) -> Result<Token<crate::Function>, Error> {
+        enum Ident {
+            Parameter(u8),
+        }
+        let mut lookup_symbols = FastHashMap::default();
         assert_eq!(function_decl.as_rule(), Rule::function_decl);
         let mut function_decl_pairs = function_decl.into_inner();
 
@@ -171,24 +219,53 @@ impl Parser {
         assert_eq!(function_header.as_rule(), Rule::function_header);
         let mut function_header_pairs = function_header.into_inner();
         let fun_name = function_header_pairs.next().unwrap().as_str().to_owned();
-        let param_list = function_header_pairs.next().unwrap();
-        assert_eq!(param_list.as_rule(), Rule::param_list);
-        let function_type_decl = function_header_pairs.next().unwrap();
-        let fun = crate::Function {
+        let mut fun = crate::Function {
             name: Some(fun_name),
             control: spirv::FunctionControl::empty(),
             parameter_types: Vec::new(),
-            return_type: if function_type_decl.as_rule() == Rule::type_decl {
-                Some(self.parse_type_decl(function_type_decl, &mut module.types)?)
-            } else {
-                None
-            },
+            return_type: None,
             expressions: Storage::new(),
             body: Vec::new(),
         };
+        let param_list = function_header_pairs.next().unwrap();
+        assert_eq!(param_list.as_rule(), Rule::param_list);
+        for (i, variable_ident_decl) in param_list.into_inner().enumerate() {
+            assert_eq!(variable_ident_decl.as_rule(), Rule::variable_ident_decl);
+            let mut variable_ident_decl_pairs = variable_ident_decl.into_inner();
+            let param_name = variable_ident_decl_pairs.next().unwrap().as_str().to_owned();
+            lookup_symbols.insert(param_name, Ident::Parameter(i as u8));
+            let param_type_decl = variable_ident_decl_pairs.next().unwrap();
+            let ty = self.parse_type_decl(param_type_decl, &mut module.types)?;
+            fun.parameter_types.push(ty);
+        }
+        let function_type_decl = function_header_pairs.next().unwrap();
+        if function_type_decl.as_rule() == Rule::type_decl {
+            let ty = self.parse_type_decl(function_type_decl, &mut module.types)?;
+            fun.return_type = Some(ty);
+        }
 
         let function_body = function_decl_pairs.next().unwrap();
         assert_eq!(function_body.as_rule(), Rule::body_stmt);
+        for statement in function_body.into_inner() {
+            assert_eq!(statement.as_rule(), Rule::statement);
+            let mut statement_pairs = statement.into_inner();
+            let first_statement = match statement_pairs.next() {
+                Some(st) => st,
+                None => continue,
+            };
+            let stmt = match first_statement.as_rule() {
+                Rule::return_statement => {
+                    let mut return_pairs = first_statement.into_inner();
+                    let value = match return_pairs.next() {
+                        Some(st) => Some(self.parse_primary_expression(st, &mut fun, &mut module.constants)?),
+                        None => None,
+                    };
+                    crate::Statement::Return { value }
+                }
+                ref other => panic!("Unknown statement {:?}", other),
+            };
+            fun.body.push(stmt);
+        }
         Ok(module.functions.append(fun))
     }
 

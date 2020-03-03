@@ -75,8 +75,7 @@ const_literal = {
     int_literal
 //  | UINT_LITERAL
 //  | FLOAT_LITERAL
-  | "true"
-  | "false"
+    | bool_literal
 }
 
 const_expr = {
@@ -106,9 +105,11 @@ scalar_type = {
   | "u32"
 }
 
+return_statement = { "return" ~ primary_expression? }
+
 statement = {
     ";"
-  | "return" ~ primary_expression ~ ";"
+  | return_statement ~ ";"
 //  | if_stmt
 //  | unless_stmt
 //  | regardless_stmt
@@ -122,12 +123,13 @@ statement = {
 //  | assignment_stmt SEMICOLON
 }
 
-primary_expression = {
+primary_expression = _{
     const_literal
 }
 
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 int_literal = @{ ("-"? ~ "0x"? ~ (ASCII_DIGIT | 'a'..'f' | 'A'..'F')+) | "0" | ("-"? ~ '1'..'9' ~ ASCII_DIGIT*) }
+bool_literal = @{ "true" | "false" }
 string = @{ "\"" ~ ( "\"\"" | (!"\"" ~ ANY) )* ~ "\"" }
 
 WHITESPACE = _{ " " | "\t" | "\n" }
