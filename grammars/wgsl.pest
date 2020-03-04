@@ -5,12 +5,12 @@ global_decl = {
     | import_decl ~ ";"
     | global_variable_decl ~ ";"
     | global_constant_decl ~ ";"
-//  | entry_point_decl ~ ";"
+    | entry_point_decl ~ ";"
     | type_alias ~ ";"
     | function_decl
 }
 
-import_decl = { "import" ~ string ~ "as" ~ (ident ~ "::")* ~ ident}
+import_decl = { "import" ~ string_literal ~ "as" ~ (ident ~ "::")* ~ ident}
 
 global_variable_decl = {
     variable_decoration_list ~ variable_decl
@@ -21,11 +21,18 @@ global_constant_decl = { "const" ~ variable_ident_decl ~ "=" ~ const_expr }
 
 variable_decoration_list = { "[[" ~ (variable_decoration ~ ",")* ~ variable_decoration ~ "]]" }
 
-variable_decoration = {
-    "location" ~ int_literal
+variable_decoration = _{
+    "location" ~ location_decoration
+    | "builtin" ~ builtin_decoration
 //  | BUILTIN builtin_decoration
 //  | BINDING INT_LITERAL
 //  | SET INT_LITERAL
+}
+
+location_decoration = { int_literal }
+builtin_decoration = {
+    "position"
+  | "vertex_idx"
 }
 
 variable_decl = { "var" ~ variable_storage_decoration? ~ variable_ident_decl }
@@ -49,14 +56,24 @@ struct_body_decl = { "{" ~ struct_member* ~ "}" }
 struct_member = { struct_member_decoration_decl? ~ variable_ident_decl ~ ";" }
 struct_member_decoration_decl = { "[[" ~ (struct_member_decoration ~ ",")* ~ struct_member_decoration ~ "]]" }
 struct_member_decoration = {
-    "offset" ~ int_literal
+    "offset" ~ uint_literal
 }
 
 function_decl = { function_header ~ body_stmt }
 function_header = { "fn" ~ ident ~ "(" ~ param_list ~ ")" ~ "->" ~ function_type_decl }
-function_type_decl = _{ type_decl | "void" }
-param_list = { (variable_ident_decl ~ ",")* ~ variable_ident_decl }
+function_type_decl = _{ "void" | type_decl }
+param_list = { (variable_ident_decl ~ ",")* ~ variable_ident_decl | "" }
 body_stmt = { "{" ~ statement* ~ "}" }
+
+entry_point_decl = {
+    "entry_point" ~ pipeline_stage ~ ("as" ~ string_literal)? ~ "=" ~ ident
+}
+
+pipeline_stage = {
+    "vertex"
+  | "fragment"
+  | "compute"
+}
 
 storage_class = {
     "in"
@@ -66,21 +83,20 @@ storage_class = {
 //  | UNIFORM_CONSTANT
   | "storage_buffer"
 //  | IMAGE
-//  | PUSH_CONSTANT
   | "private"
   | "function"
 }
 
 const_literal = {
-    int_literal
-//  | UINT_LITERAL
-//  | FLOAT_LITERAL
-    | bool_literal
+    bool_literal
+  | float_literal
+  | int_literal
+  | uint_literal
 }
 
 const_expr = {
-      type_decl ~ "(" ~ (const_expr ~ ",")? ~ const_expr ~ ")"
-    | const_literal
+      const_literal
+    | type_decl ~ "(" ~ (const_expr ~ ",")? ~ const_expr ~ ")"
 }
 
 type_pointer_kind = { "ptr" }
@@ -92,7 +108,7 @@ type_decl = {
       scalar_type
     | type_vec_kind ~ "<" ~ type_decl ~ ">"
     | type_pointer_kind  ~ "<" ~ storage_class ~ "," ~ type_decl ~ ">"
-    | type_array_kind ~ "<" ~ type_decl ~ "," ~ int_literal ~ ">"
+    | type_array_kind ~ "<" ~ type_decl ~ "," ~ uint_literal ~ ">"
     | type_array_kind ~ "<" ~ type_decl ~ ">"
     | type_mat_kind ~ "<" ~ type_decl ~ ">"
     | ident
@@ -106,6 +122,7 @@ scalar_type = {
 }
 
 return_statement = { "return" ~ primary_expression? }
+assignment_statement = { ident ~ "=" ~ primary_expression }
 
 statement = {
     ";"
@@ -115,21 +132,30 @@ statement = {
 //  | regardless_stmt
 //  | switch_stmt
 //  | loop_stmt
-//  | variable_stmt SEMICOLON
-//  | break_stmt SEMICOLON
-//  | continue_stmt SEMICOLON
-//  | KILL SEMICOLON
-//  | NOP SEMICOLON
-//  | assignment_stmt SEMICOLON
+//  | variable_stmt ~ ";"
+//  | break_stmt ~ ";"
+//  | continue_stmt ~ ";"
+//  | KILL ~ ";"
+//  | NOP ~ ";"
+  | assignment_statement ~ ";"
 }
 
 primary_expression = _{
-    const_literal
+    type_decl ~ "(" ~ argument_expression_list ~ ")"
+  | const_expr
+  | multiplicative_expression
 }
 
+//multiplicative_expression = { primary_expression ~ "*" ~ primary_expression } //TODO
+multiplicative_expression = { ident ~ "*" ~ primary_expression }
+argument_expression_list = { (primary_expression ~ ",")* ~ primary_expression }
+
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-int_literal = @{ ("-"? ~ "0x"? ~ (ASCII_DIGIT | 'a'..'f' | 'A'..'F')+) | "0" | ("-"? ~ '1'..'9' ~ ASCII_DIGIT*) }
+int_literal = @{ ("-"? ~ "0x"? ~ ASCII_HEX_DIGIT+) | "0" | ("-"? ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
+uint_literal = @{ ("0x"? ~ ASCII_HEX_DIGIT+) | "0" | (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
+float_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
 bool_literal = @{ "true" | "false" }
-string = @{ "\"" ~ ( "\"\"" | (!"\"" ~ ANY) )* ~ "\"" }
+string_literal = @{ "\"" ~ ( "\"\"" | (!"\"" ~ ANY) )* ~ "\"" }
 
 WHITESPACE = _{ " " | "\t" | "\n" }
+COMMENT = _{ "#" ~ (!"\n" ~ ANY)* }

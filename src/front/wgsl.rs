@@ -12,9 +12,13 @@ struct Tokenizer;
 pub enum Error {
     Pest(pest::error::Error<Rule>),
     BadInt(std::num::ParseIntError),
+    BadFloat(std::num::ParseFloatError),
     BadStorageClass(String),
     BadBool(String),
+    BadDecoration(String),
+    UnknownIdent(String),
     UnknownType(String),
+    UnknownFunction(String),
 }
 impl From<pest::error::Error<Rule>> for Error {
     fn from(error: pest::error::Error<Rule>) -> Self {
@@ -24,6 +28,24 @@ impl From<pest::error::Error<Rule>> for Error {
 impl From<std::num::ParseIntError> for Error {
     fn from(error: std::num::ParseIntError) -> Self {
         Error::BadInt(error)
+    }
+}
+impl From<std::num::ParseFloatError> for Error {
+    fn from(error: std::num::ParseFloatError) -> Self {
+        Error::BadFloat(error)
+    }
+}
+
+trait StringValueLookup {
+    type Value;
+    fn lookup(&self, key: &str) -> Result<Self::Value, Error>;
+}
+impl StringValueLookup for FastHashMap<String, Token<crate::Expression>> {
+    type Value = Token<crate::Expression>;
+    fn lookup(&self, key: &str) -> Result<Self::Value, Error> {
+        self.get(key)
+            .cloned()
+            .ok_or(Error::UnknownIdent(key.to_owned()))
     }
 }
 
@@ -43,25 +65,29 @@ impl Parser {
     }
 
     fn parse_int_literal(pair: pest::iterators::Pair<Rule>) -> Result<i32, Error> {
-        let istr = pair.as_str();
-        let (sign, istr) = match &istr[..1] {
-            "_" => (-1, &istr[1..]),
-            _ => (1, &istr[..]),
-        };
-        let integer: i32 = istr.parse()?;
-        Ok(sign * integer)
+        Ok(pair.as_str().parse()?)
+    }
+
+    fn parse_float_literal(pair: pest::iterators::Pair<Rule>) -> Result<f32, Error> {
+        Ok(pair.as_str().parse()?)
     }
 
     fn parse_decoration_list(variable_decoration_list: pest::iterators::Pair<Rule>) -> Result<Option<crate::Binding>, Error> {
         assert_eq!(variable_decoration_list.as_rule(), Rule::variable_decoration_list);
         for variable_decoration in variable_decoration_list.into_inner() {
-            assert_eq!(variable_decoration.as_rule(), Rule::variable_decoration);
-            let mut inner = variable_decoration.into_inner();
-            let first = inner.next().unwrap();
-            match first.as_rule() {
-                Rule::int_literal => {
-                    let location = Self::parse_uint_literal(first)?;
+            match variable_decoration.as_rule() {
+                Rule::location_decoration => {
+                    let location_pair = variable_decoration.into_inner().next().unwrap();
+                    let location = Self::parse_uint_literal(location_pair)?;
                     return Ok(Some(crate::Binding::Location(location)));
+                }
+                Rule::builtin_decoration => {
+                    let builtin = match variable_decoration.as_str() {
+                        "position" => spirv::BuiltIn::Position,
+                        "vertex_idx" => spirv::BuiltIn::VertexIndex,
+                        other => return Err(Error::BadDecoration(other.to_owned())),
+                    };
+                    return Ok(Some(crate::Binding::BuiltIn(builtin)));
                 }
                 unknown => panic!("Unexpected decoration: {:?}", unknown),
             }
@@ -132,6 +158,18 @@ impl Parser {
         }))
     }
 
+    fn parse_variable_ident_decl(
+        &self,
+        variable_ident_decl: pest::iterators::Pair<Rule>,
+        type_store: &mut Storage<crate::Type>,
+    ) -> Result<(String, Token<crate::Type>), Error> {
+        assert_eq!(variable_ident_decl.as_rule(), Rule::variable_ident_decl);
+        let mut pairs = variable_ident_decl.into_inner();
+        let name = pairs.next().unwrap().as_str().to_owned();
+        let ty = self.parse_type_decl(pairs.next().unwrap(), type_store)?;
+        Ok((name, ty))
+    }
+
     fn parse_struct_decl(
         &self,
         struct_body_decl: pest::iterators::Pair<Rule>,
@@ -147,10 +185,7 @@ impl Parser {
             if body.as_rule() == Rule::struct_member_decoration_decl {
                 body = member_decl_pairs.next().unwrap(); //TODO: parse properly
             }
-            assert_eq!(body.as_rule(), Rule::variable_ident_decl);
-            let mut variable_ident_decl_pairs = body.into_inner();
-            let member_name = variable_ident_decl_pairs.next().unwrap().as_str().to_owned();
-            let ty = self.parse_type_decl(variable_ident_decl_pairs.next().unwrap(), type_store)?;
+            let (member_name, ty) = self.parse_variable_ident_decl(body, type_store)?;
             members.push(crate::StructMember {
                 name: Some(member_name),
                 binding,
@@ -162,12 +197,15 @@ impl Parser {
 
     fn parse_const_literal(
         const_literal: pest::iterators::Pair<Rule>,
-        const_store: &mut Storage<crate::Constant>,
-    ) -> Result<Token<crate::Constant>, Error> {
+    ) -> Result<crate::ConstantInner, Error> {
         let inner = match const_literal.as_rule() {
             Rule::int_literal => {
                 let value = Self::parse_int_literal(const_literal)?;
                 crate::ConstantInner::Sint(value as i64)
+            }
+            Rule::uint_literal => {
+                let value = Self::parse_uint_literal(const_literal)?;
+                crate::ConstantInner::Uint(value as u64)
             }
             Rule::bool_literal => {
                 let value = match const_literal.as_str() {
@@ -177,13 +215,30 @@ impl Parser {
                 };
                 crate::ConstantInner::Bool(value)
             }
+            Rule::float_literal => {
+                let value = Self::parse_float_literal(const_literal)?;
+                crate::ConstantInner::Float(value as f64)
+            }
             ref other => panic!("Unknown const literal {:?}", other),
         };
-        Ok(const_store.append(crate::Constant {
-            name: None,
-            specialization: None,
-            inner,
-        }))
+        Ok(inner)
+    }
+
+    fn parse_const_expression(
+        const_expression: pest::iterators::Pair<Rule>,
+        _const_store: &mut Storage<crate::Constant>,
+    ) -> Result<crate::ConstantInner, Error> {
+        let mut const_expr_pairs = const_expression.into_inner();
+        let first_pair = const_expr_pairs.next().unwrap();
+        let inner = match first_pair.as_rule() {
+            Rule::const_literal => {
+                let const_literal = first_pair.into_inner().next().unwrap();
+                Self::parse_const_literal(const_literal)?
+            }
+            Rule::type_decl => unimplemented!(),
+            _ => panic!("Unknown const expr {:?}", first_pair),
+        };
+        Ok(inner)
     }
 
     fn parse_primary_expression(
@@ -193,9 +248,13 @@ impl Parser {
         const_store: &mut Storage<crate::Constant>,
     ) -> Result<Token<crate::Expression>, Error> {
         let expression = match primary_expression.as_rule() {
-            Rule::const_literal => {
-                let const_literal = primary_expression.into_inner().next().unwrap();
-                let token = Self::parse_const_literal(const_literal, const_store)?;
+            Rule::const_expr => {
+                let inner = Self::parse_const_expression(primary_expression, const_store)?;
+                let token = const_store.append(crate::Constant {
+                    name: None,
+                    specialization: None,
+                    inner,
+                });
                 crate::Expression::Constant(token)
             }
             ref other => panic!("Unknown expression {:?}", other),
@@ -208,10 +267,7 @@ impl Parser {
         function_decl: pest::iterators::Pair<Rule>,
         module: &mut crate::Module,
     ) -> Result<Token<crate::Function>, Error> {
-        enum Ident {
-            Parameter(u8),
-        }
-        let mut lookup_symbols = FastHashMap::default();
+        let mut lookup_ident = FastHashMap::default();
         assert_eq!(function_decl.as_rule(), Rule::function_decl);
         let mut function_decl_pairs = function_decl.into_inner();
 
@@ -233,13 +289,13 @@ impl Parser {
             assert_eq!(variable_ident_decl.as_rule(), Rule::variable_ident_decl);
             let mut variable_ident_decl_pairs = variable_ident_decl.into_inner();
             let param_name = variable_ident_decl_pairs.next().unwrap().as_str().to_owned();
-            lookup_symbols.insert(param_name, Ident::Parameter(i as u8));
+            let expression_token = fun.expressions.append(crate::Expression::FunctionParameter(i as u32));
+            lookup_ident.insert(param_name, expression_token);
             let param_type_decl = variable_ident_decl_pairs.next().unwrap();
             let ty = self.parse_type_decl(param_type_decl, &mut module.types)?;
             fun.parameter_types.push(ty);
         }
-        let function_type_decl = function_header_pairs.next().unwrap();
-        if function_type_decl.as_rule() == Rule::type_decl {
+        if let Some(function_type_decl) = function_header_pairs.next() {
             let ty = self.parse_type_decl(function_type_decl, &mut module.types)?;
             fun.return_type = Some(ty);
         }
@@ -257,10 +313,20 @@ impl Parser {
                 Rule::return_statement => {
                     let mut return_pairs = first_statement.into_inner();
                     let value = match return_pairs.next() {
-                        Some(st) => Some(self.parse_primary_expression(st, &mut fun, &mut module.constants)?),
+                        Some(exp) => Some(self.parse_primary_expression(exp, &mut fun, &mut module.constants)?),
                         None => None,
                     };
                     crate::Statement::Return { value }
+                }
+                Rule::assignment_statement => {
+                    let mut assignment_pairs = first_statement.into_inner();
+                    let left_token = lookup_ident.lookup(assignment_pairs.next().unwrap().as_str())?;
+                    let right_pair = assignment_pairs.next().unwrap();
+                    let right_token = self.parse_primary_expression(right_pair, &mut fun, &mut module.constants)?;
+                    crate::Statement::Store {
+                        pointer: left_token,
+                        value: right_token,
+                    }
                 }
                 ref other => panic!("Unknown statement {:?}", other),
             };
@@ -297,15 +363,24 @@ impl Parser {
                             } else {
                                 spirv::StorageClass::Private
                             };
-                            assert_eq!(body.as_rule(), Rule::variable_ident_decl);
-                            let mut var_ident_decl_pairs = body.into_inner();
-                            let name = var_ident_decl_pairs.next().unwrap().as_str().to_owned();
-                            let ty = self.parse_type_decl(var_ident_decl_pairs.next().unwrap(), &mut module.types)?;
+                            let (name, ty) = self.parse_variable_ident_decl(body, &mut module.types)?;
                             module.global_variables.append(crate::GlobalVariable {
                                 name: Some(name),
                                 class,
                                 binding,
                                 ty,
+                            });
+                        }
+                        Rule::global_constant_decl => {
+                            let mut global_constant_pairs = global_decl.into_inner();
+                            let variable_ident_decl = global_constant_pairs.next().unwrap();
+                            let (name, _ty) = self.parse_variable_ident_decl(variable_ident_decl, &mut module.types)?;
+                            let const_expr_decl = global_constant_pairs.next().unwrap();
+                            let inner = Self::parse_const_expression(const_expr_decl, &mut module.constants)?;
+                            module.constants.append(crate::Constant {
+                                name: Some(name),
+                                specialization: None,
+                                inner,
                             });
                         }
                         Rule::type_alias => {
@@ -334,6 +409,34 @@ impl Parser {
                         }
                         Rule::function_decl => {
                             self.parse_function_decl(global_decl, &mut module)?;
+                        }
+                        Rule::entry_point_decl => {
+                            let mut ep_decl_pairs = global_decl.into_inner();
+                            let pipeline_stage_pair = ep_decl_pairs.next().unwrap();
+                            assert_eq!(pipeline_stage_pair.as_rule(), Rule::pipeline_stage);
+                            let mut fun_name_pair = ep_decl_pairs.next().unwrap();
+                            let name = fun_name_pair.as_str().to_owned();
+                            if fun_name_pair.as_rule() == Rule::string_literal {
+                                fun_name_pair = ep_decl_pairs.next().unwrap();
+                            }
+                            let fun_ident = fun_name_pair.as_str();
+                            let function = module.functions
+                                .iter()
+                                .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
+                                .map(|(token, _)| token)
+                                .ok_or(Error::UnknownFunction(fun_ident.to_owned()))?;
+                            module.entry_points.push(crate::EntryPoint {
+                                exec_model: match pipeline_stage_pair.as_str() {
+                                    "vertex" => spirv::ExecutionModel::Vertex,
+                                    "fragment" => spirv::ExecutionModel::Fragment,
+                                    "compute" =>  spirv::ExecutionModel::GLCompute,
+                                    other => panic!("Unknown execution model {:?}", other),
+                                },
+                                name,
+                                inputs: Vec::new(), //TODO
+                                outputs: Vec::new(), //TODO
+                                function,
+                            });
                         }
                         unknown => panic!("Unexpected global decl: {:?}", unknown),
                     }
