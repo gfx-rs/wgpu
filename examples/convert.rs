@@ -19,7 +19,7 @@ fn main() {
     };
 
     if args.len() <= 2 {
-        println!("{:?}", module);
+        println!("{:#?}", module);
         return
     } else if args[2].ends_with(".metal") {
         use naga::back::msl;

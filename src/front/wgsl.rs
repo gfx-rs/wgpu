@@ -245,9 +245,20 @@ impl Parser {
         &self,
         primary_expression: pest::iterators::Pair<Rule>,
         function: &mut crate::Function,
+        type_store: &mut Storage<crate::Type>,
         const_store: &mut Storage<crate::Constant>,
     ) -> Result<Token<crate::Expression>, Error> {
         let expression = match primary_expression.as_rule() {
+            Rule::typed_expression => {
+                let mut expr_pairs = primary_expression.into_inner();
+                let ty = self.parse_type_decl(expr_pairs.next().unwrap(), type_store)?;
+                let mut components = Vec::new();
+                for argument_pair in expr_pairs {
+                    let expr_token = self.parse_primary_expression(argument_pair, function, type_store, const_store)?;
+                    components.push(expr_token);
+                }
+                crate::Expression::Compose { ty, components }
+            }
             Rule::const_expr => {
                 let inner = Self::parse_const_expression(primary_expression, const_store)?;
                 let token = const_store.append(crate::Constant {
@@ -257,7 +268,7 @@ impl Parser {
                 });
                 crate::Expression::Constant(token)
             }
-            ref other => panic!("Unknown expression {:?}", other),
+            _ => panic!("Unknown expression {:?}", primary_expression),
         };
         Ok(function.expressions.append(expression))
     }
@@ -283,6 +294,19 @@ impl Parser {
             expressions: Storage::new(),
             body: Vec::new(),
         };
+        for (const_token, constant) in module.constants.iter() {
+            if let Some(ref name) = constant.name {
+                let expr_token = fun.expressions.append(crate::Expression::Constant(const_token));
+                lookup_ident.insert(name.clone(), expr_token);
+            }
+        }
+        for (var_token, variable) in module.global_variables.iter() {
+            if let Some(ref name) = variable.name {
+                let expr_token = fun.expressions.append(crate::Expression::GlobalVariable(var_token));
+                lookup_ident.insert(name.clone(), expr_token);
+            }
+        }
+
         let param_list = function_header_pairs.next().unwrap();
         assert_eq!(param_list.as_rule(), Rule::param_list);
         for (i, variable_ident_decl) in param_list.into_inner().enumerate() {
@@ -313,7 +337,7 @@ impl Parser {
                 Rule::return_statement => {
                     let mut return_pairs = first_statement.into_inner();
                     let value = match return_pairs.next() {
-                        Some(exp) => Some(self.parse_primary_expression(exp, &mut fun, &mut module.constants)?),
+                        Some(exp) => Some(self.parse_primary_expression(exp, &mut fun, &mut module.types, &mut module.constants)?),
                         None => None,
                     };
                     crate::Statement::Return { value }
@@ -322,7 +346,7 @@ impl Parser {
                     let mut assignment_pairs = first_statement.into_inner();
                     let left_token = lookup_ident.lookup(assignment_pairs.next().unwrap().as_str())?;
                     let right_pair = assignment_pairs.next().unwrap();
-                    let right_token = self.parse_primary_expression(right_pair, &mut fun, &mut module.constants)?;
+                    let right_token = self.parse_primary_expression(right_pair, &mut fun, &mut module.types, &mut module.constants)?;
                     crate::Statement::Store {
                         pointer: left_token,
                         value: right_token,

@@ -141,14 +141,16 @@ statement = {
 }
 
 primary_expression = _{
-    type_decl ~ "(" ~ argument_expression_list ~ ")"
+    typed_expression
   | const_expr
   | multiplicative_expression
 }
 
 //multiplicative_expression = { primary_expression ~ "*" ~ primary_expression } //TODO
 multiplicative_expression = { ident ~ "*" ~ primary_expression }
-argument_expression_list = { (primary_expression ~ ",")* ~ primary_expression }
+typed_expression = { type_decl ~ "(" ~ argument_expression_list ~ ")" }
+argument_expression_list = _{ (primary_expression ~ ",")* ~ primary_expression }
+
 
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 int_literal = @{ ("-"? ~ "0x"? ~ ASCII_HEX_DIGIT+) | "0" | ("-"? ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
