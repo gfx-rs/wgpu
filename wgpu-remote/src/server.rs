@@ -328,16 +328,6 @@ pub extern "C" fn wgpu_server_compute_pipeline_destroy(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_device_create_render_pipeline(
-    global: &Global,
-    self_id: id::DeviceId,
-    desc: &core::pipeline::RenderPipelineDescriptor,
-    new_id: id::RenderPipelineId,
-) {
-    gfx_select!(self_id => global.device_create_render_pipeline(self_id, desc, new_id));
-}
-
-#[no_mangle]
 pub extern "C" fn wgpu_server_render_pipeline_destroy(
     global: &Global,
     self_id: id::RenderPipelineId,
