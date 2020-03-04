@@ -444,6 +444,20 @@ pub extern "C" fn wgpu_client_kill_compute_pipeline_id(
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_client_make_render_pipeline_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::RenderPipelineId {
+    let backend = device_id.backend();
+    client
+        .identities
+        .lock()
+        .select(backend)
+        .render_pipelines
+        .alloc(backend)
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_client_kill_render_pipeline_id(
     client: &Client,
     id: id::RenderPipelineId,
