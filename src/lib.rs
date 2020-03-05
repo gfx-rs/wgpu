@@ -17,6 +17,7 @@ use std::slice;
 use std::thread;
 
 pub use wgc::{
+    Backend,
     binding_model::ShaderStage,
     command::{
         CommandBufferDescriptor,
@@ -31,6 +32,7 @@ pub use wgc::{
         AdapterInfo,
         BackendBit,
         DeviceDescriptor,
+        DeviceType,
         Extensions,
         Limits,
         PowerPreference,
