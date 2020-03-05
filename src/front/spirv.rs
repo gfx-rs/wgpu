@@ -1066,21 +1066,21 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         flags |= crate::ImageFlags::MULTISAMPLED;
                     }
                     let is_sampled = self.next()?;
+                    if is_sampled != 0 {
+                        flags |= crate::ImageFlags::SAMPLED;
+                    }
                     let _format = self.next()?;
-                    let access = if inst.wc > 9 {
+                    if inst.wc > 9 {
                         inst.expect(10)?;
-                        self.next()?
-                    } else if is_sampled == 1 {
-                        0 // read-only
-                    } else {
-                        2 // read-write
+                        let access = self.next()?;
+                        if access == 0 || access == 2 {
+                            flags |= crate::ImageFlags::CAN_LOAD;
+                        }
+                        if access == 1 || access == 2 {
+                            flags |= crate::ImageFlags::CAN_STORE;
+                        }
                     };
-                    if access == 0 || access == 2 {
-                        flags |= crate::ImageFlags::READABLE;
-                    }
-                    if access == 1 || access == 2 {
-                        flags |= crate::ImageFlags::WRITABLE;
-                    }
+
                     let decor = self.future_decor
                         .remove(&id)
                         .unwrap_or_default();

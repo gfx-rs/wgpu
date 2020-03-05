@@ -60,8 +60,9 @@ bitflags::bitflags! {
     pub struct ImageFlags: u32 {
         const ARRAYED = 0x1;
         const MULTISAMPLED = 0x2;
-        const READABLE = 0x4;
-        const WRITABLE = 0x8;
+        const SAMPLED = 0x4;
+        const CAN_LOAD = 0x10;
+        const CAN_STORE = 0x20;
     }
 }
 

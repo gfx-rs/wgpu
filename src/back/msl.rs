@@ -56,6 +56,7 @@ pub enum Error {
     MixedExecutionModels(crate::Token<crate::Function>),
     MissingBinding(crate::Token<crate::GlobalVariable>),
     MissingBindTarget(BindSource),
+    InvalidImageFlags(crate::ImageFlags),
     BadName(String),
 }
 
@@ -510,14 +511,19 @@ impl<W: Write> Writer<W> {
                         spirv::Dim::DimCube => "Cube",
                         _ => panic!("Unsupported dim {:?}", dim),
                     };
-                    let access = if flags.contains(crate::ImageFlags::READABLE | crate::ImageFlags::WRITABLE) {
-                        "read_write"
-                    } else if flags.contains(crate::ImageFlags::WRITABLE) {
-                        "write"
-                    } else {
-                        assert!(flags.contains(crate::ImageFlags::READABLE));
-                        //TODO: figure out when to use `read`
+                    let access = if flags.contains(crate::ImageFlags::SAMPLED) {
+                        if flags.intersects(crate::ImageFlags::CAN_STORE) {
+                            return Err(Error::InvalidImageFlags(flags));
+                        }
                         "sample"
+                    } else if flags.contains(crate::ImageFlags::CAN_LOAD | crate::ImageFlags::CAN_STORE) {
+                        "read_write"
+                    } else if flags.contains(crate::ImageFlags::CAN_STORE) {
+                        "write"
+                    } else if flags.contains(crate::ImageFlags::CAN_LOAD) {
+                        "read"
+                    } else {
+                        return Err(Error::InvalidImageFlags(flags));
                     };
                     write!(self.out, "typedef texture{}<{}, access::{}> {}", dim, base_name, access, name)?;
                 }
