@@ -7,7 +7,7 @@ const c_scale: f32 = 1.2;
 
 fn main_vert() -> void {
 # scale * a_pos
-  o_position = vec4<f32>(0.0, 0.0, 0.0, 1.0);
+  o_position = vec4<f32>(2.0 * 3.0, 0.0, 0.0, 1.0);
   return;
 }
 entry_point vertex as "main" = main_vert;

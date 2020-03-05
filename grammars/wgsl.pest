@@ -132,7 +132,7 @@ statement = {
 //  | regardless_stmt
 //  | switch_stmt
 //  | loop_stmt
-//  | variable_stmt ~ ";"
+  | variable_stmt ~ ";"
 //  | break_stmt ~ ";"
 //  | continue_stmt ~ ";"
 //  | KILL ~ ";"
@@ -140,17 +140,75 @@ statement = {
   | assignment_statement ~ ";"
 }
 
+variable_stmt = _{
+    variable_decl ~ "=" ~ logical_or_expression
+  | "const" ~ variable_ident_decl ~ "=" ~ logical_or_expression
+  | variable_decl
+}
+
 primary_expression = _{
     typed_expression
   | const_expr
+  | paren_rhs_stmt
+  | ident
+}
+
+unary_expression = {
+    primary_expression
+}
+
+multiplicative_expression = { 
+    unary_expression ~ "*" ~ multiplicative_expression
+  | unary_expression
+}
+
+additive_expression = {
+    multiplicative_expression ~ "+" ~ additive_expression
   | multiplicative_expression
 }
 
-//multiplicative_expression = { primary_expression ~ "*" ~ primary_expression } //TODO
-multiplicative_expression = { ident ~ "*" ~ primary_expression }
-typed_expression = { type_decl ~ "(" ~ argument_expression_list ~ ")" }
-argument_expression_list = _{ (primary_expression ~ ",")* ~ primary_expression }
+shift_expression = {
+    additive_expression
+}
 
+relational_expression = {
+    shift_expression
+}
+
+equality_expression = {
+    relational_expression ~ "==" ~ relational_expression
+  | relational_expression
+}
+
+and_expression = {
+    equality_expression ~ "=" ~ and_expression
+  | equality_expression
+}
+
+exclusive_or_expression = {
+    and_expression ~ "^" ~ exclusive_or_expression
+  | and_expression
+}
+
+inclusive_or_expression = {
+    exclusive_or_expression ~ "|" ~ inclusive_or_expression
+  | exclusive_or_expression
+}
+
+logical_and_expression = {
+    inclusive_or_expression ~ "&&" ~ logical_and_expression
+  | inclusive_or_expression
+}
+
+logical_or_expression = {
+    logical_and_expression ~ "||" ~ logical_or_expression
+  | logical_and_expression
+}
+
+paren_rhs_stmt = { "(" ~ logical_or_expression ~ ")" }
+
+typed_expression = { type_decl ~ "(" ~ argument_expression_list ~ ")" }
+argument_expression_list = _{ (logical_or_expression ~ ",")* ~ logical_or_expression }
 
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
 int_literal = @{ ("-"? ~ "0x"? ~ ASCII_HEX_DIGIT+) | "0" | ("-"? ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
