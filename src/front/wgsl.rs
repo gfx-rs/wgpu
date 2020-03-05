@@ -19,6 +19,7 @@ pub enum Error {
     UnknownIdent(String),
     UnknownType(String),
     UnknownFunction(String),
+    InvalidVariableClass(spirv::StorageClass),
 }
 impl From<pest::error::Error<Rule>> for Error {
     fn from(error: pest::error::Error<Rule>) -> Self {
@@ -46,6 +47,48 @@ impl StringValueLookup for FastHashMap<String, Token<crate::Expression>> {
         self.get(key)
             .cloned()
             .ok_or(Error::UnknownIdent(key.to_owned()))
+    }
+}
+
+type ExpressionResult = Result<Token<crate::Expression>, Error>;
+
+struct ExpressionContext<'a> {
+    function: &'a mut crate::Function,
+    lookup_ident: &'a FastHashMap<String, Token<crate::Expression>>,
+    types: &'a mut Storage<crate::Type>,
+    constants: &'a mut Storage<crate::Constant>,
+}
+
+impl<'a> ExpressionContext<'a> {
+    fn reborrow(&mut self) -> ExpressionContext {
+        ExpressionContext {
+            function: self.function,
+            lookup_ident: self.lookup_ident,
+            types: self.types,
+            constants: self.constants,
+        }
+    }
+
+    fn parse_binary(
+        &mut self,
+        expression_pair: pest::iterators::Pair<Rule>,
+        rule: Rule,
+        op: crate::BinaryOperator,
+        mut parser: impl FnMut(pest::iterators::Pair<Rule>, ExpressionContext<'_>) -> ExpressionResult,
+    ) -> ExpressionResult {
+        assert_eq!(expression_pair.as_rule(), rule);
+        let mut expression_pairs = expression_pair.into_inner();
+        let base_pair = expression_pairs.next().unwrap();
+        let mut left = parser(base_pair, self.reborrow())?;
+        for next_pair in expression_pairs {
+            let expression = crate::Expression::Binary {
+                op,
+                left,
+                right: parser(next_pair, self.reborrow())?,
+            };
+            left = self.function.expressions.append(expression);
+        }
+        Ok(left)
     }
 }
 
@@ -170,6 +213,25 @@ impl Parser {
         Ok((name, ty))
     }
 
+    fn parse_variable_decl(
+        &self,
+        variable_decl: pest::iterators::Pair<Rule>,
+        type_store: &mut Storage<crate::Type>,
+    ) -> Result<(String, Option<spirv::StorageClass>, Token<crate::Type>), Error> {
+        assert_eq!(variable_decl.as_rule(), Rule::variable_decl);
+        let mut var_decl_pairs = variable_decl.into_inner();
+        let mut body = var_decl_pairs.next().unwrap();
+        let class = if body.as_rule() == Rule::storage_class {
+            let class = Self::parse_storage_class(body)?;
+            body = var_decl_pairs.next().unwrap();
+            Some(class)
+        } else {
+            None
+        };
+        let (name, ty) = self.parse_variable_ident_decl(body, type_store)?;
+        Ok((name, class, ty))
+    }
+
     fn parse_struct_decl(
         &self,
         struct_body_decl: pest::iterators::Pair<Rule>,
@@ -244,33 +306,94 @@ impl Parser {
     fn parse_primary_expression(
         &self,
         primary_expression: pest::iterators::Pair<Rule>,
-        function: &mut crate::Function,
-        type_store: &mut Storage<crate::Type>,
-        const_store: &mut Storage<crate::Constant>,
-    ) -> Result<Token<crate::Expression>, Error> {
-        let expression = match primary_expression.as_rule() {
+        mut ctx: ExpressionContext,
+    ) -> ExpressionResult {
+        match primary_expression.as_rule() {
             Rule::typed_expression => {
                 let mut expr_pairs = primary_expression.into_inner();
-                let ty = self.parse_type_decl(expr_pairs.next().unwrap(), type_store)?;
+                let ty = self.parse_type_decl(expr_pairs.next().unwrap(), ctx.types)?;
                 let mut components = Vec::new();
                 for argument_pair in expr_pairs {
-                    let expr_token = self.parse_primary_expression(argument_pair, function, type_store, const_store)?;
+                    let expr_token = self.parse_primary_expression(argument_pair, ctx.reborrow())?;
                     components.push(expr_token);
                 }
-                crate::Expression::Compose { ty, components }
+                let expression = crate::Expression::Compose { ty, components };
+                Ok(ctx.function.expressions.append(expression))
             }
             Rule::const_expr => {
-                let inner = Self::parse_const_expression(primary_expression, const_store)?;
-                let token = const_store.append(crate::Constant {
+                let inner = Self::parse_const_expression(primary_expression, ctx.constants)?;
+                let token = ctx.constants.append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner,
                 });
-                crate::Expression::Constant(token)
+                let expression = crate::Expression::Constant(token);
+                Ok(ctx.function.expressions.append(expression))
+            }
+            Rule::logical_or_expression => {
+                self.parse_logical_or_expression(primary_expression, ctx)
+            }
+            Rule::ident => {
+                ctx.lookup_ident.lookup(primary_expression.as_str())
             }
             _ => panic!("Unknown expression {:?}", primary_expression),
-        };
-        Ok(function.expressions.append(expression))
+        }
+    }
+
+    fn parse_relational_expression(
+        &self,
+        pair: pest::iterators::Pair<Rule>,
+        mut context: ExpressionContext,
+    ) -> ExpressionResult {
+        context.parse_binary(
+            pair,
+            Rule::additive_expression,
+            crate::BinaryOperator::Add,
+            |pair, mut context| context.parse_binary(
+                pair,
+                Rule::multiplicative_expression,
+                crate::BinaryOperator::Multiply,
+                |pair, context| self.parse_primary_expression(pair, context),
+            ),
+        )
+    }
+
+    fn parse_logical_or_expression(
+        &self,
+        pair: pest::iterators::Pair<Rule>,
+        mut context: ExpressionContext,
+    ) -> ExpressionResult {
+        context.parse_binary(
+            pair,
+            Rule::logical_or_expression,
+            crate::BinaryOperator::LogicalOr,
+            |pair, mut context| context.parse_binary(
+                pair,
+                Rule::logical_and_expression,
+                crate::BinaryOperator::LogicalAnd,
+                |pair, mut context| context.parse_binary(
+                    pair,
+                    Rule::inclusive_or_expression,
+                    crate::BinaryOperator::InclusiveOr,
+                    |pair, mut context| context.parse_binary(
+                        pair,
+                        Rule::exclusive_or_expression,
+                        crate::BinaryOperator::ExclusiveOr,
+                        |pair, mut context| context.parse_binary(
+                            pair,
+                            Rule::and_expression,
+                            crate::BinaryOperator::And,
+                            |pair, mut context| context.parse_binary(
+                                pair,
+                                Rule::equality_expression,
+                                crate::BinaryOperator::Equals,
+                                |pair, context| self.parse_relational_expression(pair, context),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
     }
 
     fn parse_function_decl(
@@ -333,26 +456,68 @@ impl Parser {
                 Some(st) => st,
                 None => continue,
             };
+            let context = ExpressionContext {
+                function: &mut fun,
+                lookup_ident: &lookup_ident,
+                types: &mut module.types,
+                constants: &mut module.constants,
+            };
             let stmt = match first_statement.as_rule() {
                 Rule::return_statement => {
                     let mut return_pairs = first_statement.into_inner();
                     let value = match return_pairs.next() {
-                        Some(exp) => Some(self.parse_primary_expression(exp, &mut fun, &mut module.types, &mut module.constants)?),
+                        Some(exp) => Some(self.parse_primary_expression(exp, context)?),
                         None => None,
                     };
                     crate::Statement::Return { value }
+                }
+                Rule::variable_statement => {
+                    let mut variable_pairs = first_statement.into_inner();
+                    let variable_decl = variable_pairs.next().unwrap();
+                    match variable_decl.as_rule() {
+                        Rule::variable_decl => {
+                            let (name, class, ty) = self.parse_variable_decl(variable_decl, context.types)?;
+                            if let Some(class) = class {
+                                return Err(Error::InvalidVariableClass(class));
+                            }
+                            let value = if let Some(value_pair) = variable_pairs.next() {
+                                let value_token = self.parse_primary_expression(value_pair, context)?;
+                                lookup_ident.insert(name.clone(), value_token);
+                                Some(value_token)
+                            } else {
+                                None
+                            };
+                            crate::Statement::VariableDeclaration {
+                                name,
+                                ty,
+                                value,
+                            }
+                        }
+                        Rule::variable_ident_decl => {
+                            let (name, ty) = self.parse_variable_ident_decl(variable_decl, context.types)?;
+                            let value_pair = variable_pairs.next().unwrap();
+                            let value_token = self.parse_primary_expression(value_pair, context)?;
+                            lookup_ident.insert(name.clone(), value_token);
+                            crate::Statement::VariableDeclaration {
+                                name,
+                                ty,
+                                value: Some(value_token),
+                            }
+                        }
+                        _ => panic!("Unexpected variable decl {:?}", variable_decl)
+                    }
                 }
                 Rule::assignment_statement => {
                     let mut assignment_pairs = first_statement.into_inner();
                     let left_token = lookup_ident.lookup(assignment_pairs.next().unwrap().as_str())?;
                     let right_pair = assignment_pairs.next().unwrap();
-                    let right_token = self.parse_primary_expression(right_pair, &mut fun, &mut module.types, &mut module.constants)?;
+                    let right_token = self.parse_primary_expression(right_pair, context)?;
                     crate::Statement::Store {
                         pointer: left_token,
                         value: right_token,
                     }
                 }
-                ref other => panic!("Unknown statement {:?}", other),
+                _ => panic!("Unknown statement {:?}", first_statement),
             };
             fun.body.push(stmt);
         }
@@ -377,20 +542,10 @@ impl Parser {
                             let mut global_decl_pairs = global_decl.into_inner();
                             let binding = Self::parse_decoration_list(global_decl_pairs.next().unwrap())?;
                             let var_decl = global_decl_pairs.next().unwrap();
-                            assert_eq!(var_decl.as_rule(), Rule::variable_decl);
-                            let mut var_decl_pairs = var_decl.into_inner();
-                            let mut body = var_decl_pairs.next().unwrap();
-                            let class = if body.as_rule() == Rule::storage_class {
-                                let class = Self::parse_storage_class(body)?;
-                                body = var_decl_pairs.next().unwrap();
-                                class
-                            } else {
-                                spirv::StorageClass::Private
-                            };
-                            let (name, ty) = self.parse_variable_ident_decl(body, &mut module.types)?;
+                            let (name, class, ty) = self.parse_variable_decl(var_decl, &mut module.types)?;
                             module.global_variables.append(crate::GlobalVariable {
                                 name: Some(name),
-                                class,
+                                class: class.unwrap_or(spirv::StorageClass::Private),
                                 binding,
                                 ty,
                             });

@@ -132,7 +132,7 @@ statement = {
 //  | regardless_stmt
 //  | switch_stmt
 //  | loop_stmt
-  | variable_stmt ~ ";"
+  | variable_statement ~ ";"
 //  | break_stmt ~ ";"
 //  | continue_stmt ~ ";"
 //  | KILL ~ ";"
@@ -140,7 +140,7 @@ statement = {
   | assignment_statement ~ ";"
 }
 
-variable_stmt = _{
+variable_statement = _{
     variable_decl ~ "=" ~ logical_or_expression
   | "const" ~ variable_ident_decl ~ "=" ~ logical_or_expression
   | variable_decl
@@ -153,59 +153,27 @@ primary_expression = _{
   | ident
 }
 
-unary_expression = {
+unary_expression = _{
     primary_expression
 }
 
-multiplicative_expression = { 
-    unary_expression ~ "*" ~ multiplicative_expression
-  | unary_expression
-}
-
-additive_expression = {
-    multiplicative_expression ~ "+" ~ additive_expression
-  | multiplicative_expression
-}
-
-shift_expression = {
+multiplicative_expression = { unary_expression ~ ("*" ~ unary_expression)* }
+additive_expression = { multiplicative_expression ~ ("+" ~ multiplicative_expression)* }
+shift_expression = _{
     additive_expression
 }
-
-relational_expression = {
+relational_expression = _{
     shift_expression
 }
 
-equality_expression = {
-    relational_expression ~ "==" ~ relational_expression
-  | relational_expression
-}
+equality_expression = { relational_expression ~ ("==" ~ relational_expression)* }
+and_expression = { equality_expression ~ ("&" ~ equality_expression)* }
+exclusive_or_expression = { and_expression ~ ("^" ~ and_expression)* }
+inclusive_or_expression = { exclusive_or_expression ~ ("|" ~ exclusive_or_expression)* }
+logical_and_expression = { inclusive_or_expression ~ ("&&" ~ inclusive_or_expression)* }
+logical_or_expression = { logical_and_expression ~ ("||" ~ logical_and_expression)* }
 
-and_expression = {
-    equality_expression ~ "=" ~ and_expression
-  | equality_expression
-}
-
-exclusive_or_expression = {
-    and_expression ~ "^" ~ exclusive_or_expression
-  | and_expression
-}
-
-inclusive_or_expression = {
-    exclusive_or_expression ~ "|" ~ inclusive_or_expression
-  | exclusive_or_expression
-}
-
-logical_and_expression = {
-    inclusive_or_expression ~ "&&" ~ logical_and_expression
-  | inclusive_or_expression
-}
-
-logical_or_expression = {
-    logical_and_expression ~ "||" ~ logical_or_expression
-  | logical_and_expression
-}
-
-paren_rhs_stmt = { "(" ~ logical_or_expression ~ ")" }
+paren_rhs_stmt = _{ "(" ~ logical_or_expression ~ ")" }
 
 typed_expression = { type_decl ~ "(" ~ argument_expression_list ~ ")" }
 argument_expression_list = _{ (logical_or_expression ~ ",")* ~ logical_or_expression }

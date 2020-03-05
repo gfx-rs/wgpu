@@ -114,7 +114,19 @@ pub struct GlobalVariable {
     pub ty: Token<Type>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
+pub enum BinaryOperator {
+    Multiply,
+    Add,
+    Equals,
+    And,
+    ExclusiveOr,
+    InclusiveOr,
+    LogicalAnd,
+    LogicalOr,
+}
+
+#[derive(Debug)]
 pub enum Expression {
     Access {
         base: Token<Expression>,
@@ -140,6 +152,11 @@ pub enum Expression {
         sampler: Token<Expression>,
         coordinate: Token<Expression>,
     },
+    Binary {
+        op: BinaryOperator,
+        left: Token<Expression>,
+        right: Token<Expression>,
+    },
 }
 
 pub type Block = Vec<Statement>;
@@ -149,6 +166,11 @@ pub struct FallThrough;
 #[derive(Debug)]
 pub enum Statement {
     Block(Block),
+    VariableDeclaration {
+        name: String,
+        ty: Token<Type>,
+        value: Option<Token<Expression>>,
+    },
     If {
         condition: Token<Expression>, //bool
         accept: Block,

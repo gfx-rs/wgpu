@@ -60,7 +60,7 @@ pub enum Error {
     InvalidVectorSize(spirv::Word),
     InvalidVariableClass(spirv::StorageClass),
     InvalidAccessType(spirv::Word),
-    InvalidAccessIndex(crate::Expression),
+    InvalidAccessIndex(Token<crate::Expression>),
     InvalidLoadType(spirv::Word),
     InvalidStoreType(spirv::Word),
     InvalidBinding(spirv::Word),
@@ -399,10 +399,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                         match const_store[const_token].inner {
                                             crate::ConstantInner::Uint(v) => v as u32,
                                             crate::ConstantInner::Sint(v) => v as u32,
-                                            _ => return Err(Error::InvalidAccessIndex(crate::Expression::Constant(const_token))),
+                                            _ => return Err(Error::InvalidAccessIndex(index_expr.token)),
                                         }
                                     }
-                                    ref other => return Err(Error::InvalidAccessIndex(other.clone()))
+                                    _ => return Err(Error::InvalidAccessIndex(index_expr.token))
                                 };
                                 AccessExpression {
                                     base_token: fun.expressions.append(crate::Expression::AccessIndex {
