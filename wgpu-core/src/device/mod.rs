@@ -1004,7 +1004,8 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
         let bindings =
             unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length as usize) };
-        assert_eq!(bindings.len(), bind_group_layout.bindings.len());
+        assert_eq!( bindings.len(), bind_group_layout.bindings.len(), "The bind group {:?} has {} bindings 
+            while corresponding layout {:?} expects {}", id_in, bind_group_layout.bindings.len(), id_in.value, bindings.len());
 
         let desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
