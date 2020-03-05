@@ -65,6 +65,7 @@ pub struct SwapChain<B: hal::Backend> {
 pub enum PresentMode {
     NoVsync = 0,
     Vsync = 1,
+    Mailbox = 2,
 }
 
 #[repr(C)]
@@ -95,6 +96,7 @@ impl SwapChainDescriptor {
         config.present_mode = match self.present_mode {
             PresentMode::NoVsync => hal::window::PresentMode::IMMEDIATE,
             PresentMode::Vsync => hal::window::PresentMode::FIFO,
+            PresentMode::Mailbox => hal::window::PresentMode::MAILBOX,
         };
         config
     }

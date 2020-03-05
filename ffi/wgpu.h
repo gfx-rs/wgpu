@@ -128,6 +128,7 @@ typedef enum {
 typedef enum {
   WGPUPresentMode_NoVsync = 0,
   WGPUPresentMode_Vsync = 1,
+  WGPUPresentMode_Mailbox = 2,
 } WGPUPresentMode;
 
 typedef enum {
