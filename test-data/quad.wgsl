@@ -6,7 +6,7 @@ const c_scale: f32 = 1.2;
 [[builtin position]] var<out> o_position : vec4<f32>;
 
 fn main_vert() -> void {
-  o_position = vec4<f32>(scale * a_pos, 0.0, 1.0);
+  o_position = vec4<f32>(c_scale * a_pos, 0.0, 1.0);
   return;
 }
 entry_point vertex as "main" = main_vert;

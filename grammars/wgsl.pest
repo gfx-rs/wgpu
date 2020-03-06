@@ -121,8 +121,8 @@ scalar_type = {
   | "u32"
 }
 
-return_statement = { "return" ~ primary_expression? }
-assignment_statement = { ident ~ "=" ~ primary_expression }
+return_statement = { "return" ~ logical_or_expression? }
+assignment_statement = { ident ~ "=" ~ logical_or_expression }
 
 statement = {
     ";"
@@ -179,8 +179,8 @@ typed_expression = { type_decl ~ "(" ~ argument_expression_list ~ ")" }
 argument_expression_list = _{ (logical_or_expression ~ ",")* ~ logical_or_expression }
 
 ident = @{ ASCII_ALPHA ~ (ASCII_ALPHANUMERIC | "_")* }
-int_literal = @{ ("-"? ~ "0x"? ~ ASCII_HEX_DIGIT+) | "0" | ("-"? ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
-uint_literal = @{ ("0x"? ~ ASCII_HEX_DIGIT+) | "0" | (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
+int_literal = @{ ("-"? ~ "0x" ~ ASCII_HEX_DIGIT+) | "0" | ("-"? ~ ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
+uint_literal = @{ ("0x" ~ ASCII_HEX_DIGIT+) | "0" | (ASCII_NONZERO_DIGIT ~ ASCII_DIGIT*) }
 float_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
 bool_literal = @{ "true" | "false" }
 string_literal = @{ "\"" ~ ( "\"\"" | (!"\"" ~ ANY) )* ~ "\"" }
