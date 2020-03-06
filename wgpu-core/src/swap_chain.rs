@@ -63,8 +63,20 @@ pub struct SwapChain<B: hal::Backend> {
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub enum PresentMode {
-    NoVsync = 0,
-    Vsync = 1,
+    /// The presentation engine does **not** wait for a vertical blanking period and 
+    /// the request is presented immediately. This is a low-latency presentation mode,
+    /// but visible tearing may be observed. Will fallback to `Fifo` if unavailable on the
+    /// selected  platform and backend. Not optimal for mobile. 
+    Immediate = 0,
+    /// The presentation engine waits for the next vertical blanking period to update
+    /// the current image, but frames may be submitted without delay. This is a low-latency 
+    /// presentation mode and visible tearing will **not** be observed. Will fallback to `Fifo`
+    /// if unavailable on the selected platform and backend. Not optimal for mobile.
+    Mailbox = 1,
+    /// The presentation engine waits for the next vertical blanking period to update 
+    /// the current image. The framerate will be capped at the display refresh rate, 
+    /// corresponding to the `VSync`. Tearing cannot be observed. Optimal for mobile.
+    Fifo = 2,
 }
 
 #[repr(C)]
@@ -93,8 +105,9 @@ impl SwapChainDescriptor {
         config.image_usage = conv::map_texture_usage(self.usage, hal::format::Aspects::COLOR);
         config.composite_alpha_mode = hal::window::CompositeAlphaMode::OPAQUE;
         config.present_mode = match self.present_mode {
-            PresentMode::NoVsync => hal::window::PresentMode::IMMEDIATE,
-            PresentMode::Vsync => hal::window::PresentMode::FIFO,
+            PresentMode::Immediate => hal::window::PresentMode::IMMEDIATE,
+            PresentMode::Mailbox => hal::window::PresentMode::MAILBOX,
+            PresentMode::Fifo => hal::window::PresentMode::FIFO,
         };
         config
     }
