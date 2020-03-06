@@ -51,6 +51,7 @@ Shout out to the following projects that work best with wgpu-rs:
 Also, libraries that have support for wgpu-rs:
 
 - [conrod](https://github.com/PistonDevelopers/conrod) - shader-based UI
+- [grr-2d](https://github.com/norse-rs/grr-2d) - experimental 2D renderer
 - [lyon](https://github.com/nical/lyon) - a path tessellation library
 
 ## Development
