@@ -208,7 +208,7 @@ int main() {
             .format = WGPUTextureFormat_Bgra8Unorm,
             .width = prev_width,
             .height = prev_height,
-            .present_mode = WGPUPresentMode_Vsync,
+            .present_mode = WGPUPresentMode_Fifo,
         });
 
     while (!glfwWindowShouldClose(window)) {
@@ -225,7 +225,7 @@ int main() {
                     .format = WGPUTextureFormat_Bgra8Unorm,
                     .width = width,
                     .height = height,
-                    .present_mode = WGPUPresentMode_Vsync,
+                    .present_mode = WGPUPresentMode_Fifo,
                 });
         }
 

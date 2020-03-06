@@ -126,9 +126,9 @@ typedef enum {
 } WGPUPowerPreference;
 
 typedef enum {
-  WGPUPresentMode_NoVsync = 0,
-  WGPUPresentMode_Vsync = 1,
-  WGPUPresentMode_Mailbox = 2,
+  WGPUPresentMode_Immediate = 0,
+  WGPUPresentMode_Mailbox = 1,
+  WGPUPresentMode_Fifo = 2,
 } WGPUPresentMode;
 
 typedef enum {
