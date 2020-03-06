@@ -185,5 +185,5 @@ float_literal = @{ "-"? ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
 bool_literal = @{ "true" | "false" }
 string_literal = @{ "\"" ~ ( "\"\"" | (!"\"" ~ ANY) )* ~ "\"" }
 
-WHITESPACE = _{ " " | "\t" | "\n" }
-COMMENT = _{ "#" ~ (!"\n" ~ ANY)* }
+WHITESPACE = _{ " " | "\t" | NEWLINE  }
+COMMENT = _{ "#" ~ (!NEWLINE ~ ANY)* }
