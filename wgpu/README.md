@@ -46,6 +46,7 @@ Shout out to the following projects that work best with wgpu-rs:
 - [pixels](https://github.com/parasyte/pixels) - the easiest way to create a hardware-accelerated pixel frame buffer
 - [kas](https://github.com/dhardy/kas) - tooKit Abstraction System
 - [oxiditor](https://github.com/Ruddle/oxidator) - RTS game engine
+- [nannou](https://github.com/nannou-org/nannou) - a creative coding framework
 
 Also, libraries that have support for wgpu-rs:
 
