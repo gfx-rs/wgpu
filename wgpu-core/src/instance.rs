@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use std::collections::HashMap;
+
 use crate::{
     backend,
     binding_model::MAX_BIND_GROUPS,
@@ -22,6 +24,7 @@ use hal::{
     Instance as _,
 };
 
+use parking_lot::Mutex;
 
 #[derive(Debug)]
 pub struct Instance {
@@ -94,6 +97,11 @@ pub struct Surface {
     pub dx12: Option<GfxSurface<backend::Dx12>>,
     #[cfg(windows)]
     pub dx11: GfxSurface<backend::Dx11>,
+    // Cache supported surface formats per phsyical device in order to
+    // reduce overhead while re-creating swapchains. Some device/drivers
+    // have significant overhead when querying supported formats and by
+    // speeding up swapchain creation, we can enable smooth window resizing.
+    pub supported_formats: Mutex<HashMap<AdapterId, Option<Vec<hal::format::Format>>, fxhash::FxBuildHasher>>,
 }
 
 #[derive(Debug)]

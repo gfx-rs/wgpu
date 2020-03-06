@@ -26,6 +26,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
             metal: instance
                 .metal
                 .create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
+            supported_formats: Default::default(),
         },
         #[cfg(target_os = "macos")]
         Rwh::MacOS(h) => {
@@ -45,6 +46,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 metal: instance
                     .metal
                     .create_surface_from_nsview(ns_view, cfg!(debug_assertions)),
+                supported_formats: Default::default(),
             }
         },
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
@@ -53,6 +55,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
+            supported_formats: Default::default(),
         },
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::Wayland(h) => core::instance::Surface {
@@ -60,6 +63,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
+            supported_formats: Default::default(),
         },
         #[cfg(windows)]
         Rwh::Windows(h) => core::instance::Surface {
@@ -72,6 +76,7 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 .as_ref()
                 .map(|inst| inst.create_surface_from_hwnd(h.hwnd)),
             dx11: instance.dx11.create_surface_from_hwnd(h.hwnd),
+            supported_formats: Default::default(),
         },
         _ => panic!("Unsupported window handle"),
     };
@@ -121,6 +126,7 @@ pub extern "C" fn wgpu_create_surface_from_metal_layer(
             .instance
             .metal
             .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
+        supported_formats: Default::default(),
     };
 
     GLOBAL
