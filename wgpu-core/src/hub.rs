@@ -505,6 +505,7 @@ impl<F: Default> Global<F> {
 pub trait GfxBackend: hal::Backend {
     const VARIANT: Backend;
     fn hub<F>(global: &Global<F>) -> &Hub<Self, F>;
+    fn get_surface(surface: &Surface) -> &Self::Surface;
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
@@ -517,6 +518,9 @@ impl GfxBackend for backend::Vulkan {
     fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.vulkan
     }
+    fn get_surface(surface: &Surface) -> &Self::Surface {
+        surface.vulkan.as_ref().unwrap()
+    }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.vulkan.as_mut().unwrap()
     }
@@ -527,6 +531,9 @@ impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
     fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.metal
+    }
+    fn get_surface(surface: &Surface) -> &Self::Surface {
+        &mut surface.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         &mut surface.metal
@@ -539,6 +546,9 @@ impl GfxBackend for backend::Dx12 {
     fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.dx12
     }
+    fn get_surface(surface: &Surface) -> &Self::Surface {
+        surface.dx12.as_ref().unwrap()
+    }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         surface.dx12.as_mut().unwrap()
     }
@@ -549,6 +559,9 @@ impl GfxBackend for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
     fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.dx11
+    }
+    fn get_surface(surface: &Surface) -> &Self::Surface {
+        &surface.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
         &mut surface.dx11

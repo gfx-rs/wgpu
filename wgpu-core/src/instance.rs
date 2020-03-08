@@ -14,17 +14,19 @@ use crate::{
     Backend,
 };
 
+use fxhash::FxBuildHasher;
+use parking_lot::Mutex;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
 use hal::{
     self,
     adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
+    format::Format,
     queue::QueueFamily as _,
     Instance as _,
+    window::Surface as _,
 };
-
-use parking_lot::Mutex;
 
 #[derive(Debug)]
 pub struct Instance {
@@ -101,7 +103,29 @@ pub struct Surface {
     // reduce overhead while re-creating swapchains. Some device/drivers
     // have significant overhead when querying supported formats and by
     // speeding up swapchain creation, we can enable smooth window resizing.
-    pub supported_formats: Mutex<HashMap<AdapterId, Option<Vec<hal::format::Format>>, fxhash::FxBuildHasher>>,
+    pub supported_formats: Mutex<HashMap<AdapterId, Option<Vec<Format>>, FxBuildHasher>>,
+}
+
+impl Surface {
+    /// Returns the supported formats for this surface and adapter.
+    ///
+    /// The `adapter_id` **must** correspond with the provided `adapter`.
+    pub fn supported_formats<B>(
+        &self,
+        adapter_id: AdapterId,
+        adapter: &Adapter<B>,
+    ) -> Option<Vec<Format>>
+    where
+        B: GfxBackend,
+    {
+        let mut supported_formats_guard = self.supported_formats.lock();
+        let physical_device = &adapter.raw.physical_device;
+        let get_formats_slow = || B::get_surface(self).supported_formats(&physical_device);
+        supported_formats_guard
+            .entry(adapter_id)
+            .or_insert_with(get_formats_slow)
+            .clone()
+    }
 }
 
 #[derive(Debug)]

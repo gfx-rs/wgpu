@@ -1860,25 +1860,7 @@ impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
 
         let (caps, formats) = {
             let adapter = &adapter_guard[device.adapter_id];
-
-            // cache supported formats for significantly faster swapchain re-creation
-            let supported_formats_guard = surface.supported_formats.lock();
-            let formats = match supported_formats_guard.get(&device.adapter_id) {
-                Some(supported_formats) => {
-                    let supported_formats = supported_formats.clone();
-                    drop(supported_formats_guard);
-                    supported_formats
-                }
-                None => {
-                    drop(supported_formats_guard);
-                    let gfx_surface = B::get_surface_mut(surface);
-                    let supported_formats = gfx_surface.supported_formats(&adapter.raw.physical_device);
-                    let mut supported_formats_guard = surface.supported_formats.lock();
-                    supported_formats_guard.insert(device.adapter_id, supported_formats.clone());
-                    supported_formats
-                }
-            };
-
+            let formats = surface.supported_formats(device.adapter_id, &adapter);
             let suf = B::get_surface_mut(surface);
             assert!(suf.supports_queue_family(&adapter.raw.queue_families[0]));
             let caps = suf.capabilities(&adapter.raw.physical_device);
