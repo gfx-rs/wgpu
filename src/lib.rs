@@ -1,7 +1,3 @@
-#[macro_use]
-extern crate pest_derive;
-extern crate spirv_headers as spirv;
-
 pub mod back;
 pub mod front;
 mod storage;

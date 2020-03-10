@@ -1,194 +1,460 @@
 use crate::{
-    storage::{Storage, Token},
+    storage::{Storage, Token as Id},
     FastHashMap,
 };
 
+#[derive(Clone)]
+struct Lexer<'a> {
+    input: &'a str,
+}
 
-#[derive(Parser)]
-#[grammar = "../grammars/wgsl.pest"]
-struct Tokenizer;
+impl<'a> Lexer<'a> {
+    fn new(input: &'a str) -> Self {
+        Lexer {
+            input,
+        }
+    }
+}
+
+#[derive(Debug, PartialEq)]
+pub enum Token<'a> {
+    Separator(char),
+    Paren(char),
+    Number(&'a str),
+    Word(&'a str),
+    Operation { op: char, boolean: bool },
+    End,
+}
+
+impl<'a> Lexer<'a> {
+    fn consume_str(&mut self, what: &str) -> bool {
+        if self.input.starts_with(what) {
+            self.input = &self.input[what.len() ..];
+            true
+        } else {
+            false
+        }
+    }
+
+    fn consume_any(&mut self, what: impl Fn(char) -> bool) -> &'a str {
+        let pos = self.input.find(|c| !what(c)).unwrap_or(self.input.len());
+        let (left, right) = self.input.split_at(pos);
+        debug_assert!(!left.is_empty(), "Leftover: '{}'...", &right[..10]);
+        self.input = right;
+        left
+    }
+
+    fn skip_whitespace(&mut self) {
+        self.input = self.input.trim_start();
+    }
+
+    fn next(&mut self) -> Token<'a> {
+        self.skip_whitespace();
+        let mut chars = self.input.chars();
+        let cur = match chars.next() {
+            Some(c) => c,
+            None => return Token::End,
+        };
+        match cur {
+            ':' | ';' | ',' | '.' => {
+                self.input = chars.as_str();
+                Token::Separator(cur)
+            }
+            '(' | ')' | '[' | ']' | '<' | '>' => {
+                self.input = chars.as_str();
+                Token::Paren(cur)
+            }
+            '0' ..= '9' => {
+                let number = self.consume_any(|c| (c>='0' && c<='9' || c=='.'));
+                Token::Number(number)
+            }
+            'a'..='z' | 'A'..='Z' | '_' => {
+                let word = self.consume_any(|c| c.is_alphanumeric() || c=='_');
+                Token::Word(word)
+            }
+            '=' | '+'| '-' | '*' | '/' | '&' | '|' | '^' => {
+                let next = chars.next();
+                let boolean = (cur == '=' || cur == '&' || cur == '|') && next == Some(cur);
+                self.input = &self.input[if boolean { 2 } else { 1 } ..];
+                Token::Operation { op: cur, boolean }
+            }
+            '#' => {
+                match chars.position(|c| c == '\n' || c == '\r') {
+                    Some(_) => {
+                        self.input = chars.as_str();
+                        self.next()
+                    }
+                    None => return Token::End,
+                }
+            }
+            _ => unimplemented!(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Scope {
+    Decoration,
+    ImportDecl,
+    VariableDecl,
+    TypeDecl,
+    ConstantExpr,
+}
 
 #[derive(Debug)]
-pub enum Error {
-    Pest(pest::error::Error<Rule>),
-    BadInt(std::num::ParseIntError),
-    BadFloat(std::num::ParseFloatError),
-    BadStorageClass(String),
-    BadBool(String),
-    BadDecoration(String),
-    UnknownIdent(String),
-    UnknownType(String),
-    UnknownFunction(String),
-    InvalidVariableClass(spirv::StorageClass),
-}
-impl From<pest::error::Error<Rule>> for Error {
-    fn from(error: pest::error::Error<Rule>) -> Self {
-        Error::Pest(error)
-    }
-}
-impl From<std::num::ParseIntError> for Error {
-    fn from(error: std::num::ParseIntError) -> Self {
-        Error::BadInt(error)
-    }
-}
-impl From<std::num::ParseFloatError> for Error {
-    fn from(error: std::num::ParseFloatError) -> Self {
-        Error::BadFloat(error)
-    }
+pub enum Error<'a> {
+    Unexpected(Token<'a>),
+    BadInteger(&'a str, std::num::ParseIntError),
+    BadFloat(&'a str, std::num::ParseFloatError),
+    UnknownStorageClass(&'a str),
+    UnknownBuiltin(&'a str),
+    Other,
 }
 
-trait StringValueLookup {
-    type Value;
-    fn lookup(&self, key: &str) -> Result<Self::Value, Error>;
-}
-impl StringValueLookup for FastHashMap<String, Token<crate::Expression>> {
-    type Value = Token<crate::Expression>;
-    fn lookup(&self, key: &str) -> Result<Self::Value, Error> {
-        self.get(key)
-            .cloned()
-            .ok_or(Error::UnknownIdent(key.to_owned()))
-    }
-}
-
-type ExpressionResult = Result<Token<crate::Expression>, Error>;
-
-struct ExpressionContext<'a> {
-    function: &'a mut crate::Function,
-    lookup_ident: &'a FastHashMap<String, Token<crate::Expression>>,
-    types: &'a mut Storage<crate::Type>,
-    constants: &'a mut Storage<crate::Constant>,
-}
-
-impl<'a> ExpressionContext<'a> {
-    fn reborrow(&mut self) -> ExpressionContext {
-        ExpressionContext {
-            function: self.function,
-            lookup_ident: self.lookup_ident,
-            types: self.types,
-            constants: self.constants,
-        }
-    }
-
-    fn parse_binary(
-        &mut self,
-        expression_pair: pest::iterators::Pair<Rule>,
-        rule: Rule,
-        op: crate::BinaryOperator,
-        mut parser: impl FnMut(pest::iterators::Pair<Rule>, ExpressionContext<'_>) -> ExpressionResult,
-    ) -> ExpressionResult {
-        assert_eq!(expression_pair.as_rule(), rule);
-        let mut expression_pairs = expression_pair.into_inner();
-        let base_pair = expression_pairs.next().unwrap();
-        let mut left = parser(base_pair, self.reborrow())?;
-        for next_pair in expression_pairs {
-            let expression = crate::Expression::Binary {
-                op,
-                left,
-                right: parser(next_pair, self.reborrow())?,
-            };
-            left = self.function.expressions.append(expression);
-        }
-        Ok(left)
-    }
+#[derive(Debug)]
+pub struct ParseError<'a> {
+    pub error: Error<'a>,
+    pub scopes: Vec<Scope>,
+    pub pos: (usize, usize),
 }
 
 pub struct Parser {
-    lookup_type: FastHashMap<String, Token<crate::Type>>,
+    scopes: Vec<Scope>,
+    lookup_type: FastHashMap<String, Id<crate::Type>>,
 }
 
 impl Parser {
     pub fn new() -> Self {
         Parser {
+            scopes: Vec::new(),
             lookup_type: FastHashMap::default(),
         }
     }
 
-    fn parse_uint_literal(pair: pest::iterators::Pair<Rule>) -> Result<u32, Error> {
-        Ok(pair.as_str().parse()?)
-    }
-
-    fn parse_int_literal(pair: pest::iterators::Pair<Rule>) -> Result<i32, Error> {
-        Ok(pair.as_str().parse()?)
-    }
-
-    fn parse_float_literal(pair: pest::iterators::Pair<Rule>) -> Result<f32, Error> {
-        Ok(pair.as_str().parse()?)
-    }
-
-    fn parse_decoration_list(variable_decoration_list: pest::iterators::Pair<Rule>) -> Result<Option<crate::Binding>, Error> {
-        assert_eq!(variable_decoration_list.as_rule(), Rule::variable_decoration_list);
-        for variable_decoration in variable_decoration_list.into_inner() {
-            match variable_decoration.as_rule() {
-                Rule::location_decoration => {
-                    let location_pair = variable_decoration.into_inner().next().unwrap();
-                    let location = Self::parse_uint_literal(location_pair)?;
-                    return Ok(Some(crate::Binding::Location(location)));
-                }
-                Rule::builtin_decoration => {
-                    let builtin = match variable_decoration.as_str() {
-                        "position" => spirv::BuiltIn::Position,
-                        "vertex_idx" => spirv::BuiltIn::VertexIndex,
-                        other => return Err(Error::BadDecoration(other.to_owned())),
-                    };
-                    return Ok(Some(crate::Binding::BuiltIn(builtin)));
-                }
-                unknown => panic!("Unexpected decoration: {:?}", unknown),
-            }
+    fn expect<'a>(
+        lexer: &mut Lexer<'a>,
+        expected: Token<'a>,
+    ) -> Result<(), Error<'a>> {
+        let token = lexer.next();
+        if token == expected {
+            Ok(())
+        } else {
+            Err(Error::Unexpected(token))
         }
-        unimplemented!()
     }
 
-    fn parse_storage_class(storage_class: pest::iterators::Pair<Rule>) -> Result<spirv::StorageClass, Error> {
-        match storage_class.as_str() {
+    fn parse_ident<'a>(&mut self, lexer: &mut Lexer<'a>) -> Result<&'a str, Error<'a>> {
+        match lexer.next() {
+            Token::Word(word) => Ok(word),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn _parse_float_literal<'a>(lexer: &mut Lexer<'a>) -> Result<f32, Error<'a>> {
+        match lexer.next() {
+            Token::Number(word) => word.parse().map_err(|err| Error::BadFloat(word, err)),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn parse_uint_literal<'a>(lexer: &mut Lexer<'a>) -> Result<u32, Error<'a>> {
+        match lexer.next() {
+            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn _parse_sint_literal<'a>(lexer: &mut Lexer<'a>) -> Result<i32, Error<'a>> {
+        match lexer.next() {
+            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn parse_scalar_generic<'a>(lexer: &mut Lexer<'a>) -> Result<(crate::ScalarKind, u8), Error<'a>> {
+        Self::expect(lexer, Token::Paren('<'))?;
+        let pair = match lexer.next() {
+            Token::Word("f32") => (crate::ScalarKind::Float, 32),
+            Token::Word("i32") => (crate::ScalarKind::Sint, 32),
+            Token::Word("u32") => (crate::ScalarKind::Uint, 32),
+            other => return Err(Error::Unexpected(other)),
+        };
+        Self::expect(lexer, Token::Paren('>'))?;
+        Ok(pair)
+    }
+
+    fn get_storage_class<'a>(word: &'a str) -> Result<spirv::StorageClass, Error<'a>> {
+        match word {
             "in" => Ok(spirv::StorageClass::Input),
             "out" => Ok(spirv::StorageClass::Output),
-            other => Err(Error::BadStorageClass(other.to_owned())),
+            _ => Err(Error::UnknownStorageClass(word)),
         }
     }
 
-    fn parse_type_decl(
-        &self,
-        type_decl: pest::iterators::Pair<Rule>,
+    fn get_built_in<'a>(word: &'a str) -> Result<spirv::BuiltIn, Error<'a>> {
+        match word {
+            "position" => Ok(spirv::BuiltIn::Position),
+            "vertex_idx" => Ok(spirv::BuiltIn::VertexId),
+            _ => Err(Error::UnknownBuiltin(word)),
+        }
+    }
+
+    fn parse_const_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
         type_store: &mut Storage<crate::Type>,
-    ) -> Result<Token<crate::Type>, Error> {
-        assert_eq!(type_decl.as_rule(), Rule::type_decl);
-        let mut type_decl_pairs = type_decl.into_inner();
-        let type_kind = type_decl_pairs.next().unwrap();
-        let inner = match type_kind.as_rule() {
-            Rule::scalar_type => {
-                let kind = match type_kind.as_str() {
-                    "f32" => crate::ScalarKind::Float,
-                    "i32" => crate::ScalarKind::Sint,
-                    "u32" => crate::ScalarKind::Uint,
-                    other => panic!("Unexpected scalar kind {:?}", other),
-                };
-                crate::TypeInner::Scalar { kind, width: 32 }
+        const_store: &mut Storage<crate::Constant>,
+    ) -> Result<crate::ConstantInner, Error<'a>> {
+        self.scopes.push(Scope::ConstantExpr);
+        let backup = lexer.clone();
+        let inner = match lexer.next() {
+            Token::Word("true") => crate::ConstantInner::Bool(true),
+            Token::Word("false") => crate::ConstantInner::Bool(false),
+            Token::Number(word) => {
+                if word.contains('.') {
+                    let value = word
+                        .parse()
+                        .map_err(|err| Error::BadFloat(word, err))?;
+                    crate::ConstantInner::Float(value)
+                } else {
+                    let value = word
+                        .parse()
+                        .map_err(|err| Error::BadInteger(word, err))?;
+                    crate::ConstantInner::Sint(value)
+                }
             }
-            Rule::type_array_kind => {
-                let base = self.parse_type_decl(type_decl_pairs.next().unwrap(), type_store)?;
-                let size = match type_decl_pairs.next() {
-                    Some(pair) => crate::ArraySize::Static(Self::parse_uint_literal(pair)?),
-                    None => crate::ArraySize::Dynamic,
+            _ => {
+                *lexer = backup;
+                let _ty = self.parse_type_decl(lexer, type_store);
+                Self::expect(lexer, Token::Paren('('))?;
+                loop {
+                    let backup = lexer.clone();
+                    match lexer.next() {
+                        Token::Paren(')') => break,
+                        _ => {
+                            *lexer = backup;
+                            let _ = self.parse_const_expression(lexer, type_store, const_store)?;
+                        }
+                    }
+                }
+                unimplemented!()
+            }
+        };
+        self.scopes.pop();
+        Ok(inner)
+    }
+
+    fn parse_variable_ident_decl<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        type_store: &mut Storage<crate::Type>,
+    ) -> Result<(&'a str, Id<crate::Type>), Error<'a>> {
+        let name = match lexer.next() {
+            Token::Word(word) => word,
+            other => return Err(Error::Unexpected(other)),
+        };
+        Self::expect(lexer, Token::Separator(':'))?;
+        let ty = self.parse_type_decl(lexer, type_store)?;
+        Ok((name, ty))
+    }
+
+    fn parse_variable_decl<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        type_store: &mut Storage<crate::Type>,
+        const_store: &mut Storage<crate::Constant>,
+    ) -> Result<(&'a str, Option<spirv::StorageClass>, Id<crate::Type>), Error<'a>> {
+        self.scopes.push(Scope::VariableDecl);
+        let mut class = None;
+        let mut token = lexer.next();
+        if let Token::Paren('<') = token {
+            class = Some(match lexer.next() {
+                Token::Word(word) => Self::get_storage_class(word)?,
+                other => return Err(Error::Unexpected(other)),
+            });
+            Self::expect(lexer, Token::Paren('>'))?;
+            token = lexer.next();
+        }
+        let name = match token {
+            Token::Word(word) => word,
+            other => return Err(Error::Unexpected(other)),
+        };
+        Self::expect(lexer, Token::Separator(':'))?;
+        let ty = self.parse_type_decl(lexer, type_store)?;
+        match lexer.next() {
+            Token::Separator(';') => {}
+            Token::Operation{ op: '=', boolean: false } => {
+                let _inner = self.parse_const_expression(lexer, type_store, const_store)?;
+                //TODO
+                Self::expect(lexer, Token::Separator(';'))?;
+            }
+            other => return Err(Error::Unexpected(other)),
+        }
+        self.scopes.pop();
+        Ok((name, class, ty))
+    }
+
+    fn parse_struct_body<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        type_store: &mut Storage<crate::Type>,
+    ) -> Result<Vec<crate::StructMember>, Error<'a>> {
+        let mut members = Vec::new();
+        Self::expect(lexer, Token::Paren('{'))?;
+        loop {
+            let mut token = lexer.next();
+            if let Token::Paren('[')  = token {
+                self.scopes.push(Scope::Decoration);
+                if !lexer.consume_str("[") {
+                    return Err(Error::Other);
+                }
+                let mut ready = true;
+                loop {
+                    match lexer.next() {
+                        Token::Paren(']') => {
+                            if !lexer.consume_str("]") {
+                                return Err(Error::Other);
+                            }
+                            break;
+                        }
+                        Token::Separator(',') if !ready => {
+                            ready = true;
+                        }
+                        Token::Word("offset") if ready => {
+                            let _offset = Self::parse_uint_literal(lexer)?; //TODO
+                            ready = false;
+                        }
+                        other => return Err(Error::Unexpected(other)),
+                    }
+                }
+                token = lexer.next();
+                self.scopes.pop();
+            }
+            let name = match token {
+                Token::Word(word) => word,
+                Token::Paren('}') => return Ok(members),
+                other => return Err(Error::Unexpected(other)),
+            };
+            Self::expect(lexer, Token::Separator(':'))?;
+            let ty = self.parse_type_decl(lexer, type_store)?;
+            Self::expect(lexer, Token::Separator(';'))?;
+            members.push(crate::StructMember {
+                name: Some(name.to_owned()),
+                binding: None,
+                ty,
+            });
+        }
+    }
+
+    fn parse_type_decl<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        type_store: &mut Storage<crate::Type>,
+    ) -> Result<Id<crate::Type>, Error<'a>> {
+        self.scopes.push(Scope::TypeDecl);
+        let inner = match lexer.next() {
+            Token::Word("f32") => {
+                crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width: 32,
+                }
+            }
+            Token::Word("i32") => {
+                crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Sint,
+                    width: 32,
+                }
+            }
+            Token::Word("u32") => {
+                crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Uint,
+                    width: 32,
+                }
+            }
+            Token::Word("vec2") => {
+                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                crate::TypeInner::Vector {
+                    size: crate::VectorSize::Bi,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("vec3") => {
+                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                crate::TypeInner::Vector {
+                    size: crate::VectorSize::Tri,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("vec4") => {
+                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                crate::TypeInner::Vector {
+                    size: crate::VectorSize::Quad,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat2x2") => {
+                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Bi,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat3x3") => {
+                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Tri,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat4x4") => {
+                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Quad,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("ptr") => {
+                Self::expect(lexer, Token::Paren('<'))?;
+                let class = match lexer.next() {
+                    Token::Word(word) => Self::get_storage_class(word)?,
+                    other => return Err(Error::Unexpected(other)),
+                };
+                Self::expect(lexer, Token::Separator(','))?;
+                let base = self.parse_type_decl(lexer, type_store)?;
+                Self::expect(lexer, Token::Paren('>'))?;
+                crate::TypeInner::Pointer { base, class }
+            }
+            Token::Word("array") => {
+                Self::expect(lexer, Token::Paren('<'))?;
+                let base = self.parse_type_decl(lexer, type_store)?;
+                let size = match lexer.next() {
+                    Token::Separator(',') => {
+                        let value = Self::parse_uint_literal(lexer)?;
+                        Self::expect(lexer, Token::Paren('>'))?;
+                        crate::ArraySize::Static(value)
+                    }
+                    Token::Separator('>') => crate::ArraySize::Dynamic,
+                    other => return Err(Error::Unexpected(other)),
                 };
                 crate::TypeInner::Array { base, size }
             }
-            Rule::type_vec_kind => {
-                let size = match type_kind.as_str() {
-                    "vec2" => crate::VectorSize::Bi,
-                    "vec3" => crate::VectorSize::Tri,
-                    "vec4" => crate::VectorSize::Quad,
-                    other => panic!("Unexpected vec kind {:?}", other),
-                };
-                crate::TypeInner::Vector { size, kind: crate::ScalarKind::Float, width: 32 }
+            Token::Word("struct") => {
+                let members = self.parse_struct_body(lexer, type_store)?;
+                crate::TypeInner::Struct { members }
             }
-            Rule::ident => {
-                return self.lookup_type
-                    .get(type_kind.as_str())
-                    .cloned()
-                    .ok_or(Error::UnknownType(type_kind.as_str().to_owned()));
-            }
-            other => panic!("Unexpected type {:?}", other),
+            other => return Err(Error::Unexpected(other)),
         };
+        self.scopes.pop();
+
         if let Some((token, _)) = type_store
             .iter()
             .find(|(_, ty)| ty.inner == inner)
@@ -201,433 +467,132 @@ impl Parser {
         }))
     }
 
-    fn parse_variable_ident_decl(
-        &self,
-        variable_ident_decl: pest::iterators::Pair<Rule>,
-        type_store: &mut Storage<crate::Type>,
-    ) -> Result<(String, Token<crate::Type>), Error> {
-        assert_eq!(variable_ident_decl.as_rule(), Rule::variable_ident_decl);
-        let mut pairs = variable_ident_decl.into_inner();
-        let name = pairs.next().unwrap().as_str().to_owned();
-        let ty = self.parse_type_decl(pairs.next().unwrap(), type_store)?;
-        Ok((name, ty))
-    }
-
-    fn parse_variable_decl(
-        &self,
-        variable_decl: pest::iterators::Pair<Rule>,
-        type_store: &mut Storage<crate::Type>,
-    ) -> Result<(String, Option<spirv::StorageClass>, Token<crate::Type>), Error> {
-        assert_eq!(variable_decl.as_rule(), Rule::variable_decl);
-        let mut var_decl_pairs = variable_decl.into_inner();
-        let mut body = var_decl_pairs.next().unwrap();
-        let class = if body.as_rule() == Rule::storage_class {
-            let class = Self::parse_storage_class(body)?;
-            body = var_decl_pairs.next().unwrap();
-            Some(class)
-        } else {
-            None
-        };
-        let (name, ty) = self.parse_variable_ident_decl(body, type_store)?;
-        Ok((name, class, ty))
-    }
-
-    fn parse_struct_decl(
-        &self,
-        struct_body_decl: pest::iterators::Pair<Rule>,
-        type_store: &mut Storage<crate::Type>,
-    ) -> Result<crate::TypeInner, Error> {
-        assert_eq!(struct_body_decl.as_rule(), Rule::struct_body_decl);
-        let mut members = Vec::new();
-        for member_decl in struct_body_decl.into_inner() {
-            assert_eq!(member_decl.as_rule(), Rule::struct_member);
-            let mut member_decl_pairs = member_decl.into_inner();
-            let mut body = member_decl_pairs.next().unwrap();
-            let binding = None;
-            if body.as_rule() == Rule::struct_member_decoration_decl {
-                body = member_decl_pairs.next().unwrap(); //TODO: parse properly
+    fn parse_global_decl<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        module: &mut crate::Module,
+    ) -> Result<bool, Error<'a>> {
+        match lexer.next() {
+            Token::Separator(';') => {},
+            Token::Word("import") => {
+                self.scopes.push(Scope::ImportDecl);
+                let _path = lexer.next();
+                //consume(words, "as", Scope::ImportDecl)?;
+                let _namespace = lexer.next();
+                Self::expect(lexer, Token::Separator(';'))?;
+                self.scopes.pop();
             }
-            let (member_name, ty) = self.parse_variable_ident_decl(body, type_store)?;
-            members.push(crate::StructMember {
-                name: Some(member_name),
-                binding,
-                ty,
-            });
-        }
-        Ok(crate::TypeInner::Struct { members })
-    }
-
-    fn parse_const_literal(
-        const_literal: pest::iterators::Pair<Rule>,
-    ) -> Result<crate::ConstantInner, Error> {
-        let inner = match const_literal.as_rule() {
-            Rule::int_literal => {
-                let value = Self::parse_int_literal(const_literal)?;
-                crate::ConstantInner::Sint(value as i64)
+            Token::Word("type") => {
+                let name = self.parse_ident(lexer)?;
+                Self::expect(lexer, Token::Operation { op: '=', boolean: false })?;
+                let ty = self.parse_type_decl(lexer, &mut module.types)?;
+                self.lookup_type.insert(name.to_owned(), ty);
+                Self::expect(lexer, Token::Separator(';'))?;
             }
-            Rule::uint_literal => {
-                let value = Self::parse_uint_literal(const_literal)?;
-                crate::ConstantInner::Uint(value as u64)
-            }
-            Rule::bool_literal => {
-                let value = match const_literal.as_str() {
-                    "true" => true,
-                    "false" => false,
-                    other => return Err(Error::BadBool(other.to_owned())),
-                };
-                crate::ConstantInner::Bool(value)
-            }
-            Rule::float_literal => {
-                let value = Self::parse_float_literal(const_literal)?;
-                crate::ConstantInner::Float(value as f64)
-            }
-            ref other => panic!("Unknown const literal {:?}", other),
-        };
-        Ok(inner)
-    }
-
-    fn parse_const_expression(
-        const_expression: pest::iterators::Pair<Rule>,
-        _const_store: &mut Storage<crate::Constant>,
-    ) -> Result<crate::ConstantInner, Error> {
-        let mut const_expr_pairs = const_expression.into_inner();
-        let first_pair = const_expr_pairs.next().unwrap();
-        let inner = match first_pair.as_rule() {
-            Rule::const_literal => {
-                let const_literal = first_pair.into_inner().next().unwrap();
-                Self::parse_const_literal(const_literal)?
-            }
-            Rule::type_decl => unimplemented!(),
-            _ => panic!("Unknown const expr {:?}", first_pair),
-        };
-        Ok(inner)
-    }
-
-    fn parse_primary_expression(
-        &self,
-        primary_expression: pest::iterators::Pair<Rule>,
-        mut ctx: ExpressionContext,
-    ) -> ExpressionResult {
-        match primary_expression.as_rule() {
-            Rule::typed_expression => {
-                let mut expr_pairs = primary_expression.into_inner();
-                let ty = self.parse_type_decl(expr_pairs.next().unwrap(), ctx.types)?;
-                let mut components = Vec::new();
-                for argument_pair in expr_pairs {
-                    let expr_token = self.parse_primary_expression(argument_pair, ctx.reborrow())?;
-                    components.push(expr_token);
-                }
-                let expression = crate::Expression::Compose { ty, components };
-                Ok(ctx.function.expressions.append(expression))
-            }
-            Rule::const_expr => {
-                let inner = Self::parse_const_expression(primary_expression, ctx.constants)?;
-                let token = ctx.constants.append(crate::Constant {
-                    name: None,
+            Token::Word("const") => {
+                let (name, _ty) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
+                Self::expect(lexer, Token::Operation { op: '=', boolean: false })?;
+                let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
+                module.constants.append(crate::Constant {
+                    name: Some(name.to_owned()),
                     specialization: None,
                     inner,
                 });
-                let expression = crate::Expression::Constant(token);
-                Ok(ctx.function.expressions.append(expression))
+                Self::expect(lexer, Token::Separator(';'))?;
             }
-            Rule::logical_or_expression => {
-                self.parse_logical_or_expression(primary_expression, ctx)
-            }
-            Rule::ident => {
-                ctx.lookup_ident.lookup(primary_expression.as_str())
-            }
-            _ => panic!("Unknown expression {:?}", primary_expression),
-        }
-    }
-
-    fn parse_relational_expression(
-        &self,
-        pair: pest::iterators::Pair<Rule>,
-        mut context: ExpressionContext,
-    ) -> ExpressionResult {
-        context.parse_binary(
-            pair,
-            Rule::additive_expression,
-            crate::BinaryOperator::Add,
-            |pair, mut context| context.parse_binary(
-                pair,
-                Rule::multiplicative_expression,
-                crate::BinaryOperator::Multiply,
-                |pair, context| self.parse_primary_expression(pair, context),
-            ),
-        )
-    }
-
-    fn parse_logical_or_expression(
-        &self,
-        pair: pest::iterators::Pair<Rule>,
-        mut context: ExpressionContext,
-    ) -> ExpressionResult {
-        context.parse_binary(
-            pair,
-            Rule::logical_or_expression,
-            crate::BinaryOperator::LogicalOr,
-            |pair, mut context| context.parse_binary(
-                pair,
-                Rule::logical_and_expression,
-                crate::BinaryOperator::LogicalAnd,
-                |pair, mut context| context.parse_binary(
-                    pair,
-                    Rule::inclusive_or_expression,
-                    crate::BinaryOperator::InclusiveOr,
-                    |pair, mut context| context.parse_binary(
-                        pair,
-                        Rule::exclusive_or_expression,
-                        crate::BinaryOperator::ExclusiveOr,
-                        |pair, mut context| context.parse_binary(
-                            pair,
-                            Rule::and_expression,
-                            crate::BinaryOperator::And,
-                            |pair, mut context| context.parse_binary(
-                                pair,
-                                Rule::equality_expression,
-                                crate::BinaryOperator::Equals,
-                                |pair, context| self.parse_relational_expression(pair, context),
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-        )
-    }
-
-    fn parse_function_decl(
-        &self,
-        function_decl: pest::iterators::Pair<Rule>,
-        module: &mut crate::Module,
-    ) -> Result<Token<crate::Function>, Error> {
-        let mut lookup_ident = FastHashMap::default();
-        assert_eq!(function_decl.as_rule(), Rule::function_decl);
-        let mut function_decl_pairs = function_decl.into_inner();
-
-        let function_header = function_decl_pairs.next().unwrap();
-        assert_eq!(function_header.as_rule(), Rule::function_header);
-        let mut function_header_pairs = function_header.into_inner();
-        let fun_name = function_header_pairs.next().unwrap().as_str().to_owned();
-        let mut fun = crate::Function {
-            name: Some(fun_name),
-            control: spirv::FunctionControl::empty(),
-            parameter_types: Vec::new(),
-            return_type: None,
-            expressions: Storage::new(),
-            body: Vec::new(),
-        };
-        for (const_token, constant) in module.constants.iter() {
-            if let Some(ref name) = constant.name {
-                let expr_token = fun.expressions.append(crate::Expression::Constant(const_token));
-                lookup_ident.insert(name.clone(), expr_token);
-            }
-        }
-        for (var_token, variable) in module.global_variables.iter() {
-            if let Some(ref name) = variable.name {
-                let expr_token = fun.expressions.append(crate::Expression::GlobalVariable(var_token));
-                lookup_ident.insert(name.clone(), expr_token);
-            }
-        }
-
-        let param_list = function_header_pairs.next().unwrap();
-        assert_eq!(param_list.as_rule(), Rule::param_list);
-        for (i, variable_ident_decl) in param_list.into_inner().enumerate() {
-            assert_eq!(variable_ident_decl.as_rule(), Rule::variable_ident_decl);
-            let mut variable_ident_decl_pairs = variable_ident_decl.into_inner();
-            let param_name = variable_ident_decl_pairs.next().unwrap().as_str().to_owned();
-            let expression_token = fun.expressions.append(crate::Expression::FunctionParameter(i as u32));
-            lookup_ident.insert(param_name, expression_token);
-            let param_type_decl = variable_ident_decl_pairs.next().unwrap();
-            let ty = self.parse_type_decl(param_type_decl, &mut module.types)?;
-            fun.parameter_types.push(ty);
-        }
-        if let Some(function_type_decl) = function_header_pairs.next() {
-            let ty = self.parse_type_decl(function_type_decl, &mut module.types)?;
-            fun.return_type = Some(ty);
-        }
-
-        let function_body = function_decl_pairs.next().unwrap();
-        assert_eq!(function_body.as_rule(), Rule::body_stmt);
-        for statement in function_body.into_inner() {
-            assert_eq!(statement.as_rule(), Rule::statement);
-            let mut statement_pairs = statement.into_inner();
-            let first_statement = match statement_pairs.next() {
-                Some(st) => st,
-                None => continue,
-            };
-            let context = ExpressionContext {
-                function: &mut fun,
-                lookup_ident: &lookup_ident,
-                types: &mut module.types,
-                constants: &mut module.constants,
-            };
-            let stmt = match first_statement.as_rule() {
-                Rule::return_statement => {
-                    let mut return_pairs = first_statement.into_inner();
-                    let value = match return_pairs.next() {
-                        Some(exp) => Some(self.parse_primary_expression(exp, context)?),
-                        None => None,
-                    };
-                    crate::Statement::Return { value }
+            Token::Paren('[') => {
+                self.scopes.push(Scope::Decoration);
+                if !lexer.consume_str("[") {
+                    return Err(Error::Other);
                 }
-                Rule::variable_statement => {
-                    let mut variable_pairs = first_statement.into_inner();
-                    let variable_decl = variable_pairs.next().unwrap();
-                    match variable_decl.as_rule() {
-                        Rule::variable_decl => {
-                            let (name, class, ty) = self.parse_variable_decl(variable_decl, context.types)?;
-                            if let Some(class) = class {
-                                return Err(Error::InvalidVariableClass(class));
+                let mut ready = true;
+                let mut binding = None;
+                loop {
+                    match lexer.next() {
+                        Token::Paren(']') => {
+                            if !lexer.consume_str("]") {
+                                return Err(Error::Other);
                             }
-                            let value = if let Some(value_pair) = variable_pairs.next() {
-                                let value_token = self.parse_primary_expression(value_pair, context)?;
-                                lookup_ident.insert(name.clone(), value_token);
-                                Some(value_token)
-                            } else {
-                                None
+                            break;
+                        }
+                        Token::Separator(',') if !ready => {
+                            ready = true;
+                        }
+                        Token::Word("location") if ready => {
+                            let location = Self::parse_uint_literal(lexer)?;
+                            binding = Some(crate::Binding::Location(location));
+                            ready = false;
+                        }
+                        Token::Word("builtin") if ready => {
+                            let builtin = match lexer.next() {
+                                Token::Word(word) => Self::get_built_in(word)?,
+                                other => return Err(Error::Unexpected(other)),
                             };
-                            crate::Statement::VariableDeclaration {
-                                name,
-                                ty,
-                                value,
-                            }
+                            binding = Some(crate::Binding::BuiltIn(builtin));
+                            ready = false;
                         }
-                        Rule::variable_ident_decl => {
-                            let (name, ty) = self.parse_variable_ident_decl(variable_decl, context.types)?;
-                            let value_pair = variable_pairs.next().unwrap();
-                            let value_token = self.parse_primary_expression(value_pair, context)?;
-                            lookup_ident.insert(name.clone(), value_token);
-                            crate::Statement::VariableDeclaration {
-                                name,
-                                ty,
-                                value: Some(value_token),
-                            }
-                        }
-                        _ => panic!("Unexpected variable decl {:?}", variable_decl)
+                        other => return Err(Error::Unexpected(other)),
                     }
                 }
-                Rule::assignment_statement => {
-                    let mut assignment_pairs = first_statement.into_inner();
-                    let left_token = lookup_ident.lookup(assignment_pairs.next().unwrap().as_str())?;
-                    let right_pair = assignment_pairs.next().unwrap();
-                    let right_token = self.parse_primary_expression(right_pair, context)?;
-                    crate::Statement::Store {
-                        pointer: left_token,
-                        value: right_token,
-                    }
-                }
-                _ => panic!("Unknown statement {:?}", first_statement),
-            };
-            fun.body.push(stmt);
+                self.scopes.pop();
+                Self::expect(lexer, Token::Word("var"))?;
+                let (name, class, ty) = self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
+                module.global_variables.append(crate::GlobalVariable {
+                    name: Some(name.to_owned()),
+                    class: class.unwrap_or(spirv::StorageClass::Private),
+                    binding,
+                    ty,
+                });
+            }
+            Token::Word("var") => {
+                let (name, class, ty) = self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
+                module.global_variables.append(crate::GlobalVariable {
+                    name: Some(name.to_owned()),
+                    class: class.unwrap_or(spirv::StorageClass::Private),
+                    binding: None,
+                    ty,
+                });
+            }
+            Token::Word("fn") => {
+                unimplemented!()
+            }
+            Token::Word("entry_point") => {
+                unimplemented!()
+            }
+            Token::End => return Ok(false),
+            token => return Err(Error::Unexpected(token)),
         }
-        Ok(module.functions.append(fun))
+        Ok(true)
     }
 
-    pub fn parse(&mut self, source: &str) -> Result<crate::Module, Error> {
-        use pest::Parser as _;
-        let pairs = Tokenizer::parse(Rule::translation_unit, source)?;
+    pub fn parse<'a>(&mut self, source: &'a str) -> Result<crate::Module, ParseError<'a>> {
         let mut module = crate::Module::generate_empty();
-        for global_decl_maybe in pairs {
-            match global_decl_maybe.as_rule() {
-                Rule::global_decl => {
-                    let global_decl = global_decl_maybe.into_inner().next().unwrap();
-                    match global_decl.as_rule() {
-                        Rule::import_decl => {
-                            let mut import_decl = global_decl.into_inner();
-                            let path = import_decl.next().unwrap().as_str();
-                            log::warn!("Ignoring import {:?}", path);
-                        }
-                        Rule::global_variable_decl => {
-                            let mut global_decl_pairs = global_decl.into_inner();
-                            let binding = Self::parse_decoration_list(global_decl_pairs.next().unwrap())?;
-                            let var_decl = global_decl_pairs.next().unwrap();
-                            let (name, class, ty) = self.parse_variable_decl(var_decl, &mut module.types)?;
-                            module.global_variables.append(crate::GlobalVariable {
-                                name: Some(name),
-                                class: class.unwrap_or(spirv::StorageClass::Private),
-                                binding,
-                                ty,
-                            });
-                        }
-                        Rule::global_constant_decl => {
-                            let mut global_constant_pairs = global_decl.into_inner();
-                            let variable_ident_decl = global_constant_pairs.next().unwrap();
-                            let (name, _ty) = self.parse_variable_ident_decl(variable_ident_decl, &mut module.types)?;
-                            let const_expr_decl = global_constant_pairs.next().unwrap();
-                            let inner = Self::parse_const_expression(const_expr_decl, &mut module.constants)?;
-                            module.constants.append(crate::Constant {
-                                name: Some(name),
-                                specialization: None,
-                                inner,
-                            });
-                        }
-                        Rule::type_alias => {
-                            let mut type_alias_pairs = global_decl.into_inner();
-                            let name = type_alias_pairs.next().unwrap().as_str().to_owned();
-                            let something_decl = type_alias_pairs.next().unwrap();
-                            match something_decl.as_rule() {
-                                Rule::type_decl => {
-                                    let token = self.parse_type_decl(something_decl, &mut module.types)?;
-                                    self.lookup_type.insert(name, token);
-                                }
-                                Rule::struct_decl => {
-                                    let mut struct_decl_pairs = something_decl.into_inner();
-                                    let mut body = struct_decl_pairs.next().unwrap();
-                                    while body.as_rule() == Rule::struct_decoration_decl {
-                                        body = struct_decl_pairs.next().unwrap(); //skip
-                                    }
-                                    let inner = self.parse_struct_decl(body, &mut module.types)?;
-                                    module.types.append(crate::Type {
-                                        name: Some(name),
-                                        inner,
-                                    });
-                                }
-                                other => panic!("Unexpected type alias rule {:?}", other),
-                            };
-                        }
-                        Rule::function_decl => {
-                            self.parse_function_decl(global_decl, &mut module)?;
-                        }
-                        Rule::entry_point_decl => {
-                            let mut ep_decl_pairs = global_decl.into_inner();
-                            let pipeline_stage_pair = ep_decl_pairs.next().unwrap();
-                            assert_eq!(pipeline_stage_pair.as_rule(), Rule::pipeline_stage);
-                            let mut fun_name_pair = ep_decl_pairs.next().unwrap();
-                            let name = fun_name_pair.as_str().to_owned();
-                            if fun_name_pair.as_rule() == Rule::string_literal {
-                                fun_name_pair = ep_decl_pairs.next().unwrap();
-                            }
-                            let fun_ident = fun_name_pair.as_str();
-                            let function = module.functions
-                                .iter()
-                                .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
-                                .map(|(token, _)| token)
-                                .ok_or(Error::UnknownFunction(fun_ident.to_owned()))?;
-                            module.entry_points.push(crate::EntryPoint {
-                                exec_model: match pipeline_stage_pair.as_str() {
-                                    "vertex" => spirv::ExecutionModel::Vertex,
-                                    "fragment" => spirv::ExecutionModel::Fragment,
-                                    "compute" =>  spirv::ExecutionModel::GLCompute,
-                                    other => panic!("Unknown execution model {:?}", other),
-                                },
-                                name,
-                                inputs: Vec::new(), //TODO
-                                outputs: Vec::new(), //TODO
-                                function,
-                            });
-                        }
-                        unknown => panic!("Unexpected global decl: {:?}", unknown),
+        let mut lexer = Lexer::new(source);
+        loop {
+            match self.parse_global_decl(&mut lexer, &mut module) {
+                Err(error) => {
+                    let pos = source.rfind(lexer.input).unwrap();
+                    let (mut rows, mut cols) = (0, 0);
+                    for line in source[..pos].lines() {
+                        rows += 1;
+                        cols = line.len();
                     }
+                    return Err(ParseError {
+                        error,
+                        scopes: std::mem::replace(&mut self.scopes, Vec::new()),
+                        pos: (rows, cols),
+                    });
                 }
-                Rule::EOI => break,
-                unknown => panic!("Unexpected: {:?}", unknown),
+                Ok(true) => {}
+                Ok(false) => {
+                    assert_eq!(self.scopes, Vec::new());
+                    return Ok(module);
+                }
             }
         }
-        Ok(module)
     }
 }
 
-pub fn parse_str(source: &str) -> Result<crate::Module, Error> {
+pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
     Parser::new().parse(source)
 }
