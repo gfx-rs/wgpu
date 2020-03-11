@@ -43,6 +43,7 @@ use crate::{
     Stored,
 };
 
+use wgt::TextureFormat;
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
 
 
@@ -71,7 +72,7 @@ pub enum PresentMode {
 #[derive(Clone, Debug)]
 pub struct SwapChainDescriptor {
     pub usage: resource::TextureUsage,
-    pub format: resource::TextureFormat,
+    pub format: TextureFormat,
     pub width: u32,
     pub height: u32,
     pub present_mode: PresentMode,

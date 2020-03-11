@@ -4,6 +4,7 @@
 
 use crate::GLOBAL;
 
+use wgt::{BackendBit, DeviceDescriptor, Limits, RequestAdapterOptions};
 use core::{gfx_select, hub::Token, id};
 
 use std::{marker::PhantomData, slice};
@@ -143,7 +144,7 @@ pub extern "C" fn wgpu_create_surface_from_windows_hwnd(
     ))
 }
 
-pub fn wgpu_enumerate_adapters(mask: core::instance::BackendBit) -> Vec<id::AdapterId> {
+pub fn wgpu_enumerate_adapters(mask: BackendBit) -> Vec<id::AdapterId> {
     GLOBAL.enumerate_adapters(core::instance::AdapterInputs::Mask(mask, || PhantomData))
 }
 
@@ -152,8 +153,8 @@ pub fn wgpu_enumerate_adapters(mask: core::instance::BackendBit) -> Vec<id::Adap
 /// This function is unsafe as it calls an unsafe extern callback.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_request_adapter_async(
-    desc: Option<&core::instance::RequestAdapterOptions>,
-    mask: core::instance::BackendBit,
+    desc: Option<&RequestAdapterOptions>,
+    mask: BackendBit,
     callback: RequestAdapterCallback,
     userdata: *mut std::ffi::c_void,
 ) {
@@ -170,7 +171,7 @@ pub unsafe extern "C" fn wgpu_request_adapter_async(
 #[no_mangle]
 pub extern "C" fn wgpu_adapter_request_device(
     adapter_id: id::AdapterId,
-    desc: Option<&core::instance::DeviceDescriptor>,
+    desc: Option<&DeviceDescriptor>,
 ) -> id::DeviceId {
     let desc = &desc.cloned().unwrap_or_default();
     gfx_select!(adapter_id => GLOBAL.adapter_request_device(adapter_id, desc, PhantomData))
@@ -188,15 +189,15 @@ pub extern "C" fn wgpu_adapter_destroy(adapter_id: id::AdapterId) {
 #[no_mangle]
 pub extern "C" fn wgpu_device_get_limits(
     _device_id: id::DeviceId,
-    limits: &mut core::instance::Limits,
+    limits: &mut Limits,
 ) {
-    *limits = core::instance::Limits::default(); // TODO
+    *limits = Limits::default(); // TODO
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_buffer(
     device_id: id::DeviceId,
-    desc: &core::resource::BufferDescriptor,
+    desc: &wgt::BufferDescriptor,
 ) -> id::BufferId {
     gfx_select!(device_id => GLOBAL.device_create_buffer(device_id, desc, PhantomData))
 }
@@ -208,7 +209,7 @@ pub extern "C" fn wgpu_device_create_buffer(
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_device_create_buffer_mapped(
     device_id: id::DeviceId,
-    desc: &core::resource::BufferDescriptor,
+    desc: &wgt::BufferDescriptor,
     mapped_ptr_out: *mut *mut u8,
 ) -> id::BufferId {
     let (id, ptr) = gfx_select!(device_id => GLOBAL.device_create_buffer_mapped(device_id, desc, PhantomData));
@@ -374,8 +375,8 @@ pub extern "C" fn wgpu_device_destroy(device_id: id::DeviceId) {
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_map_read_async(
     buffer_id: id::BufferId,
-    start: core::BufferAddress,
-    size: core::BufferAddress,
+    start: wgt::BufferAddress,
+    size: wgt::BufferAddress,
     callback: core::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
@@ -384,14 +385,14 @@ pub extern "C" fn wgpu_buffer_map_read_async(
             callback(status, data, userdata)
         }),
     );
-    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_READ, start .. start + size, operation))
+    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, wgt::BufferUsage::MAP_READ, start .. start + size, operation))
 }
 
 #[no_mangle]
 pub extern "C" fn wgpu_buffer_map_write_async(
     buffer_id: id::BufferId,
-    start: core::BufferAddress,
-    size: core::BufferAddress,
+    start: wgt::BufferAddress,
+    size: wgt::BufferAddress,
     callback: core::device::BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
@@ -400,7 +401,7 @@ pub extern "C" fn wgpu_buffer_map_write_async(
             callback(status, data, userdata)
         }),
     );
-    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, core::resource::BufferUsage::MAP_WRITE, start .. start + size, operation))
+    gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, wgt::BufferUsage::MAP_WRITE, start .. start + size, operation))
 }
 
 #[no_mangle]

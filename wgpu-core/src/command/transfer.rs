@@ -7,12 +7,12 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    resource::{BufferUsage, TextureUsage},
-    BufferAddress,
+    resource::TextureUsage,
     Extent3d,
     Origin3d,
 };
 
+use wgt::{BufferAddress, BufferUsage};
 use hal::command::CommandBuffer as _;
 
 use std::iter;

@@ -25,10 +25,10 @@ pub extern "C" fn wgpu_command_encoder_finish(
 pub extern "C" fn wgpu_command_encoder_copy_buffer_to_buffer(
     command_encoder_id: id::CommandEncoderId,
     source: id::BufferId,
-    source_offset: core::BufferAddress,
+    source_offset: wgt::BufferAddress,
     destination: id::BufferId,
-    destination_offset: core::BufferAddress,
-    size: core::BufferAddress,
+    destination_offset: wgt::BufferAddress,
+    size: wgt::BufferAddress,
 ) {
     gfx_select!(command_encoder_id => GLOBAL.command_encoder_copy_buffer_to_buffer(
         command_encoder_id,

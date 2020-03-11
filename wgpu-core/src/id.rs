@@ -2,9 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{Backend, Epoch, Index};
+use crate::{Epoch, Index};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use wgt::Backend;
 use std::{fmt, marker::PhantomData, mem};
 
 const BACKEND_BITS: usize = 3;

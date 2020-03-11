@@ -11,7 +11,6 @@ use crate::{
     hub::Storage,
     id::{BindGroupId, SamplerId, TextureViewId, TypedId},
     resource,
-    Backend,
     Epoch,
     FastHashMap,
     Index,
@@ -173,7 +172,7 @@ pub struct ResourceTracker<S: ResourceState> {
     /// Temporary storage for collecting transitions.
     temp: Vec<PendingTransition<S>>,
     /// The backend variant for all the tracked resources.
-    backend: Backend,
+    backend: wgt::Backend,
 }
 
 impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
@@ -190,7 +189,7 @@ impl<S: ResourceState + fmt::Debug> fmt::Debug for ResourceTracker<S> {
 
 impl<S: ResourceState> ResourceTracker<S> {
     /// Create a new empty tracker.
-    pub fn new(backend: Backend) -> Self {
+    pub fn new(backend: wgt::Backend) -> Self {
         ResourceTracker {
             map: FastHashMap::default(),
             temp: Vec::new(),
@@ -295,7 +294,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Make sure that a resource is tracked, and return a mutable
     /// reference to it.
     fn get_or_insert<'a>(
-        self_backend: Backend,
+        self_backend: wgt::Backend,
         map: &'a mut FastHashMap<Index, Resource<S>>,
         id: S::Id,
         ref_count: &RefCount,
@@ -472,7 +471,7 @@ pub struct TrackerSet {
 
 impl TrackerSet {
     /// Create an empty set.
-    pub fn new(backend: Backend) -> Self {
+    pub fn new(backend: wgt::Backend) -> Self {
         TrackerSet {
             buffers: ResourceTracker::new(backend),
             textures: ResourceTracker::new(backend),
@@ -510,7 +509,7 @@ impl TrackerSet {
         self.samplers.merge_extend(&other.samplers).unwrap();
     }
 
-    pub fn backend(&self) -> Backend {
+    pub fn backend(&self) -> wgt::Backend {
         self.buffers.backend
     }
 }

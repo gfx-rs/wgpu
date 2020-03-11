@@ -25,6 +25,11 @@ path = "../wgpu-core"
 package = "wgpu-core"
 version = "0.1"
 
+[dependencies.wgt]
+path = "../wgpu-types"
+package = "wgpu-types"
+version = "0.1"
+
 [dependencies]
 arrayvec = "0.5"
 lazy_static = "1.1"
