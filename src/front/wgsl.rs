@@ -24,7 +24,8 @@ pub enum Token<'a> {
     Number(&'a str),
     String(&'a str),
     Word(&'a str),
-    Operation { op: char, boolean: bool },
+    Operation(char),
+    LogicalOperation(char),
     Arrow,
     Unknown(char),
     UnterminatedString,
@@ -102,26 +103,29 @@ impl<'a> Lexer<'a> {
                     self.input = chars.as_str();
                     Token::Arrow
                 } else {
-                    Token::Operation { op: cur, boolean: false }
+                    Token::Operation(cur)
                 }
             }
             '+' | '*' | '/' | '^' => {
                 self.input = chars.as_str();
-                Token::Operation { op: cur, boolean: false }
+                Token::Operation(cur)
             }
             '!' => {
                 if chars.next() == Some('=') {
                     self.input = chars.as_str();
-                    Token::Operation { op: cur, boolean: true }
+                    Token::LogicalOperation(cur)
                 } else {
                     Token::Unknown(cur)
                 }
             }
             '=' | '&' | '|'  => {
-                let next = chars.next();
-                let boolean = next == Some(cur);
-                self.input = &self.input[if boolean { 2 } else { 1 } ..];
-                Token::Operation { op: cur, boolean }
+                if chars.next() == Some(cur) {
+                    self.input = &self.input[2..];
+                    Token::LogicalOperation(cur)
+                } else {
+                    self.input = &self.input[1..];
+                    Token::Operation(cur)
+                }
             }
             '#' => {
                 match chars.position(|c| c == '\n' || c == '\r') {
@@ -435,11 +439,11 @@ impl Parser {
     ) -> Result<Id<crate::Expression>, Error<'a>> {
         context.parse_binary_op(
             lexer,
-            Token::Operation { op: '+', boolean: false },
+            Token::Operation('+'),
             crate::BinaryOperator::Add,
             |lexer, mut context| context.parse_binary_op(
                 lexer,
-                Token::Operation { op: '*', boolean: false },
+                Token::Operation('*'),
                 crate::BinaryOperator::Multiply,
                 |lexer, context| self.parse_primary_expression(lexer, context),
             ),
@@ -454,27 +458,27 @@ impl Parser {
         self.scopes.push(Scope::GeneralExpr);
         let id = context.parse_binary_op(
             lexer,
-            Token::Operation { op: '|', boolean: true },
+            Token::LogicalOperation('|'),
             crate::BinaryOperator::LogicalOr,
             |lexer, mut context| context.parse_binary_op(
                 lexer,
-                Token::Operation { op: '&', boolean: true },
+                Token::LogicalOperation('&'),
                 crate::BinaryOperator::LogicalAnd,
                 |lexer, mut context| context.parse_binary_op(
                     lexer,
-                    Token::Operation { op: '|', boolean: false },
+                    Token::Operation('|'),
                     crate::BinaryOperator::InclusiveOr,
                     |lexer, mut context| context.parse_binary_op(
                         lexer,
-                        Token::Operation { op: '^', boolean: false },
+                        Token::Operation('^'),
                         crate::BinaryOperator::ExclusiveOr,
                         |lexer, mut context| context.parse_binary_op(
                             lexer,
-                            Token::Operation { op: '&', boolean: false },
+                            Token::Operation('&'),
                             crate::BinaryOperator::And,
                             |lexer, mut context| context.parse_binary_op(
                                 lexer,
-                                Token::Operation { op: '=', boolean: true },
+                                Token::LogicalOperation('='),
                                 crate::BinaryOperator::Equals,
                                 |lexer, context| self.parse_relational_expression(lexer, context),
                             ),
@@ -515,7 +519,7 @@ impl Parser {
         let name = Self::parse_ident(lexer)?;
         Self::expect(lexer, Token::Separator(':'))?;
         let ty = self.parse_type_decl(lexer, type_store)?;
-        if let Token::Operation{ op: '=', boolean: false } = lexer.peek() {
+        if let Token::Operation('=') = lexer.peek() {
             let _ = lexer.next();
             let _inner = self.parse_const_expression(lexer, type_store, const_store)?;
             //TODO
@@ -747,7 +751,7 @@ impl Parser {
                     let statement = match word {
                         "var" => {
                             let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
-                            let value = if let Token::Operation { op: '=', boolean: false } = lexer.peek() {
+                            let value = if let Token::Operation('=') = lexer.peek() {
                                 let _ = lexer.next();
                                 Some(self.parse_general_expression(lexer, context)?)
                             } else {
@@ -774,7 +778,7 @@ impl Parser {
                         ident => {
                             // assignment
                             let left = lookup_ident.lookup(ident)?;
-                            Self::expect(lexer, Token::Operation { op: '=', boolean: false })?;
+                            Self::expect(lexer, Token::Operation('='))?;
                             let value = self.parse_general_expression(lexer, context)?;
                             Self::expect(lexer, Token::Separator(';'))?;
                             crate::Statement::Store {
@@ -842,14 +846,14 @@ impl Parser {
             }
             Token::Word("type") => {
                 let name = Self::parse_ident(lexer)?;
-                Self::expect(lexer, Token::Operation { op: '=', boolean: false })?;
+                Self::expect(lexer, Token::Operation('='))?;
                 let ty = self.parse_type_decl(lexer, &mut module.types)?;
                 self.lookup_type.insert(name.to_owned(), ty);
                 Self::expect(lexer, Token::Separator(';'))?;
             }
             Token::Word("const") => {
                 let (name, _ty) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
-                Self::expect(lexer, Token::Operation { op: '=', boolean: false })?;
+                Self::expect(lexer, Token::Operation('='))?;
                 let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 Self::expect(lexer, Token::Separator(';'))?;
                 let const_id = module.constants.append(crate::Constant {
@@ -883,7 +887,7 @@ impl Parser {
                 } else {
                     None
                 };
-                Self::expect(lexer, Token::Operation{ op: '=', boolean: false })?;
+                Self::expect(lexer, Token::Operation('='))?;
                 let fun_ident = Self::parse_ident(lexer)?;
                 Self::expect(lexer, Token::Separator(';'))?;
                 let function = module.functions
