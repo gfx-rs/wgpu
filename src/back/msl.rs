@@ -21,7 +21,7 @@ use std::{
 };
 
 use crate::{
-    storage::Token,
+    arena::Handle,
     FastHashMap, FastHashSet
 };
 
@@ -53,8 +53,8 @@ pub enum Error {
     Format(FmtError),
     UnsupportedExecutionModel(spirv::ExecutionModel),
     UnexpectedLocation,
-    MixedExecutionModels(crate::Token<crate::Function>),
-    MissingBinding(crate::Token<crate::GlobalVariable>),
+    MixedExecutionModels(crate::Handle<crate::Function>),
+    MissingBinding(crate::Handle<crate::GlobalVariable>),
     MissingBindTarget(BindSource),
     InvalidImageFlags(crate::ImageFlags),
     BadName(String),
@@ -111,15 +111,15 @@ trait Indexed {
     fn id(&self) -> usize;
 }
 
-impl Indexed for crate::Token<crate::Type> {
+impl Indexed for crate::Handle<crate::Type> {
     const CLASS: &'static str = "Type";
     fn id(&self) -> usize { self.index() }
 }
-impl Indexed for crate::Token<crate::GlobalVariable> {
+impl Indexed for crate::Handle<crate::GlobalVariable> {
     const CLASS: &'static str = "global";
     fn id(&self) -> usize { self.index() }
 }
-impl Indexed for crate::Token<crate::Function> {
+impl Indexed for crate::Handle<crate::Function> {
     const CLASS: &'static str = "function";
     fn id(&self) -> usize { self.index() }
 }
@@ -134,13 +134,13 @@ impl Indexed for ParameterIndex {
     const CLASS: &'static str = "param";
     fn id(&self) -> usize { self.0 }
 }
-struct InputStructIndex(crate::Token<crate::Function>);
+struct InputStructIndex(crate::Handle<crate::Function>);
 impl Indexed for InputStructIndex {
     const CLASS: &'static str = "Input";
     const PREFIX: bool = true;
     fn id(&self) -> usize { self.0.index() }
 }
-struct OutputStructIndex(crate::Token<crate::Function>);
+struct OutputStructIndex(crate::Handle<crate::Function>);
 impl Indexed for OutputStructIndex {
     const CLASS: &'static str = "Output";
     const PREFIX: bool = true;
@@ -208,22 +208,22 @@ impl<T: Display> Display for Starred<T> {
 
 struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
-    token: crate::Token<crate::GlobalVariable>,
+    handle: crate::Handle<crate::GlobalVariable>,
 }
 impl Display for TypedGlobalVariable<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
-        let var = &self.module.global_variables[self.token];
-        let name = var.name.or_index(self.token);
+        let var = &self.module.global_variables[self.handle];
+        let name = var.name.or_index(self.handle);
         let ty = &self.module.types[var.ty];
         match ty.inner {
             crate::TypeInner::Pointer { base, class }  => {
-                let ty_token = match class {
+                let ty_handle= match class {
                     spirv::StorageClass::Input |
                     spirv::StorageClass::Output |
                     spirv::StorageClass::UniformConstant => base,
                     _ => var.ty
                 };
-                let ty_name = self.module.types[ty_token].name.or_index(ty_token);
+                let ty_name = self.module.types[ty_handle].name.or_index(ty_handle);
                 write!(formatter, "{} {}", ty_name, name)
             }
             _ => panic!("Unexpected global type {:?}", var.ty),
@@ -308,19 +308,19 @@ impl<T> MaybeOwned<'_, T> {
 }
 
 impl crate::Module {
-    fn borrow_type(&self, token: Token<crate::Type>) -> MaybeOwned<crate::TypeInner> {
-        MaybeOwned::Borrowed(&self.types[token].inner)
+    fn borrow_type(&self, handle: Handle<crate::Type>) -> MaybeOwned<crate::TypeInner> {
+        MaybeOwned::Borrowed(&self.types[handle].inner)
     }
 }
 
 impl<W: Write> Writer<W> {
     fn put_expression<'a>(
         &mut self,
-        expr_token: crate::Token<crate::Expression>,
-        expressions: &crate::Storage<crate::Expression>,
+        expr_handle: crate::Handle<crate::Expression>,
+        expressions: &crate::Arena<crate::Expression>,
         module: &'a crate::Module,
     ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error> {
-        let expression = &expressions[expr_token];
+        let expression = &expressions[expr_handle];
         log::trace!("expression {:?}", expression);
         match *expression {
             crate::Expression::AccessIndex { base, index } => {
@@ -349,8 +349,8 @@ impl<W: Write> Writer<W> {
                     ref other => panic!("Unexpected indexing of {:?}", other),
                 }
             }
-            crate::Expression::Constant(token) => {
-                let kind = match module.constants[token].inner {
+            crate::Expression::Constant(handle) => {
+                let kind = match module.constants[handle].inner {
                     crate::ConstantInner::Sint(value) => {
                         write!(self.out, "{}", value)?;
                         crate::ScalarKind::Sint
@@ -376,11 +376,11 @@ impl<W: Write> Writer<W> {
                 match *inner {
                     crate::TypeInner::Vector { size, kind, .. } => {
                         write!(self.out, "{}{}(", scalar_kind_string(kind), vector_size_string(size))?;
-                        for (i, &token) in components.iter().enumerate() {
+                        for (i, &handle) in components.iter().enumerate() {
                             if i != 0 {
                                 write!(self.out, ",")?;
                             }
-                            self.put_expression(token, expressions, module)?;
+                            self.put_expression(handle, expressions, module)?;
                         }
                         write!(self.out, ")")?;
                     }
@@ -388,8 +388,8 @@ impl<W: Write> Writer<W> {
                 }
                 Ok(MaybeOwned::Borrowed(inner))
             }
-            crate::Expression::GlobalVariable(token) => {
-                let var = &module.global_variables[token];
+            crate::Expression::GlobalVariable(handle) => {
+                let var = &module.global_variables[handle];
                 let inner = &module.types[var.ty].inner;
                 match var.class {
                     spirv::StorageClass::Output => {
@@ -407,7 +407,7 @@ impl<W: Write> Writer<W> {
                     }
                     _ => ()
                 }
-                let name = var.name.or_index(token);
+                let name = var.name.or_index(handle);
                 write!(self.out, "{}", name)?;
                 Ok(MaybeOwned::Borrowed(inner))
             }
@@ -455,8 +455,8 @@ impl<W: Write> Writer<W> {
 
         // write down complex types
         writeln!(self.out, "")?;
-        for (token, ty) in module.types.iter() {
-            let name = ty.name.or_index(token);
+        for (handle, ty) in module.types.iter() {
+            let name = ty.name.or_index(handle);
             match ty.inner {
                 crate::TypeInner::Scalar { kind, .. } => {
                     write!(self.out, "typedef {} {}", scalar_kind_string(kind), name)?;
@@ -537,27 +537,27 @@ impl<W: Write> Writer<W> {
         // write down functions
         let mut uniforms_used = FastHashSet::default();
         writeln!(self.out, "")?;
-        for (fun_token, fun) in module.functions.iter() {
-            let fun_name = fun.name.or_index(fun_token);
+        for (fun_handle, fun) in module.functions.iter() {
+            let fun_name = fun.name.or_index(fun_handle);
             // find the entry point(s) and inputs/outputs
             let mut exec_model = None;
             let mut var_inputs = FastHashSet::default();
             let mut var_outputs = FastHashSet::default();
             for ep in module.entry_points.iter() {
-                if ep.function == fun_token {
+                if ep.function == fun_handle{
                     var_inputs.extend(ep.inputs.iter().cloned());
                     var_outputs.extend(ep.outputs.iter().cloned());
                     if exec_model.is_some() {
                         if exec_model != Some(ep.exec_model) {
-                            return Err(Error::MixedExecutionModels(fun_token));
+                            return Err(Error::MixedExecutionModels(fun_handle));
                         }
                     } else {
                         exec_model = Some(ep.exec_model);
                     }
                 }
             }
-            let input_name = fun.name.or_index(InputStructIndex(fun_token));
-            let output_name = fun.name.or_index(OutputStructIndex(fun_token));
+            let input_name = fun.name.or_index(InputStructIndex(fun_handle));
+            let output_name = fun.name.or_index(OutputStructIndex(fun_handle));
             // make dedicated input/output structs
             if let Some(em) = exec_model {
                 writeln!(self.out, "struct {} {{", input_name)?;
@@ -567,9 +567,9 @@ impl<W: Write> Writer<W> {
                     spirv::ExecutionModel::GLCompute => ("compute", LocationMode::Uniform, LocationMode::Uniform),
                     _ => return Err(Error::UnsupportedExecutionModel(em)),
                 };
-                for &token in var_inputs.iter() {
-                    let var = &module.global_variables[token];
-                    let tyvar = TypedGlobalVariable { module, token };
+                for &handle in var_inputs.iter() {
+                    let var = &module.global_variables[handle];
+                    let tyvar = TypedGlobalVariable { module, handle };
                     write!(self.out, "\t{}", tyvar)?;
                     if let Some(ref binding) = var.binding {
                         let resolved = options.resolve_binding(binding, in_mode)?;
@@ -579,8 +579,8 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, "}};")?;
                 writeln!(self.out, "struct {} {{", output_name)?;
-                for &token in var_outputs.iter() {
-                    let var = &module.global_variables[token];
+                for &handle in var_outputs.iter() {
+                    let var = &module.global_variables[handle];
                     // if it's a struct, lift all the built-in contents up to the root
                     if let crate::TypeInner::Pointer { base, .. } = module.types[var.ty].inner {
                         if let crate::TypeInner::Struct { ref members } = module.types[base].inner {
@@ -589,14 +589,14 @@ impl<W: Write> Writer<W> {
                                 let ty_name = module.types[member.ty].name.or_index(member.ty);
                                 let binding = member.binding
                                     .as_ref()
-                                    .ok_or(Error::MissingBinding(token))?;
+                                    .ok_or(Error::MissingBinding(handle))?;
                                 let resolved = options.resolve_binding(binding, out_mode)?;
                                 writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
                             }
                             continue
                         }
                     }
-                    let tyvar = TypedGlobalVariable { module, token };
+                    let tyvar = TypedGlobalVariable { module, handle };
                     write!(self.out, "\t{}", tyvar)?;
                     if let Some(ref binding) = var.binding {
                         let resolved = options.resolve_binding(binding, out_mode)?;
@@ -623,15 +623,15 @@ impl<W: Write> Writer<W> {
                 }
             }
             for (_, expr) in fun.expressions.iter() {
-                if let crate::Expression::GlobalVariable(token) = *expr {
-                    let var = &module.global_variables[token];
-                    if var.class == spirv::StorageClass::UniformConstant && !uniforms_used.contains(&token) {
-                        uniforms_used.insert(token);
+                if let crate::Expression::GlobalVariable(handle) = *expr {
+                    let var = &module.global_variables[handle];
+                    if var.class == spirv::StorageClass::UniformConstant && !uniforms_used.contains(&handle) {
+                        uniforms_used.insert(handle);
                         let binding = var.binding
                             .as_ref()
-                            .ok_or(Error::MissingBinding(token))?;
+                            .ok_or(Error::MissingBinding(handle))?;
                         let resolved = options.resolve_binding(binding, LocationMode::Uniform)?;
-                        let var = TypedGlobalVariable { module, token };
+                        let var = TypedGlobalVariable { module, handle };
                         writeln!(self.out, "\t{} [[{}]],", var, resolved)?;
                     }
                 }
@@ -672,11 +672,11 @@ impl<W: Write> Writer<W> {
                         match (value, exec_model) {
                             (None, None) => (),
                             (None, Some(_)) => self.out.write_str(NAME_OUTPUT)?,
-                            (Some(expr_token), None) => {
-                                self.put_expression(expr_token, &fun.expressions, module)?;
+                            (Some(expr_handle), None) => {
+                                self.put_expression(expr_handle, &fun.expressions, module)?;
                             }
-                            (Some(expr_token), Some(_)) => {
-                                panic!("Unable to return value {:?} from an entry point!", expr_token)
+                            (Some(expr_handle), Some(_)) => {
+                                panic!("Unable to return value {:?} from an entry point!", expr_handle)
                             }
                         }
                         writeln!(self.out, ";")?;

@@ -1,8 +1,8 @@
+mod arena;
 pub mod back;
 pub mod front;
-mod storage;
 
-use crate::storage::{Storage, Token};
+use crate::arena::{Arena, Handle};
 
 use std::{
     collections::{HashMap, HashSet},
@@ -49,7 +49,7 @@ pub enum ArraySize {
 pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
-    pub ty: Token<Type>,
+    pub ty: Handle<Type>,
 }
 
 bitflags::bitflags! {
@@ -73,10 +73,10 @@ pub enum TypeInner {
     Scalar { kind: ScalarKind, width: Bytes },
     Vector { size: VectorSize, kind: ScalarKind, width: Bytes },
     Matrix { columns: VectorSize, rows: VectorSize, kind: ScalarKind, width: Bytes },
-    Pointer { base: Token<Type>, class: spirv::StorageClass },
-    Array { base: Token<Type>, size: ArraySize },
+    Pointer { base: Handle<Type>, class: spirv::StorageClass },
+    Array { base: Handle<Type>, size: ArraySize },
     Struct { members: Vec<StructMember> },
-    Image { base: Token<Type>, dim: spirv::Dim, flags: ImageFlags },
+    Image { base: Handle<Type>, dim: spirv::Dim, flags: ImageFlags },
     Sampler,
 }
 
@@ -107,7 +107,7 @@ pub struct GlobalVariable {
     pub name: Option<String>,
     pub class: spirv::StorageClass,
     pub binding: Option<Binding>,
-    pub ty: Token<Type>,
+    pub ty: Handle<Type>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -125,33 +125,33 @@ pub enum BinaryOperator {
 #[derive(Clone, Debug)]
 pub enum Expression {
     Access {
-        base: Token<Expression>,
-        index: Token<Expression>, //int
+        base: Handle<Expression>,
+        index: Handle<Expression>, //int
     },
     AccessIndex {
-        base: Token<Expression>,
+        base: Handle<Expression>,
         index: u32,
     },
-    Constant(Token<Constant>),
+    Constant(Handle<Constant>),
     Compose {
-        ty: Token<Type>,
-        components: Vec<Token<Expression>>,
+        ty: Handle<Type>,
+        components: Vec<Handle<Expression>>,
     },
     FunctionParameter(u32),
-    GlobalVariable(Token<GlobalVariable>),
+    GlobalVariable(Handle<GlobalVariable>),
     Load {
-        pointer: Token<Expression>,
+        pointer: Handle<Expression>,
     },
-    Mul(Token<Expression>, Token<Expression>),
+    Mul(Handle<Expression>, Handle<Expression>),
     ImageSample {
-        image: Token<Expression>,
-        sampler: Token<Expression>,
-        coordinate: Token<Expression>,
+        image: Handle<Expression>,
+        sampler: Handle<Expression>,
+        coordinate: Handle<Expression>,
     },
     Binary {
         op: BinaryOperator,
-        left: Token<Expression>,
-        right: Token<Expression>,
+        left: Handle<Expression>,
+        right: Handle<Expression>,
     },
 }
 
@@ -164,26 +164,26 @@ pub enum Statement {
     Block(Block),
     VariableDeclaration {
         name: String,
-        ty: Token<Type>,
-        value: Option<Token<Expression>>,
+        ty: Handle<Type>,
+        value: Option<Handle<Expression>>,
     },
     If {
-        condition: Token<Expression>, //bool
+        condition: Handle<Expression>, //bool
         accept: Block,
         reject: Block,
     },
     Switch {
-        selector: Token<Expression>, //int
+        selector: Handle<Expression>, //int
         cases: FastHashMap<i32, (Block, Option<FallThrough>)>,
         default: Block,
     },
     Return {
-        value: Option<Token<Expression>>,
+        value: Option<Handle<Expression>>,
     },
     Kill,
     Store {
-        pointer: Token<Expression>,
-        value: Token<Expression>,
+        pointer: Handle<Expression>,
+        value: Handle<Expression>,
     },
 }
 
@@ -191,9 +191,9 @@ pub enum Statement {
 pub struct Function {
     pub name: Option<String>,
     pub control: spirv::FunctionControl,
-    pub parameter_types: Vec<Token<Type>>,
-    pub return_type: Option<Token<Type>>,
-    pub expressions: Storage<Expression>,
+    pub parameter_types: Vec<Handle<Type>>,
+    pub return_type: Option<Handle<Type>>,
+    pub expressions: Arena<Expression>,
     pub body: Block,
 }
 
@@ -201,17 +201,17 @@ pub struct Function {
 pub struct EntryPoint {
     pub exec_model: spirv::ExecutionModel,
     pub name: String,
-    pub inputs: Vec<Token<GlobalVariable>>,
-    pub outputs: Vec<Token<GlobalVariable>>,
-    pub function: Token<Function>,
+    pub inputs: Vec<Handle<GlobalVariable>>,
+    pub outputs: Vec<Handle<GlobalVariable>>,
+    pub function: Handle<Function>,
 }
 
 #[derive(Debug)]
 pub struct Module {
     pub header: Header,
-    pub types: Storage<Type>,
-    pub constants: Storage<Constant>,
-    pub global_variables: Storage<GlobalVariable>,
-    pub functions: Storage<Function>,
+    pub types: Arena<Type>,
+    pub constants: Arena<Constant>,
+    pub global_variables: Arena<GlobalVariable>,
+    pub functions: Arena<Function>,
     pub entry_points: Vec<EntryPoint>,
 }

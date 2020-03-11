@@ -1,5 +1,5 @@
 use crate::{
-    storage::{Storage, Token as Id},
+    arena::{Arena, Handle},
     FastHashMap,
 };
 
@@ -177,8 +177,8 @@ trait StringValueLookup<'a> {
     type Value;
     fn lookup(&self, key: &'a str) -> Result<Self::Value, Error<'a>>;
 }
-impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Id<crate::Expression>> {
-    type Value = Id<crate::Expression>;
+impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression>> {
+    type Value = Handle<crate::Expression>;
     fn lookup(&self, key: &'a str) -> Result<Self::Value, Error<'a>> {
         self.get(key)
             .cloned()
@@ -188,9 +188,9 @@ impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Id<crate::Expression>> {
 
 struct ExpressionContext<'input,'temp, 'out> {
     function: &'out mut crate::Function,
-    lookup_ident: &'temp FastHashMap<&'input str, Id<crate::Expression>>,
-    types: &'out mut Storage<crate::Type>,
-    constants: &'out mut Storage<crate::Constant>,
+    lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
+    types: &'out mut Arena<crate::Type>,
+    constants: &'out mut Arena<crate::Constant>,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -208,8 +208,8 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         lexer: &mut Lexer<'a>,
         middle: Token<'a>,
         op: crate::BinaryOperator,
-        mut parser: impl FnMut(&mut Lexer<'a>, ExpressionContext<'a, '_, '_>) -> Result<Id<crate::Expression>, Error<'a>>,
-    ) -> Result<Id<crate::Expression>, Error<'a>> {
+        mut parser: impl FnMut(&mut Lexer<'a>, ExpressionContext<'a, '_, '_>) -> Result<Handle<crate::Expression>, Error<'a>>,
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
         let mut left = parser(lexer, self.reborrow())?;
         while lexer.peek() == middle {
             let _ = lexer.next();
@@ -233,7 +233,7 @@ pub struct ParseError<'a> {
 
 pub struct Parser {
     scopes: Vec<Scope>,
-    lookup_type: FastHashMap<String, Id<crate::Type>>,
+    lookup_type: FastHashMap<String, Handle<crate::Type>>,
 }
 
 impl Parser {
@@ -338,8 +338,8 @@ impl Parser {
     fn parse_const_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_store: &mut Storage<crate::Type>,
-        const_store: &mut Storage<crate::Constant>,
+        type_arena: &mut Arena<crate::Type>,
+        const_arena: &mut Arena<crate::Constant>,
     ) -> Result<crate::ConstantInner, Error<'a>> {
         self.scopes.push(Scope::ConstantExpr);
         let inner = match lexer.peek() {
@@ -356,10 +356,10 @@ impl Parser {
                 Self::get_constant_inner(word)?
             }
             _ => {
-                let _ty = self.parse_type_decl(lexer, type_store);
+                let _ty = self.parse_type_decl(lexer, type_arena);
                 Self::expect(lexer, Token::Paren('('))?;
                 while lexer.peek() != Token::Paren(')') {
-                    let _ = self.parse_const_expression(lexer, type_store, const_store)?;
+                    let _ = self.parse_const_expression(lexer, type_arena, const_arena)?;
                 }
                 let _ = lexer.next();
                 unimplemented!()
@@ -373,7 +373,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut ctx: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Id<crate::Expression>, Error<'a>> {
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::PrimaryExpr);
         let backup = lexer.clone();
         let expression = match lexer.next() {
@@ -384,33 +384,33 @@ impl Parser {
                 return Ok(expr);
             }
             Token::Word("true") => {
-                let id = ctx.constants.append(crate::Constant {
+                let handle = ctx.constants.append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(true),
                 });
-                crate::Expression::Constant(id)
+                crate::Expression::Constant(handle)
             }
             Token::Word("false") => {
-                let id = ctx.constants.append(crate::Constant {
+                let handle = ctx.constants.append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(false),
                 });
-                crate::Expression::Constant(id)
+                crate::Expression::Constant(handle)
             }
             Token::Number(word) => {
-                let id = ctx.constants.append(crate::Constant {
+                let handle = ctx.constants.append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner: Self::get_constant_inner(word)?,
                 });
-                crate::Expression::Constant(id)
+                crate::Expression::Constant(handle)
             }
             Token::Word(word) => {
-                if let Some(id) = ctx.lookup_ident.get(word) {
+                if let Some(handle) = ctx.lookup_ident.get(word) {
                     self.scopes.pop();
-                    return Ok(*id);
+                    return Ok(*handle);
                 }
                 *lexer = backup;
                 let ty = self.parse_type_decl(lexer, ctx.types)?;
@@ -436,7 +436,7 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Id<crate::Expression>, Error<'a>> {
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
         context.parse_binary_op(
             lexer,
             Token::Operation('+'),
@@ -454,9 +454,9 @@ impl Parser {
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: ExpressionContext<'a, '_, '_>,
-    ) -> Result<Id<crate::Expression>, Error<'a>> {
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::GeneralExpr);
-        let id = context.parse_binary_op(
+        let handle = context.parse_binary_op(
             lexer,
             Token::LogicalOperation('|'),
             crate::BinaryOperator::LogicalOr,
@@ -488,26 +488,26 @@ impl Parser {
             ),
         )?;
         self.scopes.pop();
-        Ok(id)
+        Ok(handle)
     }
 
     fn parse_variable_ident_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_store: &mut Storage<crate::Type>,
-    ) -> Result<(&'a str, Id<crate::Type>), Error<'a>> {
+        type_arena: &mut Arena<crate::Type>,
+    ) -> Result<(&'a str, Handle<crate::Type>), Error<'a>> {
         let name = Self::parse_ident(lexer)?;
         Self::expect(lexer, Token::Separator(':'))?;
-        let ty = self.parse_type_decl(lexer, type_store)?;
+        let ty = self.parse_type_decl(lexer, type_arena)?;
         Ok((name, ty))
     }
 
     fn parse_variable_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_store: &mut Storage<crate::Type>,
-        const_store: &mut Storage<crate::Constant>,
-    ) -> Result<(&'a str, Option<spirv::StorageClass>, Id<crate::Type>), Error<'a>> {
+        type_arena: &mut Arena<crate::Type>,
+        const_arena: &mut Arena<crate::Constant>,
+    ) -> Result<(&'a str, Option<spirv::StorageClass>, Handle<crate::Type>), Error<'a>> {
         self.scopes.push(Scope::VariableDecl);
         let mut class = None;
         if let Token::Paren('<') = lexer.peek() {
@@ -518,10 +518,10 @@ impl Parser {
         }
         let name = Self::parse_ident(lexer)?;
         Self::expect(lexer, Token::Separator(':'))?;
-        let ty = self.parse_type_decl(lexer, type_store)?;
+        let ty = self.parse_type_decl(lexer, type_arena)?;
         if let Token::Operation('=') = lexer.peek() {
             let _ = lexer.next();
-            let _inner = self.parse_const_expression(lexer, type_store, const_store)?;
+            let _inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
             //TODO
         }
         Self::expect(lexer, Token::Separator(';'))?;
@@ -532,7 +532,7 @@ impl Parser {
     fn parse_struct_body<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_store: &mut Storage<crate::Type>,
+        type_arena: &mut Arena<crate::Type>,
     ) -> Result<Vec<crate::StructMember>, Error<'a>> {
         let mut members = Vec::new();
         Self::expect(lexer, Token::Paren('{'))?;
@@ -563,7 +563,7 @@ impl Parser {
                 other => return Err(Error::Unexpected(other)),
             };
             Self::expect(lexer, Token::Separator(':'))?;
-            let ty = self.parse_type_decl(lexer, type_store)?;
+            let ty = self.parse_type_decl(lexer, type_arena)?;
             Self::expect(lexer, Token::Separator(';'))?;
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
@@ -576,8 +576,8 @@ impl Parser {
     fn parse_type_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        type_store: &mut Storage<crate::Type>,
-    ) -> Result<Id<crate::Type>, Error<'a>> {
+        type_arena: &mut Arena<crate::Type>,
+    ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.scopes.push(Scope::TypeDecl);
         let inner = match lexer.next() {
             Token::Word("f32") => {
@@ -653,13 +653,13 @@ impl Parser {
                 Self::expect(lexer, Token::Paren('<'))?;
                 let class = Self::get_storage_class(Self::parse_ident(lexer)?)?;
                 Self::expect(lexer, Token::Separator(','))?;
-                let base = self.parse_type_decl(lexer, type_store)?;
+                let base = self.parse_type_decl(lexer, type_arena)?;
                 Self::expect(lexer, Token::Paren('>'))?;
                 crate::TypeInner::Pointer { base, class }
             }
             Token::Word("array") => {
                 Self::expect(lexer, Token::Paren('<'))?;
-                let base = self.parse_type_decl(lexer, type_store)?;
+                let base = self.parse_type_decl(lexer, type_arena)?;
                 let size = match lexer.next() {
                     Token::Separator(',') => {
                         let value = Self::parse_uint_literal(lexer)?;
@@ -672,20 +672,20 @@ impl Parser {
                 crate::TypeInner::Array { base, size }
             }
             Token::Word("struct") => {
-                let members = self.parse_struct_body(lexer, type_store)?;
+                let members = self.parse_struct_body(lexer, type_arena)?;
                 crate::TypeInner::Struct { members }
             }
             other => return Err(Error::Unexpected(other)),
         };
         self.scopes.pop();
 
-        if let Some((token, _)) = type_store
+        if let Some((token, _)) = type_arena
             .iter()
             .find(|(_, ty)| ty.inner == inner)
         {
             return Ok(token);
         }
-        Ok(type_store.append(crate::Type {
+        Ok(type_arena.append(crate::Type {
             name: None,
             inner,
         }))
@@ -696,7 +696,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         module: &mut crate::Module,
         lookup_global_expression: &FastHashMap<&'a str, crate::Expression>,
-    ) -> Result<Id<crate::Function>, Error<'a>> {
+    ) -> Result<Handle<crate::Function>, Error<'a>> {
         self.scopes.push(Scope::FunctionDecl);
         // read function name
         let mut lookup_ident = FastHashMap::default();
@@ -706,13 +706,13 @@ impl Parser {
             control: spirv::FunctionControl::empty(),
             parameter_types: Vec::new(),
             return_type: None,
-            expressions: Storage::new(),
+            expressions: Arena::new(),
             body: Vec::new(),
         };
         // populare initial expressions
         for (&name, expression) in lookup_global_expression.iter() {
-            let expr_id = fun.expressions.append(expression.clone());
-            lookup_ident.insert(name, expr_id);
+            let expr_handle = fun.expressions.append(expression.clone());
+            lookup_ident.insert(name, expr_handle);
         }
         // read parameter list
         Self::expect(lexer, Token::Paren('('))?;
@@ -721,8 +721,8 @@ impl Parser {
                 Self::expect(lexer, Token::Separator(','))?;
             }
             let (param_name, param_type) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
-            let param_id = fun.parameter_types.len() as u32;
-            let expression_token = fun.expressions.append(crate::Expression::FunctionParameter(param_id));
+            let param_index = fun.parameter_types.len() as u32;
+            let expression_token = fun.expressions.append(crate::Expression::FunctionParameter(param_index));
             lookup_ident.insert(param_name, expression_token);
             fun.parameter_types.push(param_type);
         }
@@ -856,22 +856,22 @@ impl Parser {
                 Self::expect(lexer, Token::Operation('='))?;
                 let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 Self::expect(lexer, Token::Separator(';'))?;
-                let const_id = module.constants.append(crate::Constant {
+                let const_handle = module.constants.append(crate::Constant {
                     name: Some(name.to_owned()),
                     specialization: None,
                     inner,
                 });
-                lookup_global_expression.insert(name, crate::Expression::Constant(const_id));
+                lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }
             Token::Word("var") => {
                 let (name, class, ty) = self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
-                let var_id = module.global_variables.append(crate::GlobalVariable {
+                let var_handle = module.global_variables.append(crate::GlobalVariable {
                     name: Some(name.to_owned()),
                     class: class.unwrap_or(spirv::StorageClass::Private),
                     binding: binding.take(),
                     ty,
                 });
-                lookup_global_expression.insert(name, crate::Expression::GlobalVariable(var_id));
+                lookup_global_expression.insert(name, crate::Expression::GlobalVariable(var_handle));
             }
             Token::Word("fn") => {
                 self.parse_function_decl(lexer, module, &lookup_global_expression)?;
@@ -893,7 +893,7 @@ impl Parser {
                 let function = module.functions
                     .iter()
                     .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
-                    .map(|(id, _)| id)
+                    .map(|(handle, _)| handle)
                     .ok_or(Error::UnknownFunction(fun_ident))?;
                 module.entry_points.push(crate::EntryPoint {
                     exec_model,
