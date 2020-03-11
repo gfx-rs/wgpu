@@ -12,13 +12,13 @@ use crate::{
     resource,
     swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    BufferAddress,
     FastHashMap,
     Features,
     LifeGuard,
     Stored,
 };
 
+use wgt::{BufferAddress, CompareFunction, InputStepMode, TextureFormat};
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
 use hal::{
@@ -105,7 +105,7 @@ impl RenderPassContext {
 
 pub(crate) type RenderPassKey = AttachmentData<hal::pass::Attachment>;
 pub(crate) type FramebufferKey = AttachmentData<id::TextureViewId>;
-pub(crate) type RenderPassContext = AttachmentData<resource::TextureFormat>;
+pub(crate) type RenderPassContext = AttachmentData<TextureFormat>;
 
 type BufferMapResult = Result<*mut u8, hal::device::MapError>;
 type BufferMapPendingCallback = (resource::BufferMapOperation, BufferMapResult);
@@ -300,14 +300,14 @@ impl<B: GfxBackend> Device<B> {
     fn create_buffer(
         &self,
         self_id: id::DeviceId,
-        desc: &resource::BufferDescriptor,
+        desc: &wgt::BufferDescriptor,
     ) -> resource::Buffer<B> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
         let (usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
 
         let rendy_usage = {
             use rendy_memory::MemoryUsageValue as Muv;
-            use resource::BufferUsage as Bu;
+            use wgt::BufferUsage as Bu;
 
             if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
                 Muv::Data
@@ -365,7 +365,7 @@ impl<B: GfxBackend> Device<B> {
 
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
-            resource::TextureFormat::Depth24Plus | resource::TextureFormat::Depth24PlusStencil8 => {
+            TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
                 assert!(!desc.usage.intersects(
                     resource::TextureUsage::COPY_SRC | resource::TextureUsage::COPY_DST
                 ));
@@ -493,7 +493,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
     pub fn device_create_buffer<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &resource::BufferDescriptor,
+        desc: &wgt::BufferDescriptor,
         id_in: F::Input,
     ) -> id::BufferId {
         let hub = B::hub(self);
@@ -514,7 +514,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
             .init(
                 id,
                 ref_count,
-                BufferState::with_usage(resource::BufferUsage::empty()),
+                BufferState::with_usage(wgt::BufferUsage::empty()),
             )
             .unwrap();
         id
@@ -523,13 +523,13 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
     pub fn device_create_buffer_mapped<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &resource::BufferDescriptor,
+        desc: &wgt::BufferDescriptor,
         id_in: F::Input,
     ) -> (id::BufferId, *mut u8) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let mut desc = desc.clone();
-        desc.usage |= resource::BufferUsage::MAP_WRITE;
+        desc.usage |= wgt::BufferUsage::MAP_WRITE;
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
@@ -550,7 +550,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
             .buffers.init(
                 id,
                 ref_count,
-                BufferState::with_usage(resource::BufferUsage::MAP_WRITE),
+                BufferState::with_usage(wgt::BufferUsage::MAP_WRITE),
             )
             .unwrap();
 
@@ -571,7 +571,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(buffer.usage.contains(resource::BufferUsage::MAP_WRITE));
+        assert!(buffer.usage.contains(wgt::BufferUsage::MAP_WRITE));
         //assert!(buffer isn't used by the GPU);
 
         match map_buffer(
@@ -606,7 +606,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(buffer.usage.contains(resource::BufferUsage::MAP_READ));
+        assert!(buffer.usage.contains(wgt::BufferUsage::MAP_READ));
         //assert!(buffer isn't used by the GPU);
 
         match map_buffer(
@@ -825,7 +825,7 @@ impl<F: IdentityFilter<id::SamplerId>> Global<F> {
             ),
             lod_bias: hal::image::Lod(0.0),
             lod_range: hal::image::Lod(desc.lod_min_clamp) .. hal::image::Lod(desc.lod_max_clamp),
-            comparison: if desc.compare_function == resource::CompareFunction::Always {
+            comparison: if desc.compare_function == CompareFunction::Always {
                 None
             } else {
                 Some(conv::map_compare_function(desc.compare_function))
@@ -1039,13 +1039,13 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
                     binding_model::BindingResource::Buffer(ref bb) => {
                         let (alignment, usage) = match decl.ty {
                             binding_model::BindingType::UniformBuffer => {
-                                (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::UNIFORM)
+                                (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::UNIFORM)
                             }
                             binding_model::BindingType::StorageBuffer => {
-                                (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE)
+                                (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::STORAGE)
                             }
                             binding_model::BindingType::ReadonlyStorageBuffer => {
-                                (BIND_BUFFER_ALIGNMENT, resource::BufferUsage::STORAGE_READ)
+                                (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::STORAGE_READ)
                             }
                             binding_model::BindingType::Sampler
                             | binding_model::BindingType::SampledTexture
@@ -1527,8 +1527,8 @@ impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
                 binding: i as u32,
                 stride: vb_state.stride as u32,
                 rate: match vb_state.step_mode {
-                    pipeline::InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
-                    pipeline::InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
+                    InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
+                    InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
                 },
             });
             let desc_atts =
@@ -1969,7 +1969,7 @@ impl<F> Global<F> {
     pub fn buffer_map_async<B: GfxBackend>(
         &self,
         buffer_id: id::BufferId,
-        usage: resource::BufferUsage,
+        usage: wgt::BufferUsage,
         range: std::ops::Range<BufferAddress>,
         operation: resource::BufferMapOperation,
     ) {
@@ -1981,12 +1981,12 @@ impl<F> Global<F> {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
-            if usage.contains(resource::BufferUsage::MAP_READ) {
-                assert!(buffer.usage.contains(resource::BufferUsage::MAP_READ));
+            if usage.contains(wgt::BufferUsage::MAP_READ) {
+                assert!(buffer.usage.contains(wgt::BufferUsage::MAP_READ));
             }
 
-            if usage.contains(resource::BufferUsage::MAP_WRITE) {
-                assert!(buffer.usage.contains(resource::BufferUsage::MAP_WRITE));
+            if usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                assert!(buffer.usage.contains(wgt::BufferUsage::MAP_WRITE));
             }
 
             if buffer.pending_mapping.is_some() {

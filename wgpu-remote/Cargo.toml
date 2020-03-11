@@ -19,6 +19,13 @@ default = []
 path = "../wgpu-core"
 package = "wgpu-core"
 version = "0.1"
+features = ["serde"]
+
+[dependencies.wgt]
+path = "../wgpu-types"
+package = "wgpu-types"
+version = "0.1"
+features = ["serde"]
 
 [dependencies]
 log = "0.4"

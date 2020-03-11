@@ -11,11 +11,10 @@ use crate::{
     device::{all_buffer_stages, BIND_BUFFER_ALIGNMENT},
     hub::{GfxBackend, Global, Token},
     id,
-    resource::BufferUsage,
-    BufferAddress,
     DynamicOffset,
 };
 
+use wgt::{BufferAddress, BufferUsage};
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekCopy, Poke};
 
@@ -222,10 +221,10 @@ pub mod compute_ffi {
     };
     use crate::{
         id,
-        BufferAddress,
         DynamicOffset,
         RawString,
     };
+    use wgt::BufferAddress;
     use std::{convert::TryInto, slice};
 
     /// # Safety

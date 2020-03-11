@@ -20,15 +20,15 @@ use crate::{
     },
     hub::{GfxBackend, Global, Token},
     id,
-    pipeline::{IndexFormat, InputStepMode, PipelineFlags},
-    resource::{BufferUsage, TextureUsage, TextureViewInner},
+    pipeline::PipelineFlags,
+    resource::{TextureUsage, TextureViewInner},
     track::TrackerSet,
-    BufferAddress,
     Color,
     DynamicOffset,
     Stored,
 };
 
+use wgt::{BufferAddress, BufferUsage, IndexFormat, InputStepMode};
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekCopy, Poke};
@@ -1166,11 +1166,11 @@ pub mod render_ffi {
     };
     use crate::{
         id,
-        BufferAddress,
         Color,
         DynamicOffset,
         RawString,
     };
+    use wgt::BufferAddress;
     use std::{convert::TryInto, slice};
 
     /// # Safety

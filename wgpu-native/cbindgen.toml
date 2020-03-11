@@ -23,9 +23,9 @@ exclude = ["BufferMapResult"]
 
 [parse]
 parse_deps = true
-include = ["wgpu-core"]
+include = ["wgpu-core", "wgpu-types"]
 
-extra_bindings = ["wgpu-core"]
+extra_bindings = ["wgpu-core", "wgpu-types"]
 
 [fn]
 
