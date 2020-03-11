@@ -4,7 +4,7 @@
 
 use crate::{Epoch, Index};
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde_crate::{Deserialize, Serialize};
 use wgt::Backend;
 use std::{fmt, marker::PhantomData, mem};
 
@@ -13,7 +13,7 @@ const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct Id<T>(u64, PhantomData<T>);
 
 impl<T> Id<T> {

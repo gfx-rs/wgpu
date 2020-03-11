@@ -15,7 +15,7 @@ use wgt::{BufferAddress, BufferUsage, CompareFunction, TextureFormat};
 use hal;
 use rendy_memory::MemoryBlock;
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde_crate::{Deserialize, Serialize};
 
 use std::{borrow::Borrow, fmt};
 

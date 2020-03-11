@@ -13,7 +13,7 @@ use crate::{
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, RequestAdapterOptions};
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde_crate::{Deserialize, Serialize};
 
 use hal::{
     self,
@@ -103,7 +103,7 @@ pub struct Adapter<B: hal::Backend> {
 
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -138,7 +138,7 @@ impl AdapterInfo {
 
 /// Supported physical device types
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub enum DeviceType {
     /// Other
     Other,
