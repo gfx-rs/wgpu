@@ -122,7 +122,7 @@ pub enum BinaryOperator {
     LogicalOr,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expression {
     Access {
         base: Token<Expression>,
