@@ -17,6 +17,8 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [features]
 default = []
+surfman = []
+glutin = []
 #metal-auto-capture = ["gfx-backend-metal/auto-capture"]
 vulkan-portability = ["core/gfx-backend-vulkan"]
 

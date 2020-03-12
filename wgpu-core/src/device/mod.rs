@@ -1993,12 +1993,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut config =
             swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.features);
         if let Some(formats) = formats {
-            // assert!(
-            //     formats.contains(&config.format),
-            //     "Requested format {:?} is not in supported list: {:?}",
-            //     config.format,
-            //     formats
-            // );
+            assert!(
+                formats.contains(&config.format),
+                "Requested format {:?} is not in supported list: {:?}",
+                config.format,
+                formats
+            );
         }
         validate_swap_chain_descriptor(&mut config, &caps);
 

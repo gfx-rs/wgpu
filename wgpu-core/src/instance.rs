@@ -355,10 +355,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             _ => Vec::new(),
         };
         #[cfg(not(any(target_os = "ios", target_os = "macos")))]
-        dbg!(&instance);
         let mut adapters_gl = match &instance.gl {
             Some(inst) if id_gl.is_some() => {
-                dbg!(&inst);
                 let adapters = inst.enumerate_adapters();
                 device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
                 adapters

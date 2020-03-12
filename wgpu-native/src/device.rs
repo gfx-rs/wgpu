@@ -53,12 +53,18 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
+            #[cfg(feature = "glutin")]
             gl: instance.gl.as_ref().map(|inst| {
                 inst.create_surface_from_xlib(
                     h.window as std::os::raw::c_ulong,
                     h.display as *mut std::ffi::c_void,
                 )
             }),
+            #[cfg(feature = "surfman")]
+            gl: instance
+                .gl
+                .as_ref()
+                .map(|inst| unsafe { inst.create_surface_from_rwh(Rwh::Xlib(h)) }),
         },
         #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
         Rwh::Wayland(h) => core::instance::Surface {
@@ -66,10 +72,16 @@ pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id
                 .vulkan
                 .as_ref()
                 .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
+            #[cfg(feature = "glutin")]
             gl: instance
                 .gl
                 .as_ref()
                 .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
+            #[cfg(feature = "surfman")]
+            gl: instance
+                .gl
+                .as_ref()
+                .map(|inst| unsafe { inst.create_surface_from_rwh(Rwh::Wayland(h)) }),
         },
         #[cfg(windows)]
         Rwh::Windows(h) => core::instance::Surface {
