@@ -110,16 +110,50 @@ pub struct GlobalVariable {
     pub ty: Handle<Type>,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum UnaryOperator {
+    Negate,
+    Not,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BinaryOperator {
-    Multiply,
     Add,
-    Equals,
+    Subtract,
+    Multiply,
+    Divide,
+    Modulo,
+    Equal,
+    NotEqual,
+    Less,
+    LessEqual,
+    Greater,
+    GreaterEqual,
     And,
     ExclusiveOr,
     InclusiveOr,
     LogicalAnd,
     LogicalOr,
+    ShiftLeftLogical,
+    ShiftRightLogical,
+    ShiftRightArithmetic,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum IntrinsicFunction {
+    Any,
+    All,
+    IsNan,
+    IsInf,
+    IsFinite,
+    IsNormal,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum DerivativeAxis {
+    X,
+    Y,
+    Width,
 }
 
 #[derive(Clone, Debug)]
@@ -148,10 +182,25 @@ pub enum Expression {
         sampler: Handle<Expression>,
         coordinate: Handle<Expression>,
     },
+    Unary {
+        op: UnaryOperator,
+        expr: Handle<Expression>,
+    },
     Binary {
         op: BinaryOperator,
         left: Handle<Expression>,
         right: Handle<Expression>,
+    },
+    Intrinsic {
+        fun: IntrinsicFunction,
+        argument: Handle<Expression>,
+    },
+    DotProduct(Handle<Expression>, Handle<Expression>),
+    CrossProduct(Handle<Expression>, Handle<Expression>),
+    Derivative {
+        axis: DerivativeAxis,
+        //modifier,
+        expr: Handle<Expression>,
     },
 }
 

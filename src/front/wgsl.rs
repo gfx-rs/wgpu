@@ -26,6 +26,8 @@ pub enum Token<'a> {
     Word(&'a str),
     Operation(char),
     LogicalOperation(char),
+    ShiftOperation(char),
+    ArithmeticShiftOperation(char),
     Arrow,
     Unknown(char),
     UnterminatedString,
@@ -67,9 +69,26 @@ impl<'a> Lexer<'a> {
                 self.input = chars.as_str();
                 Token::Separator(cur)
             }
-            '(' | ')' | '<' | '>' | '{' | '}' => {
+            '(' | ')' | '{' | '}' => {
                 self.input = chars.as_str();
                 Token::Paren(cur)
+            }
+            '<' | '>' => {
+                self.input = chars.as_str();
+                if chars.next() == Some('=') {
+                    self.input = chars.as_str();
+                    Token::LogicalOperation(cur)
+                } else if chars.next() == Some(cur) {
+                    self.input = chars.as_str();
+                    if chars.next() == Some(cur) {
+                        self.input = chars.as_str();
+                        Token::ArithmeticShiftOperation(cur)
+                    } else {
+                        Token::ShiftOperation(cur)
+                    }
+                } else {
+                    Token::Paren(cur)
+                }
             }
             '[' | ']' => {
                 self.input = chars.as_str();
@@ -106,7 +125,7 @@ impl<'a> Lexer<'a> {
                     Token::Operation(cur)
                 }
             }
-            '+' | '*' | '/' | '^' => {
+            '+' | '*' | '/' | '%' | '^' => {
                 self.input = chars.as_str();
                 Token::Operation(cur)
             }
@@ -115,15 +134,15 @@ impl<'a> Lexer<'a> {
                     self.input = chars.as_str();
                     Token::LogicalOperation(cur)
                 } else {
-                    Token::Unknown(cur)
+                    Token::Operation(cur)
                 }
             }
             '=' | '&' | '|'  => {
+                self.input = chars.as_str();
                 if chars.next() == Some(cur) {
-                    self.input = &self.input[2..];
+                    self.input = chars.as_str();
                     Token::LogicalOperation(cur)
                 } else {
-                    self.input = &self.input[1..];
                     Token::Operation(cur)
                 }
             }
@@ -157,6 +176,7 @@ pub enum Scope {
     Statement,
     ConstantExpr,
     PrimaryExpr,
+    SingularExpr,
     GeneralExpr,
 }
 
@@ -165,6 +185,7 @@ pub enum Error<'a> {
     Unexpected(Token<'a>),
     BadInteger(&'a str, std::num::ParseIntError),
     BadFloat(&'a str, std::num::ParseFloatError),
+    UnknownImport(&'a str),
     UnknownStorageClass(&'a str),
     UnknownBuiltin(&'a str),
     UnknownPipelineStage(&'a str),
@@ -206,12 +227,11 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     fn parse_binary_op(
         &mut self,
         lexer: &mut Lexer<'a>,
-        middle: Token<'a>,
-        op: crate::BinaryOperator,
+        classifier: impl Fn(Token<'a>) -> Option<crate::BinaryOperator>,
         mut parser: impl FnMut(&mut Lexer<'a>, ExpressionContext<'a, '_, '_>) -> Result<Handle<crate::Expression>, Error<'a>>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         let mut left = parser(lexer, self.reborrow())?;
-        while lexer.peek() == middle {
+        while let Some(op) = classifier(lexer.peek()) {
             let _ = lexer.next();
             let expression = crate::Expression::Binary {
                 op,
@@ -234,6 +254,7 @@ pub struct ParseError<'a> {
 pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
+    std_namespace: Option<String>,
 }
 
 impl Parser {
@@ -241,6 +262,7 @@ impl Parser {
         Parser {
             scopes: Vec::new(),
             lookup_type: FastHashMap::default(),
+            std_namespace: None,
         }
     }
 
@@ -432,20 +454,146 @@ impl Parser {
         Ok(ctx.function.expressions.append(expression))
     }
 
-    fn parse_relational_expression<'a>(
+    fn parse_singular_expression<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        fn get_intrinsic(word: &str) -> Option<crate::IntrinsicFunction> {
+            match word {
+                "any" => Some(crate::IntrinsicFunction::Any),
+                "all" => Some(crate::IntrinsicFunction::All),
+                "is_nan" => Some(crate::IntrinsicFunction::IsNan),
+                "is_inf" => Some(crate::IntrinsicFunction::IsInf),
+                "is_normal" => Some(crate::IntrinsicFunction::IsNormal),
+                _ => None,
+            }
+        }
+        fn get_derivative(word: &str) -> Option<crate::DerivativeAxis> {
+            match word {
+                "dpdx" => Some(crate::DerivativeAxis::X),
+                "dpdy" => Some(crate::DerivativeAxis::Y),
+                "dwidth" => Some(crate::DerivativeAxis::Width),
+                _ => None,
+            }
+        }
+
+        self.scopes.push(Scope::SingularExpr);
+        let backup = lexer.clone();
+        let expression = match lexer.next() {
+            Token::Operation('-') => {
+                Some(crate::Expression::Unary {
+                    op: crate::UnaryOperator::Negate,
+                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
+                })
+            }
+            Token::Operation('!') => {
+                Some(crate::Expression::Unary {
+                    op: crate::UnaryOperator::Not,
+                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
+                })
+            }
+            Token::Word(word) => {
+                if let Some(fun) = get_intrinsic(word) {
+                    Self::expect(lexer, Token::Paren('('))?;
+                    let argument = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                    Self::expect(lexer, Token::Paren(')'))?;
+                    Some(crate::Expression::Intrinsic {
+                        fun,
+                        argument,
+                    })
+                } else if let Some(axis) = get_derivative(word) {
+                    Self::expect(lexer, Token::Paren('('))?;
+                    let expr = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                    Self::expect(lexer, Token::Paren(')'))?;
+                    Some(crate::Expression::Derivative {
+                        axis,
+                        expr,
+                    })
+                } else if word == "dot" {
+                    Self::expect(lexer, Token::Paren('('))?;
+                    let a = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                    Self::expect(lexer, Token::Separator(','))?;
+                    let b = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                    Self::expect(lexer, Token::Paren(')'))?;
+                    Some(crate::Expression::DotProduct(a, b))
+                } else if word == "outer_product" {
+                    Self::expect(lexer, Token::Paren('('))?;
+                    let a = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                    Self::expect(lexer, Token::Separator(','))?;
+                    let b = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                    Self::expect(lexer, Token::Paren(')'))?;
+                    Some(crate::Expression::CrossProduct(a, b))
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        };
+
+        self.scopes.pop();
+        match expression {
+            Some(expr) => Ok(ctx.function.expressions.append(expr)),
+            None => {
+                *lexer = backup;
+                self.parse_primary_expression(lexer, ctx)
+            }
+        }
+    }
+
+    fn parse_equality_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
         mut context: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        // equality_expression
         context.parse_binary_op(
             lexer,
-            Token::Operation('+'),
-            crate::BinaryOperator::Add,
+            |token| match token {
+                Token::LogicalOperation('=') => Some(crate::BinaryOperator::Equal),
+                Token::LogicalOperation('!') => Some(crate::BinaryOperator::NotEqual),
+                _ => None
+            },
+            // relational_expression
             |lexer, mut context| context.parse_binary_op(
                 lexer,
-                Token::Operation('*'),
-                crate::BinaryOperator::Multiply,
-                |lexer, context| self.parse_primary_expression(lexer, context),
+                |token| match token {
+                    Token::Paren('<') => Some(crate::BinaryOperator::Less),
+                    Token::Paren('>') => Some(crate::BinaryOperator::Greater),
+                    Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
+                    Token::LogicalOperation('>') => Some(crate::BinaryOperator::GreaterEqual),
+                    _ => None,
+                },
+                // shift_expression
+                |lexer, mut context| context.parse_binary_op(
+                    lexer,
+                    |token| match token {
+                        Token::ShiftOperation('<') => Some(crate::BinaryOperator::ShiftLeftLogical),
+                        Token::ShiftOperation('>') => Some(crate::BinaryOperator::ShiftRightLogical),
+                        Token::ArithmeticShiftOperation('>') => Some(crate::BinaryOperator::ShiftRightArithmetic),
+                        _ => None,
+                    },
+                    // additive_expression
+                    |lexer, mut context| context.parse_binary_op(
+                        lexer,
+                        |token| match token {
+                            Token::Operation('+') => Some(crate::BinaryOperator::Add),
+                            Token::Operation('-') => Some(crate::BinaryOperator::Subtract),
+                            _ => None,
+                        },
+                        // multiplicative_expression
+                        |lexer, mut context| context.parse_binary_op(
+                            lexer,
+                            |token| match token {
+                                Token::Operation('*') => Some(crate::BinaryOperator::Multiply),
+                                Token::Operation('/') => Some(crate::BinaryOperator::Divide),
+                                Token::Operation('%') => Some(crate::BinaryOperator::Modulo),
+                                _ => None,
+                            },
+                            |lexer, context| self.parse_singular_expression(lexer, context),
+                        ),
+                    ),
+                ),
             ),
         )
     }
@@ -456,32 +604,42 @@ impl Parser {
         mut context: ExpressionContext<'a, '_, '_>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         self.scopes.push(Scope::GeneralExpr);
+        // logical_or_expression
         let handle = context.parse_binary_op(
             lexer,
-            Token::LogicalOperation('|'),
-            crate::BinaryOperator::LogicalOr,
+            |token| match token {
+                Token::LogicalOperation('|') => Some(crate::BinaryOperator::LogicalOr),
+                _ => None,
+            },
+            // logical_and_expression
             |lexer, mut context| context.parse_binary_op(
                 lexer,
-                Token::LogicalOperation('&'),
-                crate::BinaryOperator::LogicalAnd,
+                |token| match token {
+                    Token::LogicalOperation('&') => Some(crate::BinaryOperator::LogicalAnd),
+                    _ => None,
+                },
+                // inclusive_or_expression
                 |lexer, mut context| context.parse_binary_op(
                     lexer,
-                    Token::Operation('|'),
-                    crate::BinaryOperator::InclusiveOr,
+                    |token| match token {
+                        Token::Operation('|') => Some(crate::BinaryOperator::InclusiveOr),
+                        _ => None,
+                    },
+                    // exclusive_or_expression
                     |lexer, mut context| context.parse_binary_op(
                         lexer,
-                        Token::Operation('^'),
-                        crate::BinaryOperator::ExclusiveOr,
+                        |token| match token {
+                            Token::Operation('^') => Some(crate::BinaryOperator::ExclusiveOr),
+                            _ => None,
+                        },
+                        // and_expression
                         |lexer, mut context| context.parse_binary_op(
                             lexer,
-                            Token::Operation('&'),
-                            crate::BinaryOperator::And,
-                            |lexer, mut context| context.parse_binary_op(
-                                lexer,
-                                Token::LogicalOperation('='),
-                                crate::BinaryOperator::Equals,
-                                |lexer, context| self.parse_relational_expression(lexer, context),
-                            ),
+                            |token| match token {
+                                Token::Operation('&') => Some(crate::BinaryOperator::And),
+                                _ => None,
+                            },
+                            |lexer, context| self.parse_equality_expression(lexer, context),
                         ),
                     ),
                 ),
@@ -838,10 +996,19 @@ impl Parser {
             Token::Separator(';') => {},
             Token::Word("import") => {
                 self.scopes.push(Scope::ImportDecl);
-                let _path = lexer.next();
-                //consume(words, "as", Scope::ImportDecl)?;
-                let _namespace = lexer.next();
+                let path = match lexer.next() {
+                    Token::String(path) => path,
+                    other => return Err(Error::Unexpected(other)),
+                };
+                Self::expect(lexer, Token::Word("as"))?;
+                let namespace = Self::parse_ident(lexer)?;
                 Self::expect(lexer, Token::Separator(';'))?;
+                match path {
+                    "GLSL.std.450" => {
+                        self.std_namespace = Some(namespace.to_owned())
+                    }
+                    _ => return Err(Error::UnknownImport(path)),
+                }
                 self.scopes.pop();
             }
             Token::Word("type") => {
@@ -914,6 +1081,10 @@ impl Parser {
     }
 
     pub fn parse<'a>(&mut self, source: &'a str) -> Result<crate::Module, ParseError<'a>> {
+        self.scopes.clear();
+        self.lookup_type.clear();
+        self.std_namespace = None;
+
         let mut module = crate::Module::generate_empty();
         let mut lexer = Lexer::new(source);
         let mut lookup_global_expression = FastHashMap::default();
@@ -921,7 +1092,7 @@ impl Parser {
             match self.parse_global_decl(&mut lexer, &mut module, &mut lookup_global_expression) {
                 Err(error) => {
                     let pos = source.len() - lexer.input.len();
-                    let (mut rows, mut cols) = (0, 0);
+                    let (mut rows, mut cols) = (0, 1);
                     for line in source[..pos].lines() {
                         rows += 1;
                         cols = line.len();
