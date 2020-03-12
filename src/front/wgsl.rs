@@ -197,9 +197,11 @@ pub enum Error<'a> {
     BadFloat(&'a str, std::num::ParseFloatError),
     UnknownImport(&'a str),
     UnknownStorageClass(&'a str),
+    UnknownDecoration(&'a str),
     UnknownBuiltin(&'a str),
     UnknownPipelineStage(&'a str),
     UnknownIdent(&'a str),
+    UnknownType(&'a str),
     UnknownFunction(&'a str),
     Other,
 }
@@ -332,6 +334,8 @@ impl Parser {
         match word {
             "in" => Ok(spirv::StorageClass::Input),
             "out" => Ok(spirv::StorageClass::Output),
+            "uniform" => Ok(spirv::StorageClass::Uniform),
+            "storage_buffer" => Ok(spirv::StorageClass::StorageBuffer),
             _ => Err(Error::UnknownStorageClass(word)),
         }
     }
@@ -340,6 +344,7 @@ impl Parser {
         match word {
             "position" => Ok(spirv::BuiltIn::Position),
             "vertex_idx" => Ok(spirv::BuiltIn::VertexId),
+            "global_invocation_id" => Ok(spirv::BuiltIn::GlobalInvocationId),
             _ => Err(Error::UnknownBuiltin(word)),
         }
     }
@@ -450,6 +455,9 @@ impl Parser {
                     let mut arguments = Vec::new();
                     Self::expect(lexer, Token::Paren('('))?;
                     while lexer.peek() != Token::Paren(')') {
+                        if !arguments.is_empty() {
+                            Self::expect(lexer, Token::Separator(','))?;
+                        }
                         let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
                         arguments.push(arg);
                     }
@@ -557,14 +565,25 @@ impl Parser {
             _ => None,
         };
 
-        self.scopes.pop();
-        match expression {
-            Some(expr) => Ok(ctx.function.expressions.append(expr)),
+        let handle = match expression {
+            Some(expr) => ctx.function.expressions.append(expr),
             None => {
                 *lexer = backup;
-                self.parse_primary_expression(lexer, ctx)
+                let mut handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                while let Token::Separator('.') = lexer.peek() {
+                    let _ = lexer.next();
+                    let _name = Self::parse_ident(lexer)?;
+                    let expr = crate::Expression::AccessIndex {
+                        base: handle,
+                        index: 0, //TODO: compute from `name`
+                    };
+                    handle = ctx.function.expressions.append(expr);
+                }
+                handle
             }
-        }
+        };
+        self.scopes.pop();
+        Ok(handle)
     }
 
     fn parse_equality_expression<'a>(
@@ -722,6 +741,7 @@ impl Parser {
         Self::expect(lexer, Token::Paren('{'))?;
         loop {
             if let Token::DoubleParen('[')  = lexer.peek() {
+                let _ = lexer.next();
                 self.scopes.push(Scope::Decoration);
                 let mut ready = true;
                 loop {
@@ -859,6 +879,13 @@ impl Parser {
                 let members = self.parse_struct_body(lexer, type_arena)?;
                 crate::TypeInner::Struct { members }
             }
+            Token::Word(name) => {
+                self.scopes.pop();
+                return self.lookup_type
+                    .get(name)
+                    .cloned()
+                    .ok_or(Error::UnknownType(name));
+            }
             other => return Err(Error::Unexpected(other)),
         };
         self.scopes.pop();
@@ -937,7 +964,9 @@ impl Parser {
                             let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
                             let value = if let Token::Operation('=') = lexer.peek() {
                                 let _ = lexer.next();
-                                Some(self.parse_general_expression(lexer, context)?)
+                                let value = self.parse_general_expression(lexer, context)?;
+                                lookup_ident.insert(name, value);
+                                Some(value)
                             } else {
                                 None
                             };
@@ -991,29 +1020,42 @@ impl Parser {
         // read decorations
         let mut binding = None;
         if let Token::DoubleParen('[') = lexer.peek() {
+            let (mut bind_index, mut bind_set) = (None, None);
             self.scopes.push(Scope::Decoration);
             let _ = lexer.next();
-            let mut ready = true;
             loop {
+                match Self::parse_ident(lexer)? {
+                    "location" => {
+                        let loc = Self::parse_uint_literal(lexer)?;
+                        binding = Some(crate::Binding::Location(loc));
+                    }
+                    "builtin" => {
+                        let builtin = Self::get_built_in(Self::parse_ident(lexer)?)?;
+                        binding = Some(crate::Binding::BuiltIn(builtin));
+                    }
+                    "binding" => {
+                        bind_index = Some(Self::parse_uint_literal(lexer)?);
+                    }
+                    "set" => {
+                        bind_set = Some(Self::parse_uint_literal(lexer)?);
+                    }
+                    other => return Err(Error::UnknownDecoration(other)),
+                }
                 match lexer.next() {
                     Token::DoubleParen(']') => {
                         break;
                     }
-                    Token::Separator(',') if !ready => {
-                        ready = true;
-                    }
-                    Token::Word("location") if ready => {
-                        let location = Self::parse_uint_literal(lexer)?;
-                        binding = Some(crate::Binding::Location(location));
-                        ready = false;
-                    }
-                    Token::Word("builtin") if ready => {
-                        let builtin = Self::get_built_in(Self::parse_ident(lexer)?)?;
-                        binding = Some(crate::Binding::BuiltIn(builtin));
-                        ready = false;
+                    Token::Separator(',') => {
                     }
                     other => return Err(Error::Unexpected(other)),
                 }
+            }
+            match (bind_set, bind_index) {
+                (Some(set), Some(index)) if binding.is_none() => {
+                    binding = Some(crate::Binding::Descriptor { set, binding: index });
+                }
+                _ if binding.is_none() => return Err(Error::Other),
+                _ => {}
             }
             self.scopes.pop();
         }
