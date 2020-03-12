@@ -19,6 +19,7 @@ impl<'a> Lexer<'a> {
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
     Separator(char),
+    DoubleColon,
     Paren(char),
     DoubleParen(char),
     Number(&'a str),
@@ -65,7 +66,16 @@ impl<'a> Lexer<'a> {
             None => return Token::End,
         };
         let token = match cur {
-            ':' | ';' | ',' | '.' => {
+            ':' => {
+                self.input = chars.as_str();
+                if chars.next() == Some(':') {
+                    self.input = chars.as_str();
+                    Token::DoubleColon
+                } else {
+                    Token::Separator(cur)
+                }
+            }
+            ';' | ',' | '.' => {
                 self.input = chars.as_str();
                 Token::Separator(cur)
             }
@@ -434,19 +444,35 @@ impl Parser {
                     self.scopes.pop();
                     return Ok(*handle);
                 }
-                *lexer = backup;
-                let ty = self.parse_type_decl(lexer, ctx.types)?;
-                Self::expect(lexer, Token::Paren('('))?;
-                let mut components = Vec::new();
-                while lexer.peek() != Token::Paren(')') {
-                    if !components.is_empty() {
-                        Self::expect(lexer, Token::Separator(','))?;
+                if self.std_namespace.as_ref().map(|s| s.as_str()) == Some(word) {
+                    Self::expect(lexer, Token::DoubleColon)?;
+                    let name = Self::parse_ident(lexer)?;
+                    let mut arguments = Vec::new();
+                    Self::expect(lexer, Token::Paren('('))?;
+                    while lexer.peek() != Token::Paren(')') {
+                        let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
+                        arguments.push(arg);
                     }
-                    let sub_expr = self.parse_general_expression(lexer, ctx.reborrow())?;
-                    components.push(sub_expr);
+                    let _ = lexer.next();
+                    crate::Expression::Call {
+                        name: name.to_owned(),
+                        arguments,
+                    }
+                } else {
+                    *lexer = backup;
+                    let ty = self.parse_type_decl(lexer, ctx.types)?;
+                    Self::expect(lexer, Token::Paren('('))?;
+                    let mut components = Vec::new();
+                    while lexer.peek() != Token::Paren(')') {
+                        if !components.is_empty() {
+                            Self::expect(lexer, Token::Separator(','))?;
+                        }
+                        let sub_expr = self.parse_general_expression(lexer, ctx.reborrow())?;
+                        components.push(sub_expr);
+                    }
+                    let _ = lexer.next();
+                    crate::Expression::Compose { ty, components }
                 }
-                let _ = lexer.next();
-                crate::Expression::Compose { ty, components }
             }
             other => return Err(Error::Unexpected(other)),
         };

@@ -202,6 +202,10 @@ pub enum Expression {
         //modifier,
         expr: Handle<Expression>,
     },
+    Call {
+        name: String,
+        arguments: Vec<Handle<Expression>>,
+    },
 }
 
 pub type Block = Vec<Statement>;
