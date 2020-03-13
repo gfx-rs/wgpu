@@ -187,6 +187,16 @@ impl<'a> Lexer<'a> {
         }
     }
 
+    fn skip(&mut self, what: Token<'a>) -> bool {
+        let (token, rest) = lex::consume_token(self.input);
+        if token == what {
+            self.input = rest;
+            true
+        } else {
+            false
+        }
+    }
+
     fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
         match self.next() {
             Token::Word(word) => Ok(word),
@@ -381,10 +391,9 @@ impl Parser {
             _ => {
                 let _ty = self.parse_type_decl(lexer, type_arena);
                 lexer.expect(Token::Paren('('))?;
-                while lexer.peek() != Token::Paren(')') {
+                while !lexer.skip(Token::Paren(')')) {
                     let _ = self.parse_const_expression(lexer, type_arena, const_arena)?;
                 }
-                let _ = lexer.next();
                 unimplemented!()
             }
         };
@@ -440,14 +449,13 @@ impl Parser {
                     let name = lexer.next_ident()?;
                     let mut arguments = Vec::new();
                     lexer.expect(Token::Paren('('))?;
-                    while lexer.peek() != Token::Paren(')') {
+                    while !lexer.skip(Token::Paren(')')) {
                         if !arguments.is_empty() {
                             lexer.expect(Token::Separator(','))?;
                         }
                         let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
                         arguments.push(arg);
                     }
-                    let _ = lexer.next();
                     crate::Expression::Call {
                         name: name.to_owned(),
                         arguments,
@@ -457,14 +465,13 @@ impl Parser {
                     let ty = self.parse_type_decl(lexer, ctx.types)?;
                     lexer.expect(Token::Paren('('))?;
                     let mut components = Vec::new();
-                    while lexer.peek() != Token::Paren(')') {
+                    while !lexer.skip(Token::Paren(')')) {
                         if !components.is_empty() {
                             lexer.expect(Token::Separator(','))?;
                         }
                         let sub_expr = self.parse_general_expression(lexer, ctx.reborrow())?;
                         components.push(sub_expr);
                     }
-                    let _ = lexer.next();
                     crate::Expression::Compose { ty, components }
                 }
             }
@@ -556,8 +563,7 @@ impl Parser {
             None => {
                 *lexer = backup;
                 let mut handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                while let Token::Separator('.') = lexer.peek() {
-                    let _ = lexer.next();
+                while lexer.skip(Token::Separator('.')) {
                     let _name = lexer.next_ident()?;
                     let expr = crate::Expression::AccessIndex {
                         base: handle,
@@ -699,8 +705,7 @@ impl Parser {
     ) -> Result<(&'a str, Option<spirv::StorageClass>, Handle<crate::Type>), Error<'a>> {
         self.scopes.push(Scope::VariableDecl);
         let mut class = None;
-        if let Token::Paren('<') = lexer.peek() {
-            let _ = lexer.next();
+        if lexer.skip(Token::Paren('<')) {
             let class_str = lexer.next_ident()?;
             class = Some(Self::get_storage_class(class_str)?);
             lexer.expect(Token::Paren('>'))?;
@@ -708,8 +713,7 @@ impl Parser {
         let name = lexer.next_ident()?;
         lexer.expect(Token::Separator(':'))?;
         let ty = self.parse_type_decl(lexer, type_arena)?;
-        if let Token::Operation('=') = lexer.peek() {
-            let _ = lexer.next();
+        if lexer.skip(Token::Operation('=')) {
             let _inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
             //TODO
         }
@@ -726,8 +730,7 @@ impl Parser {
         let mut members = Vec::new();
         lexer.expect(Token::Paren('{'))?;
         loop {
-            if let Token::DoubleParen('[')  = lexer.peek() {
-                let _ = lexer.next();
+            if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
                 let mut ready = true;
                 loop {
@@ -901,8 +904,7 @@ impl Parser {
                 let statement = match word {
                     "var" => {
                         let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
-                        let value = if let Token::Operation('=') = lexer.peek() {
-                            let _ = lexer.next();
+                        let value = if lexer.skip(Token::Operation('=')) {
                             let value = self.parse_general_expression(lexer, context.reborrow())?;
                             context.lookup_ident.insert(name, value);
                             Some(value)
@@ -932,12 +934,10 @@ impl Parser {
                         let condition = self.parse_general_expression(lexer, context.reborrow())?;
                         lexer.expect(Token::Paren(')'))?;
                         let accept = self.parse_block(lexer, context.reborrow())?;
-                        let reject = match lexer.peek() {
-                            Token::Word("else") => {
-                                let _ = lexer.next();
-                                self.parse_block(lexer, context.reborrow())?
-                            }
-                            _ => Vec::new(),
+                        let reject = if lexer.skip(Token::Word("else")) {
+                            self.parse_block(lexer, context.reborrow())?
+                        } else {
+                            Vec::new()
                         };
                         let statement = crate::Statement::If {
                             condition,
@@ -999,7 +999,7 @@ impl Parser {
         // read parameter list
         let mut parameter_types = Vec::new();
         lexer.expect(Token::Paren('('))?;
-        while lexer.peek() != Token::Paren(')') {
+        while !lexer.skip(Token::Paren(')')) {
             if !parameter_types.is_empty() {
                 lexer.expect(Token::Separator(','))?;
             }
@@ -1009,17 +1009,12 @@ impl Parser {
             lookup_ident.insert(param_name, expression_token);
             parameter_types.push(param_type);
         }
-        let _ = lexer.next();
         // read return type
         lexer.expect(Token::Arrow)?;
-        let return_type = match lexer.peek() {
-            Token::Word("void") => {
-                let _ = lexer.next();
-                None
-            }
-            _ => {
-                Some(self.parse_type_decl(lexer, &mut module.types)?)
-            }
+        let return_type = if lexer.skip(Token::Word("void")) {
+            None
+        } else {
+            Some(self.parse_type_decl(lexer, &mut module.types)?)
         };
         // read body
         let body = self.parse_block(lexer, ExpressionContext {
@@ -1049,10 +1044,9 @@ impl Parser {
     ) -> Result<bool, Error<'a>> {
         // read decorations
         let mut binding = None;
-        if let Token::DoubleParen('[') = lexer.peek() {
+        if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_set) = (None, None);
             self.scopes.push(Scope::Decoration);
-            let _ = lexer.next();
             loop {
                 match lexer.next_ident()? {
                     "location" => {
@@ -1143,8 +1137,7 @@ impl Parser {
             }
             Token::Word("entry_point") => {
                 let exec_model = Self::get_execution_model(lexer.next_ident()?)?;
-                let export_name = if let Token::Word("as") = lexer.peek() {
-                    let _ = lexer.next();
+                let export_name = if lexer.skip(Token::Word("as")) {
                     match lexer.next() {
                         Token::String(name) => Some(name),
                         other => return Err(Error::Unexpected(other))
