@@ -10,77 +10,37 @@ mod macros;
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 
-use std::ffi::CString;
-use std::ops::Range;
-use std::ptr;
-use std::slice;
-use std::thread;
+use std::{
+    ffi::CString,
+    ops::Range,
+    ptr,
+    slice,
+    thread,
+};
 
+pub use wgt::*;
 pub use wgc::{
-    Backend,
-    binding_model::ShaderStage,
+    Extent3d,
+    Origin3d,
     command::{
         CommandBufferDescriptor,
-        CommandEncoderDescriptor,
-        LoadOp,
-        StoreOp,
     },
     device::{
         BIND_BUFFER_ALIGNMENT,
     },
     instance::{
         AdapterInfo,
-        BackendBit,
-        DeviceDescriptor,
         DeviceType,
-        Extensions,
-        Limits,
-        PowerPreference,
-        RequestAdapterOptions,
     },
-    pipeline::{
-        BlendDescriptor,
-        BlendFactor,
-        BlendOperation,
-        ColorStateDescriptor,
-        ColorWrite,
-        CullMode,
-        DepthStencilStateDescriptor,
-        FrontFace,
-        IndexFormat,
-        InputStepMode,
-        PrimitiveTopology,
-        RasterizationStateDescriptor,
-        ShaderLocation,
-        ShaderModuleDescriptor,
-        StencilOperation,
-        StencilStateFaceDescriptor,
-        VertexAttributeDescriptor,
-        VertexFormat,
-    },
-    read_spirv,
     resource::{
         AddressMode,
-        BufferDescriptor,
-        BufferMapAsyncStatus,
-        BufferUsage,
-        CompareFunction,
         FilterMode,
         SamplerDescriptor,
         TextureAspect,
         TextureDescriptor,
         TextureDimension,
-        TextureFormat,
-        TextureUsage,
         TextureViewDescriptor,
-        TextureViewDimension,
     },
-    swap_chain::{PresentMode, SwapChainDescriptor},
-    BufferAddress,
-    Color,
-    DynamicOffset,
-    Extent3d,
-    Origin3d,
 };
 
 //TODO: avoid heap allocating vectors during resource creation.
@@ -297,19 +257,23 @@ pub enum BindingType {
         dynamic: bool,
         readonly: bool,
     },
-    Sampler,
+    Sampler {
+        comparison: bool,
+    },
     SampledTexture {
-        multisampled: bool,
         dimension: TextureViewDimension,
+        multisampled: bool,
     },
     StorageTexture {
         dimension: TextureViewDimension,
+        format: TextureFormat,
+        readonly: bool,
     },
 }
 
 /// A description of a single binding inside a bind group.
 #[derive(Clone, Debug, Hash)]
-pub struct BindGroupLayoutBinding {
+pub struct BindGroupLayoutEntry {
     pub binding: u32,
     pub visibility: ShaderStage,
     pub ty: BindingType,
@@ -317,7 +281,7 @@ pub struct BindGroupLayoutBinding {
 
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
-    pub bindings: &'a [BindGroupLayoutBinding],
+    pub bindings: &'a [BindGroupLayoutEntry],
 }
 
 /// A description of a group of bindings and the resources to be bound.
@@ -416,9 +380,9 @@ pub struct ComputePipelineDescriptor<'a> {
 }
 
 pub type RenderPassColorAttachmentDescriptor<'a> =
-    wgc::command::RenderPassColorAttachmentDescriptorBase<&'a TextureView, Option<&'a TextureView>>;
+    wgt::RenderPassColorAttachmentDescriptorBase<&'a TextureView, Option<&'a TextureView>>;
 pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
-    wgc::command::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
+    wgt::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
 
 /// A description of all the attachments of a render pass.
 #[derive(Debug)]
@@ -448,19 +412,19 @@ pub struct BufferCopyView<'a> {
     pub offset: BufferAddress,
 
     /// The size in bytes of a single row of the texture. This must be a multiple of 256 bytes.
-    pub row_pitch: u32,
+    pub bytes_per_row: u32,
 
     /// The height in texels of the imaginary texture view overlaid on the buffer.
-    pub image_height: u32,
+    pub rows_per_image: u32,
 }
 
-impl<'a> BufferCopyView<'a> {
+impl BufferCopyView<'_> {
     fn into_native(self) -> wgc::command::BufferCopyView {
         wgc::command::BufferCopyView {
             buffer: self.buffer.id,
             offset: self.offset,
-            row_pitch: self.row_pitch,
-            image_height: self.image_height,
+            bytes_per_row: self.bytes_per_row,
+            rows_per_image: self.rows_per_image,
         }
     }
 }
@@ -569,7 +533,7 @@ impl Adapter {
             temp: Temp::default(),
         };
         let queue = Queue {
-            id: wgn::wgpu_device_get_queue(device.id),
+            id: wgn::wgpu_device_get_default_queue(device.id),
         };
         (device, queue)
     }
@@ -613,7 +577,7 @@ impl Device {
         let bindings = desc
             .bindings
             .iter()
-            .map(|binding| bm::BindGroupBinding {
+            .map(|binding| bm::BindGroupEntry {
                 binding: binding.binding,
                 resource: match binding.resource {
                     BindingResource::Buffer {
@@ -653,7 +617,7 @@ impl Device {
         let temp_layouts = desc
             .bindings
             .iter()
-            .map(|bind| bm::BindGroupLayoutBinding {
+            .map(|bind| bm::BindGroupLayoutEntry {
                 binding: bind.binding,
                 visibility: bind.visibility,
                 ty: match bind.ty {
@@ -664,23 +628,33 @@ impl Device {
                     BindingType::StorageBuffer { readonly: true, .. } => {
                         bm::BindingType::ReadonlyStorageBuffer
                     }
-                    BindingType::Sampler => bm::BindingType::Sampler,
+                    BindingType::Sampler { comparison: false } => bm::BindingType::Sampler,
+                    BindingType::Sampler { .. } => bm::BindingType::ComparisonSampler,
                     BindingType::SampledTexture { .. } => bm::BindingType::SampledTexture,
-                    BindingType::StorageTexture { .. } => bm::BindingType::StorageTexture,
+                    BindingType::StorageTexture { readonly: true, .. } => {
+                        bm::BindingType::ReadonlyStorageTexture
+                    }
+                    BindingType::StorageTexture { .. } => {
+                        bm::BindingType::WriteonlyStorageTexture
+                    }
                 },
-                dynamic: match bind.ty {
-                    BindingType::UniformBuffer { dynamic }
-                    | BindingType::StorageBuffer { dynamic, .. } => dynamic,
+                has_dynamic_offset: match bind.ty {
+                    BindingType::UniformBuffer { dynamic } |
+                    BindingType::StorageBuffer { dynamic, .. } => dynamic,
                     _ => false,
                 },
                 multisampled: match bind.ty {
                     BindingType::SampledTexture { multisampled, .. } => multisampled,
                     _ => false,
                 },
-                texture_dimension: match bind.ty {
-                    BindingType::SampledTexture { dimension, .. }
-                    | BindingType::StorageTexture { dimension } => dimension,
+                view_dimension: match bind.ty {
+                    BindingType::SampledTexture { dimension, .. } |
+                    BindingType::StorageTexture { dimension, .. } => dimension,
                     _ => TextureViewDimension::D2,
+                },
+                storage_texture_format: match bind.ty {
+                    BindingType::StorageTexture { format, .. } => format,
+                    _ => TextureFormat::Rgb10a2Unorm, // doesn't matter
                 },
             })
             .collect::<Vec<_>>();
@@ -739,8 +713,8 @@ impl Device {
         let temp_vertex_buffers = desc
             .vertex_buffers
             .iter()
-            .map(|vbuf| pipe::VertexBufferDescriptor {
-                stride: vbuf.stride,
+            .map(|vbuf| pipe::VertexBufferLayoutDescriptor {
+                array_stride: vbuf.stride,
                 step_mode: vbuf.step_mode,
                 attributes: vbuf.attributes.as_ptr(),
                 attributes_length: vbuf.attributes.len(),
@@ -767,7 +741,7 @@ impl Device {
                         .depth_stencil_state
                         .as_ref()
                         .map_or(ptr::null(), |p| p as *const _),
-                    vertex_input: pipe::VertexInputDescriptor {
+                    vertex_state: pipe::VertexStateDescriptor {
                         index_format: desc.index_format,
                         vertex_buffers: temp_vertex_buffers.as_ptr(),
                         vertex_buffers_length: temp_vertex_buffers.len(),
@@ -1249,38 +1223,44 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    pub fn set_index_buffer(&mut self, buffer: &'a Buffer, offset: BufferAddress) {
+    ///
+    /// If `size == 0`, the remaining part of the buffer is considered.
+    pub fn set_index_buffer(
+        &mut self,
+        buffer: &'a Buffer,
+        offset: BufferAddress,
+        size: BufferAddress,
+    ) {
         unsafe {
             wgn::wgpu_render_pass_set_index_buffer(
                 self.id.as_mut().unwrap(),
                 buffer.id,
                 offset,
+                size,
             );
         }
     }
 
-    /// Sets the active vertex buffers, starting from `start_slot`.
+    /// Assign a vertex buffer to a slot.
     ///
-    /// Each element of `buffer_pairs` describes a vertex buffer and an offset in bytes into that
-    /// buffer. The offset must be aligned to a multiple of 4 bytes.
-    pub fn set_vertex_buffers(
+    /// Subsequent calls to [`draw`](RenderPass::draw) and [`draw_indexed`](RenderPass::draw_indexed)
+    /// on this [`RenderPass`] will use `buffer` as one of the source vertex buffers.
+    ///
+    /// If `size == 0`, the remaining part of the buffer is considered.
+    pub fn set_vertex_buffer(
         &mut self,
-        start_slot: u32,
-        buffer_pairs: &[(&'a Buffer, BufferAddress)],
+        slot: u32,
+        buffer: &'a Buffer,
+        offset: BufferAddress,
+        size: BufferAddress,
     ) {
-        let mut buffers = Vec::new();
-        let mut offsets = Vec::new();
-        for &(buffer, offset) in buffer_pairs {
-            buffers.push(buffer.id);
-            offsets.push(offset);
-        }
         unsafe {
-            wgn::wgpu_render_pass_set_vertex_buffers(
+            wgn::wgpu_render_pass_set_vertex_buffer(
                 self.id.as_mut().unwrap(),
-                start_slot,
-                buffers.as_ptr(),
-                offsets.as_ptr(),
-                buffer_pairs.len(),
+                slot,
+                buffer.id,
+                offset,
+                size,
             )
         };
     }

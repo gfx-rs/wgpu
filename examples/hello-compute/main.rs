@@ -52,7 +52,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     });
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        bindings: &[wgpu::BindGroupLayoutBinding {
+        bindings: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStage::COMPUTE,
             ty: wgpu::BindingType::StorageBuffer {

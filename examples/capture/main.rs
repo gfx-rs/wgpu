@@ -74,8 +74,8 @@ async fn run() {
             wgpu::BufferCopyView {
                 buffer: &output_buffer,
                 offset: 0,
-                row_pitch: size_of::<u32>() as u32 * size,
-                image_height: size,
+                bytes_per_row: size_of::<u32>() as u32 * size,
+                rows_per_image: size,
             },
             texture_extent,
         );
