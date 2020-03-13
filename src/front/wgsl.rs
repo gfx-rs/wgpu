@@ -3,18 +3,6 @@ use crate::{
     FastHashMap,
 };
 
-#[derive(Clone)]
-struct Lexer<'a> {
-    input: &'a str,
-}
-
-impl<'a> Lexer<'a> {
-    fn new(input: &'a str) -> Self {
-        Lexer {
-            input,
-        }
-    }
-}
 
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
@@ -35,159 +23,119 @@ pub enum Token<'a> {
     End,
 }
 
-impl<'a> Lexer<'a> {
-    fn _consume_str(&mut self, what: &str) -> bool {
-        if self.input.starts_with(what) {
-            self.input = &self.input[what.len() ..];
-            true
+mod lex {
+    use super::Token;
+
+    fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
+        if input.starts_with(what) {
+            Some(&input[what.len() ..])
         } else {
-            false
+            None
         }
     }
 
-    fn consume_any(&mut self, what: impl Fn(char) -> bool) -> &'a str {
-        let pos = self.input.find(|c| !what(c)).unwrap_or(self.input.len());
-        let (left, right) = self.input.split_at(pos);
-        debug_assert!(!left.is_empty(), "Leftover: '{}'...", &right[..10]);
-        self.input = right;
-        left
+    fn consume_any<'a>(input: &'a str, what: impl Fn(char) -> bool) -> (&'a str, &'a str) {
+        let pos = input.find(|c| !what(c)).unwrap_or(input.len());
+        input.split_at(pos)
     }
 
-    fn skip_whitespace(&mut self) {
-        self.input = self.input.trim_start();
-    }
-
-    #[must_use]
-    fn next(&mut self) -> Token<'a> {
-        self.skip_whitespace();
-        let mut chars = self.input.chars();
+    pub fn consume_token<'a>(mut input: &'a str) -> (Token<'a>, &'a str) {
+        input = input.trim_start();
+        let mut chars = input.chars();
         let cur = match chars.next() {
             Some(c) => c,
-            None => return Token::End,
+            None => return (Token::End, input),
         };
-        let token = match cur {
+        match cur {
             ':' => {
-                self.input = chars.as_str();
+                input = chars.as_str();
                 if chars.next() == Some(':') {
-                    self.input = chars.as_str();
-                    Token::DoubleColon
+                    (Token::DoubleColon, chars.as_str())
                 } else {
-                    Token::Separator(cur)
+                    (Token::Separator(cur), input)
                 }
             }
             ';' | ',' | '.' => {
-                self.input = chars.as_str();
-                Token::Separator(cur)
+                (Token::Separator(cur), chars.as_str())
             }
             '(' | ')' | '{' | '}' => {
-                self.input = chars.as_str();
-                Token::Paren(cur)
+                (Token::Paren(cur), chars.as_str())
             }
             '<' | '>' => {
-                self.input = chars.as_str();
-                if chars.next() == Some('=') {
-                    self.input = chars.as_str();
-                    Token::LogicalOperation(cur)
-                } else if chars.next() == Some(cur) {
-                    self.input = chars.as_str();
+                input = chars.as_str();
+                let next = chars.next();
+                if next == Some('=') {
+                    (Token::LogicalOperation(cur), chars.as_str())
+                } else if next == Some(cur) {
+                    input = chars.as_str();
                     if chars.next() == Some(cur) {
-                        self.input = chars.as_str();
-                        Token::ArithmeticShiftOperation(cur)
+                        (Token::ArithmeticShiftOperation(cur), chars.as_str())
                     } else {
-                        Token::ShiftOperation(cur)
+                        (Token::ShiftOperation(cur), input)
                     }
                 } else {
-                    Token::Paren(cur)
+                    (Token::Paren(cur), input)
                 }
             }
             '[' | ']' => {
-                self.input = chars.as_str();
+                input = chars.as_str();
                 if chars.next() == Some(cur) {
-                    self.input = chars.as_str();
-                    Token::DoubleParen(cur)
+                    (Token::DoubleParen(cur), chars.as_str())
                 } else {
-                    Token::Paren(cur)
+                    (Token::Paren(cur), input)
                 }
             }
             '0' ..= '9' => {
-                let number = self.consume_any(|c| (c>='0' && c<='9' || c=='.'));
-                Token::Number(number)
+                let (number, rest) = consume_any(input, |c| (c>='0' && c<='9' || c=='.'));
+                (Token::Number(number), rest)
             }
             'a'..='z' | 'A'..='Z' | '_' => {
-                let word = self.consume_any(|c| c.is_alphanumeric() || c=='_');
-                Token::Word(word)
+                let (word, rest) = consume_any(input, |c| c.is_alphanumeric() || c=='_');
+                (Token::Word(word), rest)
             }
             '"' => {
                 let base = chars.as_str();
                 let len = match chars.position(|c| c == '"') {
                     Some(pos) => pos,
-                    None => return Token::UnterminatedString,
+                    None => return (Token::UnterminatedString, chars.as_str())
                 };
-                self.input = chars.as_str();
-                Token::String(&base[..len])
+                (Token::String(&base[..len]), chars.as_str())
             }
             '-' => {
-                self.input = chars.as_str();
+                input = chars.as_str();
                 if chars.next() == Some('>') {
-                    self.input = chars.as_str();
-                    Token::Arrow
+                    (Token::Arrow, chars.as_str())
                 } else {
-                    Token::Operation(cur)
+                    (Token::Operation(cur), input)
                 }
             }
             '+' | '*' | '/' | '%' | '^' => {
-                self.input = chars.as_str();
-                Token::Operation(cur)
+                (Token::Operation(cur), chars.as_str())
             }
             '!' => {
                 if chars.next() == Some('=') {
-                    self.input = chars.as_str();
-                    Token::LogicalOperation(cur)
+                    (Token::LogicalOperation(cur), chars.as_str())
                 } else {
-                    Token::Operation(cur)
+                    (Token::Operation(cur), input)
                 }
             }
             '=' | '&' | '|'  => {
-                self.input = chars.as_str();
+                input = chars.as_str();
                 if chars.next() == Some(cur) {
-                    self.input = chars.as_str();
-                    Token::LogicalOperation(cur)
+                    (Token::LogicalOperation(cur), chars.as_str())
                 } else {
-                    Token::Operation(cur)
+                    (Token::Operation(cur), input)
                 }
             }
             '#' => {
                 match chars.position(|c| c == '\n' || c == '\r') {
-                    Some(_) => {
-                        self.input = chars.as_str();
-                        self.next()
-                    }
-                    None => Token::End,
+                    Some(_) => consume_token(chars.as_str()),
+                    None => (Token::End, chars.as_str())
                 }
             }
-            _ => Token::Unknown(cur),
-        };
-        token
+            _ => (Token::Unknown(cur), chars.as_str())
+        }
     }
-
-    #[must_use]
-    fn peek(&self) -> Token<'a> {
-        self.clone().next()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Scope {
-    Decoration,
-    ImportDecl,
-    VariableDecl,
-    TypeDecl,
-    FunctionDecl,
-    Statement,
-    ConstantExpr,
-    PrimaryExpr,
-    SingularExpr,
-    GeneralExpr,
 }
 
 #[derive(Debug)]
@@ -204,6 +152,80 @@ pub enum Error<'a> {
     UnknownType(&'a str),
     UnknownFunction(&'a str),
     Other,
+}
+
+#[derive(Clone)]
+struct Lexer<'a> {
+    input: &'a str,
+}
+
+impl<'a> Lexer<'a> {
+    fn new(input: &'a str) -> Self {
+        Lexer {
+            input,
+        }
+    }
+
+    #[must_use]
+    fn next(&mut self) -> Token<'a> {
+        let (token, rest) = lex::consume_token(self.input);
+        self.input = rest;
+        token
+    }
+
+    #[must_use]
+    fn peek(&mut self) -> Token<'a> {
+        self.clone().next()
+    }
+
+    fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+        let token = self.next();
+        if token == expected {
+            Ok(())
+        } else {
+            Err(Error::Unexpected(token))
+        }
+    }
+
+    fn next_ident(&mut self) -> Result<&'a str, Error<'a>> {
+        match self.next() {
+            Token::Word(word) => Ok(word),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn _next_float_literal(&mut self) -> Result<f32, Error<'a>> {
+        match self.next() {
+            Token::Number(word) => word.parse().map_err(|err| Error::BadFloat(word, err)),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn next_uint_literal(&mut self) -> Result<u32, Error<'a>> {
+        match self.next() {
+            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn _next_sint_literal(&mut self) -> Result<i32, Error<'a>> {
+        match self.next() {
+            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn next_scalar_generic(&mut self) -> Result<(crate::ScalarKind, u8), Error<'a>> {
+        self.expect(Token::Paren('<'))?;
+        let pair = match self.next() {
+            Token::Word("f32") => (crate::ScalarKind::Float, 32),
+            Token::Word("i32") => (crate::ScalarKind::Sint, 32),
+            Token::Word("u32") => (crate::ScalarKind::Uint, 32),
+            other => return Err(Error::Unexpected(other)),
+        };
+        self.expect(Token::Paren('>'))?;
+        Ok(pair)
+    }
 }
 
 trait StringValueLookup<'a> {
@@ -256,6 +278,21 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     }
 }
 
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Scope {
+    Decoration,
+    ImportDecl,
+    VariableDecl,
+    TypeDecl,
+    FunctionDecl,
+    Statement,
+    ConstantExpr,
+    PrimaryExpr,
+    SingularExpr,
+    GeneralExpr,
+}
+
 #[derive(Debug)]
 pub struct ParseError<'a> {
     pub error: Error<'a>,
@@ -276,58 +313,6 @@ impl Parser {
             lookup_type: FastHashMap::default(),
             std_namespace: None,
         }
-    }
-
-    fn expect<'a>(
-        lexer: &mut Lexer<'a>,
-        expected: Token<'a>,
-    ) -> Result<(), Error<'a>> {
-        let token = lexer.next();
-        if token == expected {
-            Ok(())
-        } else {
-            Err(Error::Unexpected(token))
-        }
-    }
-
-    fn parse_ident<'a>(lexer: &mut Lexer<'a>) -> Result<&'a str, Error<'a>> {
-        match lexer.next() {
-            Token::Word(word) => Ok(word),
-            other => Err(Error::Unexpected(other)),
-        }
-    }
-
-    fn _parse_float_literal<'a>(lexer: &mut Lexer<'a>) -> Result<f32, Error<'a>> {
-        match lexer.next() {
-            Token::Number(word) => word.parse().map_err(|err| Error::BadFloat(word, err)),
-            other => Err(Error::Unexpected(other)),
-        }
-    }
-
-    fn parse_uint_literal<'a>(lexer: &mut Lexer<'a>) -> Result<u32, Error<'a>> {
-        match lexer.next() {
-            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
-            other => Err(Error::Unexpected(other)),
-        }
-    }
-
-    fn _parse_sint_literal<'a>(lexer: &mut Lexer<'a>) -> Result<i32, Error<'a>> {
-        match lexer.next() {
-            Token::Number(word) => word.parse().map_err(|err| Error::BadInteger(word, err)),
-            other => Err(Error::Unexpected(other)),
-        }
-    }
-
-    fn parse_scalar_generic<'a>(lexer: &mut Lexer<'a>) -> Result<(crate::ScalarKind, u8), Error<'a>> {
-        Self::expect(lexer, Token::Paren('<'))?;
-        let pair = match lexer.next() {
-            Token::Word("f32") => (crate::ScalarKind::Float, 32),
-            Token::Word("i32") => (crate::ScalarKind::Sint, 32),
-            Token::Word("u32") => (crate::ScalarKind::Uint, 32),
-            other => return Err(Error::Unexpected(other)),
-        };
-        Self::expect(lexer, Token::Paren('>'))?;
-        Ok(pair)
     }
 
     fn get_storage_class<'a>(word: &'a str) -> Result<spirv::StorageClass, Error<'a>> {
@@ -394,7 +379,7 @@ impl Parser {
             }
             _ => {
                 let _ty = self.parse_type_decl(lexer, type_arena);
-                Self::expect(lexer, Token::Paren('('))?;
+                lexer.expect(Token::Paren('('))?;
                 while lexer.peek() != Token::Paren(')') {
                     let _ = self.parse_const_expression(lexer, type_arena, const_arena)?;
                 }
@@ -416,7 +401,7 @@ impl Parser {
         let expression = match lexer.next() {
             Token::Paren('(') => {
                 let expr = self.parse_general_expression(lexer, ctx)?;
-                Self::expect(lexer, Token::Paren(')'))?;
+                lexer.expect(Token::Paren(')'))?;
                 self.scopes.pop();
                 return Ok(expr);
             }
@@ -450,13 +435,13 @@ impl Parser {
                     return Ok(*handle);
                 }
                 if self.std_namespace.as_ref().map(|s| s.as_str()) == Some(word) {
-                    Self::expect(lexer, Token::DoubleColon)?;
-                    let name = Self::parse_ident(lexer)?;
+                    lexer.expect(Token::DoubleColon)?;
+                    let name = lexer.next_ident()?;
                     let mut arguments = Vec::new();
-                    Self::expect(lexer, Token::Paren('('))?;
+                    lexer.expect(Token::Paren('('))?;
                     while lexer.peek() != Token::Paren(')') {
                         if !arguments.is_empty() {
-                            Self::expect(lexer, Token::Separator(','))?;
+                            lexer.expect(Token::Separator(','))?;
                         }
                         let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
                         arguments.push(arg);
@@ -469,11 +454,11 @@ impl Parser {
                 } else {
                     *lexer = backup;
                     let ty = self.parse_type_decl(lexer, ctx.types)?;
-                    Self::expect(lexer, Token::Paren('('))?;
+                    lexer.expect(Token::Paren('('))?;
                     let mut components = Vec::new();
                     while lexer.peek() != Token::Paren(')') {
                         if !components.is_empty() {
-                            Self::expect(lexer, Token::Separator(','))?;
+                            lexer.expect(Token::Separator(','))?;
                         }
                         let sub_expr = self.parse_general_expression(lexer, ctx.reborrow())?;
                         components.push(sub_expr);
@@ -529,34 +514,34 @@ impl Parser {
             }
             Token::Word(word) => {
                 if let Some(fun) = get_intrinsic(word) {
-                    Self::expect(lexer, Token::Paren('('))?;
+                    lexer.expect(Token::Paren('('))?;
                     let argument = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                    Self::expect(lexer, Token::Paren(')'))?;
+                    lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::Intrinsic {
                         fun,
                         argument,
                     })
                 } else if let Some(axis) = get_derivative(word) {
-                    Self::expect(lexer, Token::Paren('('))?;
+                    lexer.expect(Token::Paren('('))?;
                     let expr = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                    Self::expect(lexer, Token::Paren(')'))?;
+                    lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::Derivative {
                         axis,
                         expr,
                     })
                 } else if word == "dot" {
-                    Self::expect(lexer, Token::Paren('('))?;
+                    lexer.expect(Token::Paren('('))?;
                     let a = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                    Self::expect(lexer, Token::Separator(','))?;
+                    lexer.expect(Token::Separator(','))?;
                     let b = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                    Self::expect(lexer, Token::Paren(')'))?;
+                    lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::DotProduct(a, b))
                 } else if word == "outer_product" {
-                    Self::expect(lexer, Token::Paren('('))?;
+                    lexer.expect(Token::Paren('('))?;
                     let a = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                    Self::expect(lexer, Token::Separator(','))?;
+                    lexer.expect(Token::Separator(','))?;
                     let b = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                    Self::expect(lexer, Token::Paren(')'))?;
+                    lexer.expect(Token::Paren(')'))?;
                     Some(crate::Expression::CrossProduct(a, b))
                 } else {
                     None
@@ -572,7 +557,7 @@ impl Parser {
                 let mut handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
                 while let Token::Separator('.') = lexer.peek() {
                     let _ = lexer.next();
-                    let _name = Self::parse_ident(lexer)?;
+                    let _name = lexer.next_ident()?;
                     let expr = crate::Expression::AccessIndex {
                         base: handle,
                         index: 0, //TODO: compute from `name`
@@ -699,8 +684,8 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         type_arena: &mut Arena<crate::Type>,
     ) -> Result<(&'a str, Handle<crate::Type>), Error<'a>> {
-        let name = Self::parse_ident(lexer)?;
-        Self::expect(lexer, Token::Separator(':'))?;
+        let name = lexer.next_ident()?;
+        lexer.expect(Token::Separator(':'))?;
         let ty = self.parse_type_decl(lexer, type_arena)?;
         Ok((name, ty))
     }
@@ -715,19 +700,19 @@ impl Parser {
         let mut class = None;
         if let Token::Paren('<') = lexer.peek() {
             let _ = lexer.next();
-            let class_str = Self::parse_ident(lexer)?;
+            let class_str = lexer.next_ident()?;
             class = Some(Self::get_storage_class(class_str)?);
-            Self::expect(lexer, Token::Paren('>'))?;
+            lexer.expect(Token::Paren('>'))?;
         }
-        let name = Self::parse_ident(lexer)?;
-        Self::expect(lexer, Token::Separator(':'))?;
+        let name = lexer.next_ident()?;
+        lexer.expect(Token::Separator(':'))?;
         let ty = self.parse_type_decl(lexer, type_arena)?;
         if let Token::Operation('=') = lexer.peek() {
             let _ = lexer.next();
             let _inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
             //TODO
         }
-        Self::expect(lexer, Token::Separator(';'))?;
+        lexer.expect(Token::Separator(';'))?;
         self.scopes.pop();
         Ok((name, class, ty))
     }
@@ -738,7 +723,7 @@ impl Parser {
         type_arena: &mut Arena<crate::Type>,
     ) -> Result<Vec<crate::StructMember>, Error<'a>> {
         let mut members = Vec::new();
-        Self::expect(lexer, Token::Paren('{'))?;
+        lexer.expect(Token::Paren('{'))?;
         loop {
             if let Token::DoubleParen('[')  = lexer.peek() {
                 let _ = lexer.next();
@@ -753,7 +738,7 @@ impl Parser {
                             ready = true;
                         }
                         Token::Word("offset") if ready => {
-                            let _offset = Self::parse_uint_literal(lexer)?; //TODO
+                            let _offset = lexer.next_uint_literal()?; //TODO
                             ready = false;
                         }
                         other => return Err(Error::Unexpected(other)),
@@ -766,9 +751,9 @@ impl Parser {
                 Token::Paren('}') => return Ok(members),
                 other => return Err(Error::Unexpected(other)),
             };
-            Self::expect(lexer, Token::Separator(':'))?;
+            lexer.expect(Token::Separator(':'))?;
             let ty = self.parse_type_decl(lexer, type_arena)?;
-            Self::expect(lexer, Token::Separator(';'))?;
+            lexer.expect(Token::Separator(';'))?;
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
                 binding: None,
@@ -803,7 +788,7 @@ impl Parser {
                 }
             }
             Token::Word("vec2") => {
-                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Vector {
                     size: crate::VectorSize::Bi,
                     kind,
@@ -811,7 +796,7 @@ impl Parser {
                 }
             }
             Token::Word("vec3") => {
-                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Vector {
                     size: crate::VectorSize::Tri,
                     kind,
@@ -819,7 +804,7 @@ impl Parser {
                 }
             }
             Token::Word("vec4") => {
-                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Vector {
                     size: crate::VectorSize::Quad,
                     kind,
@@ -827,7 +812,7 @@ impl Parser {
                 }
             }
             Token::Word("mat2x2") => {
-                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Matrix {
                     columns: crate::VectorSize::Bi,
                     rows: crate::VectorSize::Bi,
@@ -836,7 +821,7 @@ impl Parser {
                 }
             }
             Token::Word("mat3x3") => {
-                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Matrix {
                     columns: crate::VectorSize::Tri,
                     rows: crate::VectorSize::Tri,
@@ -845,7 +830,7 @@ impl Parser {
                 }
             }
             Token::Word("mat4x4") => {
-                let (kind, width) = Self::parse_scalar_generic(lexer)?;
+                let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Matrix {
                     columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Quad,
@@ -854,20 +839,20 @@ impl Parser {
                 }
             }
             Token::Word("ptr") => {
-                Self::expect(lexer, Token::Paren('<'))?;
-                let class = Self::get_storage_class(Self::parse_ident(lexer)?)?;
-                Self::expect(lexer, Token::Separator(','))?;
+                lexer.expect(Token::Paren('<'))?;
+                let class = Self::get_storage_class(lexer.next_ident()?)?;
+                lexer.expect(Token::Separator(','))?;
                 let base = self.parse_type_decl(lexer, type_arena)?;
-                Self::expect(lexer, Token::Paren('>'))?;
+                lexer.expect(Token::Paren('>'))?;
                 crate::TypeInner::Pointer { base, class }
             }
             Token::Word("array") => {
-                Self::expect(lexer, Token::Paren('<'))?;
+                lexer.expect(Token::Paren('<'))?;
                 let base = self.parse_type_decl(lexer, type_arena)?;
                 let size = match lexer.next() {
                     Token::Separator(',') => {
-                        let value = Self::parse_uint_literal(lexer)?;
-                        Self::expect(lexer, Token::Paren('>'))?;
+                        let value = lexer.next_uint_literal()?;
+                        lexer.expect(Token::Paren('>'))?;
                         crate::ArraySize::Static(value)
                     }
                     Token::Separator('>') => crate::ArraySize::Dynamic,
@@ -911,7 +896,7 @@ impl Parser {
         self.scopes.push(Scope::FunctionDecl);
         // read function name
         let mut lookup_ident = FastHashMap::default();
-        let fun_name = Self::parse_ident(lexer)?;
+        let fun_name = lexer.next_ident()?;
         let mut fun = crate::Function {
             name: Some(fun_name.to_owned()),
             control: spirv::FunctionControl::empty(),
@@ -926,10 +911,10 @@ impl Parser {
             lookup_ident.insert(name, expr_handle);
         }
         // read parameter list
-        Self::expect(lexer, Token::Paren('('))?;
+        lexer.expect(Token::Paren('('))?;
         while lexer.peek() != Token::Paren(')') {
             if !fun.parameter_types.is_empty() {
-                Self::expect(lexer, Token::Separator(','))?;
+                lexer.expect(Token::Separator(','))?;
             }
             let (param_name, param_type) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
             let param_index = fun.parameter_types.len() as u32;
@@ -939,14 +924,14 @@ impl Parser {
         }
         let _ = lexer.next();
         // read return type
-        Self::expect(lexer, Token::Arrow)?;
+        lexer.expect(Token::Arrow)?;
         if let Token::Word("void") = lexer.peek() {
             let _ = lexer.next();
         } else {
             fun.return_type = Some(self.parse_type_decl(lexer, &mut module.types)?);
         };
         // read body
-        Self::expect(lexer, Token::Paren('{'))?;
+        lexer.expect(Token::Paren('{'))?;
         loop {
             let context = ExpressionContext {
                 function: &mut fun,
@@ -970,7 +955,7 @@ impl Parser {
                             } else {
                                 None
                             };
-                            Self::expect(lexer, Token::Separator(';'))?;
+                            lexer.expect(Token::Separator(';'))?;
                             crate::Statement::VariableDeclaration {
                                 name: name.to_owned(),
                                 ty,
@@ -983,7 +968,7 @@ impl Parser {
                             } else {
                                 None
                             };
-                            Self::expect(lexer, Token::Separator(';'))?;
+                            lexer.expect(Token::Separator(';'))?;
                             crate::Statement::Return {
                                 value
                             }
@@ -991,9 +976,9 @@ impl Parser {
                         ident => {
                             // assignment
                             let left = lookup_ident.lookup(ident)?;
-                            Self::expect(lexer, Token::Operation('='))?;
+                            lexer.expect(Token::Operation('='))?;
                             let value = self.parse_general_expression(lexer, context)?;
-                            Self::expect(lexer, Token::Separator(';'))?;
+                            lexer.expect(Token::Separator(';'))?;
                             crate::Statement::Store {
                                 pointer: left,
                                 value,
@@ -1024,20 +1009,20 @@ impl Parser {
             self.scopes.push(Scope::Decoration);
             let _ = lexer.next();
             loop {
-                match Self::parse_ident(lexer)? {
+                match lexer.next_ident()? {
                     "location" => {
-                        let loc = Self::parse_uint_literal(lexer)?;
+                        let loc = lexer.next_uint_literal()?;
                         binding = Some(crate::Binding::Location(loc));
                     }
                     "builtin" => {
-                        let builtin = Self::get_built_in(Self::parse_ident(lexer)?)?;
+                        let builtin = Self::get_built_in(lexer.next_ident()?)?;
                         binding = Some(crate::Binding::BuiltIn(builtin));
                     }
                     "binding" => {
-                        bind_index = Some(Self::parse_uint_literal(lexer)?);
+                        bind_index = Some(lexer.next_uint_literal()?);
                     }
                     "set" => {
-                        bind_set = Some(Self::parse_uint_literal(lexer)?);
+                        bind_set = Some(lexer.next_uint_literal()?);
                     }
                     other => return Err(Error::UnknownDecoration(other)),
                 }
@@ -1068,9 +1053,9 @@ impl Parser {
                     Token::String(path) => path,
                     other => return Err(Error::Unexpected(other)),
                 };
-                Self::expect(lexer, Token::Word("as"))?;
-                let namespace = Self::parse_ident(lexer)?;
-                Self::expect(lexer, Token::Separator(';'))?;
+                lexer.expect(Token::Word("as"))?;
+                let namespace = lexer.next_ident()?;
+                lexer.expect(Token::Separator(';'))?;
                 match path {
                     "GLSL.std.450" => {
                         self.std_namespace = Some(namespace.to_owned())
@@ -1080,17 +1065,17 @@ impl Parser {
                 self.scopes.pop();
             }
             Token::Word("type") => {
-                let name = Self::parse_ident(lexer)?;
-                Self::expect(lexer, Token::Operation('='))?;
+                let name = lexer.next_ident()?;
+                lexer.expect(Token::Operation('='))?;
                 let ty = self.parse_type_decl(lexer, &mut module.types)?;
                 self.lookup_type.insert(name.to_owned(), ty);
-                Self::expect(lexer, Token::Separator(';'))?;
+                lexer.expect(Token::Separator(';'))?;
             }
             Token::Word("const") => {
                 let (name, _ty) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
-                Self::expect(lexer, Token::Operation('='))?;
+                lexer.expect(Token::Operation('='))?;
                 let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
-                Self::expect(lexer, Token::Separator(';'))?;
+                lexer.expect(Token::Separator(';'))?;
                 let const_handle = module.constants.append(crate::Constant {
                     name: Some(name.to_owned()),
                     specialization: None,
@@ -1112,7 +1097,7 @@ impl Parser {
                 self.parse_function_decl(lexer, module, &lookup_global_expression)?;
             }
             Token::Word("entry_point") => {
-                let exec_model = Self::get_execution_model(Self::parse_ident(lexer)?)?;
+                let exec_model = Self::get_execution_model(lexer.next_ident()?)?;
                 let export_name = if let Token::Word("as") = lexer.peek() {
                     let _ = lexer.next();
                     match lexer.next() {
@@ -1122,9 +1107,9 @@ impl Parser {
                 } else {
                     None
                 };
-                Self::expect(lexer, Token::Operation('='))?;
-                let fun_ident = Self::parse_ident(lexer)?;
-                Self::expect(lexer, Token::Separator(';'))?;
+                lexer.expect(Token::Operation('='))?;
+                let fun_ident = lexer.next_ident()?;
+                lexer.expect(Token::Separator(';'))?;
                 let function = module.functions
                     .iter()
                     .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
