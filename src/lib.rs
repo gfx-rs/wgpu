@@ -214,6 +214,7 @@ pub struct FallThrough;
 
 #[derive(Debug)]
 pub enum Statement {
+    Empty,
     Block(Block),
     VariableDeclaration {
         name: String,

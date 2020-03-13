@@ -242,8 +242,8 @@ impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression
 }
 
 struct ExpressionContext<'input,'temp, 'out> {
-    function: &'out mut crate::Function,
-    lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
+    lookup_ident: &'temp mut FastHashMap<&'input str, Handle<crate::Expression>>,
+    expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
 }
@@ -251,8 +251,8 @@ struct ExpressionContext<'input,'temp, 'out> {
 impl<'a> ExpressionContext<'a, '_, '_> {
     fn reborrow(&mut self) -> ExpressionContext<'a, '_, '_> {
         ExpressionContext {
-            function: self.function,
             lookup_ident: self.lookup_ident,
+            expressions: self.expressions,
             types: self.types,
             constants: self.constants,
         }
@@ -272,7 +272,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
                 left,
                 right: parser(lexer, self.reborrow())?,
             };
-            left = self.function.expressions.append(expression);
+            left = self.expressions.append(expression);
         }
         Ok(left)
     }
@@ -286,6 +286,7 @@ pub enum Scope {
     VariableDecl,
     TypeDecl,
     FunctionDecl,
+    Block,
     Statement,
     ConstantExpr,
     PrimaryExpr,
@@ -470,7 +471,7 @@ impl Parser {
             other => return Err(Error::Unexpected(other)),
         };
         self.scopes.pop();
-        Ok(ctx.function.expressions.append(expression))
+        Ok(ctx.expressions.append(expression))
     }
 
     fn parse_singular_expression<'a>(
@@ -551,7 +552,7 @@ impl Parser {
         };
 
         let handle = match expression {
-            Some(expr) => ctx.function.expressions.append(expr),
+            Some(expr) => ctx.expressions.append(expr),
             None => {
                 *lexer = backup;
                 let mut handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
@@ -562,7 +563,7 @@ impl Parser {
                         base: handle,
                         index: 0, //TODO: compute from `name`
                     };
-                    handle = ctx.function.expressions.append(expr);
+                    handle = ctx.expressions.append(expr);
                 }
                 handle
             }
@@ -887,6 +888,98 @@ impl Parser {
         }))
     }
 
+    fn parse_statement<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut context: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Option<crate::Statement>, Error<'a>> {
+        match lexer.next() {
+            Token::Separator(';') => Ok(Some(crate::Statement::Empty)),
+            Token::Paren('}') => Ok(None),
+            Token::Word(word) => {
+                self.scopes.push(Scope::Statement);
+                let statement = match word {
+                    "var" => {
+                        let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
+                        let value = if let Token::Operation('=') = lexer.peek() {
+                            let _ = lexer.next();
+                            let value = self.parse_general_expression(lexer, context.reborrow())?;
+                            context.lookup_ident.insert(name, value);
+                            Some(value)
+                        } else {
+                            None
+                        };
+                        lexer.expect(Token::Separator(';'))?;
+                        crate::Statement::VariableDeclaration {
+                            name: name.to_owned(),
+                            ty,
+                            value,
+                        }
+                    }
+                    "return" => {
+                        let value = if lexer.peek() != Token::Separator(';') {
+                            Some(self.parse_general_expression(lexer, context)?)
+                        } else {
+                            None
+                        };
+                        lexer.expect(Token::Separator(';'))?;
+                        crate::Statement::Return {
+                            value
+                        }
+                    }
+                    "if" => {
+                        lexer.expect(Token::Paren('('))?;
+                        let condition = self.parse_general_expression(lexer, context.reborrow())?;
+                        lexer.expect(Token::Paren(')'))?;
+                        let accept = self.parse_block(lexer, context.reborrow())?;
+                        let reject = match lexer.peek() {
+                            Token::Word("else") => {
+                                let _ = lexer.next();
+                                self.parse_block(lexer, context.reborrow())?
+                            }
+                            _ => Vec::new(),
+                        };
+                        let statement = crate::Statement::If {
+                            condition,
+                            accept,
+                            reject,
+                        };
+                        statement
+                    }
+                    ident => {
+                        // assignment
+                        let left = context.lookup_ident.lookup(ident)?;
+                        lexer.expect(Token::Operation('='))?;
+                        let value = self.parse_general_expression(lexer, context)?;
+                        lexer.expect(Token::Separator(';'))?;
+                        crate::Statement::Store {
+                            pointer: left,
+                            value,
+                        }
+                    }
+                };
+                self.scopes.pop();
+                Ok(Some(statement))
+            }
+            other => Err(Error::Unexpected(other)),
+        }
+    }
+
+    fn parse_block<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut context: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Vec<crate::Statement>, Error<'a>> {
+        self.scopes.push(Scope::Block);
+        lexer.expect(Token::Paren('{'))?;
+        let mut statements = Vec::new();
+        while let Some(s) = self.parse_statement(lexer, context.reborrow())? {
+            statements.push(s);
+        }
+        self.scopes.pop();
+        Ok(statements)
+    }
+
     fn parse_function_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -897,102 +990,54 @@ impl Parser {
         // read function name
         let mut lookup_ident = FastHashMap::default();
         let fun_name = lexer.next_ident()?;
-        let mut fun = crate::Function {
-            name: Some(fun_name.to_owned()),
-            control: spirv::FunctionControl::empty(),
-            parameter_types: Vec::new(),
-            return_type: None,
-            expressions: Arena::new(),
-            body: Vec::new(),
-        };
         // populare initial expressions
+        let mut expressions = Arena::new();
         for (&name, expression) in lookup_global_expression.iter() {
-            let expr_handle = fun.expressions.append(expression.clone());
+            let expr_handle = expressions.append(expression.clone());
             lookup_ident.insert(name, expr_handle);
         }
         // read parameter list
+        let mut parameter_types = Vec::new();
         lexer.expect(Token::Paren('('))?;
         while lexer.peek() != Token::Paren(')') {
-            if !fun.parameter_types.is_empty() {
+            if !parameter_types.is_empty() {
                 lexer.expect(Token::Separator(','))?;
             }
             let (param_name, param_type) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
-            let param_index = fun.parameter_types.len() as u32;
-            let expression_token = fun.expressions.append(crate::Expression::FunctionParameter(param_index));
+            let param_index = parameter_types.len() as u32;
+            let expression_token = expressions.append(crate::Expression::FunctionParameter(param_index));
             lookup_ident.insert(param_name, expression_token);
-            fun.parameter_types.push(param_type);
+            parameter_types.push(param_type);
         }
         let _ = lexer.next();
         // read return type
         lexer.expect(Token::Arrow)?;
-        if let Token::Word("void") = lexer.peek() {
-            let _ = lexer.next();
-        } else {
-            fun.return_type = Some(self.parse_type_decl(lexer, &mut module.types)?);
-        };
-        // read body
-        lexer.expect(Token::Paren('{'))?;
-        loop {
-            let context = ExpressionContext {
-                function: &mut fun,
-                lookup_ident: &lookup_ident,
-                types: &mut module.types,
-                constants: &mut module.constants,
-            };
-            match lexer.next() {
-                Token::Separator(';') => {},
-                Token::Paren('}') => break,
-                Token::Word(word) => {
-                    self.scopes.push(Scope::Statement);
-                    let statement = match word {
-                        "var" => {
-                            let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
-                            let value = if let Token::Operation('=') = lexer.peek() {
-                                let _ = lexer.next();
-                                let value = self.parse_general_expression(lexer, context)?;
-                                lookup_ident.insert(name, value);
-                                Some(value)
-                            } else {
-                                None
-                            };
-                            lexer.expect(Token::Separator(';'))?;
-                            crate::Statement::VariableDeclaration {
-                                name: name.to_owned(),
-                                ty,
-                                value,
-                            }
-                        }
-                        "return" => {
-                            let value = if context.function.return_type.is_some() {
-                                Some(self.parse_general_expression(lexer, context)?)
-                            } else {
-                                None
-                            };
-                            lexer.expect(Token::Separator(';'))?;
-                            crate::Statement::Return {
-                                value
-                            }
-                        }
-                        ident => {
-                            // assignment
-                            let left = lookup_ident.lookup(ident)?;
-                            lexer.expect(Token::Operation('='))?;
-                            let value = self.parse_general_expression(lexer, context)?;
-                            lexer.expect(Token::Separator(';'))?;
-                            crate::Statement::Store {
-                                pointer: left,
-                                value,
-                            }
-                        }
-                    };
-                    self.scopes.pop();
-                    fun.body.push(statement);
-                }
-                other => return Err(Error::Unexpected(other)),
+        let return_type = match lexer.peek() {
+            Token::Word("void") => {
+                let _ = lexer.next();
+                None
+            }
+            _ => {
+                Some(self.parse_type_decl(lexer, &mut module.types)?)
             }
         };
+        // read body
+        let body = self.parse_block(lexer, ExpressionContext {
+            lookup_ident: &mut lookup_ident,
+            expressions: &mut expressions,
+            types: &mut module.types,
+            constants: &mut module.constants,
+        })?;
         // done
         self.scopes.pop();
+        let fun = crate::Function {
+            name: Some(fun_name.to_owned()),
+            control: spirv::FunctionControl::empty(),
+            parameter_types,
+            return_type,
+            expressions,
+            body,
+        };
         Ok(module.functions.append(fun))
     }
 
