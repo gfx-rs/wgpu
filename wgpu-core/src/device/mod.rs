@@ -18,7 +18,7 @@ use crate::{
     Stored,
 };
 
-use wgt::{BufferAddress, CompareFunction, InputStepMode, TextureFormat};
+use wgt::{BufferAddress, InputStepMode, TextureFormat};
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
 use hal::{
@@ -825,11 +825,7 @@ impl<F: IdentityFilter<id::SamplerId>> Global<F> {
             ),
             lod_bias: hal::image::Lod(0.0),
             lod_range: hal::image::Lod(desc.lod_min_clamp) .. hal::image::Lod(desc.lod_max_clamp),
-            comparison: if desc.compare_function == CompareFunction::Always {
-                None
-            } else {
-                Some(conv::map_compare_function(desc.compare_function))
-            },
+            comparison: desc.compare.cloned().map(conv::map_compare_function),
             border: hal::image::PackedColor(0),
             normalized: true,
             anisotropic: hal::image::Anisotropic::Off, //TODO
@@ -924,7 +920,7 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
             raw,
             bindings: bindings_map,
             desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
-            dynamic_count: bindings.iter().filter(|b| b.dynamic).count(),
+            dynamic_count: bindings.iter().filter(|b| b.has_dynamic_offset).count(),
         };
 
         hub.bind_group_layouts
@@ -1047,9 +1043,11 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
                             binding_model::BindingType::ReadonlyStorageBuffer => {
                                 (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::STORAGE_READ)
                             }
-                            binding_model::BindingType::Sampler
-                            | binding_model::BindingType::SampledTexture
-                            | binding_model::BindingType::StorageTexture => {
+                            binding_model::BindingType::Sampler |
+                            binding_model::BindingType::ComparisonSampler |
+                            binding_model::BindingType::SampledTexture |
+                            binding_model::BindingType::ReadonlyStorageTexture |
+                            binding_model::BindingType::WriteonlyStorageTexture => {
                                 panic!("Mismatched buffer binding for {:?}", decl)
                             }
                         };
@@ -1086,7 +1084,11 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
                         hal::pso::Descriptor::Buffer(&buffer.raw, range)
                     }
                     binding_model::BindingResource::Sampler(id) => {
-                        assert_eq!(decl.ty, binding_model::BindingType::Sampler);
+                        match decl.ty {
+                            binding_model::BindingType::Sampler |
+                            binding_model::BindingType::ComparisonSampler => {}
+                            _ => panic!("Wrong binding type for a sampler: {:?}", decl.ty),
+                        }
                         let sampler = used
                             .samplers
                             .use_extend(&*sampler_guard, id, (), ())
@@ -1099,7 +1101,8 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
                                 resource::TextureUsage::SAMPLED,
                                 hal::image::Layout::ShaderReadOnlyOptimal,
                             ),
-                            binding_model::BindingType::StorageTexture => {
+                            binding_model::BindingType::ReadonlyStorageTexture |
+                            binding_model::BindingType::WriteonlyStorageTexture => {
                                 (resource::TextureUsage::STORAGE, hal::image::Layout::General)
                             }
                             _ => panic!("Mismatched texture binding for {:?}", decl),

@@ -14,8 +14,6 @@ use crate::{
 use wgt::{BufferAddress, BufferUsage, CompareFunction, TextureFormat};
 use hal;
 use rendy_memory::MemoryBlock;
-#[cfg(feature = "serde")]
-use serde_crate::{Deserialize, Serialize};
 
 use std::{borrow::Borrow, fmt};
 
@@ -250,7 +248,7 @@ impl Default for FilterMode {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct SamplerDescriptor {
+pub struct SamplerDescriptor<'a> {
     pub address_mode_u: AddressMode,
     pub address_mode_v: AddressMode,
     pub address_mode_w: AddressMode,
@@ -259,7 +257,7 @@ pub struct SamplerDescriptor {
     pub mipmap_filter: FilterMode,
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
-    pub compare_function: CompareFunction,
+    pub compare: Option<&'a CompareFunction>,
 }
 
 #[derive(Debug)]

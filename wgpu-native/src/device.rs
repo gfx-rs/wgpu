@@ -318,7 +318,7 @@ pub extern "C" fn wgpu_command_buffer_destroy(command_buffer_id: id::CommandBuff
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_device_get_queue(device_id: id::DeviceId) -> id::QueueId {
+pub extern "C" fn wgpu_device_get_default_queue(device_id: id::DeviceId) -> id::QueueId {
     device_id
 }
 

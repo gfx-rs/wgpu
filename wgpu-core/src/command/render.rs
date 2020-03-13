@@ -116,12 +116,13 @@ enum RenderCommand {
     SetIndexBuffer {
         buffer_id: id::BufferId,
         offset: BufferAddress,
+        size: BufferAddress,
     },
-    SetVertexBuffers {
-        start_index: u8,
-        count: u8,
-        phantom_buffer_ids: PhantomSlice<id::BufferId>,
-        phantom_offsets: PhantomSlice<BufferAddress>,
+    SetVertexBuffer {
+        slot: u32,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        size: BufferAddress,
     },
     SetBlendColor(Color),
     SetStencilReference(u32),
@@ -971,15 +972,15 @@ impl<F> Global<F> {
                     }
                     state.vertex.update_limits();
                 }
-                RenderCommand::SetIndexBuffer { buffer_id, offset } => {
+                RenderCommand::SetIndexBuffer { buffer_id, offset, size } => {
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDEX));
 
-                    let range = offset .. buffer.size;
-                    state.index.bound_buffer_view = Some((buffer_id, range));
+                    let end = if size != 0 { offset + size } else { buffer.size };
+                    state.index.bound_buffer_view = Some((buffer_id, offset .. end));
                     state.index.update_limit();
 
                     let view = hal::buffer::IndexBufferView {
@@ -992,31 +993,20 @@ impl<F> Global<F> {
                         raw.bind_index_buffer(view);
                     }
                 }
-                RenderCommand::SetVertexBuffers { start_index, count, phantom_buffer_ids, phantom_offsets } => {
-                    let (new_peeker, buffer_ids) = unsafe {
-                        phantom_buffer_ids.decode_unaligned(peeker, count as usize, raw_data_end)
+                RenderCommand::SetVertexBuffer { slot, buffer_id, offset, size } => {
+                    let buffer = trackers
+                        .buffers
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::VERTEX)
+                        .unwrap();
+                    assert!(buffer.usage.contains(BufferUsage::VERTEX));
+                    state.vertex.inputs[slot as usize].total_size = if size != 0 {
+                        size
+                    } else {
+                        buffer.size - offset
                     };
-                    let (new_peeker, offsets) = unsafe {
-                        phantom_offsets.decode_unaligned(new_peeker, count as usize, raw_data_end)
-                    };
-                    peeker = new_peeker;
-
-                    let pairs = state.vertex.inputs[start_index as usize ..]
-                        .iter_mut()
-                        .zip(buffer_ids.iter().zip(offsets))
-                        .map(|(vbs, (&id, &offset))| {
-                            let buffer = trackers
-                                .buffers
-                                .use_extend(&*buffer_guard, id, (), BufferUsage::VERTEX)
-                                .unwrap();
-                            assert!(buffer.usage.contains(BufferUsage::VERTEX));
-
-                            vbs.total_size = buffer.size - offset;
-                            (&buffer.raw, offset)
-                        });
 
                     unsafe {
-                        raw.bind_vertex_buffers(start_index as u32, pairs);
+                        raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, offset)));
                     }
                     state.vertex.update_limits();
                 }
@@ -1211,39 +1201,29 @@ pub mod render_ffi {
         pass: &mut RawPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
+        size: BufferAddress,
     ) {
         pass.encode(&RenderCommand::SetIndexBuffer {
             buffer_id,
             offset,
+            size,
         });
     }
 
-    /// # Safety
-    ///
-    /// This function is unsafe as there is no guarantee that the given pointers
-    /// (`buffer_ids` and `offsets`) are valid for `length` elements.
-    // TODO: There might be other safety issues, such as using the unsafe
-    // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffers(
+    pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffer(
         pass: &mut RawPass,
-        start_slot: u32,
-        buffer_ids: *const id::BufferId,
-        offsets: *const BufferAddress,
-        length: usize,
+        slot: u32,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        size: BufferAddress,
     ) {
-        pass.encode(&RenderCommand::SetVertexBuffers {
-            start_index: start_slot.try_into().unwrap(),
-            count: length.try_into().unwrap(),
-            phantom_buffer_ids: PhantomSlice::new(),
-            phantom_offsets: PhantomSlice::new(),
+        pass.encode(&RenderCommand::SetVertexBuffer {
+            slot,
+            buffer_id,
+            offset,
+            size,
         });
-        pass.encode_slice(
-            slice::from_raw_parts(buffer_ids, length),
-        );
-        pass.encode_slice(
-            slice::from_raw_parts(offsets, length),
-        );
     }
 
     #[no_mangle]

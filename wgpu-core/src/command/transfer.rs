@@ -24,8 +24,8 @@ const BITS_PER_BYTE: u32 = 8;
 pub struct BufferCopyView {
     pub buffer: BufferId,
     pub offset: BufferAddress,
-    pub row_pitch: u32,
-    pub image_height: u32,
+    pub bytes_per_row: u32,
+    pub rows_per_image: u32,
 }
 
 #[repr(C)]
@@ -161,12 +161,12 @@ impl<F> Global<F> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = source.row_pitch / bytes_per_texel;
-        assert_eq!(source.row_pitch % bytes_per_texel, 0);
+        let buffer_width = source.bytes_per_row / bytes_per_texel;
+        assert_eq!(source.bytes_per_row % bytes_per_texel, 0);
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.offset,
             buffer_width,
-            buffer_height: source.image_height,
+            buffer_height: source.rows_per_image,
             image_layers: destination.to_sub_layers(aspects),
             image_offset: conv::map_origin(destination.origin),
             image_extent: conv::map_extent(copy_size),
@@ -225,12 +225,12 @@ impl<F> Global<F> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = destination.row_pitch / bytes_per_texel;
-        assert_eq!(destination.row_pitch % bytes_per_texel, 0);
+        let buffer_width = destination.bytes_per_row / bytes_per_texel;
+        assert_eq!(destination.bytes_per_row % bytes_per_texel, 0);
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.offset,
             buffer_width,
-            buffer_height: destination.image_height,
+            buffer_height: destination.rows_per_image,
             image_layers: source.to_sub_layers(aspects),
             image_offset: conv::map_origin(source.origin),
             image_extent: conv::map_extent(copy_size),
