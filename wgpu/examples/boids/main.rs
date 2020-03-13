@@ -67,17 +67,17 @@ impl framework::Example for Example {
 
         let compute_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &[
-                wgpu::BindGroupLayoutBinding {
+                wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStage::COMPUTE,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 },
-                wgpu::BindGroupLayoutBinding {
+                wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStage::COMPUTE,
                     ty: wgpu::BindingType::StorageBuffer { dynamic: false, readonly: false },
                 },
-                wgpu::BindGroupLayoutBinding {
+                wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::COMPUTE,
                     ty: wgpu::BindingType::StorageBuffer { dynamic: false, readonly: false },
@@ -149,11 +149,11 @@ impl framework::Example for Example {
             },
         });
 
-        
+
         // buffer for the three 2d triangle vertices of each instance
 
         let vertex_buffer_data = [-0.01f32, -0.02, 0.01, -0.02, 0.00, 0.02];
-        let vertices_buffer = device.create_buffer_with_data(vertex_buffer_data.as_bytes(), 
+        let vertices_buffer = device.create_buffer_with_data(vertex_buffer_data.as_bytes(),
             wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST);
 
 
@@ -168,7 +168,7 @@ impl framework::Example for Example {
             0.05,    // rule2Scale
             0.005    // rule3Scale
         ].to_vec();
-        let sim_param_buffer = device.create_buffer_with_data(sim_param_data.as_bytes(), 
+        let sim_param_buffer = device.create_buffer_with_data(sim_param_data.as_bytes(),
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST);
 
 
@@ -288,7 +288,7 @@ impl framework::Example for Example {
         // get command encoder
         let mut command_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
-        
+
         {
             // compute pass
             let mut cpass = command_encoder.begin_compute_pass();
@@ -301,10 +301,10 @@ impl framework::Example for Example {
             // render pass
             let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor);
             rpass.set_pipeline(&self.render_pipeline);
-            rpass.set_vertex_buffers(0, &[
-                (&self.particle_buffers[(self.frame_num + 1) % 2], 0), // render dst particles
-                (&self.vertices_buffer, 0), // the three instance-local vertices
-            ]);
+            // render dst particles
+            rpass.set_vertex_buffer(0, &self.particle_buffers[(self.frame_num + 1) % 2], 0, 0);
+            // the three instance-local vertices
+            rpass.set_vertex_buffer(1, &self.vertices_buffer, 0, 0);
             rpass.draw(0..3, 0..NUM_PARTICLES);
         }
 
