@@ -1,6 +1,6 @@
 use crate::{
     arena::{Arena, Handle},
-    proc::Typifier,
+    proc::{Typifier, ResolveError},
     FastHashMap,
 };
 
@@ -145,6 +145,7 @@ pub enum Error<'a> {
     BadInteger(&'a str, std::num::ParseIntError),
     BadFloat(&'a str, std::num::ParseFloatError),
     BadAccessor(&'a str),
+    InvalidResolve(ResolveError),
     UnknownImport(&'a str),
     UnknownStorageClass(&'a str),
     UnknownDecoration(&'a str),
@@ -312,8 +313,10 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         }
     }
 
-    fn resolve_type(&mut self, handle: Handle<crate::Expression>) -> Handle<crate::Type> {
-        self.typifier.resolve(handle, self.expressions, self.types, self.constants, self.global_vars, self.local_vars)
+    fn resolve_type(&mut self, handle: Handle<crate::Expression>) -> Result<Handle<crate::Type>, Error<'a>> {
+        self.typifier
+            .resolve(handle, self.expressions, self.types, self.constants, self.global_vars, self.local_vars)
+            .map_err(Error::InvalidResolve)
     }
 
     fn parse_binary_op(
@@ -468,7 +471,7 @@ impl Parser {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(true),
-                    ty: Self::deduce_type_handle(
+                    ty: Typifier::deduce_type_handle(
                         crate::TypeInner::Scalar {
                             kind: crate::ScalarKind::Bool,
                             width: 1,
@@ -483,7 +486,7 @@ impl Parser {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(false),
-                    ty: Self::deduce_type_handle(
+                    ty: Typifier::deduce_type_handle(
                         crate::TypeInner::Scalar {
                             kind: crate::ScalarKind::Bool,
                             width: 1,
@@ -500,7 +503,7 @@ impl Parser {
                     name: None,
                     specialization: None,
                     inner,
-                    ty: Self::deduce_type_handle(
+                    ty: Typifier::deduce_type_handle(
                         crate::TypeInner::Scalar { kind, width: 32 },
                         ctx.types,
                     )
@@ -560,29 +563,64 @@ impl Parser {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let name = lexer.next_ident()?;
-                    let type_handle = ctx.resolve_type(handle);
-                    let index = match ctx.types[type_handle].inner {
+                    let type_handle = ctx.resolve_type(handle)?;
+                    let base_type = &ctx.types[type_handle];
+                    let expression = match base_type.inner {
                         crate::TypeInner::Struct { ref members } => {
-                            members
+                            let index = members
                                 .iter()
                                 .position(|m| m.name.as_ref().map(|s| s.as_str()) == Some(name))
-                                .ok_or(Error::BadAccessor(name))? as u32
+                                .ok_or(Error::BadAccessor(name))? as u32;
+                            crate::Expression::AccessIndex {
+                                base: handle,
+                                index,
+                            }
                         }
-                        crate::TypeInner::Vector { size, .. } |
-                        crate::TypeInner::Matrix { columns: size, .. } => {
-                            const MEMBERS: [&'static str; 4] = ["x", "y", "z", "w"];
-                            MEMBERS[.. size as usize]
-                                .iter()
-                                .position(|&m| m == name)
-                                .ok_or(Error::BadAccessor(name))? as u32
+                        crate::TypeInner::Vector { size, kind, width } |
+                        crate::TypeInner::Matrix { columns: size, kind, width, .. } => {
+                            const MEMBERS: [char; 4] = ['x', 'y', 'z', 'w'];
+                            if name.len() > 1 {
+                                let mut components = Vec::with_capacity(name.len());
+                                for ch in name.chars() {
+                                    let expr = crate::Expression::AccessIndex {
+                                        base: handle,
+                                        index: MEMBERS[.. size as usize]
+                                            .iter()
+                                            .position(|&m| m == ch)
+                                            .ok_or(Error::BadAccessor(name))? as u32,
+                                    };
+                                    components.push(ctx.expressions.append(expr));
+                                }
+                                let size = match name.len() {
+                                    2 => crate::VectorSize::Bi,
+                                    3 => crate::VectorSize::Tri,
+                                    4 => crate::VectorSize::Quad,
+                                    _ => return Err(Error::BadAccessor(name)),
+                                };
+                                let inner = if let crate::TypeInner::Matrix { rows, .. } = base_type.inner {
+                                    crate::TypeInner::Matrix { columns: size, rows, kind, width }
+                                } else {
+                                    crate::TypeInner::Vector { size, kind, width }
+                                };
+                                crate::Expression::Compose {
+                                    ty: Typifier::deduce_type_handle(inner, ctx.types),
+                                    components,
+                                }
+                            } else {
+                                let ch = name.chars().next().unwrap();
+                                let index = MEMBERS[.. size as usize]
+                                    .iter()
+                                    .position(|&m| m == ch)
+                                    .ok_or(Error::BadAccessor(name))? as u32;
+                                crate::Expression::AccessIndex {
+                                    base: handle,
+                                    index,
+                                }
+                            }
                         }
                         _ => return Err(Error::BadAccessor(name)),
                     };
-                    let expr = crate::Expression::AccessIndex {
-                        base: handle,
-                        index,
-                    };
-                    handle = ctx.expressions.append(expr);
+                    handle = ctx.expressions.append(expression);
                 }
                 Token::Paren('[') => {
                     let _ = lexer.next();
@@ -876,19 +914,6 @@ impl Parser {
         }
     }
 
-    fn deduce_type_handle<'a>(inner: crate::TypeInner, arena: &mut Arena<crate::Type>) -> Handle<crate::Type> {
-        if let Some((token, _)) = arena
-            .iter()
-            .find(|(_, ty)| ty.inner == inner)
-        {
-            return token;
-        }
-        arena.append(crate::Type {
-            name: None,
-            inner,
-        })
-    }
-
     fn parse_type_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -1001,7 +1026,7 @@ impl Parser {
             other => return Err(Error::Unexpected(other)),
         };
         self.scopes.pop();
-        Ok(Self::deduce_type_handle(inner, type_arena))
+        Ok(Typifier::deduce_type_handle(inner, type_arena))
     }
 
     fn parse_statement<'a>(

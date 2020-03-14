@@ -1,3 +1,3 @@
 mod typifier;
 
-pub use typifier::Typifier;
+pub use typifier::{ResolveError, Typifier};
