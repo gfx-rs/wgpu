@@ -260,6 +260,7 @@ struct StatementContext<'input, 'temp, 'out> {
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
+    global_vars: &'out Arena<crate::GlobalVariable>,
 }
 
 impl<'a> StatementContext<'a, '_, '_> {
@@ -271,6 +272,7 @@ impl<'a> StatementContext<'a, '_, '_> {
             expressions: self.expressions,
             types: self.types,
             constants: self.constants,
+            global_vars: self.global_vars,
         }
     }
 
@@ -281,6 +283,8 @@ impl<'a> StatementContext<'a, '_, '_> {
             expressions: self.expressions,
             types: self.types,
             constants: self.constants,
+            global_vars: self.global_vars,
+            local_vars: self.variables,
         }
     }
 }
@@ -291,6 +295,8 @@ struct ExpressionContext<'input, 'temp, 'out> {
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
+    global_vars: &'out Arena<crate::GlobalVariable>,
+    local_vars: &'out Arena<crate::LocalVariable>,
 }
 
 impl<'a> ExpressionContext<'a, '_, '_> {
@@ -301,7 +307,13 @@ impl<'a> ExpressionContext<'a, '_, '_> {
             expressions: self.expressions,
             types: self.types,
             constants: self.constants,
+            global_vars: self.global_vars,
+            local_vars: self.local_vars,
         }
+    }
+
+    fn resolve_type(&mut self, handle: Handle<crate::Expression>) -> Handle<crate::Type> {
+        self.typifier.resolve(handle, self.expressions, self.types, self.constants, self.global_vars, self.local_vars)
     }
 
     fn parse_binary_op(
@@ -456,6 +468,13 @@ impl Parser {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(true),
+                    ty: Self::deduce_type_handle(
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Bool,
+                            width: 1,
+                        },
+                        ctx.types,
+                    )
                 });
                 crate::Expression::Constant(handle)
             }
@@ -464,14 +483,27 @@ impl Parser {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(false),
+                    ty: Self::deduce_type_handle(
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Bool,
+                            width: 1,
+                        },
+                        ctx.types,
+                    )
                 });
                 crate::Expression::Constant(handle)
             }
             Token::Number(word) => {
+                let inner = Self::get_constant_inner(word)?;
+                let kind = inner.scalar_kind();
                 let handle = ctx.constants.append(crate::Constant {
                     name: None,
                     specialization: None,
-                    inner: Self::get_constant_inner(word)?,
+                    inner,
+                    ty: Self::deduce_type_handle(
+                        crate::TypeInner::Scalar { kind, width: 32 },
+                        ctx.types,
+                    )
                 });
                 crate::Expression::Constant(handle)
             }
@@ -528,7 +560,7 @@ impl Parser {
                 Token::Separator('.') => {
                     let _ = lexer.next();
                     let name = lexer.next_ident()?;
-                    let type_handle = ctx.typifier.resolve(handle, ctx.expressions);
+                    let type_handle = ctx.resolve_type(handle);
                     let index = match ctx.types[type_handle].inner {
                         crate::TypeInner::Struct { ref members } => {
                             members
@@ -844,6 +876,19 @@ impl Parser {
         }
     }
 
+    fn deduce_type_handle<'a>(inner: crate::TypeInner, arena: &mut Arena<crate::Type>) -> Handle<crate::Type> {
+        if let Some((token, _)) = arena
+            .iter()
+            .find(|(_, ty)| ty.inner == inner)
+        {
+            return token;
+        }
+        arena.append(crate::Type {
+            name: None,
+            inner,
+        })
+    }
+
     fn parse_type_decl<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -956,17 +1001,7 @@ impl Parser {
             other => return Err(Error::Unexpected(other)),
         };
         self.scopes.pop();
-
-        if let Some((token, _)) = type_arena
-            .iter()
-            .find(|(_, ty)| ty.inner == inner)
-        {
-            return Ok(token);
-        }
-        Ok(type_arena.append(crate::Type {
-            name: None,
-            inner,
-        }))
+        Ok(Self::deduce_type_handle(inner, type_arena))
     }
 
     fn parse_statement<'a>(
@@ -1127,6 +1162,7 @@ impl Parser {
             expressions: &mut expressions,
             types: &mut module.types,
             constants: &mut module.constants,
+            global_vars: &module.global_variables,
         })?;
         // done
         self.scopes.pop();
@@ -1217,7 +1253,7 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
             }
             Token::Word("const") => {
-                let (name, _ty) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
+                let (name, ty) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
                 lexer.expect(Token::Operation('='))?;
                 let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 lexer.expect(Token::Separator(';'))?;
@@ -1225,6 +1261,7 @@ impl Parser {
                     name: Some(name.to_owned()),
                     specialization: None,
                     inner,
+                    ty,
                 });
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }

@@ -1135,6 +1135,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let type_id = self.next()?;
                     let id = self.next()?;
                     let type_lookup = self.lookup_type.lookup(type_id)?;
+                    let ty = type_lookup.handle;
                     let inner = match module.types[type_lookup.handle].inner {
                         crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, width } => {
                             let low = self.next()?;
@@ -1186,6 +1187,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                 .and_then(|dec| dec.name),
                             specialization: None, //TODO
                             inner,
+                            ty,
                         }),
                         type_id,
                     });
