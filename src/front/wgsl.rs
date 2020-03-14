@@ -1,5 +1,6 @@
 use crate::{
     arena::{Arena, Handle},
+    proc::Typifier,
     FastHashMap,
 };
 
@@ -143,6 +144,7 @@ pub enum Error<'a> {
     Unexpected(Token<'a>),
     BadInteger(&'a str, std::num::ParseIntError),
     BadFloat(&'a str, std::num::ParseFloatError),
+    BadAccessor(&'a str),
     UnknownImport(&'a str),
     UnknownStorageClass(&'a str),
     UnknownDecoration(&'a str),
@@ -253,6 +255,7 @@ impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression
 
 struct StatementContext<'input, 'temp, 'out> {
     lookup_ident: &'temp mut FastHashMap<&'input str, Handle<crate::Expression>>,
+    typifier: &'temp mut Typifier,
     variables: &'out mut Arena<crate::LocalVariable>,
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
@@ -263,6 +266,7 @@ impl<'a> StatementContext<'a, '_, '_> {
     fn reborrow(&mut self) -> StatementContext<'a, '_, '_> {
         StatementContext {
             lookup_ident: self.lookup_ident,
+            typifier: self.typifier,
             variables: self.variables,
             expressions: self.expressions,
             types: self.types,
@@ -273,6 +277,7 @@ impl<'a> StatementContext<'a, '_, '_> {
     fn as_expression(&mut self) -> ExpressionContext<'a, '_, '_> {
         ExpressionContext {
             lookup_ident: self.lookup_ident,
+            typifier: self.typifier,
             expressions: self.expressions,
             types: self.types,
             constants: self.constants,
@@ -282,6 +287,7 @@ impl<'a> StatementContext<'a, '_, '_> {
 
 struct ExpressionContext<'input, 'temp, 'out> {
     lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
+    typifier: &'temp mut Typifier,
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
@@ -291,6 +297,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
     fn reborrow(&mut self) -> ExpressionContext<'a, '_, '_> {
         ExpressionContext {
             lookup_ident: self.lookup_ident,
+            typifier: self.typifier,
             expressions: self.expressions,
             types: self.types,
             constants: self.constants,
@@ -520,10 +527,28 @@ impl Parser {
             match lexer.peek() {
                 Token::Separator('.') => {
                     let _ = lexer.next();
-                    let _name = lexer.next_ident()?;
+                    let name = lexer.next_ident()?;
+                    let type_handle = ctx.typifier.resolve(handle, ctx.expressions);
+                    let index = match ctx.types[type_handle].inner {
+                        crate::TypeInner::Struct { ref members } => {
+                            members
+                                .iter()
+                                .position(|m| m.name.as_ref().map(|s| s.as_str()) == Some(name))
+                                .ok_or(Error::BadAccessor(name))? as u32
+                        }
+                        crate::TypeInner::Vector { size, .. } |
+                        crate::TypeInner::Matrix { columns: size, .. } => {
+                            const MEMBERS: [&'static str; 4] = ["x", "y", "z", "w"];
+                            MEMBERS[.. size as usize]
+                                .iter()
+                                .position(|&m| m == name)
+                                .ok_or(Error::BadAccessor(name))? as u32
+                        }
+                        _ => return Err(Error::BadAccessor(name)),
+                    };
                     let expr = crate::Expression::AccessIndex {
                         base: handle,
-                        index: 0, //TODO: compute from `name`
+                        index,
                     };
                     handle = ctx.expressions.append(expr);
                 }
@@ -1094,8 +1119,10 @@ impl Parser {
         };
         // read body
         let mut local_variables = Arena::new();
+        let mut typifier = Typifier::new();
         let body = self.parse_block(lexer, StatementContext {
             lookup_ident: &mut lookup_ident,
+            typifier: &mut typifier,
             variables: &mut local_variables,
             expressions: &mut expressions,
             types: &mut module.types,
