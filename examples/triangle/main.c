@@ -142,8 +142,8 @@ int main() {
                     },
                 .color_states_length = 1,
                 .depth_stencil_state = NULL,
-                .vertex_input =
-                    (WGPUVertexInputDescriptor){
+                .vertex_state =
+                    (WGPUVertexStateDescriptor){
                         .index_format = WGPUIndexFormat_Uint16,
                         .vertex_buffers = NULL,
                         .vertex_buffers_length = 0,

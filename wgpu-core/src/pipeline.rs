@@ -12,8 +12,8 @@ use wgt::{BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, Inde
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct VertexBufferDescriptor {
-    pub stride: BufferAddress,
+pub struct VertexBufferLayoutDescriptor {
+    pub array_stride: BufferAddress,
     pub step_mode: InputStepMode,
     pub attributes: *const VertexAttributeDescriptor,
     pub attributes_length: usize,
@@ -21,9 +21,9 @@ pub struct VertexBufferDescriptor {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct VertexInputDescriptor {
+pub struct VertexStateDescriptor {
     pub index_format: IndexFormat,
-    pub vertex_buffers: *const VertexBufferDescriptor,
+    pub vertex_buffers: *const VertexBufferLayoutDescriptor,
     pub vertex_buffers_length: usize,
 }
 
@@ -64,7 +64,7 @@ pub struct RenderPipelineDescriptor {
     pub color_states: *const ColorStateDescriptor,
     pub color_states_length: usize,
     pub depth_stencil_state: *const DepthStencilStateDescriptor,
-    pub vertex_input: VertexInputDescriptor,
+    pub vertex_state: VertexStateDescriptor,
     pub sample_count: u32,
     pub sample_mask: u32,
     pub alpha_to_coverage_enabled: bool,

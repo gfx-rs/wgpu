@@ -594,17 +594,17 @@ typedef struct {
 } WGPUVertexAttributeDescriptor;
 
 typedef struct {
-  WGPUBufferAddress stride;
+  WGPUBufferAddress array_stride;
   WGPUInputStepMode step_mode;
   const WGPUVertexAttributeDescriptor *attributes;
   uintptr_t attributes_length;
-} WGPUVertexBufferDescriptor;
+} WGPUVertexBufferLayoutDescriptor;
 
 typedef struct {
   WGPUIndexFormat index_format;
-  const WGPUVertexBufferDescriptor *vertex_buffers;
+  const WGPUVertexBufferLayoutDescriptor *vertex_buffers;
   uintptr_t vertex_buffers_length;
-} WGPUVertexInputDescriptor;
+} WGPUVertexStateDescriptor;
 
 typedef struct {
   WGPUPipelineLayoutId layout;
@@ -615,7 +615,7 @@ typedef struct {
   const WGPUColorStateDescriptor *color_states;
   uintptr_t color_states_length;
   const WGPUDepthStencilStateDescriptor *depth_stencil_state;
-  WGPUVertexInputDescriptor vertex_input;
+  WGPUVertexStateDescriptor vertex_state;
   uint32_t sample_count;
   uint32_t sample_mask;
   bool alpha_to_coverage_enabled;

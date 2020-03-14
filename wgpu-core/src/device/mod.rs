@@ -1512,8 +1512,8 @@ impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
 
         let desc_vbs = unsafe {
             slice::from_raw_parts(
-                desc.vertex_input.vertex_buffers,
-                desc.vertex_input.vertex_buffers_length,
+                desc.vertex_state.vertex_buffers,
+                desc.vertex_state.vertex_buffers_length,
             )
         };
         let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
@@ -1522,13 +1522,13 @@ impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
         for (i, vb_state) in desc_vbs.iter().enumerate() {
             vertex_strides
                 .alloc()
-                .init((vb_state.stride, vb_state.step_mode));
+                .init((vb_state.array_stride, vb_state.step_mode));
             if vb_state.attributes_length == 0 {
                 continue;
             }
             vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
                 binding: i as u32,
-                stride: vb_state.stride as u32,
+                stride: vb_state.array_stride as u32,
                 rate: match vb_state.step_mode {
                     InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
                     InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
@@ -1736,7 +1736,7 @@ impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
             layout_id: desc.layout,
             pass_context,
             flags,
-            index_format: desc.vertex_input.index_format,
+            index_format: desc.vertex_state.index_format,
             vertex_strides,
             sample_count: sc,
         };
