@@ -251,8 +251,37 @@ impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression
     }
 }
 
-struct ExpressionContext<'input,'temp, 'out> {
+struct StatementContext<'input, 'temp, 'out> {
     lookup_ident: &'temp mut FastHashMap<&'input str, Handle<crate::Expression>>,
+    variables: &'out mut Arena<crate::LocalVariable>,
+    expressions: &'out mut Arena<crate::Expression>,
+    types: &'out mut Arena<crate::Type>,
+    constants: &'out mut Arena<crate::Constant>,
+}
+
+impl<'a> StatementContext<'a, '_, '_> {
+    fn reborrow(&mut self) -> StatementContext<'a, '_, '_> {
+        StatementContext {
+            lookup_ident: self.lookup_ident,
+            variables: self.variables,
+            expressions: self.expressions,
+            types: self.types,
+            constants: self.constants,
+        }
+    }
+
+    fn as_expression(&mut self) -> ExpressionContext<'a, '_, '_> {
+        ExpressionContext {
+            lookup_ident: self.lookup_ident,
+            expressions: self.expressions,
+            types: self.types,
+            constants: self.constants,
+        }
+    }
+}
+
+struct ExpressionContext<'input, 'temp, 'out> {
+    lookup_ident: &'temp FastHashMap<&'input str, Handle<crate::Expression>>,
     expressions: &'out mut Arena<crate::Expression>,
     types: &'out mut Arena<crate::Type>,
     constants: &'out mut Arena<crate::Constant>,
@@ -481,6 +510,38 @@ impl Parser {
         Ok(ctx.expressions.append(expression))
     }
 
+    fn parse_postfix<'a>(
+        &mut self,
+        lexer: &mut Lexer<'a>,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+        mut handle: Handle<crate::Expression>,
+    ) -> Result<Handle<crate::Expression>, Error<'a>> {
+        loop {
+            match lexer.peek() {
+                Token::Separator('.') => {
+                    let _ = lexer.next();
+                    let _name = lexer.next_ident()?;
+                    let expr = crate::Expression::AccessIndex {
+                        base: handle,
+                        index: 0, //TODO: compute from `name`
+                    };
+                    handle = ctx.expressions.append(expr);
+                }
+                Token::Paren('[') => {
+                    let _ = lexer.next();
+                    let index = self.parse_general_expression(lexer, ctx.reborrow())?;
+                    lexer.expect(Token::Paren(']'))?;
+                    let expr = crate::Expression::Access {
+                        base: handle,
+                        index,
+                    };
+                    handle = ctx.expressions.append(expr);
+                }
+                _ => return Ok(handle),
+            }
+        }
+    }
+
     fn parse_singular_expression<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
@@ -562,16 +623,8 @@ impl Parser {
             Some(expr) => ctx.expressions.append(expr),
             None => {
                 *lexer = backup;
-                let mut handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
-                while lexer.skip(Token::Separator('.')) {
-                    let _name = lexer.next_ident()?;
-                    let expr = crate::Expression::AccessIndex {
-                        base: handle,
-                        index: 0, //TODO: compute from `name`
-                    };
-                    handle = ctx.expressions.append(expr);
-                }
-                handle
+                let handle = self.parse_primary_expression(lexer, ctx.reborrow())?;
+                self.parse_postfix(lexer, ctx, handle)?
             }
         };
         self.scopes.pop();
@@ -894,7 +947,7 @@ impl Parser {
     fn parse_statement<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        mut context: ExpressionContext<'a, '_, '_>,
+        mut context: StatementContext<'a, '_, '_>,
     ) -> Result<Option<crate::Statement>, Error<'a>> {
         match lexer.next() {
             Token::Separator(';') => Ok(Some(crate::Statement::Empty)),
@@ -904,23 +957,24 @@ impl Parser {
                 let statement = match word {
                     "var" => {
                         let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
-                        let value = if lexer.skip(Token::Operation('=')) {
-                            let value = self.parse_general_expression(lexer, context.reborrow())?;
-                            context.lookup_ident.insert(name, value);
-                            Some(value)
+                        let init = if lexer.skip(Token::Operation('=')) {
+                            Some(self.parse_general_expression(lexer, context.as_expression())?)
                         } else {
                             None
                         };
                         lexer.expect(Token::Separator(';'))?;
-                        crate::Statement::VariableDeclaration {
-                            name: name.to_owned(),
+                        let var_id = context.variables.append(crate::LocalVariable {
+                            name: Some(name.to_owned()),
                             ty,
-                            value,
-                        }
+                            init,
+                        });
+                        let expr_id = context.expressions.append(crate::Expression::LocalVariable(var_id));
+                        context.lookup_ident.insert(name, expr_id);
+                        crate::Statement::Empty
                     }
                     "return" => {
                         let value = if lexer.peek() != Token::Separator(';') {
-                            Some(self.parse_general_expression(lexer, context)?)
+                            Some(self.parse_general_expression(lexer, context.as_expression())?)
                         } else {
                             None
                         };
@@ -931,7 +985,7 @@ impl Parser {
                     }
                     "if" => {
                         lexer.expect(Token::Paren('('))?;
-                        let condition = self.parse_general_expression(lexer, context.reborrow())?;
+                        let condition = self.parse_general_expression(lexer, context.as_expression())?;
                         lexer.expect(Token::Paren(')'))?;
                         let accept = self.parse_block(lexer, context.reborrow())?;
                         let reject = if lexer.skip(Token::Word("else")) {
@@ -939,18 +993,40 @@ impl Parser {
                         } else {
                             Vec::new()
                         };
-                        let statement = crate::Statement::If {
+                        crate::Statement::If {
                             condition,
                             accept,
                             reject,
-                        };
-                        statement
+                        }
                     }
+                    "loop" => {
+                        let mut body = Vec::new();
+                        let mut continuing = Vec::new();
+                        lexer.expect(Token::Paren('{'))?;
+                        loop {
+                            if lexer.skip(Token::Word("continuing")) {
+                                continuing = self.parse_block(lexer, context.reborrow())?;
+                                lexer.expect(Token::Paren('}'))?;
+                                break;
+                            }
+                            match self.parse_statement(lexer, context.reborrow())? {
+                                Some(s) => body.push(s),
+                                None => break,
+                            }
+                        }
+                        crate::Statement::Loop {
+                            body,
+                            continuing
+                        }
+                    }
+                    "break" => crate::Statement::Break,
+                    "continue" => crate::Statement::Continue,
                     ident => {
                         // assignment
-                        let left = context.lookup_ident.lookup(ident)?;
+                        let var_expr = context.lookup_ident.lookup(ident)?;
+                        let left = self.parse_postfix(lexer, context.as_expression(), var_expr)?;
                         lexer.expect(Token::Operation('='))?;
-                        let value = self.parse_general_expression(lexer, context)?;
+                        let value = self.parse_general_expression(lexer, context.as_expression())?;
                         lexer.expect(Token::Separator(';'))?;
                         crate::Statement::Store {
                             pointer: left,
@@ -968,7 +1044,7 @@ impl Parser {
     fn parse_block<'a>(
         &mut self,
         lexer: &mut Lexer<'a>,
-        mut context: ExpressionContext<'a, '_, '_>,
+        mut context: StatementContext<'a, '_, '_>,
     ) -> Result<Vec<crate::Statement>, Error<'a>> {
         self.scopes.push(Scope::Block);
         lexer.expect(Token::Paren('{'))?;
@@ -1017,8 +1093,10 @@ impl Parser {
             Some(self.parse_type_decl(lexer, &mut module.types)?)
         };
         // read body
-        let body = self.parse_block(lexer, ExpressionContext {
+        let mut local_variables = Arena::new();
+        let body = self.parse_block(lexer, StatementContext {
             lookup_ident: &mut lookup_ident,
+            variables: &mut local_variables,
             expressions: &mut expressions,
             types: &mut module.types,
             constants: &mut module.constants,
@@ -1030,6 +1108,7 @@ impl Parser {
             control: spirv::FunctionControl::empty(),
             parameter_types,
             return_type,
+            local_variables,
             expressions,
             body,
         };

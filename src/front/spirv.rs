@@ -1269,6 +1269,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             } else {
                                 Some(self.lookup_type.lookup(result_type)?.handle)
                             },
+                            local_variables: Arena::new(),
                             expressions: self.make_expression_storage(),
                             body: Vec::new(),
                         }

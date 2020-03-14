@@ -110,6 +110,13 @@ pub struct GlobalVariable {
     pub ty: Handle<Type>,
 }
 
+#[derive(Clone, Debug)]
+pub struct LocalVariable {
+    pub name: Option<String>,
+    pub ty: Handle<Type>,
+    pub init: Option<Handle<Expression>>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum UnaryOperator {
     Negate,
@@ -173,6 +180,7 @@ pub enum Expression {
     },
     FunctionParameter(u32),
     GlobalVariable(Handle<GlobalVariable>),
+    LocalVariable(Handle<LocalVariable>),
     Load {
         pointer: Handle<Expression>,
     },
@@ -216,11 +224,6 @@ pub struct FallThrough;
 pub enum Statement {
     Empty,
     Block(Block),
-    VariableDeclaration {
-        name: String,
-        ty: Handle<Type>,
-        value: Option<Handle<Expression>>,
-    },
     If {
         condition: Handle<Expression>, //bool
         accept: Block,
@@ -231,6 +234,13 @@ pub enum Statement {
         cases: FastHashMap<i32, (Block, Option<FallThrough>)>,
         default: Block,
     },
+    Loop {
+        body: Block,
+        continuing: Block,
+    },
+    //TODO: move terminator variations into a separate enum?
+    Break,
+    Continue,
     Return {
         value: Option<Handle<Expression>>,
     },
@@ -247,6 +257,7 @@ pub struct Function {
     pub control: spirv::FunctionControl,
     pub parameter_types: Vec<Handle<Type>>,
     pub return_type: Option<Handle<Type>>,
+    pub local_variables: Arena<LocalVariable>,
     pub expressions: Arena<Expression>,
     pub body: Block,
 }
