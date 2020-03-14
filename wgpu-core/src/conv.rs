@@ -79,28 +79,31 @@ pub fn map_texture_usage(
 }
 
 pub fn map_binding_type(
-    binding: &binding_model::BindGroupLayoutBinding,
+    binding: &binding_model::BindGroupLayoutEntry,
 ) -> hal::pso::DescriptorType {
     use crate::binding_model::BindingType as Bt;
     use hal::pso::DescriptorType as H;
     match binding.ty {
         Bt::UniformBuffer => {
-            if binding.dynamic {
+            if binding.has_dynamic_offset {
                 H::UniformBufferDynamic
             } else {
                 H::UniformBuffer
             }
         }
-        Bt::StorageBuffer | Bt::ReadonlyStorageBuffer => {
-            if binding.dynamic {
+        Bt::StorageBuffer |
+        Bt::ReadonlyStorageBuffer => {
+            if binding.has_dynamic_offset {
                 H::StorageBufferDynamic
             } else {
                 H::StorageBuffer
             }
         }
-        Bt::Sampler => H::Sampler,
+        Bt::Sampler |
+        Bt::ComparisonSampler => H::Sampler,
         Bt::SampledTexture => H::SampledImage,
-        Bt::StorageTexture => H::StorageImage,
+        Bt::ReadonlyStorageTexture |
+        Bt::WriteonlyStorageTexture => H::StorageImage,
     }
 }
 
@@ -328,12 +331,9 @@ pub(crate) fn map_texture_format(
         Tf::R8Sint => H::R8Sint,
 
         // Normal 16 bit formats
-        Tf::R16Unorm => H::R16Unorm,
-        Tf::R16Snorm => H::R16Snorm,
         Tf::R16Uint => H::R16Uint,
         Tf::R16Sint => H::R16Sint,
         Tf::R16Float => H::R16Sfloat,
-
         Tf::Rg8Unorm => H::Rg8Unorm,
         Tf::Rg8Snorm => H::Rg8Snorm,
         Tf::Rg8Uint => H::Rg8Uint,
@@ -343,8 +343,6 @@ pub(crate) fn map_texture_format(
         Tf::R32Uint => H::R32Uint,
         Tf::R32Sint => H::R32Sint,
         Tf::R32Float => H::R32Sfloat,
-        Tf::Rg16Unorm => H::Rg16Unorm,
-        Tf::Rg16Snorm => H::Rg16Snorm,
         Tf::Rg16Uint => H::Rg16Uint,
         Tf::Rg16Sint => H::Rg16Sint,
         Tf::Rg16Float => H::Rg16Sfloat,
@@ -364,8 +362,6 @@ pub(crate) fn map_texture_format(
         Tf::Rg32Uint => H::Rg32Uint,
         Tf::Rg32Sint => H::Rg32Sint,
         Tf::Rg32Float => H::Rg32Sfloat,
-        Tf::Rgba16Unorm => H::Rgba16Unorm,
-        Tf::Rgba16Snorm => H::Rgba16Snorm,
         Tf::Rgba16Uint => H::Rgba16Uint,
         Tf::Rgba16Sint => H::Rgba16Sint,
         Tf::Rgba16Float => H::Rgba16Sfloat,

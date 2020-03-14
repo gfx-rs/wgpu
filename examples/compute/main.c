@@ -80,7 +80,7 @@ int main(
     WGPUBindGroupLayoutId bind_group_layout =
         wgpu_device_create_bind_group_layout(device,
             &(WGPUBindGroupLayoutDescriptor){
-                .bindings = &(WGPUBindGroupLayoutBinding){
+                .bindings = &(WGPUBindGroupLayoutEntry){
 					.binding = 0,
                     .visibility = WGPUShaderStage_COMPUTE,
                     .ty = WGPUBindingType_StorageBuffer},
@@ -95,7 +95,7 @@ int main(
 
     WGPUBindGroupId bind_group = wgpu_device_create_bind_group(device,
             &(WGPUBindGroupDescriptor){.layout = bind_group_layout,
-                .bindings = &(WGPUBindGroupBinding){
+                .bindings = &(WGPUBindGroupEntry){
 					.binding = 0,
 					.resource = resource},
                 .bindings_length = BINDINGS_LENGTH});
@@ -135,7 +135,7 @@ int main(
     wgpu_compute_pass_dispatch(command_pass, numbers_length, 1, 1);
     wgpu_compute_pass_end_pass(command_pass);
 
-    WGPUQueueId queue = wgpu_device_get_queue(device);
+    WGPUQueueId queue = wgpu_device_get_default_queue(device);
 
     WGPUCommandBufferId command_buffer = wgpu_command_encoder_finish(encoder, NULL);
 

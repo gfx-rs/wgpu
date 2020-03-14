@@ -27,33 +27,36 @@ pub enum BindingType {
     StorageBuffer = 1,
     ReadonlyStorageBuffer = 2,
     Sampler = 3,
-    SampledTexture = 4,
-    StorageTexture = 5,
+    ComparisonSampler = 4,
+    SampledTexture = 5,
+    ReadonlyStorageTexture = 6,
+    WriteonlyStorageTexture = 7,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
-pub struct BindGroupLayoutBinding {
+pub struct BindGroupLayoutEntry {
     pub binding: u32,
     pub visibility: wgt::ShaderStage,
     pub ty: BindingType,
-    pub texture_dimension: wgt::TextureViewDimension,
     pub multisampled: bool,
-    pub dynamic: bool,
+    pub has_dynamic_offset: bool,
+    pub view_dimension: wgt::TextureViewDimension,
+    pub storage_texture_format: wgt::TextureFormat,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupLayoutDescriptor {
-    pub bindings: *const BindGroupLayoutBinding,
+    pub bindings: *const BindGroupLayoutEntry,
     pub bindings_length: usize,
 }
 
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
-    pub(crate) bindings: FastHashMap<u32, BindGroupLayoutBinding>,
+    pub(crate) bindings: FastHashMap<u32, BindGroupLayoutEntry>,
     pub(crate) desc_ranges: DescriptorRanges,
     pub(crate) dynamic_count: usize,
 }
@@ -92,7 +95,7 @@ pub enum BindingResource {
 #[repr(C)]
 #[derive(Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
-pub struct BindGroupBinding {
+pub struct BindGroupEntry {
     pub binding: u32,
     pub resource: BindingResource,
 }
@@ -101,7 +104,7 @@ pub struct BindGroupBinding {
 #[derive(Debug)]
 pub struct BindGroupDescriptor {
     pub layout: BindGroupLayoutId,
-    pub bindings: *const BindGroupBinding,
+    pub bindings: *const BindGroupEntry,
     pub bindings_length: usize,
 }
 

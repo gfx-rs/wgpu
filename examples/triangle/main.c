@@ -142,8 +142,8 @@ int main() {
                     },
                 .color_states_length = 1,
                 .depth_stencil_state = NULL,
-                .vertex_input =
-                    (WGPUVertexInputDescriptor){
+                .vertex_state =
+                    (WGPUVertexStateDescriptor){
                         .index_format = WGPUIndexFormat_Uint16,
                         .vertex_buffers = NULL,
                         .vertex_buffers_length = 0,
@@ -260,7 +260,7 @@ int main() {
         wgpu_render_pass_set_pipeline(rpass, render_pipeline);
         wgpu_render_pass_set_bind_group(rpass, 0, bind_group, NULL, 0);
         wgpu_render_pass_draw(rpass, 3, 1, 0, 0);
-        WGPUQueueId queue = wgpu_device_get_queue(device);
+        WGPUQueueId queue = wgpu_device_get_default_queue(device);
         wgpu_render_pass_end_pass(rpass);
         WGPUCommandBufferId cmd_buf =  wgpu_command_encoder_finish(cmd_encoder, NULL);
         wgpu_queue_submit(queue, &cmd_buf, 1);
