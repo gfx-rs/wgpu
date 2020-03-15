@@ -197,7 +197,6 @@ pub enum Expression {
     Load {
         pointer: Handle<Expression>,
     },
-    Mul(Handle<Expression>, Handle<Expression>),
     ImageSample {
         image: Handle<Expression>,
         sampler: Handle<Expression>,

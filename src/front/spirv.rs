@@ -577,7 +577,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width } if width == res_width => (),
                         _ => return Err(Error::UnsupportedType(scalar_type_lookup.handle)),
                     };
-                    let expr = crate::Expression::Mul(vector_lexp.handle, scalar_lexp.handle);
+                    let expr = crate::Expression::Binary {
+                        op: crate::BinaryOperator::Multiply,
+                        left: vector_lexp.handle,
+                        right: scalar_lexp.handle,
+                    };
                     self.lookup_expression.insert(result_id, LookupExpression {
                         handle: fun.expressions.append(expr),
                         type_id: result_type_id,
@@ -606,7 +610,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         crate::TypeInner::Vector { size, kind: crate::ScalarKind::Float, width } if size == columns && width == res_width => (),
                         _ => return Err(Error::UnsupportedType(vector_type_lookup.handle)),
                     };
-                    let expr = crate::Expression::Mul(matrix_lexp.handle, vector_lexp.handle);
+                    let expr = crate::Expression::Binary {
+                        op: crate::BinaryOperator::Multiply,
+                        left: matrix_lexp.handle,
+                        right: vector_lexp.handle,
+                    };
                     self.lookup_expression.insert(result_id, LookupExpression {
                         handle: fun.expressions.append(expr),
                         type_id: result_type_id,

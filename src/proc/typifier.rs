@@ -65,7 +65,6 @@ impl Typifier {
                     crate::Expression::GlobalVariable(h) => global_vars[h].ty,
                     crate::Expression::LocalVariable(h) => local_vars[h].ty,
                     crate::Expression::Load { .. } => unimplemented!(),
-                    crate::Expression::Mul(_, _) => unimplemented!(),
                     crate::Expression::ImageSample { .. } => unimplemented!(),
                     crate::Expression::Unary { expr, .. } => self.types[expr.index()],
                     crate::Expression::Binary { op, left, right } => {

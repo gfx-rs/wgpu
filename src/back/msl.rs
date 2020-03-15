@@ -420,10 +420,17 @@ impl<W: Write> Writer<W> {
                     ref other => panic!("Unexpected load pointer {:?}", other),
                 }
             }
-            crate::Expression::Mul(left, right) => {
+            crate::Expression::Binary { op, left, right } => {
+                let op_ch = match op {
+                    crate::BinaryOperator::Add => '+',
+                    crate::BinaryOperator::Multiply => '*',
+                    crate::BinaryOperator::Divide => '/',
+                    crate::BinaryOperator::Modulo => '%',
+                    _ => panic!("Unsupported binary op {:?}", op),
+                };
                 write!(self.out, "(")?;
                 let ty_left = self.put_expression(left, expressions, module)?;
-                write!(self.out, " * ")?;
+                write!(self.out, " {} ", op_ch)?;
                 let ty_right = self.put_expression(right, expressions, module)?;
                 write!(self.out, ")")?;
                 Ok(match (ty_left.borrow(), ty_right.borrow()) {
