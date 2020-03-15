@@ -1243,10 +1243,18 @@ impl<'a> RenderPass<'a> {
 
     /// Assign a vertex buffer to a slot.
     ///
-    /// Subsequent calls to [`draw`](RenderPass::draw) and [`draw_indexed`](RenderPass::draw_indexed)
-    /// on this [`RenderPass`] will use `buffer` as one of the source vertex buffers.
+    /// Subsequent calls to [`draw`] and [`draw_indexed`] on this
+    /// [`RenderPass`] will use `buffer` as one of the source vertex buffers.
+    ///
+    /// The `slot` refers to the index of the matching descriptor in
+    /// [`RenderPipelineDescriptor::vertex_buffers`].
     ///
     /// If `size == 0`, the remaining part of the buffer is considered.
+    ///
+    /// [`draw`]: #method.draw
+    /// [`draw_indexed`]: #method.draw_indexed
+    /// [`RenderPass`]: struct.RenderPass.html
+    /// [`RenderPipelineDescriptor::vertex_buffers`]: struct.RenderPipelineDescriptor.html#structfield.vertex_buffers
     pub fn set_vertex_buffer(
         &mut self,
         slot: u32,
