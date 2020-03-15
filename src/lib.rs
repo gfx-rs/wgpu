@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default)]
+
 mod arena;
 pub mod back;
 pub mod front;

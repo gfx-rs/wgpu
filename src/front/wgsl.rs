@@ -35,12 +35,12 @@ mod lex {
         }
     }
 
-    fn consume_any<'a>(input: &'a str, what: impl Fn(char) -> bool) -> (&'a str, &'a str) {
-        let pos = input.find(|c| !what(c)).unwrap_or(input.len());
+    fn consume_any(input: &str, what: impl Fn(char) -> bool) -> (&str, &str) {
+        let pos = input.find(|c| !what(c)).unwrap_or_else(|| input.len());
         input.split_at(pos)
     }
 
-    pub fn consume_token<'a>(mut input: &'a str) -> (Token<'a>, &'a str) {
+    pub fn consume_token(mut input: &str) -> (Token<'_>, &str) {
         input = input.trim_start();
         let mut chars = input.chars();
         let cur = match chars.next() {
@@ -164,9 +164,7 @@ struct Lexer<'a> {
 
 impl<'a> Lexer<'a> {
     fn new(input: &'a str) -> Self {
-        Lexer {
-            input,
-        }
+        Lexer { input }
     }
 
     #[must_use]
@@ -377,7 +375,7 @@ impl Parser {
         }
     }
 
-    fn get_storage_class<'a>(word: &'a str) -> Result<spirv::StorageClass, Error<'a>> {
+    fn get_storage_class(word: &str) -> Result<spirv::StorageClass, Error<'_>> {
         match word {
             "in" => Ok(spirv::StorageClass::Input),
             "out" => Ok(spirv::StorageClass::Output),
@@ -387,7 +385,7 @@ impl Parser {
         }
     }
 
-    fn get_built_in<'a>(word: &'a str) -> Result<spirv::BuiltIn, Error<'a>> {
+    fn get_built_in(word: &str) -> Result<spirv::BuiltIn, Error<'_>> {
         match word {
             "position" => Ok(spirv::BuiltIn::Position),
             "vertex_idx" => Ok(spirv::BuiltIn::VertexId),
@@ -396,7 +394,7 @@ impl Parser {
         }
     }
 
-    fn get_execution_model<'a>(word: &'a str) -> Result<spirv::ExecutionModel, Error<'a>> {
+    fn get_execution_model(word: &str) -> Result<spirv::ExecutionModel, Error<'_>> {
         match word {
             "vertex" => Ok(spirv::ExecutionModel::Vertex),
             "fragment" => Ok(spirv::ExecutionModel::Fragment),
@@ -405,7 +403,7 @@ impl Parser {
         }
     }
 
-    fn get_constant_inner<'a>(word: &'a str) -> Result<crate::ConstantInner, Error<'a>> {
+    fn get_constant_inner(word: &str) -> Result<crate::ConstantInner, Error<'_>> {
         if word.contains('.') {
             word
                 .parse()

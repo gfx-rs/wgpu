@@ -58,7 +58,7 @@ impl<T> Handle<T> {
         }
     }
 
-    pub fn index(&self) -> usize {
+    pub fn index(self) -> usize {
         self.index as usize
     }
 }
@@ -71,6 +71,12 @@ pub struct Arena<T> {
     data: Vec<T>,
 }
 
+impl<T> Default for Arena<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> Arena<T> {
     pub fn new() -> Self {
         Arena {
@@ -78,7 +84,7 @@ impl<T> Arena<T> {
         }
     }
 
-    pub fn iter<'a>(&'a self) -> impl Iterator<Item = (Handle<T>, &'a T)> {
+    pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
         self.data
             .iter()
             .enumerate()
@@ -119,36 +125,36 @@ mod tests {
 
     #[test]
     fn append_non_unique() {
-        let mut arena: Arena<f64> = Arena::new();
-        let t1 = arena.append(0.0);
-        let t2 = arena.append(0.0);
+        let mut arena: Arena<u8> = Arena::new();
+        let t1 = arena.append(0);
+        let t2 = arena.append(0);
         assert!(t1 != t2);
         assert!(arena[t1] == arena[t2]);
     }
 
     #[test]
     fn append_unique() {
-        let mut arena: Arena<f64> = Arena::new();
-        let t1 = arena.append(std::f64::NAN);
-        let t2 = arena.append(std::f64::NAN);
+        let mut arena: Arena<u8> = Arena::new();
+        let t1 = arena.append(0);
+        let t2 = arena.append(1);
         assert!(t1 != t2);
         assert!(arena[t1] != arena[t2]);
     }
 
     #[test]
     fn fetch_or_append_non_unique() {
-        let mut arena: Arena<f64> = Arena::new();
-        let t1 = arena.fetch_or_append(0.0);
-        let t2 = arena.fetch_or_append(0.0);
+        let mut arena: Arena<u8> = Arena::new();
+        let t1 = arena.fetch_or_append(0);
+        let t2 = arena.fetch_or_append(0);
         assert!(t1 == t2);
         assert!(arena[t1] == arena[t2])
     }
 
     #[test]
     fn fetch_or_append_unique() {
-        let mut arena: Arena<f64> = Arena::new();
-        let t1 = arena.fetch_or_append(std::f64::NAN);
-        let t2 = arena.fetch_or_append(std::f64::NAN);
+        let mut arena: Arena<u8> = Arena::new();
+        let t1 = arena.fetch_or_append(0);
+        let t2 = arena.fetch_or_append(1);
         assert!(t1 != t2);
         assert!(arena[t1] != arena[t2]);
     }

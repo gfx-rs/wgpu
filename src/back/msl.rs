@@ -74,6 +74,7 @@ enum LocationMode {
     Uniform,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Options<'a> {
     pub binding_map: &'a BindingMap,
 }
@@ -196,13 +197,6 @@ impl AsName for Option<String> {
                 _ => NameSource::Index(index.id()),
             },
         }
-    }
-}
-
-struct Starred<T>(T);
-impl<T: Display> Display for Starred<T> {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
-        write!(formatter, "*{}", self.0)
     }
 }
 
@@ -461,8 +455,16 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "#include <simd/simd.h>")?;
         writeln!(self.out, "using namespace metal;")?;
 
-        // write down complex types
-        writeln!(self.out, "")?;
+        writeln!(self.out)?;
+        self.write_type_defs(module, options)?;
+
+        writeln!(self.out)?;
+        self.write_functions(module, options)?;
+
+        Ok(())
+    }
+
+    fn write_type_defs(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
         for (handle, ty) in module.types.iter() {
             let name = ty.name.or_index(handle);
             match ty.inner {
@@ -541,10 +543,11 @@ impl<W: Write> Writer<W> {
             }
             writeln!(self.out, ";")?;
         }
+        Ok(())
+    }
 
-        // write down functions
+    fn write_functions(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
         let mut uniforms_used = FastHashSet::default();
-        writeln!(self.out, "")?;
         for (fun_handle, fun) in module.functions.iter() {
             let fun_name = fun.name.or_index(fun_handle);
             // find the entry point(s) and inputs/outputs

@@ -20,7 +20,6 @@ fn main() {
 
     if args.len() <= 2 {
         println!("{:#?}", module);
-        return
     } else if args[2].ends_with(".metal") {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();

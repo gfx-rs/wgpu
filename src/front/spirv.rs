@@ -15,15 +15,8 @@ use crate::{
     FastHashMap, FastHashSet,
 };
 
+use num_traits::cast::FromPrimitive;
 use std::convert::TryInto;
-
-const LAST_KNOWN_OPCODE: spirv::Op = spirv::Op::MemberDecorateStringGOOGLE;
-const LAST_KNOWN_CAPABILITY: spirv::Capability = spirv::Capability::VulkanMemoryModelDeviceScopeKHR;
-const LAST_KNOWN_EXECUTION_MODEL: spirv::ExecutionModel = spirv::ExecutionModel::Kernel;
-const LAST_KNOWN_STORAGE_CLASS: spirv::StorageClass = spirv::StorageClass::StorageBuffer;
-const LAST_KNOWN_DECORATION: spirv::Decoration = spirv::Decoration::NonUniformEXT;
-const LAST_KNOWN_BUILT_IN: spirv::BuiltIn = spirv::BuiltIn::FullyCoveredEXT;
-const LAST_KNOWN_DIM: spirv::Dim = spirv::Dim::DimSubpassData;
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[
     spirv::Capability::Shader,
@@ -118,8 +111,7 @@ trait LookupHelper {
 impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     type Target = T;
     fn lookup(&self, key: spirv::Word) -> Result<&T, Error> {
-        self.get(&key)
-            .ok_or(Error::InvalidId(key))
+        self.get(&key).ok_or(Error::InvalidId(key))
     }
 }
 
@@ -128,16 +120,12 @@ fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, Error> {
         2 => Ok(crate::VectorSize::Bi),
         3 => Ok(crate::VectorSize::Tri),
         4 => Ok(crate::VectorSize::Quad),
-        _ => Err(Error::InvalidVectorSize(word))
+        _ => Err(Error::InvalidVectorSize(word)),
     }
 }
 
 fn map_storage_class(word: spirv::Word) -> Result<spirv::StorageClass, Error> {
-    if word > LAST_KNOWN_STORAGE_CLASS as u32 {
-        Err(Error::UnsupportedStorageClass(word))
-    } else {
-        Ok(unsafe { std::mem::transmute(word) })
-    }
+    spirv::StorageClass::from_u32(word).ok_or(Error::UnsupportedStorageClass(word))
 }
 
 type MemberIndex = u32;
@@ -272,16 +260,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         if wc == 0 {
             return Err(Error::InvalidWordCount);
         }
-        if opcode > LAST_KNOWN_OPCODE as u16 {
-            return Err(Error::UnknownInstruction(opcode));
-        }
+        let op = spirv::Op::from_u16(opcode).ok_or(Error::UnknownInstruction(opcode))?;
 
-        Ok(Instruction {
-            op: unsafe {
-                std::mem::transmute(opcode as u32)
-            },
-            wc,
-        })
+        Ok(Instruction { op, wc })
     }
 
     fn next_string(&mut self, mut count: u16) -> Result<(String, u16), Error>{
@@ -310,24 +291,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         dec: &mut Decoration,
     ) -> Result<(), Error> {
         let raw = self.next()?;
-        if raw > LAST_KNOWN_DECORATION as spirv::Word {
-            return Err(Error::InvalidDecoration(raw));
-        }
-        let dec_typed = unsafe {
-            std::mem::transmute::<_, spirv::Decoration>(raw)
-        };
+        let dec_typed = spirv::Decoration::from_u32(raw).ok_or(Error::InvalidDecoration(raw))?;
         log::trace!("\t\t{:?}", dec_typed);
         match dec_typed {
             spirv::Decoration::BuiltIn => {
                 inst.expect(base_words + 2)?;
                 let raw = self.next()?;
-                if raw > LAST_KNOWN_BUILT_IN as spirv::Word {
+                let built_in = spirv::BuiltIn::from_u32(raw);
+                if built_in.is_none() {
                     log::warn!("Unknown built in {:?}", raw);
-                } else {
-                    dec.built_in = Some(unsafe {
-                        std::mem::transmute(raw)
-                    });
                 }
+                dec.built_in = built_in;
             }
             spirv::Decoration::Location => {
                 inst.expect(base_words + 2)?;
@@ -688,7 +662,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     fn switch(&mut self, state: ModuleState, op: spirv::Op) -> Result<(), Error> {
         if state < self.state {
-            return Err(Error::UnsupportedInstruction(self.state, op))
+            Err(Error::UnsupportedInstruction(self.state, op))
         } else {
             self.state = state;
             Ok(())
@@ -715,620 +689,36 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             use spirv::Op;
             log::debug!("\t{:?} [{}]", inst.op, inst.wc);
             match inst.op {
-                Op::Capability => {
-                    self.switch(ModuleState::Capability, inst.op)?;
-                    inst.expect(2)?;
-                    let capability = self.next()?;
-                    if capability > LAST_KNOWN_CAPABILITY as u32 {
-                        return Err(Error::UnknownCapability(capability));
-                    }
-                    let cap = unsafe {
-                        std::mem::transmute(capability)
-                    };
-                    if !SUPPORTED_CAPABILITIES.contains(&cap) {
-                        return Err(Error::UnsupportedCapability(cap));
-                    }
-                }
-                Op::Extension => {
-                    self.switch(ModuleState::Extension, inst.op)?;
-                    inst.expect_at_least(2)?;
-                    let (name, left) = self.next_string(inst.wc - 1)?;
-                    if left != 0 {
-                        return Err(Error::InvalidOperand);
-                    }
-                    if !SUPPORTED_EXTENSIONS.contains(&name.as_str()) {
-                        return Err(Error::UnsupportedExtension(name.to_owned()));
-                    }
-                }
-                Op::ExtInstImport => {
-                    self.switch(ModuleState::Extension, inst.op)?;
-                    inst.expect_at_least(3)?;
-                    let _result = self.next()?;
-                    let (name, left) = self.next_string(inst.wc - 2)?;
-                    if left != 0 {
-                        return Err(Error::InvalidOperand)
-                    }
-                    if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
-                        return Err(Error::UnsupportedExtSet(name.to_owned()));
-                    }
-                }
-                Op::MemoryModel => {
-                    self.switch(ModuleState::MemoryModel, inst.op)?;
-                    inst.expect(3)?;
-                    let _addressing_model = self.next()?;
-                    let _memory_model = self.next()?;
-                }
-                Op::EntryPoint => {
-                    self.switch(ModuleState::EntryPoint, inst.op)?;
-                    inst.expect_at_least(4)?;
-                    let exec_model = self.next()?;
-                    if exec_model > LAST_KNOWN_EXECUTION_MODEL as u32 {
-                        return Err(Error::UnsupportedExecutionModel(exec_model));
-                    }
-                    let function_id = self.next()?;
-                    let (name, left) = self.next_string(inst.wc - 3)?;
-                    let ep = EntryPoint {
-                        exec_model: unsafe {
-                            std::mem::transmute(exec_model)
-                        },
-                        name: name.to_owned(),
-                        function_id,
-                        variable_ids: self.data
-                            .by_ref()
-                            .take(left as usize)
-                            .collect(),
-                    };
-                    entry_points.push(ep);
-                }
-                Op::ExecutionMode => {
-                    self.switch(ModuleState::ExecutionMode, inst.op)?;
-                    inst.expect_at_least(3)?;
-                    let _ep_id = self.next()?;
-                    let _mode = self.next()?;
-                    for _ in 3 .. inst.wc {
-                        let _ = self.next()?; //TODO
-                    }
-                }
-                Op::Source => {
-                    self.switch(ModuleState::Source, inst.op)?;
-                    for _ in 1 .. inst.wc {
-                        let _ = self.next()?;
-                    }
-                }
-                Op::SourceExtension => {
-                    self.switch(ModuleState::Source, inst.op)?;
-                    inst.expect_at_least(2)?;
-                    let (_name, _) = self.next_string(inst.wc - 1)?;
-                }
-                Op::Name => {
-                    self.switch(ModuleState::Name, inst.op)?;
-                    inst.expect_at_least(3)?;
-                    let id = self.next()?;
-                    let (name, left) = self.next_string(inst.wc - 2)?;
-                    if left != 0 {
-                        return Err(Error::InvalidOperand);
-                    }
-                    self.future_decor
-                        .entry(id)
-                        .or_default()
-                        .name = Some(name.to_owned());
-                }
-                Op::MemberName => {
-                    self.switch(ModuleState::Name, inst.op)?;
-                    inst.expect_at_least(4)?;
-                    let id = self.next()?;
-                    let member = self.next()?;
-                    let (name, left) = self.next_string(inst.wc - 3)?;
-                    if left != 0 {
-                        return Err(Error::InvalidOperand);
-                    }
-                    self.future_member_decor
-                        .entry((id, member))
-                        .or_default()
-                        .name = Some(name.to_owned());
-                }
-                Op::Decorate => {
-                    self.switch(ModuleState::Annotation, inst.op)?;
-                    inst.expect_at_least(3)?;
-                    let id = self.next()?;
-                    let mut dec = self.future_decor
-                        .remove(&id)
-                        .unwrap_or_default();
-                    self.next_decoration(inst, 2, &mut dec)?;
-                    self.future_decor.insert(id, dec);
-                }
-                Op::MemberDecorate => {
-                    self.switch(ModuleState::Annotation, inst.op)?;
-                    inst.expect_at_least(4)?;
-                    let id = self.next()?;
-                    let member = self.next()?;
-                    let mut dec = self.future_member_decor
-                        .remove(&(id, member))
-                        .unwrap_or_default();
-                    self.next_decoration(inst, 3, &mut dec)?;
-                    self.future_member_decor.insert((id, member), dec);
-                }
-                Op::TypeVoid => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(2)?;
-                    let id = self.next()?;
-                    self.lookup_void_type.insert(id);
-                }
-                Op::TypeInt => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(4)?;
-                    let id = self.next()?;
-                    let width = self.next()?;
-                    let sign = self.next()?;
-                    let inner = crate::TypeInner::Scalar {
-                        kind: match sign {
-                            0 => crate::ScalarKind::Uint,
-                            1 => crate::ScalarKind::Sint,
-                            _ => return Err(Error::InvalidSign(sign)),
-                        },
-                        width: width
-                            .try_into()
-                            .map_err(|_| Error::InvalidTypeWidth(width))?,
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: None,
-                    });
-                }
-                Op::TypeFloat => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(3)?;
-                    let id = self.next()?;
-                    let width = self.next()?;
-                    let inner = crate::TypeInner::Scalar {
-                        kind: crate::ScalarKind::Float,
-                        width: width
-                            .try_into()
-                            .map_err(|_| Error::InvalidTypeWidth(width))?,
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: None,
-                    });
-                }
-                Op::TypeVector => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(4)?;
-                    let id = self.next()?;
-                    let type_id = self.next()?;
-                    let type_lookup = self.lookup_type.lookup(type_id)?;
-                    let (kind, width) = match module.types[type_lookup.handle].inner {
-                        crate::TypeInner::Scalar { kind, width } => (kind, width),
-                        _ => return Err(Error::InvalidInnerType(type_id)),
-                    };
-                    let component_count = self.next()?;
-                    let inner = crate::TypeInner::Vector {
-                        size: map_vector_size(component_count)?,
-                        kind,
-                        width,
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: Some(type_id),
-                    });
-                }
-                Op::TypeMatrix => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(4)?;
-                    let id = self.next()?;
-                    let vector_type_id = self.next()?;
-                    let num_columns = self.next()?;
-                    let vector_type_lookup = self.lookup_type.lookup(vector_type_id)?;
-                    let inner = match module.types[vector_type_lookup.handle].inner {
-                        crate::TypeInner::Vector { size, kind, width } => crate::TypeInner::Matrix {
-                            columns: map_vector_size(num_columns)?,
-                            rows: size,
-                            kind,
-                            width,
-                        },
-                        _ => return Err(Error::InvalidInnerType(vector_type_id)),
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: Some(vector_type_id),
-                    });
-                }
-                Op::TypeFunction => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect_at_least(3)?;
-                    let id = self.next()?;
-                    let return_type_id = self.next()?;
-                    let parameter_type_ids = self.data
-                        .by_ref()
-                        .take(inst.wc as usize - 3)
-                        .collect();
-                    self.lookup_function_type.insert(id, LookupFunctionType {
-                        parameter_type_ids,
-                        return_type_id,
-                    });
-                }
-                Op::TypePointer => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(4)?;
-                    let id = self.next()?;
-                    let storage = self.next()?;
-                    let type_id = self.next()?;
-                    let inner = crate::TypeInner::Pointer {
-                        base: self.lookup_type.lookup(type_id)?.handle,
-                        class: map_storage_class(storage)?,
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: Some(type_id),
-                    });
-                }
-                Op::TypeArray => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(4)?;
-                    let id = self.next()?;
-                    let type_id = self.next()?;
-                    let length = self.next()?;
-                    let inner = crate::TypeInner::Array {
-                        base: self.lookup_type.lookup(type_id)?.handle,
-                        size: crate::ArraySize::Static(length),
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: Some(type_id),
-                    });
-                }
-                Op::TypeRuntimeArray => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(4)?;
-                    let id = self.next()?;
-                    let type_id = self.next()?;
-                    let inner = crate::TypeInner::Array {
-                        base: self.lookup_type.lookup(type_id)?.handle,
-                        size: crate::ArraySize::Dynamic,
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: Some(type_id),
-                    });
-                }
-                Op::TypeStruct => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect_at_least(2)?;
-                    let id = self.next()?;
-                    let mut members = Vec::with_capacity(inst.wc as usize - 2);
-                    for i in 0 .. inst.wc as u32 - 2 {
-                        let type_id = self.next()?;
-                        let ty = self.lookup_type.lookup(type_id)?.handle;
-                        self.lookup_member_type_id.insert((id, i), type_id);
-                        let decor = self.future_member_decor
-                            .remove(&(id, i))
-                            .unwrap_or_default();
-                        let binding = decor.get_binding();
-                        members.push(crate::StructMember {
-                            name: decor.name,
-                            binding,
-                            ty,
-                        });
-                    }
-                    let inner = crate::TypeInner::Struct {
-                        members
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            inner,
-                        }),
-                        base_id: None,
-                    });
-                }
-                Op::TypeImage => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect_at_least(9)?;
-
-                    let id = self.next()?;
-                    let sample_type_id = self.next()?;
-                    let dim = self.next()?;
-                    let mut flags = crate::ImageFlags::empty();
-                    let _is_depth = self.next()?;
-                    if self.next()? != 0 {
-                        flags |= crate::ImageFlags::ARRAYED;
-                    }
-                    if self.next()? != 0 {
-                        flags |= crate::ImageFlags::MULTISAMPLED;
-                    }
-                    let is_sampled = self.next()?;
-                    if is_sampled != 0 {
-                        flags |= crate::ImageFlags::SAMPLED;
-                    }
-                    let _format = self.next()?;
-                    if inst.wc > 9 {
-                        inst.expect(10)?;
-                        let access = self.next()?;
-                        if access == 0 || access == 2 {
-                            flags |= crate::ImageFlags::CAN_LOAD;
-                        }
-                        if access == 1 || access == 2 {
-                            flags |= crate::ImageFlags::CAN_STORE;
-                        }
-                    };
-
-                    let decor = self.future_decor
-                        .remove(&id)
-                        .unwrap_or_default();
-
-                    let inner = crate::TypeInner::Image {
-                        base: self.lookup_type.lookup(sample_type_id)?.handle,
-                        dim: if dim > LAST_KNOWN_DIM as u32 {
-                            return Err(Error::UnsupportedDim(dim));
-                        } else {
-                            unsafe { std::mem::transmute(dim) }
-                        },
-                        flags,
-                    };
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: decor.name,
-                            inner,
-                        }),
-                        base_id: Some(sample_type_id),
-                    });
-                }
-                Op::TypeSampledImage => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(3)?;
-                    let id = self.next()?;
-                    let image_id = self.next()?;
-                    self.lookup_type.insert(id, LookupType {
-                        handle: self.lookup_type.lookup(image_id)?.handle,
-                        base_id: Some(image_id),
-                    });
-                }
-                Op::TypeSampler => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect(2)?;
-                    let id = self.next()?;
-                    let decor = self.future_decor
-                        .remove(&id)
-                        .unwrap_or_default();
-                    let inner = crate::TypeInner::Sampler;
-                    self.lookup_type.insert(id, LookupType {
-                        handle: module.types.append(crate::Type {
-                            name: decor.name,
-                            inner,
-                        }),
-                        base_id: None,
-                    });
-                }
-                Op::Constant |
-                Op::SpecConstant => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect_at_least(3)?;
-                    let type_id = self.next()?;
-                    let id = self.next()?;
-                    let type_lookup = self.lookup_type.lookup(type_id)?;
-                    let ty = type_lookup.handle;
-                    let inner = match module.types[type_lookup.handle].inner {
-                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, width } => {
-                            let low = self.next()?;
-                            let high = if width > 32 {
-                                inst.expect(4)?;
-                                self.next()?
-                            } else {
-                                0
-                            };
-                            crate::ConstantInner::Uint(((high as u64) << 32) | low as u64)
-                        }
-                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, width } => {
-                            let low = self.next()?;
-                            let high = if width < 32 {
-                                return Err(Error::InvalidTypeWidth(width as u32));
-                            } else if width > 32 {
-                                inst.expect(4)?;
-                                self.next()?
-                            } else {
-                                !0
-                            };
-                            crate::ConstantInner::Sint(unsafe {
-                                std::mem::transmute(((high as u64) << 32) | low as u64)
-                            })
-                        }
-                        crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width } => {
-                            let low = self.next()?;
-                            let extended = if width < 32 {
-                                return Err(Error::InvalidTypeWidth(width as u32));
-                            } else if width > 32 {
-                                inst.expect(4)?;
-                                let high = self.next()?;
-                                unsafe {
-                                    std::mem::transmute(((high as u64) << 32) | low as u64)
-                                }
-                            } else {
-                                unsafe {
-                                    std::mem::transmute::<_, f32>(low) as f64
-                                }
-                            };
-                            crate::ConstantInner::Float(extended)
-                        }
-                        _ => return Err(Error::UnsupportedType(type_lookup.handle))
-                    };
-                    self.lookup_constant.insert(id, LookupConstant {
-                        handle: module.constants.append(crate::Constant {
-                            name: self.future_decor
-                                .remove(&id)
-                                .and_then(|dec| dec.name),
-                            specialization: None, //TODO
-                            inner,
-                            ty,
-                        }),
-                        type_id,
-                    });
-                }
-                Op::Variable => {
-                    self.switch(ModuleState::Type, inst.op)?;
-                    inst.expect_at_least(4)?;
-                    let type_id = self.next()?;
-                    let id = self.next()?;
-                    let storage = self.next()?;
-                    if inst.wc != 4 {
-                        inst.expect(5)?;
-                        let _init = self.next()?; //TODO
-                    }
-                    let lookup_type = self.lookup_type.lookup(type_id)?;
-                    let dec = self.future_decor
-                        .remove(&id)
-                        .ok_or(Error::InvalidBinding(id))?;
-                    let binding = match module.types[lookup_type.handle].inner {
-                        crate::TypeInner::Pointer { base, class: spirv::StorageClass::Input } |
-                        crate::TypeInner::Pointer { base, class: spirv::StorageClass::Output } => {
-                            match module.types[base].inner {
-                                crate::TypeInner::Struct { ref members } => {
-                                    // we don't expect binding decoration on I/O structs,
-                                    // but we do expect them on all of the members
-                                    for member in members {
-                                        if member.binding.is_none() {
-                                            log::warn!("Struct {:?} member {:?} doesn't have a binding", base, member);
-                                            return Err(Error::InvalidBinding(id));
-                                        }
-                                    }
-                                    None
-                                }
-                                _ => {
-                                    Some(dec
-                                        .get_binding()
-                                        .ok_or(Error::InvalidBinding(id))?
-                                    )
-                                }
-                            }
-                        }
-                        _ => {
-                            Some(dec
-                                .get_binding()
-                                .ok_or(Error::InvalidBinding(id))?
-                            )
-                        }
-                    };
-                    let var = crate::GlobalVariable {
-                        name: dec.name,
-                        class: map_storage_class(storage)?,
-                        binding,
-                        ty: lookup_type.handle,
-                    };
-                    self.lookup_variable.insert(id, LookupVariable {
-                        handle: module.global_variables.append(var),
-                        type_id,
-                    });
-                }
-                Op::Function => {
-                    self.switch(ModuleState::Function, inst.op)?;
-                    inst.expect(5)?;
-                    let result_type = self.next()?;
-                    let fun_id = self.next()?;
-                    let fun_control = self.next()?;
-                    let fun_type = self.next()?;
-                    let mut fun = {
-                        let ft = self.lookup_function_type.lookup(fun_type)?.clone();
-                        if ft.return_type_id != result_type {
-                            return Err(Error::WrongFunctionResultType(result_type))
-                        }
-                        crate::Function {
-                            name: self.future_decor
-                                .remove(&fun_id)
-                                .and_then(|dec| dec.name),
-                            control: spirv::FunctionControl::from_bits(fun_control)
-                                .ok_or(Error::UnsupportedFunctionControl(fun_control))?,
-                            parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
-                            return_type: if self.lookup_void_type.contains(&result_type) {
-                                None
-                            } else {
-                                Some(self.lookup_type.lookup(result_type)?.handle)
-                            },
-                            local_variables: Arena::new(),
-                            expressions: self.make_expression_storage(),
-                            body: Vec::new(),
-                        }
-                    };
-                    // read parameters
-                    for i in 0 .. fun.parameter_types.capacity() {
-                        match self.next_inst()? {
-                            Instruction { op: Op::FunctionParameter, wc: 3 } => {
-                                let type_id = self.next()?;
-                                let _id = self.next()?;
-                                //Note: we redo the lookup in order to work around `self` borrowing
-                                if type_id != self.lookup_function_type
-                                    .lookup(fun_type)?
-                                    .parameter_type_ids[i]
-                                {
-                                    return Err(Error::WrongFunctionParameterType(type_id))
-                                }
-                                let ty = self.lookup_type.lookup(type_id)?.handle;
-                                fun.parameter_types.push(ty);
-                            }
-                            Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
-                        }
-                    }
-                    // read body
-                    loop {
-                        let fun_inst = self.next_inst()?;
-                        log::debug!("\t\t{:?}", fun_inst.op);
-                        match fun_inst.op {
-                            Op::Label => {
-                                fun_inst.expect(2)?;
-                                let _id = self.next()?;
-                                self.next_block(&mut fun, &module.types, &module.constants)?;
-                            }
-                            Op::FunctionEnd => {
-                                fun_inst.expect(1)?;
-                                break
-                            }
-                            _ => return Err(Error::UnsupportedInstruction(self.state, fun_inst.op))
-                        }
-                    }
-                    // done
-                    let handle = module.functions.append(fun);
-                    self.lookup_function.insert(fun_id, handle);
-                    self.lookup_expression.clear();
-                    self.lookup_sampled_image.clear();
-                }
-                _ => return Err(Error::UnsupportedInstruction(self.state, inst.op))
-                //TODO
-            }
+                Op::Capability => self.parse_capability(inst),
+                Op::Extension => self.parse_extension(inst),
+                Op::ExtInstImport => self.parse_ext_inst_import(inst),
+                Op::MemoryModel => self.parse_memory_model(inst),
+                Op::EntryPoint => self.parse_entry_point(inst, &mut entry_points),
+                Op::ExecutionMode => self.parse_execution_mode(inst),
+                Op::Source => self.parse_source(inst),
+                Op::SourceExtension => self.parse_source_extension(inst),
+                Op::Name => self.parse_name(inst),
+                Op::MemberName => self.parse_member_name(inst),
+                Op::Decorate => self.parse_decorate(inst),
+                Op::MemberDecorate => self.parse_member_decorate(inst),
+                Op::TypeVoid => self.parse_type_void(inst),
+                Op::TypeInt => self.parse_type_int(inst, &mut module),
+                Op::TypeFloat => self.parse_type_float(inst, &mut module),
+                Op::TypeVector => self.parse_type_vector(inst, &mut module),
+                Op::TypeMatrix => self.parse_type_matrix(inst, &mut module),
+                Op::TypeFunction => self.parse_type_function(inst),
+                Op::TypePointer => self.parse_type_pointer(inst, &mut module),
+                Op::TypeArray => self.parse_type_array(inst, &mut module),
+                Op::TypeRuntimeArray => self.parse_type_runtime_array(inst, &mut module),
+                Op::TypeStruct => self.parse_type_struct(inst, &mut module),
+                Op::TypeImage => self.parse_type_image(inst, &mut module),
+                Op::TypeSampledImage => self.parse_type_sampled_image(inst),
+                Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
+                Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
+                Op::Variable => self.parse_variable(inst, &mut module),
+                Op::Function => self.parse_function(inst, &mut module),
+                _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
+            }?;
         }
 
         if !self.future_decor.is_empty() {
@@ -1354,13 +744,714 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 match module.global_variables[handle].class {
                     spirv::StorageClass::Input => ep.inputs.push(handle),
                     spirv::StorageClass::Output => ep.outputs.push(handle),
-                    other => return Err(Error::InvalidVariableClass(other))
+                    other => return Err(Error::InvalidVariableClass(other)),
                 }
             }
             module.entry_points.push(ep);
         }
 
         Ok(module)
+    }
+
+    fn parse_capability(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Capability, inst.op)?;
+        inst.expect(2)?;
+        let capability = self.next()?;
+        let cap =
+            spirv::Capability::from_u32(capability).ok_or(Error::UnknownCapability(capability))?;
+        if !SUPPORTED_CAPABILITIES.contains(&cap) {
+            return Err(Error::UnsupportedCapability(cap));
+        }
+        Ok(())
+    }
+
+    fn parse_extension(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Extension, inst.op)?;
+        inst.expect_at_least(2)?;
+        let (name, left) = self.next_string(inst.wc - 1)?;
+        if left != 0 {
+            return Err(Error::InvalidOperand);
+        }
+        if !SUPPORTED_EXTENSIONS.contains(&name.as_str()) {
+            return Err(Error::UnsupportedExtension(name.to_owned()));
+        }
+        Ok(())
+    }
+
+    fn parse_ext_inst_import(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Extension, inst.op)?;
+        inst.expect_at_least(3)?;
+        let _result = self.next()?;
+        let (name, left) = self.next_string(inst.wc - 2)?;
+        if left != 0 {
+            return Err(Error::InvalidOperand);
+        }
+        if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
+            return Err(Error::UnsupportedExtSet(name.to_owned()));
+        }
+        Ok(())
+    }
+
+    fn parse_memory_model(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::MemoryModel, inst.op)?;
+        inst.expect(3)?;
+        let _addressing_model = self.next()?;
+        let _memory_model = self.next()?;
+        Ok(())
+    }
+
+    fn parse_entry_point(
+        &mut self,
+        inst: Instruction,
+        entry_points: &mut Vec<EntryPoint>,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::EntryPoint, inst.op)?;
+        inst.expect_at_least(4)?;
+        let exec_model = self.next()?;
+        let exec_model = spirv::ExecutionModel::from_u32(exec_model)
+            .ok_or(Error::UnsupportedExecutionModel(exec_model))?;
+        let function_id = self.next()?;
+        let (name, left) = self.next_string(inst.wc - 3)?;
+        let ep = EntryPoint {
+            exec_model,
+            name: name.to_owned(),
+            function_id,
+            variable_ids: self.data
+                .by_ref()
+                .take(left as usize)
+                .collect(),
+        };
+        entry_points.push(ep);
+        Ok(())
+    }
+
+    fn parse_execution_mode(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::ExecutionMode, inst.op)?;
+        inst.expect_at_least(3)?;
+        let _ep_id = self.next()?;
+        let _mode = self.next()?;
+        for _ in 3..inst.wc {
+            let _ = self.next()?; //TODO
+        }
+        Ok(())
+    }
+
+    fn parse_source(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Source, inst.op)?;
+        for _ in 1 .. inst.wc {
+            let _ = self.next()?;
+        }
+        Ok(())
+    }
+
+    fn parse_source_extension(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Source, inst.op)?;
+        inst.expect_at_least(2)?;
+        let (_name, _) = self.next_string(inst.wc - 1)?;
+        Ok(())
+    }
+
+    fn parse_name(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Name, inst.op)?;
+        inst.expect_at_least(3)?;
+        let id = self.next()?;
+        let (name, left) = self.next_string(inst.wc - 2)?;
+        if left != 0 {
+            return Err(Error::InvalidOperand);
+        }
+        self.future_decor
+            .entry(id)
+            .or_default()
+            .name = Some(name.to_owned());
+        Ok(())
+    }
+
+    fn parse_member_name(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Name, inst.op)?;
+        inst.expect_at_least(4)?;
+        let id = self.next()?;
+        let member = self.next()?;
+        let (name, left) = self.next_string(inst.wc - 3)?;
+        if left != 0 {
+            return Err(Error::InvalidOperand);
+        }
+        self.future_member_decor
+            .entry((id, member))
+            .or_default()
+            .name = Some(name.to_owned());
+        Ok(())
+    }
+
+    fn parse_decorate(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Annotation, inst.op)?;
+        inst.expect_at_least(3)?;
+        let id = self.next()?;
+        let mut dec = self.future_decor
+            .remove(&id)
+            .unwrap_or_default();
+        self.next_decoration(inst, 2, &mut dec)?;
+        self.future_decor.insert(id, dec);
+        Ok(())
+    }
+
+    fn parse_member_decorate(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Annotation, inst.op)?;
+        inst.expect_at_least(4)?;
+        let id = self.next()?;
+        let member = self.next()?;
+        let mut dec = self.future_member_decor
+            .remove(&(id, member))
+            .unwrap_or_default();
+        self.next_decoration(inst, 3, &mut dec)?;
+        self.future_member_decor.insert((id, member), dec);
+        Ok(())
+    }
+
+    fn parse_type_void(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(2)?;
+        let id = self.next()?;
+        self.lookup_void_type.insert(id);
+        Ok(())
+    }
+
+    fn parse_type_int(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(4)?;
+        let id = self.next()?;
+        let width = self.next()?;
+        let sign = self.next()?;
+        let inner = crate::TypeInner::Scalar {
+            kind: match sign {
+                0 => crate::ScalarKind::Uint,
+                1 => crate::ScalarKind::Sint,
+                _ => return Err(Error::InvalidSign(sign)),
+            },
+            width: width
+                .try_into()
+                .map_err(|_| Error::InvalidTypeWidth(width))?,
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: None,
+        });
+        Ok(())
+    }
+
+    fn parse_type_float(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(3)?;
+        let id = self.next()?;
+        let width = self.next()?;
+        let inner = crate::TypeInner::Scalar {
+            kind: crate::ScalarKind::Float,
+            width: width
+                .try_into()
+                .map_err(|_| Error::InvalidTypeWidth(width))?,
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: None,
+        });
+        Ok(())
+    }
+
+    fn parse_type_vector(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(4)?;
+        let id = self.next()?;
+        let type_id = self.next()?;
+        let type_lookup = self.lookup_type.lookup(type_id)?;
+        let (kind, width) = match module.types[type_lookup.handle].inner {
+            crate::TypeInner::Scalar { kind, width } => (kind, width),
+            _ => return Err(Error::InvalidInnerType(type_id)),
+        };
+        let component_count = self.next()?;
+        let inner = crate::TypeInner::Vector {
+            size: map_vector_size(component_count)?,
+            kind,
+            width,
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: Some(type_id),
+        });
+        Ok(())
+    }
+
+    fn parse_type_matrix(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(4)?;
+        let id = self.next()?;
+        let vector_type_id = self.next()?;
+        let num_columns = self.next()?;
+        let vector_type_lookup = self.lookup_type.lookup(vector_type_id)?;
+        let inner = match module.types[vector_type_lookup.handle].inner {
+            crate::TypeInner::Vector { size, kind, width } => crate::TypeInner::Matrix {
+                columns: map_vector_size(num_columns)?,
+                rows: size,
+                kind,
+                width,
+            },
+            _ => return Err(Error::InvalidInnerType(vector_type_id)),
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: Some(vector_type_id),
+        });
+        Ok(())
+    }
+
+    fn parse_type_function(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect_at_least(3)?;
+        let id = self.next()?;
+        let return_type_id = self.next()?;
+        let parameter_type_ids = self.data
+            .by_ref()
+            .take(inst.wc as usize - 3)
+            .collect();
+        self.lookup_function_type.insert(id, LookupFunctionType {
+            parameter_type_ids,
+            return_type_id,
+        });
+        Ok(())
+    }
+
+    fn parse_type_pointer(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(4)?;
+        let id = self.next()?;
+        let storage = self.next()?;
+        let type_id = self.next()?;
+        let inner = crate::TypeInner::Pointer {
+            base: self.lookup_type.lookup(type_id)?.handle,
+            class: map_storage_class(storage)?,
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: Some(type_id),
+        });
+        Ok(())
+    }
+
+    fn parse_type_array(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(4)?;
+        let id = self.next()?;
+        let type_id = self.next()?;
+        let length = self.next()?;
+        let inner = crate::TypeInner::Array {
+            base: self.lookup_type.lookup(type_id)?.handle,
+            size: crate::ArraySize::Static(length),
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: Some(type_id),
+        });
+        Ok(())
+    }
+
+    fn parse_type_runtime_array(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(4)?;
+        let id = self.next()?;
+        let type_id = self.next()?;
+        let inner = crate::TypeInner::Array {
+            base: self.lookup_type.lookup(type_id)?.handle,
+            size: crate::ArraySize::Dynamic,
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: Some(type_id),
+        });
+        Ok(())
+    }
+
+    fn parse_type_struct(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect_at_least(2)?;
+        let id = self.next()?;
+        let mut members = Vec::with_capacity(inst.wc as usize - 2);
+        for i in 0 .. u32::from(inst.wc) - 2 {
+            let type_id = self.next()?;
+            let ty = self.lookup_type.lookup(type_id)?.handle;
+            self.lookup_member_type_id.insert((id, i), type_id);
+            let decor = self.future_member_decor
+                .remove(&(id, i))
+                .unwrap_or_default();
+            let binding = decor.get_binding();
+            members.push(crate::StructMember {
+                name: decor.name,
+                binding,
+                ty,
+            });
+        }
+        let inner = crate::TypeInner::Struct {
+            members
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                inner,
+            }),
+            base_id: None,
+        });
+        Ok(())
+    }
+
+    fn parse_type_image(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect_at_least(9)?;
+
+        let id = self.next()?;
+        let sample_type_id = self.next()?;
+        let dim = self.next()?;
+        let mut flags = crate::ImageFlags::empty();
+        let _is_depth = self.next()?;
+        if self.next()? != 0 {
+            flags |= crate::ImageFlags::ARRAYED;
+        }
+        if self.next()? != 0 {
+            flags |= crate::ImageFlags::MULTISAMPLED;
+        }
+        let is_sampled = self.next()?;
+        if is_sampled != 0 {
+            flags |= crate::ImageFlags::SAMPLED;
+        }
+        let _format = self.next()?;
+        if inst.wc > 9 {
+            inst.expect(10)?;
+            let access = self.next()?;
+            if access == 0 || access == 2 {
+                flags |= crate::ImageFlags::CAN_LOAD;
+            }
+            if access == 1 || access == 2 {
+                flags |= crate::ImageFlags::CAN_STORE;
+            }
+        };
+
+        let decor = self.future_decor
+            .remove(&id)
+            .unwrap_or_default();
+
+        let inner = crate::TypeInner::Image {
+            base: self.lookup_type.lookup(sample_type_id)?.handle,
+            dim: spirv::Dim::from_u32(dim).ok_or(Error::UnsupportedDim(dim))?,
+            flags,
+        };
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: decor.name,
+                inner,
+            }),
+            base_id: Some(sample_type_id),
+        });
+        Ok(())
+    }
+
+    fn parse_type_sampled_image(&mut self, inst: Instruction) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(3)?;
+        let id = self.next()?;
+        let image_id = self.next()?;
+        self.lookup_type.insert(id, LookupType {
+            handle: self.lookup_type.lookup(image_id)?.handle,
+            base_id: Some(image_id),
+        });
+        Ok(())
+    }
+
+    fn parse_type_sampler(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(2)?;
+        let id = self.next()?;
+        let decor = self.future_decor
+            .remove(&id)
+            .unwrap_or_default();
+        let inner = crate::TypeInner::Sampler;
+        self.lookup_type.insert(id, LookupType {
+            handle: module.types.append(crate::Type {
+                name: decor.name,
+                inner,
+            }),
+            base_id: None,
+        });
+        Ok(())
+    }
+
+    fn parse_constant(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect_at_least(3)?;
+        let type_id = self.next()?;
+        let id = self.next()?;
+        let type_lookup = self.lookup_type.lookup(type_id)?;
+        let ty = type_lookup.handle;
+        let inner = match module.types[type_lookup.handle].inner {
+            crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, width } => {
+                let low = self.next()?;
+                let high = if width > 32 {
+                    inst.expect(4)?;
+                    self.next()?
+                } else {
+                    0
+                };
+                crate::ConstantInner::Uint((u64::from(high) << 32) | u64::from(low))
+            }
+            crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, width } => {
+                let low = self.next()?;
+                let high = if width < 32 {
+                    return Err(Error::InvalidTypeWidth(u32::from(width)));
+                } else if width > 32 {
+                    inst.expect(4)?;
+                    self.next()?
+                } else {
+                    !0
+                };
+                crate::ConstantInner::Sint(((u64::from(high) << 32) | u64::from(low)) as i64)
+            }
+            crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width } => {
+                let low = self.next()?;
+                let extended = match width {
+                    32 => f64::from(f32::from_bits(low)),
+                    64 => {
+                        inst.expect(4)?;
+                        let high = self.next()?;
+                        f64::from_bits((u64::from(high) << 32) | u64::from(low))
+                    }
+                    _ => return Err(Error::InvalidTypeWidth(u32::from(width))),
+                };
+                crate::ConstantInner::Float(extended)
+            }
+            _ => return Err(Error::UnsupportedType(type_lookup.handle))
+        };
+        self.lookup_constant.insert(id, LookupConstant {
+            handle: module.constants.append(crate::Constant {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec| dec.name),
+                specialization: None, //TODO
+                inner,
+                ty,
+            }),
+            type_id,
+        });
+        Ok(())
+    }
+
+    fn parse_variable(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect_at_least(4)?;
+        let type_id = self.next()?;
+        let id = self.next()?;
+        let storage = self.next()?;
+        if inst.wc != 4 {
+            inst.expect(5)?;
+            let _init = self.next()?; //TODO
+        }
+        let lookup_type = self.lookup_type.lookup(type_id)?;
+        let dec = self.future_decor
+            .remove(&id)
+            .ok_or(Error::InvalidBinding(id))?;
+        let binding = match module.types[lookup_type.handle].inner {
+            crate::TypeInner::Pointer { base, class: spirv::StorageClass::Input } |
+            crate::TypeInner::Pointer { base, class: spirv::StorageClass::Output } => {
+                match module.types[base].inner {
+                    crate::TypeInner::Struct { ref members } => {
+                        // we don't expect binding decoration on I/O structs,
+                        // but we do expect them on all of the members
+                        for member in members {
+                            if member.binding.is_none() {
+                                log::warn!("Struct {:?} member {:?} doesn't have a binding", base, member);
+                                return Err(Error::InvalidBinding(id));
+                            }
+                        }
+                        None
+                    }
+                    _ => {
+                        Some(dec
+                            .get_binding()
+                            .ok_or(Error::InvalidBinding(id))?
+                        )
+                   }
+                }
+            }
+            _ => {
+                Some(dec
+                    .get_binding()
+                    .ok_or(Error::InvalidBinding(id))?
+                )
+            }
+        };
+        let var = crate::GlobalVariable {
+            name: dec.name,
+            class: map_storage_class(storage)?,
+            binding,
+            ty: lookup_type.handle,
+        };
+        self.lookup_variable.insert(id, LookupVariable {
+            handle: module.global_variables.append(var),
+            type_id,
+        });
+        Ok(())
+    }
+
+    fn parse_function(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Function, inst.op)?;
+        inst.expect(5)?;
+        let result_type = self.next()?;
+        let fun_id = self.next()?;
+        let fun_control = self.next()?;
+        let fun_type = self.next()?;
+        let mut fun = {
+            let ft = self.lookup_function_type.lookup(fun_type)?;
+            if ft.return_type_id != result_type {
+                return Err(Error::WrongFunctionResultType(result_type))
+            }
+            crate::Function {
+                name: self.future_decor
+                    .remove(&fun_id)
+                    .and_then(|dec| dec.name),
+                control: spirv::FunctionControl::from_bits(fun_control)
+                    .ok_or(Error::UnsupportedFunctionControl(fun_control))?,
+                parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
+                return_type: if self.lookup_void_type.contains(&result_type) {
+                    None
+                } else {
+                    Some(self.lookup_type.lookup(result_type)?.handle)
+                },
+                local_variables: Arena::new(),
+                expressions: self.make_expression_storage(),
+                body: Vec::new(),
+            }
+        };
+        // read parameters
+        for i in 0..fun.parameter_types.capacity() {
+            match self.next_inst()? {
+                Instruction { op: spirv::Op::FunctionParameter, wc: 3 } => {
+                    let type_id = self.next()?;
+                    let _id = self.next()?;
+                    //Note: we redo the lookup in order to work around `self` borrowing
+                    if type_id != self.lookup_function_type
+                        .lookup(fun_type)?
+                        .parameter_type_ids[i]
+                    {
+                        return Err(Error::WrongFunctionParameterType(type_id))
+                    }
+                    let ty = self.lookup_type.lookup(type_id)?.handle;
+                    fun.parameter_types.push(ty);
+                }
+                Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
+            }
+        }
+        // read body
+        loop {
+            let fun_inst = self.next_inst()?;
+            log::debug!("\t\t{:?}", fun_inst.op);
+            match fun_inst.op {
+                spirv::Op::Label => {
+                    fun_inst.expect(2)?;
+                    let _id = self.next()?;
+                    self.next_block(&mut fun, &module.types, &module.constants)?;
+                }
+                spirv::Op::FunctionEnd => {
+                    fun_inst.expect(1)?;
+                    break
+                }
+                _ => return Err(Error::UnsupportedInstruction(self.state, fun_inst.op))
+            }
+        }
+        // done
+        let handle = module.functions.append(fun);
+        self.lookup_function.insert(fun_id, handle);
+        self.lookup_expression.clear();
+        self.lookup_sampled_image.clear();
+        Ok(())
     }
 }
 
