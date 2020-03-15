@@ -255,7 +255,7 @@ impl framework::Example for Example {
                 depth_stencil_attachment: None,
             });
             rpass.set_pipeline(&self.pipeline);
-            rpass.set_vertex_buffers(0, &[(&self.vertex_buffer, 0)]);
+            rpass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
             rpass.draw(0 .. self.vertex_count, 0 .. 1);
         }
 

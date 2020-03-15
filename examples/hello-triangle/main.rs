@@ -105,7 +105,7 @@ fn main() {
         format: wgpu::TextureFormat::Bgra8UnormSrgb,
         width: size.width,
         height: size.height,
-        present_mode: wgpu::PresentMode::Vsync,
+        present_mode: wgpu::PresentMode::Mailbox,
     };
 
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);

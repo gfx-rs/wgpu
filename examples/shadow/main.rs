@@ -223,7 +223,7 @@ impl framework::Example for Example {
 
         let local_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[wgpu::BindGroupLayoutBinding {
+                bindings: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
@@ -331,7 +331,7 @@ impl framework::Example for Example {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare_function: wgpu::CompareFunction::LessEqual,
+            compare: Some(&wgpu::CompareFunction::LessEqual),
         });
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -403,7 +403,7 @@ impl framework::Example for Example {
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[wgpu::BindGroupLayoutBinding {
+                    bindings: &[wgpu::BindGroupLayoutEntry {
                         binding: 0, // global
                         visibility: wgpu::ShaderStage::VERTEX,
                         ty: wgpu::BindingType::UniformBuffer { dynamic: false },
@@ -486,17 +486,17 @@ impl framework::Example for Example {
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     bindings: &[
-                        wgpu::BindGroupLayoutBinding {
+                        wgpu::BindGroupLayoutEntry {
                             binding: 0, // global
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                         },
-                        wgpu::BindGroupLayoutBinding {
+                        wgpu::BindGroupLayoutEntry {
                             binding: 1, // lights
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                         },
-                        wgpu::BindGroupLayoutBinding {
+                        wgpu::BindGroupLayoutEntry {
                             binding: 2,
                             visibility: wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::SampledTexture {
@@ -504,10 +504,10 @@ impl framework::Example for Example {
                                 dimension: wgpu::TextureViewDimension::D2Array,
                             },
                         },
-                        wgpu::BindGroupLayoutBinding {
+                        wgpu::BindGroupLayoutEntry {
                             binding: 3,
                             visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler,
+                            ty: wgpu::BindingType::Sampler { comparison: true },
                         },
                     ],
                 });
@@ -779,8 +779,8 @@ impl framework::Example for Example {
 
             for entity in &self.entities {
                 pass.set_bind_group(1, &entity.bind_group, &[]);
-                pass.set_index_buffer(&entity.index_buf, 0);
-                pass.set_vertex_buffers(0, &[(&entity.vertex_buf, 0)]);
+                pass.set_index_buffer(&entity.index_buf, 0, 0);
+                pass.set_vertex_buffer(0, &entity.vertex_buf, 0, 0);
                 pass.draw_indexed(0 .. entity.index_count as u32, 0, 0 .. 1);
             }
         }
@@ -815,8 +815,8 @@ impl framework::Example for Example {
 
             for entity in &self.entities {
                 pass.set_bind_group(1, &entity.bind_group, &[]);
-                pass.set_index_buffer(&entity.index_buf, 0);
-                pass.set_vertex_buffers(0, &[(&entity.vertex_buf, 0)]);
+                pass.set_index_buffer(&entity.index_buf, 0, 0);
+                pass.set_vertex_buffer(0, &entity.vertex_buf, 0, 0);
                 pass.draw_indexed(0 .. entity.index_count as u32, 0, 0 .. 1);
             }
         }

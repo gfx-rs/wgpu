@@ -56,12 +56,12 @@ impl framework::Example for Skybox {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &[
-                wgpu::BindGroupLayoutBinding {
+                wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 },
-                wgpu::BindGroupLayoutBinding {
+                wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::SampledTexture {
@@ -69,10 +69,10 @@ impl framework::Example for Skybox {
                         dimension: wgpu::TextureViewDimension::Cube,
                     },
                 },
-                wgpu::BindGroupLayoutBinding {
+                wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler,
+                    ty: wgpu::BindingType::Sampler { comparison: false },
                 },
             ],
         });
@@ -144,7 +144,7 @@ impl framework::Example for Skybox {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare_function: wgpu::CompareFunction::Always,
+            compare: None,
         });
 
         let paths: [&'static [u8]; 6] = [
@@ -201,18 +201,14 @@ impl framework::Example for Skybox {
                 wgpu::BufferCopyView {
                     buffer: &image_buf,
                     offset: 0,
-                    row_pitch: 4 * image_width,
-                    image_height,
+                    bytes_per_row: 4 * image_width,
+                    rows_per_image: 0,
                 },
                 wgpu::TextureCopyView {
                     texture: &texture,
                     mip_level: 0,
                     array_layer: i as u32,
-                    origin: wgpu::Origin3d {
-                        x: 0,
-                        y: 0,
-                        z: 0,
-                    },
+                    origin: wgpu::Origin3d::ZERO,
                 },
                 texture_extent,
             );
