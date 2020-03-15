@@ -321,7 +321,7 @@ impl<W: Write> Writer<W> {
         module: &'a crate::Module,
     ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error> {
         let expression = &expressions[expr_handle];
-        log::trace!("expression {:?}", expression);
+        log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
             crate::Expression::AccessIndex { base, index } => {
                 match *self.put_expression(base, expressions, module)?.borrow() {
@@ -434,6 +434,7 @@ impl<W: Write> Writer<W> {
                 let ty_right = self.put_expression(right, expressions, module)?;
                 write!(self.out, ")")?;
                 Ok(match (ty_left.borrow(), ty_right.borrow()) {
+                    (&crate::TypeInner::Scalar { .. }, &crate::TypeInner::Vector { size, kind, width }) |
                     (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Scalar { .. }) =>
                         MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
                     other => panic!("Unable to infer Mul for {:?}", other),
