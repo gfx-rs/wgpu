@@ -142,7 +142,7 @@ pub extern "C" fn wgpu_server_buffer_destroy(global: &Global, self_id: id::Buffe
 pub extern "C" fn wgpu_server_device_create_encoder(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::command::CommandEncoderDescriptor,
+    desc: &wgt::CommandEncoderDescriptor,
     new_id: id::CommandEncoderId,
 ) {
     gfx_select!(self_id => global.device_create_command_encoder(self_id, &desc, new_id));

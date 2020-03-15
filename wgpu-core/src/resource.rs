@@ -11,7 +11,7 @@ use crate::{
     Stored,
 };
 
-use wgt::{BufferAddress, BufferUsage, CompareFunction, TextureFormat};
+use wgt::{BufferAddress, BufferUsage, CompareFunction, TextureFormat, TextureUsage};
 use hal;
 use rendy_memory::MemoryBlock;
 
@@ -99,27 +99,6 @@ pub enum TextureDimension {
     D1,
     D2,
     D3,
-}
-
-bitflags::bitflags! {
-    #[repr(transparent)]
-    pub struct TextureUsage: u32 {
-        const COPY_SRC = 1;
-        const COPY_DST = 2;
-        const SAMPLED = 4;
-        const STORAGE = 8;
-        const OUTPUT_ATTACHMENT = 16;
-        const NONE = 0;
-        /// The combination of all read-only usages.
-        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits;
-        /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::COPY_DST.bits | Self::STORAGE.bits | Self::OUTPUT_ATTACHMENT.bits;
-        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
-        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
-        /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::READ_ALL.bits | Self::OUTPUT_ATTACHMENT.bits;
-        const UNINITIALIZED = 0xFFFF;
-    }
 }
 
 #[repr(C)]

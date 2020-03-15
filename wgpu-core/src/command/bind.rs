@@ -6,12 +6,11 @@ use crate::{
     binding_model::BindGroup,
     hub::GfxBackend,
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId},
-    DynamicOffset,
     Stored,
 };
 
 use smallvec::{smallvec, SmallVec};
-
+use wgt::DynamicOffset;
 use std::slice;
 
 pub const DEFAULT_BIND_GROUPS: usize = 4;

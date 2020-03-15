@@ -2,8 +2,25 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model, command, resource, Color, Extent3d, Features, Origin3d};
-use wgt::{BlendDescriptor, BlendFactor, ColorStateDescriptor, ColorWrite, CompareFunction, CullMode, DepthStencilStateDescriptor, FrontFace, IndexFormat, PrimitiveTopology, StencilOperation, StencilStateFaceDescriptor, TextureFormat, RasterizationStateDescriptor, VertexFormat};
+use crate::{binding_model, resource, Extent3d, Features, Origin3d};
+use wgt::{
+    BlendDescriptor,
+    BlendFactor,
+    Color,
+    ColorStateDescriptor,
+    ColorWrite,
+    CompareFunction,
+    CullMode,
+    DepthStencilStateDescriptor,
+    FrontFace,
+    IndexFormat,
+    PrimitiveTopology,
+    StencilOperation,
+    StencilStateFaceDescriptor,
+    TextureFormat,
+    RasterizationStateDescriptor,
+    VertexFormat,
+};
 
 pub fn map_buffer_usage(
     usage: wgt::BufferUsage,
@@ -47,10 +64,10 @@ pub fn map_buffer_usage(
 }
 
 pub fn map_texture_usage(
-    usage: resource::TextureUsage,
+    usage: wgt::TextureUsage,
     aspects: hal::format::Aspects,
 ) -> hal::image::Usage {
-    use crate::resource::TextureUsage as W;
+    use wgt::TextureUsage as W;
     use hal::image::Usage as U;
 
     let mut value = U::empty();
@@ -524,10 +541,10 @@ pub fn map_buffer_state(usage: wgt::BufferUsage) -> hal::buffer::State {
 }
 
 pub fn map_texture_state(
-    usage: resource::TextureUsage,
+    usage: wgt::TextureUsage,
     aspects: hal::format::Aspects,
 ) -> hal::image::State {
-    use crate::resource::TextureUsage as W;
+    use wgt::TextureUsage as W;
     use hal::image::{Access as A, Layout as L};
 
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
@@ -567,17 +584,17 @@ pub fn map_texture_state(
 }
 
 pub fn map_load_store_ops(
-    load: command::LoadOp,
-    store: command::StoreOp,
+    load: wgt::LoadOp,
+    store: wgt::StoreOp,
 ) -> hal::pass::AttachmentOps {
     hal::pass::AttachmentOps {
         load: match load {
-            command::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
-            command::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
+            wgt::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
+            wgt::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
         },
         store: match store {
-            command::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
-            command::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
+            wgt::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
+            wgt::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
         },
     }
 }

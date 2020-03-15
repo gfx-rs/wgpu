@@ -37,13 +37,12 @@ use crate::{
     hub::{GfxBackend, Global, IdentityFilter, Token},
     id::{DeviceId, SwapChainId, TextureViewId},
     resource,
-    Extent3d,
     Features,
     LifeGuard,
     Stored,
 };
 
-use wgt::TextureFormat;
+use wgt::SwapChainDescriptor;
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
 
 
@@ -61,73 +60,26 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) acquired_framebuffers: Vec<B::Framebuffer>,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug)]
-pub enum PresentMode {
-    /// The presentation engine does **not** wait for a vertical blanking period and 
-    /// the request is presented immediately. This is a low-latency presentation mode,
-    /// but visible tearing may be observed. Will fallback to `Fifo` if unavailable on the
-    /// selected  platform and backend. Not optimal for mobile. 
-    Immediate = 0,
-    /// The presentation engine waits for the next vertical blanking period to update
-    /// the current image, but frames may be submitted without delay. This is a low-latency 
-    /// presentation mode and visible tearing will **not** be observed. Will fallback to `Fifo`
-    /// if unavailable on the selected platform and backend. Not optimal for mobile.
-    Mailbox = 1,
-    /// The presentation engine waits for the next vertical blanking period to update 
-    /// the current image. The framerate will be capped at the display refresh rate, 
-    /// corresponding to the `VSync`. Tearing cannot be observed. Optimal for mobile.
-    Fifo = 2,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-pub struct SwapChainDescriptor {
-    pub usage: resource::TextureUsage,
-    pub format: TextureFormat,
-    pub width: u32,
-    pub height: u32,
-    pub present_mode: PresentMode,
-}
-
-impl SwapChainDescriptor {
-    pub(crate) fn to_hal(
-        &self,
-        num_frames: u32,
-        features: Features,
-    ) -> hal::window::SwapchainConfig {
-        let mut config = hal::window::SwapchainConfig::new(
-            self.width,
-            self.height,
-            conv::map_texture_format(self.format, features),
-            num_frames,
-        );
-        //TODO: check for supported
-        config.image_usage = conv::map_texture_usage(self.usage, hal::format::Aspects::COLOR);
-        config.composite_alpha_mode = hal::window::CompositeAlphaMode::OPAQUE;
-        config.present_mode = match self.present_mode {
-            PresentMode::Immediate => hal::window::PresentMode::IMMEDIATE,
-            PresentMode::Mailbox => hal::window::PresentMode::MAILBOX,
-            PresentMode::Fifo => hal::window::PresentMode::FIFO,
-        };
-        config
-    }
-
-    pub fn to_texture_desc(&self) -> resource::TextureDescriptor {
-        resource::TextureDescriptor {
-            size: Extent3d {
-                width: self.width,
-                height: self.height,
-                depth: 1,
-            },
-            mip_level_count: 1,
-            array_layer_count: 1,
-            sample_count: 1,
-            dimension: resource::TextureDimension::D2,
-            format: self.format,
-            usage: self.usage,
-        }
-    }
+pub(crate) fn swap_chain_descriptor_to_hal(
+    desc: &SwapChainDescriptor,
+    num_frames: u32,
+    features: Features,
+) -> hal::window::SwapchainConfig {
+    let mut config = hal::window::SwapchainConfig::new(
+        desc.width,
+        desc.height,
+        conv::map_texture_format(desc.format, features),
+        num_frames,
+    );
+    //TODO: check for supported
+    config.image_usage = conv::map_texture_usage(desc.usage, hal::format::Aspects::COLOR);
+    config.composite_alpha_mode = hal::window::CompositeAlphaMode::OPAQUE;
+    config.present_mode = match desc.present_mode {
+        wgt::PresentMode::Immediate => hal::window::PresentMode::IMMEDIATE,
+        wgt::PresentMode::Mailbox => hal::window::PresentMode::MAILBOX,
+        wgt::PresentMode::Fifo => hal::window::PresentMode::FIFO,
+    };
+    config
 }
 
 #[repr(C)]
@@ -166,7 +118,7 @@ impl<F: IdentityFilter<TextureViewId>> Global<F> {
                 }
                 Err(e) => {
                     log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
-                    let desc = sc.desc.to_hal(sc.num_frames, device.features);
+                    let desc = swap_chain_descriptor_to_hal(&sc.desc, sc.num_frames, device.features);
                     unsafe {
                         suf.configure_swapchain(&device.raw, desc).unwrap();
                         suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000).unwrap()

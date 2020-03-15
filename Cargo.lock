@@ -742,6 +742,7 @@ name = "wgpu-types"
 version = "0.1.0"
 dependencies = [
  "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "peek-poke 0.2.0 (git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075)",
  "serde 1.0.103 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 

@@ -301,7 +301,7 @@ pub extern "C" fn wgpu_device_create_shader_module(
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_command_encoder(
     device_id: id::DeviceId,
-    desc: Option<&core::command::CommandEncoderDescriptor>,
+    desc: Option<&wgt::CommandEncoderDescriptor>,
 ) -> id::CommandEncoderId {
     let desc = &desc.cloned().unwrap_or_default();
     gfx_select!(device_id => GLOBAL.device_create_command_encoder(device_id, desc, PhantomData))
@@ -357,7 +357,7 @@ pub extern "C" fn wgpu_device_create_compute_pipeline(
 pub extern "C" fn wgpu_device_create_swap_chain(
     device_id: id::DeviceId,
     surface_id: id::SurfaceId,
-    desc: &core::swap_chain::SwapChainDescriptor,
+    desc: &wgt::SwapChainDescriptor,
 ) -> id::SwapChainId {
     gfx_select!(device_id => GLOBAL.device_create_swap_chain(device_id, surface_id, desc))
 }
