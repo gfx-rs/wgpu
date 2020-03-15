@@ -5,6 +5,8 @@
 use std::{io, slice};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
+#[cfg(feature = "peek-poke")]
+use peek_poke::{PeekCopy, Poke};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -539,4 +541,153 @@ bitflags::bitflags! {
 pub struct BufferDescriptor {
     pub size: BufferAddress,
     pub usage: BufferUsage,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Default)]
+pub struct CommandEncoderDescriptor {
+    // MSVC doesn't allow zero-sized structs
+    // We can remove this when we actually have a field
+    pub todo: u32,
+}
+
+pub type DynamicOffset = u32;
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug)]
+pub enum PresentMode {
+    /// The presentation engine does **not** wait for a vertical blanking period and 
+    /// the request is presented immediately. This is a low-latency presentation mode,
+    /// but visible tearing may be observed. Will fallback to `Fifo` if unavailable on the
+    /// selected  platform and backend. Not optimal for mobile. 
+    Immediate = 0,
+    /// The presentation engine waits for the next vertical blanking period to update
+    /// the current image, but frames may be submitted without delay. This is a low-latency 
+    /// presentation mode and visible tearing will **not** be observed. Will fallback to `Fifo`
+    /// if unavailable on the selected platform and backend. Not optimal for mobile.
+    Mailbox = 1,
+    /// The presentation engine waits for the next vertical blanking period to update 
+    /// the current image. The framerate will be capped at the display refresh rate, 
+    /// corresponding to the `VSync`. Tearing cannot be observed. Optimal for mobile.
+    Fifo = 2,
+}
+
+bitflags::bitflags! {
+    #[repr(transparent)]
+    pub struct TextureUsage: u32 {
+        const COPY_SRC = 1;
+        const COPY_DST = 2;
+        const SAMPLED = 4;
+        const STORAGE = 8;
+        const OUTPUT_ATTACHMENT = 16;
+        const NONE = 0;
+        /// The combination of all read-only usages.
+        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits;
+        /// The combination of all write-only and read-write usages.
+        const WRITE_ALL = Self::COPY_DST.bits | Self::STORAGE.bits | Self::OUTPUT_ATTACHMENT.bits;
+        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
+        /// still need to be pipeline barriers inserted for synchronization.
+        const ORDERED = Self::READ_ALL.bits | Self::OUTPUT_ATTACHMENT.bits;
+        const UNINITIALIZED = 0xFFFF;
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct SwapChainDescriptor {
+    pub usage: TextureUsage,
+    pub format: TextureFormat,
+    pub width: u32,
+    pub height: u32,
+    pub present_mode: PresentMode,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+pub enum LoadOp {
+    Clear = 0,
+    Load = 1,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+pub enum StoreOp {
+    Clear = 0,
+    Store = 1,
+}
+
+#[repr(C)]
+#[derive(Debug)]
+#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+pub struct RenderPassColorAttachmentDescriptorBase<T, R> {
+    pub attachment: T,
+    pub resolve_target: R,
+    pub load_op: LoadOp,
+    pub store_op: StoreOp,
+    pub clear_color: Color,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
+    pub attachment: T,
+    pub depth_load_op: LoadOp,
+    pub depth_store_op: StoreOp,
+    pub clear_depth: f32,
+    pub stencil_load_op: LoadOp,
+    pub stencil_store_op: StoreOp,
+    pub clear_stencil: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+pub struct Color {
+    pub r: f64,
+    pub g: f64,
+    pub b: f64,
+    pub a: f64,
+}
+
+impl Color {
+    pub const TRANSPARENT: Self = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 0.0,
+    };
+    pub const BLACK: Self = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const WHITE: Self = Color {
+        r: 1.0,
+        g: 1.0,
+        b: 1.0,
+        a: 1.0,
+    };
+    pub const RED: Self = Color {
+        r: 1.0,
+        g: 0.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const GREEN: Self = Color {
+        r: 0.0,
+        g: 1.0,
+        b: 0.0,
+        a: 1.0,
+    };
+    pub const BLUE: Self = Color {
+        r: 0.0,
+        g: 0.0,
+        b: 1.0,
+        a: 1.0,
+    };
 }

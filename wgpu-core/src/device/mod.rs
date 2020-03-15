@@ -367,7 +367,7 @@ impl<B: GfxBackend> Device<B> {
         match desc.format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
                 assert!(!desc.usage.intersects(
-                    resource::TextureUsage::COPY_SRC | resource::TextureUsage::COPY_DST
+                    wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST
                 ));
             }
             _ => {}
@@ -1098,12 +1098,12 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
                     binding_model::BindingResource::TextureView(id) => {
                         let (usage, image_layout) = match decl.ty {
                             binding_model::BindingType::SampledTexture => (
-                                resource::TextureUsage::SAMPLED,
+                                wgt::TextureUsage::SAMPLED,
                                 hal::image::Layout::ShaderReadOnlyOptimal,
                             ),
                             binding_model::BindingType::ReadonlyStorageTexture |
                             binding_model::BindingType::WriteonlyStorageTexture => {
-                                (resource::TextureUsage::STORAGE, hal::image::Layout::General)
+                                (wgt::TextureUsage::STORAGE, hal::image::Layout::General)
                             }
                             _ => panic!("Mismatched texture binding for {:?}", decl),
                         };
@@ -1235,7 +1235,7 @@ impl<F: IdentityFilter<id::CommandEncoderId>> Global<F> {
     pub fn device_create_command_encoder<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        _desc: &command::CommandEncoderDescriptor,
+        _desc: &wgt::CommandEncoderDescriptor,
         id_in: F::Input,
     ) -> id::CommandEncoderId {
         let hub = B::hub(self);
@@ -1848,7 +1848,7 @@ impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
         &self,
         device_id: id::DeviceId,
         surface_id: id::SurfaceId,
-        desc: &swap_chain::SwapChainDescriptor,
+        desc: &wgt::SwapChainDescriptor,
     ) -> id::SwapChainId {
         log::info!("creating swap chain {:?}", desc);
         let hub = B::hub(self);
@@ -1872,7 +1872,7 @@ impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
         let num_frames = swap_chain::DESIRED_NUM_FRAMES
             .max(*caps.image_count.start())
             .min(*caps.image_count.end());
-        let mut config = desc.to_hal(num_frames, device.features);
+        let mut config = swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.features);
         if let Some(formats) = formats {
             assert!(
                 formats.contains(&config.format),

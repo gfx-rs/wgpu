@@ -35,6 +35,7 @@ use std::{
     slice,
     thread::ThreadId,
 };
+use wgt::RenderPassColorAttachmentDescriptorBase;
 
 
 #[derive(Clone, Copy, Debug, peek_poke::PeekCopy, peek_poke::Poke)]
@@ -192,14 +193,6 @@ impl<B: GfxBackend> CommandBuffer<B> {
             );
         }
     }
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Default)]
-pub struct CommandEncoderDescriptor {
-    // MSVC doesn't allow zero-sized structs
-    // We can remove this when we actually have a field
-    pub todo: u32,
 }
 
 #[repr(C)]

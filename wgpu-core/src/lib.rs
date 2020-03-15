@@ -31,7 +31,6 @@ pub mod swap_chain;
 pub mod track;
 
 pub use hal::pso::read_spirv;
-use peek_poke::{PeekCopy, Poke};
 
 use std::{
     os::raw::c_char,
@@ -43,7 +42,6 @@ type SubmissionIndex = usize;
 type Index = u32;
 type Epoch = u32;
 
-pub type DynamicOffset = u32;
 pub type RawString = *const c_char;
 
 //TODO: make it private. Currently used for swapchain creation impl.
@@ -108,54 +106,6 @@ impl LifeGuard {
 struct Stored<T> {
     value: T,
     ref_count: RefCount,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
-pub struct Color {
-    pub r: f64,
-    pub g: f64,
-    pub b: f64,
-    pub a: f64,
-}
-
-impl Color {
-    pub const TRANSPARENT: Self = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-        a: 0.0,
-    };
-    pub const BLACK: Self = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const WHITE: Self = Color {
-        r: 1.0,
-        g: 1.0,
-        b: 1.0,
-        a: 1.0,
-    };
-    pub const RED: Self = Color {
-        r: 1.0,
-        g: 0.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const GREEN: Self = Color {
-        r: 0.0,
-        g: 1.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const BLUE: Self = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 1.0,
-        a: 1.0,
-    };
 }
 
 #[repr(C)]

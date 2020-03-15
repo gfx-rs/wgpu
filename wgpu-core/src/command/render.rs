@@ -21,14 +21,23 @@ use crate::{
     hub::{GfxBackend, Global, Token},
     id,
     pipeline::PipelineFlags,
-    resource::{TextureUsage, TextureViewInner},
+    resource::TextureViewInner,
     track::TrackerSet,
-    Color,
-    DynamicOffset,
     Stored,
 };
 
-use wgt::{BufferAddress, BufferUsage, IndexFormat, InputStepMode};
+use wgt::{
+    BufferAddress,
+    BufferUsage,
+    Color,
+    DynamicOffset,
+    IndexFormat,
+    InputStepMode,
+    LoadOp,
+    RenderPassColorAttachmentDescriptorBase,
+    RenderPassDepthStencilAttachmentDescriptorBase,
+    TextureUsage,
+};
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekCopy, Poke};
@@ -43,45 +52,8 @@ use std::{
     slice,
 };
 
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PeekCopy, Poke)]
-pub enum LoadOp {
-    Clear = 0,
-    Load = 1,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq, PeekCopy, Poke)]
-pub enum StoreOp {
-    Clear = 0,
-    Store = 1,
-}
-
-#[repr(C)]
-#[derive(Debug, PeekCopy, Poke)]
-pub struct RenderPassColorAttachmentDescriptorBase<T, R> {
-    pub attachment: T,
-    pub resolve_target: R,
-    pub load_op: LoadOp,
-    pub store_op: StoreOp,
-    pub clear_color: Color,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, PeekCopy, Poke)]
-pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
-    pub attachment: T,
-    pub depth_load_op: LoadOp,
-    pub depth_store_op: StoreOp,
-    pub clear_depth: f32,
-    pub stencil_load_op: LoadOp,
-    pub stencil_store_op: StoreOp,
-    pub clear_stencil: u32,
-}
-
 //Note: this could look better if `cbindgen` wasn't confused by &T used in place of
-// a generic paramter, it's not able to mange
+// a generic parameter, it's not able to manage
 pub type OptionRef<'a, T> = Option<&'a T>;
 pub type RenderPassColorAttachmentDescriptor<'a> =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId, OptionRef<'a, id::TextureViewId>>;
@@ -1156,11 +1128,9 @@ pub mod render_ffi {
     };
     use crate::{
         id,
-        Color,
-        DynamicOffset,
         RawString,
     };
-    use wgt::BufferAddress;
+    use wgt::{BufferAddress, Color, DynamicOffset};
     use std::{convert::TryInto, slice};
 
     /// # Safety
