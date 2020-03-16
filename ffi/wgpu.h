@@ -465,8 +465,8 @@ typedef struct {
 
 typedef struct {
   WGPUBindGroupLayoutId layout;
-  const WGPUBindGroupEntry *bindings;
-  uintptr_t bindings_length;
+  const WGPUBindGroupEntry *entries;
+  uintptr_t entries_length;
 } WGPUBindGroupDescriptor;
 
 typedef uint32_t WGPUShaderStage;
@@ -486,8 +486,8 @@ typedef struct {
 } WGPUBindGroupLayoutEntry;
 
 typedef struct {
-  const WGPUBindGroupLayoutEntry *bindings;
-  uintptr_t bindings_length;
+  const WGPUBindGroupLayoutEntry *entries;
+  uintptr_t entries_length;
 } WGPUBindGroupLayoutDescriptor;
 
 typedef uint32_t WGPUBufferUsage;

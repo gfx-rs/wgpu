@@ -876,8 +876,8 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
     ) -> id::BindGroupLayoutId {
         let mut token = Token::root();
         let hub = B::hub(self);
-        let bindings = unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length) };
-        let bindings_map: FastHashMap<_, _> = bindings
+        let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
+        let entry_map: FastHashMap<_, _> = entries
             .iter()
             .cloned()
             .map(|b| (b.binding, b))
@@ -890,14 +890,14 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
             let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
             let bind_group_layout_id = bgl_guard
                 .iter(device_id.backend())
-                .find(|(_, bgl)| bgl.bindings == bindings_map);
+                .find(|(_, bgl)| bgl.entries == entry_map);
 
             if let Some((id, _)) = bind_group_layout_id {
                 return id;
             }
         }
 
-        let raw_bindings = bindings
+        let raw_bindings = entries
             .iter()
             .map(|binding| hal::pso::DescriptorSetLayoutBinding {
                 binding: binding.binding,
@@ -918,9 +918,9 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
 
         let layout = binding_model::BindGroupLayout {
             raw,
-            bindings: bindings_map,
+            entries: entry_map,
             desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
-            dynamic_count: bindings.iter().filter(|b| b.has_dynamic_offset).count(),
+            dynamic_count: entries.iter().filter(|b| b.has_dynamic_offset).count(),
         };
 
         hub.bind_group_layouts
@@ -998,9 +998,9 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
         let device = &device_guard[device_id];
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
-        let bindings =
-            unsafe { slice::from_raw_parts(desc.bindings, desc.bindings_length as usize) };
-        assert_eq!(bindings.len(), bind_group_layout.bindings.len());
+        let entries =
+            unsafe { slice::from_raw_parts(desc.entries, desc.entries_length as usize) };
+        assert_eq!(entries.len(), bind_group_layout.entries.len());
 
         let desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
@@ -1028,8 +1028,8 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
 
             //TODO: group writes into contiguous sections
             let mut writes = Vec::new();
-            for b in bindings.iter() {
-                let decl = bind_group_layout.bindings.get(&b.binding)
+            for b in entries.iter() {
+                let decl = bind_group_layout.entries.get(&b.binding)
                     .expect("Failed to find binding declaration for binding");
                 let descriptor = match b.resource {
                     binding_model::BindingResource::Buffer(ref bb) => {

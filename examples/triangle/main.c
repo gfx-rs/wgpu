@@ -79,15 +79,15 @@ int main() {
     WGPUBindGroupLayoutId bind_group_layout =
         wgpu_device_create_bind_group_layout(device,
             &(WGPUBindGroupLayoutDescriptor){
-                .bindings = NULL,
-                .bindings_length = 0,
+                .entries = NULL,
+                .entries_length = 0,
             });
     WGPUBindGroupId bind_group =
         wgpu_device_create_bind_group(device,
             &(WGPUBindGroupDescriptor){
                 .layout = bind_group_layout,
-                .bindings = NULL,
-                .bindings_length = 0,
+                .entries = NULL,
+                .entries_length = 0,
             });
 
     WGPUBindGroupLayoutId bind_group_layouts[BIND_GROUP_LAYOUTS_LENGTH] = {
