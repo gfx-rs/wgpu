@@ -2,18 +2,18 @@ use std::{convert::TryInto as _, str::FromStr};
 use zerocopy::AsBytes as _;
 
 async fn run() {
-    env_logger::init();
+    let numbers = if std::env::args().len() == 1 {
+        let default = vec![1, 2, 3, 4];
+        log::info!("No numbers were provided, defaulting to {:?}", default);
+        default
+    } else {
+        std::env::args()
+            .skip(1)
+            .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
+            .collect()
+    };
 
-    // For now this just panics if you didn't pass numbers. Could add proper error handling.
-    if std::env::args().len() == 1 {
-        panic!("You must pass a list of positive integers!")
-    }
-    let numbers: Vec<u32> = std::env::args()
-        .skip(1)
-        .map(|s| u32::from_str(&s).expect("You must pass a list of positive integers!"))
-        .collect();
-
-    println!("Times: {:?}", execute_gpu(numbers).await);
+    log::info!("Times: {:?}", execute_gpu(numbers).await);
 }
 
 async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
@@ -26,6 +26,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         },
         wgpu::BackendBit::PRIMARY,
     )
+    .await
     .unwrap();
 
     let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
@@ -33,7 +34,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    });
+    })
+    .await;
 
     let cs = include_bytes!("shader.comp.spv");
     let cs_module =
@@ -108,6 +110,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 }
 
 fn main() {
+    env_logger::init();
     futures::executor::block_on(run());
 }
 

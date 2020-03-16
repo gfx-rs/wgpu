@@ -1,8 +1,7 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
-mod future;
-use future::GpuFutureCompletion;
-pub use future::GpuFuture;
+mod backend;
+use crate::backend::native_gpu_future;
 
 #[macro_use]
 mod macros;
@@ -12,6 +11,7 @@ use smallvec::SmallVec;
 
 use std::{
     ffi::CString,
+    future::Future,
     ops::Range,
     ptr,
     slice,
@@ -501,7 +501,7 @@ impl Adapter {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
-    pub fn request(options: &RequestAdapterOptions, backends: BackendBit) -> Option<Self> {
+    pub async fn request(options: &RequestAdapterOptions, backends: BackendBit) -> Option<Self> {
         unsafe extern "C" fn adapter_callback(
             id: wgc::id::AdapterId,
             user_data: *mut std::ffi::c_void,
@@ -527,7 +527,7 @@ impl Adapter {
     /// # Panics
     ///
     /// Panics if the extensions specified by `desc` are not supported by this adapter.
-    pub fn request_device(&self, desc: &DeviceDescriptor) -> (Device, Queue) {
+    pub async fn request_device(&self, desc: &DeviceDescriptor) -> (Device, Queue) {
         let device = Device {
             id: wgn::wgpu_adapter_request_device(self.id, Some(desc)),
             temp: Temp::default(),
@@ -910,22 +910,22 @@ impl<T> Drop for BufferAsyncMapping<T> {
 struct BufferMapReadFutureUserData
 {
     size: BufferAddress,
-    completion: GpuFutureCompletion<BufferMapReadResult>,
+    completion: native_gpu_future::GpuFutureCompletion<BufferMapReadResult>,
     buffer_id: wgc::id::BufferId,
 }
 
 struct BufferMapWriteFutureUserData
 {
     size: BufferAddress,
-    completion: GpuFutureCompletion<BufferMapWriteResult>,
+    completion: native_gpu_future::GpuFutureCompletion<BufferMapWriteResult>,
     buffer_id: wgc::id::BufferId,
 }
 
 impl Buffer {
     /// Map the buffer for reading. The result is returned in a future.
-    pub fn map_read(&self, start: BufferAddress, size: BufferAddress) -> GpuFuture<BufferMapReadResult>
+    pub fn map_read(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = crate::BufferMapReadResult>
     {
-        let (future, completion) = future::new_gpu_future(self.device_id);
+        let (future, completion) = native_gpu_future::new_gpu_future(self.device_id);
 
         extern "C" fn buffer_map_read_future_wrapper(
             status: wgc::resource::BufferMapAsyncStatus,
@@ -963,9 +963,9 @@ impl Buffer {
     }
 
     /// Map the buffer for writing. The result is returned in a future.
-    pub fn map_write(&self, start: BufferAddress, size: BufferAddress) -> GpuFuture<BufferMapWriteResult>
+    pub fn map_write(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = crate::BufferMapWriteResult>
     {
-        let (future, completion) = future::new_gpu_future(self.device_id);
+        let (future, completion) = native_gpu_future::new_gpu_future(self.device_id);
 
         extern "C" fn buffer_map_write_future_wrapper(
             status: wgc::resource::BufferMapAsyncStatus,

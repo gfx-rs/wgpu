@@ -52,7 +52,7 @@ pub trait Example: 'static + Sized {
     ) -> wgpu::CommandBuffer;
 }
 
-pub fn run<E: Example>(title: &str) {
+async fn run_async<E: Example>(title: &str) {
     use winit::{
         event,
         event_loop::{ControlFlow, EventLoop},
@@ -105,6 +105,7 @@ pub fn run<E: Example>(title: &str) {
         },
         wgpu::BackendBit::PRIMARY,
     )
+    .await
     .unwrap();
 
     let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
@@ -112,7 +113,8 @@ pub fn run<E: Example>(title: &str) {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    });
+    })
+    .await;
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -178,6 +180,10 @@ pub fn run<E: Example>(title: &str) {
             _ => {}
         }
     });
+}
+
+pub fn run<E: Example>(title: &str) {
+    futures::executor::block_on(run_async::<E>(title));
 }
 
 // This allows treating the framework as a standalone example,
