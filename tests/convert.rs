@@ -27,5 +27,13 @@ fn convert_quad() {
 
 #[test]
 fn convert_boids() {
-    let _module = load_wgsl("boids");
+    let module = load_wgsl("boids");
+    {
+        use naga::back::msl;
+        let binding_map = msl::BindingMap::default();
+        let options = msl::Options {
+            binding_map: &binding_map,
+        };
+        msl::write_string(&module, options).unwrap();
+    }
 }

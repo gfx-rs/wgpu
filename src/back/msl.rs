@@ -48,6 +48,18 @@ enum ResolvedBinding {
     Resource(BindTarget),
 }
 
+struct Level(usize);
+impl Level {
+    fn next(&self) -> Self {
+        Level(self.0 + 1)
+    }
+}
+impl Display for Level {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
+        (0 .. self.0).map(|_| formatter.write_str("\t")).collect()
+    }
+}
+
 #[derive(Debug)]
 pub enum Error {
     Format(FmtError),
@@ -118,6 +130,10 @@ impl Indexed for crate::Handle<crate::Type> {
 }
 impl Indexed for crate::Handle<crate::GlobalVariable> {
     const CLASS: &'static str = "global";
+    fn id(&self) -> usize { self.index() }
+}
+impl Indexed for crate::Handle<crate::LocalVariable> {
+    const CLASS: &'static str = "local";
     fn id(&self) -> usize { self.index() }
 }
 impl Indexed for crate::Handle<crate::Function> {
@@ -310,15 +326,27 @@ impl crate::Module {
 impl<W: Write> Writer<W> {
     fn put_expression<'a>(
         &mut self,
-        expr_handle: crate::Handle<crate::Expression>,
-        expressions: &crate::Arena<crate::Expression>,
+        expr_handle: Handle<crate::Expression>,
+        function: &crate::Function,
         module: &'a crate::Module,
     ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error> {
-        let expression = &expressions[expr_handle];
+        let expression = &function.expressions[expr_handle];
         log::trace!("expression {:?} = {:?}", expr_handle, expression);
         match *expression {
+            crate::Expression::Access { base, index } => {
+                match *self.put_expression(base, function, module)?.borrow() {
+                    crate::TypeInner::Array { base, .. } => {
+                        //TODO: add size check
+                        self.out.write_str("[")?;
+                        self.put_expression(index, function, module)?;
+                        self.out.write_str("]")?;
+                        Ok(module.borrow_type(base))
+                    }
+                    ref other => panic!("Unexpected indexing of {:?}", other),
+                }
+            }
             crate::Expression::AccessIndex { base, index } => {
-                match *self.put_expression(base, expressions, module)?.borrow() {
+                match *self.put_expression(base, function, module)?.borrow() {
                     crate::TypeInner::Struct { ref members } => {
                         let member = &members[index as usize];
                         let name = member.name.or_index(MemberIndex(index as usize));
@@ -374,7 +402,7 @@ impl<W: Write> Writer<W> {
                             if i != 0 {
                                 write!(self.out, ",")?;
                             }
-                            self.put_expression(handle, expressions, module)?;
+                            self.put_expression(handle, function, module)?;
                         }
                         write!(self.out, ")")?;
                     }
@@ -405,49 +433,185 @@ impl<W: Write> Writer<W> {
                 write!(self.out, "{}", name)?;
                 Ok(MaybeOwned::Borrowed(inner))
             }
+            crate::Expression::LocalVariable(handle) => {
+                let var = &function.local_variables[handle];
+                let inner = &module.types[var.ty].inner;
+                let name = var.name.or_index(handle);
+                write!(self.out, "{}", name)?;
+                Ok(MaybeOwned::Borrowed(inner))
+            }
             crate::Expression::Load { pointer } => {
                 //write!(self.out, "*")?;
-                match *self.put_expression(pointer, expressions, module)?.borrow() {
+                match *self.put_expression(pointer, function, module)?.borrow() {
                     crate::TypeInner::Pointer { base, .. } => {
                         Ok(module.borrow_type(base))
                     }
                     ref other => panic!("Unexpected load pointer {:?}", other),
                 }
             }
+            crate::Expression::Unary { op, expr } => {
+                let op_str = match op {
+                    crate::UnaryOperator::Negate => "-",
+                    crate::UnaryOperator::Not => "!",
+                };
+                write!(self.out, "{}", op_str)?;
+                self.put_expression(expr, function, module)
+            }
             crate::Expression::Binary { op, left, right } => {
-                let op_ch = match op {
-                    crate::BinaryOperator::Add => '+',
-                    crate::BinaryOperator::Multiply => '*',
-                    crate::BinaryOperator::Divide => '/',
-                    crate::BinaryOperator::Modulo => '%',
+                let op_str = match op {
+                    crate::BinaryOperator::Add => "+",
+                    crate::BinaryOperator::Subtract => "-",
+                    crate::BinaryOperator::Multiply => "*",
+                    crate::BinaryOperator::Divide => "/",
+                    crate::BinaryOperator::Modulo => "%",
+                    crate::BinaryOperator::Equal => "==",
+                    crate::BinaryOperator::NotEqual => "!=",
+                    crate::BinaryOperator::Less => "<",
+                    crate::BinaryOperator::LessEqual => "<=",
+                    crate::BinaryOperator::Greater => "==",
+                    crate::BinaryOperator::GreaterEqual => ">=",
                     _ => panic!("Unsupported binary op {:?}", op),
                 };
                 write!(self.out, "(")?;
-                let ty_left = self.put_expression(left, expressions, module)?;
-                write!(self.out, " {} ", op_ch)?;
-                let ty_right = self.put_expression(right, expressions, module)?;
+                let ty_left = self.put_expression(left, function, module)?;
+                write!(self.out, " {} ", op_str)?;
+                let ty_right = self.put_expression(right, function, module)?;
                 write!(self.out, ")")?;
-                Ok(match (ty_left.borrow(), ty_right.borrow()) {
-                    (&crate::TypeInner::Scalar { .. }, &crate::TypeInner::Vector { size, kind, width }) |
-                    (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Scalar { .. }) =>
-                        MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
-                    other => panic!("Unable to infer Mul for {:?}", other),
+
+                Ok(if op_str.len() == 1 {
+                    match (ty_left.borrow(), ty_right.borrow()) {
+                        (&crate::TypeInner::Scalar { kind, width }, &crate::TypeInner::Scalar { .. }) =>
+                            MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }),
+                        (&crate::TypeInner::Scalar { .. }, &crate::TypeInner::Vector { size, kind, width }) |
+                        (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Scalar { .. }) |
+                        (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Vector { .. }) =>
+                            MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
+                        other => panic!("Unable to infer {:?} for {:?}", op, other),
+                    }
+                } else {
+                    MaybeOwned::Owned(crate::TypeInner::Scalar { kind: crate::ScalarKind::Bool, width: 1 })
                 })
             }
             crate::Expression::ImageSample { image, sampler, coordinate } => {
-                let ty_image = self.put_expression(image, expressions, module)?;
+                let ty_image = self.put_expression(image, function, module)?;
                 write!(self.out, ".sample(")?;
-                self.put_expression(sampler, expressions, module)?;
+                self.put_expression(sampler, function, module)?;
                 write!(self.out, ", ")?;
-                self.put_expression(coordinate, expressions, module)?;
+                self.put_expression(coordinate, function, module)?;
                 write!(self.out, ")")?;
                 match *ty_image.borrow() {
                     crate::TypeInner::Image { base, .. } => Ok(module.borrow_type(base)),
                     ref other => panic!("Unexpected image type {:?}", other),
                 }
             }
+            crate::Expression::Call { ref name, ref arguments } => {
+                match name.as_str() {
+                    "distance" => {
+                        write!(self.out, "distance(")?;
+                        let result = match *self.put_expression(arguments[0], function, module)?.borrow() {
+                            crate::TypeInner::Vector { kind, width, .. } => crate::TypeInner::Scalar { kind, width },
+                            ref other => panic!("Unexpected distance argument {:?}", other),
+                        };
+                        write!(self.out, ", ")?;
+                        self.put_expression(arguments[1], function, module)?;
+                        write!(self.out, ")")?;
+                        Ok(MaybeOwned::Owned(result))
+                    }
+                    "length" => {
+                        write!(self.out, "length(")?;
+                        let result = match *self.put_expression(arguments[0], function, module)?.borrow() {
+                            crate::TypeInner::Vector { kind, width, .. } => crate::TypeInner::Scalar { kind, width },
+                            ref other => panic!("Unexpected distance argument {:?}", other),
+                        };
+                        write!(self.out, ")")?;
+                        Ok(MaybeOwned::Owned(result))
+                    }
+                    "normalize" => {
+                        write!(self.out, "normalize(")?;
+                        let result = self.put_expression(arguments[0], function, module)?;
+                        write!(self.out, ")")?;
+                        Ok(result)
+                    }
+                    "fclamp" => {
+                        write!(self.out, "fclamp(")?;
+                        let result = self.put_expression(arguments[0], function, module)?;
+                        write!(self.out, ")")?;
+                        Ok(result)
+                    }
+                    _ => panic!("Unsupported call to '{}'", name),
+                }
+            }
             ref other => panic!("Unsupported {:?}", other),
         }
+    }
+
+    fn put_statement<'a>(
+        &mut self,
+        level: Level,
+        statement: &crate::Statement,
+        function: &crate::Function,
+        is_entry_point: bool,
+        module: &'a crate::Module,
+    ) -> Result<(), Error> {
+        log::trace!("statement[{}] {:?}", level.0, statement);
+        match *statement {
+            crate::Statement::Empty => {}
+            crate::Statement::If { condition, ref accept, ref reject } => {
+                write!(self.out, "{}if (", level)?;
+                self.put_expression(condition, function, module)?;
+                writeln!(self.out, ") {{")?;
+                for s in accept {
+                    self.put_statement(level.next(), s, function, is_entry_point, module)?;
+                }
+                if !reject.is_empty() {
+                    writeln!(self.out, "{}}} else {{", level)?;
+                    for s in reject {
+                        self.put_statement(level.next(), s, function, is_entry_point, module)?;
+                    }
+                }
+                writeln!(self.out, "{}}}", level)?;
+            }
+            crate::Statement::Loop { ref body, ref continuing } => {
+                writeln!(self.out, "{}while(true) {{", level)?;
+                for s in body {
+                    self.put_statement(level.next(), s, function, is_entry_point, module)?;
+                }
+                if !continuing.is_empty() {
+                    //TODO
+                }
+                writeln!(self.out, "{}}}", level)?;
+            }
+            crate::Statement::Store { pointer, value } => {
+                //write!(self.out, "\t*")?;
+                write!(self.out, "{}", level)?;
+                self.put_expression(pointer, function, module)?;
+                write!(self.out, " = ")?;
+                self.put_expression(value, function, module)?;
+                writeln!(self.out, ";")?;
+            }
+            crate::Statement::Break => {
+                writeln!(self.out, "{}break;", level)?;
+            }
+            crate::Statement::Continue => {
+                writeln!(self.out, "{}continue;", level)?;
+            }
+            crate::Statement::Return { value } => {
+                write!(self.out, "{}return ", level)?;
+                match value {
+                    None if is_entry_point => self.out.write_str(NAME_OUTPUT)?,
+                    None => {}
+                    Some(expr_handle) if is_entry_point => {
+                        panic!("Unable to return value {:?} from an entry point!", expr_handle)
+                    }
+                    Some(expr_handle) => {
+                        self.put_expression(expr_handle, function, module)?;
+                    }
+                }
+                writeln!(self.out, ";")?;
+            }
+            _ => panic!("Unsupported {:?}", statement),
+        };
+        Ok(())
     }
 
     pub fn write(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
@@ -668,32 +832,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, "\t{} {};", output_name, NAME_OUTPUT)?;
             }
             for statement in fun.body.iter() {
-                log::trace!("statement {:?}", statement);
-                match *statement {
-                    crate::Statement::Store { pointer, value } => {
-                        //write!(self.out, "\t*")?;
-                        write!(self.out, "\t")?;
-                        self.put_expression(pointer, &fun.expressions, module)?;
-                        write!(self.out, " = ")?;
-                        self.put_expression(value, &fun.expressions, module)?;
-                        writeln!(self.out, ";")?;
-                    }
-                    crate::Statement::Return { value } => {
-                        write!(self.out, "\treturn ")?;
-                        match (value, exec_model) {
-                            (None, None) => (),
-                            (None, Some(_)) => self.out.write_str(NAME_OUTPUT)?,
-                            (Some(expr_handle), None) => {
-                                self.put_expression(expr_handle, &fun.expressions, module)?;
-                            }
-                            (Some(expr_handle), Some(_)) => {
-                                panic!("Unable to return value {:?} from an entry point!", expr_handle)
-                            }
-                        }
-                        writeln!(self.out, ";")?;
-                    }
-                    _ => panic!("Unsupported {:?}", statement),
-                }
+                self.put_statement(Level(1), statement, fun, exec_model.is_some(), module)?;
             }
             writeln!(self.out, "}}")?;
         }
