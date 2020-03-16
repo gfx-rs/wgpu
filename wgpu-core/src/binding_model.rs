@@ -49,14 +49,14 @@ pub struct BindGroupLayoutEntry {
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupLayoutDescriptor {
-    pub bindings: *const BindGroupLayoutEntry,
-    pub bindings_length: usize,
+    pub entries: *const BindGroupLayoutEntry,
+    pub entries_length: usize,
 }
 
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
-    pub(crate) bindings: FastHashMap<u32, BindGroupLayoutEntry>,
+    pub(crate) entries: FastHashMap<u32, BindGroupLayoutEntry>,
     pub(crate) desc_ranges: DescriptorRanges,
     pub(crate) dynamic_count: usize,
 }
@@ -104,8 +104,8 @@ pub struct BindGroupEntry {
 #[derive(Debug)]
 pub struct BindGroupDescriptor {
     pub layout: BindGroupLayoutId,
-    pub bindings: *const BindGroupEntry,
-    pub bindings_length: usize,
+    pub entries: *const BindGroupEntry,
+    pub entries_length: usize,
 }
 
 #[derive(Debug)]
