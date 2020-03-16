@@ -1,39 +1,12 @@
-fn main() {
-    use winit::{
-        event,
-        event_loop::{ControlFlow, EventLoop},
-    };
+use winit::{
+    event::{Event, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::Window
+};
 
-    env_logger::init();
-    let event_loop = EventLoop::new();
-
-    #[cfg(not(feature = "gl"))]
-    let (window, size, surface) = {
-        let window = winit::window::Window::new(&event_loop).unwrap();
-        let size = window.inner_size();
-        let surface = wgpu::Surface::create(&window);
-        (window, size, surface)
-    };
-
-    #[cfg(feature = "gl")]
-    let (window, instance, size, surface) = {
-        let wb = winit::WindowBuilder::new();
-        let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
-        let context = cb.build_windowed(wb, &event_loop).unwrap();
-
-        let size = context
-            .window()
-            .get_inner_size()
-            .unwrap()
-            .to_physical(context.window().get_hidpi_factor());
-
-        let (context, window) = unsafe { context.make_current().unwrap().split() };
-
-        let instance = wgpu::Instance::new(context);
-        let surface = instance.get_surface();
-
-        (window, instance, size, surface)
-    };
+async fn run(event_loop: EventLoop<()>, window: Window) {
+    let size = window.inner_size();
+    let surface = wgpu::Surface::create(&window);
 
     let adapter = wgpu::Adapter::request(
         &wgpu::RequestAdapterOptions {
@@ -41,6 +14,7 @@ fn main() {
         },
         wgpu::BackendBit::PRIMARY,
     )
+    .await
     .unwrap();
 
     let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
@@ -48,7 +22,8 @@ fn main() {
             anisotropic_filtering: false,
         },
         limits: wgpu::Limits::default(),
-    });
+    })
+    .await;
 
     let vs = include_bytes!("shader.vert.spv");
     let vs_module =
@@ -113,13 +88,13 @@ fn main() {
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
         match event {
-            event::Event::MainEventsCleared => window.request_redraw(),
-            event::Event::WindowEvent { event: event::WindowEvent::Resized(size), .. } => {
+            Event::MainEventsCleared => window.request_redraw(),
+            Event::WindowEvent { event: WindowEvent::Resized(size), .. } => {
                 sc_desc.width = size.width;
                 sc_desc.height = size.height;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
             }
-            event::Event::RedrawRequested(_) => {
+            Event::RedrawRequested(_) => {
                 let frame = swap_chain
                     .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
@@ -143,11 +118,17 @@ fn main() {
 
                 queue.submit(&[encoder.finish()]);
             }
-            event::Event::WindowEvent {
-                event: event::WindowEvent::CloseRequested,
+            Event::WindowEvent {
+                event: WindowEvent::CloseRequested,
                 ..
             } => *control_flow = ControlFlow::Exit,
             _ => {}
         }
     });
+}
+fn main() {
+    let event_loop = EventLoop::new();
+    let window = winit::window::Window::new(&event_loop).unwrap();
+    env_logger::init();
+    futures::executor::block_on(run(event_loop, window));
 }
