@@ -181,6 +181,12 @@ typedef enum {
 } WGPUTextureAspect;
 
 typedef enum {
+  WGPUTextureComponentType_Float,
+  WGPUTextureComponentType_Sint,
+  WGPUTextureComponentType_Uint,
+} WGPUTextureComponentType;
+
+typedef enum {
   WGPUTextureDimension_D1,
   WGPUTextureDimension_D2,
   WGPUTextureDimension_D3,
@@ -482,6 +488,7 @@ typedef struct {
   bool multisampled;
   bool has_dynamic_offset;
   WGPUTextureViewDimension view_dimension;
+  WGPUTextureComponentType texture_component_type;
   WGPUTextureFormat storage_texture_format;
 } WGPUBindGroupLayoutEntry;
 
