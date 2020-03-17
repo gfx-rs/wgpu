@@ -3,8 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{range::RangedStates, PendingTransition, ResourceState, Unit};
-use crate::{device::MAX_MIP_LEVELS, id::TextureId, resource::TextureUsage};
+use crate::{device::MAX_MIP_LEVELS, id::TextureId};
 
+use wgt::TextureUsage;
 use arrayvec::ArrayVec;
 
 use std::{iter, ops::Range};

@@ -13,7 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BINDINGS_LENGTH (1)
+#define BIND_ENTRIES_LENGTH (1)
 #define BIND_GROUP_LAYOUTS_LENGTH (1)
 
 void request_adapter_callback(WGPUAdapterId received, void *userdata) {
@@ -80,11 +80,11 @@ int main(
     WGPUBindGroupLayoutId bind_group_layout =
         wgpu_device_create_bind_group_layout(device,
             &(WGPUBindGroupLayoutDescriptor){
-                .bindings = &(WGPUBindGroupLayoutBinding){
+                .entries = &(WGPUBindGroupLayoutEntry){
 					.binding = 0,
                     .visibility = WGPUShaderStage_COMPUTE,
                     .ty = WGPUBindingType_StorageBuffer},
-                .bindings_length = BINDINGS_LENGTH});
+                .entries_length = BIND_ENTRIES_LENGTH});
 
 	WGPUBindingResource resource = {
 		.tag = WGPUBindingResource_Buffer,
@@ -95,10 +95,10 @@ int main(
 
     WGPUBindGroupId bind_group = wgpu_device_create_bind_group(device,
             &(WGPUBindGroupDescriptor){.layout = bind_group_layout,
-                .bindings = &(WGPUBindGroupBinding){
+                .entries = &(WGPUBindGroupEntry){
 					.binding = 0,
 					.resource = resource},
-                .bindings_length = BINDINGS_LENGTH});
+                .entries_length = BIND_ENTRIES_LENGTH});
 
 	WGPUBindGroupLayoutId bind_group_layouts[BIND_GROUP_LAYOUTS_LENGTH] = {
         bind_group_layout};
@@ -135,7 +135,7 @@ int main(
     wgpu_compute_pass_dispatch(command_pass, numbers_length, 1, 1);
     wgpu_compute_pass_end_pass(command_pass);
 
-    WGPUQueueId queue = wgpu_device_get_queue(device);
+    WGPUQueueId queue = wgpu_device_get_default_queue(device);
 
     WGPUCommandBufferId command_buffer = wgpu_command_encoder_finish(encoder, NULL);
 

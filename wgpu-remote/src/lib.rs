@@ -5,8 +5,9 @@
 use core::{
     hub::IdentityManager,
     id,
-    Backend,
 };
+
+use wgt::Backend;
 
 pub use core::command::{
     compute_ffi::*,

@@ -4,16 +4,16 @@
 
 use crate::{
     backend,
-    binding_model::MAX_BIND_GROUPS,
     device::{Device, BIND_BUFFER_ALIGNMENT},
     hub::{GfxBackend, Global, IdentityFilter, Token},
     id::{AdapterId, DeviceId},
     power,
-    Backend,
 };
 
+use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, RequestAdapterOptions};
+
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde_crate::{Deserialize, Serialize};
 
 use hal::{
     self,
@@ -101,85 +101,9 @@ pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
 }
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum PowerPreference {
-    Default = 0,
-    LowPower = 1,
-    HighPerformance = 2,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RequestAdapterOptions {
-    pub power_preference: PowerPreference,
-}
-
-impl Default for RequestAdapterOptions {
-    fn default() -> Self {
-        RequestAdapterOptions {
-            power_preference: PowerPreference::Default,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Extensions {
-    pub anisotropic_filtering: bool,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Limits {
-    pub max_bind_groups: u32,
-}
-
-impl Default for Limits {
-    fn default() -> Self {
-        Limits {
-            max_bind_groups: MAX_BIND_GROUPS as u32,
-        }
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DeviceDescriptor {
-    pub extensions: Extensions,
-    pub limits: Limits,
-}
-
-bitflags::bitflags! {
-    #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct BackendBit: u32 {
-        const VULKAN = 1 << Backend::Vulkan as u32;
-        const GL = 1 << Backend::Gl as u32;
-        const METAL = 1 << Backend::Metal as u32;
-        const DX12 = 1 << Backend::Dx12 as u32;
-        const DX11 = 1 << Backend::Dx11 as u32;
-        /// Vulkan + METAL + DX12
-        const PRIMARY = Self::VULKAN.bits | Self::METAL.bits | Self::DX12.bits;
-        /// OpenGL + DX11
-        const SECONDARY = Self::GL.bits | Self::DX11.bits;
-    }
-}
-
-impl From<Backend> for BackendBit {
-    fn from(backend: Backend) -> Self {
-        BackendBit::from_bits(1 << backend as u32).unwrap()
-    }
-}
-
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -214,7 +138,7 @@ impl AdapterInfo {
 
 /// Supported physical device types
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub enum DeviceType {
     /// Other
     Other,

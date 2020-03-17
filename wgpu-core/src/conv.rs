@@ -2,12 +2,30 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model, command, pipeline, resource, Color, Extent3d, Features, Origin3d};
+use crate::{binding_model, resource, Extent3d, Features, Origin3d};
+use wgt::{
+    BlendDescriptor,
+    BlendFactor,
+    Color,
+    ColorStateDescriptor,
+    ColorWrite,
+    CompareFunction,
+    CullMode,
+    DepthStencilStateDescriptor,
+    FrontFace,
+    IndexFormat,
+    PrimitiveTopology,
+    StencilOperation,
+    StencilStateFaceDescriptor,
+    TextureFormat,
+    RasterizationStateDescriptor,
+    VertexFormat,
+};
 
 pub fn map_buffer_usage(
-    usage: resource::BufferUsage,
+    usage: wgt::BufferUsage,
 ) -> (hal::buffer::Usage, hal::memory::Properties) {
-    use crate::resource::BufferUsage as W;
+    use wgt::BufferUsage as W;
     use hal::buffer::Usage as U;
     use hal::memory::Properties as P;
 
@@ -46,10 +64,10 @@ pub fn map_buffer_usage(
 }
 
 pub fn map_texture_usage(
-    usage: resource::TextureUsage,
+    usage: wgt::TextureUsage,
     aspects: hal::format::Aspects,
 ) -> hal::image::Usage {
-    use crate::resource::TextureUsage as W;
+    use wgt::TextureUsage as W;
     use hal::image::Usage as U;
 
     let mut value = U::empty();
@@ -78,35 +96,38 @@ pub fn map_texture_usage(
 }
 
 pub fn map_binding_type(
-    binding: &binding_model::BindGroupLayoutBinding,
+    binding: &binding_model::BindGroupLayoutEntry,
 ) -> hal::pso::DescriptorType {
     use crate::binding_model::BindingType as Bt;
     use hal::pso::DescriptorType as H;
     match binding.ty {
         Bt::UniformBuffer => {
-            if binding.dynamic {
+            if binding.has_dynamic_offset {
                 H::UniformBufferDynamic
             } else {
                 H::UniformBuffer
             }
         }
-        Bt::StorageBuffer | Bt::ReadonlyStorageBuffer => {
-            if binding.dynamic {
+        Bt::StorageBuffer |
+        Bt::ReadonlyStorageBuffer => {
+            if binding.has_dynamic_offset {
                 H::StorageBufferDynamic
             } else {
                 H::StorageBuffer
             }
         }
-        Bt::Sampler => H::Sampler,
+        Bt::Sampler |
+        Bt::ComparisonSampler => H::Sampler,
         Bt::SampledTexture => H::SampledImage,
-        Bt::StorageTexture => H::StorageImage,
+        Bt::ReadonlyStorageTexture |
+        Bt::WriteonlyStorageTexture => H::StorageImage,
     }
 }
 
 pub fn map_shader_stage_flags(
-    shader_stage_flags: binding_model::ShaderStage,
+    shader_stage_flags: wgt::ShaderStage,
 ) -> hal::pso::ShaderStageFlags {
-    use crate::binding_model::ShaderStage as Ss;
+    use wgt::ShaderStage as Ss;
     use hal::pso::ShaderStageFlags as H;
 
     let mut value = H::empty();
@@ -139,9 +160,9 @@ pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
 }
 
 pub fn map_primitive_topology(
-    primitive_topology: pipeline::PrimitiveTopology,
+    primitive_topology: PrimitiveTopology,
 ) -> hal::pso::Primitive {
-    use crate::pipeline::PrimitiveTopology as Pt;
+    use wgt::PrimitiveTopology as Pt;
     use hal::pso::Primitive as H;
     match primitive_topology {
         Pt::PointList => H::PointList,
@@ -153,11 +174,11 @@ pub fn map_primitive_topology(
 }
 
 pub fn map_color_state_descriptor(
-    desc: &pipeline::ColorStateDescriptor,
+    desc: &ColorStateDescriptor,
 ) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.color_blend != pipeline::BlendDescriptor::REPLACE
-        || desc.alpha_blend != pipeline::BlendDescriptor::REPLACE
+    let blend_state = if desc.color_blend != BlendDescriptor::REPLACE
+        || desc.alpha_blend != BlendDescriptor::REPLACE
     {
         Some(hal::pso::BlendState {
             color: map_blend_descriptor(&desc.color_blend),
@@ -172,8 +193,8 @@ pub fn map_color_state_descriptor(
     }
 }
 
-fn map_color_write_flags(flags: pipeline::ColorWrite) -> hal::pso::ColorMask {
-    use crate::pipeline::ColorWrite as Cw;
+fn map_color_write_flags(flags: ColorWrite) -> hal::pso::ColorMask {
+    use wgt::ColorWrite as Cw;
     use hal::pso::ColorMask as H;
 
     let mut value = H::empty();
@@ -192,8 +213,8 @@ fn map_color_write_flags(flags: pipeline::ColorWrite) -> hal::pso::ColorMask {
     value
 }
 
-fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::BlendOp {
-    use crate::pipeline::BlendOperation as Bo;
+fn map_blend_descriptor(blend_desc: &BlendDescriptor) -> hal::pso::BlendOp {
+    use wgt::BlendOperation as Bo;
     use hal::pso::BlendOp as H;
     match blend_desc.operation {
         Bo::Add => H::Add {
@@ -213,8 +234,8 @@ fn map_blend_descriptor(blend_desc: &pipeline::BlendDescriptor) -> hal::pso::Ble
     }
 }
 
-fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
-    use crate::pipeline::BlendFactor as Bf;
+fn map_blend_factor(blend_factor: BlendFactor) -> hal::pso::Factor {
+    use wgt::BlendFactor as Bf;
     use hal::pso::Factor as H;
     match blend_factor {
         Bf::Zero => H::Zero,
@@ -234,11 +255,11 @@ fn map_blend_factor(blend_factor: pipeline::BlendFactor) -> hal::pso::Factor {
 }
 
 pub fn map_depth_stencil_state_descriptor(
-    desc: &pipeline::DepthStencilStateDescriptor,
+    desc: &DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
         depth: if desc.depth_write_enabled
-            || desc.depth_compare != resource::CompareFunction::Always
+            || desc.depth_compare != CompareFunction::Always
         {
             Some(hal::pso::DepthTest {
                 fun: map_compare_function(desc.depth_compare),
@@ -250,8 +271,8 @@ pub fn map_depth_stencil_state_descriptor(
         depth_bounds: false, // TODO
         stencil: if desc.stencil_read_mask != !0
             || desc.stencil_write_mask != !0
-            || desc.stencil_front != pipeline::StencilStateFaceDescriptor::IGNORE
-            || desc.stencil_back != pipeline::StencilStateFaceDescriptor::IGNORE
+            || desc.stencil_front != StencilStateFaceDescriptor::IGNORE
+            || desc.stencil_back != StencilStateFaceDescriptor::IGNORE
         {
             Some(hal::pso::StencilTest {
                 faces: hal::pso::Sided {
@@ -273,7 +294,7 @@ pub fn map_depth_stencil_state_descriptor(
 }
 
 fn map_stencil_face(
-    stencil_state_face_desc: &pipeline::StencilStateFaceDescriptor,
+    stencil_state_face_desc: &StencilStateFaceDescriptor,
 ) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
         fun: map_compare_function(stencil_state_face_desc.compare),
@@ -283,8 +304,8 @@ fn map_stencil_face(
     }
 }
 
-pub fn map_compare_function(compare_function: resource::CompareFunction) -> hal::pso::Comparison {
-    use crate::resource::CompareFunction as Cf;
+pub fn map_compare_function(compare_function: CompareFunction) -> hal::pso::Comparison {
+    use wgt::CompareFunction as Cf;
     use hal::pso::Comparison as H;
     match compare_function {
         Cf::Never => H::Never,
@@ -298,8 +319,8 @@ pub fn map_compare_function(compare_function: resource::CompareFunction) -> hal:
     }
 }
 
-fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::pso::StencilOp {
-    use crate::pipeline::StencilOperation as So;
+fn map_stencil_operation(stencil_operation: StencilOperation) -> hal::pso::StencilOp {
+    use wgt::StencilOperation as So;
     use hal::pso::StencilOp as H;
     match stencil_operation {
         So::Keep => H::Keep,
@@ -314,10 +335,10 @@ fn map_stencil_operation(stencil_operation: pipeline::StencilOperation) -> hal::
 }
 
 pub(crate) fn map_texture_format(
-    texture_format: resource::TextureFormat,
+    texture_format: TextureFormat,
     features: Features,
 ) -> hal::format::Format {
-    use crate::resource::TextureFormat as Tf;
+    use wgt::TextureFormat as Tf;
     use hal::format::Format as H;
     match texture_format {
         // Normal 8 bit formats
@@ -327,12 +348,9 @@ pub(crate) fn map_texture_format(
         Tf::R8Sint => H::R8Sint,
 
         // Normal 16 bit formats
-        Tf::R16Unorm => H::R16Unorm,
-        Tf::R16Snorm => H::R16Snorm,
         Tf::R16Uint => H::R16Uint,
         Tf::R16Sint => H::R16Sint,
         Tf::R16Float => H::R16Sfloat,
-
         Tf::Rg8Unorm => H::Rg8Unorm,
         Tf::Rg8Snorm => H::Rg8Snorm,
         Tf::Rg8Uint => H::Rg8Uint,
@@ -342,8 +360,6 @@ pub(crate) fn map_texture_format(
         Tf::R32Uint => H::R32Uint,
         Tf::R32Sint => H::R32Sint,
         Tf::R32Float => H::R32Sfloat,
-        Tf::Rg16Unorm => H::Rg16Unorm,
-        Tf::Rg16Snorm => H::Rg16Snorm,
         Tf::Rg16Uint => H::Rg16Uint,
         Tf::Rg16Sint => H::Rg16Sint,
         Tf::Rg16Float => H::Rg16Sfloat,
@@ -363,8 +379,6 @@ pub(crate) fn map_texture_format(
         Tf::Rg32Uint => H::Rg32Uint,
         Tf::Rg32Sint => H::Rg32Sint,
         Tf::Rg32Float => H::Rg32Sfloat,
-        Tf::Rgba16Unorm => H::Rgba16Unorm,
-        Tf::Rgba16Snorm => H::Rgba16Snorm,
         Tf::Rgba16Uint => H::Rgba16Uint,
         Tf::Rgba16Sint => H::Rgba16Sint,
         Tf::Rgba16Float => H::Rgba16Sfloat,
@@ -393,8 +407,8 @@ pub(crate) fn map_texture_format(
     }
 }
 
-pub fn map_vertex_format(vertex_format: pipeline::VertexFormat) -> hal::format::Format {
-    use crate::pipeline::VertexFormat as Vf;
+pub fn map_vertex_format(vertex_format: VertexFormat) -> hal::format::Format {
+    use wgt::VertexFormat as Vf;
     use hal::format::Format as H;
     match vertex_format {
         Vf::Uchar2 => H::Rg8Uint,
@@ -482,9 +496,9 @@ pub fn map_texture_dimension_size(
 }
 
 pub fn map_texture_view_dimension(
-    dimension: resource::TextureViewDimension,
+    dimension: wgt::TextureViewDimension,
 ) -> hal::image::ViewKind {
-    use crate::resource::TextureViewDimension::*;
+    use wgt::TextureViewDimension::*;
     use hal::image::ViewKind as H;
     match dimension {
         D1 => H::D1,
@@ -496,8 +510,8 @@ pub fn map_texture_view_dimension(
     }
 }
 
-pub fn map_buffer_state(usage: resource::BufferUsage) -> hal::buffer::State {
-    use crate::resource::BufferUsage as W;
+pub fn map_buffer_state(usage: wgt::BufferUsage) -> hal::buffer::State {
+    use wgt::BufferUsage as W;
     use hal::buffer::Access as A;
 
     let mut access = A::empty();
@@ -527,10 +541,10 @@ pub fn map_buffer_state(usage: resource::BufferUsage) -> hal::buffer::State {
 }
 
 pub fn map_texture_state(
-    usage: resource::TextureUsage,
+    usage: wgt::TextureUsage,
     aspects: hal::format::Aspects,
 ) -> hal::image::State {
-    use crate::resource::TextureUsage as W;
+    use wgt::TextureUsage as W;
     use hal::image::{Access as A, Layout as L};
 
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
@@ -570,17 +584,17 @@ pub fn map_texture_state(
 }
 
 pub fn map_load_store_ops(
-    load: command::LoadOp,
-    store: command::StoreOp,
+    load: wgt::LoadOp,
+    store: wgt::StoreOp,
 ) -> hal::pass::AttachmentOps {
     hal::pass::AttachmentOps {
         load: match load {
-            command::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
-            command::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
+            wgt::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
+            wgt::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
         },
         store: match store {
-            command::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
-            command::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
+            wgt::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
+            wgt::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
         },
     }
 }
@@ -628,19 +642,19 @@ pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
 }
 
 pub fn map_rasterization_state_descriptor(
-    desc: &pipeline::RasterizationStateDescriptor,
+    desc: &RasterizationStateDescriptor,
 ) -> hal::pso::Rasterizer {
     hal::pso::Rasterizer {
         depth_clamping: false,
         polygon_mode: hal::pso::PolygonMode::Fill,
         cull_face: match desc.cull_mode {
-            pipeline::CullMode::None => hal::pso::Face::empty(),
-            pipeline::CullMode::Front => hal::pso::Face::FRONT,
-            pipeline::CullMode::Back => hal::pso::Face::BACK,
+            CullMode::None => hal::pso::Face::empty(),
+            CullMode::Front => hal::pso::Face::FRONT,
+            CullMode::Back => hal::pso::Face::BACK,
         },
         front_face: match desc.front_face {
-            pipeline::FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
-            pipeline::FrontFace::Cw => hal::pso::FrontFace::Clockwise,
+            FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
+            FrontFace::Cw => hal::pso::FrontFace::Clockwise,
         },
         depth_bias: if desc.depth_bias != 0
             || desc.depth_bias_slope_scale != 0.0
@@ -658,9 +672,9 @@ pub fn map_rasterization_state_descriptor(
     }
 }
 
-pub fn map_index_format(index_format: pipeline::IndexFormat) -> hal::IndexType {
+pub fn map_index_format(index_format: IndexFormat) -> hal::IndexType {
     match index_format {
-        pipeline::IndexFormat::Uint16 => hal::IndexType::U16,
-        pipeline::IndexFormat::Uint32 => hal::IndexType::U32,
+        IndexFormat::Uint16 => hal::IndexType::U16,
+        IndexFormat::Uint32 => hal::IndexType::U32,
     }
 }
