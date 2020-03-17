@@ -34,6 +34,15 @@ pub enum BindingType {
 }
 
 #[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+pub enum TextureComponentType {
+    Float,
+    Sint,
+    Uint,
+}
+
+#[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct BindGroupLayoutEntry {
@@ -43,6 +52,7 @@ pub struct BindGroupLayoutEntry {
     pub multisampled: bool,
     pub has_dynamic_offset: bool,
     pub view_dimension: wgt::TextureViewDimension,
+    pub texture_component_type: TextureComponentType,
     pub storage_texture_format: wgt::TextureFormat,
 }
 
