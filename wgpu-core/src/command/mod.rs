@@ -195,12 +195,6 @@ impl<B: GfxBackend> CommandBuffer<B> {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Default)]
-pub struct CommandBufferDescriptor {
-    pub todo: u32,
-}
-
 pub type RawRenderPassColorAttachmentDescriptor =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId, id::TextureViewId>;
 
@@ -215,7 +209,7 @@ impl<F> Global<F> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        _desc: &CommandBufferDescriptor,
+        _desc: &wgt::CommandBufferDescriptor,
     ) -> id::CommandBufferId {
         let hub = B::hub(self);
         let mut token = Token::root();

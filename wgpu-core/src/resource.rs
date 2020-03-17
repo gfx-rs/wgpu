@@ -5,13 +5,17 @@
 use crate::{
     id::{DeviceId, SwapChainId, TextureId},
     track::DUMMY_SELECTOR,
-    Extent3d,
     LifeGuard,
     RefCount,
     Stored,
 };
 
-use wgt::{BufferAddress, BufferUsage, CompareFunction, TextureFormat, TextureUsage};
+use wgt::{
+    BufferAddress,
+    BufferUsage,
+    TextureFormat,
+    TextureUsage,
+};
 use hal;
 use rendy_memory::MemoryBlock;
 
@@ -93,26 +97,6 @@ impl<B: hal::Backend> Borrow<()> for Buffer<B> {
     }
 }
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum TextureDimension {
-    D1,
-    D2,
-    D3,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct TextureDescriptor {
-    pub size: Extent3d,
-    pub array_layer_count: u32,
-    pub mip_level_count: u32,
-    pub sample_count: u32,
-    pub dimension: TextureDimension,
-    pub format: TextureFormat,
-    pub usage: TextureUsage,
-}
-
 #[derive(Debug)]
 pub struct Texture<B: hal::Backend> {
     pub(crate) raw: B::Image,
@@ -135,32 +119,6 @@ impl<B: hal::Backend> Borrow<hal::image::SubresourceRange> for Texture<B> {
     fn borrow(&self) -> &hal::image::SubresourceRange {
         &self.full_range
     }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum TextureAspect {
-    All,
-    StencilOnly,
-    DepthOnly,
-}
-
-impl Default for TextureAspect {
-    fn default() -> Self {
-        TextureAspect::All
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct TextureViewDescriptor {
-    pub format: TextureFormat,
-    pub dimension: wgt::TextureViewDimension,
-    pub aspect: TextureAspect,
-    pub base_mip_level: u32,
-    pub level_count: u32,
-    pub base_array_layer: u32,
-    pub array_layer_count: u32,
 }
 
 #[derive(Debug)]
@@ -196,47 +154,6 @@ impl<B: hal::Backend> Borrow<()> for TextureView<B> {
     fn borrow(&self) -> &() {
         &DUMMY_SELECTOR
     }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum AddressMode {
-    ClampToEdge = 0,
-    Repeat = 1,
-    MirrorRepeat = 2,
-}
-
-impl Default for AddressMode {
-    fn default() -> Self {
-        AddressMode::ClampToEdge
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum FilterMode {
-    Nearest = 0,
-    Linear = 1,
-}
-
-impl Default for FilterMode {
-    fn default() -> Self {
-        FilterMode::Nearest
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct SamplerDescriptor<'a> {
-    pub address_mode_u: AddressMode,
-    pub address_mode_v: AddressMode,
-    pub address_mode_w: AddressMode,
-    pub mag_filter: FilterMode,
-    pub min_filter: FilterMode,
-    pub mipmap_filter: FilterMode,
-    pub lod_min_clamp: f32,
-    pub lod_max_clamp: f32,
-    pub compare: Option<&'a CompareFunction>,
 }
 
 #[derive(Debug)]
