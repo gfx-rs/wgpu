@@ -109,36 +109,6 @@ struct Stored<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct Origin3d {
-    pub x: u32,
-    pub y: u32,
-    pub z: u32,
-}
-
-impl Origin3d {
-    pub const ZERO: Self = Origin3d {
-        x: 0,
-        y: 0,
-        z: 0,
-    };
-}
-
-impl Default for Origin3d {
-    fn default() -> Self {
-        Origin3d::ZERO
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-pub struct Extent3d {
-    pub width: u32,
-    pub height: u32,
-    pub depth: u32,
-}
-
-#[repr(C)]
 #[derive(Debug)]
 pub struct U32Array {
     pub bytes: *const u32,

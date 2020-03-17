@@ -225,7 +225,7 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: id::BufferId) {
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: id::DeviceId,
-    desc: &core::resource::TextureDescriptor,
+    desc: &wgt::TextureDescriptor,
 ) -> id::TextureId {
     gfx_select!(device_id => GLOBAL.device_create_texture(device_id, desc, PhantomData))
 }
@@ -238,7 +238,7 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: id::TextureId) {
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_view(
     texture_id: id::TextureId,
-    desc: Option<&core::resource::TextureViewDescriptor>,
+    desc: Option<&wgt::TextureViewDescriptor>,
 ) -> id::TextureViewId {
     gfx_select!(texture_id => GLOBAL.texture_create_view(texture_id, desc, PhantomData))
 }
@@ -251,7 +251,7 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: id::TextureViewId) 
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_sampler(
     device_id: id::DeviceId,
-    desc: &core::resource::SamplerDescriptor,
+    desc: &wgt::SamplerDescriptor,
 ) -> id::SamplerId {
     gfx_select!(device_id => GLOBAL.device_create_sampler(device_id, desc, PhantomData))
 }

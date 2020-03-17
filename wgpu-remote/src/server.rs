@@ -152,7 +152,7 @@ pub extern "C" fn wgpu_server_device_create_encoder(
 pub extern "C" fn wgpu_server_encoder_finish(
     global: &Global,
     self_id: id::CommandEncoderId,
-    desc: &core::command::CommandBufferDescriptor,
+    desc: &wgt::CommandBufferDescriptor,
 ) {
     gfx_select!(self_id => global.command_encoder_finish(self_id, desc));
 }
@@ -349,7 +349,7 @@ pub extern "C" fn wgpu_server_render_pipeline_destroy(
 pub extern "C" fn wgpu_server_device_create_texture(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::resource::TextureDescriptor,
+    desc: &wgt::TextureDescriptor,
     new_id: id::TextureId,
 ) {
     gfx_select!(self_id => global.device_create_texture(self_id, desc, new_id));
@@ -359,7 +359,7 @@ pub extern "C" fn wgpu_server_device_create_texture(
 pub extern "C" fn wgpu_server_texture_create_view(
     global: &Global,
     self_id: id::TextureId,
-    desc: Option<&core::resource::TextureViewDescriptor>,
+    desc: Option<&wgt::TextureViewDescriptor>,
     new_id: id::TextureViewId,
 ) {
     gfx_select!(self_id => global.texture_create_view(self_id, desc, new_id));
@@ -385,7 +385,7 @@ pub extern "C" fn wgpu_server_texture_view_destroy(
 pub extern "C" fn wgpu_server_device_create_sampler(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::resource::SamplerDescriptor,
+    desc: &wgt::SamplerDescriptor,
     new_id: id::SamplerId,
 ) {
     gfx_select!(self_id => global.device_create_sampler(self_id, desc, new_id));

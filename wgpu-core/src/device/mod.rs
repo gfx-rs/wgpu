@@ -18,7 +18,7 @@ use crate::{
     Stored,
 };
 
-use wgt::{BufferAddress, InputStepMode, TextureFormat};
+use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat};
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
 use hal::{
@@ -359,7 +359,7 @@ impl<B: GfxBackend> Device<B> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
-        desc: &resource::TextureDescriptor,
+        desc: &wgt::TextureDescriptor,
     ) -> resource::Texture<B> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
@@ -388,7 +388,7 @@ impl<B: GfxBackend> Device<B> {
 
         // 2D textures with array layer counts that are multiples of 6 could be cubemaps
         // Following gpuweb/gpuweb#68 always add the hint in that case
-        if desc.dimension == resource::TextureDimension::D2 && desc.array_layer_count % 6 == 0 {
+        if desc.dimension == TextureDimension::D2 && desc.array_layer_count % 6 == 0 {
             view_capabilities |= hal::image::ViewCapabilities::KIND_CUBE;
         };
 
@@ -649,7 +649,7 @@ impl<F: IdentityFilter<id::TextureId>> Global<F> {
     pub fn device_create_texture<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &resource::TextureDescriptor,
+        desc: &wgt::TextureDescriptor,
         id_in: F::Input,
     ) -> id::TextureId {
         let hub = B::hub(self);
@@ -695,7 +695,7 @@ impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
     pub fn texture_create_view<B: GfxBackend>(
         &self,
         texture_id: id::TextureId,
-        desc: Option<&resource::TextureViewDescriptor>,
+        desc: Option<&wgt::TextureViewDescriptor>,
         id_in: F::Input,
     ) -> id::TextureViewId {
         let hub = B::hub(self);
@@ -806,7 +806,7 @@ impl<F: IdentityFilter<id::SamplerId>> Global<F> {
     pub fn device_create_sampler<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &resource::SamplerDescriptor,
+        desc: &wgt::SamplerDescriptor,
         id_in: F::Input,
     ) -> id::SamplerId {
         let hub = B::hub(self);

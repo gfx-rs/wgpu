@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model, resource, Extent3d, Features, Origin3d};
+use crate::{binding_model, Features};
 use wgt::{
     BlendDescriptor,
     BlendFactor,
@@ -12,13 +12,15 @@ use wgt::{
     CompareFunction,
     CullMode,
     DepthStencilStateDescriptor,
+    Extent3d,
     FrontFace,
     IndexFormat,
+    Origin3d,
     PrimitiveTopology,
+    RasterizationStateDescriptor,
     StencilOperation,
     StencilStateFaceDescriptor,
     TextureFormat,
-    RasterizationStateDescriptor,
     VertexFormat,
 };
 
@@ -450,7 +452,7 @@ fn checked_u32_as_u16(value: u32) -> u16 {
 }
 
 pub fn map_texture_dimension_size(
-    dimension: resource::TextureDimension,
+    dimension: wgt::TextureDimension,
     Extent3d {
         width,
         height,
@@ -459,7 +461,7 @@ pub fn map_texture_dimension_size(
     array_size: u32,
     sample_size: u32,
 ) -> hal::image::Kind {
-    use crate::resource::TextureDimension::*;
+    use wgt::TextureDimension::*;
     use hal::image::Kind as H;
     match dimension {
         D1 => {
@@ -624,15 +626,15 @@ pub fn map_color_u32(color: &Color) -> [u32; 4] {
     ]
 }
 
-pub fn map_filter(filter: resource::FilterMode) -> hal::image::Filter {
+pub fn map_filter(filter: wgt::FilterMode) -> hal::image::Filter {
     match filter {
-        resource::FilterMode::Nearest => hal::image::Filter::Nearest,
-        resource::FilterMode::Linear => hal::image::Filter::Linear,
+        wgt::FilterMode::Nearest => hal::image::Filter::Nearest,
+        wgt::FilterMode::Linear => hal::image::Filter::Linear,
     }
 }
 
-pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
-    use crate::resource::AddressMode as Am;
+pub fn map_wrap(address: wgt::AddressMode) -> hal::image::WrapMode {
+    use wgt::AddressMode as Am;
     use hal::image::WrapMode as W;
     match address {
         Am::ClampToEdge => W::Clamp,
