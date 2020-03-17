@@ -190,6 +190,39 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_buffer(
     gfx_select!(self_id => global.command_encoder_copy_buffer_to_buffer(self_id, source_id, source_offset, destination_id, destination_offset, size));
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_buffer(
+    global: &Global,
+    self_id: id::CommandEncoderId,
+    source: &core::command::TextureCopyView,
+    destination: &core::command::BufferCopyView,
+    size: wgt::Extent3d,
+) {
+    gfx_select!(self_id => global.command_encoder_copy_texture_to_buffer(self_id, source, destination, size));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_texture(
+    global: &Global,
+    self_id: id::CommandEncoderId,
+    source: &core::command::BufferCopyView,
+    destination: &core::command::TextureCopyView,
+    size: wgt::Extent3d,
+) {
+    gfx_select!(self_id => global.command_encoder_copy_buffer_to_texture(self_id, source, destination, size));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_texture(
+    global: &Global,
+    self_id: id::CommandEncoderId,
+    source: &core::command::TextureCopyView,
+    destination: &core::command::TextureCopyView,
+    size: wgt::Extent3d,
+) {
+    gfx_select!(self_id => global.command_encoder_copy_texture_to_texture(self_id, source, destination, size));
+}
+
 /// # Safety
 ///
 /// This function is unsafe as there is no guarantee that the given pointers are
