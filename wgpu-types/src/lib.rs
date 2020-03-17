@@ -723,7 +723,7 @@ impl Default for Origin3d {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Extent3d {
     pub width: u32,
     pub height: u32,
