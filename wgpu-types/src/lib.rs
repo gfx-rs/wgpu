@@ -556,18 +556,18 @@ pub type DynamicOffset = u32;
 #[repr(C)]
 #[derive(Copy, Clone, Debug)]
 pub enum PresentMode {
-    /// The presentation engine does **not** wait for a vertical blanking period and 
+    /// The presentation engine does **not** wait for a vertical blanking period and
     /// the request is presented immediately. This is a low-latency presentation mode,
     /// but visible tearing may be observed. Will fallback to `Fifo` if unavailable on the
-    /// selected  platform and backend. Not optimal for mobile. 
+    /// selected  platform and backend. Not optimal for mobile.
     Immediate = 0,
     /// The presentation engine waits for the next vertical blanking period to update
-    /// the current image, but frames may be submitted without delay. This is a low-latency 
+    /// the current image, but frames may be submitted without delay. This is a low-latency
     /// presentation mode and visible tearing will **not** be observed. Will fallback to `Fifo`
     /// if unavailable on the selected platform and backend. Not optimal for mobile.
     Mailbox = 1,
-    /// The presentation engine waits for the next vertical blanking period to update 
-    /// the current image. The framerate will be capped at the display refresh rate, 
+    /// The presentation engine waits for the next vertical blanking period to update
+    /// the current image. The framerate will be capped at the display refresh rate,
     /// corresponding to the `VSync`. Tearing cannot be observed. Optimal for mobile.
     Fifo = 2,
 }
@@ -731,7 +731,7 @@ pub struct Extent3d {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextureDescriptor {
     pub size: Extent3d,
     pub array_layer_count: u32,
@@ -757,7 +757,7 @@ impl Default for TextureAspect {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TextureViewDescriptor {
     pub format: TextureFormat,
     pub dimension: TextureViewDimension,
