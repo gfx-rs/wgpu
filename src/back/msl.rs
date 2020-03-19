@@ -25,6 +25,10 @@ use crate::{
     FastHashMap, FastHashSet
 };
 
+/// Expect all the global variables to have a pointer type,
+/// like in SPIR-V.
+const GLOBAL_POINTERS: bool = false;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct BindTarget {
     pub buffer: Option<u8>,
@@ -224,19 +228,24 @@ impl Display for TypedGlobalVariable<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         let var = &self.module.global_variables[self.handle];
         let name = var.name.or_index(self.handle);
-        let ty = &self.module.types[var.ty];
-        match ty.inner {
-            crate::TypeInner::Pointer { base, class }  => {
-                let ty_handle= match class {
-                    spirv::StorageClass::Input |
-                    spirv::StorageClass::Output |
-                    spirv::StorageClass::UniformConstant => base,
-                    _ => var.ty
-                };
-                let ty_name = self.module.types[ty_handle].name.or_index(ty_handle);
-                write!(formatter, "{} {}", ty_name, name)
+        if GLOBAL_POINTERS {
+            let ty = &self.module.types[var.ty];
+            match ty.inner {
+                crate::TypeInner::Pointer { base, class }  => {
+                    let ty_handle = match class {
+                        spirv::StorageClass::Input |
+                        spirv::StorageClass::Output |
+                        spirv::StorageClass::UniformConstant => base,
+                        _ => var.ty
+                    };
+                    let ty_name = self.module.types[ty_handle].name.or_index(ty_handle);
+                    write!(formatter, "{} {}", ty_name, name)
+                }
+                _ => panic!("Unexpected global type {:?} = {:?}", var.ty, ty),
             }
-            _ => panic!("Unexpected global type {:?}", var.ty),
+        } else {
+            let ty_name = self.module.types[var.ty].name.or_index(var.ty);
+            write!(formatter, "{} {}", ty_name, name)
         }
     }
 }
@@ -247,6 +256,7 @@ impl Display for ResolvedBinding {
             ResolvedBinding::BuiltIn(built_in) => {
                 let name = match built_in {
                     spirv::BuiltIn::ClipDistance => "clip_distance",
+                    spirv::BuiltIn::GlobalInvocationId => "thread_position_in_grid",
                     spirv::BuiltIn::PointSize => "point_size",
                     spirv::BuiltIn::Position => "position",
                     _ => panic!("Built in {:?} is not implemented", built_in),
@@ -416,10 +426,16 @@ impl<W: Write> Writer<W> {
                 match var.class {
                     spirv::StorageClass::Output => {
                         self.out.write_str(NAME_OUTPUT)?;
-                        if let crate::TypeInner::Pointer { base, .. } = *inner {
-                            let base_inner = &module.types[base].inner;
-                            if let crate::TypeInner::Struct { .. } = *base_inner {
-                                return Ok(MaybeOwned::Borrowed(base_inner));
+                        if GLOBAL_POINTERS {
+                            if let crate::TypeInner::Pointer { base, .. } = *inner {
+                                let base_inner = &module.types[base].inner;
+                                if let crate::TypeInner::Struct { .. } = *base_inner {
+                                    return Ok(MaybeOwned::Borrowed(base_inner));
+                                }
+                            }
+                        } else {
+                            if let crate::TypeInner::Struct { .. } = *inner {
+                                return Ok(MaybeOwned::Borrowed(inner));
                             }
                         }
                         self.out.write_str(".")?;
@@ -506,6 +522,23 @@ impl<W: Write> Writer<W> {
             }
             crate::Expression::Call { ref name, ref arguments } => {
                 match name.as_str() {
+                    "cos" |
+                    "fclamp" |
+                    "normalize" |
+                    "sin" => {
+                        write!(self.out, "{}(", name)?;
+                        let result = self.put_expression(arguments[0], function, module)?;
+                        write!(self.out, ")")?;
+                        Ok(result)
+                    }
+                    "atan2" => {
+                        write!(self.out, "{}(", name)?;
+                        let result = self.put_expression(arguments[0], function, module)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arguments[1], function, module)?;
+                        write!(self.out, ")")?;
+                        Ok(result)
+                    }
                     "distance" => {
                         write!(self.out, "distance(")?;
                         let result = match *self.put_expression(arguments[0], function, module)?.borrow() {
@@ -526,18 +559,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ")")?;
                         Ok(MaybeOwned::Owned(result))
                     }
-                    "normalize" => {
-                        write!(self.out, "normalize(")?;
-                        let result = self.put_expression(arguments[0], function, module)?;
-                        write!(self.out, ")")?;
-                        Ok(result)
-                    }
-                    "fclamp" => {
-                        write!(self.out, "fclamp(")?;
-                        let result = self.put_expression(arguments[0], function, module)?;
-                        write!(self.out, ")")?;
-                        Ok(result)
-                    }
+
                     _ => panic!("Unsupported call to '{}'", name),
                 }
             }
@@ -757,19 +779,23 @@ impl<W: Write> Writer<W> {
                 for &handle in var_outputs.iter() {
                     let var = &module.global_variables[handle];
                     // if it's a struct, lift all the built-in contents up to the root
-                    if let crate::TypeInner::Pointer { base, .. } = module.types[var.ty].inner {
-                        if let crate::TypeInner::Struct { ref members } = module.types[base].inner {
-                            for (index, member) in members.iter().enumerate() {
-                                let name = member.name.or_index(MemberIndex(index));
-                                let ty_name = module.types[member.ty].name.or_index(member.ty);
-                                let binding = member.binding
-                                    .as_ref()
-                                    .ok_or(Error::MissingBinding(handle))?;
-                                let resolved = options.resolve_binding(binding, out_mode)?;
-                                writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
-                            }
-                            continue
+                    let mut ty_handle = var.ty;
+                    if GLOBAL_POINTERS {
+                        if let crate::TypeInner::Pointer { base, .. } = module.types[var.ty].inner {
+                            ty_handle = base;
                         }
+                    }
+                    if let crate::TypeInner::Struct { ref members } = module.types[ty_handle].inner {
+                        for (index, member) in members.iter().enumerate() {
+                            let name = member.name.or_index(MemberIndex(index));
+                            let ty_name = module.types[member.ty].name.or_index(member.ty);
+                            let binding = member.binding
+                                .as_ref()
+                                .ok_or(Error::MissingBinding(handle))?;
+                            let resolved = options.resolve_binding(binding, out_mode)?;
+                            writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
+                        }
+                        continue
                     }
                     let tyvar = TypedGlobalVariable { module, handle };
                     write!(self.out, "\t{}", tyvar)?;
@@ -830,6 +856,15 @@ impl<W: Write> Writer<W> {
             // write down function body
             if exec_model.is_some() {
                 writeln!(self.out, "\t{} {};", output_name, NAME_OUTPUT)?;
+            }
+            for (local_handle, local) in fun.local_variables.iter() {
+                let ty_name = module.types[local.ty].name.or_index(local.ty);
+                write!(self.out, "\t{} {}", ty_name, local.name.or_index(local_handle))?;
+                if let Some(value) = local.init {
+                    write!(self.out, " = ")?;
+                    self.put_expression(value, fun, module)?;
+                }
+                writeln!(self.out, ";")?;
             }
             for statement in fun.body.iter() {
                 self.put_statement(Level(1), statement, fun, exec_model.is_some(), module)?;

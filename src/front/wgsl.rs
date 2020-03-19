@@ -1,6 +1,6 @@
 use crate::{
     arena::{Arena, Handle},
-    proc::{Typifier, ResolveError},
+    proc::{Interface, Typifier, ResolveError},
     FastHashMap,
 };
 
@@ -1039,21 +1039,37 @@ impl Parser {
                 self.scopes.push(Scope::Statement);
                 let statement = match word {
                     "var" => {
+                        enum Init {
+                            Empty,
+                            Uniform(Handle<crate::Expression>),
+                            Variable(Handle<crate::Expression>),
+                        }
                         let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
                         let init = if lexer.skip(Token::Operation('=')) {
-                            Some(self.parse_general_expression(lexer, context.as_expression())?)
+                            let value = self.parse_general_expression(lexer, context.as_expression())?;
+                            if let crate::Expression::Constant(_) = context.expressions[value] {
+                                Init::Uniform(value)
+                            } else {
+                                Init::Variable(value)
+                            }
                         } else {
-                            None
+                            Init::Empty
                         };
                         lexer.expect(Token::Separator(';'))?;
                         let var_id = context.variables.append(crate::LocalVariable {
                             name: Some(name.to_owned()),
                             ty,
-                            init,
+                            init: match init {
+                                Init::Uniform(value) => Some(value),
+                                _ => None,
+                            }
                         });
                         let expr_id = context.expressions.append(crate::Expression::LocalVariable(var_id));
                         context.lookup_ident.insert(name, expr_id);
-                        crate::Statement::Empty
+                        match init {
+                            Init::Variable(value) => crate::Statement::Store { pointer: expr_id, value },
+                            _ => crate::Statement::Empty,
+                        }
                     }
                     "return" => {
                         let value = if lexer.peek() != Token::Separator(';') {
@@ -1292,7 +1308,17 @@ impl Parser {
                 let (name, class, ty) = self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
                 let var_handle = module.global_variables.append(crate::GlobalVariable {
                     name: Some(name.to_owned()),
-                    class: class.unwrap_or(spirv::StorageClass::Private),
+                    class: match class {
+                        Some(c) => c,
+                        None => match binding {
+                            Some(crate::Binding::BuiltIn(builtin)) => match builtin {
+                                spirv::BuiltIn::GlobalInvocationId => spirv::StorageClass::Input,
+                                spirv::BuiltIn::Position => spirv::StorageClass::Output,
+                                _ => unimplemented!(),
+                            },
+                            _ => spirv::StorageClass::Private,
+                        },
+                    },
                     binding: binding.take(),
                     ty,
                 });
@@ -1314,17 +1340,18 @@ impl Parser {
                 lexer.expect(Token::Operation('='))?;
                 let fun_ident = lexer.next_ident()?;
                 lexer.expect(Token::Separator(';'))?;
-                let function = module.functions
+                let (fun_handle, function) = module.functions
                     .iter()
                     .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
-                    .map(|(handle, _)| handle)
                     .ok_or(Error::UnknownFunction(fun_ident))?;
+
+                let io = Interface::new(function, &module.global_variables);
                 module.entry_points.push(crate::EntryPoint {
                     exec_model,
                     name: export_name.unwrap_or(fun_ident).to_owned(),
-                    inputs: Vec::new(), //TODO
-                    outputs: Vec::new(), //TODO
-                    function,
+                    inputs: io.inputs,
+                    outputs: io.outputs,
+                    function: fun_handle,
                 });
             }
             Token::End => return Ok(false),

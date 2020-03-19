@@ -736,16 +736,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 exec_model: raw.exec_model,
                 name: raw.name,
                 function: *self.lookup_function.lookup(raw.function_id)?,
-                inputs: Vec::new(),
-                outputs: Vec::new(),
+                inputs: FastHashSet::default(),
+                outputs: FastHashSet::default(),
             };
             for var_id in raw.variable_ids {
                 let handle = self.lookup_variable.lookup(var_id)?.handle;
                 match module.global_variables[handle].class {
-                    spirv::StorageClass::Input => ep.inputs.push(handle),
-                    spirv::StorageClass::Output => ep.outputs.push(handle),
+                    spirv::StorageClass::Input => ep.inputs.insert(handle),
+                    spirv::StorageClass::Output => ep.outputs.insert(handle),
                     other => return Err(Error::InvalidVariableClass(other)),
-                }
+                };
             }
             module.entry_points.push(ep);
         }

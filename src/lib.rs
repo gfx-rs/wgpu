@@ -280,8 +280,8 @@ pub struct Function {
 pub struct EntryPoint {
     pub exec_model: spirv::ExecutionModel,
     pub name: String,
-    pub inputs: Vec<Handle<GlobalVariable>>,
-    pub outputs: Vec<Handle<GlobalVariable>>,
+    pub inputs: FastHashSet<Handle<GlobalVariable>>,
+    pub outputs: FastHashSet<Handle<GlobalVariable>>,
     pub function: Handle<Function>,
 }
 
