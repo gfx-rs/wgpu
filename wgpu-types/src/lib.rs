@@ -796,7 +796,7 @@ impl Default for FilterMode {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SamplerDescriptor<'a> {
     pub address_mode_u: AddressMode,
     pub address_mode_v: AddressMode,
