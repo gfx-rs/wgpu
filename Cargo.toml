@@ -18,3 +18,5 @@ spirv = { package = "spirv_headers", version = "1" }
 
 [dev-dependencies]
 env_logger = "0.6"
+ron = "0.5"
+serde = { version = "1", features = ["serde_derive"] }

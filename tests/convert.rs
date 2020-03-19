@@ -30,7 +30,19 @@ fn convert_boids() {
     let module = load_wgsl("boids");
     {
         use naga::back::msl;
-        let binding_map = msl::BindingMap::default();
+        let mut binding_map = msl::BindingMap::default();
+        binding_map.insert(
+            msl::BindSource { set: 0, binding: 0 },
+            msl::BindTarget { buffer: Some(0), texture: None, sampler: None },
+        );
+        binding_map.insert(
+            msl::BindSource { set: 0, binding: 1 },
+            msl::BindTarget { buffer: Some(1), texture: None, sampler: Some(1) },
+        );
+        binding_map.insert(
+            msl::BindSource { set: 0, binding: 2 },
+            msl::BindTarget { buffer: Some(2), texture: None, sampler: Some(1) },
+        );
         let options = msl::Options {
             binding_map: &binding_map,
         };

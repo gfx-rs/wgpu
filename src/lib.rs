@@ -13,8 +13,8 @@ use std::{
 };
 
 
-type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
-type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
+pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
+pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
 #[derive(Clone, Debug)]
 pub struct Header {
