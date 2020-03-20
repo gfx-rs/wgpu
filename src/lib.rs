@@ -1479,7 +1479,8 @@ impl SwapChain {
     /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
     ///
-    /// Returns an `Err` if the GPU timed out when attempting to acquire the next texture.
+    /// Returns an `Err` if the GPU timed out when attempting to acquire the next texture or if a
+    /// previous output is still alive.
     pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, ()> {
         let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
         if output.view_id == wgc::id::Id::ERROR {
