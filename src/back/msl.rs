@@ -22,8 +22,7 @@ use std::{
 
 use crate::{
     arena::Handle,
-    proc::GlobalUse,
-    FastHashMap, FastHashSet
+    FastHashMap,
 };
 
 /// Expect all the global variables to have a pointer type,
@@ -226,7 +225,7 @@ impl AsName for Option<String> {
 struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
     handle: crate::Handle<crate::GlobalVariable>,
-    usage: GlobalUse,
+    usage: crate::GlobalUse,
 }
 impl Display for TypedGlobalVariable<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
@@ -236,7 +235,7 @@ impl Display for TypedGlobalVariable<'_> {
             spirv::StorageClass::Uniform |
             spirv::StorageClass::UniformConstant |
             spirv::StorageClass::StorageBuffer => {
-                let space = if self.usage.contains(GlobalUse::STORE) {
+                let space = if self.usage.contains(crate::GlobalUse::STORE) {
                     "device "
                 } else {
                     "constant "
@@ -773,9 +772,8 @@ impl<W: Write> Writer<W> {
             let fun_name = fun.name.or_index(fun_handle);
             // find the entry point(s) and inputs/outputs
             let mut exec_model = None;
-            let global_use = GlobalUse::scan(fun, &module.global_variables);
             let mut last_used_global = None;
-            for ((handle, var), &usage) in module.global_variables.iter().zip(global_use.iter()) {
+            for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
                 match var.class {
                     spirv::StorageClass::Input => {
                         if let Some(crate::Binding::Location(_)) = var.binding {
@@ -789,12 +787,8 @@ impl<W: Write> Writer<W> {
                     last_used_global = Some(handle);
                 }
             }
-            let mut var_inputs = FastHashSet::default();
-            let mut var_outputs = FastHashSet::default();
             for ep in module.entry_points.iter() {
-                if ep.function == fun_handle{
-                    var_inputs.extend(ep.inputs.iter().cloned());
-                    var_outputs.extend(ep.outputs.iter().cloned());
+                if ep.function == fun_handle {
                     if exec_model.is_some() {
                         if exec_model != Some(ep.exec_model) {
                             return Err(Error::MixedExecutionModels(fun_handle));
@@ -819,8 +813,10 @@ impl<W: Write> Writer<W> {
 
                 if em != spirv::ExecutionModel::GLCompute {
                     writeln!(self.out, "struct {} {{", location_input_name)?;
-                    for &handle in var_inputs.iter() {
-                        let var = &module.global_variables[handle];
+                    for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
+                        if var.class != spirv::StorageClass::Input || !usage.contains(crate::GlobalUse::LOAD) {
+                            continue
+                        }
                         // if it's a struct, lift all the built-in contents up to the root
                         let mut ty_handle = var.ty;
                         if GLOBAL_POINTERS {
@@ -839,7 +835,7 @@ impl<W: Write> Writer<W> {
                             }
                         } else {
                             if let Some(ref binding@crate::Binding::Location(_)) = var.binding {
-                                let tyvar = TypedGlobalVariable { module, handle, usage: GlobalUse::empty() };
+                                let tyvar = TypedGlobalVariable { module, handle, usage: crate::GlobalUse::empty() };
                                 let resolved = options.resolve_binding(binding, in_mode)?;
                                 writeln!(self.out, "\t{} [[{}]];", tyvar, resolved)?;
                             }
@@ -847,8 +843,10 @@ impl<W: Write> Writer<W> {
                     }
                     writeln!(self.out, "}};")?;
                     writeln!(self.out, "struct {} {{", output_name)?;
-                    for &handle in var_outputs.iter() {
-                        let var = &module.global_variables[handle];
+                    for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
+                        if var.class != spirv::StorageClass::Output || !usage.contains(crate::GlobalUse::STORE) {
+                            continue
+                        }
                         // if it's a struct, lift all the built-in contents up to the root
                         let mut ty_handle = var.ty;
                         if GLOBAL_POINTERS {
@@ -867,7 +865,7 @@ impl<W: Write> Writer<W> {
                                 writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
                             }
                         } else {
-                            let tyvar = TypedGlobalVariable { module, handle, usage: GlobalUse::empty() };
+                            let tyvar = TypedGlobalVariable { module, handle, usage: crate::GlobalUse::empty() };
                             write!(self.out, "\t{}", tyvar)?;
                             if let Some(ref binding) = var.binding {
                                 let resolved = options.resolve_binding(binding, out_mode)?;
@@ -885,7 +883,7 @@ impl<W: Write> Writer<W> {
                     writeln!(self.out, "{} void {}(", em_str, fun_name)?;
                 }
 
-                for ((handle, var), &usage) in module.global_variables.iter().zip(global_use.iter()) {
+                for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
                     if usage.is_empty() || var.class == spirv::StorageClass::Output {
                         continue
                     }

@@ -117,6 +117,13 @@ pub enum Binding {
     Descriptor { set: spirv::Word, binding: spirv::Word },
 }
 
+bitflags::bitflags! {
+    pub struct GlobalUse: u8 {
+        const LOAD = 0x1;
+        const STORE = 0x2;
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct GlobalVariable {
     pub name: Option<String>,
@@ -271,6 +278,7 @@ pub struct Function {
     pub control: spirv::FunctionControl,
     pub parameter_types: Vec<Handle<Type>>,
     pub return_type: Option<Handle<Type>>,
+    pub global_usage: Vec<GlobalUse>,
     pub local_variables: Arena<LocalVariable>,
     pub expressions: Arena<Expression>,
     pub body: Block,
@@ -280,8 +288,6 @@ pub struct Function {
 pub struct EntryPoint {
     pub exec_model: spirv::ExecutionModel,
     pub name: String,
-    pub inputs: FastHashSet<Handle<GlobalVariable>>,
-    pub outputs: FastHashSet<Handle<GlobalVariable>>,
     pub function: Handle<Function>,
 }
 

@@ -732,22 +732,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         module.entry_points.reserve(entry_points.len());
         for raw in entry_points {
-            let mut ep = crate::EntryPoint {
+            module.entry_points.push(crate::EntryPoint {
                 exec_model: raw.exec_model,
                 name: raw.name,
                 function: *self.lookup_function.lookup(raw.function_id)?,
-                inputs: FastHashSet::default(),
-                outputs: FastHashSet::default(),
-            };
-            for var_id in raw.variable_ids {
-                let handle = self.lookup_variable.lookup(var_id)?.handle;
-                match module.global_variables[handle].class {
-                    spirv::StorageClass::Input => ep.inputs.insert(handle),
-                    spirv::StorageClass::Output => ep.outputs.insert(handle),
-                    other => return Err(Error::InvalidVariableClass(other)),
-                };
-            }
-            module.entry_points.push(ep);
+            });
         }
 
         Ok(module)
@@ -1405,6 +1394,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 } else {
                     Some(self.lookup_type.lookup(result_type)?.handle)
                 },
+                global_usage: Vec::new(),
                 local_variables: Arena::new(),
                 expressions: self.make_expression_storage(),
                 body: Vec::new(),
@@ -1447,6 +1437,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
         // done
+        fun.global_usage = crate::GlobalUse::scan(&fun.expressions, &fun.body, &module.global_variables);
         let handle = module.functions.append(fun);
         self.lookup_function.insert(fun_id, handle);
         self.lookup_expression.clear();

@@ -2,16 +2,9 @@ use crate::{
     arena::{Arena, Handle},
 };
 
-bitflags::bitflags! {
-    pub struct GlobalUse: u8 {
-        const LOAD = 0x1;
-        const STORE = 0x2;
-    }
-}
-
 struct Interface<'a> {
     expressions: &'a Arena<crate::Expression>,
-    uses: Vec<GlobalUse>,
+    uses: Vec<crate::GlobalUse>,
 }
 
 impl<'a> Interface<'a> {
@@ -33,7 +26,7 @@ impl<'a> Interface<'a> {
             }
             E::FunctionParameter(_) => {},
             E::GlobalVariable(handle) => {
-                self.uses[handle.index()] |= GlobalUse::LOAD;
+                self.uses[handle.index()] |= crate::GlobalUse::LOAD;
             }
             E::LocalVariable(_) => {}
             E::Load { pointer } => {
@@ -117,7 +110,7 @@ impl<'a> Interface<'a> {
                                 left = base;
                             }
                             crate::Expression::GlobalVariable(handle) => {
-                                self.uses[handle.index()] |= GlobalUse::STORE;
+                                self.uses[handle.index()] |= crate::GlobalUse::STORE;
                                 break;
                             }
                             _ => break,
@@ -130,16 +123,17 @@ impl<'a> Interface<'a> {
     }
 }
 
-impl GlobalUse {
+impl crate::GlobalUse {
     pub fn scan(
-        fun: &crate::Function,
+        expressions: &Arena<crate::Expression>,
+        body: &[crate::Statement],
         globals: &Arena<crate::GlobalVariable>,
-    ) -> Box<[Self]> {
+    ) -> Vec<Self> {
         let mut io = Interface {
-            expressions: &fun.expressions,
-            uses: vec![GlobalUse::empty(); globals.len()],
+            expressions,
+            uses: vec![crate::GlobalUse::empty(); globals.len()],
         };
-        io.collect(&fun.body);
-        io.uses.into_boxed_slice()
+        io.collect(body);
+        io.uses
     }
 }
