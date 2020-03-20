@@ -34,6 +34,13 @@ impl Shader {
         })
     }
 
+    pub fn from_raw(data: &[u8]) -> Self {
+        Shader(d3d12::D3D12_SHADER_BYTECODE {
+            BytecodeLength: data.len() as _,
+            pShaderBytecode: data.as_ptr() as _,
+        })
+    }
+
     // `blob` may not be null.
     pub fn from_blob(blob: Blob) -> Self {
         Shader(d3d12::D3D12_SHADER_BYTECODE {
