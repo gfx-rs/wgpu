@@ -470,6 +470,7 @@ typedef struct {
 } WGPUBindGroupEntry;
 
 typedef struct {
+  const char *label;
   WGPUBindGroupLayoutId layout;
   const WGPUBindGroupEntry *entries;
   uintptr_t entries_length;
@@ -493,6 +494,7 @@ typedef struct {
 } WGPUBindGroupLayoutEntry;
 
 typedef struct {
+  const char *label;
   const WGPUBindGroupLayoutEntry *entries;
   uintptr_t entries_length;
 } WGPUBindGroupLayoutDescriptor;
@@ -511,12 +513,13 @@ typedef uint32_t WGPUBufferUsage;
 #define WGPUBufferUsage_NONE 0
 
 typedef struct {
+  const char *label;
   WGPUBufferAddress size;
   WGPUBufferUsage usage;
 } WGPUBufferDescriptor;
 
 typedef struct {
-  uint32_t todo;
+  const char *label;
 } WGPUCommandEncoderDescriptor;
 
 typedef uint64_t WGPUId_PipelineLayout_Dummy;
@@ -671,6 +674,7 @@ typedef struct {
 } WGPUSwapChainDescriptor;
 
 typedef struct {
+  const char *label;
   WGPUExtent3d size;
   uint32_t array_layer_count;
   uint32_t mip_level_count;

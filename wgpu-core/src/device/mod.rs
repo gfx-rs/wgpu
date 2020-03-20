@@ -321,8 +321,11 @@ impl<B: GfxBackend> Device<B> {
         };
 
         let mut buffer = unsafe { self.raw.create_buffer(desc.size, usage).unwrap() };
-        if let Some(label) = desc.label {
-            unsafe { self.raw.set_buffer_name(&mut buffer, label) };
+        if !desc.label.is_null() {
+            unsafe {
+                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+                self.raw.set_buffer_name(&mut buffer, &label)
+            };
         }
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
         let memory = self
@@ -398,16 +401,20 @@ impl<B: GfxBackend> Device<B> {
         // TODO: 2D arrays, cubemap arrays
 
         let mut image = unsafe {
-            self.raw.create_image(
+            let mut image = self.raw.create_image(
                 kind,
                 desc.mip_level_count as hal::image::Level,
                 format,
                 hal::image::Tiling::Optimal,
                 usage,
                 view_capabilities,
-            )
-        }
-        .unwrap();
+            ).unwrap();
+            if !desc.label.is_null() {
+                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+                self.raw.set_image_name(&mut image, &label);
+            }
+            image
+        };
         let requirements = unsafe { self.raw.get_image_requirements(&image) };
 
         let memory = self
@@ -907,10 +914,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         let raw = unsafe {
-            device
+            let mut raw_layout = device
                 .raw
                 .create_descriptor_set_layout(&raw_bindings, &[])
-                .unwrap()
+                .unwrap();
+            if !desc.label.is_null() {
+                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+                device.raw.set_descriptor_set_layout_name(&mut raw_layout, &label);
+            }
+            raw_layout
         };
 
         let layout = binding_model::BindGroupLayout {
@@ -1009,7 +1021,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             unsafe { slice::from_raw_parts(desc.entries, desc.entries_length as usize) };
         assert_eq!(entries.len(), bind_group_layout.entries.len());
 
-        let desc_set = unsafe {
+        let mut desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
             device
                 .desc_allocator
@@ -1024,6 +1036,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .unwrap();
             desc_sets.pop().unwrap()
         };
+
+        if !desc.label.is_null() {
+            unsafe {
+                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+                device.raw.set_descriptor_set_name(desc_set.raw_mut(), &label);
+            }
+        }
 
         // fill out the descriptors
         let mut used = TrackerSet::new(B::VARIANT);
@@ -1246,7 +1265,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_command_encoder<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        _desc: &wgt::CommandEncoderDescriptor,
+        desc: &wgt::CommandEncoderDescriptor,
         id_in: Input<G, id::CommandEncoderId>,
     ) -> id::CommandEncoderId {
         let hub = B::hub(self);
@@ -1264,17 +1283,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life(&mut token)
             .lowest_active_submission();
 
-        let mut comb = device
+        let mut command_buffer = device
             .com_allocator
             .allocate(dev_stored, &device.raw, device.features, lowest_active_index);
         unsafe {
-            comb.raw.last_mut().unwrap().begin_primary(
+            let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
+            if !desc.label.is_null() {
+                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+                device.raw.set_command_buffer_name(raw_command_buffer, &label);
+            }
+            raw_command_buffer.begin_primary(
                 hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
             );
         }
 
         hub.command_buffers
-            .register_identity(id_in, comb, &mut token)
+            .register_identity(id_in, command_buffer, &mut token)
     }
 
     pub fn command_encoder_destroy<B: GfxBackend>(

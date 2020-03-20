@@ -536,20 +536,26 @@ bitflags::bitflags! {
 }
 
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BufferDescriptor<'a> {
-    pub label: Option<&'a str>,
+pub struct BufferDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub size: BufferAddress,
     pub usage: BufferUsage,
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor {
     // MSVC doesn't allow zero-sized structs
     // We can remove this when we actually have a field
-    pub todo: u32,
+    // pub todo: u32,
+    pub label: *const std::os::raw::c_char,
+}
+
+impl Default for CommandEncoderDescriptor {
+    fn default() -> CommandEncoderDescriptor {
+        unsafe { std::mem::zeroed() }
+    }
 }
 
 pub type DynamicOffset = u32;
@@ -735,6 +741,7 @@ pub struct Extent3d {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextureDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub size: Extent3d,
     pub array_layer_count: u32,
     pub mip_level_count: u32,
