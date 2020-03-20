@@ -22,6 +22,7 @@ use std::{
 
 use crate::{
     arena::Handle,
+    proc::GlobalUse,
     FastHashMap, FastHashSet
 };
 
@@ -29,11 +30,12 @@ use crate::{
 /// like in SPIR-V.
 const GLOBAL_POINTERS: bool = false;
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct BindTarget {
     pub buffer: Option<u8>,
     pub texture: Option<u8>,
     pub sampler: Option<u8>,
+    pub mutable: bool,
 }
 
 #[derive(Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
@@ -73,6 +75,7 @@ pub enum Error {
     MissingBinding(crate::Handle<crate::GlobalVariable>),
     MissingBindTarget(BindSource),
     InvalidImageFlags(crate::ImageFlags),
+    MutabilityViolation(crate::Handle<crate::GlobalVariable>),
     BadName(String),
 }
 
@@ -223,11 +226,25 @@ impl AsName for Option<String> {
 struct TypedGlobalVariable<'a> {
     module: &'a crate::Module,
     handle: crate::Handle<crate::GlobalVariable>,
+    usage: GlobalUse,
 }
 impl Display for TypedGlobalVariable<'_> {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
         let var = &self.module.global_variables[self.handle];
         let name = var.name.or_index(self.handle);
+        let (space_qualifier, reference) = match var.class {
+            spirv::StorageClass::Uniform |
+            spirv::StorageClass::UniformConstant |
+            spirv::StorageClass::StorageBuffer => {
+                let space = if self.usage.contains(GlobalUse::STORE) {
+                    "device "
+                } else {
+                    "constant "
+                };
+                (space, "&")
+            }
+            _ => ("", "")
+        };
         if GLOBAL_POINTERS {
             let ty = &self.module.types[var.ty];
             match ty.inner {
@@ -235,6 +252,7 @@ impl Display for TypedGlobalVariable<'_> {
                     let ty_handle = match class {
                         spirv::StorageClass::Input |
                         spirv::StorageClass::Output |
+                        spirv::StorageClass::Uniform |
                         spirv::StorageClass::UniformConstant => base,
                         _ => var.ty
                     };
@@ -245,7 +263,7 @@ impl Display for TypedGlobalVariable<'_> {
             }
         } else {
             let ty_name = self.module.types[var.ty].name.or_index(var.ty);
-            write!(formatter, "{} {}", ty_name, name)
+            write!(formatter, "{}{}{} {}", space_qualifier, ty_name, reference, name)
         }
     }
 }
@@ -294,8 +312,8 @@ pub struct Writer<W> {
 fn scalar_kind_string(kind: crate::ScalarKind) -> &'static str {
     match kind {
         crate::ScalarKind::Float => "float",
-        crate::ScalarKind::Sint => "signed int",
-        crate::ScalarKind::Uint => "unsigned int",
+        crate::ScalarKind::Sint => "int",
+        crate::ScalarKind::Uint => "uint",
         crate::ScalarKind::Bool => "bool",
     }
 }
@@ -308,9 +326,13 @@ fn vector_size_string(size: crate::VectorSize) -> &'static str {
     }
 }
 
-const NAME_INPUT: &str = "input";
-const NAME_OUTPUT: &str = "output";
+const OUTPUT_STRUCT_NAME: &str = "output";
+const LOCATION_INPUT_STRUCT_NAME: &str = "input";
 const COMPONENTS: &[char] = &['x', 'y', 'z', 'w'];
+
+fn separate(is_last: bool) -> &'static str {
+    if is_last { "" } else { "," }
+}
 
 #[derive(Debug)]
 enum MaybeOwned<'a, T: 'a> {
@@ -393,6 +415,9 @@ impl<W: Write> Writer<W> {
                     }
                     crate::ConstantInner::Float(value) => {
                         write!(self.out, "{}", value)?;
+                        if value.fract() == 0.0 {
+                            self.out.write_str(".0")?;
+                        }
                         crate::ScalarKind::Float
                     }
                     crate::ConstantInner::Bool(value) => {
@@ -425,7 +450,6 @@ impl<W: Write> Writer<W> {
                 let inner = &module.types[var.ty].inner;
                 match var.class {
                     spirv::StorageClass::Output => {
-                        self.out.write_str(NAME_OUTPUT)?;
                         if GLOBAL_POINTERS {
                             if let crate::TypeInner::Pointer { base, .. } = *inner {
                                 let base_inner = &module.types[base].inner;
@@ -438,12 +462,14 @@ impl<W: Write> Writer<W> {
                                 return Ok(MaybeOwned::Borrowed(inner));
                             }
                         }
-                        self.out.write_str(".")?;
+                        write!(self.out, "{}.", OUTPUT_STRUCT_NAME)?;
                     }
                     spirv::StorageClass::Input => {
-                        write!(self.out, "{}.", NAME_INPUT)?;
+                        if let Some(crate::Binding::Location(_)) = var.binding {
+                            write!(self.out, "{}.", LOCATION_INPUT_STRUCT_NAME)?;
+                        }
                     }
-                    _ => ()
+                    _ => {}
                 }
                 let name = var.name.or_index(handle);
                 write!(self.out, "{}", name)?;
@@ -488,11 +514,11 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::GreaterEqual => ">=",
                     _ => panic!("Unsupported binary op {:?}", op),
                 };
-                write!(self.out, "(")?;
+                //write!(self.out, "(")?;
                 let ty_left = self.put_expression(left, function, module)?;
                 write!(self.out, " {} ", op_str)?;
                 let ty_right = self.put_expression(right, function, module)?;
-                write!(self.out, ")")?;
+                //write!(self.out, ")")?;
 
                 Ok(if op_str.len() == 1 {
                     match (ty_left.borrow(), ty_right.borrow()) {
@@ -523,11 +549,20 @@ impl<W: Write> Writer<W> {
             crate::Expression::Call { ref name, ref arguments } => {
                 match name.as_str() {
                     "cos" |
-                    "fclamp" |
                     "normalize" |
                     "sin" => {
                         write!(self.out, "{}(", name)?;
                         let result = self.put_expression(arguments[0], function, module)?;
+                        write!(self.out, ")")?;
+                        Ok(result)
+                    }
+                    "fclamp" => {
+                        write!(self.out, "clamp(")?;
+                        let result = self.put_expression(arguments[0], function, module)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arguments[1], function, module)?;
+                        write!(self.out, ", ")?;
+                        self.put_expression(arguments[2], function, module)?;
                         write!(self.out, ")")?;
                         Ok(result)
                     }
@@ -572,7 +607,7 @@ impl<W: Write> Writer<W> {
         level: Level,
         statement: &crate::Statement,
         function: &crate::Function,
-        is_entry_point: bool,
+        has_output: bool,
         module: &'a crate::Module,
     ) -> Result<(), Error> {
         log::trace!("statement[{}] {:?}", level.0, statement);
@@ -583,12 +618,12 @@ impl<W: Write> Writer<W> {
                 self.put_expression(condition, function, module)?;
                 writeln!(self.out, ") {{")?;
                 for s in accept {
-                    self.put_statement(level.next(), s, function, is_entry_point, module)?;
+                    self.put_statement(level.next(), s, function, has_output, module)?;
                 }
                 if !reject.is_empty() {
                     writeln!(self.out, "{}}} else {{", level)?;
                     for s in reject {
-                        self.put_statement(level.next(), s, function, is_entry_point, module)?;
+                        self.put_statement(level.next(), s, function, has_output, module)?;
                     }
                 }
                 writeln!(self.out, "{}}}", level)?;
@@ -596,7 +631,7 @@ impl<W: Write> Writer<W> {
             crate::Statement::Loop { ref body, ref continuing } => {
                 writeln!(self.out, "{}while(true) {{", level)?;
                 for s in body {
-                    self.put_statement(level.next(), s, function, is_entry_point, module)?;
+                    self.put_statement(level.next(), s, function, has_output, module)?;
                 }
                 if !continuing.is_empty() {
                     //TODO
@@ -620,9 +655,9 @@ impl<W: Write> Writer<W> {
             crate::Statement::Return { value } => {
                 write!(self.out, "{}return ", level)?;
                 match value {
-                    None if is_entry_point => self.out.write_str(NAME_OUTPUT)?,
+                    None if has_output => self.out.write_str(OUTPUT_STRUCT_NAME)?,
                     None => {}
-                    Some(expr_handle) if is_entry_point => {
+                    Some(expr_handle) if has_output => {
                         panic!("Unable to return value {:?} from an entry point!", expr_handle)
                     }
                     Some(expr_handle) => {
@@ -668,6 +703,7 @@ impl<W: Write> Writer<W> {
                     let class_name = match class {
                         spirv::StorageClass::Input |
                         spirv::StorageClass::Output => continue,
+                        spirv::StorageClass::Uniform |
                         spirv::StorageClass::UniformConstant => "constant",
                         other => {
                             log::warn!("Unexpected pointer class {:?}", other);
@@ -733,11 +769,26 @@ impl<W: Write> Writer<W> {
     }
 
     fn write_functions(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
-        let mut uniforms_used = FastHashSet::default();
         for (fun_handle, fun) in module.functions.iter() {
             let fun_name = fun.name.or_index(fun_handle);
             // find the entry point(s) and inputs/outputs
             let mut exec_model = None;
+            let global_use = GlobalUse::scan(fun, &module.global_variables);
+            let mut last_used_global = None;
+            for ((handle, var), &usage) in module.global_variables.iter().zip(global_use.iter()) {
+                match var.class {
+                    spirv::StorageClass::Input => {
+                        if let Some(crate::Binding::Location(_)) = var.binding {
+                            continue
+                        }
+                    }
+                    spirv::StorageClass::Output => continue,
+                    _ => {}
+                }
+                if !usage.is_empty() {
+                    last_used_global = Some(handle);
+                }
+            }
             let mut var_inputs = FastHashSet::default();
             let mut var_outputs = FastHashSet::default();
             for ep in module.entry_points.iter() {
@@ -753,61 +804,109 @@ impl<W: Write> Writer<W> {
                     }
                 }
             }
-            let input_name = fun.name.or_index(InputStructIndex(fun_handle));
             let output_name = fun.name.or_index(OutputStructIndex(fun_handle));
+
             // make dedicated input/output structs
             if let Some(em) = exec_model {
-                writeln!(self.out, "struct {} {{", input_name)?;
+                assert_eq!(fun.return_type, None);
                 let (em_str, in_mode, out_mode) = match em {
                     spirv::ExecutionModel::Vertex => ("vertex", LocationMode::VertexInput, LocationMode::Intermediate),
                     spirv::ExecutionModel::Fragment => ("fragment", LocationMode::Intermediate, LocationMode::FragmentOutput),
-                    spirv::ExecutionModel::GLCompute => ("compute", LocationMode::Uniform, LocationMode::Uniform),
+                    spirv::ExecutionModel::GLCompute => ("kernel", LocationMode::Uniform, LocationMode::Uniform),
                     _ => return Err(Error::UnsupportedExecutionModel(em)),
                 };
-                for &handle in var_inputs.iter() {
-                    let var = &module.global_variables[handle];
-                    let tyvar = TypedGlobalVariable { module, handle };
-                    write!(self.out, "\t{}", tyvar)?;
-                    if let Some(ref binding) = var.binding {
-                        let resolved = options.resolve_binding(binding, in_mode)?;
-                        write!(self.out, " [[{}]]", resolved)?;
+                let location_input_name = fun.name.or_index(InputStructIndex(fun_handle));
+
+                if em != spirv::ExecutionModel::GLCompute {
+                    writeln!(self.out, "struct {} {{", location_input_name)?;
+                    for &handle in var_inputs.iter() {
+                        let var = &module.global_variables[handle];
+                        // if it's a struct, lift all the built-in contents up to the root
+                        let mut ty_handle = var.ty;
+                        if GLOBAL_POINTERS {
+                            if let crate::TypeInner::Pointer { base, .. } = module.types[var.ty].inner {
+                                ty_handle = base;
+                            }
+                        }
+                        if let crate::TypeInner::Struct { ref members } = module.types[ty_handle].inner {
+                            for (index, member) in members.iter().enumerate() {
+                                if let Some(ref binding@crate::Binding::Location(_)) = member.binding {
+                                    let name = member.name.or_index(MemberIndex(index));
+                                    let ty_name = module.types[member.ty].name.or_index(member.ty);
+                                    let resolved = options.resolve_binding(binding, in_mode)?;
+                                    writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
+                                }
+                            }
+                        } else {
+                            if let Some(ref binding@crate::Binding::Location(_)) = var.binding {
+                                let tyvar = TypedGlobalVariable { module, handle, usage: GlobalUse::empty() };
+                                let resolved = options.resolve_binding(binding, in_mode)?;
+                                writeln!(self.out, "\t{} [[{}]];", tyvar, resolved)?;
+                            }
+                        }
                     }
-                    writeln!(self.out, ";")?;
+                    writeln!(self.out, "}};")?;
+                    writeln!(self.out, "struct {} {{", output_name)?;
+                    for &handle in var_outputs.iter() {
+                        let var = &module.global_variables[handle];
+                        // if it's a struct, lift all the built-in contents up to the root
+                        let mut ty_handle = var.ty;
+                        if GLOBAL_POINTERS {
+                            if let crate::TypeInner::Pointer { base, .. } = module.types[var.ty].inner {
+                                ty_handle = base;
+                            }
+                        }
+                        if let crate::TypeInner::Struct { ref members } = module.types[ty_handle].inner {
+                            for (index, member) in members.iter().enumerate() {
+                                let name = member.name.or_index(MemberIndex(index));
+                                let ty_name = module.types[member.ty].name.or_index(member.ty);
+                                let binding = member.binding
+                                    .as_ref()
+                                    .ok_or(Error::MissingBinding(handle))?;
+                                let resolved = options.resolve_binding(binding, out_mode)?;
+                                writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
+                            }
+                        } else {
+                            let tyvar = TypedGlobalVariable { module, handle, usage: GlobalUse::empty() };
+                            write!(self.out, "\t{}", tyvar)?;
+                            if let Some(ref binding) = var.binding {
+                                let resolved = options.resolve_binding(binding, out_mode)?;
+                                write!(self.out, " [[{}]]", resolved)?;
+                            }
+                            writeln!(self.out, ";")?;
+                        }
+                    }
+                    writeln!(self.out, "}};")?;
+                    writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
+                    let separator = separate(last_used_global.is_none());
+                    writeln!(self.out, "\t{} {} [[stage_in]]{}",
+                        location_input_name, LOCATION_INPUT_STRUCT_NAME, separator)?;
+                } else {
+                    writeln!(self.out, "{} void {}(", em_str, fun_name)?;
                 }
-                writeln!(self.out, "}};")?;
-                writeln!(self.out, "struct {} {{", output_name)?;
-                for &handle in var_outputs.iter() {
-                    let var = &module.global_variables[handle];
-                    // if it's a struct, lift all the built-in contents up to the root
-                    let mut ty_handle = var.ty;
-                    if GLOBAL_POINTERS {
-                        if let crate::TypeInner::Pointer { base, .. } = module.types[var.ty].inner {
-                            ty_handle = base;
-                        }
-                    }
-                    if let crate::TypeInner::Struct { ref members } = module.types[ty_handle].inner {
-                        for (index, member) in members.iter().enumerate() {
-                            let name = member.name.or_index(MemberIndex(index));
-                            let ty_name = module.types[member.ty].name.or_index(member.ty);
-                            let binding = member.binding
-                                .as_ref()
-                                .ok_or(Error::MissingBinding(handle))?;
-                            let resolved = options.resolve_binding(binding, out_mode)?;
-                            writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
-                        }
+
+                for ((handle, var), &usage) in module.global_variables.iter().zip(global_use.iter()) {
+                    if usage.is_empty() || var.class == spirv::StorageClass::Output {
                         continue
                     }
-                    let tyvar = TypedGlobalVariable { module, handle };
-                    write!(self.out, "\t{}", tyvar)?;
-                    if let Some(ref binding) = var.binding {
-                        let resolved = options.resolve_binding(binding, out_mode)?;
-                        write!(self.out, " [[{}]]", resolved)?;
+                    if var.class == spirv::StorageClass::Input {
+                        if let Some(crate::Binding::Location(_)) = var.binding {
+                            // location inputs are put into a separate struct
+                            continue
+                        }
                     }
-                    writeln!(self.out, ";")?;
+                    let loc_mode = match (em, var.class) {
+                        (spirv::ExecutionModel::Vertex, spirv::StorageClass::Input) => LocationMode::VertexInput,
+                        (spirv::ExecutionModel::Vertex, spirv::StorageClass::Output) |
+                        (spirv::ExecutionModel::Fragment, spirv::StorageClass::Input) => LocationMode::Intermediate,
+                        (spirv::ExecutionModel::Fragment, spirv::StorageClass::Output) => LocationMode::FragmentOutput,
+                        _ => LocationMode::Uniform,
+                    };
+                    let resolved = options.resolve_binding(var.binding.as_ref().unwrap(), loc_mode)?;
+                    let tyvar = TypedGlobalVariable { module, handle, usage };
+                    let separator = separate(last_used_global == Some(handle));
+                    writeln!(self.out, "\t{} [[{}]]{}", tyvar, resolved, separator)?;
                 }
-                writeln!(self.out, "}};")?;
-                writeln!(self.out, "{} {} {}(", em_str, output_name, fun_name)?;
-                writeln!(self.out, "\t{} {} [[stage_in]],", input_name, NAME_INPUT)?;
             } else {
                 let result_type_name = match fun.return_type {
                     Some(type_id) => module.types[type_id].name.or_index(type_id),
@@ -820,43 +919,21 @@ impl<W: Write> Writer<W> {
                 for (index, &ty) in fun.parameter_types.iter().enumerate() {
                     let name = Name::from(ParameterIndex(index));
                     let member_type_name = module.types[ty].name.or_index(ty);
-                    writeln!(self.out, "\t{} {},", member_type_name, name)?;
-                }
-            }
-            for (_, expr) in fun.expressions.iter() {
-                if let crate::Expression::GlobalVariable(handle) = *expr {
-                    let var = &module.global_variables[handle];
-                    if var.class == spirv::StorageClass::UniformConstant && !uniforms_used.contains(&handle) {
-                        uniforms_used.insert(handle);
-                        let binding = var.binding
-                            .as_ref()
-                            .ok_or(Error::MissingBinding(handle))?;
-                        let resolved = options.resolve_binding(binding, LocationMode::Uniform)?;
-                        let var = TypedGlobalVariable { module, handle };
-                        writeln!(self.out, "\t{} [[{}]],", var, resolved)?;
-                    }
-                }
-            }
-            // add an extra parameter to make Metal happy about the comma
-            match exec_model {
-                Some(spirv::ExecutionModel::Vertex) => {
-                    writeln!(self.out, "\tunsigned _dummy [[vertex_id]]")?;
-                }
-                Some(spirv::ExecutionModel::Fragment) => {
-                    writeln!(self.out, "\tbool _dummy [[front_facing]]")?;
-                }
-                Some(spirv::ExecutionModel::GLCompute) => {
-                    writeln!(self.out, "\tunsigned _dummy [[threads_per_grid]]")?;
-                }
-                _ => {
-                    writeln!(self.out, "\tint _dummy")?;
+                    let separator = separate(index + 1 == fun.parameter_types.len() && last_used_global.is_none());
+                    writeln!(self.out, "\t{} {}{}", member_type_name, name, separator)?;
                 }
             }
             writeln!(self.out, ") {{")?;
+
             // write down function body
-            if exec_model.is_some() {
-                writeln!(self.out, "\t{} {};", output_name, NAME_OUTPUT)?;
-            }
+            let has_output = match exec_model {
+                Some(spirv::ExecutionModel::Vertex) |
+                Some(spirv::ExecutionModel::Fragment) => {
+                    writeln!(self.out, "\t{} {};", output_name, OUTPUT_STRUCT_NAME)?;
+                    true
+                }
+                _ => false
+            };
             for (local_handle, local) in fun.local_variables.iter() {
                 let ty_name = module.types[local.ty].name.or_index(local.ty);
                 write!(self.out, "\t{} {}", ty_name, local.name.or_index(local_handle))?;
@@ -867,7 +944,7 @@ impl<W: Write> Writer<W> {
                 writeln!(self.out, ";")?;
             }
             for statement in fun.body.iter() {
-                self.put_statement(Level(1), statement, fun, exec_model.is_some(), module)?;
+                self.put_statement(Level(1), statement, fun, has_output, module)?;
             }
             writeln!(self.out, "}}")?;
         }

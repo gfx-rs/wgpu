@@ -64,7 +64,7 @@ type Particles = struct {
 [[binding 1, set 0]] var<storage_buffer> particlesA : Particles;
 [[binding 2, set 0]] var<storage_buffer> particlesB : Particles;
 
-[[builtin global_invocation_id]] var gl_GlobalInvocationID : vec3<f32>;
+[[builtin global_invocation_id]] var gl_GlobalInvocationID : vec3<u32>;
 
 # https://github.com/austinEng/Project6-Vulkan-Flocking/blob/master/data/shaders/computeparticles/particle.comp
 fn compute_main() -> void {
@@ -84,7 +84,7 @@ fn compute_main() -> void {
 
   var pos : vec2<f32>;
   var vel : vec2<f32>;
-  var i : i32 = 0;
+  var i : u32 = 0;
   loop {
     if (i >= 5) {
       break;

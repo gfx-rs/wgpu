@@ -12,6 +12,7 @@ struct BindTarget {
     buffer: Option<u8>,
     texture: Option<u8>,
     sampler: Option<u8>,
+    mutable: bool,
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -62,6 +63,7 @@ fn main() {
                     buffer: value.buffer,
                     texture: value.texture,
                     sampler: value.sampler,
+                    mutable: value.mutable,
                 },
             );
         }

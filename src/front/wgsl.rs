@@ -1,7 +1,7 @@
 use crate::{
     arena::{Arena, Handle},
-    proc::{Interface, Typifier, ResolveError},
-    FastHashMap,
+    proc::{GlobalUse, Typifier, ResolveError},
+    FastHashMap, FastHashSet,
 };
 
 
@@ -154,6 +154,7 @@ pub enum Error<'a> {
     UnknownIdent(&'a str),
     UnknownType(&'a str),
     UnknownFunction(&'a str),
+    MutabilityViolation(&'a str),
     Other,
 }
 
@@ -1345,12 +1346,38 @@ impl Parser {
                     .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
                     .ok_or(Error::UnknownFunction(fun_ident))?;
 
-                let io = Interface::new(function, &module.global_variables);
+                let uses = GlobalUse::scan(function, &module.global_variables);
+                let mut inputs = FastHashSet::default();
+                let mut outputs = FastHashSet::default();
+                for ((handle, var), &usage) in module.global_variables.iter().zip(uses.iter()) {
+                    match var.class {
+                        _ if usage.is_empty() => {}
+                        spirv::StorageClass::Input if usage.contains(GlobalUse::LOAD) => {
+                            inputs.insert(handle);
+                        }
+                        spirv::StorageClass::Output if usage.contains(GlobalUse::STORE) => {
+                            outputs.insert(handle);
+                        }
+                        spirv::StorageClass::Input |
+                        spirv::StorageClass::Output => {
+                            let name = lookup_global_expression
+                                .iter()
+                                .find(|&(_, h)| match *h {
+                                    crate::Expression::GlobalVariable(h) => h == handle,
+                                    _ => false,
+                                })
+                                .map(|(name, _)| name)
+                                .unwrap();
+                            return Err(Error::MutabilityViolation(name));
+                        }
+                        _ => {}
+                    }
+                }
                 module.entry_points.push(crate::EntryPoint {
                     exec_model,
                     name: export_name.unwrap_or(fun_ident).to_owned(),
-                    inputs: io.inputs,
-                    outputs: io.outputs,
+                    inputs,
+                    outputs,
                     function: fun_handle,
                 });
             }

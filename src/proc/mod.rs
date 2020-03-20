@@ -1,5 +1,5 @@
 mod interface;
 mod typifier;
 
-pub use interface::Interface;
+pub use interface::GlobalUse;
 pub use typifier::{ResolveError, Typifier};

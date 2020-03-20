@@ -84,6 +84,10 @@ impl<T> Arena<T> {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
         self.data
             .iter()

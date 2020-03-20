@@ -1,6 +1,7 @@
 .PHONY: all clean
+.SECONDARY: boids.metal quad.metal
 
-all: boids.metallib
+all:
 
 clean:
 	rm *.metal *.air *.metallib

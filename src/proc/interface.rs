@@ -1,13 +1,17 @@
 use crate::{
     arena::{Arena, Handle},
-    FastHashSet,
 };
 
-pub struct Interface<'a> {
+bitflags::bitflags! {
+    pub struct GlobalUse: u8 {
+        const LOAD = 0x1;
+        const STORE = 0x2;
+    }
+}
+
+struct Interface<'a> {
     expressions: &'a Arena<crate::Expression>,
-    globals: &'a Arena<crate::GlobalVariable>,
-    pub inputs: FastHashSet<Handle<crate::GlobalVariable>>,
-    pub outputs: FastHashSet<Handle<crate::GlobalVariable>>,
+    uses: Vec<GlobalUse>,
 }
 
 impl<'a> Interface<'a> {
@@ -29,9 +33,7 @@ impl<'a> Interface<'a> {
             }
             E::FunctionParameter(_) => {},
             E::GlobalVariable(handle) => {
-                if self.globals[handle].class == spirv::StorageClass::Input {
-                    self.inputs.insert(handle);
-                }
+                self.uses[handle.index()] |= GlobalUse::LOAD;
             }
             E::LocalVariable(_) => {}
             E::Load { pointer } => {
@@ -115,9 +117,7 @@ impl<'a> Interface<'a> {
                                 left = base;
                             }
                             crate::Expression::GlobalVariable(handle) => {
-                                if self.globals[handle].class == spirv::StorageClass::Output {
-                                    self.outputs.insert(handle);
-                                }
+                                self.uses[handle.index()] |= GlobalUse::STORE;
                                 break;
                             }
                             _ => break,
@@ -128,18 +128,18 @@ impl<'a> Interface<'a> {
             }
         }
     }
+}
 
-    pub fn new(
-        fun: &'a crate::Function,
-        globals: &'a Arena<crate::GlobalVariable>,
-    ) -> Self {
+impl GlobalUse {
+    pub fn scan(
+        fun: &crate::Function,
+        globals: &Arena<crate::GlobalVariable>,
+    ) -> Box<[Self]> {
         let mut io = Interface {
             expressions: &fun.expressions,
-            globals,
-            inputs: FastHashSet::default(),
-            outputs: FastHashSet::default(),
+            uses: vec![GlobalUse::empty(); globals.len()],
         };
         io.collect(&fun.body);
-        io
+        io.uses.into_boxed_slice()
     }
 }
