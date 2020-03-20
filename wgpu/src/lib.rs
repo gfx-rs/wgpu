@@ -397,9 +397,9 @@ pub struct RenderPassDescriptor<'a, 'b> {
 
 /// A swap chain image that can be rendered to.
 #[derive(Debug)]
-pub struct SwapChainOutput<'a> {
+pub struct SwapChainOutput {
     pub view: TextureView,
-    swap_chain_id: &'a wgc::id::SwapChainId,
+    swap_chain_id: wgc::id::SwapChainId,
 }
 
 /// A view of a buffer which can be used to copy to or from a texture.
@@ -1465,10 +1465,10 @@ impl Queue {
     }
 }
 
-impl<'a> Drop for SwapChainOutput<'a> {
+impl Drop for SwapChainOutput {
     fn drop(&mut self) {
         if !thread::panicking() {
-            wgn::wgpu_swap_chain_present(*self.swap_chain_id);
+            wgn::wgpu_swap_chain_present(self.swap_chain_id);
         }
     }
 }
@@ -1479,7 +1479,8 @@ impl SwapChain {
     /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
     ///
-    /// Returns an `Err` if the GPU timed out when attempting to acquire the next texture.
+    /// Returns an `Err` if the GPU timed out when attempting to acquire the next texture or if a
+    /// previous output is still alive.
     pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, ()> {
         let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
         if output.view_id == wgc::id::Id::ERROR {
@@ -1490,7 +1491,7 @@ impl SwapChain {
                     id: output.view_id,
                     owned: false,
                 },
-                swap_chain_id: &self.id,
+                swap_chain_id: self.id,
             })
         }
     }
