@@ -538,7 +538,8 @@ bitflags::bitflags! {
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BufferDescriptor {
+pub struct BufferDescriptor<'a> {
+    pub label: Option<&'a str>,
     pub size: BufferAddress,
     pub usage: BufferUsage,
 }

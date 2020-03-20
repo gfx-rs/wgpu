@@ -321,6 +321,9 @@ impl<B: GfxBackend> Device<B> {
         };
 
         let mut buffer = unsafe { self.raw.create_buffer(desc.size, usage).unwrap() };
+        if let Some(label) = desc.label {
+            unsafe { self.raw.set_buffer_name(&mut buffer, label) };
+        }
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
         let memory = self
             .mem_allocator
