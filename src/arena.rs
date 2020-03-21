@@ -1,8 +1,4 @@
-use std::{
-    fmt,
-    hash,
-    marker::PhantomData,
-};
+use std::{fmt, hash, marker::PhantomData};
 
 /// An unique index in the arena array that a handle points to.
 ///
@@ -79,9 +75,7 @@ impl<T> Default for Arena<T> {
 
 impl<T> Arena<T> {
     pub fn new() -> Self {
-        Arena {
-            data: Vec::new(),
-        }
+        Arena { data: Vec::new() }
     }
 
     pub fn len(&self) -> usize {
@@ -107,7 +101,10 @@ impl<T> Arena<T> {
     /// Adds a value with a check for uniqueness: returns a handle pointing to
     /// an existing element if its value matches the given one, or adds a new
     /// element otherwise.
-    pub fn fetch_or_append(&mut self, value: T) -> Handle<T> where T: PartialEq {
+    pub fn fetch_or_append(&mut self, value: T) -> Handle<T>
+    where
+        T: PartialEq,
+    {
         if let Some(index) = self.data.iter().position(|d| d == &value) {
             Handle::new(index as Index)
         } else {
