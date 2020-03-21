@@ -1,12 +1,12 @@
-use std::{fmt, hash, marker::PhantomData};
+use std::{fmt, hash, marker::PhantomData, num::NonZeroU32};
 
 /// An unique index in the arena array that a handle points to.
 ///
 /// This type is independent of `spirv::Word`. `spirv::Word` is used in data
 /// representation. It holds a SPIR-V and refers to that instruction. In
 /// structured representation, we use Handle to refer to an SPIR-V instruction.
-/// Index is an implementation detail to Handle.
-type Index = u32;
+/// `Index` is an implementation detail to `Handle`.
+type Index = NonZeroU32;
 
 /// A strongly typed reference to a SPIR-V element.
 pub struct Handle<T> {
@@ -43,7 +43,7 @@ impl<T> hash::Hash for Handle<T> {
 impl<T> Handle<T> {
     #[cfg(test)]
     pub const DUMMY: Self = Handle {
-        index: !0,
+        index: unsafe { NonZeroU32::new_unchecked(!0) },
         marker: PhantomData,
     };
 
@@ -54,8 +54,10 @@ impl<T> Handle<T> {
         }
     }
 
+    /// Returns the zero-based index of this handle.
     pub fn index(self) -> usize {
-        self.index as usize
+        let index = self.index.get() - 1;
+        index as usize
     }
 }
 
@@ -83,17 +85,19 @@ impl<T> Arena<T> {
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
-        self.data
-            .iter()
-            .enumerate()
-            .map(|(i, v)| (Handle::new(i as Index), v))
+        self.data.iter().enumerate().map(|(i, v)| {
+            let position = i + 1;
+            let index = unsafe { Index::new_unchecked(position as u32) };
+            (Handle::new(index), v)
+        })
     }
 
     /// Adds a new value to the arena, returning a typed handle.
     ///
     /// The value is not linked to any SPIR-V module.
     pub fn append(&mut self, value: T) -> Handle<T> {
-        let index = self.data.len() as Index;
+        let position = self.data.len() + 1;
+        let index = unsafe { Index::new_unchecked(position as u32) };
         self.data.push(value);
         Handle::new(index)
     }
@@ -106,7 +110,8 @@ impl<T> Arena<T> {
         T: PartialEq,
     {
         if let Some(index) = self.data.iter().position(|d| d == &value) {
-            Handle::new(index as Index)
+            let index = unsafe { Index::new_unchecked((index + 1) as u32) };
+            Handle::new(index)
         } else {
             self.append(value)
         }
@@ -116,7 +121,8 @@ impl<T> Arena<T> {
 impl<T> std::ops::Index<Handle<T>> for Arena<T> {
     type Output = T;
     fn index(&self, handle: Handle<T>) -> &T {
-        &self.data[handle.index as usize]
+        let index = handle.index.get() - 1;
+        &self.data[index as usize]
     }
 }
 
