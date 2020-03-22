@@ -408,13 +408,16 @@ pub struct BufferCopyView<'a> {
     /// The buffer to be copied to or from.
     pub buffer: &'a Buffer,
 
-    /// The offset in bytes from the start of the buffer. This must be aligned to 512 bytes.
+    /// The offset in bytes from the start of the buffer.
+    /// In the future this must be aligned to 512 bytes, however the requirement is currently unimplemented.
     pub offset: BufferAddress,
 
-    /// The size in bytes of a single row of the texture. This must be a multiple of 256 bytes.
+    /// The size in bytes of a single row of the texture.
+    /// In the future this must be a multiple of 256 bytes, however the requirement is currently unimplemented.
     pub bytes_per_row: u32,
 
     /// The height in texels of the imaginary texture view overlaid on the buffer.
+    /// Must be zero for copies where `copy_size.depth == 1`.
     pub rows_per_image: u32,
 }
 
