@@ -77,7 +77,7 @@ async fn run() {
                 buffer: &output_buffer,
                 offset: 0,
                 bytes_per_row: size_of::<u32>() as u32 * size,
-                rows_per_image: size,
+                rows_per_image: 0,
             },
             texture_extent,
         );

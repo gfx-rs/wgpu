@@ -268,7 +268,7 @@ impl framework::Example for Example {
                 buffer: &temp_buf,
                 offset: 0,
                 bytes_per_row: 4 * size,
-                rows_per_image: size,
+                rows_per_image: 0,
             },
             wgpu::TextureCopyView {
                 texture: &texture,
