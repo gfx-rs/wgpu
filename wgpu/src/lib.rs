@@ -20,26 +20,13 @@ use std::{
 
 pub use wgt::*;
 pub use wgc::{
-    Extent3d,
-    Origin3d,
-    command::{
-        CommandBufferDescriptor,
-    },
+    binding_model::TextureComponentType,
     device::{
         BIND_BUFFER_ALIGNMENT,
     },
     instance::{
         AdapterInfo,
         DeviceType,
-    },
-    resource::{
-        AddressMode,
-        FilterMode,
-        SamplerDescriptor,
-        TextureAspect,
-        TextureDescriptor,
-        TextureDimension,
-        TextureViewDescriptor,
     },
 };
 
@@ -262,10 +249,12 @@ pub enum BindingType {
     },
     SampledTexture {
         dimension: TextureViewDimension,
+        component_type: TextureComponentType,
         multisampled: bool,
     },
     StorageTexture {
         dimension: TextureViewDimension,
+        component_type: TextureComponentType,
         format: TextureFormat,
         readonly: bool,
     },
@@ -606,8 +595,8 @@ impl Device {
                 self.id,
                 &bm::BindGroupDescriptor {
                     layout: desc.layout.id,
-                    bindings: bindings.as_ptr(),
-                    bindings_length: bindings.len(),
+                    entries: bindings.as_ptr(),
+                    entries_length: bindings.len(),
                 },
             ),
         }
@@ -655,6 +644,11 @@ impl Device {
                     BindingType::StorageTexture { dimension, .. } => dimension,
                     _ => TextureViewDimension::D2,
                 },
+                texture_component_type: match bind.ty {
+                    BindingType::SampledTexture { component_type, .. } |
+                    BindingType::StorageTexture { component_type, .. } => component_type,
+                    _ => bm::TextureComponentType::Float,
+                },
                 storage_texture_format: match bind.ty {
                     BindingType::StorageTexture { format, .. } => format,
                     _ => TextureFormat::Rgb10a2Unorm, // doesn't matter
@@ -665,8 +659,8 @@ impl Device {
             id: wgn::wgpu_device_create_bind_group_layout(
                 self.id,
                 &bm::BindGroupLayoutDescriptor {
-                    bindings: temp_layouts.as_ptr(),
-                    bindings_length: temp_layouts.len(),
+                    entries: temp_layouts.as_ptr(),
+                    entries_length: temp_layouts.len(),
                 },
             ),
         }

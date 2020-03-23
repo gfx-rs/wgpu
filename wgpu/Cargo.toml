@@ -27,22 +27,19 @@ vulkan = ["wgn/vulkan-portability"]
 package = "wgpu-native"
 version = "0.4"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "39f17e50754aba6beeeabdd868ddfd700f9710c5"
-#path = "../wgpu/wgpu-native"
+rev = "08e8d406c175579da5ef18c1abf4d6c00e2a9726"
 
 [dependencies.wgc]
 package = "wgpu-core"
 version = "0.1"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "39f17e50754aba6beeeabdd868ddfd700f9710c5"
-#path = "../wgpu/wgpu-core"
+rev = "08e8d406c175579da5ef18c1abf4d6c00e2a9726"
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.1"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "39f17e50754aba6beeeabdd868ddfd700f9710c5"
-#path = "../wgpu/wgpu-types"
+rev = "08e8d406c175579da5ef18c1abf4d6c00e2a9726"
 
 [dependencies]
 arrayvec = "0.5"
@@ -59,3 +56,8 @@ winit = "0.22"
 rand = "0.7.2"
 zerocopy = "0.2"
 futures = "0.3"
+
+#[patch."https://github.com/gfx-rs/wgpu"]
+#wgc = { version = "0.1.0", package = "wgpu-core", path = "../wgpu/wgpu-core" }
+#wgt = { version = "0.1.0", package = "wgpu-types", path = "../wgpu/wgpu-types" }
+#wgn = { version = "0.4.0", package = "wgpu-native", path = "../wgpu/wgpu-native" }
