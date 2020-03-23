@@ -13,6 +13,7 @@ async fn run() {
             .collect()
     };
 
+    // To see the output, run `RUST_LOG=info cargo run --example hello-compute`.
     log::info!("Times: {:?}", execute_gpu(numbers).await);
 }
 
@@ -98,7 +99,16 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
     queue.submit(&[encoder.finish()]);
-    if let Ok(mapping) = staging_buffer.map_read(0u64, size).await {
+
+    // Note that we're not calling `.await` here.
+    let buffer_future = staging_buffer.map_read(0, size);
+
+    // Poll the device in a blocking manner so that our future resolves.
+    // In an actual application, `device.poll(...)` should
+    // be called in an event loop or on another thread.
+    device.poll(wgpu::Maintain::Wait);
+
+    if let Ok(mapping) = buffer_future.await {
         mapping
             .as_slice()
             .chunks_exact(4)
@@ -111,6 +121,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
 fn main() {
     env_logger::init();
+
     futures::executor::block_on(run());
 }
 

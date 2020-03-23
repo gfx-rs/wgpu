@@ -5,8 +5,6 @@ use std::fs::File;
 use std::mem::size_of;
 
 async fn run() {
-    env_logger::init();
-
     let adapter = wgpu::Adapter::request(
         &wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
@@ -87,8 +85,16 @@ async fn run() {
 
     queue.submit(&[command_buffer]);
 
+    // Note that we're not calling `.await` here.
+    let buffer_future = output_buffer.map_read(0, (size * size) as u64 * size_of::<u32>() as u64);
+
+    // Poll the device in a blocking manner so that our future resolves.
+    // In an actual application, `device.poll(...)` should
+    // be called in an event loop or on another thread.
+    device.poll(wgpu::Maintain::Wait);
+
     // Write the buffer as a PNG
-    if let Ok(mapping) = output_buffer.map_read(0u64, (size * size) as u64 * size_of::<u32>() as u64).await {
+    if let Ok(mapping) = buffer_future.await {
         let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), size, size);
         png_encoder.set_depth(png::BitDepth::Eight);
         png_encoder.set_color(png::ColorType::RGBA);
@@ -98,11 +104,10 @@ async fn run() {
             .write_image_data(mapping.as_slice())
             .unwrap();
     }
-
-    // The device will be polled when it is dropped but we can also poll it explicitly
-    device.poll(true);
 }
 
 fn main() {
+    env_logger::init();
+
     futures::executor::block_on(run());
 }

@@ -1,22 +1,31 @@
 use std::future::Future;
 use std::pin::Pin;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
+use parking_lot::Mutex;
+use crate::BufferAddress;
 
-struct GpuFutureInner<T> {
-    id: wgc::id::DeviceId,
-    result: Option<T>,
-    waker: Option<Waker>,
+enum WakerOrResult<T> {
+    Waker(Waker),
+    Result(T),
 }
 
 /// A Future that can poll the wgpu::Device
 pub struct GpuFuture<T> {
-    inner: Arc<Mutex<GpuFutureInner<T>>>,
+    data: Arc<Data<T>>,
+}
+
+pub enum OpaqueData {}
+
+struct Data<T> {
+    buffer_id: wgc::id::BufferId,
+    size: BufferAddress,
+    waker_or_result: Mutex<Option<WakerOrResult<T>>>,
 }
 
 /// A completion handle to set the result on a GpuFuture
 pub struct GpuFutureCompletion<T> {
-    inner: Arc<Mutex<GpuFutureInner<T>>>,
+    data: Arc<Data<T>>,
 }
 
 impl<T> Future for GpuFuture<T>
@@ -24,49 +33,62 @@ impl<T> Future for GpuFuture<T>
     type Output = T;
 
     fn poll(self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
-        // grab a clone of the Arc
-        let arc = Arc::clone(&self.get_mut().inner);
+        let mut waker_or_result = self.into_ref().get_ref().data.waker_or_result.lock();
 
-        // grab the device id and set the waker, but release the lock, so that the native callback can write to it
-        let device_id = {
-            let mut inner = arc.lock().unwrap();
-            inner.waker.replace(context.waker().clone());
-            inner.id
-        };
-
-        // polling the device should trigger the callback
-        wgn::wgpu_device_poll(device_id, true);
-
-        // now take the lock again, and check whether the future is complete
-        let mut inner = arc.lock().unwrap();
-        match inner.result.take() {
-            Some(value) => Poll::Ready(value),
-            _ => Poll::Pending,
+        match waker_or_result.take() {
+            Some(WakerOrResult::Result(res)) => Poll::Ready(res),
+            _ => {
+                *waker_or_result = Some(WakerOrResult::Waker(context.waker().clone()));
+                Poll::Pending
+            }
         }
     }
 }
 
 impl<T> GpuFutureCompletion<T> {
     pub fn complete(self, value: T) {
-        let mut inner = self.inner.lock().unwrap();
-        inner.result.replace(value);
-        if let Some(waker) = &inner.waker {
-            waker.wake_by_ref();
+        let mut waker_or_result = self.data.waker_or_result.lock();
+
+        match waker_or_result.replace(WakerOrResult::Result(value)) {
+            Some(WakerOrResult::Waker(waker)) => waker.wake(),
+            None => {}
+            Some(WakerOrResult::Result(_)) => {
+                // Drop before panicking. Not sure if this is necessary, but it makes me feel better.
+                drop(waker_or_result);
+                unreachable!()
+            },
+        };
+    }
+
+    pub(crate) fn to_raw(self) -> *mut OpaqueData {
+        Arc::into_raw(self.data) as _
+    }
+
+    pub(crate) unsafe fn from_raw(this: *mut OpaqueData) -> Self {
+        Self {
+            data: Arc::from_raw(this as _)
         }
+    }
+
+    pub(crate) fn get_buffer_info(&self) -> (wgc::id::BufferId, BufferAddress) {
+        (self.data.buffer_id, self.data.size)
     }
 }
 
-pub(crate) fn new_gpu_future<T>(id: wgc::id::DeviceId) -> (GpuFuture<T>, GpuFutureCompletion<T>) {
-    let inner = Arc::new(Mutex::new(GpuFutureInner {
-        id,
-        result: None,
-        waker: None,
-    }));
+pub(crate) fn new_gpu_future<T>(
+    buffer_id: wgc::id::BufferId,
+    size: BufferAddress,
+) -> (GpuFuture<T>, GpuFutureCompletion<T>) {
+    let data = Arc::new(Data {
+        buffer_id,
+        size,
+        waker_or_result: Mutex::new(None),
+    });
 
     (
         GpuFuture {
-            inner: inner.clone(),
+            data: Arc::clone(&data),
         },
-        GpuFutureCompletion { inner },
+        GpuFutureCompletion { data },
     )
 }
