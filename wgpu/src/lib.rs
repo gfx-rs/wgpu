@@ -11,7 +11,6 @@ use smallvec::SmallVec;
 
 use std::{
     ffi::CString,
-    future::Future,
     ops::Range,
     ptr,
     slice,
@@ -845,13 +844,14 @@ impl Drop for Device {
     }
 }
 
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BufferAsyncErr;
+
 pub struct BufferReadMapping {
     data: *const u8,
     size: usize,
     buffer_id: wgc::id::BufferId,
 }
-//TODO: proper error type
-pub type BufferMapReadResult = Result<BufferReadMapping, ()>;
 
 impl BufferReadMapping
 {
@@ -873,8 +873,6 @@ pub struct BufferWriteMapping {
     size: usize,
     buffer_id: wgc::id::BufferId,
 }
-//TODO: proper error type
-pub type BufferMapWriteResult = Result<BufferWriteMapping, ()>;
 
 impl BufferWriteMapping
 {
@@ -891,36 +889,23 @@ impl Drop for BufferWriteMapping {
     }
 }
 
-pub struct BufferAsyncMapping<T> {
-    pub data: T,
-    buffer_id: wgc::id::BufferId,
-}
-//TODO: proper error type
-pub type BufferMapAsyncResult<T> = Result<BufferAsyncMapping<T>, ()>;
-
-impl<T> Drop for BufferAsyncMapping<T> {
-    fn drop(&mut self) {
-        wgn::wgpu_buffer_unmap(self.buffer_id);
-    }
-}
-
 struct BufferMapReadFutureUserData
 {
     size: BufferAddress,
-    completion: native_gpu_future::GpuFutureCompletion<BufferMapReadResult>,
+    completion: native_gpu_future::GpuFutureCompletion<Result<BufferReadMapping, BufferAsyncErr>>,
     buffer_id: wgc::id::BufferId,
 }
 
 struct BufferMapWriteFutureUserData
 {
     size: BufferAddress,
-    completion: native_gpu_future::GpuFutureCompletion<BufferMapWriteResult>,
+    completion: native_gpu_future::GpuFutureCompletion<Result<BufferWriteMapping, BufferAsyncErr>>,
     buffer_id: wgc::id::BufferId,
 }
 
 impl Buffer {
     /// Map the buffer for reading. The result is returned in a future.
-    pub fn map_read(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = crate::BufferMapReadResult>
+    pub async fn map_read(&self, start: BufferAddress, size: BufferAddress) -> Result<BufferReadMapping, BufferAsyncErr>
     {
         let (future, completion) = native_gpu_future::new_gpu_future(self.device_id);
 
@@ -939,7 +924,7 @@ impl Buffer {
                     buffer_id: user_data.buffer_id,
                 }));
             } else {
-                user_data.completion.complete(Err(()));
+                user_data.completion.complete(Err(BufferAsyncErr));
             }
         }
 
@@ -956,11 +941,11 @@ impl Buffer {
             Box::into_raw(user_data) as *mut u8,
         );
 
-        future
+        future.await
     }
 
     /// Map the buffer for writing. The result is returned in a future.
-    pub fn map_write(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = crate::BufferMapWriteResult>
+    pub async fn map_write(&self, start: BufferAddress, size: BufferAddress) -> Result<BufferWriteMapping, BufferAsyncErr>
     {
         let (future, completion) = native_gpu_future::new_gpu_future(self.device_id);
 
@@ -979,7 +964,7 @@ impl Buffer {
                     buffer_id: user_data.buffer_id,
                 }));
             } else {
-                user_data.completion.complete(Err(()));
+                user_data.completion.complete(Err(BufferAsyncErr));
             }
         }
 
@@ -996,7 +981,7 @@ impl Buffer {
             Box::into_raw(user_data) as *mut u8,
         );
 
-        future
+        future.await
     }
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.
