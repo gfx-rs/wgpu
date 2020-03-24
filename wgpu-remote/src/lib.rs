@@ -18,6 +18,7 @@ use parking_lot::Mutex;
 
 use std::{ptr, slice};
 
+pub mod identity;
 pub mod server;
 
 
@@ -124,21 +125,14 @@ pub unsafe extern "C" fn wgpu_client_make_adapter_ids(
     id_length - ids.len()
 }
 
-/// # Safety
-///
-/// This function is unsafe as there is no guarantee that the given pointer is
-/// valid for `id_length` elements.
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_client_kill_adapter_ids(
-    client: &Client,
-    ids: *const id::AdapterId,
-    id_length: usize,
-) {
-    let mut identity = client.identities.lock();
-    let ids = slice::from_raw_parts(ids, id_length);
-    for &id in ids {
-        identity.select(id.backend()).adapters.free(id)
-    }
+pub extern "C" fn wgpu_client_kill_adapter_id(client: &Client, id: id::AdapterId) {
+    client
+        .identities
+        .lock()
+        .select(id.backend())
+        .adapters
+        .free(id)
 }
 
 #[no_mangle]
