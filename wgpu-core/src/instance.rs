@@ -5,7 +5,7 @@
 use crate::{
     backend,
     device::{Device, BIND_BUFFER_ALIGNMENT},
-    hub::{GfxBackend, Global, IdentityFilter, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId},
     power,
 };
@@ -184,8 +184,8 @@ impl<I: Clone> AdapterInputs<'_, I> {
     }
 }
 
-impl<F: IdentityFilter<AdapterId>> Global<F> {
-    pub fn enumerate_adapters(&self, inputs: AdapterInputs<F::Input>) -> Vec<AdapterId> {
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         let instance = &self.instance;
         let mut token = Token::root();
         let mut adapters = Vec::new();
@@ -258,7 +258,7 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
     pub fn pick_adapter(
         &self,
         desc: &RequestAdapterOptions,
-        inputs: AdapterInputs<F::Input>,
+        inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Option<AdapterId> {
         let instance = &self.instance;
         let mut device_types = Vec::new();
@@ -432,12 +432,12 @@ impl<F: IdentityFilter<AdapterId>> Global<F> {
     }
 }
 
-impl<F: IdentityFilter<DeviceId>> Global<F> {
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_request_device<B: GfxBackend>(
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, DeviceId>,
     ) -> DeviceId {
         let hub = B::hub(self);
         let mut token = Token::root();

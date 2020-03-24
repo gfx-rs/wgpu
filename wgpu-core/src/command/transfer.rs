@@ -5,7 +5,7 @@
 use crate::{
     conv,
     device::{all_buffer_stages, all_image_stages},
-    hub::{GfxBackend, Global, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id::{BufferId, CommandEncoderId, TextureId},
     Extent3d,
     Origin3d,
@@ -71,7 +71,7 @@ impl TextureCopyView {
     }
 }
 
-impl<F> Global<F> {
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_copy_buffer_to_buffer<B: GfxBackend>(
         &self,
         command_encoder_id: CommandEncoderId,

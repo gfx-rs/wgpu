@@ -19,7 +19,7 @@ use crate::{
         all_buffer_stages,
         all_image_stages,
     },
-    hub::{GfxBackend, Global, Storage, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     resource::{Buffer, Texture},
     track::TrackerSet,
@@ -211,7 +211,7 @@ pub struct RawRenderTargets {
     pub depth_stencil: RenderPassDepthStencilAttachmentDescriptor,
 }
 
-impl<F> Global<F> {
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,

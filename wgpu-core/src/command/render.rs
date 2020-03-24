@@ -18,7 +18,7 @@ use crate::{
         MAX_VERTEX_BUFFERS,
         MAX_COLOR_TARGETS,
     },
-    hub::{GfxBackend, Global, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     pipeline::PipelineFlags,
     resource::TextureViewInner,
@@ -281,7 +281,7 @@ impl State {
 
 // Common routines between render/compute
 
-impl<F> Global<F> {
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_run_render_pass<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,

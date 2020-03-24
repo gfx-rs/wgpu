@@ -71,7 +71,7 @@ impl IdentityManager {
         }
     }
 
-    pub fn free<I: TypedId>(&mut self, id: I) {
+    pub fn free<I: TypedId + Debug>(&mut self, id: I) {
         let (index, epoch, _backend) = id.unzip();
         // avoid doing this check in release
         if cfg!(debug_assertions) {
@@ -252,22 +252,13 @@ impl<'a, T> Drop for Token<'a, T> {
 }
 
 
-pub trait IdentityFilter<I>: Debug {
+pub trait IdentityHandler<I>: Debug {
     type Input: Clone + Debug;
     fn process(&self, id: Self::Input, backend: Backend) -> I;
     fn free(&self, id: I);
 }
 
-impl<I: TypedId + Clone + Debug> IdentityFilter<I> for () {
-    type Input = I;
-    fn process(&self, id: I, _backend: Backend) -> I {
-        //debug_assert_eq!(id.unzip().2, backend);
-        id
-    }
-    fn free(&self, _id: I) {}
-}
-
-impl<I: TypedId + Debug> IdentityFilter<I> for Mutex<IdentityManager> {
+impl<I: TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
     type Input = PhantomData<I>;
     fn process(&self, _id: Self::Input, backend: Backend) -> I {
         self.lock().alloc(backend)
@@ -277,32 +268,55 @@ impl<I: TypedId + Debug> IdentityFilter<I> for Mutex<IdentityManager> {
     }
 }
 
-/// Compound trait for all the things a device cares about
-/// for the matter of destruction/cleanup.
-pub trait AllIdentityFilter:
-    IdentityFilter<BufferId>
-    + IdentityFilter<TextureId>
-    + IdentityFilter<TextureViewId>
-    + IdentityFilter<BindGroupId>
-    + IdentityFilter<SamplerId>
-{
+pub trait IdentityHandlerFactory<I> {
+    type Filter: IdentityHandler<I>;
+    fn spawn(&self) -> Self::Filter;
 }
 
-impl AllIdentityFilter for Mutex<IdentityManager> {}
-impl AllIdentityFilter for () {}
+#[derive(Debug)]
+pub struct IdentityManagerFactory;
+
+impl<I: TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
+    type Filter = Mutex<IdentityManager>;
+    fn spawn(&self) -> Self::Filter {
+        Mutex::new(IdentityManager::default())
+    }
+}
+
+pub trait GlobalIdentityHandlerFactory:
+    IdentityHandlerFactory<AdapterId> +
+    IdentityHandlerFactory<DeviceId> +
+    IdentityHandlerFactory<SwapChainId> +
+    IdentityHandlerFactory<PipelineLayoutId> +
+    IdentityHandlerFactory<ShaderModuleId> +
+    IdentityHandlerFactory<BindGroupLayoutId> +
+    IdentityHandlerFactory<BindGroupId> +
+    IdentityHandlerFactory<CommandBufferId> +
+    IdentityHandlerFactory<RenderPipelineId> +
+    IdentityHandlerFactory<ComputePipelineId> +
+    IdentityHandlerFactory<BufferId> +
+    IdentityHandlerFactory<TextureId> +
+    IdentityHandlerFactory<TextureViewId> +
+    IdentityHandlerFactory<SamplerId> +
+    IdentityHandlerFactory<SurfaceId>
+{}
+
+impl GlobalIdentityHandlerFactory for IdentityManagerFactory {}
+
+pub type Input<G, I> = <<G as IdentityHandlerFactory<I>>::Filter as IdentityHandler<I>>::Input;
 
 
 #[derive(Debug)]
-pub struct Registry<T, I: TypedId, F> {
-    pub(crate) identity: F,
+pub struct Registry<T, I: TypedId, F: IdentityHandlerFactory<I>> {
+    identity: F::Filter,
     data: RwLock<Storage<T, I>>,
     backend: Backend,
 }
 
-impl<T, I: TypedId, F: Default> Registry<T, I, F> {
-    fn new(backend: Backend) -> Self {
+impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
+    fn new(backend: Backend, factory: &F) -> Self {
         Registry {
-            identity: F::default(),
+            identity: factory.spawn(),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
                 _phantom: PhantomData,
@@ -312,7 +326,7 @@ impl<T, I: TypedId, F: Default> Registry<T, I, F> {
     }
 }
 
-impl<T, I: TypedId + Copy, F> Registry<T, I, F> {
+impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         debug_assert_eq!(id.unzip().2, self.backend);
         let old = self.data.write().insert(id, value);
@@ -334,10 +348,10 @@ impl<T, I: TypedId + Copy, F> Registry<T, I, F> {
     }
 }
 
-impl<T, I: TypedId + Copy, F: IdentityFilter<I>> Registry<T, I, F> {
+impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub fn register_identity<A: Access<T>>(
         &self,
-        id_in: F::Input,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
         value: T,
         token: &mut Token<A>,
     ) -> I {
@@ -356,10 +370,14 @@ impl<T, I: TypedId + Copy, F: IdentityFilter<I>> Registry<T, I, F> {
         self.identity.free(id);
         (value, Token::new())
     }
+
+    pub fn free_id(&self, id: I) {
+        self.identity.free(id)
+    }
 }
 
 #[derive(Debug)]
-pub struct Hub<B: hal::Backend, F> {
+pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
     pub adapters: Registry<Adapter<B>, AdapterId, F>,
     pub devices: Registry<Device<B>, DeviceId, F>,
     pub swap_chains: Registry<SwapChain<B>, SwapChainId, F>,
@@ -376,28 +394,28 @@ pub struct Hub<B: hal::Backend, F> {
     pub samplers: Registry<Sampler<B>, SamplerId, F>,
 }
 
-impl<B: GfxBackend, F: Default> Default for Hub<B, F> {
-    fn default() -> Self {
+impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
+    fn new(factory: &F) -> Self {
         Hub {
-            adapters: Registry::new(B::VARIANT),
-            devices: Registry::new(B::VARIANT),
-            swap_chains: Registry::new(B::VARIANT),
-            pipeline_layouts: Registry::new(B::VARIANT),
-            shader_modules: Registry::new(B::VARIANT),
-            bind_group_layouts: Registry::new(B::VARIANT),
-            bind_groups: Registry::new(B::VARIANT),
-            command_buffers: Registry::new(B::VARIANT),
-            render_pipelines: Registry::new(B::VARIANT),
-            compute_pipelines: Registry::new(B::VARIANT),
-            buffers: Registry::new(B::VARIANT),
-            textures: Registry::new(B::VARIANT),
-            texture_views: Registry::new(B::VARIANT),
-            samplers: Registry::new(B::VARIANT),
+            adapters: Registry::new(B::VARIANT, factory),
+            devices: Registry::new(B::VARIANT, factory),
+            swap_chains: Registry::new(B::VARIANT, factory),
+            pipeline_layouts: Registry::new(B::VARIANT, factory),
+            shader_modules: Registry::new(B::VARIANT, factory),
+            bind_group_layouts: Registry::new(B::VARIANT, factory),
+            bind_groups: Registry::new(B::VARIANT, factory),
+            command_buffers: Registry::new(B::VARIANT, factory),
+            render_pipelines: Registry::new(B::VARIANT, factory),
+            compute_pipelines: Registry::new(B::VARIANT, factory),
+            buffers: Registry::new(B::VARIANT, factory),
+            textures: Registry::new(B::VARIANT, factory),
+            texture_views: Registry::new(B::VARIANT, factory),
+            samplers: Registry::new(B::VARIANT, factory),
         }
     }
 }
 
-impl<B: hal::Backend, F> Drop for Hub<B, F> {
+impl<B: hal::Backend, F: GlobalIdentityHandlerFactory> Drop for Hub<B, F> {
     fn drop(&mut self) {
         use crate::resource::TextureViewInner;
         use hal::device::Device as _;
@@ -457,8 +475,8 @@ impl<B: hal::Backend, F> Drop for Hub<B, F> {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct Hubs<F> {
+#[derive(Debug)]
+pub struct Hubs<F: GlobalIdentityHandlerFactory> {
     #[cfg(any(
         not(any(target_os = "ios", target_os = "macos")),
         feature = "gfx-backend-vulkan"
@@ -472,19 +490,37 @@ pub struct Hubs<F> {
     dx11: Hub<backend::Dx11, F>,
 }
 
-#[derive(Debug)]
-pub struct Global<F> {
-    pub instance: Instance,
-    pub surfaces: Registry<Surface, SurfaceId, F>,
-    hubs: Hubs<F>,
+impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
+    fn new(factory: &F) -> Self {
+        Hubs {
+            #[cfg(any(
+                not(any(target_os = "ios", target_os = "macos")),
+                feature = "gfx-backend-vulkan"
+            ))]
+            vulkan: Hub::new(factory),
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            metal: Hub::new(factory),
+            #[cfg(windows)]
+            dx12: Hub::new(factory),
+            #[cfg(windows)]
+            dx11: Hub::new(factory),
+        }
+    }
 }
 
-impl<F: Default> Global<F> {
-    pub fn new(name: &str) -> Self {
+#[derive(Debug)]
+pub struct Global<G: GlobalIdentityHandlerFactory> {
+    pub instance: Instance,
+    pub surfaces: Registry<Surface, SurfaceId, G>,
+    hubs: Hubs<G>,
+}
+
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    pub fn new(name: &str, factory: G) -> Self {
         Global {
             instance: Instance::new(name, 1),
-            surfaces: Registry::new(Backend::Empty),
-            hubs: Hubs::default(),
+            surfaces: Registry::new(Backend::Empty, &factory),
+            hubs: Hubs::new(&factory),
         }
     }
 
@@ -504,7 +540,7 @@ impl<F: Default> Global<F> {
 
 pub trait GfxBackend: hal::Backend {
     const VARIANT: Backend;
-    fn hub<F>(global: &Global<F>) -> &Hub<Self, F>;
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G>;
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface;
 }
 
@@ -514,7 +550,7 @@ pub trait GfxBackend: hal::Backend {
 ))]
 impl GfxBackend for backend::Vulkan {
     const VARIANT: Backend = Backend::Vulkan;
-    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.vulkan
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
@@ -525,7 +561,7 @@ impl GfxBackend for backend::Vulkan {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 impl GfxBackend for backend::Metal {
     const VARIANT: Backend = Backend::Metal;
-    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
@@ -536,7 +572,7 @@ impl GfxBackend for backend::Metal {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx12 {
     const VARIANT: Backend = Backend::Dx12;
-    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx12
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
@@ -547,7 +583,7 @@ impl GfxBackend for backend::Dx12 {
 #[cfg(windows)]
 impl GfxBackend for backend::Dx11 {
     const VARIANT: Backend = Backend::Dx11;
-    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
+    fn hub<G: GlobalIdentityHandlerFactory>(global: &Global<G>) -> &Hub<Self, G> {
         &global.hubs.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {

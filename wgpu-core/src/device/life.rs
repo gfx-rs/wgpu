@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    hub::{AllIdentityFilter, GfxBackend, Global, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource,
     track::TrackerSet,
@@ -204,6 +204,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 
     fn wait_idle(&self, device: &B::Device) {
         if !self.active.is_empty() {
+            log::debug!("Waiting for IDLE...");
             let status = unsafe {
                 device.wait_for_fences(
                     self.active.iter().map(|a| &a.fence),
@@ -211,6 +212,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
                     CLEANUP_WAIT_MS * 1_000_000,
                 )
             };
+            log::debug!("...Done");
             assert_eq!(status, Ok(true), "GPU got stuck :(");
         }
     }
@@ -268,9 +270,9 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 }
 
 impl<B: GfxBackend> LifetimeTracker<B> {
-    pub(crate) fn triage_suspected<F: AllIdentityFilter>(
+    pub(crate) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<F>,
+        global: &Global<G>,
         trackers: &Mutex<TrackerSet>,
         token: &mut Token<super::Device<B>>,
     ) {
@@ -282,7 +284,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
             for id in self.suspected_resources.bind_groups.drain(..) {
                 if trackers.bind_groups.remove_abandoned(id) {
-                    hub.bind_groups.identity.free(id);
+                    hub.bind_groups.free_id(id);
                     let res = guard.remove(id).unwrap();
 
                     assert!(res.used.bind_groups.is_empty());
@@ -307,7 +309,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
             for id in self.suspected_resources.texture_views.drain(..) {
                 if trackers.views.remove_abandoned(id) {
-                    hub.texture_views.identity.free(id);
+                    hub.texture_views.free_id(id);
                     let res = guard.remove(id).unwrap();
 
                     let raw = match res.inner {
@@ -334,7 +336,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
             for id in self.suspected_resources.textures.drain(..) {
                 if trackers.textures.remove_abandoned(id) {
-                    hub.textures.identity.free(id);
+                    hub.textures.free_id(id);
                     let res = guard.remove(id).unwrap();
 
                     let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
@@ -353,7 +355,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
             for id in self.suspected_resources.samplers.drain(..) {
                 if trackers.samplers.remove_abandoned(id) {
-                    hub.samplers.identity.free(id);
+                    hub.samplers.free_id(id);
                     let res = guard.remove(id).unwrap();
 
                     let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
@@ -372,7 +374,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
             for id in self.suspected_resources.buffers.drain(..) {
                 if trackers.buffers.remove_abandoned(id) {
-                    hub.buffers.identity.free(id);
+                    hub.buffers.free_id(id);
                     let res = guard.remove(id).unwrap();
 
                     let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
@@ -386,8 +388,10 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
     }
 
-    pub(crate) fn triage_mapped<F>(
-        &mut self, global: &Global<F>, token: &mut Token<super::Device<B>>
+    pub(crate) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
+        &mut self,
+        global: &Global<G>,
+        token: &mut Token<super::Device<B>>,
     ) {
         if self.mapped.is_empty() {
             return;
@@ -414,9 +418,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
     }
 
-    pub(crate) fn triage_framebuffers<F>(
+    pub(crate) fn triage_framebuffers<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<F>,
+        global: &Global<G>,
         framebuffers: &mut FastHashMap<super::FramebufferKey, B::Framebuffer>,
         token: &mut Token<super::Device<B>>,
     ) {
@@ -476,9 +480,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
     }
 
-    pub(crate) fn handle_mapping<F>(
+    pub(crate) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<F>,
+        global: &Global<G>,
         raw: &B::Device,
         token: &mut Token<super::Device<B>>,
     ) -> Vec<super::BufferMapPendingCallback> {

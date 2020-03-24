@@ -34,7 +34,7 @@
 
 use crate::{
     conv,
-    hub::{GfxBackend, Global, IdentityFilter, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId},
     resource,
     Features,
@@ -93,11 +93,11 @@ pub enum SwapChainGetNextTextureError {
     GpuProcessingTimeout,
 }
 
-impl<F: IdentityFilter<TextureViewId>> Global<F> {
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn swap_chain_get_next_texture<B: GfxBackend>(
         &self,
         swap_chain_id: SwapChainId,
-        view_id_in: F::Input,
+        view_id_in: Input<G, TextureViewId>,
     ) -> Result<SwapChainOutput, SwapChainGetNextTextureError> {
         let hub = B::hub(self);
         let mut token = Token::root();
