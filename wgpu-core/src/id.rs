@@ -2,9 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{Backend, Epoch, Index};
+use crate::{Epoch, Index};
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde_crate::{Deserialize, Serialize};
+use wgt::Backend;
 use std::{fmt, marker::PhantomData, mem};
 
 const BACKEND_BITS: usize = 3;
@@ -12,7 +13,7 @@ const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct Id<T>(u64, PhantomData<T>);
 
 impl<T> Id<T> {

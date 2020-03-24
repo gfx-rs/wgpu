@@ -29,11 +29,11 @@ use crate::{
     pipeline::{ComputePipeline, RenderPipeline},
     resource::{Buffer, Sampler, Texture, TextureView},
     swap_chain::SwapChain,
-    Backend,
     Epoch,
     Index,
 };
 
+use wgt::Backend;
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use vec_map::VecMap;
 

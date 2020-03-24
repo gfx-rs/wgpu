@@ -17,6 +17,7 @@ license = "MPL-2.0"
 [features]
 default = []
 metal-auto-capture = ["gfx-backend-metal/auto-capture"]
+serde = ["wgt/serde", "serde_crate"]
 #NOTE: glutin feature is not stable, use at your own risk
 #glutin = ["gfx-backend-gl/glutin"]
 
@@ -32,9 +33,20 @@ parking_lot = "0.9"
 peek-poke = { git = "https://github.com/kvark/peek-poke", rev = "969bd7fe2be1a83f87916dc8b388c63cfd457075" }
 rendy-memory = "0.5"
 rendy-descriptor = "0.5"
-serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1.0"
 vec_map = "0.8"
+
+[dependencies.serde_crate]
+package = "serde"
+version = "1.0"
+features = ["serde_derive"]
+optional = true
+
+[dependencies.wgt]
+path = "../wgpu-types"
+package = "wgpu-types"
+version = "0.1"
+features = ["peek-poke"]
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 gfx-backend-metal = { version = "0.4" }

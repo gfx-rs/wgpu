@@ -4,70 +4,69 @@
 
 use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
-    resource::TextureViewDimension,
     track::{DUMMY_SELECTOR, TrackerSet},
-    BufferAddress,
     FastHashMap,
     LifeGuard,
     RefCount,
     Stored,
 };
 
+use wgt::BufferAddress;
 use arrayvec::ArrayVec;
 use rendy_descriptor::{DescriptorRanges, DescriptorSet};
 
 #[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+use serde_crate::{Deserialize, Serialize};
 use std::borrow::Borrow;
-
-pub const MAX_BIND_GROUPS: usize = 4;
-
-bitflags::bitflags! {
-    #[repr(transparent)]
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct ShaderStage: u32 {
-        const NONE = 0;
-        const VERTEX = 1;
-        const FRAGMENT = 2;
-        const COMPUTE = 4;
-    }
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub enum BindingType {
     UniformBuffer = 0,
     StorageBuffer = 1,
     ReadonlyStorageBuffer = 2,
     Sampler = 3,
-    SampledTexture = 4,
-    StorageTexture = 5,
+    ComparisonSampler = 4,
+    SampledTexture = 5,
+    ReadonlyStorageTexture = 6,
+    WriteonlyStorageTexture = 7,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+pub enum TextureComponentType {
+    Float,
+    Sint,
+    Uint,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BindGroupLayoutBinding {
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+pub struct BindGroupLayoutEntry {
     pub binding: u32,
-    pub visibility: ShaderStage,
+    pub visibility: wgt::ShaderStage,
     pub ty: BindingType,
-    pub texture_dimension: TextureViewDimension,
     pub multisampled: bool,
-    pub dynamic: bool,
+    pub has_dynamic_offset: bool,
+    pub view_dimension: wgt::TextureViewDimension,
+    pub texture_component_type: TextureComponentType,
+    pub storage_texture_format: wgt::TextureFormat,
 }
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupLayoutDescriptor {
-    pub bindings: *const BindGroupLayoutBinding,
-    pub bindings_length: usize,
+    pub entries: *const BindGroupLayoutEntry,
+    pub entries_length: usize,
 }
 
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
-    pub(crate) bindings: FastHashMap<u32, BindGroupLayoutBinding>,
+    pub(crate) entries: FastHashMap<u32, BindGroupLayoutEntry>,
     pub(crate) desc_ranges: DescriptorRanges,
     pub(crate) dynamic_count: usize,
 }
@@ -82,12 +81,12 @@ pub struct PipelineLayoutDescriptor {
 #[derive(Debug)]
 pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
-    pub(crate) bind_group_layout_ids: ArrayVec<[BindGroupLayoutId; MAX_BIND_GROUPS]>,
+    pub(crate) bind_group_layout_ids: ArrayVec<[BindGroupLayoutId; wgt::MAX_BIND_GROUPS]>,
 }
 
 #[repr(C)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct BufferBinding {
     pub buffer: BufferId,
     pub offset: BufferAddress,
@@ -96,7 +95,7 @@ pub struct BufferBinding {
 
 #[repr(C)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub enum BindingResource {
     Buffer(BufferBinding),
     Sampler(SamplerId),
@@ -105,8 +104,8 @@ pub enum BindingResource {
 
 #[repr(C)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BindGroupBinding {
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+pub struct BindGroupEntry {
     pub binding: u32,
     pub resource: BindingResource,
 }
@@ -115,8 +114,8 @@ pub struct BindGroupBinding {
 #[derive(Debug)]
 pub struct BindGroupDescriptor {
     pub layout: BindGroupLayoutId,
-    pub bindings: *const BindGroupBinding,
-    pub bindings_length: usize,
+    pub entries: *const BindGroupEntry,
+    pub entries_length: usize,
 }
 
 #[derive(Debug)]

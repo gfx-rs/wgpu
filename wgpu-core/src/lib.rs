@@ -30,11 +30,7 @@ pub mod resource;
 pub mod swap_chain;
 pub mod track;
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
 pub use hal::pso::read_spirv;
-use peek_poke::{PeekCopy, Poke};
 
 use std::{
     os::raw::c_char,
@@ -46,20 +42,6 @@ type SubmissionIndex = usize;
 type Index = u32;
 type Epoch = u32;
 
-#[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Backend {
-    Empty = 0,
-    Vulkan = 1,
-    Metal = 2,
-    Dx12 = 3,
-    Dx11 = 4,
-    Gl = 5,
-}
-
-pub type BufferAddress = u64;
-pub type DynamicOffset = u32;
 pub type RawString = *const c_char;
 
 //TODO: make it private. Currently used for swapchain creation impl.
@@ -127,54 +109,6 @@ struct Stored<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
-pub struct Color {
-    pub r: f64,
-    pub g: f64,
-    pub b: f64,
-    pub a: f64,
-}
-
-impl Color {
-    pub const TRANSPARENT: Self = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-        a: 0.0,
-    };
-    pub const BLACK: Self = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const WHITE: Self = Color {
-        r: 1.0,
-        g: 1.0,
-        b: 1.0,
-        a: 1.0,
-    };
-    pub const RED: Self = Color {
-        r: 1.0,
-        g: 0.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const GREEN: Self = Color {
-        r: 0.0,
-        g: 1.0,
-        b: 0.0,
-        a: 1.0,
-    };
-    pub const BLUE: Self = Color {
-        r: 0.0,
-        g: 0.0,
-        b: 1.0,
-        a: 1.0,
-    };
-}
-
-#[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct Origin3d {
     pub x: u32,
@@ -222,13 +156,13 @@ macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
         match $id.backend() {
             #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
-            $crate::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),+ ),
+            wgt::Backend::Vulkan => $global.$method::<$crate::backend::Vulkan>( $($param),+ ),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            $crate::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),+ ),
+            wgt::Backend::Metal => $global.$method::<$crate::backend::Metal>( $($param),+ ),
             #[cfg(windows)]
-            $crate::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),+ ),
+            wgt::Backend::Dx12 => $global.$method::<$crate::backend::Dx12>( $($param),+ ),
             #[cfg(windows)]
-            $crate::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),+ ),
+            wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),+ ),
             _ => unreachable!()
         }
     };
