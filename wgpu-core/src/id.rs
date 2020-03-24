@@ -58,6 +58,8 @@ impl<T> PartialEq for Id<T> {
     }
 }
 
+impl<T> Eq for Id<T> {}
+
 unsafe impl<T> peek_poke::Poke for Id<T> {
     fn max_size() -> usize {
          mem::size_of::<u64>()
