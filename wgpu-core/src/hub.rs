@@ -184,6 +184,7 @@ impl<B: hal::Backend> Access<ComputePipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
+impl<B: hal::Backend> Access<RenderPipeline<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for PipelineLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}

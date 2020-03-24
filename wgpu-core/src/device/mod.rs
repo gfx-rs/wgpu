@@ -1292,6 +1292,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // that it references for destruction in the next GC pass.
         {
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
+            let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
@@ -1320,6 +1322,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             for id in comb.trackers.samplers.used() {
                 if sampler_guard[id].life_guard.ref_count.is_none() {
                     device.temp_suspected.samplers.push(id);
+                }
+            }
+            for id in comb.trackers.compute_pipes.used() {
+                if compute_pipe_guard[id].life_guard.ref_count.is_none() {
+                    device.temp_suspected.compute_pipelines.push(id);
+                }
+            }
+            for id in comb.trackers.render_pipes.used() {
+                if render_pipe_guard[id].life_guard.ref_count.is_none() {
+                    device.temp_suspected.render_pipelines.push(id);
                 }
             }
         }
@@ -1357,6 +1369,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
             let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
+            let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (buffer_guard, mut token) = hub.buffers.read(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
@@ -1413,6 +1427,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 for id in comb.trackers.samplers.used() {
                     if !sampler_guard[id].life_guard.use_at(submit_index) {
                         device.temp_suspected.samplers.push(id);
+                    }
+                }
+                for id in comb.trackers.compute_pipes.used() {
+                    if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
+                        device.temp_suspected.compute_pipelines.push(id);
+                    }
+                }
+                for id in comb.trackers.render_pipes.used() {
+                    if !render_pipe_guard[id].life_guard.use_at(submit_index) {
+                        device.temp_suspected.render_pipelines.push(id);
                     }
                 }
 
@@ -1745,6 +1769,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             index_format: desc.vertex_state.index_format,
             vertex_strides,
             sample_count: sc,
+            life_guard: LifeGuard::new(),
         };
 
         hub.render_pipelines
@@ -1754,9 +1779,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn render_pipeline_destroy<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (_, mut token) = hub.devices.read(&mut token);
-        //TODO: track usage by GPU
-        hub.render_pipelines.unregister(render_pipeline_id, &mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        let device_id = {
+            let (mut pipeline_guard, _) = hub.render_pipelines.write(&mut token);
+            let pipeline = &mut pipeline_guard[render_pipeline_id];
+            pipeline.life_guard.ref_count.take();
+            pipeline.device_id.value
+        };
+
+        device_guard[device_id]
+            .lock_life(&mut token)
+            .suspected_resources.render_pipelines.push(render_pipeline_id);
     }
 
     pub fn device_create_compute_pipeline<B: GfxBackend>(
@@ -1812,6 +1846,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
             },
+            life_guard: LifeGuard::new(),
         };
         hub.compute_pipelines
             .register_identity(id_in, pipeline, &mut token)
@@ -1820,9 +1855,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn compute_pipeline_destroy<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (_, mut token) = hub.devices.read(&mut token);
-        //TODO: track usage by GPU
-        hub.compute_pipelines.unregister(compute_pipeline_id, &mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+
+        let device_id = {
+            let (mut pipeline_guard, _) = hub.compute_pipelines.write(&mut token);
+            let pipeline = &mut pipeline_guard[compute_pipeline_id];
+            pipeline.life_guard.ref_count.take();
+            pipeline.device_id.value
+        };
+
+        device_guard[device_id]
+            .lock_life(&mut token)
+            .suspected_resources.compute_pipelines.push(compute_pipeline_id);
+
     }
 
     pub fn device_create_swap_chain<B: GfxBackend>(

@@ -183,6 +183,8 @@ impl<B: GfxBackend> CommandBuffer<B> {
         base.views.merge_extend(&head.views).unwrap();
         base.bind_groups.merge_extend(&head.bind_groups).unwrap();
         base.samplers.merge_extend(&head.samplers).unwrap();
+        base.compute_pipes.merge_extend(&head.compute_pipes).unwrap();
+        base.render_pipes.merge_extend(&head.render_pipes).unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
