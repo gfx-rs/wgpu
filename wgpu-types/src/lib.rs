@@ -9,7 +9,7 @@ use serde::{Serialize, Deserialize};
 use peek_poke::{PeekCopy, Poke};
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Backend {
     Empty = 0,
@@ -22,7 +22,7 @@ pub enum Backend {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PowerPreference {
     Default = 0,
@@ -31,7 +31,7 @@ pub enum PowerPreference {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
@@ -72,14 +72,14 @@ impl From<Backend> for BackendBit {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
@@ -203,7 +203,7 @@ impl Default for BlendOperation {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BlendDescriptor {
     pub src_factor: BlendFactor,
     pub dst_factor: BlendFactor,
@@ -235,7 +235,7 @@ impl Default for BlendDescriptor {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ColorStateDescriptor {
     pub format: TextureFormat,
     pub alpha_blend: BlendDescriptor,
@@ -281,7 +281,7 @@ impl Default for CullMode {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
@@ -366,7 +366,7 @@ impl Default for ColorWrite {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct DepthStencilStateDescriptor {
     pub format: TextureFormat,
     pub depth_write_enabled: bool,
@@ -410,7 +410,7 @@ impl Default for StencilOperation {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct StencilStateFaceDescriptor {
     pub compare: CompareFunction,
     pub fail_op: StencilOperation,
@@ -465,7 +465,7 @@ pub enum InputStepMode {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct VertexAttributeDescriptor {
     pub offset: BufferAddress,
     pub format: VertexFormat,
@@ -537,14 +537,14 @@ bitflags::bitflags! {
 
 #[repr(C)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferDescriptor {
     pub size: BufferAddress,
     pub usage: BufferUsage,
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor {
     // MSVC doesn't allow zero-sized structs
     // We can remove this when we actually have a field
@@ -554,7 +554,7 @@ pub struct CommandEncoderDescriptor {
 pub type DynamicOffset = u32;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum PresentMode {
     /// The presentation engine does **not** wait for a vertical blanking period and
     /// the request is presented immediately. This is a low-latency presentation mode,
@@ -594,7 +594,7 @@ bitflags::bitflags! {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct SwapChainDescriptor {
     pub usage: TextureUsage,
     pub format: TextureFormat,
@@ -644,7 +644,8 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
 pub struct Color {
     pub r: f64,
@@ -701,7 +702,7 @@ pub enum TextureDimension {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Origin3d {
     pub x: u32,
     pub y: u32,
@@ -723,7 +724,7 @@ impl Default for Origin3d {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Extent3d {
     pub width: u32,
     pub height: u32,
@@ -731,7 +732,7 @@ pub struct Extent3d {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct TextureDescriptor {
     pub size: Extent3d,
     pub array_layer_count: u32,
@@ -810,7 +811,7 @@ pub struct SamplerDescriptor<'a> {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CommandBufferDescriptor {
     pub todo: u32,
 }
