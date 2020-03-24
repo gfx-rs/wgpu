@@ -9,7 +9,6 @@ autogen_warning = """/* DO NOT MODIFY THIS MANUALLY! This file was generated usi
  */
 
 typedef void WGPUEmpty;
-typedef struct WGPUGlobal WGPUGlobal;
 """
 include_version = true
 braces = "SameLine"

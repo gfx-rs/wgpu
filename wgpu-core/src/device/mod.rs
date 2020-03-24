@@ -6,7 +6,7 @@ use crate::{
     binding_model,
     command,
     conv,
-    hub::{AllIdentityFilter, GfxBackend, Global, IdentityFilter, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id,
     pipeline,
     resource,
@@ -271,9 +271,9 @@ impl<B: GfxBackend> Device<B> {
         self.life_tracker.lock()
     }
 
-    fn maintain<'a, F: AllIdentityFilter>(
+    fn maintain<'a, G: GlobalIdentityHandlerFactory>(
         &'a self,
-        global: &Global<F>,
+        global: &Global<G>,
         force_wait: bool,
         token: &mut Token<'a, Self>,
     ) -> Vec<BufferMapPendingCallback> {
@@ -490,12 +490,12 @@ impl<B: hal::Backend> Device<B> {
 }
 
 
-impl<F: IdentityFilter<id::BufferId>> Global<F> {
+impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_buffer<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &wgt::BufferDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::BufferId>,
     ) -> id::BufferId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -525,7 +525,7 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
         &self,
         device_id: id::DeviceId,
         desc: &wgt::BufferDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::BufferId>,
     ) -> (id::BufferId, *mut u8) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -644,14 +644,12 @@ impl<F: IdentityFilter<id::BufferId>> Global<F> {
             .lock_life(&mut token)
             .suspected_resources.buffers.push(buffer_id);
     }
-}
 
-impl<F: IdentityFilter<id::TextureId>> Global<F> {
     pub fn device_create_texture<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &wgt::TextureDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::TextureId>,
     ) -> id::TextureId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -690,14 +688,12 @@ impl<F: IdentityFilter<id::TextureId>> Global<F> {
             .lock_life(&mut token)
             .suspected_resources.textures.push(texture_id);
     }
-}
 
-impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
     pub fn texture_create_view<B: GfxBackend>(
         &self,
         texture_id: id::TextureId,
         desc: Option<&wgt::TextureViewDescriptor>,
-        id_in: F::Input,
+        id_in: Input<G, id::TextureViewId>,
     ) -> id::TextureViewId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -801,14 +797,12 @@ impl<F: IdentityFilter<id::TextureViewId>> Global<F> {
             .lock_life(&mut token)
             .suspected_resources.texture_views.push(texture_view_id);
     }
-}
 
-impl<F: IdentityFilter<id::SamplerId>> Global<F> {
     pub fn device_create_sampler<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &wgt::SamplerDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::SamplerId>,
     ) -> id::SamplerId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -866,14 +860,12 @@ impl<F: IdentityFilter<id::SamplerId>> Global<F> {
             .lock_life(&mut token)
             .suspected_resources.samplers.push(sampler_id);
     }
-}
 
-impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
     pub fn device_create_bind_group_layout<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::BindGroupLayoutId>,
     ) -> id::BindGroupLayoutId {
         let mut token = Token::root();
         let hub = B::hub(self);
@@ -942,14 +934,12 @@ impl<F: IdentityFilter<id::BindGroupLayoutId>> Global<F> {
             device_guard[bgl.device_id.value].raw.destroy_descriptor_set_layout(bgl.raw);
         }
     }
-}
 
-impl<F: IdentityFilter<id::PipelineLayoutId>> Global<F> {
     pub fn device_create_pipeline_layout<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::PipelineLayoutId>,
     ) -> id::PipelineLayoutId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -998,14 +988,12 @@ impl<F: IdentityFilter<id::PipelineLayoutId>> Global<F> {
             device_guard[pipeline_layout.device_id.value].raw.destroy_pipeline_layout(pipeline_layout.raw);
         }
     }
-}
 
-impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
     pub fn device_create_bind_group<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::BindGroupId>,
     ) -> id::BindGroupId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1211,14 +1199,12 @@ impl<F: IdentityFilter<id::BindGroupId>> Global<F> {
             .lock_life(&mut token)
             .suspected_resources.bind_groups.push(bind_group_id);
     }
-}
 
-impl<F: IdentityFilter<id::ShaderModuleId>> Global<F> {
     pub fn device_create_shader_module<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &pipeline::ShaderModuleDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::ShaderModuleId>,
     ) -> id::ShaderModuleId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1253,14 +1239,12 @@ impl<F: IdentityFilter<id::ShaderModuleId>> Global<F> {
             device_guard[module.device_id.value].raw.destroy_shader_module(module.raw);
         }
     }
-}
 
-impl<F: IdentityFilter<id::CommandEncoderId>> Global<F> {
     pub fn device_create_command_encoder<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         _desc: &wgt::CommandEncoderDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::CommandEncoderId>,
     ) -> id::CommandEncoderId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1345,17 +1329,13 @@ impl<F: IdentityFilter<id::CommandEncoderId>> Global<F> {
             .suspected_resources.extend(&device.temp_suspected);
         device.com_allocator.discard(comb);
     }
-}
 
-impl<F: IdentityFilter<id::CommandBufferId>> Global<F> {
     pub fn command_buffer_destroy<B: GfxBackend>(
         &self, command_buffer_id: id::CommandBufferId
     ) {
         self.command_encoder_destroy::<B>(command_buffer_id)
     }
-}
 
-impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
     pub fn queue_submit<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
@@ -1504,14 +1484,12 @@ impl<F: AllIdentityFilter + IdentityFilter<id::CommandBufferId>> Global<F> {
 
         fire_map_callbacks(callbacks);
     }
-}
 
-impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
     pub fn device_create_render_pipeline<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &pipeline::RenderPipelineDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::RenderPipelineId>,
     ) -> id::RenderPipelineId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1780,14 +1758,12 @@ impl<F: IdentityFilter<id::RenderPipelineId>> Global<F> {
         //TODO: track usage by GPU
         hub.render_pipelines.unregister(render_pipeline_id, &mut token);
     }
-}
 
-impl<F: IdentityFilter<id::ComputePipelineId>> Global<F> {
     pub fn device_create_compute_pipeline<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         desc: &pipeline::ComputePipelineDescriptor,
-        id_in: F::Input,
+        id_in: Input<G, id::ComputePipelineId>,
     ) -> id::ComputePipelineId {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1848,43 +1824,41 @@ impl<F: IdentityFilter<id::ComputePipelineId>> Global<F> {
         //TODO: track usage by GPU
         hub.compute_pipelines.unregister(compute_pipeline_id, &mut token);
     }
-}
 
-fn validate_swap_chain_descriptor(
-    config: &mut hal::window::SwapchainConfig,
-    caps: &hal::window::SurfaceCapabilities,
-) {
-    let width = config.extent.width;
-    let height = config.extent.height;
-    if width < caps.extents.start().width
-        || width > caps.extents.end().width
-        || height < caps.extents.start().height
-        || height > caps.extents.end().height
-    {
-        log::warn!(
-            "Requested size {}x{} is outside of the supported range: {:?}",
-            width,
-            height,
-            caps.extents
-        );
-    }
-    if !caps.present_modes.contains(config.present_mode) {
-        log::warn!(
-            "Surface does not support present mode: {:?}, falling back to {:?}",
-            config.present_mode,
-            hal::window::PresentMode::FIFO
-        );
-        config.present_mode = hal::window::PresentMode::FIFO;
-    }
-}
-
-impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
     pub fn device_create_swap_chain<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
         surface_id: id::SurfaceId,
         desc: &wgt::SwapChainDescriptor,
     ) -> id::SwapChainId {
+        fn validate_swap_chain_descriptor(
+            config: &mut hal::window::SwapchainConfig,
+            caps: &hal::window::SurfaceCapabilities,
+        ) {
+            let width = config.extent.width;
+            let height = config.extent.height;
+            if width < caps.extents.start().width
+                || width > caps.extents.end().width
+                || height < caps.extents.start().height
+                || height > caps.extents.end().height
+            {
+                log::warn!(
+                    "Requested size {}x{} is outside of the supported range: {:?}",
+                    width,
+                    height,
+                    caps.extents
+                );
+            }
+            if !caps.present_modes.contains(config.present_mode) {
+                log::warn!(
+                    "Surface does not support present mode: {:?}, falling back to {:?}",
+                    config.present_mode,
+                    hal::window::PresentMode::FIFO
+                );
+                config.present_mode = hal::window::PresentMode::FIFO;
+            }
+        }
+
         log::info!("creating swap chain {:?}", desc);
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1945,9 +1919,7 @@ impl<F: IdentityFilter<id::SwapChainId>> Global<F> {
         swap_chain_guard.insert(sc_id, swap_chain);
         sc_id
     }
-}
 
-impl<F: AllIdentityFilter> Global<F> {
     pub fn device_poll<B: GfxBackend>(&self, device_id: id::DeviceId, force_wait: bool) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1990,9 +1962,7 @@ impl<F: AllIdentityFilter> Global<F> {
 
         fire_map_callbacks(callbacks);
     }
-}
 
-impl<F: AllIdentityFilter + IdentityFilter<id::DeviceId>> Global<F> {
     pub fn device_destroy<B: GfxBackend>(&self, device_id: id::DeviceId) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2001,9 +1971,7 @@ impl<F: AllIdentityFilter + IdentityFilter<id::DeviceId>> Global<F> {
         drop(token);
         device.dispose();
     }
-}
 
-impl<F> Global<F> {
     pub fn buffer_map_async<B: GfxBackend>(
         &self,
         buffer_id: id::BufferId,

@@ -2,16 +2,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use crate::identity::IdentityRecyclerFactory;
+
 use core::{gfx_select, id};
 
 use std::slice;
 
-pub type Global = core::hub::Global<()>;
+
+pub type Global = core::hub::Global<IdentityRecyclerFactory>;
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_new() -> *mut Global {
+pub extern "C" fn wgpu_server_new(factory: IdentityRecyclerFactory) -> *mut Global {
     log::info!("Initializing WGPU server");
-    Box::into_raw(Box::new(Global::new("wgpu")))
+    Box::into_raw(Box::new(Global::new("wgpu", factory)))
 }
 
 /// # Safety
