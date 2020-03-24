@@ -100,7 +100,6 @@ pub type SurfaceId = Id<crate::instance::Surface>;
 // Device
 pub type DeviceId = Id<crate::device::Device<Dummy>>;
 pub type QueueId = DeviceId;
-pub type ShaderModuleId = Id<crate::device::ShaderModule<Dummy>>;
 // Resource
 pub type BufferId = Id<crate::resource::Buffer<Dummy>>;
 pub type TextureViewId = Id<crate::resource::TextureView<Dummy>>;
@@ -111,6 +110,7 @@ pub type BindGroupLayoutId = Id<crate::binding_model::BindGroupLayout<Dummy>>;
 pub type PipelineLayoutId = Id<crate::binding_model::PipelineLayout<Dummy>>;
 pub type BindGroupId = Id<crate::binding_model::BindGroup<Dummy>>;
 // Pipeline
+pub type ShaderModuleId = Id<crate::pipeline::ShaderModule<Dummy>>;
 pub type RenderPipelineId = Id<crate::pipeline::RenderPipeline<Dummy>>;
 pub type ComputePipelineId = Id<crate::pipeline::ComputePipeline<Dummy>>;
 // Command
