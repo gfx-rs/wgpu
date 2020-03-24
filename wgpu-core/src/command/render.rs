@@ -851,7 +851,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let pipeline = &pipeline_guard[pipeline_id];
+                    let pipeline = trackers
+                        .render_pipes
+                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
+                        .unwrap();
 
                     assert!(
                         context.compatible(&pipeline.pass_context),

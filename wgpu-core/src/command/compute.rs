@@ -142,7 +142,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
-                    let pipeline = &pipeline_guard[pipeline_id];
+                    let pipeline = cmb.trackers
+                        .compute_pipes
+                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
+                        .unwrap();
 
                     unsafe {
                         raw.bind_compute_pipeline(&pipeline.raw);
