@@ -97,17 +97,7 @@ pub enum ConstantInner {
     Uint(u64),
     Float(f64),
     Bool(bool),
-}
-
-impl ConstantInner {
-    pub fn scalar_kind(&self) -> ScalarKind {
-        match *self {
-            ConstantInner::Sint(_) => ScalarKind::Sint,
-            ConstantInner::Uint(_) => ScalarKind::Uint,
-            ConstantInner::Float(_) => ScalarKind::Float,
-            ConstantInner::Bool(_) => ScalarKind::Bool,
-        }
-    }
+    Composite(Vec<Handle<Constant>>),
 }
 
 #[derive(Clone, Debug, PartialEq)]

@@ -715,6 +715,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::TypeSampledImage => self.parse_type_sampled_image(inst),
                 Op::TypeSampler => self.parse_type_sampler(inst, &mut module),
                 Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
+                Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
                 Op::Variable => self.parse_variable(inst, &mut module),
                 Op::Function => self.parse_function(inst, &mut module),
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
@@ -1302,6 +1303,42 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }),
             type_id,
         });
+        Ok(())
+    }
+
+    fn parse_composite_constant(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect_at_least(3)?;
+        let type_id = self.next()?;
+        let type_lookup = self.lookup_type.lookup(type_id)?;
+        let ty = type_lookup.handle;
+
+        let id = self.next()?;
+
+        let constituents_count = inst.wc - 3;
+        let mut constituents = Vec::with_capacity(constituents_count as usize);
+        for _ in 0..constituents_count {
+            let constituent_id = self.next()?;
+            let constant = self.lookup_constant.lookup(constituent_id)?;
+            constituents.push(constant.handle);
+        }
+
+        self.lookup_constant.insert(id, LookupConstant {
+            handle: module.constants.append(crate::Constant {
+                name: self.future_decor
+                    .remove(&id)
+                    .and_then(|dec|dec.name),
+                specialization: None,
+                inner: crate::ConstantInner::Composite(constituents),
+                ty
+            }),
+            type_id
+        });
+
         Ok(())
     }
 

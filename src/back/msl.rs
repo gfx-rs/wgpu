@@ -403,29 +403,7 @@ impl<W: Write> Writer<W> {
                 }
             }
             crate::Expression::Constant(handle) => {
-                let kind = match module.constants[handle].inner {
-                    crate::ConstantInner::Sint(value) => {
-                        write!(self.out, "{}", value)?;
-                        crate::ScalarKind::Sint
-                    }
-                    crate::ConstantInner::Uint(value) => {
-                        write!(self.out, "{}", value)?;
-                        crate::ScalarKind::Uint
-                    }
-                    crate::ConstantInner::Float(value) => {
-                        write!(self.out, "{}", value)?;
-                        if value.fract() == 0.0 {
-                            self.out.write_str(".0")?;
-                        }
-                        crate::ScalarKind::Float
-                    }
-                    crate::ConstantInner::Bool(value) => {
-                        write!(self.out, "{}", value)?;
-                        crate::ScalarKind::Bool
-                    }
-                };
-                let width = 32; //TODO: not sure how to get that...
-                Ok(MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }))
+                self.put_constant(handle, module)
             }
             crate::Expression::Compose { ty, ref components } => {
                 let inner = &module.types[ty].inner;
@@ -599,6 +577,46 @@ impl<W: Write> Writer<W> {
             }
             ref other => panic!("Unsupported {:?}", other),
         }
+    }
+
+    fn put_constant<'a>(
+        &mut self,
+        handle: Handle<crate::Constant>,
+        module: &'a crate::Module,
+    ) -> Result<MaybeOwned<'a, crate::TypeInner>, Error> {
+        let constant = &module.constants[handle];
+        let ty = &module.types[constant.ty];
+
+        match constant.inner {
+            crate::ConstantInner::Sint(value) => {
+                write!(self.out, "{}", value)?;
+            }
+            crate::ConstantInner::Uint(value) => {
+                write!(self.out, "{}", value)?;
+            }
+            crate::ConstantInner::Float(value) => {
+                write!(self.out, "{}", value)?;
+                if value.fract() == 0.0 {
+                    self.out.write_str(".0")?;
+                }
+            }
+            crate::ConstantInner::Bool(value) => {
+                write!(self.out, "{}", value)?;
+            }
+            crate::ConstantInner::Composite(ref constituents) => {
+                let ty_name = ty.name.or_index(constant.ty);
+                write!(self.out, "{}(", ty_name)?;
+                for (i, handle) in constituents.iter().enumerate() {
+                    if i != 0 {
+                        write!(self.out, ", ")?;
+                    }
+                    self.put_constant(*handle, module)?;
+                }
+                write!(self.out, ")")?;
+            }
+        }
+
+        Ok(MaybeOwned::Borrowed(&ty.inner))
     }
 
     fn put_statement<'a>(

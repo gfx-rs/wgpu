@@ -404,16 +404,16 @@ impl Parser {
         }
     }
 
-    fn get_constant_inner(word: &str) -> Result<crate::ConstantInner, Error<'_>> {
+    fn get_constant_inner(word: &str) -> Result<(crate::ConstantInner, crate::ScalarKind), Error<'_>> {
         if word.contains('.') {
             word
                 .parse()
-                .map(crate::ConstantInner::Float)
+                .map(|f|(crate::ConstantInner::Float(f), crate::ScalarKind::Float))
                 .map_err(|err| Error::BadFloat(word, err))
         } else {
             word
                 .parse()
-                .map(crate::ConstantInner::Sint)
+                .map(|i|(crate::ConstantInner::Sint(i), crate::ScalarKind::Sint))
                 .map_err(|err| Error::BadInteger(word, err))
         }
     }
@@ -436,7 +436,8 @@ impl Parser {
             }
             Token::Number(word) => {
                 let _ = lexer.next();
-                Self::get_constant_inner(word)?
+                let (inner, _) = Self::get_constant_inner(word)?;
+                inner
             }
             _ => {
                 let _ty = self.parse_type_decl(lexer, type_arena);
@@ -496,8 +497,7 @@ impl Parser {
                 crate::Expression::Constant(handle)
             }
             Token::Number(word) => {
-                let inner = Self::get_constant_inner(word)?;
-                let kind = inner.scalar_kind();
+                let (inner, kind) = Self::get_constant_inner(word)?;
                 let handle = ctx.constants.append(crate::Constant {
                     name: None,
                     specialization: None,
