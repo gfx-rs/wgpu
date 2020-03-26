@@ -269,6 +269,7 @@ dependencies = [
 [[package]]
 name = "gfx-descriptor"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "fxhash 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -287,6 +288,7 @@ dependencies = [
 [[package]]
 name = "gfx-memory"
 version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "fxhash 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -708,9 +710,9 @@ dependencies = [
  "gfx-backend-empty 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx-backend-metal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx-backend-vulkan 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx-descriptor 0.1.0",
+ "gfx-descriptor 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "gfx-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "gfx-memory 0.1.0",
+ "gfx-memory 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "peek-poke 0.2.0 (git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075)",
@@ -819,7 +821,9 @@ dependencies = [
 "checksum gfx-backend-empty 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "b67bd2d7bc022b257ddbdabc5fa3b10c29c292372c3409f2b6a6e3f4e11cdb85"
 "checksum gfx-backend-metal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "6e46f18a5c1b6e5f447ea38ab57154a50a284c3d968c2a587212c9c31c33073e"
 "checksum gfx-backend-vulkan 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "2be2520dae207bbdd5eb16da86decbfb57a72bd200ca81480b9a60c7c91eb4b2"
+"checksum gfx-descriptor 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "1bf35f5d66d1bc56e63e68d7528441453f25992bd954b84309d23c659df2c5da"
 "checksum gfx-hal 0.5.0 (registry+https://github.com/rust-lang/crates.io-index)" = "bc96180204064c9493e0fe4a9efeb721e0ac59fe8e1906d0c659142a93114fb1"
+"checksum gfx-memory 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)" = "12e0d05a5a1c849561bcc8b9cc1a79ad7d250c9bae458e1de477e184cd63fc5a"
 "checksum hibitset 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)" = "47e7292fd9f7fe89fa35c98048f2d0a69b79ed243604234d18f6f8a1aa6f408d"
 "checksum js-sys 0.3.32 (registry+https://github.com/rust-lang/crates.io-index)" = "1c840fdb2167497b0bd0db43d6dfe61e91637fa72f9d061f8bd17ddc44ba6414"
 "checksum lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)" = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
