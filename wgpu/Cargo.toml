@@ -54,7 +54,7 @@ log = "0.4"
 png = "0.15"
 winit = "0.22"
 rand = "0.7.2"
-zerocopy = "0.2"
+zerocopy = "0.3"
 futures = "0.3"
 
 #[patch."https://github.com/gfx-rs/wgpu"]
