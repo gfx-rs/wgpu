@@ -496,6 +496,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 adapter_id,
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
+                limits.non_coherent_atom_size as u64,
                 supports_texture_d24_s8,
                 desc.limits.max_bind_groups,
             )

@@ -13,7 +13,7 @@ use crate::{
 
 use wgt::BufferAddress;
 use arrayvec::ArrayVec;
-use rendy_descriptor::{DescriptorRanges, DescriptorSet};
+use gfx_descriptor::{DescriptorCounts, DescriptorSet};
 
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};
@@ -69,7 +69,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) entries: FastHashMap<u32, BindGroupLayoutEntry>,
-    pub(crate) desc_ranges: DescriptorRanges,
+    pub(crate) desc_counts: DescriptorCounts,
     pub(crate) dynamic_count: usize,
 }
 

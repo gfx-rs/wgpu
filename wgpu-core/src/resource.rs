@@ -16,8 +16,7 @@ use wgt::{
     TextureFormat,
     TextureUsage,
 };
-use hal;
-use rendy_memory::MemoryBlock;
+use gfx_memory::MemoryBlock;
 
 use std::{borrow::Borrow, fmt};
 
@@ -72,7 +71,7 @@ impl BufferMapOperation {
 
 #[derive(Debug)]
 pub struct BufferPendingMapping {
-    pub range: std::ops::Range<BufferAddress>,
+    pub sub_range: hal::buffer::SubRange,
     pub op: BufferMapOperation,
     // hold the parent alive while the mapping is active
     pub parent_ref_count: RefCount,
@@ -86,7 +85,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: BufferAddress,
     pub(crate) full_range: (),
-    pub(crate) mapped_write_ranges: Vec<std::ops::Range<BufferAddress>>,
+    pub(crate) mapped_write_segments: Vec<hal::memory::Segment>,
     pub(crate) pending_mapping: Option<BufferPendingMapping>,
     pub(crate) life_guard: LifeGuard,
 }

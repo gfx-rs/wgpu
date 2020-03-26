@@ -16,8 +16,8 @@ use crate::{
 use copyless::VecHelper as _;
 use hal::device::Device as _;
 use parking_lot::Mutex;
-use rendy_descriptor::{DescriptorAllocator, DescriptorSet};
-use rendy_memory::{Heaps, MemoryBlock};
+use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
+use gfx_memory::{Heaps, MemoryBlock};
 
 use std::{
     sync::atomic::Ordering,
@@ -555,10 +555,10 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 let mapping = buffer.pending_mapping.take().unwrap();
                 let result = match mapping.op {
                     resource::BufferMapOperation::Read { .. } => {
-                        super::map_buffer(raw, buffer, mapping.range, super::HostMap::Read)
+                        super::map_buffer(raw, buffer, mapping.sub_range, super::HostMap::Read)
                     }
                     resource::BufferMapOperation::Write { .. } => {
-                        super::map_buffer(raw, buffer, mapping.range, super::HostMap::Write)
+                        super::map_buffer(raw, buffer, mapping.sub_range, super::HostMap::Write)
                     }
                 };
                 (mapping.op, result)
