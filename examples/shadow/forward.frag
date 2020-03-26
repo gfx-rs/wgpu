@@ -32,9 +32,11 @@ float fetch_shadow(int light_id, vec4 homogeneous_coords) {
     if (homogeneous_coords.w <= 0.0) {
         return 1.0;
     }
+    // compensate for the Y-flip difference between the NDC and texture coordinates
+    const vec2 flip_correction = vec2(0.5, -0.5);
     // compute texture coordinates for shadow lookup
     vec4 light_local = vec4(
-        (homogeneous_coords.xy/homogeneous_coords.w + 1.0) / 2.0,
+        homogeneous_coords.xy * flip_correction/homogeneous_coords.w + 0.5,
         light_id,
         homogeneous_coords.z / homogeneous_coords.w
     );
