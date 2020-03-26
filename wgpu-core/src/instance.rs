@@ -595,16 +595,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let limits = adapter.physical_device.limits();
-            // assert_eq!(
-            //     0,
-            //     BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
-            //     "Adapter storage buffer offset alignment not compatible with WGPU"
-            // );
-            // assert_eq!(
-            //     0,
-            //     BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
-            //     "Adapter uniform buffer offset alignment not compatible with WGPU"
-            // );
+            assert_eq!(
+                0,
+                BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
+                "Adapter storage buffer offset alignment not compatible with WGPU"
+            );
+            assert_eq!(
+                0,
+                BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
+                "Adapter uniform buffer offset alignment not compatible with WGPU"
+            );
             if limits.max_bound_descriptor_sets == 0 {
                 log::warn!("max_bind_groups limit is missing");
             } else {
