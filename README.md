@@ -35,6 +35,8 @@ The implementation consists of the following parts:
   Vulkan | :heavy_check_mark: | :heavy_check_mark: |                    |
   Metal  |                    |                    | :heavy_check_mark: |
   OpenGL | :construction:     | :construction:     | :construction:     |
+  
+:heavy_check_mark: = Primary support — :white_check_mark: = Secondary support — :construction: = Unsupported, but support in progress
 
 ## Usage
 
