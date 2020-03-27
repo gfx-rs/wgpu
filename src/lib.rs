@@ -12,6 +12,7 @@ use smallvec::SmallVec;
 use std::{
     ffi::CString,
     ops::Range,
+    future::Future,
     ptr,
     slice,
     thread,
@@ -53,6 +54,14 @@ pub struct Adapter {
 pub struct Device {
     id: wgc::id::DeviceId,
     temp: Temp,
+}
+
+/// This is passed to `Device::poll` to control whether
+/// it should block or not.
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Maintain {
+    Wait,
+    Poll,
 }
 
 /// A handle to a GPU-accessible buffer.
@@ -536,8 +545,11 @@ impl Adapter {
 
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
-    pub fn poll(&self, force_wait: bool) {
-        wgn::wgpu_device_poll(self.id, force_wait);
+    pub fn poll(&self, maintain: Maintain) {
+        wgn::wgpu_device_poll(self.id, match maintain {
+            Maintain::Poll => false,
+            Maintain::Wait => true,
+        });
     }
 
     /// Creates a shader module from SPIR-V source code.
@@ -889,25 +901,23 @@ impl Drop for BufferWriteMapping {
     }
 }
 
-struct BufferMapReadFutureUserData
-{
-    size: BufferAddress,
-    completion: native_gpu_future::GpuFutureCompletion<Result<BufferReadMapping, BufferAsyncErr>>,
-    buffer_id: wgc::id::BufferId,
-}
 
-struct BufferMapWriteFutureUserData
-{
-    size: BufferAddress,
-    completion: native_gpu_future::GpuFutureCompletion<Result<BufferWriteMapping, BufferAsyncErr>>,
-    buffer_id: wgc::id::BufferId,
-}
 
 impl Buffer {
     /// Map the buffer for reading. The result is returned in a future.
-    pub async fn map_read(&self, start: BufferAddress, size: BufferAddress) -> Result<BufferReadMapping, BufferAsyncErr>
+    /// 
+    /// For the future to complete, `device.poll(...)` must be called elsewhere in the runtime, possibly integrated
+    /// into an event loop, run on a separate thread, or continually polled in the same task runtime that this
+    /// future will be run on.
+    /// 
+    /// It's expected that wgpu will eventually supply its own event loop infrastructure that will be easy to integrate
+    /// into other event loops, like winit's.
+    pub fn map_read(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>>
     {
-        let (future, completion) = native_gpu_future::new_gpu_future(self.device_id);
+        let (future, completion) = native_gpu_future::new_gpu_future(
+            self.id,
+            size,
+        );
 
         extern "C" fn buffer_map_read_future_wrapper(
             status: wgc::resource::BufferMapAsyncStatus,
@@ -915,39 +925,43 @@ impl Buffer {
             user_data: *mut u8,
         )
         {
-            let user_data =
-                unsafe { Box::from_raw(user_data as *mut BufferMapReadFutureUserData) };
+            let completion = unsafe {
+                native_gpu_future::GpuFutureCompletion::from_raw(user_data as _)
+            };
+            let (buffer_id, size) = completion.get_buffer_info();
+
             if let wgc::resource::BufferMapAsyncStatus::Success = status {
-                user_data.completion.complete(Ok(BufferReadMapping {
+                completion.complete(Ok(BufferReadMapping {
                     data,
-                    size: user_data.size as usize,
-                    buffer_id: user_data.buffer_id,
+                    size: size as usize,
+                    buffer_id,
                 }));
             } else {
-                user_data.completion.complete(Err(BufferAsyncErr));
+                completion.complete(Err(BufferAsyncErr));
             }
         }
 
-        let user_data = Box::new(BufferMapReadFutureUserData {
-            size,
-            completion,
-            buffer_id: self.id,
-        });
         wgn::wgpu_buffer_map_read_async(
             self.id,
             start,
             size,
             buffer_map_read_future_wrapper,
-            Box::into_raw(user_data) as *mut u8,
+            completion.to_raw() as _,
         );
 
-        future.await
+        future
     }
 
     /// Map the buffer for writing. The result is returned in a future.
-    pub async fn map_write(&self, start: BufferAddress, size: BufferAddress) -> Result<BufferWriteMapping, BufferAsyncErr>
+    /// 
+    /// See the documentation of (map_read)[#method.map_read] for more information about
+    /// how to run this future.
+    pub fn map_write(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>>
     {
-        let (future, completion) = native_gpu_future::new_gpu_future(self.device_id);
+        let (future, completion) = native_gpu_future::new_gpu_future(
+            self.id,
+            size,
+        );
 
         extern "C" fn buffer_map_write_future_wrapper(
             status: wgc::resource::BufferMapAsyncStatus,
@@ -955,33 +969,31 @@ impl Buffer {
             user_data: *mut u8,
         )
         {
-            let user_data =
-                unsafe { Box::from_raw(user_data as *mut BufferMapWriteFutureUserData) };
+            let completion = unsafe {
+                native_gpu_future::GpuFutureCompletion::from_raw(user_data as _)
+            };
+            let (buffer_id, size) = completion.get_buffer_info();
+
             if let wgc::resource::BufferMapAsyncStatus::Success = status {
-                user_data.completion.complete(Ok(BufferWriteMapping {
+                completion.complete(Ok(BufferWriteMapping {
                     data,
-                    size: user_data.size as usize,
-                    buffer_id: user_data.buffer_id,
+                    size: size as usize,
+                    buffer_id,
                 }));
             } else {
-                user_data.completion.complete(Err(BufferAsyncErr));
+                completion.complete(Err(BufferAsyncErr));
             }
         }
 
-        let user_data = Box::new(BufferMapWriteFutureUserData {
-            size,
-            completion,
-            buffer_id: self.id,
-        });
         wgn::wgpu_buffer_map_write_async(
             self.id,
             start,
             size,
             buffer_map_write_future_wrapper,
-            Box::into_raw(user_data) as *mut u8,
+            completion.to_raw() as _,
         );
 
-        future.await
+        future
     }
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.

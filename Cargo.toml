@@ -45,6 +45,7 @@ rev = "08e8d406c175579da5ef18c1abf4d6c00e2a9726"
 arrayvec = "0.5"
 smallvec = "1"
 raw-window-handle = "0.3"
+parking_lot = "0.10"
 
 [dev-dependencies]
 cgmath = "0.17"
