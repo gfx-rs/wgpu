@@ -19,8 +19,11 @@ use crate::{
 };
 
 use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat};
+
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
+use gfx_descriptor::DescriptorAllocator;
+use gfx_memory::{Block, Heaps};
 use hal::{
     self,
     command::CommandBuffer as _,
@@ -29,8 +32,6 @@ use hal::{
     window::{PresentationSurface as _, Surface as _},
 };
 use parking_lot::{Mutex, MutexGuard};
-use rendy_descriptor::{DescriptorAllocator, DescriptorRanges};
-use rendy_memory::{Block, Heaps};
 use smallvec::SmallVec;
 
 use std::{
@@ -38,7 +39,6 @@ use std::{
     ffi,
     iter,
     marker::PhantomData,
-    ops,
     ptr,
     slice,
     sync::atomic::Ordering,
@@ -118,29 +118,38 @@ pub type BufferMapWriteCallback =
 fn map_buffer<B: hal::Backend>(
     raw: &B::Device,
     buffer: &mut resource::Buffer<B>,
-    buffer_range: ops::Range<BufferAddress>,
+    sub_range: hal::buffer::SubRange,
     kind: HostMap,
 ) -> BufferMapResult {
-    let is_coherent = buffer
-        .memory
-        .properties()
-        .contains(hal::memory::Properties::COHERENT);
-    let (ptr, mapped_range) = {
-        let mapped = buffer.memory.map(raw, buffer_range)?;
-        (mapped.ptr(), mapped.range())
+    let (ptr, sync_range) = {
+        let segment = hal::memory::Segment {
+            offset: sub_range.offset,
+            size: sub_range.size,
+        };
+        let mapped = buffer.memory.map(raw, segment)?;
+        let sync_range = if mapped.is_coherent() {
+            None
+        } else {
+            Some(mapped.range())
+        };
+        (mapped.ptr(), sync_range)
     };
 
-    if !is_coherent {
+    if let Some(range) = sync_range {
+        let segment = hal::memory::Segment {
+            offset: range.start,
+            size: Some(range.end - range.start),
+        };
         match kind {
             HostMap::Read => unsafe {
                 raw.invalidate_mapped_memory_ranges(iter::once((
                     buffer.memory.memory(),
-                    mapped_range,
+                    segment,
                 )))
                 .unwrap();
             },
             HostMap::Write => {
-                buffer.mapped_write_ranges.push(mapped_range);
+                buffer.mapped_write_segments.push(segment);
             }
         }
     }
@@ -152,21 +161,19 @@ fn unmap_buffer<B: hal::Backend>(
     raw: &B::Device,
     buffer: &mut resource::Buffer<B>,
 ) {
-    if !buffer.mapped_write_ranges.is_empty() {
+    if !buffer.mapped_write_segments.is_empty() {
         unsafe {
             raw
                 .flush_mapped_memory_ranges(
                     buffer
-                        .mapped_write_ranges
+                        .mapped_write_segments
                         .iter()
                         .map(|r| (buffer.memory.memory(), r.clone())),
                 )
                 .unwrap()
         };
-        buffer.mapped_write_ranges.clear();
+        buffer.mapped_write_segments.clear();
     }
-
-    buffer.memory.unmap(raw);
 }
 
 //Note: this logic is specifically moved out of `handle_mapping()` in order to
@@ -216,6 +223,7 @@ impl<B: GfxBackend> Device<B> {
         adapter_id: id::AdapterId,
         queue_group: hal::queue::QueueGroup<B>,
         mem_props: hal::adapter::MemoryProperties,
+        non_coherent_atom_size: u64,
         supports_texture_d24_s8: bool,
         max_bind_groups: u32,
     ) -> Self {
@@ -223,26 +231,19 @@ impl<B: GfxBackend> Device<B> {
         let life_guard = LifeGuard::new();
         life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
 
-        let heaps = {
-            let types = mem_props.memory_types.iter().map(|mt| {
-                use rendy_memory::{DynamicConfig, HeapsConfig, LinearConfig};
-                let config = HeapsConfig {
-                    linear: if mt.properties.contains(hal::memory::Properties::CPU_VISIBLE) {
-                        Some(LinearConfig {
-                            linear_size: 0x10_00_00,
-                        })
-                    } else {
-                        None
-                    },
-                    dynamic: Some(DynamicConfig {
-                        block_size_granularity: 0x1_00,
-                        max_chunk_size: 0x1_00_00_00,
-                        min_device_allocation: 0x1_00_00,
-                    }),
-                };
-                (mt.properties, mt.heap_index as u32, config)
-            });
-            unsafe { Heaps::new(types, mem_props.memory_heaps.iter().cloned()) }
+        let heaps = unsafe {
+            Heaps::new(
+                &mem_props,
+                gfx_memory::GeneralConfig {
+                    block_size_granularity: 0x100,
+                    max_chunk_size: 0x100_0000,
+                    min_device_allocation: 0x1_0000,
+                },
+                gfx_memory::LinearConfig {
+                    linear_size: 0x10_0000,
+                },
+                non_coherent_atom_size,
+            )
         };
 
         Device {
@@ -302,21 +303,21 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &wgt::BufferDescriptor,
     ) -> resource::Buffer<B> {
+        use gfx_memory::{Kind, MemoryUsage};
+
         debug_assert_eq!(self_id.backend(), B::VARIANT);
         let (usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
-
-        let rendy_usage = {
-            use rendy_memory::MemoryUsageValue as Muv;
+        let (kind, mem_usage) = {
             use wgt::BufferUsage as Bu;
 
             if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
-                Muv::Data
+                (Kind::General, MemoryUsage::Private)
             } else if (Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage) {
-                Muv::Upload
+                (Kind::Linear, MemoryUsage::Staging { read_back: false })
             } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
-                Muv::Download
+                (Kind::Linear, MemoryUsage::Staging { read_back: true })
             } else {
-                Muv::Dynamic
+                (Kind::General, MemoryUsage::Dynamic { sparse_updates: false })
             }
         };
 
@@ -334,7 +335,8 @@ impl<B: GfxBackend> Device<B> {
             .allocate(
                 &self.raw,
                 requirements.type_mask as u32,
-                rendy_usage,
+                mem_usage,
+                kind,
                 requirements.size,
                 requirements.alignment,
             )
@@ -342,7 +344,11 @@ impl<B: GfxBackend> Device<B> {
 
         unsafe {
             self.raw
-                .bind_buffer_memory(memory.memory(), memory.range().start, &mut buffer)
+                .bind_buffer_memory(
+                    memory.memory(),
+                    memory.segment().offset,
+                    &mut buffer,
+                )
                 .unwrap()
         };
 
@@ -356,7 +362,7 @@ impl<B: GfxBackend> Device<B> {
             memory,
             size: desc.size,
             full_range: (),
-            mapped_write_ranges: Vec::new(),
+            mapped_write_segments: Vec::new(),
             pending_mapping: None,
             life_guard: LifeGuard::new(),
         }
@@ -423,7 +429,8 @@ impl<B: GfxBackend> Device<B> {
             .allocate(
                 &self.raw,
                 requirements.type_mask as u32,
-                rendy_memory::Data,
+                gfx_memory::MemoryUsage::Private,
+                gfx_memory::Kind::General,
                 requirements.size,
                 requirements.alignment,
             )
@@ -431,7 +438,11 @@ impl<B: GfxBackend> Device<B> {
 
         unsafe {
             self.raw
-                .bind_image_memory(memory.memory(), memory.range().start, &mut image)
+                .bind_image_memory(
+                    memory.memory(),
+                    memory.segment().offset,
+                    &mut image,
+                )
                 .unwrap()
         };
 
@@ -484,11 +495,11 @@ impl<B: hal::Backend> Device<B> {
             &self.desc_allocator,
         );
         self.com_allocator.destroy(&self.raw);
-        let desc_alloc = self.desc_allocator.into_inner();
-        let mem_alloc = self.mem_allocator.into_inner();
+        let mut desc_alloc = self.desc_allocator.into_inner();
+        let mut mem_alloc = self.mem_allocator.into_inner();
         unsafe {
-            desc_alloc.dispose(&self.raw);
-            mem_alloc.dispose(&self.raw);
+            desc_alloc.clear(&self.raw);
+            mem_alloc.clear(&self.raw);
             for (_, rp) in self.render_passes.lock().drain() {
                 self.raw.destroy_render_pass(rp);
             }
@@ -547,7 +558,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut buffer = device.create_buffer(device_id, &desc);
         let ref_count = buffer.life_guard.add_ref();
 
-        let pointer = match map_buffer(&device.raw, &mut buffer, 0 .. desc.size, HostMap::Write) {
+        let pointer = match map_buffer(
+            &device.raw,
+            &mut buffer,
+            hal::buffer::SubRange::WHOLE,
+            HostMap::Write,
+        ) {
             Ok(ptr) => ptr,
             Err(e) => {
                 log::error!("failed to create buffer in a mapped state: {:?}", e);
@@ -588,7 +604,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match map_buffer(
             &device.raw,
             &mut buffer,
-            offset .. offset + data.len() as BufferAddress,
+            hal::buffer::SubRange { offset, size: Some(data.len() as BufferAddress) },
             HostMap::Write,
         ) {
             Ok(ptr) => unsafe {
@@ -623,7 +639,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match map_buffer(
             &device.raw,
             &mut buffer,
-            offset .. offset + data.len() as BufferAddress,
+            hal::buffer::SubRange { offset, size: Some(data.len() as BufferAddress) },
             HostMap::Read,
         ) {
             Ok(ptr) => unsafe {
@@ -833,7 +849,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             comparison: desc.compare.cloned().map(conv::map_compare_function),
             border: hal::image::PackedColor(0),
             normalized: true,
-            anisotropic: hal::image::Anisotropic::Off, //TODO
+            anisotropy_clamp: None, //TODO
         };
 
         let sampler = resource::Sampler {
@@ -932,7 +948,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ref_count: device.life_guard.add_ref(),
             },
             entries: entry_map,
-            desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
+            desc_counts: raw_bindings.iter().cloned().collect(),
             dynamic_count: entries.iter().filter(|b| b.has_dynamic_offset).count(),
         };
 
@@ -1018,10 +1034,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
         let entries =
-            unsafe { slice::from_raw_parts(desc.entries, desc.entries_length as usize) };
+            unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
         assert_eq!(entries.len(), bind_group_layout.entries.len());
 
-        let mut desc_set = unsafe {
+        let desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
             device
                 .desc_allocator
@@ -1029,7 +1045,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .allocate(
                     &device.raw,
                     &bind_group_layout.raw,
-                    bind_group_layout.desc_ranges,
+                    &bind_group_layout.desc_counts,
                     1,
                     &mut desc_sets,
                 )
@@ -1038,10 +1054,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         if !desc.label.is_null() {
-            unsafe {
-                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
-                device.raw.set_descriptor_set_name(desc_set.raw_mut(), &label);
-            }
+            //TODO: https://github.com/gfx-rs/gfx-extras/pull/5
+            //unsafe {
+            //    let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+            //    device.raw.set_descriptor_set_name(desc_set.raw_mut(), &label);
+            //}
         }
 
         // fill out the descriptors
@@ -1078,7 +1095,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         };
                         assert_eq!(
-                            bb.offset as hal::buffer::Offset % alignment,
+                            bb.offset % alignment,
                             0,
                             "Misaligned buffer offset {}",
                             bb.offset
@@ -1093,21 +1110,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             usage
                         );
 
-                        let end = if bb.size == 0 {
-                            None
-                        } else {
-                            let end = bb.offset + bb.size;
-                            assert!(
-                                end <= buffer.size,
-                                "Bound buffer range {:?} does not fit in buffer size {}",
-                                bb.offset .. end,
-                                buffer.size
-                            );
-                            Some(end)
+                        let sub_range = hal::buffer::SubRange {
+                            offset: bb.offset,
+                            size: if bb.size == 0 { None } else {
+                                let end = bb.offset + bb.size;
+                                assert!(
+                                    end <= buffer.size,
+                                    "Bound buffer range {:?} does not fit in buffer size {}",
+                                    bb.offset .. end,
+                                    buffer.size
+                                );
+                                Some(bb.size)
+                            },
                         };
-
-                        let range = Some(bb.offset) .. end;
-                        hal::pso::Descriptor::Buffer(&buffer.raw, range)
+                        hal::pso::Descriptor::Buffer(&buffer.raw, sub_range)
                     }
                     binding_model::BindingResource::Sampler(id) => {
                         match decl.ty {
@@ -2073,7 +2089,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             buffer.pending_mapping = Some(resource::BufferPendingMapping {
-                range,
+                sub_range: hal::buffer::SubRange {
+                    offset: range.start,
+                    size: Some(range.end - range.start),
+                },
                 op: operation,
                 parent_ref_count: buffer.life_guard.add_ref(),
             });

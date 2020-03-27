@@ -266,7 +266,7 @@ impl State {
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DrawError::IncompatibleBindGroup {
-                index: bind_mask.trailing_zeros() as u32,
+                index: bind_mask.trailing_zeros(),
             });
         }
         if self.blend_color == OptionalState::Required {
@@ -335,7 +335,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     clear_color: at.clear_color,
                 }
             })
-            .collect::<arrayvec::ArrayVec<[_; MAX_COLOR_TARGETS]>>();
+            .collect::<ArrayVec<[_; MAX_COLOR_TARGETS]>>();
         let depth_stencil_attachment = if targets.depth_stencil.attachment == id::TextureViewId::ERROR {
             None
         } else {
@@ -602,7 +602,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             } else {
                                 let sample_count_check =
                                     view_guard[color_attachments[i].attachment].samples;
-                                assert!(sample_count_check > 1, "RenderPassColorAttachmentDescriptor with a resolve_target must have an attachment with sample_count > 1");
+                                assert!(sample_count_check > 1,
+                                    "RenderPassColorAttachmentDescriptor with a resolve_target must have an attachment with sample_count > 1");
                                 resolve_ids.push((
                                     attachment_index,
                                     hal::image::Layout::ColorAttachmentOptimal,
@@ -845,7 +846,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 offsets
                                     .iter()
                                     .chain(follow_ups.flat_map(|(_, offsets)| offsets))
-                                    .map(|&off| off as hal::command::DescriptorSetOffset),
+                                    .cloned()
                             );
                         }
                     };
@@ -897,7 +898,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             &pipeline_layout.raw,
                                             index,
                                             iter::once(desc_set),
-                                            offsets.iter().map(|offset| *offset as u32),
+                                            offsets.iter().cloned(),
                                         );
                                     }
                                 }
@@ -922,7 +923,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                             let view = hal::buffer::IndexBufferView {
                                 buffer: &buffer.raw,
-                                offset: range.start,
+                                range: hal::buffer::SubRange {
+                                    offset: range.start,
+                                    size: Some(range.end - range.start),
+                                },
                                 index_type: conv::map_index_format(state.index.format),
                             };
 
@@ -960,7 +964,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let view = hal::buffer::IndexBufferView {
                         buffer: &buffer.raw,
-                        offset,
+                        range: hal::buffer::SubRange {
+                            offset,
+                            size: Some(end - offset),
+                        },
                         index_type: conv::map_index_format(state.index.format),
                     };
 
@@ -980,8 +987,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         buffer.size - offset
                     };
 
+                    let range = hal::buffer::SubRange {
+                        offset,
+                        size: if size != 0 { Some(size) } else { None },
+                    };
                     unsafe {
-                        raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, offset)));
+                        raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
                     }
                     state.vertex.update_limits();
                 }

@@ -101,28 +101,61 @@ pub fn map_binding_type(
     binding: &binding_model::BindGroupLayoutEntry,
 ) -> hal::pso::DescriptorType {
     use crate::binding_model::BindingType as Bt;
-    use hal::pso::DescriptorType as H;
+    use hal::pso;
     match binding.ty {
         Bt::UniformBuffer => {
-            if binding.has_dynamic_offset {
-                H::UniformBufferDynamic
-            } else {
-                H::UniformBuffer
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Uniform,
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: binding.has_dynamic_offset,
+                },
             }
         }
-        Bt::StorageBuffer |
+        Bt::StorageBuffer => {
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Storage {
+                    read_only: false,
+                },
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: binding.has_dynamic_offset,
+                },
+            }
+        }
         Bt::ReadonlyStorageBuffer => {
-            if binding.has_dynamic_offset {
-                H::StorageBufferDynamic
-            } else {
-                H::StorageBuffer
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Storage {
+                    read_only: false,
+                },
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: binding.has_dynamic_offset,
+                },
             }
         }
         Bt::Sampler |
-        Bt::ComparisonSampler => H::Sampler,
-        Bt::SampledTexture => H::SampledImage,
-        Bt::ReadonlyStorageTexture |
-        Bt::WriteonlyStorageTexture => H::StorageImage,
+        Bt::ComparisonSampler => {
+            pso::DescriptorType::Sampler
+        }
+        Bt::SampledTexture => {
+            pso::DescriptorType::Image {
+                ty: pso::ImageDescriptorType::Sampled {
+                    with_sampler: false,
+                },
+            }
+        }
+        Bt::ReadonlyStorageTexture => {
+            pso::DescriptorType::Image {
+                ty: pso::ImageDescriptorType::Storage {
+                    read_only: false,
+                },
+            }
+        }
+        Bt::WriteonlyStorageTexture => {
+            pso::DescriptorType::Image {
+                ty: pso::ImageDescriptorType::Storage {
+                    read_only: true,
+                },
+            }
+        }
     }
 }
 
@@ -646,23 +679,24 @@ pub fn map_wrap(address: wgt::AddressMode) -> hal::image::WrapMode {
 pub fn map_rasterization_state_descriptor(
     desc: &RasterizationStateDescriptor,
 ) -> hal::pso::Rasterizer {
-    hal::pso::Rasterizer {
+    use hal::pso;
+    pso::Rasterizer {
         depth_clamping: false,
-        polygon_mode: hal::pso::PolygonMode::Fill,
+        polygon_mode: pso::PolygonMode::Fill,
         cull_face: match desc.cull_mode {
-            CullMode::None => hal::pso::Face::empty(),
-            CullMode::Front => hal::pso::Face::FRONT,
-            CullMode::Back => hal::pso::Face::BACK,
+            CullMode::None => pso::Face::empty(),
+            CullMode::Front => pso::Face::FRONT,
+            CullMode::Back => pso::Face::BACK,
         },
         front_face: match desc.front_face {
-            FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
-            FrontFace::Cw => hal::pso::FrontFace::Clockwise,
+            FrontFace::Ccw => pso::FrontFace::CounterClockwise,
+            FrontFace::Cw => pso::FrontFace::Clockwise,
         },
         depth_bias: if desc.depth_bias != 0
             || desc.depth_bias_slope_scale != 0.0
             || desc.depth_bias_clamp != 0.0
         {
-            Some(hal::pso::State::Static(hal::pso::DepthBias {
+            Some(pso::State::Static(pso::DepthBias {
                 const_factor: desc.depth_bias as f32,
                 slope_factor: desc.depth_bias_slope_scale,
                 clamp: desc.depth_bias_clamp,
@@ -671,6 +705,7 @@ pub fn map_rasterization_state_descriptor(
             None
         },
         conservative: false,
+        line_width: pso::State::Static(1.0),
     }
 }
 

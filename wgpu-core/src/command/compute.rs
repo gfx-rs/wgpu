@@ -136,7 +136,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 offsets
                                     .iter()
                                     .chain(follow_ups.flat_map(|(_, offsets)| offsets))
-                                    .map(|&off| off as hal::command::DescriptorSetOffset),
+                                    .cloned(),
                             );
                         }
                     }
@@ -173,7 +173,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             &pipeline_layout.raw,
                                             index,
                                             iter::once(desc_set),
-                                            offsets.iter().map(|offset| *offset as u32),
+                                            offsets.iter().cloned(),
                                         );
                                     }
                                 }

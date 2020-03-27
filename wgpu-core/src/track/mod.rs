@@ -138,7 +138,7 @@ impl PendingTransition<BufferState> {
         hal::memory::Barrier::Buffer {
             states: conv::map_buffer_state(self.usage.start) .. conv::map_buffer_state(self.usage.end),
             target: &buf.raw,
-            range: None .. None,
+            range: hal::buffer::SubRange::WHOLE,
             families: None,
         }
     }

@@ -446,7 +446,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let adapter = &adapter_guard[adapter_id].raw;
             let wishful_features =
                 hal::Features::VERTEX_STORES_AND_ATOMICS |
-                hal::Features::FRAGMENT_STORES_AND_ATOMICS;
+                hal::Features::FRAGMENT_STORES_AND_ATOMICS |
+                hal::Features::NDC_Y_UP;
+            let enabled_features = adapter.physical_device.features() & wishful_features;
+            if enabled_features != wishful_features {
+                log::warn!("Missing features: {:?}", wishful_features - enabled_features);
+            }
 
             let family = adapter
                 .queue_families
@@ -456,10 +461,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut gpu = unsafe {
                 adapter
                     .physical_device
-                    .open(
-                        &[(family, &[1.0])],
-                        adapter.physical_device.features() & wishful_features,
-                    )
+                    .open(&[(family, &[1.0])], enabled_features)
                     .unwrap()
             };
 
@@ -496,6 +498,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 adapter_id,
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
+                limits.non_coherent_atom_size as u64,
                 supports_texture_d24_s8,
                 desc.limits.max_bind_groups,
             )
