@@ -33,7 +33,7 @@ version = "0.1"
 [dependencies]
 arrayvec = "0.5"
 lazy_static = "1.1"
-parking_lot = "0.9"
+parking_lot = "0.10"
 raw-window-handle = "0.3"
 libc = {version="0.2", features=[]}
 
