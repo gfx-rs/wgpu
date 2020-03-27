@@ -181,11 +181,11 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
             }
         };
         match operation {
-            resource::BufferMapOperation::Read(on_read) => {
-                on_read(status, ptr)
+            resource::BufferMapOperation::Read { callback, userdata } => unsafe {
+                callback(status, ptr, userdata)
             }
-            resource::BufferMapOperation::Write(on_write) => {
-                on_write(status, ptr)
+            resource::BufferMapOperation::Write { callback, userdata } => unsafe {
+                callback(status, ptr, userdata)
             }
         }
     }
