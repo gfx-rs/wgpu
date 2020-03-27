@@ -59,6 +59,7 @@ pub struct BindGroupLayoutEntry {
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupLayoutDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub entries: *const BindGroupLayoutEntry,
     pub entries_length: usize,
 }
@@ -115,6 +116,7 @@ pub struct BindGroupEntry {
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub layout: BindGroupLayoutId,
     pub entries: *const BindGroupEntry,
     pub entries_length: usize,

@@ -79,12 +79,14 @@ int main() {
     WGPUBindGroupLayoutId bind_group_layout =
         wgpu_device_create_bind_group_layout(device,
             &(WGPUBindGroupLayoutDescriptor){
+                .label = "bind group layout",
                 .entries = NULL,
                 .entries_length = 0,
             });
     WGPUBindGroupId bind_group =
         wgpu_device_create_bind_group(device,
             &(WGPUBindGroupDescriptor){
+                .label = "bind group",
                 .layout = bind_group_layout,
                 .entries = NULL,
                 .entries_length = 0,
@@ -237,7 +239,7 @@ int main() {
         }
 
         WGPUCommandEncoderId cmd_encoder = wgpu_device_create_command_encoder(
-            device, &(WGPUCommandEncoderDescriptor){.todo = 0});
+            device, &(WGPUCommandEncoderDescriptor){.label = "command encoder"});
 
         WGPURenderPassColorAttachmentDescriptor
             color_attachments[ATTACHMENTS_LENGTH] = {
