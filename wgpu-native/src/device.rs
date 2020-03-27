@@ -380,11 +380,11 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     callback: core::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
-    let operation = core::resource::BufferMapOperation::Read(
-        Box::new(move |status, data| unsafe {
-            callback(status, data, userdata)
-        }),
-    );
+    let operation = core::resource::BufferMapOperation::Read {
+        callback,
+        userdata,
+    };
+
     gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, wgt::BufferUsage::MAP_READ, start .. start + size, operation))
 }
 
@@ -396,11 +396,11 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     callback: core::device::BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
-    let operation = core::resource::BufferMapOperation::Write(
-        Box::new(move |status, data| unsafe {
-            callback(status, data, userdata)
-        }),
-    );
+    let operation = core::resource::BufferMapOperation::Write {
+        callback,
+        userdata,
+    };
+
     gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, wgt::BufferUsage::MAP_WRITE, start .. start + size, operation))
 }
 

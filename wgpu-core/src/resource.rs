@@ -31,8 +31,14 @@ pub enum BufferMapAsyncStatus {
 }
 
 pub enum BufferMapOperation {
-    Read(Box<dyn FnOnce(BufferMapAsyncStatus, *const u8)>),
-    Write(Box<dyn FnOnce(BufferMapAsyncStatus, *mut u8)>),
+    Read {
+        callback: crate::device::BufferMapReadCallback,
+        userdata: *mut u8,
+    },
+    Write {
+        callback: crate::device::BufferMapWriteCallback,
+        userdata: *mut u8,
+    }
 }
 
 //TODO: clarify if/why this is needed here
@@ -42,8 +48,8 @@ unsafe impl Sync for BufferMapOperation {}
 impl fmt::Debug for BufferMapOperation {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         let op = match *self {
-            BufferMapOperation::Read(_) => "read",
-            BufferMapOperation::Write(_) => "write",
+            BufferMapOperation::Read { .. } => "read",
+            BufferMapOperation::Write { .. } => "write",
         };
         write!(fmt, "BufferMapOperation <{}>", op)
     }
@@ -52,13 +58,13 @@ impl fmt::Debug for BufferMapOperation {
 impl BufferMapOperation {
     pub(crate) fn call_error(self) {
         match self {
-            BufferMapOperation::Read(callback) => {
+            BufferMapOperation::Read { callback, userdata } => {
                 log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
-                callback(BufferMapAsyncStatus::Error, std::ptr::null());
+                unsafe { callback(BufferMapAsyncStatus::Error, std::ptr::null(), userdata); }
             }
-            BufferMapOperation::Write(callback) => {
+            BufferMapOperation::Write { callback, userdata } => {
                 log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
-                callback(BufferMapAsyncStatus::Error, std::ptr::null_mut());
+                unsafe { callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata); }
             }
         }
     }

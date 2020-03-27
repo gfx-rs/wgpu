@@ -554,10 +554,10 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 let buffer = &mut buffer_guard[buffer_id];
                 let mapping = buffer.pending_mapping.take().unwrap();
                 let result = match mapping.op {
-                    resource::BufferMapOperation::Read(..) => {
+                    resource::BufferMapOperation::Read { .. } => {
                         super::map_buffer(raw, buffer, mapping.range, super::HostMap::Read)
                     }
-                    resource::BufferMapOperation::Write(..) => {
+                    resource::BufferMapOperation::Write { .. } => {
                         super::map_buffer(raw, buffer, mapping.range, super::HostMap::Write)
                     }
                 };

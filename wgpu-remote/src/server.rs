@@ -123,11 +123,11 @@ pub extern "C" fn wgpu_server_buffer_map_read(
     callback: core::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
-    let operation = core::resource::BufferMapOperation::Read(
-        Box::new(move |status, data| unsafe {
-            callback(status, data, userdata)
-        }),
-    );
+    let operation = core::resource::BufferMapOperation::Read {
+        callback,
+        userdata,   
+    };
+    
     gfx_select!(buffer_id => global.buffer_map_async(
         buffer_id,
         wgt::BufferUsage::MAP_READ,
