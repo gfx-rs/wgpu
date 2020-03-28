@@ -18,8 +18,7 @@ use crate::{
     Stored,
 };
 
-use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat};
-
+use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, BIND_BUFFER_ALIGNMENT};
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
 use gfx_descriptor::DescriptorAllocator;
@@ -49,9 +48,6 @@ mod life;
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 8;
-
-/// Bound uniform/storage buffer offsets must be aligned to this number.
-pub const BIND_BUFFER_ALIGNMENT: hal::buffer::Offset = 256;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;

@@ -11,7 +11,7 @@ use crate::{
     Stored,
 };
 
-use wgt::BufferAddress;
+use wgt::{BufferAddress, TextureComponentType};
 use arrayvec::ArrayVec;
 use gfx_descriptor::{DescriptorCounts, DescriptorSet};
 
@@ -31,15 +31,6 @@ pub enum BindingType {
     SampledTexture = 5,
     ReadonlyStorageTexture = 6,
     WriteonlyStorageTexture = 7,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
-pub enum TextureComponentType {
-    Float,
-    Sint,
-    Uint,
 }
 
 #[repr(C)]

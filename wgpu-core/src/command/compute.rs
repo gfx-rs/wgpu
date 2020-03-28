@@ -8,12 +8,12 @@ use crate::{
         CommandBuffer,
         PhantomSlice,
     },
-    device::{all_buffer_stages, BIND_BUFFER_ALIGNMENT},
+    device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
 };
 
-use wgt::{BufferAddress, BufferUsage, DynamicOffset};
+use wgt::{BufferAddress, BufferUsage, DynamicOffset, BIND_BUFFER_ALIGNMENT};
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekCopy, Poke};
 
