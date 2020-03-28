@@ -4,13 +4,13 @@
 
 use crate::{
     backend,
-    device::{Device, BIND_BUFFER_ALIGNMENT},
+    device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId},
     power,
 };
 
-use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, RequestAdapterOptions};
+use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, RequestAdapterOptions, BIND_BUFFER_ALIGNMENT};
 
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};

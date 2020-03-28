@@ -825,3 +825,15 @@ pub struct SamplerDescriptor<'a> {
 pub struct CommandBufferDescriptor {
     pub todo: u32,
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TextureComponentType {
+    Float,
+    Sint,
+    Uint,
+}
+
+/// Bound uniform/storage buffer offsets must be aligned to this number.
+pub const BIND_BUFFER_ALIGNMENT: u64 = 256;

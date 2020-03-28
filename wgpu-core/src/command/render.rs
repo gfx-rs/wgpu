@@ -14,7 +14,6 @@ use crate::{
         FramebufferKey,
         RenderPassContext,
         RenderPassKey,
-        BIND_BUFFER_ALIGNMENT,
         MAX_VERTEX_BUFFERS,
         MAX_COLOR_TARGETS,
     },
@@ -37,6 +36,7 @@ use wgt::{
     RenderPassColorAttachmentDescriptorBase,
     RenderPassDepthStencilAttachmentDescriptorBase,
     TextureUsage,
+    BIND_BUFFER_ALIGNMENT
 };
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
