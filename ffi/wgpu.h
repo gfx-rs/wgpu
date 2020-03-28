@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.13.1 */
+/* Generated with cbindgen:0.13.2 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -80,14 +80,15 @@ typedef enum {
 } WGPUBufferMapAsyncStatus;
 
 typedef enum {
-  WGPUCompareFunction_Never = 0,
-  WGPUCompareFunction_Less = 1,
-  WGPUCompareFunction_Equal = 2,
-  WGPUCompareFunction_LessEqual = 3,
-  WGPUCompareFunction_Greater = 4,
-  WGPUCompareFunction_NotEqual = 5,
-  WGPUCompareFunction_GreaterEqual = 6,
-  WGPUCompareFunction_Always = 7,
+  WGPUCompareFunction_Undefined = 0,
+  WGPUCompareFunction_Never = 1,
+  WGPUCompareFunction_Less = 2,
+  WGPUCompareFunction_Equal = 3,
+  WGPUCompareFunction_LessEqual = 4,
+  WGPUCompareFunction_Greater = 5,
+  WGPUCompareFunction_NotEqual = 6,
+  WGPUCompareFunction_GreaterEqual = 7,
+  WGPUCompareFunction_Always = 8,
 } WGPUCompareFunction;
 
 typedef enum {
@@ -640,7 +641,7 @@ typedef struct {
   WGPUFilterMode mipmap_filter;
   float lod_min_clamp;
   float lod_max_clamp;
-  const WGPUCompareFunction *compare;
+  WGPUCompareFunction compare;
 } WGPUSamplerDescriptor;
 
 typedef struct {

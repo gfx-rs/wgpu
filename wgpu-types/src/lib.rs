@@ -450,14 +450,15 @@ impl Default for StencilStateFaceDescriptor {
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CompareFunction {
-    Never = 0,
-    Less = 1,
-    Equal = 2,
-    LessEqual = 3,
-    Greater = 4,
-    NotEqual = 5,
-    GreaterEqual = 6,
-    Always = 7,
+    Undefined = 0,
+    Never = 1,
+    Less = 2,
+    Equal = 3,
+    LessEqual = 4,
+    Greater = 5,
+    NotEqual = 6,
+    GreaterEqual = 7,
+    Always = 8,
 }
 
 impl CompareFunction {
@@ -841,7 +842,7 @@ impl Default for FilterMode {
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct SamplerDescriptor<'a> {
+pub struct SamplerDescriptor {
     pub address_mode_u: AddressMode,
     pub address_mode_v: AddressMode,
     pub address_mode_w: AddressMode,
@@ -850,40 +851,7 @@ pub struct SamplerDescriptor<'a> {
     pub mipmap_filter: FilterMode,
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
-    #[cfg_attr(feature = "serde", serde(deserialize_with="deserialise_sampler_compare_function::deserialize"))]
-    pub compare: Option<&'a CompareFunction>,
-}
-
-#[cfg(feature = "serde")]
-mod deserialise_sampler_compare_function {
-    use serde::{Deserialize, Deserializer};
-    use super::CompareFunction;
-
-    static NEVER: CompareFunction = CompareFunction::Never;
-    static LESS: CompareFunction = CompareFunction::Less;
-    static EQUAL: CompareFunction = CompareFunction::Equal;
-    static LESS_EQUAL: CompareFunction = CompareFunction::LessEqual;
-    static GREATER: CompareFunction = CompareFunction::Greater;
-    static NOT_EQUAL: CompareFunction = CompareFunction::NotEqual;
-    static GREATER_EQUAL: CompareFunction = CompareFunction::GreaterEqual;
-    static ALWAYS: CompareFunction = CompareFunction::Always;
-
-    pub fn deserialize<'de, D>(d: D) -> Result<Option<&'static CompareFunction>, D::Error> where D: Deserializer<'de> {
-        let compare = Option::<CompareFunction>::deserialize(d)?;
-        let static_compare = compare.map(|compare| {
-            match compare {
-                CompareFunction::Never => &NEVER,
-                CompareFunction::Less => &LESS,
-                CompareFunction::Equal => &EQUAL,
-                CompareFunction::LessEqual => &LESS_EQUAL,
-                CompareFunction::Greater => &GREATER,
-                CompareFunction::NotEqual => &NOT_EQUAL,
-                CompareFunction::GreaterEqual => &GREATER_EQUAL,
-                CompareFunction::Always => &ALWAYS,
-            }
-        });
-        Ok(static_compare)
-    }
+    pub compare: CompareFunction,
 }
 
 #[repr(C)]
