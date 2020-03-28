@@ -842,7 +842,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ),
             lod_bias: hal::image::Lod(0.0),
             lod_range: hal::image::Lod(desc.lod_min_clamp) .. hal::image::Lod(desc.lod_max_clamp),
-            comparison: desc.compare.cloned().map(conv::map_compare_function),
+            comparison: conv::map_compare_function(desc.compare),
             border: hal::image::PackedColor(0),
             normalized: true,
             anisotropy_clamp: None, //TODO

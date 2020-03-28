@@ -297,7 +297,7 @@ pub fn map_depth_stencil_state_descriptor(
             || desc.depth_compare != CompareFunction::Always
         {
             Some(hal::pso::DepthTest {
-                fun: map_compare_function(desc.depth_compare),
+                fun: map_compare_function(desc.depth_compare).expect("DepthStencilStateDescriptor has undefined compare function"),
                 write: desc.depth_write_enabled,
             })
         } else {
@@ -332,25 +332,26 @@ fn map_stencil_face(
     stencil_state_face_desc: &StencilStateFaceDescriptor,
 ) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
-        fun: map_compare_function(stencil_state_face_desc.compare),
+        fun: map_compare_function(stencil_state_face_desc.compare).expect("StencilStateFaceDescriptor has undefined compare function"),
         op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
         op_depth_fail: map_stencil_operation(stencil_state_face_desc.depth_fail_op),
         op_pass: map_stencil_operation(stencil_state_face_desc.pass_op),
     }
 }
 
-pub fn map_compare_function(compare_function: CompareFunction) -> hal::pso::Comparison {
+pub fn map_compare_function(compare_function: CompareFunction) -> Option<hal::pso::Comparison> {
     use wgt::CompareFunction as Cf;
     use hal::pso::Comparison as H;
     match compare_function {
-        Cf::Never => H::Never,
-        Cf::Less => H::Less,
-        Cf::Equal => H::Equal,
-        Cf::LessEqual => H::LessEqual,
-        Cf::Greater => H::Greater,
-        Cf::NotEqual => H::NotEqual,
-        Cf::GreaterEqual => H::GreaterEqual,
-        Cf::Always => H::Always,
+        Cf::Undefined => None,
+        Cf::Never => Some(H::Never),
+        Cf::Less => Some(H::Less),
+        Cf::Equal => Some(H::Equal),
+        Cf::LessEqual => Some(H::LessEqual),
+        Cf::Greater => Some(H::Greater),
+        Cf::NotEqual => Some(H::NotEqual),
+        Cf::GreaterEqual => Some(H::GreaterEqual),
+        Cf::Always => Some(H::Always),
     }
 }
 
