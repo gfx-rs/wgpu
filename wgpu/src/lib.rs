@@ -310,6 +310,16 @@ pub struct ProgrammableStageDescriptor<'a> {
     pub entry_point: &'a str,
 }
 
+/// The vertex input state for a render pipeline.
+#[derive(Clone, Debug)]
+pub struct VertexStateDescriptor<'a> {
+    /// The format of any index buffers used with this pipeline.
+    pub index_format: IndexFormat,
+
+    /// The format of any vertex buffers used with this pipeline.
+    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
+}
+
 /// A description of a vertex buffer.
 #[derive(Clone, Debug)]
 pub struct VertexBufferDescriptor<'a> {
@@ -346,11 +356,8 @@ pub struct RenderPipelineDescriptor<'a> {
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
 
-    /// The format of any index buffers used with this pipeline.
-    pub index_format: IndexFormat,
-
-    /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
+    /// The vertex input state for this pipeline.
+    pub vertex_state: VertexStateDescriptor<'a>,
 
     /// The number of samples calculated per pixel (for MSAA).
     pub sample_count: u32,
@@ -719,7 +726,7 @@ impl Device {
 
         let temp_color_states = desc.color_states.to_vec();
         let temp_vertex_buffers = desc
-            .vertex_buffers
+            .vertex_state.vertex_buffers
             .iter()
             .map(|vbuf| pipe::VertexBufferLayoutDescriptor {
                 array_stride: vbuf.stride,
@@ -750,7 +757,7 @@ impl Device {
                         .as_ref()
                         .map_or(ptr::null(), |p| p as *const _),
                     vertex_state: pipe::VertexStateDescriptor {
-                        index_format: desc.index_format,
+                        index_format: desc.vertex_state.index_format,
                         vertex_buffers: temp_vertex_buffers.as_ptr(),
                         vertex_buffers_length: temp_vertex_buffers.len(),
                     },

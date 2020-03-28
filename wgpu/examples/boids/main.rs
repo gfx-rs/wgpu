@@ -120,19 +120,21 @@ impl framework::Example for Example {
                 write_mask: wgpu::ColorWrite::ALL,
             }],
             depth_stencil_state: None,
-            index_format: wgpu::IndexFormat::Uint16,
-            vertex_buffers: &[
-                wgpu::VertexBufferDescriptor {
-                    stride: 4 * 4,
-                    step_mode: wgpu::InputStepMode::Instance,
-                    attributes: &vertex_attr_array![0 => Float2, 1 => Float2],
-                },
-                wgpu::VertexBufferDescriptor {
-                    stride: 2 * 4,
-                    step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &vertex_attr_array![2 => Float2],
-                },
-            ],
+            vertex_state: wgpu::VertexStateDescriptor {
+                index_format: wgpu::IndexFormat::Uint16,
+                vertex_buffers: &[
+                    wgpu::VertexBufferDescriptor {
+                        stride: 4 * 4,
+                        step_mode: wgpu::InputStepMode::Instance,
+                        attributes: &vertex_attr_array![0 => Float2, 1 => Float2],
+                    },
+                    wgpu::VertexBufferDescriptor {
+                        stride: 2 * 4,
+                        step_mode: wgpu::InputStepMode::Vertex,
+                        attributes: &vertex_attr_array![2 => Float2],
+                    },
+                ],
+            },
             sample_count: 1,
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
