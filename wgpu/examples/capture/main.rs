@@ -29,6 +29,7 @@ async fn run() {
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         size: (size * size) as u64 * size_of::<u32>() as u64,
         usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
+        label: None,
     });
 
     let texture_extent = wgpu::Extent3d {
@@ -46,12 +47,13 @@ async fn run() {
         dimension: wgpu::TextureDimension::D2,
         format: wgpu::TextureFormat::Rgba8UnormSrgb,
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::COPY_SRC,
+        label: None,
     });
 
     // Set the background to be red
     let command_buffer = {
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &texture.create_default_view(),

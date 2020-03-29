@@ -18,16 +18,61 @@ use std::{
     thread,
 };
 
-pub use wgt::*;
-pub use wgc::{
-    binding_model::TextureComponentType,
-    device::{
-        BIND_BUFFER_ALIGNMENT,
-    },
-    instance::{
-        AdapterInfo,
-        DeviceType,
-    },
+pub use wgt::{
+    AddressMode,
+    Backend,
+    BackendBit,
+    BlendDescriptor,
+    BlendFactor,
+    BlendOperation,
+    BufferAddress,
+    BufferUsage,
+    Color,
+    ColorStateDescriptor,
+    ColorWrite,
+    CommandBufferDescriptor,
+    CompareFunction,
+    CullMode,
+    DepthStencilStateDescriptor,
+    DeviceDescriptor,
+    DynamicOffset,
+    Extensions,
+    Extent3d,
+    FilterMode,
+    FrontFace,
+    IndexFormat,
+    InputStepMode,
+    Limits,
+    LoadOp,
+    Origin3d,
+    PowerPreference,
+    PresentMode,
+    PrimitiveTopology,
+    RasterizationStateDescriptor,
+    RequestAdapterOptions,
+    SamplerDescriptor,
+    ShaderLocation,
+    ShaderStage,
+    StencilOperation,
+    StencilStateFaceDescriptor,
+    StoreOp,
+    SwapChainDescriptor,
+    TextureAspect,
+    TextureComponentType,
+    TextureDimension,
+    TextureFormat,
+    TextureUsage,
+    TextureViewDescriptor,
+    TextureViewDimension,
+    VertexAttributeDescriptor,
+    VertexFormat,
+    BIND_BUFFER_ALIGNMENT,
+    MAX_BIND_GROUPS,
+    read_spirv,
+};
+pub use wgc::instance::{
+    AdapterInfo,
+    DeviceType,
 };
 
 //TODO: avoid heap allocating vectors during resource creation.
@@ -276,9 +321,14 @@ pub struct BindGroupLayoutEntry {
     pub ty: BindingType,
 }
 
+/// A description of a bind group layout.
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     pub bindings: &'a [BindGroupLayoutEntry],
+
+    /// An optional label to apply to the bind group layout.
+    /// This can be useful for debugging and performance analysis.
+    pub label: Option<&'a str>,
 }
 
 /// A description of a group of bindings and the resources to be bound.
@@ -289,6 +339,10 @@ pub struct BindGroupDescriptor<'a> {
 
     /// The resources to bind to this bind group.
     pub bindings: &'a [Binding<'a>],
+
+    /// An optional label to apply to the bind group.
+    /// This can be useful for debugging and performance analysis.
+    pub label: Option<&'a str>,
 }
 
 /// A description of a pipeline layout.
@@ -397,6 +451,57 @@ pub struct RenderPassDescriptor<'a, 'b> {
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment:
         Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
+}
+
+/// A description of a buffer.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BufferDescriptor<'a> {
+    /// An optional label to apply to the buffer.
+    /// This can be useful for debugging and performance analysis.
+    pub label: Option<&'a str>,
+
+    /// The size of the buffer (in bytes).
+    pub size: BufferAddress,
+
+    /// All possible ways the buffer can be used.
+    pub usage: BufferUsage,
+}
+
+/// A description of a command encoder.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct CommandEncoderDescriptor<'a> {
+    /// An optional label to apply to the command encoder.
+    /// This can be useful for debugging and performance analysis.
+    pub label: Option<&'a str>,
+}
+
+/// A description of a texture.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TextureDescriptor<'a> {
+    /// An optional label to apply to the texture.
+    /// This can be useful for debugging and performance analysis.
+    pub label: Option<&'a str>,
+
+    /// The size of the texture.
+    pub size: Extent3d,
+
+    /// The array layer count.
+    pub array_layer_count: u32,
+
+    /// The mip level count.
+    pub mip_level_count: u32,
+
+    /// The sample count.
+    pub sample_count: u32,
+
+    /// The texture dimension.
+    pub dimension: TextureDimension,
+
+    /// The texture format.
+    pub format: TextureFormat,
+
+    /// All possible ways the texture can be used.
+    pub usage: TextureUsage,
 }
 
 /// A swap chain image that can be rendered to.
@@ -574,8 +679,14 @@ impl Device {
 
     /// Creates an empty [`CommandEncoder`].
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
+        let owned_label = OwnedLabel::new(desc.label.as_deref());
         CommandEncoder {
-            id: wgn::wgpu_device_create_command_encoder(self.id, Some(desc)),
+            id: wgn::wgpu_device_create_command_encoder(
+                self.id,
+                Some(&wgt::CommandEncoderDescriptor {
+                    label: owned_label.as_ptr(),
+                }),
+            ),
             _p: Default::default(),
         }
     }
@@ -608,6 +719,7 @@ impl Device {
             })
             .collect::<Vec<_>>();
 
+        let owned_label = OwnedLabel::new(desc.label.as_deref());
         BindGroup {
             id: wgn::wgpu_device_create_bind_group(
                 self.id,
@@ -615,6 +727,7 @@ impl Device {
                     layout: desc.layout.id,
                     entries: bindings.as_ptr(),
                     entries_length: bindings.len(),
+                    label: owned_label.as_ptr(),
                 },
             ),
         }
@@ -665,7 +778,7 @@ impl Device {
                 texture_component_type: match bind.ty {
                     BindingType::SampledTexture { component_type, .. } |
                     BindingType::StorageTexture { component_type, .. } => component_type,
-                    _ => bm::TextureComponentType::Float,
+                    _ => TextureComponentType::Float,
                 },
                 storage_texture_format: match bind.ty {
                     BindingType::StorageTexture { format, .. } => format,
@@ -673,12 +786,14 @@ impl Device {
                 },
             })
             .collect::<Vec<_>>();
+        let owned_label = OwnedLabel::new(desc.label.as_deref());
         BindGroupLayout {
             id: wgn::wgpu_device_create_bind_group_layout(
                 self.id,
                 &bm::BindGroupLayoutDescriptor {
                     entries: temp_layouts.as_ptr(),
                     entries_length: temp_layouts.len(),
+                    label: owned_label.as_ptr(),
                 },
             ),
         }
@@ -791,9 +906,17 @@ impl Device {
 
     /// Creates a new buffer.
     pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
+        let owned_label = OwnedLabel::new(desc.label.as_deref());
         Buffer {
             device_id: self.id,
-            id: wgn::wgpu_device_create_buffer(self.id, desc),
+            id: wgn::wgpu_device_create_buffer(
+                self.id,
+                &wgt::BufferDescriptor {
+                    label: owned_label.as_ptr(),
+                    size: desc.size,
+                    usage: desc.usage,
+                }
+            ),
         }
     }
 
@@ -801,18 +924,22 @@ impl Device {
     ///
     /// This returns a [`CreateBufferMapped`], which exposes a `&mut [u8]`. The actual [`Buffer`]
     /// will not be created until calling [`CreateBufferMapped::finish`].
-    pub fn create_buffer_mapped(&self, size: usize, usage: BufferUsage) -> CreateBufferMapped<'_> {
-        assert_ne!(size, 0);
+    pub fn create_buffer_mapped(&self, desc: &BufferDescriptor) -> CreateBufferMapped<'_> {
+        assert_ne!(desc.size, 0);
 
-        let desc = BufferDescriptor {
-            size: size as BufferAddress,
-            usage,
-        };
-        let mut ptr: *mut u8 = std::ptr::null_mut();
+        let owned_label = OwnedLabel::new(desc.label.as_deref());
+        let mut data_ptr: *mut u8 = std::ptr::null_mut();
 
         let (id, data) = unsafe {
-            let id = wgn::wgpu_device_create_buffer_mapped(self.id, &desc, &mut ptr as *mut *mut u8);
-            let data = std::slice::from_raw_parts_mut(ptr as *mut u8, size);
+            let id = wgn::wgpu_device_create_buffer_mapped(
+                self.id,
+                &wgt::BufferDescriptor {
+                    label: owned_label.as_ptr(),
+                    size: desc.size,
+                    usage: desc.usage,
+                },
+                &mut data_ptr as *mut *mut u8);
+            let data = std::slice::from_raw_parts_mut(data_ptr as *mut u8, desc.size as usize);
             (id, data)
         };
 
@@ -822,7 +949,11 @@ impl Device {
     /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
     /// and finally unmaps it, returning a [`Buffer`].
     pub fn create_buffer_with_data(&self, data: &[u8], usage: BufferUsage) -> Buffer {
-        let mapped = self.create_buffer_mapped(data.len(), usage);
+        let mapped = self.create_buffer_mapped(&BufferDescriptor {
+            size: data.len() as u64,
+            usage,
+            label: None,
+        });
         mapped.data.copy_from_slice(data);
         mapped.finish()
     }
@@ -831,8 +962,18 @@ impl Device {
     ///
     /// `desc` specifies the general format of the texture.
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
+        let owned_label = OwnedLabel::new(desc.label.as_deref());
         Texture {
-            id: wgn::wgpu_device_create_texture(self.id, desc),
+            id: wgn::wgpu_device_create_texture(self.id, &wgt::TextureDescriptor {
+                label: owned_label.as_ptr(),
+                size: desc.size,
+                array_layer_count: desc.array_layer_count,
+                mip_level_count: desc.mip_level_count,
+                sample_count: desc.sample_count,
+                dimension: desc.dimension,
+                format: desc.format,
+                usage: desc.usage,
+            }),
             owned: true,
         }
     }
@@ -1494,6 +1635,21 @@ impl SwapChain {
                 },
                 swap_chain_id: self.id,
             })
+        }
+    }
+}
+
+struct OwnedLabel(Option<CString>);
+
+impl OwnedLabel {
+    fn new(text: Option<&str>) -> Self {
+        Self(text.map(|t| CString::new(t).expect("invalid label")))
+    }
+
+    fn as_ptr(&self) -> *const std::os::raw::c_char {
+        match self.0 {
+            Some(ref c_string) => c_string.as_ptr(),
+            None => ptr::null(),
         }
     }
 }

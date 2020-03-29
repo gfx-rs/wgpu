@@ -52,6 +52,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         usage: wgpu::BufferUsage::STORAGE
             | wgpu::BufferUsage::COPY_DST
             | wgpu::BufferUsage::COPY_SRC,
+        label: None,
     });
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -63,6 +64,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 readonly: false,
             },
         }],
+        label: None,
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -74,6 +76,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 range: 0 .. size,
             },
         }],
+        label: None,
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -88,7 +91,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         },
     });
 
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     encoder.copy_buffer_to_buffer(&staging_buffer, 0, &storage_buffer, 0, size);
     {
         let mut cpass = encoder.begin_compute_pass();
