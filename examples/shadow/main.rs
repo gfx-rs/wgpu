@@ -219,6 +219,7 @@ impl framework::Example for Example {
         let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             size: entity_uniform_size,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            label: None,
         });
 
         let local_bind_group_layout =
@@ -228,6 +229,7 @@ impl framework::Example for Example {
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                 }],
+                label: None,
             });
 
         let mut entities = vec![{
@@ -242,6 +244,7 @@ impl framework::Example for Example {
                         range: 0 .. entity_uniform_size,
                     },
                 }],
+                label: None,
             });
             Entity {
                 mx_world: cgmath::Matrix4::identity(),
@@ -299,6 +302,7 @@ impl framework::Example for Example {
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
                 size: entity_uniform_size,
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+                label: None,
             });
             entities.push(Entity {
                 mx_world: cgmath::Matrix4::from(transform),
@@ -316,6 +320,7 @@ impl framework::Example for Example {
                             range: 0 .. entity_uniform_size,
                         },
                     }],
+                    label: None,
                 }),
                 uniform_buf,
             });
@@ -331,7 +336,7 @@ impl framework::Example for Example {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare: Some(&wgpu::CompareFunction::LessEqual),
+            compare: wgpu::CompareFunction::LessEqual,
         });
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -342,6 +347,7 @@ impl framework::Example for Example {
             dimension: wgpu::TextureDimension::D2,
             format: Self::SHADOW_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
+            label: None,
         });
         let shadow_view = shadow_texture.create_default_view();
 
@@ -391,6 +397,7 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsage::UNIFORM
                 | wgpu::BufferUsage::COPY_SRC
                 | wgpu::BufferUsage::COPY_DST,
+            label: None,
         });
 
         let vb_desc = wgpu::VertexBufferDescriptor {
@@ -408,6 +415,7 @@ impl framework::Example for Example {
                         visibility: wgpu::ShaderStage::VERTEX,
                         ty: wgpu::BindingType::UniformBuffer { dynamic: false },
                     }],
+                    label: None,
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
@@ -417,6 +425,7 @@ impl framework::Example for Example {
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
                 size: uniform_size,
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+                label: None,
             });
 
             // Create bind group
@@ -429,6 +438,7 @@ impl framework::Example for Example {
                         range: 0 .. uniform_size,
                     },
                 }],
+                label: None,
             });
 
             // Create the render pipeline
@@ -513,6 +523,7 @@ impl framework::Example for Example {
                             ty: wgpu::BindingType::Sampler { comparison: true },
                         },
                     ],
+                    label: None,
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
@@ -556,6 +567,7 @@ impl framework::Example for Example {
                         resource: wgpu::BindingResource::Sampler(&shadow_sampler),
                     },
                 ],
+                label: None,
             });
 
             // Create the render pipeline
@@ -629,6 +641,7 @@ impl framework::Example for Example {
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: None,
         });
 
         let this = Example {
@@ -659,7 +672,7 @@ impl framework::Example for Example {
                 device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
 
             let mut encoder =
-                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
             encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.forward_pass.uniform_buf, 0, 64);
             encoder.finish()
         };
@@ -676,6 +689,7 @@ impl framework::Example for Example {
             dimension: wgpu::TextureDimension::D2,
             format: Self::DEPTH_FORMAT,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: None,
         });
         self.forward_depth = depth_texture.create_default_view();
 
@@ -688,12 +702,15 @@ impl framework::Example for Example {
         device: &wgpu::Device,
     ) -> wgpu::CommandBuffer {
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         {
             let size = mem::size_of::<EntityUniforms>();
-            let temp_buf_data = device
-                .create_buffer_mapped(self.entities.len() * size, wgpu::BufferUsage::COPY_SRC);
+            let temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+                size: (self.entities.len() * size) as u64,
+                usage: wgpu::BufferUsage::COPY_SRC,
+                label: None,
+            });
 
             // FIXME: Align and use `LayoutVerified`
             for (entity, slot) in self
@@ -737,8 +754,11 @@ impl framework::Example for Example {
             self.lights_are_dirty = false;
             let size = mem::size_of::<LightRaw>();
             let total_size = size * self.lights.len();
-            let temp_buf_data =
-                device.create_buffer_mapped(total_size, wgpu::BufferUsage::COPY_SRC);
+            let temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+                size: total_size as u64,
+                usage: wgpu::BufferUsage::COPY_SRC,
+                label: None
+            });
             // FIXME: Align and use `LayoutVerified`
             for (light, slot) in self
                 .lights

@@ -83,6 +83,7 @@ impl framework::Example for Example {
                     ty: wgpu::BindingType::StorageBuffer { dynamic: false, readonly: false },
                 },
             ],
+            label: None,
         });
         let compute_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&compute_bind_group_layout],
@@ -155,8 +156,10 @@ impl framework::Example for Example {
         // buffer for the three 2d triangle vertices of each instance
 
         let vertex_buffer_data = [-0.01f32, -0.02, 0.01, -0.02, 0.00, 0.02];
-        let vertices_buffer = device.create_buffer_with_data(vertex_buffer_data.as_bytes(),
-            wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST);
+        let vertices_buffer = device.create_buffer_with_data(
+            vertex_buffer_data.as_bytes(),
+            wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+        );
 
 
         // buffer for simulation parameters uniform
@@ -170,8 +173,10 @@ impl framework::Example for Example {
             0.05,    // rule2Scale
             0.005    // rule3Scale
         ].to_vec();
-        let sim_param_buffer = device.create_buffer_with_data(sim_param_data.as_bytes(),
-            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST);
+        let sim_param_buffer = device.create_buffer_with_data(
+            sim_param_data.as_bytes(),
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        );
 
 
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
@@ -192,9 +197,12 @@ impl framework::Example for Example {
         let mut particle_bind_groups = Vec::<wgpu::BindGroup>::new();
         for _i in 0..2 {
             particle_buffers.push(
-                device.create_buffer_with_data(initial_particle_data.as_bytes(), wgpu::BufferUsage::VERTEX
-                    | wgpu::BufferUsage::STORAGE
-                    | wgpu::BufferUsage::COPY_DST)
+                device.create_buffer_with_data(
+                    initial_particle_data.as_bytes(),
+                    wgpu::BufferUsage::VERTEX
+                        | wgpu::BufferUsage::STORAGE
+                        | wgpu::BufferUsage::COPY_DST,
+                )
             );
         }
 
@@ -203,36 +211,35 @@ impl framework::Example for Example {
         // where the alternate buffer is used as the dst
 
         for i in 0..2 {
-            particle_bind_groups.push(
-                device.create_bind_group(
-                    &wgpu::BindGroupDescriptor {
-                        layout: &compute_bind_group_layout,
-                        bindings: &[
-                            wgpu::Binding {
-                                binding: 0,
-                                resource: wgpu::BindingResource::Buffer {
-                                    buffer: &sim_param_buffer,
-                                    range: 0 .. (4 * sim_param_data.len() as u64), // 4 = size_of f32
-                                },
+            particle_bind_groups.push(device.create_bind_group(
+                &wgpu::BindGroupDescriptor {
+                    layout: &compute_bind_group_layout,
+                    bindings: &[
+                        wgpu::Binding {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer {
+                                buffer: &sim_param_buffer,
+                                range: 0 .. (4 * sim_param_data.len() as u64), // 4 = size_of f32
                             },
-                            wgpu::Binding {
-                                binding: 1,
-                                resource: wgpu::BindingResource::Buffer {
-                                    buffer: &particle_buffers[i],
-                                    range: 0 .. (4 * initial_particle_data.len() as u64), // 4 = size_of f32
-                                },
+                        },
+                        wgpu::Binding {
+                            binding: 1,
+                            resource: wgpu::BindingResource::Buffer {
+                                buffer: &particle_buffers[i],
+                                range: 0 .. (4 * initial_particle_data.len() as u64), // 4 = size_of f32
                             },
-                            wgpu::Binding {
-                                binding: 2,
-                                resource: wgpu::BindingResource::Buffer {
-                                    buffer: &particle_buffers[(i + 1) % 2], // bind to opposite buffer
-                                    range: 0 .. (4 * initial_particle_data.len() as u64), // 4 = size_of f32
-                                },
+                        },
+                        wgpu::Binding {
+                            binding: 2,
+                            resource: wgpu::BindingResource::Buffer {
+                                buffer: &particle_buffers[(i + 1) % 2], // bind to opposite buffer
+                                range: 0 .. (4 * initial_particle_data.len() as u64), // 4 = size_of f32
                             },
-                        ],
-                    }
-                )
-            );
+                        },
+                    ],
+                    label: None,
+                }
+            ));
         }
 
         // calculates number of work groups from PARTICLES_PER_GROUP constant
@@ -289,7 +296,7 @@ impl framework::Example for Example {
 
         // get command encoder
         let mut command_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         {
             // compute pass

@@ -34,7 +34,11 @@ fn buffer_from_uniforms(
     uniforms: &Uniforms,
     usage: wgpu::BufferUsage,
 ) -> wgpu::Buffer {
-    let uniform_buf = device.create_buffer_mapped(std::mem::size_of::<Uniforms>(), usage);
+    let uniform_buf = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+        size: std::mem::size_of::<Uniforms>() as u64,
+        usage,
+        label: None,
+    });
     // FIXME: Align and use `LayoutVerified`
     for (u, slot) in uniforms.iter().zip(
         uniform_buf
@@ -52,7 +56,7 @@ impl framework::Example for Skybox {
         device: &wgpu::Device,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
         let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &[
@@ -76,6 +80,7 @@ impl framework::Example for Skybox {
                     ty: wgpu::BindingType::Sampler { comparison: false },
                 },
             ],
+            label: None,
         });
 
         // Create the render pipeline
@@ -147,7 +152,7 @@ impl framework::Example for Skybox {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare: None,
+            compare: wgpu::CompareFunction::Undefined,
         });
 
         let paths: [&'static [u8]; 6] = [
@@ -189,6 +194,7 @@ impl framework::Example for Skybox {
             dimension: wgpu::TextureDimension::D2,
             format: SKYBOX_FORMAT,
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
+            label: None,
         });
 
         for (i, image) in faces.iter().enumerate() {
@@ -245,6 +251,7 @@ impl framework::Example for Skybox {
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
+            label: None,
         });
         (
             Self {
@@ -276,7 +283,7 @@ impl framework::Example for Skybox {
             device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
 
         let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         init_encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
         self.uniforms = uniforms;
         Some(init_encoder.finish())
@@ -288,7 +295,7 @@ impl framework::Example for Skybox {
         device: &wgpu::Device,
     ) -> wgpu::CommandBuffer {
         let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
         self.uniforms[1] = self.uniforms[1] * rotation;
         let uniform_buf_size = std::mem::size_of::<Uniforms>();

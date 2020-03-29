@@ -96,6 +96,7 @@ impl Example {
                     ty: wgpu::BindingType::Sampler { comparison: false },
                 },
             ],
+            label: None,
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&bind_group_layout],
@@ -151,7 +152,7 @@ impl Example {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare: None,
+            compare: wgpu::CompareFunction::Undefined,
         });
 
         let views = (0 .. mip_count)
@@ -181,6 +182,7 @@ impl Example {
                         resource: wgpu::BindingResource::Sampler(&sampler),
                     },
                 ],
+                label: None,
             });
 
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -208,7 +210,7 @@ impl framework::Example for Example {
         use std::mem;
 
         let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
@@ -239,6 +241,7 @@ impl framework::Example for Example {
                     ty: wgpu::BindingType::Sampler { comparison: false },
                 },
             ],
+            label: None,
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&bind_group_layout],
@@ -263,6 +266,7 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsage::SAMPLED
                 | wgpu::TextureUsage::OUTPUT_ATTACHMENT
                 | wgpu::TextureUsage::COPY_DST,
+            label: None,
         });
         let texture_view = texture.create_default_view();
         let temp_buf =
@@ -293,7 +297,7 @@ impl framework::Example for Example {
             mipmap_filter: wgpu::FilterMode::Linear,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare: None,
+            compare: wgpu::CompareFunction::Undefined,
         });
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
@@ -322,6 +326,7 @@ impl framework::Example for Example {
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
             ],
+            label: None,
         });
 
         // Create the render pipeline
@@ -398,7 +403,7 @@ impl framework::Example for Example {
             device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
         Some(encoder.finish())
     }
@@ -409,7 +414,7 @@ impl framework::Example for Example {
         device: &wgpu::Device,
     ) -> wgpu::CommandBuffer {
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {

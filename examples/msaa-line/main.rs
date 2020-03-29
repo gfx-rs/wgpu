@@ -101,6 +101,7 @@ impl Example {
             dimension: wgpu::TextureDimension::D2,
             format: sc_desc.format,
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            label: None,
         };
 
         device
@@ -232,7 +233,7 @@ impl framework::Example for Example {
         }
 
         let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { todo: 0 });
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachmentDescriptor {
