@@ -141,7 +141,31 @@ mod tests {
         futures::executor::block_on(assert_execute_gpu(input, vec!(5, 15, 6, 19)));
     }
 
-    async fn assert_execute_gpu(input: Vec<u32>, expected: Vec<u32>){
+    #[test]
+    fn test_multithreaded_compute() {
+        use std::sync::mpsc;
+        use std::thread;
+        use std::time::Duration;
+
+        let thread_count = 8;
+
+        let (tx, rx) = mpsc::channel();
+        for _ in 0 .. thread_count {
+            let tx = tx.clone();
+            thread::spawn(move || {
+                let input = vec![100, 100, 100];
+                futures::executor::block_on(assert_execute_gpu(input, vec!(25, 25, 25)));
+                tx.send(true).unwrap();
+            });
+        }
+
+        for _ in 0 .. thread_count {
+            rx.recv_timeout(Duration::from_secs(10))
+                .expect("A thread never completed.");
+        }
+    }
+
+    async fn assert_execute_gpu(input: Vec<u32>, expected: Vec<u32>) {
         assert_eq!(execute_gpu(input).await, expected);
     }
 }
