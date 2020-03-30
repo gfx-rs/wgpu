@@ -30,21 +30,6 @@ pub enum PowerPreference {
     HighPerformance = 2,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RequestAdapterOptions {
-    pub power_preference: PowerPreference,
-}
-
-impl Default for RequestAdapterOptions {
-    fn default() -> Self {
-        RequestAdapterOptions {
-            power_preference: PowerPreference::Default,
-        }
-    }
-}
-
 bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

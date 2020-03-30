@@ -4,7 +4,7 @@
 
 use crate::GLOBAL;
 
-use wgt::{BackendBit, DeviceDescriptor, Limits, RequestAdapterOptions};
+use wgt::{BackendBit, DeviceDescriptor, Limits};
 use core::{gfx_select, hub::Token, id};
 
 use std::{marker::PhantomData, slice};
@@ -153,7 +153,7 @@ pub fn wgpu_enumerate_adapters(mask: BackendBit) -> Vec<id::AdapterId> {
 /// This function is unsafe as it calls an unsafe extern callback.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_request_adapter_async(
-    desc: Option<&RequestAdapterOptions>,
+    desc: Option<&core::instance::RequestAdapterOptions>,
     mask: BackendBit,
     callback: RequestAdapterCallback,
     userdata: *mut std::ffi::c_void,

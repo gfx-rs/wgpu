@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.13.2 */
+/* Generated with cbindgen:0.13.1 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -18,6 +18,8 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+#define WGPUBIND_BUFFER_ALIGNMENT 256
 
 #define WGPUDEFAULT_BIND_GROUPS 4
 
@@ -695,6 +697,7 @@ typedef WGPUId_RenderBundle_Dummy WGPURenderBundleId;
 
 typedef struct {
   WGPUPowerPreference power_preference;
+  WGPUSurfaceId compatible_surface;
 } WGPURequestAdapterOptions;
 
 typedef uint32_t WGPUBackendBit;

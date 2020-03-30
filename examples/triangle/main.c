@@ -43,10 +43,58 @@ void request_adapter_callback(WGPUAdapterId received, void *userdata) {
 }
 
 int main() {
+    if (!glfwInit()) {
+        printf("Cannot initialize glfw");
+        return 1;
+    }
+
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+    GLFWwindow *window =
+        glfwCreateWindow(640, 480, "wgpu with glfw", NULL, NULL);
+
+    if (!window) {
+        printf("Cannot create window");
+        return 1;
+    }
+
+    WGPUSurfaceId surface;
+
+#if WGPU_TARGET == WGPU_TARGET_MACOS
+    {
+        id metal_layer = NULL;
+        NSWindow *ns_window = glfwGetCocoaWindow(window);
+        [ns_window.contentView setWantsLayer:YES];
+        metal_layer = [CAMetalLayer layer];
+        [ns_window.contentView setLayer:metal_layer];
+        surface = wgpu_create_surface_from_metal_layer(metal_layer);
+    }
+#elif WGPU_TARGET == WGPU_TARGET_LINUX_X11
+    {
+        Display *x11_display = glfwGetX11Display();
+        Window x11_window = glfwGetX11Window(window);
+        surface = wgpu_create_surface_from_xlib((const void **)x11_display, x11_window);
+    }
+#elif WGPU_TARGET == WGPU_TARGET_LINUX_WAYLAND
+    {
+        struct wl_display *wayland_display = glfwGetWaylandDisplay();
+        struct wl_surface *wayland_surface = glfwGetWaylandWindow(window);
+        surface = wgpu_create_surface_from_wayland(wayland_surface, wayland_display);
+    }
+#elif WGPU_TARGET == WGPU_TARGET_WINDOWS
+    {
+        HWND hwnd = glfwGetWin32Window(window);
+        HINSTANCE hinstance = GetModuleHandle(NULL);
+        surface = wgpu_create_surface_from_windows_hwnd(hinstance, hwnd);
+    }
+#else
+    #error "Unsupported WGPU_TARGET"
+#endif
+
     WGPUAdapterId adapter = { 0 };
     wgpu_request_adapter_async(
         &(WGPURequestAdapterOptions){
             .power_preference = WGPUPowerPreference_LowPower,
+            .compatible_surface = surface,
         },
         2 | 4 | 8,
         request_adapter_callback,
@@ -152,53 +200,6 @@ int main() {
                     },
                 .sample_count = 1,
             });
-
-    if (!glfwInit()) {
-        printf("Cannot initialize glfw");
-        return 1;
-    }
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    GLFWwindow *window =
-        glfwCreateWindow(640, 480, "wgpu with glfw", NULL, NULL);
-
-    if (!window) {
-        printf("Cannot create window");
-        return 1;
-    }
-
-    WGPUSurfaceId surface;
-
-#if WGPU_TARGET == WGPU_TARGET_MACOS
-    {
-        id metal_layer = NULL;
-        NSWindow *ns_window = glfwGetCocoaWindow(window);
-        [ns_window.contentView setWantsLayer:YES];
-        metal_layer = [CAMetalLayer layer];
-        [ns_window.contentView setLayer:metal_layer];
-        surface = wgpu_create_surface_from_metal_layer(metal_layer);
-    }
-#elif WGPU_TARGET == WGPU_TARGET_LINUX_X11
-    {
-        Display *x11_display = glfwGetX11Display();
-        Window x11_window = glfwGetX11Window(window);
-        surface = wgpu_create_surface_from_xlib((const void **)x11_display, x11_window);
-    }
-#elif WGPU_TARGET == WGPU_TARGET_LINUX_WAYLAND
-    {
-        struct wl_display *wayland_display = glfwGetWaylandDisplay();
-        struct wl_surface *wayland_surface = glfwGetWaylandWindow(window);
-        surface = wgpu_create_surface_from_wayland(wayland_surface, wayland_display);
-    }
-#elif WGPU_TARGET == WGPU_TARGET_WINDOWS
-    {
-        HWND hwnd = glfwGetWin32Window(window);
-        HINSTANCE hinstance = GetModuleHandle(NULL);
-        surface = wgpu_create_surface_from_windows_hwnd(hinstance, hwnd);
-    }
-#else
-    #error "Unsupported WGPU_TARGET"
-#endif
 
     int prev_width = 0;
     int prev_height = 0;

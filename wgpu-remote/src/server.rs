@@ -46,7 +46,7 @@ pub extern "C" fn wgpu_server_poll_all_devices(global: &Global, force_wait: bool
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_server_instance_request_adapter(
     global: &Global,
-    desc: &wgt::RequestAdapterOptions,
+    desc: &core::instance::RequestAdapterOptions,
     ids: *const id::AdapterId,
     id_length: usize,
 ) -> i8 {
