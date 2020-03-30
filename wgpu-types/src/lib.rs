@@ -637,12 +637,11 @@ pub enum StoreOp {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
-pub struct RenderPassColorAttachmentDescriptorBase<T, R> {
+pub struct RenderPassColorAttachmentDescriptorBase<T> {
     pub attachment: T,
-    pub resolve_target: R,
+    pub resolve_target: Option<T>,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
@@ -663,7 +662,6 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
 }
 
 #[repr(C)]
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
