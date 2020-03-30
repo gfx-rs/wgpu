@@ -9,6 +9,9 @@ branches:
   except:
   - staging.tmp
 
+before_install:
+  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then rustup default stable-msvc; fi
+
 script:
   - cargo check
   - cargo test --no-run
