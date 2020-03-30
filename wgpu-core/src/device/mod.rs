@@ -149,7 +149,6 @@ fn map_buffer<B: hal::Backend>(
             }
         }
     }
-
     Ok(ptr.as_ptr())
 }
 
@@ -157,6 +156,14 @@ fn unmap_buffer<B: hal::Backend>(
     raw: &B::Device,
     buffer: &mut resource::Buffer<B>,
 ) {
+    match buffer.map_state {
+        resource::BufferMapState::Idle => {
+            log::error!("Buffer already unmapped");
+            return;
+        },
+        _ => buffer.map_state = resource::BufferMapState::Idle,
+    }
+
     if !buffer.mapped_write_segments.is_empty() {
         unsafe {
             raw
@@ -279,13 +286,13 @@ impl<B: GfxBackend> Device<B> {
         life_tracker.triage_suspected(global, &self.trackers, token);
         life_tracker.triage_mapped(global, token);
         life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
+        let callbacks = life_tracker.handle_mapping(global, &self.raw, &self.trackers, token);
         life_tracker.cleanup(
             &self.raw,
             force_wait,
             &self.mem_allocator,
             &self.desc_allocator,
         );
-        let callbacks = life_tracker.handle_mapping(global, &self.raw, token);
 
         unsafe {
             self.desc_allocator.lock().cleanup(&self.raw);
@@ -359,7 +366,7 @@ impl<B: GfxBackend> Device<B> {
             size: desc.size,
             full_range: (),
             mapped_write_segments: Vec::new(),
-            pending_mapping: None,
+            map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(),
         }
     }
@@ -560,7 +567,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             hal::buffer::SubRange::WHOLE,
             HostMap::Write,
         ) {
-            Ok(ptr) => ptr,
+            Ok(ptr) => {
+                buffer.map_state = resource::BufferMapState::Active;
+                ptr
+            },
             Err(e) => {
                 log::error!("failed to create buffer in a mapped state: {:?}", e);
                 ptr::null_mut()
@@ -1410,7 +1420,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
             let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+            let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
             let (texture_guard, mut token) = hub.textures.read(&mut token);
             let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
             let (sampler_guard, _) = hub.samplers.read(&mut token);
@@ -1443,8 +1453,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                 // update submission IDs
                 for id in comb.trackers.buffers.used() {
-                    assert!(buffer_guard[id].pending_mapping.is_none());
+                    if let resource::BufferMapState::Waiting(_) = buffer_guard[id].map_state {
+                        panic!("Buffer has a pending mapping.");
+                    }
                     if !buffer_guard[id].life_guard.use_at(submit_index) {
+                        if let resource::BufferMapState::Active = buffer_guard[id].map_state {
+                            unmap_buffer(&device.raw, &mut buffer_guard[id]);
+                        }
                         device.temp_suspected.buffers.push(id);
                     }
                 }
@@ -2079,19 +2094,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 assert!(buffer.usage.contains(wgt::BufferUsage::MAP_WRITE));
             }
 
-            if buffer.pending_mapping.is_some() {
-                operation.call_error();
-                return;
-            }
+            buffer.map_state = match buffer.map_state {
+                resource::BufferMapState::Active => panic!("Buffer already mapped"),
+                resource::BufferMapState::Waiting(_) => {
+                    operation.call_error();
+                    return;
+                }
+                resource::BufferMapState::Idle => resource::BufferMapState::Waiting(resource::BufferPendingMapping {
+                    sub_range: hal::buffer::SubRange {
+                        offset: range.start,
+                        size: Some(range.end - range.start),
+                    },
+                    op: operation,
+                    parent_ref_count: buffer.life_guard.add_ref(),
+                }),
+            };
+            log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
-            buffer.pending_mapping = Some(resource::BufferPendingMapping {
-                sub_range: hal::buffer::SubRange {
-                    offset: range.start,
-                    size: Some(range.end - range.start),
-                },
-                op: operation,
-                parent_ref_count: buffer.life_guard.add_ref(),
-            });
             (buffer.device_id.value, buffer.life_guard.add_ref())
         };
 
@@ -2116,6 +2135,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let buffer = &mut buffer_guard[buffer_id];
 
+        log::debug!("Buffer {:?} map state -> Idle", buffer_id);
         unmap_buffer(
             &device_guard[buffer.device_id.value].raw,
             buffer,

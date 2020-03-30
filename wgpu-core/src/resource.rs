@@ -29,6 +29,16 @@ pub enum BufferMapAsyncStatus {
     ContextLost,
 }
 
+#[derive(Debug)]
+pub enum BufferMapState {
+    /// Waiting for GPU to be done before mapping
+    Waiting(BufferPendingMapping),
+    /// Mapped
+    Active,
+    /// Not mapped
+    Idle,
+}
+
 pub enum BufferMapOperation {
     Read {
         callback: crate::device::BufferMapReadCallback,
@@ -86,8 +96,8 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) size: BufferAddress,
     pub(crate) full_range: (),
     pub(crate) mapped_write_segments: Vec<hal::memory::Segment>,
-    pub(crate) pending_mapping: Option<BufferPendingMapping>,
     pub(crate) life_guard: LifeGuard,
+    pub(crate) map_state: BufferMapState,
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
