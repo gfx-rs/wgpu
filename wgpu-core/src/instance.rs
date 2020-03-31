@@ -6,22 +6,44 @@ use crate::{
     backend,
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
-    id::{AdapterId, DeviceId},
+    id::{AdapterId, DeviceId, SurfaceId},
     power,
 };
 
-use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, RequestAdapterOptions, BIND_BUFFER_ALIGNMENT};
+use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};
 
 use hal::{
     self,
-    adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
+    adapter::{
+        AdapterInfo as HalAdapterInfo,
+        DeviceType as HalDeviceType,
+        PhysicalDevice as _,
+    },
     queue::QueueFamily as _,
+    window::Surface as _,
     Instance as _,
 };
 
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+pub struct RequestAdapterOptions {
+    pub power_preference: PowerPreference,
+    pub compatible_surface: SurfaceId,
+}
+
+impl Default for RequestAdapterOptions {
+    fn default() -> Self {
+        RequestAdapterOptions {
+            power_preference: PowerPreference::Default,
+            compatible_surface: SurfaceId::ERROR,
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct Instance {
@@ -261,6 +283,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Option<AdapterId> {
         let instance = &self.instance;
+        let mut token = Token::root();
+        let (surface_guard, mut token) = self.surfaces.read(&mut token);
+        let compatible_surface = if desc.compatible_surface != SurfaceId::ERROR {
+            Some(&surface_guard[desc.compatible_surface])
+        } else {
+            None
+        };
         let mut device_types = Vec::new();
 
         let id_vulkan = inputs.find(Backend::Vulkan);
@@ -274,7 +303,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         ))]
         let mut adapters_vk = match instance.vulkan {
             Some(ref inst) if id_vulkan.is_some() => {
-                let adapters = inst.enumerate_adapters();
+                let mut adapters = inst.enumerate_adapters();
+                if let Some(&Surface { vulkan: Some(ref surface), .. }) = compatible_surface {
+                    adapters.retain(|a|
+                        a.queue_families
+                            .iter()
+                            .find(|qf| qf.queue_type().supports_graphics())
+                            .map_or(false, |qf| surface.supports_queue_family(qf))
+                    );
+                }
                 device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
                 adapters
             }
@@ -282,7 +319,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         let mut adapters_mtl = if id_metal.is_some() {
-            let adapters = instance.metal.enumerate_adapters();
+            let mut adapters = instance.metal.enumerate_adapters();
+            if let Some(surface) = compatible_surface {
+                adapters.retain(|a|
+                    a.queue_families
+                        .iter()
+                        .find(|qf| qf.queue_type().supports_graphics())
+                        .map_or(false, |qf| surface.metal.supports_queue_family(qf))
+                );
+            }
             device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
             adapters
         } else {
@@ -291,7 +336,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(windows)]
         let mut adapters_dx12 = match instance.dx12 {
             Some(ref inst) if id_dx12.is_some() => {
-                let adapters = inst.enumerate_adapters();
+                let mut adapters = inst.enumerate_adapters();
+                if let Some(&Surface { dx12: Some(ref surface), .. }) = compatible_surface {
+                    adapters.retain(|a|
+                        a.queue_families
+                            .iter()
+                            .find(|qf| qf.queue_type().supports_graphics())
+                            .map_or(false, |qf| surface.supports_queue_family(qf))
+                    );
+                }
                 device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
                 adapters
             }
@@ -299,7 +352,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         #[cfg(windows)]
         let mut adapters_dx11 = if id_dx11.is_some() {
-            let adapters = instance.dx11.enumerate_adapters();
+            let mut adapters = instance.dx11.enumerate_adapters();
+            if let Some(surface) = compatible_surface {
+                adapters.retain(|a|
+                    a.queue_families
+                        .iter()
+                        .find(|qf| qf.queue_type().supports_graphics())
+                        .map_or(false, |qf| surface.dx11.supports_queue_family(qf))
+                );
+            }
             device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
             adapters
         } else {
@@ -345,7 +406,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
 
-        let mut token = Token::root();
         let mut selected = preferred_gpu.unwrap_or(0);
         #[cfg(any(
             not(any(target_os = "ios", target_os = "macos")),
