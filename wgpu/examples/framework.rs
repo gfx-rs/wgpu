@@ -102,6 +102,7 @@ async fn run_async<E: Example>(title: &str) {
     let adapter = wgpu::Adapter::request(
         &wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
+            compatible_surface: Some(&surface),
         },
         wgpu::BackendBit::PRIMARY,
     )
