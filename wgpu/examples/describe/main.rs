@@ -8,6 +8,7 @@ async fn run() {
     let adapter = wgpu::Adapter::request(
         &wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
+            compatible_surface: None,
         },
         wgpu::BackendBit::PRIMARY,
     )
