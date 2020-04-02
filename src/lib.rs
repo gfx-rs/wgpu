@@ -49,7 +49,6 @@ pub use wgt::{
     PresentMode,
     PrimitiveTopology,
     RasterizationStateDescriptor,
-    RequestAdapterOptions,
     SamplerDescriptor,
     ShaderLocation,
     ShaderStage,
@@ -79,7 +78,7 @@ pub use wgc::instance::{
 #[derive(Default, Debug)]
 struct Temp {
     //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
-//vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
+    //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
 }
 
 /// A handle to a physical graphics and/or compute device.
@@ -89,6 +88,15 @@ struct Temp {
 #[derive(Debug, PartialEq)]
 pub struct Adapter {
     id: wgc::id::AdapterId,
+}
+
+/// Options for requesting adapter.
+#[derive(Clone, Debug)]
+pub struct RequestAdapterOptions<'a> {
+    /// Power preference for the adapter.
+    pub power_preference: PowerPreference,
+    /// Surface that is required to be presentable with the requested adapter.
+    pub compatible_surface: Option<&'a Surface>,
 }
 
 /// An open connection to a graphics and/or compute device.
@@ -613,7 +621,7 @@ impl Adapter {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
-    pub async fn request(options: &RequestAdapterOptions, backends: BackendBit) -> Option<Self> {
+    pub async fn request(options: &RequestAdapterOptions<'_>, backends: BackendBit) -> Option<Self> {
         unsafe extern "C" fn adapter_callback(
             id: wgc::id::AdapterId,
             user_data: *mut std::ffi::c_void,
@@ -624,7 +632,11 @@ impl Adapter {
         let mut id = wgc::id::AdapterId::ERROR;
         unsafe {
             wgn::wgpu_request_adapter_async(
-                Some(options),
+                Some(&wgc::instance::RequestAdapterOptions {
+                    power_preference: options.power_preference,
+                    compatible_surface: options.compatible_surface
+                        .map_or(wgc::id::SurfaceId::ERROR, |surface| surface.id),
+                }),
                 backends,
                 adapter_callback,
                 &mut id as *mut _ as *mut std::ffi::c_void,

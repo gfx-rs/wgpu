@@ -27,19 +27,19 @@ vulkan = ["wgn/vulkan-portability"]
 package = "wgpu-native"
 version = "0.4"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "306554600ab7479ec3e54d0c076c71f02474237a"
+rev = "05ba7a50b4645f6ac6c65edbae295a31c0d7ebef"
 
 [dependencies.wgc]
 package = "wgpu-core"
 version = "0.1"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "306554600ab7479ec3e54d0c076c71f02474237a"
+rev = "05ba7a50b4645f6ac6c65edbae295a31c0d7ebef"
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.1"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "306554600ab7479ec3e54d0c076c71f02474237a"
+rev = "05ba7a50b4645f6ac6c65edbae295a31c0d7ebef"
 
 [dependencies]
 arrayvec = "0.5"
@@ -58,12 +58,21 @@ rand = "0.7.2"
 zerocopy = "0.3"
 futures = "0.3"
 
+[[example]]
+name="hello-compute"
+path="examples/hello-compute/main.rs"
+test = true
+
 #[patch."https://github.com/gfx-rs/wgpu"]
 #wgc = { version = "0.1.0", package = "wgpu-core", path = "../wgpu/wgpu-core" }
 #wgt = { version = "0.1.0", package = "wgpu-types", path = "../wgpu/wgpu-types" }
 #wgn = { version = "0.4.0", package = "wgpu-native", path = "../wgpu/wgpu-native" }
 
-[[example]]
-name="hello-compute"
-path="examples/hello-compute/main.rs"
-test = true
+#[patch.crates-io]
+#gfx-hal = { version = "0.5.0", path = "../gfx/src/hal" }
+#gfx-backend-empty = { version = "0.5.0", path = "../gfx/src/backend/empty" }
+#gfx-backend-vulkan = { version = "0.5.0", path = "../gfx/src/backend/vulkan" }
+#gfx-backend-dx12 = { version = "0.5.0", path = "../gfx/src/backend/dx12" }
+#gfx-backend-dx11 = { version = "0.5.0", path = "../gfx/src/backend/dx11" }
+#gfx-descriptor = { version = "0.1.0", path = "../gfx-extras/gfx-descriptor" }
+#gfx-memory = { version = "0.1.0", path = "../gfx-extras/gfx-memory" }

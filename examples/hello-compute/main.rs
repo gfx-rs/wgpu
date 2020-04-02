@@ -24,6 +24,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let adapter = wgpu::Adapter::request(
         &wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
+            compatible_surface: None,
         },
         wgpu::BackendBit::PRIMARY,
     )
