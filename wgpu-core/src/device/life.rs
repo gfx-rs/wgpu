@@ -542,17 +542,30 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         &mut self,
         global: &Global<G>,
         raw: &B::Device,
+        trackers: &Mutex<TrackerSet>,
         token: &mut Token<super::Device<B>>,
     ) -> Vec<super::BufferMapPendingCallback> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
         }
+        let hub = B::hub(global);
         let (mut buffer_guard, _) = B::hub(global).buffers.write(token);
-        self.ready_to_map
-            .drain(..)
-            .map(|buffer_id| {
-                let buffer = &mut buffer_guard[buffer_id];
-                let mapping = buffer.pending_mapping.take().unwrap();
+        let mut pending_callbacks: Vec<super::BufferMapPendingCallback> = Vec::with_capacity(self.ready_to_map.len());
+        let mut trackers = trackers.lock();
+        for buffer_id in self.ready_to_map.drain(..) {
+            let buffer = &mut buffer_guard[buffer_id];
+            if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id) {
+                buffer.map_state = resource::BufferMapState::Idle;
+                log::debug!("Mapping request is dropped because the buffer is destroyed.");
+                hub.buffers.free_id(buffer_id);
+                let buffer = buffer_guard.remove(buffer_id).unwrap();
+                self.free_resources.buffers.push((buffer.raw, buffer.memory));
+            } else {
+                let mapping = match std::mem::replace(&mut buffer.map_state, resource::BufferMapState::Active) {
+                    resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
+                    _ => panic!("No pending mapping."),
+                };
+                log::debug!("Buffer {:?} map state -> Active", buffer_id);
                 let result = match mapping.op {
                     resource::BufferMapOperation::Read { .. } => {
                         super::map_buffer(raw, buffer, mapping.sub_range, super::HostMap::Read)
@@ -561,8 +574,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         super::map_buffer(raw, buffer, mapping.sub_range, super::HostMap::Write)
                     }
                 };
-                (mapping.op, result)
-            })
-            .collect()
+                pending_callbacks.push((mapping.op, result));
+            }
+        }
+        pending_callbacks
     }
 }
