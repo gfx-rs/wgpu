@@ -1025,6 +1025,9 @@ pub struct BufferReadMapping {
     buffer_id: wgc::id::BufferId,
 }
 
+unsafe impl Send for BufferReadMapping {}
+unsafe impl Sync for BufferReadMapping {}
+
 impl BufferReadMapping
 {
     pub fn as_slice(&self) -> &[u8] {
@@ -1045,6 +1048,9 @@ pub struct BufferWriteMapping {
     size: usize,
     buffer_id: wgc::id::BufferId,
 }
+
+unsafe impl Send for BufferWriteMapping {}
+unsafe impl Sync for BufferWriteMapping {}
 
 impl BufferWriteMapping
 {
