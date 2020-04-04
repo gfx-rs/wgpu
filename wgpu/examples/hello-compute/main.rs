@@ -1,7 +1,7 @@
-use std::{convert::TryInto as _, str::FromStr};
+use std::{convert::TryInto, str::FromStr};
 
 async fn run() {
-    let numbers = if std::env::args().len() == 1 {
+    let numbers = if std::env::args().len() <= 1 {
         let default = vec![1, 2, 3, 4];
         log::info!("No numbers were provided, defaulting to {:?}", default);
         default
@@ -124,9 +124,20 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen(start))]
+pub fn wasm_main() {
+    console_log::init().expect("could not initialize log");
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    wasm_bindgen_futures::spawn_local(run());
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     env_logger::init();
-
     futures::executor::block_on(run());
 }
 

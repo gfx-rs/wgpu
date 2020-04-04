@@ -46,7 +46,7 @@ impl Example {
         pipeline_layout: &wgpu::PipelineLayout,
         sample_count: u32,
     ) -> wgpu::RenderPipeline {
-        println!("sample_count: {}", sample_count);
+        log::info!("sample_count: {}", sample_count);
         device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
@@ -117,17 +117,15 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
-        println!("Press left/right arrow keys to change sample_count.");
+        log::info!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
-        let vs_bytes =
-            framework::load_glsl(include_str!("shader.vert"), framework::ShaderStage::Vertex);
-        let fs_bytes = framework::load_glsl(
-            include_str!("shader.frag"),
-            framework::ShaderStage::Fragment,
-        );
-        let vs_module = device.create_shader_module(&vs_bytes);
-        let fs_module = device.create_shader_module(&fs_bytes);
+        let vs_bytes = include_bytes!("shader.vert.spv");
+        let fs_bytes = include_bytes!("shader.frag.spv");
+        let vs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
+        let fs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[],
@@ -268,6 +266,12 @@ impl framework::Example for Example {
 
         encoder.finish()
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen(start))]
+pub fn wasm_main() {
+    main();
 }
 
 fn main() {
