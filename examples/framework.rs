@@ -1,4 +1,8 @@
-use winit::event::WindowEvent;
+use winit::{
+    event::{self, WindowEvent},
+    event_loop::{ControlFlow, EventLoop},
+    window::Window,
+};
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 #[allow(unused)]
@@ -24,16 +28,6 @@ pub enum ShaderStage {
     Compute,
 }
 
-pub fn load_glsl(code: &str, stage: ShaderStage) -> Vec<u32> {
-    let ty = match stage {
-        ShaderStage::Vertex => glsl_to_spirv::ShaderType::Vertex,
-        ShaderStage::Fragment => glsl_to_spirv::ShaderType::Fragment,
-        ShaderStage::Compute => glsl_to_spirv::ShaderType::Compute,
-    };
-
-    wgpu::read_spirv(glsl_to_spirv::compile(&code, ty).unwrap()).unwrap()
-}
-
 pub trait Example: 'static + Sized {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
@@ -52,51 +46,13 @@ pub trait Example: 'static + Sized {
     ) -> wgpu::CommandBuffer;
 }
 
-async fn run_async<E: Example>(title: &str) {
-    use winit::{
-        event,
-        event_loop::{ControlFlow, EventLoop},
-    };
+async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
+    log::info!("Initializing the surface...");
 
-    env_logger::init();
-    let event_loop = EventLoop::new();
-    log::info!("Initializing the window...");
-
-    #[cfg(not(feature = "gl"))]
-    let (window, size, surface) = {
-        let mut builder = winit::window::WindowBuilder::new();
-        builder = builder.with_title(title);
-        #[cfg(windows_OFF)] //TODO
-        {
-            use winit::platform::windows::WindowBuilderExtWindows;
-            builder = builder.with_no_redirection_bitmap(true);
-        }
-        let window = builder.build(&event_loop).unwrap();
+    let (size, surface) = {
         let size = window.inner_size();
         let surface = wgpu::Surface::create(&window);
-        (window, size, surface)
-    };
-
-    #[cfg(feature = "gl")]
-    let (window, instance, size, surface) = {
-        let wb = winit::WindowBuilder::new();
-        let cb = wgpu::glutin::ContextBuilder::new().with_vsync(true);
-        let context = cb.build_windowed(wb, &event_loop).unwrap();
-        context.window().set_title(title);
-
-        let hidpi_factor = context.window().hidpi_factor();
-        let size = context
-            .window()
-            .get_inner_size()
-            .unwrap()
-            .to_physical(hidpi_factor);
-
-        let (context, window) = unsafe { context.make_current().unwrap().split() };
-
-        let instance = wgpu::Instance::new(context);
-        let surface = instance.get_surface();
-
-        (window, instance, size, surface)
+        (size, surface)
     };
 
     let adapter = wgpu::Adapter::request(
@@ -120,7 +76,7 @@ async fn run_async<E: Example>(title: &str) {
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-        format: wgpu::TextureFormat::Bgra8UnormSrgb,
+        format: wgpu::TextureFormat::Bgra8Unorm,
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Mailbox,
@@ -185,7 +141,36 @@ async fn run_async<E: Example>(title: &str) {
 }
 
 pub fn run<E: Example>(title: &str) {
-    futures::executor::block_on(run_async::<E>(title));
+    let event_loop = EventLoop::new();
+    let mut builder = winit::window::WindowBuilder::new();
+    builder = builder.with_title(title);
+    #[cfg(windows_OFF)] //TODO
+    {
+        use winit::platform::windows::WindowBuilderExtWindows;
+        builder = builder.with_no_redirection_bitmap(true);
+    }
+    let window = builder.build(&event_loop).unwrap();
+
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        env_logger::init();
+        futures::executor::block_on(run_async::<E>(event_loop, window));
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        use winit::platform::web::WindowExtWebSys;
+        // On wasm, append the canvas to the document body
+        web_sys::window()
+            .and_then(|win| win.document())
+            .and_then(|doc| doc.body())
+            .and_then(|body| {
+                body.append_child(&web_sys::Element::from(window.canvas()))
+                    .ok()
+            })
+            .expect("couldn't append canvas to document body");
+        wasm_bindgen_futures::spawn_local(run_async::<E>(event_loop, window));
+    }
 }
 
 // This allows treating the framework as a standalone example,

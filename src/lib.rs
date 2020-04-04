@@ -1,15 +1,11 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
 mod backend;
-use crate::backend::native_gpu_future;
 
 #[macro_use]
 mod macros;
 
-use arrayvec::ArrayVec;
-use smallvec::SmallVec;
-
-use std::{ffi::CString, future::Future, ops::Range, ptr, slice, thread};
+use std::{future::Future, ops::Range, thread};
 
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
@@ -23,6 +19,12 @@ pub use wgt::{
     TextureFormat, TextureUsage, TextureViewDescriptor, TextureViewDimension,
     VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
 };
+/*
+pub use wgc::instance::{
+    AdapterInfo,
+    DeviceType,
+};
+*/
 
 //TODO: avoid heap allocating vectors during resource creation.
 #[derive(Default, Debug)]
@@ -37,7 +39,7 @@ struct Temp {
 /// yielding a [`Device`] object.
 #[derive(Debug, PartialEq)]
 pub struct Adapter {
-    id: wgc::id::AdapterId,
+    id: backend::AdapterId,
 }
 
 /// Options for requesting adapter.
@@ -55,7 +57,7 @@ pub struct RequestAdapterOptions<'a> {
 /// well as exposing [`Queue`] objects.
 #[derive(Debug)]
 pub struct Device {
-    id: wgc::id::DeviceId,
+    id: backend::DeviceId,
     temp: Temp,
 }
 
@@ -70,14 +72,14 @@ pub enum Maintain {
 /// A handle to a GPU-accessible buffer.
 #[derive(Debug, PartialEq)]
 pub struct Buffer {
-    id: wgc::id::BufferId,
-    device_id: wgc::id::DeviceId,
+    id: backend::BufferId,
+    detail: backend::BufferDetail,
 }
 
 /// A handle to a texture on the GPU.
 #[derive(Debug, PartialEq)]
 pub struct Texture {
-    id: wgc::id::TextureId,
+    id: backend::TextureId,
     owned: bool,
 }
 
@@ -87,7 +89,7 @@ pub struct Texture {
 /// [`RenderPipeline`] or [`BindGroup`].
 #[derive(Debug, PartialEq)]
 pub struct TextureView {
-    id: wgc::id::TextureViewId,
+    id: backend::TextureViewId,
     owned: bool,
 }
 
@@ -98,7 +100,7 @@ pub struct TextureView {
 /// the documentation for [`SamplerDescriptor`] for more information.
 #[derive(Debug, PartialEq)]
 pub struct Sampler {
-    id: wgc::id::SamplerId,
+    id: backend::SamplerId,
 }
 
 /// A handle to a presentable surface.
@@ -107,7 +109,7 @@ pub struct Sampler {
 /// be presented. A `Surface` may be created with [`Surface::create`].
 #[derive(Debug, PartialEq)]
 pub struct Surface {
-    id: wgc::id::SurfaceId,
+    id: backend::SurfaceId,
 }
 
 /// A handle to a swap chain.
@@ -116,7 +118,7 @@ pub struct Surface {
 /// A `SwapChain` may be created with [`Device::create_swap_chain`].
 #[derive(Debug, PartialEq)]
 pub struct SwapChain {
-    id: wgc::id::SwapChainId,
+    id: backend::SwapChainId,
 }
 
 /// An opaque handle to a binding group layout.
@@ -127,7 +129,7 @@ pub struct SwapChain {
 /// create a [`PipelineLayoutDescriptor`], which can be used to create a [`PipelineLayout`].
 #[derive(Debug, PartialEq)]
 pub struct BindGroupLayout {
-    id: wgc::id::BindGroupLayoutId,
+    id: backend::BindGroupLayoutId,
 }
 
 /// An opaque handle to a binding group.
@@ -138,11 +140,12 @@ pub struct BindGroupLayout {
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
 #[derive(Debug, PartialEq)]
 pub struct BindGroup {
-    id: wgc::id::BindGroupId,
+    id: backend::BindGroupId,
 }
 
 impl Drop for BindGroup {
     fn drop(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
         wgn::wgpu_bind_group_destroy(self.id);
     }
 }
@@ -154,7 +157,7 @@ impl Drop for BindGroup {
 /// programmable stages of a pipeline.
 #[derive(Debug, PartialEq)]
 pub struct ShaderModule {
-    id: wgc::id::ShaderModuleId,
+    id: backend::ShaderModuleId,
 }
 
 /// An opaque handle to a pipeline layout.
@@ -162,7 +165,7 @@ pub struct ShaderModule {
 /// A `PipelineLayout` object describes the available binding groups of a pipeline.
 #[derive(Debug, PartialEq)]
 pub struct PipelineLayout {
-    id: wgc::id::PipelineLayoutId,
+    id: backend::PipelineLayoutId,
 }
 
 /// A handle to a rendering (graphics) pipeline.
@@ -171,13 +174,13 @@ pub struct PipelineLayout {
 /// buffers and targets. A `RenderPipeline` may be created with [`Device::create_render_pipeline`].
 #[derive(Debug, PartialEq)]
 pub struct RenderPipeline {
-    id: wgc::id::RenderPipelineId,
+    id: backend::RenderPipelineId,
 }
 
 /// A handle to a compute pipeline.
 #[derive(Debug, PartialEq)]
 pub struct ComputePipeline {
-    id: wgc::id::ComputePipelineId,
+    id: backend::ComputePipelineId,
 }
 
 /// An opaque handle to a command buffer on the GPU.
@@ -187,7 +190,7 @@ pub struct ComputePipeline {
 /// a [`CommandEncoder`] and then calling [`CommandEncoder::finish`].
 #[derive(Debug, PartialEq)]
 pub struct CommandBuffer {
-    id: wgc::id::CommandBufferId,
+    id: backend::CommandBufferId,
 }
 
 /// An object that encodes GPU operations.
@@ -199,7 +202,7 @@ pub struct CommandBuffer {
 /// be submitted for execution.
 #[derive(Debug)]
 pub struct CommandEncoder {
-    id: wgc::id::CommandEncoderId,
+    id: backend::CommandEncoderId,
     /// This type should be !Send !Sync, because it represents an allocation on this thread's
     /// command buffer.
     _p: std::marker::PhantomData<*const u8>,
@@ -208,14 +211,14 @@ pub struct CommandEncoder {
 /// An in-progress recording of a render pass.
 #[derive(Debug)]
 pub struct RenderPass<'a> {
-    id: wgc::id::RenderPassId,
+    id: backend::RenderPassEncoderId,
     _parent: &'a mut CommandEncoder,
 }
 
 /// An in-progress recording of a compute pass.
 #[derive(Debug)]
 pub struct ComputePass<'a> {
-    id: wgc::id::ComputePassId,
+    id: backend::ComputePassId,
     _parent: &'a mut CommandEncoder,
 }
 
@@ -224,7 +227,7 @@ pub struct ComputePass<'a> {
 /// A `Queue` executes recorded [`CommandBuffer`] objects.
 #[derive(Debug, PartialEq)]
 pub struct Queue {
-    id: wgc::id::QueueId,
+    id: backend::QueueId,
 }
 
 /// A resource that can be bound to a pipeline.
@@ -462,9 +465,10 @@ pub struct TextureDescriptor<'a> {
 #[derive(Debug)]
 pub struct SwapChainOutput {
     pub view: TextureView,
-    swap_chain_id: wgc::id::SwapChainId,
+    swap_chain_id: backend::SwapChainId,
 }
 
+/*
 /// A view of a buffer which can be used to copy to or from a texture.
 #[derive(Clone, Debug)]
 pub struct BufferCopyView<'a> {
@@ -521,22 +525,27 @@ impl<'a> TextureCopyView<'a> {
         }
     }
 }
+*/
 
 /// A buffer being created, mapped in host memory.
 pub struct CreateBufferMapped<'a> {
-    id: wgc::id::BufferId,
-    pub data: &'a mut [u8],
-    device_id: wgc::id::DeviceId,
+    id: backend::BufferId,
+    /// The backing field for `data()`. This isn't `pub` because users shouldn't
+    /// be able to replace it to point somewhere else. We rely on it pointing to
+    /// to the correct memory later during `unmap()`.
+    mapped_data: &'a mut [u8],
+    detail: backend::CreateBufferMappedDetail,
 }
 
 impl CreateBufferMapped<'_> {
+    /// The mapped data.
+    pub fn data(&mut self) -> &mut [u8] {
+        self.mapped_data
+    }
+
     /// Unmaps the buffer from host memory and returns a [`Buffer`].
     pub fn finish(self) -> Buffer {
-        wgn::wgpu_buffer_unmap(self.id);
-        Buffer {
-            device_id: self.device_id,
-            id: self.id,
-        }
+        backend::create_buffer_mapped_finish(self)
     }
 }
 
@@ -544,26 +553,30 @@ impl Surface {
     /// Creates a surface from a raw window handle.
     pub fn create<W: raw_window_handle::HasRawWindowHandle>(window: &W) -> Self {
         Surface {
-            id: wgn::wgpu_create_surface(window.raw_window_handle()),
+            id: backend::create_surface(window),
         }
     }
 
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub fn create_surface_from_core_animation_layer(layer: *mut std::ffi::c_void) -> Self {
-        Surface {
-            id: wgn::wgpu_create_surface_from_metal_layer(layer),
+    /*
+        #[cfg(any(target_os = "ios", target_os = "macos"))]
+        pub fn create_surface_from_core_animation_layer(layer: *mut std::ffi::c_void) -> Self {
+            Surface {
+                id: wgn::wgpu_create_surface_from_metal_layer(layer),
+            }
         }
-    }
+    */
 }
 
 impl Adapter {
-    /// Retrieves all available [`Adapter`]s that match the given backends.
-    pub fn enumerate(backends: BackendBit) -> Vec<Self> {
-        wgn::wgpu_enumerate_adapters(backends)
-            .into_iter()
-            .map(|id| Adapter { id })
-            .collect()
-    }
+    /*
+        /// Retrieves all available [`Adapter`]s that match the given backends.
+        pub fn enumerate(backends: BackendBit) -> Vec<Self> {
+            wgn::wgpu_enumerate_adapters(backends)
+                .into_iter()
+                .map(|id| Adapter { id })
+                .collect()
+        }
+    */
 
     /// Retrieves an [`Adapter`] which matches the given options.
     ///
@@ -574,26 +587,9 @@ impl Adapter {
         options: &RequestAdapterOptions<'_>,
         backends: BackendBit,
     ) -> Option<Self> {
-        unsafe extern "C" fn adapter_callback(
-            id: Option<wgc::id::AdapterId>,
-            user_data: *mut std::ffi::c_void,
-        ) {
-            *(user_data as *mut Option<wgc::id::AdapterId>) = id;
-        }
-
-        let mut id_maybe = None;
-        unsafe {
-            wgn::wgpu_request_adapter_async(
-                Some(&wgc::instance::RequestAdapterOptions {
-                    power_preference: options.power_preference,
-                    compatible_surface: options.compatible_surface.map(|surface| surface.id),
-                }),
-                backends,
-                adapter_callback,
-                &mut id_maybe as *mut _ as *mut std::ffi::c_void,
-            )
-        };
-        id_maybe.map(|id| Adapter { id })
+        backend::request_adapter(options, backends)
+            .await
+            .map(|id| Adapter { id })
     }
 
     /// Requests a connection to a physical device, creating a logical device.
@@ -603,286 +599,76 @@ impl Adapter {
     ///
     /// Panics if the extensions specified by `desc` are not supported by this adapter.
     pub async fn request_device(&self, desc: &DeviceDescriptor) -> (Device, Queue) {
+        let (device_id, queue_id) = backend::request_device_and_queue(&self.id, Some(desc)).await;
         let device = Device {
-            id: wgn::wgpu_adapter_request_device(self.id, Some(desc)),
+            id: device_id,
             temp: Temp::default(),
         };
-        let queue = Queue {
-            id: wgn::wgpu_device_get_default_queue(device.id),
-        };
+        let queue = Queue { id: queue_id };
         (device, queue)
     }
 
-    pub fn get_info(&self) -> AdapterInfo {
-        wgn::adapter_get_info(self.id)
-    }
+    /*
+        pub fn get_info(&self) -> AdapterInfo {
+            wgn::adapter_get_info(self.id)
+        }
+    */
 }
 
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
     pub fn poll(&self, maintain: Maintain) {
-        wgn::wgpu_device_poll(
-            self.id,
-            match maintain {
-                Maintain::Poll => false,
-                Maintain::Wait => true,
-            },
-        );
+        backend::device_poll(&self.id, maintain);
     }
 
     /// Creates a shader module from SPIR-V source code.
     pub fn create_shader_module(&self, spv: &[u32]) -> ShaderModule {
-        let desc = wgc::pipeline::ShaderModuleDescriptor {
-            code: wgc::U32Array {
-                bytes: spv.as_ptr(),
-                length: spv.len(),
-            },
-        };
         ShaderModule {
-            id: wgn::wgpu_device_create_shader_module(self.id, &desc),
+            id: backend::create_shader_module(&self.id, spv),
         }
     }
 
     /// Creates an empty [`CommandEncoder`].
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
         CommandEncoder {
-            id: wgn::wgpu_device_create_command_encoder(
-                self.id,
-                Some(&wgt::CommandEncoderDescriptor {
-                    label: owned_label.as_ptr(),
-                }),
-            ),
+            id: backend::create_command_encoder(&self.id, desc),
             _p: Default::default(),
         }
     }
 
     /// Creates a new bind group.
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
-        use wgc::binding_model as bm;
-
-        let bindings = desc
-            .bindings
-            .iter()
-            .map(|binding| bm::BindGroupEntry {
-                binding: binding.binding,
-                resource: match binding.resource {
-                    BindingResource::Buffer {
-                        ref buffer,
-                        ref range,
-                    } => bm::BindingResource::Buffer(bm::BufferBinding {
-                        buffer: buffer.id,
-                        offset: range.start,
-                        size: range.end - range.start,
-                    }),
-                    BindingResource::Sampler(ref sampler) => {
-                        bm::BindingResource::Sampler(sampler.id)
-                    }
-                    BindingResource::TextureView(ref texture_view) => {
-                        bm::BindingResource::TextureView(texture_view.id)
-                    }
-                },
-            })
-            .collect::<Vec<_>>();
-
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-        BindGroup {
-            id: wgn::wgpu_device_create_bind_group(
-                self.id,
-                &bm::BindGroupDescriptor {
-                    layout: desc.layout.id,
-                    entries: bindings.as_ptr(),
-                    entries_length: bindings.len(),
-                    label: owned_label.as_ptr(),
-                },
-            ),
-        }
+        let id = backend::create_bind_group(&self.id, desc);
+        BindGroup { id }
     }
 
     /// Creates a bind group layout.
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
-        use wgc::binding_model as bm;
-
-        let temp_layouts = desc
-            .bindings
-            .iter()
-            .map(|bind| bm::BindGroupLayoutEntry {
-                binding: bind.binding,
-                visibility: bind.visibility,
-                ty: match bind.ty {
-                    BindingType::UniformBuffer { .. } => bm::BindingType::UniformBuffer,
-                    BindingType::StorageBuffer {
-                        readonly: false, ..
-                    } => bm::BindingType::StorageBuffer,
-                    BindingType::StorageBuffer { readonly: true, .. } => {
-                        bm::BindingType::ReadonlyStorageBuffer
-                    }
-                    BindingType::Sampler { comparison: false } => bm::BindingType::Sampler,
-                    BindingType::Sampler { .. } => bm::BindingType::ComparisonSampler,
-                    BindingType::SampledTexture { .. } => bm::BindingType::SampledTexture,
-                    BindingType::StorageTexture { readonly: true, .. } => {
-                        bm::BindingType::ReadonlyStorageTexture
-                    }
-                    BindingType::StorageTexture { .. } => bm::BindingType::WriteonlyStorageTexture,
-                },
-                has_dynamic_offset: match bind.ty {
-                    BindingType::UniformBuffer { dynamic }
-                    | BindingType::StorageBuffer { dynamic, .. } => dynamic,
-                    _ => false,
-                },
-                multisampled: match bind.ty {
-                    BindingType::SampledTexture { multisampled, .. } => multisampled,
-                    _ => false,
-                },
-                view_dimension: match bind.ty {
-                    BindingType::SampledTexture { dimension, .. }
-                    | BindingType::StorageTexture { dimension, .. } => dimension,
-                    _ => TextureViewDimension::D2,
-                },
-                texture_component_type: match bind.ty {
-                    BindingType::SampledTexture { component_type, .. }
-                    | BindingType::StorageTexture { component_type, .. } => component_type,
-                    _ => TextureComponentType::Float,
-                },
-                storage_texture_format: match bind.ty {
-                    BindingType::StorageTexture { format, .. } => format,
-                    _ => TextureFormat::Rgb10a2Unorm, // doesn't matter
-                },
-            })
-            .collect::<Vec<_>>();
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-        BindGroupLayout {
-            id: wgn::wgpu_device_create_bind_group_layout(
-                self.id,
-                &bm::BindGroupLayoutDescriptor {
-                    entries: temp_layouts.as_ptr(),
-                    entries_length: temp_layouts.len(),
-                    label: owned_label.as_ptr(),
-                },
-            ),
-        }
+        let id = backend::create_bind_group_layout(&self.id, desc);
+        BindGroupLayout { id }
     }
 
     /// Creates a pipeline layout.
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
-        //TODO: avoid allocation here
-        let temp_layouts = desc
-            .bind_group_layouts
-            .iter()
-            .map(|bgl| bgl.id)
-            .collect::<Vec<_>>();
-        PipelineLayout {
-            id: wgn::wgpu_device_create_pipeline_layout(
-                self.id,
-                &wgc::binding_model::PipelineLayoutDescriptor {
-                    bind_group_layouts: temp_layouts.as_ptr(),
-                    bind_group_layouts_length: temp_layouts.len(),
-                },
-            ),
-        }
+        let id = backend::create_pipeline_layout(&self.id, desc);
+        PipelineLayout { id }
     }
 
     /// Creates a render pipeline.
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
-        use wgc::pipeline as pipe;
-
-        let vertex_entry_point = CString::new(desc.vertex_stage.entry_point).unwrap();
-        let vertex_stage = pipe::ProgrammableStageDescriptor {
-            module: desc.vertex_stage.module.id,
-            entry_point: vertex_entry_point.as_ptr(),
-        };
-        let (_fragment_entry_point, fragment_stage) =
-            if let Some(fragment_stage) = &desc.fragment_stage {
-                let fragment_entry_point = CString::new(fragment_stage.entry_point).unwrap();
-                let fragment_stage = pipe::ProgrammableStageDescriptor {
-                    module: fragment_stage.module.id,
-                    entry_point: fragment_entry_point.as_ptr(),
-                };
-                (fragment_entry_point, Some(fragment_stage))
-            } else {
-                (CString::default(), None)
-            };
-
-        let temp_color_states = desc.color_states.to_vec();
-        let temp_vertex_buffers = desc
-            .vertex_state
-            .vertex_buffers
-            .iter()
-            .map(|vbuf| pipe::VertexBufferLayoutDescriptor {
-                array_stride: vbuf.stride,
-                step_mode: vbuf.step_mode,
-                attributes: vbuf.attributes.as_ptr(),
-                attributes_length: vbuf.attributes.len(),
-            })
-            .collect::<Vec<_>>();
-
-        RenderPipeline {
-            id: wgn::wgpu_device_create_render_pipeline(
-                self.id,
-                &pipe::RenderPipelineDescriptor {
-                    layout: desc.layout.id,
-                    vertex_stage,
-                    fragment_stage: fragment_stage
-                        .as_ref()
-                        .map_or(ptr::null(), |fs| fs as *const _),
-                    rasterization_state: desc
-                        .rasterization_state
-                        .as_ref()
-                        .map_or(ptr::null(), |p| p as *const _),
-                    primitive_topology: desc.primitive_topology,
-                    color_states: temp_color_states.as_ptr(),
-                    color_states_length: temp_color_states.len(),
-                    depth_stencil_state: desc
-                        .depth_stencil_state
-                        .as_ref()
-                        .map_or(ptr::null(), |p| p as *const _),
-                    vertex_state: pipe::VertexStateDescriptor {
-                        index_format: desc.vertex_state.index_format,
-                        vertex_buffers: temp_vertex_buffers.as_ptr(),
-                        vertex_buffers_length: temp_vertex_buffers.len(),
-                    },
-                    sample_count: desc.sample_count,
-                    sample_mask: desc.sample_mask,
-                    alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
-                },
-            ),
-        }
+        let id = backend::create_render_pipeline(&self.id, desc);
+        RenderPipeline { id }
     }
 
     /// Creates a compute pipeline.
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
-        use wgc::pipeline as pipe;
-
-        let entry_point = CString::new(desc.compute_stage.entry_point).unwrap();
-
-        ComputePipeline {
-            id: wgn::wgpu_device_create_compute_pipeline(
-                self.id,
-                &pipe::ComputePipelineDescriptor {
-                    layout: desc.layout.id,
-                    compute_stage: pipe::ProgrammableStageDescriptor {
-                        module: desc.compute_stage.module.id,
-                        entry_point: entry_point.as_ptr(),
-                    },
-                },
-            ),
-        }
+        let id = backend::create_compute_pipeline(&self.id, desc);
+        ComputePipeline { id }
     }
 
     /// Creates a new buffer.
     pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-        Buffer {
-            device_id: self.id,
-            id: wgn::wgpu_device_create_buffer(
-                self.id,
-                &wgt::BufferDescriptor {
-                    label: owned_label.as_ptr(),
-                    size: desc.size,
-                    usage: desc.usage,
-                },
-            ),
-        }
+        backend::create_buffer(&self.id, desc)
     }
 
     /// Creates a new buffer and maps it into host-visible memory.
@@ -891,40 +677,18 @@ impl Device {
     /// will not be created until calling [`CreateBufferMapped::finish`].
     pub fn create_buffer_mapped(&self, desc: &BufferDescriptor) -> CreateBufferMapped<'_> {
         assert_ne!(desc.size, 0);
-
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-        let mut data_ptr: *mut u8 = std::ptr::null_mut();
-
-        let (id, data) = unsafe {
-            let id = wgn::wgpu_device_create_buffer_mapped(
-                self.id,
-                &wgt::BufferDescriptor {
-                    label: owned_label.as_ptr(),
-                    size: desc.size,
-                    usage: desc.usage,
-                },
-                &mut data_ptr as *mut *mut u8,
-            );
-            let data = std::slice::from_raw_parts_mut(data_ptr as *mut u8, desc.size as usize);
-            (id, data)
-        };
-
-        CreateBufferMapped {
-            device_id: self.id,
-            id,
-            data,
-        }
+        backend::create_buffer_mapped(&self.id, desc)
     }
 
     /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
     /// and finally unmaps it, returning a [`Buffer`].
     pub fn create_buffer_with_data(&self, data: &[u8], usage: BufferUsage) -> Buffer {
-        let mapped = self.create_buffer_mapped(&BufferDescriptor {
+        let mut mapped = self.create_buffer_mapped(&BufferDescriptor {
             size: data.len() as u64,
             usage,
             label: None,
         });
-        mapped.data.copy_from_slice(data);
+        mapped.data().copy_from_slice(data);
         mapped.finish()
     }
 
@@ -932,45 +696,38 @@ impl Device {
     ///
     /// `desc` specifies the general format of the texture.
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
         Texture {
-            id: wgn::wgpu_device_create_texture(
-                self.id,
-                &wgt::TextureDescriptor {
-                    label: owned_label.as_ptr(),
-                    size: desc.size,
-                    mip_level_count: desc.mip_level_count,
-                    sample_count: desc.sample_count,
-                    dimension: desc.dimension,
-                    format: desc.format,
-                    usage: desc.usage,
-                },
-            ),
+            id: backend::create_texture(&self.id, desc),
             owned: true,
         }
     }
 
-    /// Creates a new [`Sampler`].
-    ///
-    /// `desc` specifies the behavior of the sampler.
-    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
-        Sampler {
-            id: wgn::wgpu_device_create_sampler(self.id, desc),
+    /*
+        /// Creates a new [`Sampler`].
+        ///
+        /// `desc` specifies the behavior of the sampler.
+        pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
+            Sampler {
+                id: wgn::wgpu_device_create_sampler(self.id, desc),
+            }
         }
-    }
+    */
 
     /// Create a new [`SwapChain`] which targets `surface`.
     pub fn create_swap_chain(&self, surface: &Surface, desc: &SwapChainDescriptor) -> SwapChain {
         SwapChain {
-            id: wgn::wgpu_device_create_swap_chain(self.id, surface.id, desc),
+            id: backend::device_create_swap_chain(&self.id, &surface.id, desc),
         }
     }
 }
 
+// TODO
 impl Drop for Device {
     fn drop(&mut self) {
+        #[cfg(not(target_arch = "wasm32"))]
         wgn::wgpu_device_poll(self.id, true);
         //TODO: make this work in general
+        #[cfg(not(target_arch = "wasm32"))]
         #[cfg(feature = "metal-auto-capture")]
         wgn::wgpu_device_destroy(self.id);
     }
@@ -980,9 +737,7 @@ impl Drop for Device {
 pub struct BufferAsyncErr;
 
 pub struct BufferReadMapping {
-    data: *const u8,
-    size: usize,
-    buffer_id: wgc::id::BufferId,
+    detail: backend::BufferReadMappingDetail,
 }
 
 unsafe impl Send for BufferReadMapping {}
@@ -990,16 +745,17 @@ unsafe impl Sync for BufferReadMapping {}
 
 impl BufferReadMapping {
     pub fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.data as *const u8, self.size) }
+        self.detail.as_slice()
     }
 }
 
 impl Drop for BufferReadMapping {
     fn drop(&mut self) {
-        wgn::wgpu_buffer_unmap(self.buffer_id);
+        backend::buffer_unmap(&self.detail.buffer_id);
     }
 }
 
+/*
 pub struct BufferWriteMapping {
     data: *mut u8,
     size: usize,
@@ -1020,6 +776,7 @@ impl Drop for BufferWriteMapping {
         wgn::wgpu_buffer_unmap(self.buffer_id);
     }
 }
+*/
 
 impl Buffer {
     /// Map the buffer for reading. The result is returned in a future.
@@ -1034,112 +791,89 @@ impl Buffer {
         &self,
         start: BufferAddress,
         size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>> {
-        let (future, completion) = native_gpu_future::new_gpu_future(self.id, size);
+    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>> + '_ {
+        backend::buffer_map_read(self, start, size)
+    }
 
-        extern "C" fn buffer_map_read_future_wrapper(
-            status: wgc::resource::BufferMapAsyncStatus,
-            data: *const u8,
-            user_data: *mut u8,
-        ) {
-            let completion =
-                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-            let (buffer_id, size) = completion.get_buffer_info();
+    /*
+        /// Map the buffer for writing. The result is returned in a future.
+        ///
+        /// See the documentation of (map_read)[#method.map_read] for more information about
+        /// how to run this future.
+        pub fn map_write(
+            &self,
+            start: BufferAddress,
+            size: BufferAddress,
+        ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> {
+            let (future, completion) = native_gpu_future::new_gpu_future(self.id, size);
 
-            if let wgc::resource::BufferMapAsyncStatus::Success = status {
-                completion.complete(Ok(BufferReadMapping {
-                    data,
-                    size: size as usize,
-                    buffer_id,
-                }));
-            } else {
-                completion.complete(Err(BufferAsyncErr));
+            extern "C" fn buffer_map_write_future_wrapper(
+                status: wgc::resource::BufferMapAsyncStatus,
+                data: *mut u8,
+                user_data: *mut u8,
+            ) {
+                let completion =
+                    unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
+                let (buffer_id, size) = completion.get_buffer_info();
+
+                if let wgc::resource::BufferMapAsyncStatus::Success = status {
+                    completion.complete(Ok(BufferWriteMapping {
+                        data,
+                        size: size as usize,
+                        buffer_id,
+                    }));
+                } else {
+                    completion.complete(Err(BufferAsyncErr));
+                }
             }
+
+            wgn::wgpu_buffer_map_write_async(
+                self.id,
+                start,
+                size,
+                buffer_map_write_future_wrapper,
+                completion.to_raw() as _,
+            );
+
+            future
         }
 
-        wgn::wgpu_buffer_map_read_async(
-            self.id,
-            start,
-            size,
-            buffer_map_read_future_wrapper,
-            completion.to_raw() as _,
-        );
-
-        future
-    }
-
-    /// Map the buffer for writing. The result is returned in a future.
-    ///
-    /// See the documentation of (map_read)[#method.map_read] for more information about
-    /// how to run this future.
-    pub fn map_write(
-        &self,
-        start: BufferAddress,
-        size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> {
-        let (future, completion) = native_gpu_future::new_gpu_future(self.id, size);
-
-        extern "C" fn buffer_map_write_future_wrapper(
-            status: wgc::resource::BufferMapAsyncStatus,
-            data: *mut u8,
-            user_data: *mut u8,
-        ) {
-            let completion =
-                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-            let (buffer_id, size) = completion.get_buffer_info();
-
-            if let wgc::resource::BufferMapAsyncStatus::Success = status {
-                completion.complete(Ok(BufferWriteMapping {
-                    data,
-                    size: size as usize,
-                    buffer_id,
-                }));
-            } else {
-                completion.complete(Err(BufferAsyncErr));
-            }
+        /// Flushes any pending write operations and unmaps the buffer from host memory.
+        pub fn unmap(&self) {
+            wgn::wgpu_buffer_unmap(self.id);
         }
-
-        wgn::wgpu_buffer_map_write_async(
-            self.id,
-            start,
-            size,
-            buffer_map_write_future_wrapper,
-            completion.to_raw() as _,
-        );
-
-        future
-    }
-
-    /// Flushes any pending write operations and unmaps the buffer from host memory.
-    pub fn unmap(&self) {
-        wgn::wgpu_buffer_unmap(self.id);
-    }
+    */
 }
 
+/*
 impl Drop for Buffer {
     fn drop(&mut self) {
         wgn::wgpu_buffer_destroy(self.id);
     }
 }
+*/
 
 impl Texture {
-    /// Creates a view of this texture.
-    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
-        TextureView {
-            id: wgn::wgpu_texture_create_view(self.id, Some(desc)),
-            owned: true,
+    /*
+        /// Creates a view of this texture.
+        pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+            TextureView {
+                id: wgn::wgpu_texture_create_view(self.id, Some(desc)),
+                owned: true,
+            }
         }
-    }
+    */
 
     /// Creates a default view of this whole texture.
     pub fn create_default_view(&self) -> TextureView {
         TextureView {
-            id: wgn::wgpu_texture_create_view(self.id, None),
+            id: backend::texture_create_default_view(&self.id),
             owned: true,
         }
     }
 }
 
+/*
 impl Drop for Texture {
     fn drop(&mut self) {
         if self.owned {
@@ -1155,12 +889,13 @@ impl Drop for TextureView {
         }
     }
 }
+*/
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
     pub fn finish(self) -> CommandBuffer {
         CommandBuffer {
-            id: wgn::wgpu_command_encoder_finish(self.id, None),
+            id: backend::command_encoder_finish(&self.id),
         }
     }
 
@@ -1171,41 +906,8 @@ impl CommandEncoder {
         &'a mut self,
         desc: &RenderPassDescriptor<'a, '_>,
     ) -> RenderPass<'a> {
-        let colors = desc
-            .color_attachments
-            .iter()
-            .map(|ca| wgc::command::RenderPassColorAttachmentDescriptor {
-                attachment: ca.attachment.id,
-                resolve_target: ca.resolve_target.map(|rt| rt.id),
-                load_op: ca.load_op,
-                store_op: ca.store_op,
-                clear_color: ca.clear_color,
-            })
-            .collect::<ArrayVec<[_; 4]>>();
-
-        let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
-            wgc::command::RenderPassDepthStencilAttachmentDescriptor {
-                attachment: dsa.attachment.id,
-                depth_load_op: dsa.depth_load_op,
-                depth_store_op: dsa.depth_store_op,
-                clear_depth: dsa.clear_depth,
-                stencil_load_op: dsa.stencil_load_op,
-                stencil_store_op: dsa.stencil_store_op,
-                clear_stencil: dsa.clear_stencil,
-            }
-        });
-
         RenderPass {
-            id: unsafe {
-                wgn::wgpu_command_encoder_begin_render_pass(
-                    self.id,
-                    &wgc::command::RenderPassDescriptor {
-                        color_attachments: colors.as_ptr(),
-                        color_attachments_length: colors.len(),
-                        depth_stencil_attachment: depth_stencil.as_ref(),
-                    },
-                )
-            },
+            id: backend::command_encoder_begin_render_pass(&self.id, desc),
             _parent: self,
         }
     }
@@ -1215,7 +917,7 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: unsafe { wgn::wgpu_command_encoder_begin_compute_pass(self.id, None) },
+            id: backend::begin_compute_pass(&self.id),
             _parent: self,
         }
     }
@@ -1229,60 +931,62 @@ impl CommandEncoder {
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
     ) {
-        wgn::wgpu_command_encoder_copy_buffer_to_buffer(
-            self.id,
-            source.id,
+        backend::copy_buffer_to_buffer(
+            &self.id,
+            source,
             source_offset,
-            destination.id,
+            destination,
             destination_offset,
             copy_size,
         );
     }
 
-    /// Copy data from a buffer to a texture.
-    pub fn copy_buffer_to_texture(
-        &mut self,
-        source: BufferCopyView,
-        destination: TextureCopyView,
-        copy_size: Extent3d,
-    ) {
-        wgn::wgpu_command_encoder_copy_buffer_to_texture(
-            self.id,
-            &source.into_native(),
-            &destination.into_native(),
-            copy_size,
-        );
-    }
+    /*
+        /// Copy data from a buffer to a texture.
+        pub fn copy_buffer_to_texture(
+            &mut self,
+            source: BufferCopyView,
+            destination: TextureCopyView,
+            copy_size: Extent3d,
+        ) {
+            wgn::wgpu_command_encoder_copy_buffer_to_texture(
+                self.id,
+                &source.into_native(),
+                &destination.into_native(),
+                copy_size,
+            );
+        }
 
-    /// Copy data from a texture to a buffer.
-    pub fn copy_texture_to_buffer(
-        &mut self,
-        source: TextureCopyView,
-        destination: BufferCopyView,
-        copy_size: Extent3d,
-    ) {
-        wgn::wgpu_command_encoder_copy_texture_to_buffer(
-            self.id,
-            &source.into_native(),
-            &destination.into_native(),
-            copy_size,
-        );
-    }
+        /// Copy data from a texture to a buffer.
+        pub fn copy_texture_to_buffer(
+            &mut self,
+            source: TextureCopyView,
+            destination: BufferCopyView,
+            copy_size: Extent3d,
+        ) {
+            wgn::wgpu_command_encoder_copy_texture_to_buffer(
+                self.id,
+                &source.into_native(),
+                &destination.into_native(),
+                copy_size,
+            );
+        }
 
-    /// Copy data from one texture to another.
-    pub fn copy_texture_to_texture(
-        &mut self,
-        source: TextureCopyView,
-        destination: TextureCopyView,
-        copy_size: Extent3d,
-    ) {
-        wgn::wgpu_command_encoder_copy_texture_to_texture(
-            self.id,
-            &source.into_native(),
-            &destination.into_native(),
-            copy_size,
-        );
-    }
+        /// Copy data from one texture to another.
+        pub fn copy_texture_to_texture(
+            &mut self,
+            source: TextureCopyView,
+            destination: TextureCopyView,
+            copy_size: Extent3d,
+        ) {
+            wgn::wgpu_command_encoder_copy_texture_to_texture(
+                self.id,
+                &source.into_native(),
+                &destination.into_native(),
+                copy_size,
+            );
+        }
+    */
 }
 
 impl<'a> RenderPass<'a> {
@@ -1293,53 +997,45 @@ impl<'a> RenderPass<'a> {
         bind_group: &'a BindGroup,
         offsets: &[DynamicOffset],
     ) {
-        unsafe {
-            wgn::wgpu_render_pass_set_bind_group(
-                self.id.as_mut().unwrap(),
-                index,
-                bind_group.id,
-                offsets.as_ptr(),
-                offsets.len(),
-            );
-        }
+        backend::render_pass_set_bind_group(&self.id, index, &bind_group.id, offsets)
     }
 
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
     pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
-        unsafe {
-            wgn::wgpu_render_pass_set_pipeline(self.id.as_mut().unwrap(), pipeline.id);
-        }
+        backend::render_pass_set_pipeline(&self.id, &pipeline.id)
     }
 
-    pub fn set_blend_color(&mut self, color: Color) {
-        unsafe {
-            wgn::wgpu_render_pass_set_blend_color(self.id.as_mut().unwrap(), &color);
+    /*
+        pub fn set_blend_color(&mut self, color: Color) {
+            unsafe {
+                wgn::wgpu_render_pass_set_blend_color(self.id.as_mut().unwrap(), &color);
+            }
         }
-    }
 
-    /// Sets the active index buffer.
-    ///
-    /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
-    /// use `buffer` as the source index buffer.
-    ///
-    /// If `size == 0`, the remaining part of the buffer is considered.
-    pub fn set_index_buffer(
-        &mut self,
-        buffer: &'a Buffer,
-        offset: BufferAddress,
-        size: BufferAddress,
-    ) {
-        unsafe {
-            wgn::wgpu_render_pass_set_index_buffer(
-                self.id.as_mut().unwrap(),
-                buffer.id,
-                offset,
-                size,
-            );
+        /// Sets the active index buffer.
+        ///
+        /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
+        /// use `buffer` as the source index buffer.
+        ///
+        /// If `size == 0`, the remaining part of the buffer is considered.
+        pub fn set_index_buffer(
+            &mut self,
+            buffer: &'a Buffer,
+            offset: BufferAddress,
+            size: BufferAddress,
+        ) {
+            unsafe {
+                wgn::wgpu_render_pass_set_index_buffer(
+                    self.id.as_mut().unwrap(),
+                    buffer.id,
+                    offset,
+                    size,
+                );
+            }
         }
-    }
+    */
 
     /// Assign a vertex buffer to a slot.
     ///
@@ -1362,67 +1058,54 @@ impl<'a> RenderPass<'a> {
         offset: BufferAddress,
         size: BufferAddress,
     ) {
-        unsafe {
-            wgn::wgpu_render_pass_set_vertex_buffer(
-                self.id.as_mut().unwrap(),
-                slot,
-                buffer.id,
-                offset,
-                size,
-            )
-        };
+        backend::render_pass_set_vertex_buffer(&self.id, slot, buffer, offset, size)
     }
 
-    /// Sets the scissor region.
-    ///
-    /// Subsequent draw calls will discard any fragments that fall outside this region.
-    pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
-        unsafe {
-            wgn::wgpu_render_pass_set_scissor_rect(self.id.as_mut().unwrap(), x, y, w, h);
+    /*
+        /// Sets the scissor region.
+        ///
+        /// Subsequent draw calls will discard any fragments that fall outside this region.
+        pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
+            unsafe {
+                wgn::wgpu_render_pass_set_scissor_rect(self.id.as_mut().unwrap(), x, y, w, h);
+            }
         }
-    }
 
-    /// Sets the viewport region.
-    ///
-    /// Subsequent draw calls will draw any fragments in this region.
-    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
-        unsafe {
-            wgn::wgpu_render_pass_set_viewport(
-                self.id.as_mut().unwrap(),
-                x,
-                y,
-                w,
-                h,
-                min_depth,
-                max_depth,
-            );
+        /// Sets the viewport region.
+        ///
+        /// Subsequent draw calls will draw any fragments in this region.
+        pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
+            unsafe {
+                wgn::wgpu_render_pass_set_viewport(
+                    self.id.as_mut().unwrap(),
+                    x,
+                    y,
+                    w,
+                    h,
+                    min_depth,
+                    max_depth,
+                );
+            }
         }
-    }
 
-    /// Sets the stencil reference.
-    ///
-    /// Subsequent stencil tests will test against this value.
-    pub fn set_stencil_reference(&mut self, reference: u32) {
-        unsafe {
-            wgn::wgpu_render_pass_set_stencil_reference(self.id.as_mut().unwrap(), reference);
+        /// Sets the stencil reference.
+        ///
+        /// Subsequent stencil tests will test against this value.
+        pub fn set_stencil_reference(&mut self, reference: u32) {
+            unsafe {
+                wgn::wgpu_render_pass_set_stencil_reference(self.id.as_mut().unwrap(), reference);
+            }
         }
-    }
+    */
 
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        unsafe {
-            wgn::wgpu_render_pass_draw(
-                self.id.as_mut().unwrap(),
-                vertices.end - vertices.start,
-                instances.end - instances.start,
-                vertices.start,
-                instances.start,
-            );
-        }
+        backend::render_pass_draw(&self.id, vertices, instances)
     }
 
+    /*
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
@@ -1496,14 +1179,13 @@ impl<'a> RenderPass<'a> {
             );
         }
     }
+    */
 }
 
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            unsafe {
-                wgn::wgpu_render_pass_end_pass(self.id);
-            }
+            backend::render_pass_end_pass(&self.id);
         }
     }
 }
@@ -1516,31 +1198,19 @@ impl<'a> ComputePass<'a> {
         bind_group: &'a BindGroup,
         offsets: &[DynamicOffset],
     ) {
-        unsafe {
-            wgn::wgpu_compute_pass_set_bind_group(
-                self.id.as_mut().unwrap(),
-                index,
-                bind_group.id,
-                offsets.as_ptr(),
-                offsets.len(),
-            );
-        }
+        backend::compute_pass_set_bind_group(&self.id, index, &bind_group.id, offsets);
     }
 
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
-        unsafe {
-            wgn::wgpu_compute_pass_set_pipeline(self.id.as_mut().unwrap(), pipeline.id);
-        }
+        backend::compute_pass_set_pipeline(&self.id, &pipeline.id);
     }
 
     /// Dispatches compute work operations.
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        unsafe {
-            wgn::wgpu_compute_pass_dispatch(self.id.as_mut().unwrap(), x, y, z);
-        }
+        backend::compute_pass_dispatch(&self.id, x, y, z);
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
@@ -1549,22 +1219,14 @@ impl<'a> ComputePass<'a> {
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
-        unsafe {
-            wgn::wgpu_compute_pass_dispatch_indirect(
-                self.id.as_mut().unwrap(),
-                indirect_buffer.id,
-                indirect_offset,
-            );
-        }
+        backend::compute_pass_dispatch_indirect(&self.id, &indirect_buffer.id, indirect_offset);
     }
 }
 
 impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            unsafe {
-                wgn::wgpu_compute_pass_end_pass(self.id);
-            }
+            backend::compute_pass_end_pass(&self.id);
         }
     }
 }
@@ -1572,25 +1234,14 @@ impl<'a> Drop for ComputePass<'a> {
 impl Queue {
     /// Submits a series of finished command buffers for execution.
     pub fn submit(&self, command_buffers: &[CommandBuffer]) {
-        let temp_command_buffers = command_buffers
-            .iter()
-            .map(|cb| cb.id)
-            .collect::<SmallVec<[_; 4]>>();
-
-        unsafe {
-            wgn::wgpu_queue_submit(
-                self.id,
-                temp_command_buffers.as_ptr(),
-                command_buffers.len(),
-            )
-        };
+        backend::queue_submit(&self.id, command_buffers);
     }
 }
 
 impl Drop for SwapChainOutput {
     fn drop(&mut self) {
         if !thread::panicking() {
-            wgn::wgpu_swap_chain_present(self.swap_chain_id);
+            backend::swap_chain_present(&self.swap_chain_id);
         }
     }
 }
@@ -1606,28 +1257,12 @@ impl SwapChain {
     /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
     pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, TimeOut> {
-        let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
-        match output.view_id {
+        match backend::swap_chain_get_next_texture(&self.id) {
             Some(id) => Ok(SwapChainOutput {
                 view: TextureView { id, owned: false },
                 swap_chain_id: self.id,
             }),
             None => Err(TimeOut),
-        }
-    }
-}
-
-struct OwnedLabel(Option<CString>);
-
-impl OwnedLabel {
-    fn new(text: Option<&str>) -> Self {
-        Self(text.map(|t| CString::new(t).expect("invalid label")))
-    }
-
-    fn as_ptr(&self) -> *const std::os::raw::c_char {
-        match self.0 {
-            Some(ref c_string) => c_string.as_ptr(),
-            None => ptr::null(),
         }
     }
 }

@@ -33,6 +33,19 @@ The `hello-triangle` and `hello-compute` examples show bare-bones setup without 
 cargo run --example hello-compute 1 2 3 4
 ```
 
+#### Run Examples on the Web (`wasm32-unknown-unknown`)
+
+To run examples on the `wasm32-unknown-unknown` target, first build the example as usual, then run `wasm-bindgen`:
+
+```bash
+# Install or update wasm-bindgen-cli
+cargo install -f wasm-bindgen-cli
+# Build with the wasm target
+RUSTFLAGS=--cfg=web_sys_unstable_apis cargo build --target wasm32-unknown-unknown --example hello-triangle
+# Generate bindings in a `target/generated` directory
+wasm-bindgen --out-dir target/generated --web target/wasm32-unknown-unknown/debug/examples/hello-triangle.wasm
+```
+
 ## Friends
 
 Shout out to the following projects that work best with wgpu-rs:

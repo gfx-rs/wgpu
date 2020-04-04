@@ -23,13 +23,13 @@ default = []
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
 vulkan = ["wgn/vulkan-portability"]
 
-[dependencies.wgn]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgn]
 package = "wgpu-native"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
 rev = "49dbe08f37f8396cff0d6672667a48116ec487f5"
 
-[dependencies.wgc]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.wgc]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
@@ -49,11 +49,10 @@ parking_lot = "0.10"
 
 [dev-dependencies]
 cgmath = "0.17"
-env_logger = "0.7"
-glsl-to-spirv = "0.1"
+#glsl-to-spirv = "0.1"
 log = "0.4"
 png = "0.15"
-winit = "0.22"
+winit = { version = "0.22", features = ["web-sys"] }
 rand = "0.7.2"
 bytemuck = "1"
 futures = "0.3"
@@ -76,3 +75,93 @@ test = true
 #gfx-backend-dx11 = { version = "0.5.0", path = "../gfx/src/backend/dx11" }
 #gfx-descriptor = { version = "0.1.0", path = "../gfx-extras/gfx-descriptor" }
 #gfx-memory = { version = "0.1.0", path = "../gfx-extras/gfx-memory" }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+env_logger = "0.7"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.59"
+web-sys = { version = "0.3.36", features = [
+    "Document",
+    "Navigator",
+    "Node",
+    "NodeList",
+    "Gpu",
+    "GpuAdapter",
+    "GpuBindGroup",
+    "GpuBindGroupBinding",
+    "GpuBindGroupDescriptor",
+    "GpuBindGroupLayout",
+    "GpuBindGroupLayoutBinding",
+    "GpuBindGroupLayoutDescriptor",
+    "GpuBlendDescriptor",
+    "GpuBlendFactor",
+    "GpuBlendOperation",
+    "GpuBindingType",
+    "GpuBuffer",
+    "GpuBufferBinding",
+    "GpuBufferDescriptor",
+    "GpuCanvasContext",
+    "GpuColorDict",
+    "GpuColorStateDescriptor",
+    "GpuCommandBuffer",
+    "GpuCommandBufferDescriptor",
+    "GpuCommandEncoder",
+    "GpuCommandEncoderDescriptor",
+    "GpuCompareFunction",
+    "GpuComputePassDescriptor",
+    "GpuComputePassEncoder",
+    "GpuComputePipeline",
+    "GpuComputePipelineDescriptor",
+    "GpuCullMode",
+    "GpuDepthStencilStateDescriptor",
+    "GpuDevice",
+    "GpuDeviceDescriptor",
+    "GpuExtent3dDict",
+    "GpuFrontFace",
+    "GpuIndexFormat",
+    "GpuInputStepMode",
+    "GpuLimits",
+    "GpuLoadOp",
+    "GpuPipelineLayout",
+    "GpuPipelineLayoutDescriptor",
+    "GpuPowerPreference",
+    "GpuPrimitiveTopology",
+    "GpuProgrammableStageDescriptor",
+    "GpuQueue",
+    "GpuRasterizationStateDescriptor",
+    "GpuRenderPassColorAttachmentDescriptor",
+    "GpuRenderPassDepthStencilAttachmentDescriptor",
+    "GpuRenderPassDescriptor",
+    "GpuRenderPassEncoder",
+    "GpuRenderPipeline",
+    "GpuRenderPipelineDescriptor",
+    "GpuRequestAdapterOptions",
+    "GpuSampler",
+    "GpuShaderModule",
+    "GpuShaderModuleDescriptor",
+    "GpuStencilOperation",
+    "GpuStencilStateFaceDescriptor",
+    "GpuStoreOp",
+    "GpuSwapChain",
+    "GpuSwapChainDescriptor",
+    "GpuTexture",
+    "GpuTextureDescriptor",
+    "GpuTextureDimension",
+    "GpuTextureFormat",
+    "GpuTextureViewDimension",
+    "GpuTextureView",
+    "GpuVertexAttributeDescriptor",
+    "GpuVertexBufferLayoutDescriptor",
+    "GpuVertexFormat",
+    "GpuVertexStateDescriptor",
+    "GpuVertexAttributeDescriptor",
+    "HtmlCanvasElement",
+    "Window",
+]}
+js-sys = "0.3.36"
+wasm-bindgen-futures = "0.4.9"
+
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+console_error_panic_hook = "0.1.6"
+console_log = "0.1.2"
