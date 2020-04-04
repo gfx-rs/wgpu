@@ -42,7 +42,7 @@ use wgt::{
 };
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
-use peek_poke::{Peek, PeekCopy, Poke};
+use peek_poke::{Peek, PeekPoke, Poke};
 
 use std::{
     borrow::Borrow,
@@ -67,7 +67,7 @@ pub struct RenderPassDescriptor<'a> {
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachmentDescriptor>,
 }
 
-#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
+#[derive(Clone, Copy, Debug, Default, PeekPoke)]
 pub struct Rect<T> {
     pub x: T,
     pub y: T,
@@ -75,7 +75,7 @@ pub struct Rect<T> {
     pub h: T,
 }
 
-#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
+#[derive(Clone, Copy, Debug, PeekPoke)]
 enum RenderCommand {
     SetBindGroup {
         index: u8,
@@ -126,6 +126,13 @@ enum RenderCommand {
         offset: BufferAddress,
     },
     End,
+}
+
+// required for PeekPoke
+impl Default for RenderCommand {
+    fn default() -> Self {
+        RenderCommand::End
+    }
 }
 
 impl super::RawPass {
@@ -334,7 +341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut targets: RawRenderTargets = unsafe { mem::zeroed() };
         assert!(unsafe { peeker.add(RawRenderTargets::max_size()) <= raw_data_end });
-        peeker = unsafe { targets.peek_from(peeker) };
+        peeker = unsafe { RawRenderTargets::peek_from(peeker, &mut targets) };
 
         let color_attachments = targets.colors
             .iter()
@@ -829,7 +836,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         loop {
             assert!(unsafe { peeker.add(RenderCommand::max_size()) } <= raw_data_end);
-            peeker = unsafe { command.peek_from(peeker) };
+            peeker = unsafe { RenderCommand::peek_from(peeker, &mut command) };
             match command {
                 RenderCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
                     let (new_peeker, offsets) = unsafe {
@@ -1190,7 +1197,7 @@ pub mod render_ffi {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
-            phantom_offsets: PhantomSlice::new(),
+            phantom_offsets: PhantomSlice::default(),
         });
         pass.encode_slice(
             slice::from_raw_parts(offsets, offset_length),

@@ -32,7 +32,7 @@ gfx-backend-empty = "0.5"
 gfx-descriptor = "0.1"
 gfx-memory = "0.1"
 parking_lot = "0.10"
-peek-poke = { git = "https://github.com/kvark/peek-poke", rev = "969bd7fe2be1a83f87916dc8b388c63cfd457075" }
+peek-poke = "0.2"
 smallvec = "1"
 vec_map = "0.8"
 

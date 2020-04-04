@@ -6,7 +6,7 @@ use std::{io, slice, ptr};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "peek-poke")]
-use peek_poke::{PeekCopy, Poke};
+use peek_poke::{PeekPoke};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -621,7 +621,7 @@ pub struct SwapChainDescriptor {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum LoadOp {
     Clear = 0,
     Load = 1,
@@ -630,7 +630,7 @@ pub enum LoadOp {
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum StoreOp {
     Clear = 0,
     Store = 1,
@@ -639,6 +639,7 @@ pub enum StoreOp {
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct RenderPassColorAttachmentDescriptorBase<T> {
     pub attachment: T,
     pub resolve_target: Option<T>,
@@ -650,7 +651,7 @@ pub struct RenderPassColorAttachmentDescriptorBase<T> {
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     pub attachment: T,
     pub depth_load_op: LoadOp,
@@ -662,9 +663,9 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct Color {
     pub r: f64,
     pub g: f64,
