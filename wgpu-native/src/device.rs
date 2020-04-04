@@ -13,7 +13,7 @@ use std::{marker::PhantomData, slice};
 use objc::{msg_send, runtime::Object, sel, sel_impl};
 
 pub type RequestAdapterCallback =
-    unsafe extern "C" fn(id: id::AdapterId, userdata: *mut std::ffi::c_void);
+    unsafe extern "C" fn(id: Option<id::AdapterId>, userdata: *mut std::ffi::c_void);
 
 pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id::SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
@@ -162,10 +162,7 @@ pub unsafe extern "C" fn wgpu_request_adapter_async(
         &desc.cloned().unwrap_or_default(),
         core::instance::AdapterInputs::Mask(mask, || PhantomData),
     );
-    callback(
-        id.unwrap_or(id::AdapterId::ERROR),
-        userdata,
-    );
+    callback(id, userdata);
 }
 
 #[no_mangle]
@@ -415,7 +412,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
 ) -> core::swap_chain::SwapChainOutput {
     gfx_select!(swap_chain_id => GLOBAL.swap_chain_get_next_texture(swap_chain_id, PhantomData))
         .unwrap_or(core::swap_chain::SwapChainOutput {
-            view_id: id::TextureViewId::ERROR,
+            view_id: None,
         })
 }
 

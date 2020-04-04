@@ -33,14 +33,14 @@ use hal::{
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
-    pub compatible_surface: SurfaceId,
+    pub compatible_surface: Option<SurfaceId>,
 }
 
 impl Default for RequestAdapterOptions {
     fn default() -> Self {
         RequestAdapterOptions {
             power_preference: PowerPreference::Default,
-            compatible_surface: SurfaceId::ERROR,
+            compatible_surface: None,
         }
     }
 }
@@ -285,11 +285,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let instance = &self.instance;
         let mut token = Token::root();
         let (surface_guard, mut token) = self.surfaces.read(&mut token);
-        let compatible_surface = if desc.compatible_surface != SurfaceId::ERROR {
-            Some(&surface_guard[desc.compatible_surface])
-        } else {
-            None
-        };
+        let compatible_surface = desc.compatible_surface.map(|id| &surface_guard[id]);
         let mut device_types = Vec::new();
 
         let id_vulkan = inputs.find(Backend::Vulkan);

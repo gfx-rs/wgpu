@@ -85,7 +85,7 @@ pub(crate) fn swap_chain_descriptor_to_hal(
 #[repr(C)]
 #[derive(Debug)]
 pub struct SwapChainOutput {
-    pub view_id: TextureViewId,
+    pub view_id: Option<TextureViewId>,
 }
 
 #[derive(Debug)]
@@ -150,7 +150,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             life_guard: LifeGuard::new(),
         };
         let ref_count = view.life_guard.add_ref();
-        let view_id = hub
+        let id = hub
             .texture_views
             .register_identity(view_id_in, view, &mut token);
 
@@ -159,11 +159,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "Swap chain image is already acquired"
         );
         sc.acquired_view_id = Some(Stored {
-            value: view_id,
+            value: id,
             ref_count,
         });
 
-        Ok(SwapChainOutput { view_id })
+        Ok(SwapChainOutput { view_id: Some(id) })
     }
 
     pub fn swap_chain_present<B: GfxBackend>(&self, swap_chain_id: SwapChainId) {

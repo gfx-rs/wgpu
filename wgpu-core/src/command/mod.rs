@@ -35,7 +35,6 @@ use std::{
     slice,
     thread::ThreadId,
 };
-use wgt::RenderPassColorAttachmentDescriptorBase;
 
 
 #[derive(Clone, Copy, Debug, peek_poke::PeekCopy, peek_poke::Poke)]
@@ -197,14 +196,35 @@ impl<B: GfxBackend> CommandBuffer<B> {
     }
 }
 
-pub type RawRenderPassColorAttachmentDescriptor =
-    RenderPassColorAttachmentDescriptorBase<id::TextureViewId, id::TextureViewId>;
+#[repr(C)]
+#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
+struct PassComponent<T> {
+    load_op: wgt::LoadOp,
+    store_op: wgt::StoreOp,
+    clear_value: T,
+}
 
 #[repr(C)]
 #[derive(peek_poke::PeekCopy, peek_poke::Poke)]
-pub struct RawRenderTargets {
-    pub colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
-    pub depth_stencil: RenderPassDepthStencilAttachmentDescriptor,
+struct RawRenderPassColorAttachmentDescriptor {
+    attachment: u64,
+    resolve_target: u64,
+    component: PassComponent<wgt::Color>,
+}
+
+#[repr(C)]
+#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
+struct RawRenderPassDepthStencilAttachmentDescriptor {
+    attachment: u64,
+    depth: PassComponent<f32>,
+    stencil: PassComponent<u32>,
+}
+
+#[repr(C)]
+#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
+struct RawRenderTargets {
+    colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
+    depth_stencil: RawRenderPassDepthStencilAttachmentDescriptor,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {

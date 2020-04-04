@@ -5,8 +5,10 @@
 use crate::{
     command::{
         bind::{Binder, LayoutChange},
+        PassComponent,
         PhantomSlice,
         RawRenderPassColorAttachmentDescriptor,
+        RawRenderPassDepthStencilAttachmentDescriptor,
         RawRenderTargets,
     },
     conv,
@@ -52,18 +54,15 @@ use std::{
     slice,
 };
 
-//Note: this could look better if `cbindgen` wasn't confused by &T used in place of
-// a generic parameter, it's not able to manage
-pub type OptionRef<'a, T> = Option<&'a T>;
-pub type RenderPassColorAttachmentDescriptor<'a> =
-    RenderPassColorAttachmentDescriptorBase<id::TextureViewId, OptionRef<'a, id::TextureViewId>>;
+pub type RenderPassColorAttachmentDescriptor =
+    RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
 pub type RenderPassDepthStencilAttachmentDescriptor =
     RenderPassDepthStencilAttachmentDescriptorBase<id::TextureViewId>;
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct RenderPassDescriptor<'a> {
-    pub color_attachments: *const RenderPassColorAttachmentDescriptor<'a>,
+    pub color_attachments: *const RenderPassColorAttachmentDescriptor,
     pub color_attachments_length: usize,
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachmentDescriptor>,
 }
@@ -133,22 +132,35 @@ impl super::RawPass {
     pub unsafe fn new_render(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
         let mut pass = Self::from_vec(Vec::<RenderCommand>::with_capacity(1), parent_id);
 
-        let mut targets = RawRenderTargets {
-            depth_stencil: desc.depth_stencil_attachment
-                .cloned()
-                .unwrap_or_else(|| mem::zeroed()),
-            colors: mem::zeroed(),
-        };
+        let mut targets: RawRenderTargets = mem::zeroed();
+        if let Some(ds) = desc.depth_stencil_attachment {
+            targets.depth_stencil = RawRenderPassDepthStencilAttachmentDescriptor {
+                attachment: ds.attachment.into_raw(),
+                depth: PassComponent {
+                    load_op: ds.depth_load_op,
+                    store_op: ds.depth_store_op,
+                    clear_value: ds.clear_depth,
+                },
+                stencil: PassComponent {
+                    load_op: ds.stencil_load_op,
+                    store_op: ds.stencil_store_op,
+                    clear_value: ds.clear_stencil,
+                },
+            };
+        }
+
         for (color, at) in targets.colors
             .iter_mut()
             .zip(slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length))
         {
             *color = RawRenderPassColorAttachmentDescriptor {
-                attachment: at.attachment,
-                resolve_target: at.resolve_target.map_or(id::TextureViewId::ERROR, |rt| *rt),
-                load_op: at.load_op,
-                store_op: at.store_op,
-                clear_color: at.clear_color,
+                attachment: at.attachment.into_raw(),
+                resolve_target: at.resolve_target.map_or(0, |id| id.into_raw()),
+                component: PassComponent {
+                    load_op: at.load_op,
+                    store_op: at.store_op,
+                    clear_value: at.clear_color,
+                },
             };
         }
 
@@ -321,25 +333,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let color_attachments = targets.colors
             .iter()
-            .take_while(|at| at.attachment != id::TextureViewId::ERROR)
+            .take_while(|at| at.attachment != 0)
             .map(|at| {
                 RenderPassColorAttachmentDescriptor {
-                    attachment: at.attachment,
-                    resolve_target: if at.resolve_target == id::TextureViewId::ERROR {
-                        None
-                    } else {
-                        Some(&at.resolve_target)
-                    },
-                    load_op: at.load_op,
-                    store_op: at.store_op,
-                    clear_color: at.clear_color,
+                    attachment: id::TextureViewId::from_raw(at.attachment).unwrap(),
+                    resolve_target: id::TextureViewId::from_raw(at.resolve_target),
+                    load_op: at.component.load_op,
+                    store_op: at.component.store_op,
+                    clear_color: at.component.clear_value,
                 }
             })
             .collect::<ArrayVec<[_; MAX_COLOR_TARGETS]>>();
-        let depth_stencil_attachment = if targets.depth_stencil.attachment == id::TextureViewId::ERROR {
+        let depth_stencil_attachment_body;
+        let depth_stencil_attachment = if targets.depth_stencil.attachment == 0 {
             None
         } else {
-            Some(&targets.depth_stencil)
+            let at = &targets.depth_stencil;
+            depth_stencil_attachment_body = RenderPassDepthStencilAttachmentDescriptor {
+                attachment: id::TextureViewId::from_raw(at.attachment).unwrap(),
+                depth_load_op: at.depth.load_op,
+                depth_store_op: at.depth.store_op,
+                clear_depth: at.depth.clear_value,
+                stencil_load_op: at.stencil.load_op,
+                stencil_store_op: at.stencil.store_op,
+                clear_stencil: at.stencil.clear_value,
+            };
+            Some(&depth_stencil_attachment_body)
         };
 
         let (context, sample_count) = {
@@ -485,7 +504,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     });
                 }
 
-                for &resolve_target in color_attachments
+                for resolve_target in color_attachments
                     .iter()
                     .flat_map(|at| at.resolve_target)
                 {
@@ -642,7 +661,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 resolves: color_attachments
                     .iter()
                     .filter_map(|at| at.resolve_target)
-                    .cloned()
                     .collect(),
                 depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
             };
@@ -774,7 +792,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 resolves: color_attachments
                     .iter()
                     .filter_map(|at| at.resolve_target)
-                    .map(|resolve| view_guard[*resolve].format)
+                    .map(|resolve| view_guard[resolve].format)
                     .collect(),
                 depth_stencil: depth_stencil_attachment.map(|at| view_guard[at.attachment].format),
             };
