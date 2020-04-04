@@ -1,7 +1,8 @@
 #version 450
 
-// this shader expects NUM_PARTICLES and PARTICLES_PER_GROUP
-// defines to be inserted by main.rs
+// These should match the Rust constants defined in main.rs
+#define NUM_PARTICLES 1500
+#define PARTICLES_PER_GROUP 64
 
 layout(local_size_x = PARTICLES_PER_GROUP) in;
 
