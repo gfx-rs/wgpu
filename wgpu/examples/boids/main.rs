@@ -6,8 +6,6 @@ extern crate rand;
 #[path = "../framework.rs"]
 mod framework;
 
-use std::fmt::Write;
-
 use wgpu::vertex_attr_array;
 
 // number of boid particles to simulate
@@ -35,34 +33,19 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
-        // loads comp shader source and adds shared constants as defines to comp shader
-
-        const BOIDS_SOURCE: &str = include_str!("boids.comp");
-        const HEADER: &str = "#version 450";
-        assert_eq!(BOIDS_SOURCE.lines().next(), Some(HEADER));
-
-        let mut boids_source_str = String::from(HEADER);
-        write!(
-            boids_source_str,
-            "\n#define NUM_PARTICLES {}\n#define PARTICLES_PER_GROUP {}",
-            NUM_PARTICLES, PARTICLES_PER_GROUP
-        )
-        .unwrap();
-        boids_source_str += &BOIDS_SOURCE[HEADER.len()..];
-
         // load (and compile) shaders and create shader modules
 
-        let boids = framework::load_glsl(&boids_source_str, framework::ShaderStage::Compute);
-        let boids_module = device.create_shader_module(&boids);
+        let boids = include_bytes!("boids.comp.spv");
+        let boids_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&boids[..])).unwrap());
 
-        let vs = framework::load_glsl(include_str!("shader.vert"), framework::ShaderStage::Vertex);
-        let vs_module = device.create_shader_module(&vs);
+        let vs = include_bytes!("shader.vert.spv");
+        let vs_module =
+            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
 
-        let fs = framework::load_glsl(
-            include_str!("shader.frag"),
-            framework::ShaderStage::Fragment,
-        );
-        let fs_module = device.create_shader_module(&fs);
+        let fs = include_bytes!("shader.frag.spv");
+        let fs_module =
+            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
 
         // create compute bind layout group and compute pipeline layout
 
