@@ -1,7 +1,8 @@
 use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType, BufferDescriptor,
     CommandEncoderDescriptor, ComputePipelineDescriptor, PipelineLayoutDescriptor,
-    ProgrammableStageDescriptor, RenderPipelineDescriptor, TextureDescriptor, TextureViewDimension,
+    ProgrammableStageDescriptor, RenderPipelineDescriptor, SamplerDescriptor, TextureDescriptor,
+    TextureViewDimension,
 };
 
 use std::ops::Range;
@@ -474,11 +475,49 @@ fn map_extent_3d(extent: wgt::Extent3d) -> web_sys::GpuExtent3dDict {
     web_sys::GpuExtent3dDict::new(extent.depth, extent.height, extent.width)
 }
 
+fn map_origin_3d(origin: wgt::Origin3d) -> web_sys::GpuOrigin3dDict {
+    let mut mapped = web_sys::GpuOrigin3dDict::new();
+    mapped.x(origin.x);
+    mapped.y(origin.y);
+    mapped.z(origin.z);
+    mapped
+}
+
 fn map_texture_dimension(texture_dimension: wgt::TextureDimension) -> web_sys::GpuTextureDimension {
     match texture_dimension {
         wgt::TextureDimension::D1 => web_sys::GpuTextureDimension::N1d,
         wgt::TextureDimension::D2 => web_sys::GpuTextureDimension::N2d,
         wgt::TextureDimension::D3 => web_sys::GpuTextureDimension::N3d,
+    }
+}
+
+fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> web_sys::GpuBufferCopyView {
+    let mut mapped =
+        web_sys::GpuBufferCopyView::new(&view.buffer.id, view.rows_per_image, view.bytes_per_row);
+    mapped.offset(view.offset as f64);
+    mapped
+}
+
+fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> web_sys::GpuTextureCopyView {
+    let mut mapped = web_sys::GpuTextureCopyView::new(&view.texture.id);
+    mapped.array_layer(view.array_layer);
+    mapped.mip_level(view.mip_level);
+    mapped.origin(&map_origin_3d(view.origin));
+    mapped
+}
+
+fn map_filter_mode(mode: wgt::FilterMode) -> web_sys::GpuFilterMode {
+    match mode {
+        wgt::FilterMode::Nearest => web_sys::GpuFilterMode::Nearest,
+        wgt::FilterMode::Linear => web_sys::GpuFilterMode::Linear,
+    }
+}
+
+fn map_address_mode(mode: wgt::AddressMode) -> web_sys::GpuAddressMode {
+    match mode {
+        wgt::AddressMode::ClampToEdge => web_sys::GpuAddressMode::ClampToEdge,
+        wgt::AddressMode::Repeat => web_sys::GpuAddressMode::Repeat,
+        wgt::AddressMode::MirrorRepeat => web_sys::GpuAddressMode::MirrorRepeat,
     }
 }
 
@@ -558,7 +597,7 @@ pub(crate) struct CreateBufferMappedDetail {
     array_buffer: js_sys::ArrayBuffer,
 }
 
-pub(crate) fn create_buffer_mapped<'a>(
+pub(crate) fn device_create_buffer_mapped<'a>(
     device: &DeviceId,
     desc: &BufferDescriptor,
 ) -> crate::CreateBufferMapped<'a> {
@@ -581,7 +620,7 @@ pub(crate) fn create_buffer_mapped<'a>(
 
 pub type BufferDetail = ();
 
-pub(crate) fn create_buffer_mapped_finish(
+pub(crate) fn device_create_buffer_mapped_finish(
     create_buffer_mapped: crate::CreateBufferMapped<'_>,
 ) -> crate::Buffer {
     unsafe {
@@ -614,7 +653,7 @@ pub(crate) fn buffer_unmap(buffer: &BufferId) {
     buffer.unmap();
 }
 
-pub(crate) fn create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate::Buffer {
+pub(crate) fn device_create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate::Buffer {
     let mapped_desc = web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
     crate::Buffer {
         id: device.create_buffer(&mapped_desc),
@@ -622,7 +661,7 @@ pub(crate) fn create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate
     }
 }
 
-pub(crate) fn create_texture(device: &DeviceId, desc: &TextureDescriptor) -> TextureId {
+pub(crate) fn device_create_texture(device: &DeviceId, desc: &TextureDescriptor) -> TextureId {
     let extent = map_extent_3d(desc.size);
     let mut mapped_desc = web_sys::GpuTextureDescriptor::new(
         map_texture_format(desc.format),
@@ -637,6 +676,22 @@ pub(crate) fn create_texture(device: &DeviceId, desc: &TextureDescriptor) -> Tex
     device.create_texture(&mapped_desc)
 }
 
+pub(crate) fn device_create_sampler(device: &DeviceId, desc: &SamplerDescriptor) -> SamplerId {
+    let mut mapped_desc = web_sys::GpuSamplerDescriptor::new();
+    mapped_desc.address_mode_u(map_address_mode(desc.address_mode_u));
+    mapped_desc.address_mode_v(map_address_mode(desc.address_mode_v));
+    mapped_desc.address_mode_w(map_address_mode(desc.address_mode_w));
+    if let Some(compare) = map_compare_function(desc.compare) {
+        mapped_desc.compare(compare);
+    }
+    mapped_desc.lod_max_clamp(desc.lod_max_clamp);
+    mapped_desc.lod_min_clamp(desc.lod_min_clamp);
+    mapped_desc.mag_filter(map_filter_mode(desc.mag_filter));
+    mapped_desc.min_filter(map_filter_mode(desc.min_filter));
+    mapped_desc.mipmap_filter(map_filter_mode(desc.mipmap_filter));
+    device.create_sampler_with_descriptor(&mapped_desc)
+}
+
 pub(crate) fn create_command_encoder(
     device: &DeviceId,
     _desc: &CommandEncoderDescriptor,
@@ -645,7 +700,7 @@ pub(crate) fn create_command_encoder(
     device.create_command_encoder_with_descriptor(&mapped_desc)
 }
 
-pub(crate) fn copy_buffer_to_buffer(
+pub(crate) fn command_encoder_copy_buffer_to_buffer(
     command_encoder: &CommandEncoderId,
     source: &crate::Buffer,
     source_offset: wgt::BufferAddress,
@@ -659,6 +714,19 @@ pub(crate) fn copy_buffer_to_buffer(
         &destination.id,
         destination_offset as f64,
         copy_size as f64,
+    );
+}
+
+pub(crate) fn command_encoder_copy_buffer_to_texture(
+    command_encoder: &CommandEncoderId,
+    source: crate::BufferCopyView,
+    destination: crate::TextureCopyView,
+    copy_size: wgt::Extent3d,
+) {
+    command_encoder.copy_buffer_to_texture_with_gpu_extent_3d_dict(
+        &map_buffer_copy_view(source),
+        &map_texture_copy_view(destination),
+        &map_extent_3d(copy_size),
     );
 }
 
@@ -752,7 +820,9 @@ impl BufferReadMappingDetail {
     }
 }
 
-pub(crate) fn create_surface<W: raw_window_handle::HasRawWindowHandle>(window: &W) -> SurfaceId {
+pub(crate) fn device_create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    window: &W,
+) -> SurfaceId {
     let handle = window.raw_window_handle();
     let canvas_attribute = match handle {
         raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
@@ -877,6 +947,19 @@ pub(crate) fn render_pass_set_bind_group(
     );
 }
 
+pub(crate) fn render_pass_set_index_buffer<'a>(
+    render_pass: &RenderPassEncoderId,
+    buffer: &'a crate::Buffer,
+    offset: wgt::BufferAddress,
+    _size: wgt::BufferAddress,
+) {
+    render_pass.set_index_buffer_with_f64(
+        &buffer.id,
+        offset as f64,
+        // TODO: size,
+    );
+}
+
 pub(crate) fn render_pass_set_vertex_buffer<'a>(
     render_pass: &RenderPassEncoderId,
     slot: u32,
@@ -903,6 +986,21 @@ pub(crate) fn render_pass_draw(
         vertices.start,
         instances.start,
     )
+}
+
+pub(crate) fn render_pass_draw_indexed(
+    render_pass: &RenderPassEncoderId,
+    indices: Range<u32>,
+    base_vertex: i32,
+    instances: Range<u32>,
+) {
+    render_pass.draw_indexed(
+        indices.end - indices.start,
+        instances.end - instances.start,
+        indices.start,
+        base_vertex,
+        instances.start,
+    );
 }
 
 pub(crate) fn render_pass_end_pass(render_pass: &RenderPassEncoderId) {
