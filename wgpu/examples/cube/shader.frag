@@ -8,5 +8,5 @@ layout(set = 0, binding = 2) uniform sampler s_Color;
 void main() {
     vec4 tex = texture(sampler2D(t_Color, s_Color), v_TexCoord);
     float mag = length(v_TexCoord-vec2(0.5));
-    o_Target = mix(tex, vec4(0.0), mag*mag);
+    o_Target = vec4(mix(tex.xyz, vec3(0.0), mag*mag), 1.0);
 }

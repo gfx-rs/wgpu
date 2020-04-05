@@ -468,7 +468,6 @@ pub struct SwapChainOutput {
     swap_chain_id: backend::SwapChainId,
 }
 
-/*
 /// A view of a buffer which can be used to copy to or from a texture.
 #[derive(Clone, Debug)]
 pub struct BufferCopyView<'a> {
@@ -488,17 +487,6 @@ pub struct BufferCopyView<'a> {
     pub rows_per_image: u32,
 }
 
-impl BufferCopyView<'_> {
-    fn into_native(self) -> wgc::command::BufferCopyView {
-        wgc::command::BufferCopyView {
-            buffer: self.buffer.id,
-            offset: self.offset,
-            bytes_per_row: self.bytes_per_row,
-            rows_per_image: self.rows_per_image,
-        }
-    }
-}
-
 /// A view of a texture which can be used to copy to or from a buffer or another texture.
 #[derive(Clone, Debug)]
 pub struct TextureCopyView<'a> {
@@ -514,18 +502,6 @@ pub struct TextureCopyView<'a> {
     /// The base texel of the texture in the selected `mip_level`.
     pub origin: Origin3d,
 }
-
-impl<'a> TextureCopyView<'a> {
-    fn into_native(self) -> wgc::command::TextureCopyView {
-        wgc::command::TextureCopyView {
-            texture: self.texture.id,
-            mip_level: self.mip_level,
-            array_layer: self.array_layer,
-            origin: self.origin,
-        }
-    }
-}
-*/
 
 /// A buffer being created, mapped in host memory.
 pub struct CreateBufferMapped<'a> {
@@ -545,7 +521,7 @@ impl CreateBufferMapped<'_> {
 
     /// Unmaps the buffer from host memory and returns a [`Buffer`].
     pub fn finish(self) -> Buffer {
-        backend::create_buffer_mapped_finish(self)
+        backend::device_create_buffer_mapped_finish(self)
     }
 }
 
@@ -553,7 +529,7 @@ impl Surface {
     /// Creates a surface from a raw window handle.
     pub fn create<W: raw_window_handle::HasRawWindowHandle>(window: &W) -> Self {
         Surface {
-            id: backend::create_surface(window),
+            id: backend::device_create_surface(window),
         }
     }
 
@@ -668,7 +644,7 @@ impl Device {
 
     /// Creates a new buffer.
     pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
-        backend::create_buffer(&self.id, desc)
+        backend::device_create_buffer(&self.id, desc)
     }
 
     /// Creates a new buffer and maps it into host-visible memory.
@@ -677,7 +653,7 @@ impl Device {
     /// will not be created until calling [`CreateBufferMapped::finish`].
     pub fn create_buffer_mapped(&self, desc: &BufferDescriptor) -> CreateBufferMapped<'_> {
         assert_ne!(desc.size, 0);
-        backend::create_buffer_mapped(&self.id, desc)
+        backend::device_create_buffer_mapped(&self.id, desc)
     }
 
     /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
@@ -697,21 +673,19 @@ impl Device {
     /// `desc` specifies the general format of the texture.
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
-            id: backend::create_texture(&self.id, desc),
+            id: backend::device_create_texture(&self.id, desc),
             owned: true,
         }
     }
 
-    /*
-        /// Creates a new [`Sampler`].
-        ///
-        /// `desc` specifies the behavior of the sampler.
-        pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
-            Sampler {
-                id: wgn::wgpu_device_create_sampler(self.id, desc),
-            }
+    /// Creates a new [`Sampler`].
+    ///
+    /// `desc` specifies the behavior of the sampler.
+    pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
+        Sampler {
+            id: backend::device_create_sampler(&self.id, desc),
         }
-    */
+    }
 
     /// Create a new [`SwapChain`] which targets `surface`.
     pub fn create_swap_chain(&self, surface: &Surface, desc: &SwapChainDescriptor) -> SwapChain {
@@ -931,7 +905,7 @@ impl CommandEncoder {
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
     ) {
-        backend::copy_buffer_to_buffer(
+        backend::command_encoder_copy_buffer_to_buffer(
             &self.id,
             source,
             source_offset,
@@ -941,36 +915,31 @@ impl CommandEncoder {
         );
     }
 
-    /*
-        /// Copy data from a buffer to a texture.
-        pub fn copy_buffer_to_texture(
-            &mut self,
-            source: BufferCopyView,
-            destination: TextureCopyView,
-            copy_size: Extent3d,
-        ) {
-            wgn::wgpu_command_encoder_copy_buffer_to_texture(
-                self.id,
-                &source.into_native(),
-                &destination.into_native(),
-                copy_size,
-            );
-        }
+    /// Copy data from a buffer to a texture.
+    pub fn copy_buffer_to_texture(
+        &mut self,
+        source: BufferCopyView,
+        destination: TextureCopyView,
+        copy_size: Extent3d,
+    ) {
+        backend::command_encoder_copy_buffer_to_texture(&self.id, source, destination, copy_size);
+    }
 
-        /// Copy data from a texture to a buffer.
-        pub fn copy_texture_to_buffer(
-            &mut self,
-            source: TextureCopyView,
-            destination: BufferCopyView,
-            copy_size: Extent3d,
-        ) {
-            wgn::wgpu_command_encoder_copy_texture_to_buffer(
-                self.id,
-                &source.into_native(),
-                &destination.into_native(),
-                copy_size,
-            );
-        }
+    /*
+    /// Copy data from a texture to a buffer.
+    pub fn copy_texture_to_buffer(
+        &mut self,
+        source: TextureCopyView,
+        destination: BufferCopyView,
+        copy_size: Extent3d,
+    ) {
+        wgn::wgpu_command_encoder_copy_texture_to_buffer(
+            self.id,
+            &source.into_native(),
+            &destination.into_native(),
+            copy_size,
+        );
+    }
 
         /// Copy data from one texture to another.
         pub fn copy_texture_to_texture(
@@ -1008,34 +977,28 @@ impl<'a> RenderPass<'a> {
     }
 
     /*
-        pub fn set_blend_color(&mut self, color: Color) {
-            unsafe {
-                wgn::wgpu_render_pass_set_blend_color(self.id.as_mut().unwrap(), &color);
-            }
-        }
-
-        /// Sets the active index buffer.
-        ///
-        /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
-        /// use `buffer` as the source index buffer.
-        ///
-        /// If `size == 0`, the remaining part of the buffer is considered.
-        pub fn set_index_buffer(
-            &mut self,
-            buffer: &'a Buffer,
-            offset: BufferAddress,
-            size: BufferAddress,
-        ) {
-            unsafe {
-                wgn::wgpu_render_pass_set_index_buffer(
-                    self.id.as_mut().unwrap(),
-                    buffer.id,
-                    offset,
-                    size,
-                );
+            pub fn set_blend_color(&mut self, color: Color) {
+                unsafe {
+                    wgn::wgpu_render_pass_set_blend_color(self.id.as_mut().unwrap(), &color);
+                }
             }
         }
     */
+
+    /// Sets the active index buffer.
+    ///
+    /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
+    /// use `buffer` as the source index buffer.
+    ///
+    /// If `size == 0`, the remaining part of the buffer is considered.
+    pub fn set_index_buffer(
+        &mut self,
+        buffer: &'a Buffer,
+        offset: BufferAddress,
+        size: BufferAddress,
+    ) {
+        backend::render_pass_set_index_buffer(&self.id, buffer, offset, size)
+    }
 
     /// Assign a vertex buffer to a slot.
     ///
@@ -1105,24 +1068,15 @@ impl<'a> RenderPass<'a> {
         backend::render_pass_draw(&self.id, vertices, instances)
     }
 
-    /*
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        unsafe {
-            wgn::wgpu_render_pass_draw_indexed(
-                self.id.as_mut().unwrap(),
-                indices.end - indices.start,
-                instances.end - instances.start,
-                indices.start,
-                base_vertex,
-                instances.start,
-            );
-        }
+        backend::render_pass_draw_indexed(&self.id, indices, base_vertex, instances);
     }
 
+    /*
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].

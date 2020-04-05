@@ -3,7 +3,8 @@ use wgn;
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
     BindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor,
-    PipelineLayoutDescriptor, RenderPipelineDescriptor, TextureDescriptor, TextureViewDimension,
+    PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, TextureDescriptor,
+    TextureViewDimension,
 };
 
 use arrayvec::ArrayVec;
@@ -29,6 +30,24 @@ pub type CommandBufferId = wgc::id::CommandBufferId;
 pub type SurfaceId = wgc::id::SurfaceId;
 pub type SwapChainId = wgc::id::SwapChainId;
 pub type RenderPassEncoderId = wgc::id::RenderPassId;
+
+fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> wgc::command::BufferCopyView {
+    wgc::command::BufferCopyView {
+        buffer: view.buffer.id,
+        offset: view.offset,
+        bytes_per_row: view.bytes_per_row,
+        rows_per_image: view.rows_per_image,
+    }
+}
+
+fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> wgc::command::TextureCopyView {
+    wgc::command::TextureCopyView {
+        texture: view.texture.id,
+        mip_level: view.mip_level,
+        array_layer: view.array_layer,
+        origin: view.origin,
+    }
+}
 
 pub(crate) async fn request_adapter(
     options: &crate::RequestAdapterOptions<'_>,
@@ -284,7 +303,7 @@ pub(crate) fn create_compute_pipeline(
 
 pub(crate) type CreateBufferMappedDetail = BufferDetail;
 
-pub(crate) fn create_buffer_mapped<'a>(
+pub(crate) fn device_create_buffer_mapped<'a>(
     device: &DeviceId,
     desc: &BufferDescriptor,
 ) -> crate::CreateBufferMapped<'a> {
@@ -316,7 +335,7 @@ pub(crate) struct BufferDetail {
     device_id: DeviceId,
 }
 
-pub(crate) fn create_buffer_mapped_finish(
+pub(crate) fn device_create_buffer_mapped_finish(
     create_buffer_mapped: crate::CreateBufferMapped<'_>,
 ) -> crate::Buffer {
     buffer_unmap(&create_buffer_mapped.id);
@@ -332,7 +351,7 @@ pub(crate) fn buffer_unmap(buffer: &BufferId) {
     wgn::wgpu_buffer_unmap(*buffer);
 }
 
-pub(crate) fn create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate::Buffer {
+pub(crate) fn device_create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate::Buffer {
     let owned_label = OwnedLabel::new(desc.label.as_deref());
     crate::Buffer {
         id: wgn::wgpu_device_create_buffer(
@@ -347,7 +366,7 @@ pub(crate) fn create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate
     }
 }
 
-pub(crate) fn create_texture(device: &DeviceId, desc: &TextureDescriptor) -> TextureId {
+pub(crate) fn device_create_texture(device: &DeviceId, desc: &TextureDescriptor) -> TextureId {
     let owned_label = OwnedLabel::new(desc.label.as_deref());
     wgn::wgpu_device_create_texture(
         *device,
@@ -363,6 +382,10 @@ pub(crate) fn create_texture(device: &DeviceId, desc: &TextureDescriptor) -> Tex
     )
 }
 
+pub(crate) fn device_create_sampler(device: &DeviceId, desc: &SamplerDescriptor) -> SamplerId {
+    wgn::wgpu_device_create_sampler(*device, desc)
+}
+
 pub(crate) fn create_command_encoder(
     device: &DeviceId,
     desc: &CommandEncoderDescriptor,
@@ -376,7 +399,7 @@ pub(crate) fn create_command_encoder(
     )
 }
 
-pub(crate) fn copy_buffer_to_buffer(
+pub(crate) fn command_encoder_copy_buffer_to_buffer(
     command_encoder: &CommandEncoderId,
     source: &crate::Buffer,
     source_offset: wgt::BufferAddress,
@@ -390,6 +413,20 @@ pub(crate) fn copy_buffer_to_buffer(
         source_offset,
         destination.id,
         destination_offset,
+        copy_size,
+    );
+}
+
+pub(crate) fn command_encoder_copy_buffer_to_texture(
+    command_encoder: &CommandEncoderId,
+    source: crate::BufferCopyView,
+    destination: crate::TextureCopyView,
+    copy_size: wgt::Extent3d,
+) {
+    wgn::wgpu_command_encoder_copy_buffer_to_texture(
+        *command_encoder,
+        &map_buffer_copy_view(source),
+        &map_texture_copy_view(destination),
         copy_size,
     );
 }
@@ -515,7 +552,9 @@ impl BufferReadMappingDetail {
     }
 }
 
-pub(crate) fn create_surface<W: raw_window_handle::HasRawWindowHandle>(window: &W) -> SurfaceId {
+pub(crate) fn device_create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    window: &W,
+) -> SurfaceId {
     wgn::wgpu_create_surface(window.raw_window_handle())
 }
 
@@ -597,6 +636,22 @@ pub(crate) fn render_pass_set_bind_group(
     }
 }
 
+pub(crate) fn render_pass_set_index_buffer<'a>(
+    render_pass: &RenderPassEncoderId,
+    buffer: &'a crate::Buffer,
+    offset: wgt::BufferAddress,
+    size: wgt::BufferAddress,
+) {
+    unsafe {
+        wgn::wgpu_render_pass_set_index_buffer(
+            render_pass.as_mut().unwrap(),
+            buffer.id,
+            offset,
+            size,
+        );
+    }
+}
+
 pub(crate) fn render_pass_set_vertex_buffer<'a>(
     render_pass: &RenderPassEncoderId,
     slot: u32,
@@ -626,6 +681,24 @@ pub(crate) fn render_pass_draw(
             vertices.end - vertices.start,
             instances.end - instances.start,
             vertices.start,
+            instances.start,
+        );
+    }
+}
+
+pub(crate) fn render_pass_draw_indexed(
+    render_pass: &RenderPassEncoderId,
+    indices: Range<u32>,
+    base_vertex: i32,
+    instances: Range<u32>,
+) {
+    unsafe {
+        wgn::wgpu_render_pass_draw_indexed(
+            render_pass.as_mut().unwrap(),
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
             instances.start,
         );
     }
