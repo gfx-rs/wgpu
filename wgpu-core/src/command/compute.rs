@@ -19,6 +19,11 @@ use peek_poke::{Peek, PeekCopy, Poke};
 
 use std::iter;
 
+#[derive(Debug, PartialEq)]
+enum PipelineState {
+    Required,
+    Set,
+}
 
 #[derive(Clone, Copy, Debug, PeekCopy, Poke)]
 enum ComputeCommand {
@@ -75,6 +80,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
+
+        let mut pipeline_state = PipelineState::Required;
 
         let mut peeker = raw_data.as_ptr();
         let raw_data_end = unsafe {
@@ -142,6 +149,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
+                    pipeline_state = PipelineState::Set;
                     let pipeline = cmb.trackers
                         .compute_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
@@ -186,11 +194,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::Dispatch(groups) => {
+                    assert_eq!(pipeline_state, PipelineState::Set, "Dispatch error: Pipeline is missing");
                     unsafe {
                         raw.dispatch(groups);
                     }
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
+                    assert_eq!(pipeline_state, PipelineState::Set, "Dispatch error: Pipeline is missing");
                     let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
                         &*buffer_guard,
                         buffer_id,
