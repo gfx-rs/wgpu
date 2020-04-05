@@ -109,6 +109,7 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         if !self.buffers.is_empty() {
             let mut heaps = heaps_mutex.lock();
             for (raw, memory) in self.buffers.drain(..) {
+                log::trace!("Buffer {:?} is destroyed with memory {:?}", raw, memory);
                 device.destroy_buffer(raw);
                 heaps.free(device, memory);
             }
@@ -237,10 +238,14 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     }
 
     /// Returns the last submission index that is done.
-    fn check_last_done(
+    pub fn triage_submissions(
         &mut self,
         device: &B::Device,
+        force_wait: bool,
     ) -> SubmissionIndex {
+        if force_wait {
+            self.wait_idle(device);
+        }
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
         let done_count = self
@@ -269,22 +274,19 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn cleanup(
         &mut self,
         device: &B::Device,
-        force_wait: bool,
         heaps_mutex: &Mutex<Heaps<B>>,
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
-    ) -> SubmissionIndex {
-        if force_wait {
-            self.wait_idle(device);
-        }
-        let last_done = self.check_last_done(device);
+    ) {
         unsafe {
             self.free_resources.clean(
                 device,
                 heaps_mutex,
                 descriptor_allocator_mutex,
             );
+            descriptor_allocator_mutex
+                .lock()
+                .cleanup(device);
         }
-        last_done
     }
 }
 
@@ -395,6 +397,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 if trackers.buffers.remove_abandoned(id) {
                     hub.buffers.free_id(id);
                     let res = guard.remove(id).unwrap();
+                    log::debug!("Buffer {:?} is detached", id);
 
                     let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
                     self.active
