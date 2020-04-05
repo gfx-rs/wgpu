@@ -182,6 +182,7 @@ impl OptionalState {
 enum DrawError {
     MissingBlendColor,
     MissingStencilReference,
+    MissingPipeline,
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
@@ -255,6 +256,7 @@ struct State {
     binder: Binder,
     blend_color: OptionalState,
     stencil_reference: OptionalState,
+    pipeline: OptionalState,
     index: IndexState,
     vertex: VertexState,
 }
@@ -268,6 +270,9 @@ impl State {
             return Err(DrawError::IncompatibleBindGroup {
                 index: bind_mask.trailing_zeros(),
             });
+        }
+        if self.pipeline == OptionalState::Required {
+            return Err(DrawError::MissingPipeline);
         }
         if self.blend_color == OptionalState::Required {
             return Err(DrawError::MissingBlendColor);
@@ -785,6 +790,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             binder: Binder::new(cmb.features.max_bind_groups),
             blend_color: OptionalState::Unused,
             stencil_reference: OptionalState::Unused,
+            pipeline: OptionalState::Required,
             index: IndexState {
                 bound_buffer_view: None,
                 format: IndexFormat::Uint16,
@@ -852,6 +858,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
+                    state.pipeline = OptionalState::Set;
                     let pipeline = trackers
                         .render_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
