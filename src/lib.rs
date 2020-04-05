@@ -446,7 +446,7 @@ pub struct ComputePipelineDescriptor<'a> {
 }
 
 pub type RenderPassColorAttachmentDescriptor<'a> =
-    wgt::RenderPassColorAttachmentDescriptorBase<&'a TextureView, Option<&'a TextureView>>;
+    wgt::RenderPassColorAttachmentDescriptorBase<&'a TextureView>;
 pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
     wgt::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
 
@@ -623,26 +623,26 @@ impl Adapter {
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub async fn request(options: &RequestAdapterOptions<'_>, backends: BackendBit) -> Option<Self> {
         unsafe extern "C" fn adapter_callback(
-            id: wgc::id::AdapterId,
+            id: Option<wgc::id::AdapterId>,
             user_data: *mut std::ffi::c_void,
         ) {
-            *(user_data as *mut wgc::id::AdapterId) = id;
+            *(user_data as *mut Option<wgc::id::AdapterId>) = id;
         }
 
-        let mut id = wgc::id::AdapterId::ERROR;
+        let mut id_maybe = None;
         unsafe {
             wgn::wgpu_request_adapter_async(
                 Some(&wgc::instance::RequestAdapterOptions {
                     power_preference: options.power_preference,
                     compatible_surface: options.compatible_surface
-                        .map_or(wgc::id::SurfaceId::ERROR, |surface| surface.id),
+                        .map(|surface| surface.id),
                 }),
                 backends,
                 adapter_callback,
-                &mut id as *mut _ as *mut std::ffi::c_void,
+                &mut id_maybe as *mut _ as *mut std::ffi::c_void,
             )
         };
-        Some(Adapter { id })
+        id_maybe.map(|id| Adapter { id })
     }
 
     /// Requests a connection to a physical device, creating a logical device.
@@ -1228,7 +1228,7 @@ impl CommandEncoder {
             .iter()
             .map(|ca| wgc::command::RenderPassColorAttachmentDescriptor {
                 attachment: ca.attachment.id,
-                resolve_target: ca.resolve_target.map(|rt| &rt.id),
+                resolve_target: ca.resolve_target.map(|rt| rt.id),
                 load_op: ca.load_op,
                 store_op: ca.store_op,
                 clear_color: ca.clear_color,
@@ -1633,26 +1633,24 @@ impl Drop for SwapChainOutput {
     }
 }
 
+/// The GPU timed out when attempting to acquire the next texture or if a
+/// previous output is still alive.
+#[derive(Clone, Debug)]
+pub struct TimeOut;
+
 impl SwapChain {
     /// Returns the next texture to be presented by the swapchain for drawing.
     ///
     /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
-    ///
-    /// Returns an `Err` if the GPU timed out when attempting to acquire the next texture or if a
-    /// previous output is still alive.
-    pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, ()> {
+    pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, TimeOut> {
         let output = wgn::wgpu_swap_chain_get_next_texture(self.id);
-        if output.view_id == wgc::id::Id::ERROR {
-            Err(())
-        } else {
-            Ok(SwapChainOutput {
-                view: TextureView {
-                    id: output.view_id,
-                    owned: false,
-                },
+        match output.view_id {
+            Some(id) => Ok(SwapChainOutput {
+                view: TextureView { id, owned: false },
                 swap_chain_id: self.id,
-            })
+            }),
+            None => Err(TimeOut),
         }
     }
 }
