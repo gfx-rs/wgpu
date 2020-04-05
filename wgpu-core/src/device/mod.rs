@@ -288,18 +288,13 @@ impl<B: GfxBackend> Device<B> {
         life_tracker.triage_suspected(global, &self.trackers, token);
         life_tracker.triage_mapped(global, token);
         life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
+        let _last_done = life_tracker.triage_submissions(&self.raw, force_wait);
         let callbacks = life_tracker.handle_mapping(global, &self.raw, &self.trackers, token);
         life_tracker.cleanup(
             &self.raw,
-            force_wait,
             &self.mem_allocator,
             &self.desc_allocator,
         );
-
-        unsafe {
-            self.desc_allocator.lock().cleanup(&self.raw);
-        }
-
         callbacks
     }
 
@@ -493,9 +488,9 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub(crate) fn dispose(self) {
+        self.life_tracker.lock().triage_submissions(&self.raw, true);
         self.life_tracker.lock().cleanup(
             &self.raw,
-            true,
             &self.mem_allocator,
             &self.desc_allocator,
         );
@@ -534,6 +529,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let ref_count = buffer.life_guard.add_ref();
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
+        log::info!("Created buffer {:?} with {:?}", id, desc);
         device
             .trackers
             .lock()
@@ -580,6 +576,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
+        log::info!("Created mapped buffer {:?} with {:?}", id, desc);
         device.trackers
             .lock()
             .buffers.init(
