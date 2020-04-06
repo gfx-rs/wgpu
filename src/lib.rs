@@ -828,20 +828,18 @@ impl Drop for Buffer {
 */
 
 impl Texture {
-    /*
-        /// Creates a view of this texture.
-        pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
-            TextureView {
-                id: wgn::wgpu_texture_create_view(self.id, Some(desc)),
-                owned: true,
-            }
+    /// Creates a view of this texture.
+    pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
+        TextureView {
+            id: backend::texture_create_view(&self.id, Some(desc)),
+            owned: true,
         }
-    */
+    }
 
     /// Creates a default view of this whole texture.
     pub fn create_default_view(&self) -> TextureView {
         TextureView {
-            id: backend::texture_create_default_view(&self.id),
+            id: backend::texture_create_view(&self.id, None),
             owned: true,
         }
     }
