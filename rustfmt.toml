@@ -1,4 +1,0 @@
-newline_style = "Native"
-blank_lines_upper_bound = 2
-spaces_around_ranges = true
-imports_layout = "HorizontalVertical"

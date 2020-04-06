@@ -2,17 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use core::{
-    hub::IdentityManager,
-    id,
-};
+use core::{hub::IdentityManager, id};
 
 use wgt::Backend;
 
-pub use core::command::{
-    compute_ffi::*,
-    render_ffi::*,
-};
+pub use core::command::{compute_ffi::*, render_ffi::*};
 
 use parking_lot::Mutex;
 
@@ -20,7 +14,6 @@ use std::{ptr, slice};
 
 pub mod identity;
 pub mod server;
-
 
 #[derive(Debug, Default)]
 struct IdentityHub {
@@ -136,7 +129,10 @@ pub extern "C" fn wgpu_client_kill_adapter_id(client: &Client, id: id::AdapterId
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_device_id(client: &Client, adapter_id: id::AdapterId) -> id::DeviceId {
+pub extern "C" fn wgpu_client_make_device_id(
+    client: &Client,
+    adapter_id: id::AdapterId,
+) -> id::DeviceId {
     let backend = adapter_id.backend();
     client
         .identities
@@ -157,7 +153,10 @@ pub extern "C" fn wgpu_client_kill_device_id(client: &Client, id: id::DeviceId) 
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_buffer_id(client: &Client, device_id: id::DeviceId) -> id::BufferId {
+pub extern "C" fn wgpu_client_make_buffer_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::BufferId {
     let backend = device_id.backend();
     client
         .identities
@@ -178,7 +177,10 @@ pub extern "C" fn wgpu_client_kill_buffer_id(client: &Client, id: id::BufferId) 
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_texture_id(client: &Client, device_id: id::DeviceId) -> id::TextureId {
+pub extern "C" fn wgpu_client_make_texture_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::TextureId {
     let backend = device_id.backend();
     client
         .identities
@@ -189,10 +191,7 @@ pub extern "C" fn wgpu_client_make_texture_id(client: &Client, device_id: id::De
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_texture_id(
-    client: &Client,
-    id: id::TextureId,
-) {
+pub extern "C" fn wgpu_client_kill_texture_id(client: &Client, id: id::TextureId) {
     client
         .identities
         .lock()
@@ -201,9 +200,11 @@ pub extern "C" fn wgpu_client_kill_texture_id(
         .free(id)
 }
 
-
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_texture_view_id(client: &Client, device_id: id::DeviceId) -> id::TextureViewId {
+pub extern "C" fn wgpu_client_make_texture_view_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::TextureViewId {
     let backend = device_id.backend();
     client
         .identities
@@ -214,10 +215,7 @@ pub extern "C" fn wgpu_client_make_texture_view_id(client: &Client, device_id: i
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_texture_view_id(
-    client: &Client,
-    id: id::TextureViewId,
-) {
+pub extern "C" fn wgpu_client_kill_texture_view_id(client: &Client, id: id::TextureViewId) {
     client
         .identities
         .lock()
@@ -227,7 +225,10 @@ pub extern "C" fn wgpu_client_kill_texture_view_id(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_make_sampler_id(client: &Client, device_id: id::DeviceId) -> id::SamplerId {
+pub extern "C" fn wgpu_client_make_sampler_id(
+    client: &Client,
+    device_id: id::DeviceId,
+) -> id::SamplerId {
     let backend = device_id.backend();
     client
         .identities
@@ -238,10 +239,7 @@ pub extern "C" fn wgpu_client_make_sampler_id(client: &Client, device_id: id::De
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_sampler_id(
-    client: &Client,
-    id: id::SamplerId,
-) {
+pub extern "C" fn wgpu_client_kill_sampler_id(client: &Client, id: id::SamplerId) {
     client
         .identities
         .lock()
@@ -265,10 +263,7 @@ pub extern "C" fn wgpu_client_make_encoder_id(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_encoder_id(
-    client: &Client,
-    id: id::CommandEncoderId,
-) {
+pub extern "C" fn wgpu_client_kill_encoder_id(client: &Client, id: id::CommandEncoderId) {
     client
         .identities
         .lock()
@@ -345,10 +340,7 @@ pub extern "C" fn wgpu_client_make_pipeline_layout_id(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_pipeline_layout_id(
-    client: &Client,
-    id: id::PipelineLayoutId,
-) {
+pub extern "C" fn wgpu_client_kill_pipeline_layout_id(client: &Client, id: id::PipelineLayoutId) {
     client
         .identities
         .lock()
@@ -372,10 +364,7 @@ pub extern "C" fn wgpu_client_make_bind_group_id(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_bind_group_id(
-    client: &Client,
-    id: id::BindGroupId,
-) {
+pub extern "C" fn wgpu_client_kill_bind_group_id(client: &Client, id: id::BindGroupId) {
     client
         .identities
         .lock()
@@ -399,10 +388,7 @@ pub extern "C" fn wgpu_client_make_shader_module_id(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_shader_module_id(
-    client: &Client,
-    id: id::ShaderModuleId,
-) {
+pub extern "C" fn wgpu_client_kill_shader_module_id(client: &Client, id: id::ShaderModuleId) {
     client
         .identities
         .lock()
@@ -426,10 +412,7 @@ pub extern "C" fn wgpu_client_make_compute_pipeline_id(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_compute_pipeline_id(
-    client: &Client,
-    id: id::ComputePipelineId,
-) {
+pub extern "C" fn wgpu_client_kill_compute_pipeline_id(client: &Client, id: id::ComputePipelineId) {
     client
         .identities
         .lock()
@@ -453,10 +436,7 @@ pub extern "C" fn wgpu_client_make_render_pipeline_id(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_client_kill_render_pipeline_id(
-    client: &Client,
-    id: id::RenderPipelineId,
-) {
+pub extern "C" fn wgpu_client_kill_render_pipeline_id(client: &Client, id: id::RenderPipelineId) {
     client
         .identities
         .lock()

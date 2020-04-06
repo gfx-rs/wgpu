@@ -5,18 +5,11 @@
 use crate::{
     id::{DeviceId, SwapChainId, TextureId},
     track::DUMMY_SELECTOR,
-    LifeGuard,
-    RefCount,
-    Stored,
+    LifeGuard, RefCount, Stored,
 };
 
-use wgt::{
-    BufferAddress,
-    BufferUsage,
-    TextureFormat,
-    TextureUsage,
-};
 use gfx_memory::MemoryBlock;
+use wgt::{BufferAddress, BufferUsage, TextureFormat, TextureUsage};
 
 use std::{borrow::Borrow, fmt};
 
@@ -47,7 +40,7 @@ pub enum BufferMapOperation {
     Write {
         callback: crate::device::BufferMapWriteCallback,
         userdata: *mut u8,
-    }
+    },
 }
 
 //TODO: clarify if/why this is needed here
@@ -69,11 +62,15 @@ impl BufferMapOperation {
         match self {
             BufferMapOperation::Read { callback, userdata } => {
                 log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
-                unsafe { callback(BufferMapAsyncStatus::Error, std::ptr::null(), userdata); }
+                unsafe {
+                    callback(BufferMapAsyncStatus::Error, std::ptr::null(), userdata);
+                }
             }
             BufferMapOperation::Write { callback, userdata } => {
                 log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
-                unsafe { callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata); }
+                unsafe {
+                    callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
+                }
             }
         }
     }

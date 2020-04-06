@@ -2,11 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use std::{io, slice, ptr};
-#[cfg(feature = "serde")]
-use serde::{Serialize, Deserialize};
 #[cfg(feature = "peek-poke")]
-use peek_poke::{PeekPoke};
+use peek_poke::PeekPoke;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+use std::{io, ptr, slice};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -557,9 +557,7 @@ pub struct CommandEncoderDescriptor {
 
 impl Default for CommandEncoderDescriptor {
     fn default() -> CommandEncoderDescriptor {
-        CommandEncoderDescriptor {
-            label: ptr::null(),
-        }
+        CommandEncoderDescriptor { label: ptr::null() }
     }
 }
 
@@ -731,11 +729,7 @@ pub struct Origin3d {
 }
 
 impl Origin3d {
-    pub const ZERO: Self = Origin3d {
-        x: 0,
-        y: 0,
-        z: 0,
-    };
+    pub const ZERO: Self = Origin3d { x: 0, y: 0, z: 0 };
 }
 
 impl Default for Origin3d {

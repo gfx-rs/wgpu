@@ -5,17 +5,16 @@
 use crate::{
     command::{
         bind::{Binder, LayoutChange},
-        CommandBuffer,
-        PhantomSlice,
+        CommandBuffer, PhantomSlice,
     },
     device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
 };
 
-use wgt::{BufferAddress, BufferUsage, DynamicOffset, BIND_BUFFER_ALIGNMENT};
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekPoke, Poke};
+use wgt::{BufferAddress, BufferUsage, DynamicOffset, BIND_BUFFER_ALIGNMENT};
 
 use std::iter;
 
@@ -90,17 +89,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut pipeline_state = PipelineState::Required;
 
         let mut peeker = raw_data.as_ptr();
-        let raw_data_end = unsafe {
-            raw_data.as_ptr().add(raw_data.len())
-        };
+        let raw_data_end = unsafe { raw_data.as_ptr().add(raw_data.len()) };
         let mut command = ComputeCommand::Dispatch([0; 3]); // dummy
         loop {
             assert!(unsafe { peeker.add(ComputeCommand::max_size()) } <= raw_data_end);
             peeker = unsafe { ComputeCommand::peek_from(peeker, &mut command) };
             match command {
-                ComputeCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
+                ComputeCommand::SetBindGroup {
+                    index,
+                    num_dynamic_offsets,
+                    bind_group_id,
+                    phantom_offsets,
+                } => {
                     let (new_peeker, offsets) = unsafe {
-                        phantom_offsets.decode_unaligned(peeker, num_dynamic_offsets as usize, raw_data_end)
+                        phantom_offsets.decode_unaligned(
+                            peeker,
+                            num_dynamic_offsets as usize,
+                            raw_data_end,
+                        )
                     };
                     peeker = new_peeker;
 
@@ -136,11 +142,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &*texture_guard,
                     );
 
-                    if let Some((pipeline_layout_id, follow_ups)) = binder
-                        .provide_entry(index as usize, bind_group_id, bind_group, offsets)
+                    if let Some((pipeline_layout_id, follow_ups)) =
+                        binder.provide_entry(index as usize, bind_group_id, bind_group, offsets)
                     {
-                        let bind_groups = iter::once(bind_group.raw.raw())
-                            .chain(follow_ups.clone().map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()));
+                        let bind_groups = iter::once(bind_group.raw.raw()).chain(
+                            follow_ups
+                                .clone()
+                                .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
+                        );
                         unsafe {
                             raw.bind_compute_descriptor_sets(
                                 &pipeline_layout_guard[pipeline_layout_id].raw,
@@ -156,7 +165,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
                     pipeline_state = PipelineState::Set;
-                    let pipeline = cmb.trackers
+                    let pipeline = cmb
+                        .trackers
                         .compute_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
                         .unwrap();
@@ -169,8 +179,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if binder.pipeline_layout_id != Some(pipeline.layout_id) {
                         let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
                         binder.pipeline_layout_id = Some(pipeline.layout_id);
-                        binder
-                            .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
+                        binder.reset_expectations(pipeline_layout.bind_group_layout_ids.len());
                         let mut is_compatible = true;
 
                         for (index, (entry, &bgl_id)) in binder
@@ -200,13 +209,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::Dispatch(groups) => {
-                    assert_eq!(pipeline_state, PipelineState::Set, "Dispatch error: Pipeline is missing");
+                    assert_eq!(
+                        pipeline_state,
+                        PipelineState::Set,
+                        "Dispatch error: Pipeline is missing"
+                    );
                     unsafe {
                         raw.dispatch(groups);
                     }
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
-                    assert_eq!(pipeline_state, PipelineState::Set, "Dispatch error: Pipeline is missing");
+                    assert_eq!(
+                        pipeline_state,
+                        PipelineState::Set,
+                        "Dispatch error: Pipeline is missing"
+                    );
                     let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
                         &*buffer_guard,
                         buffer_id,
@@ -219,7 +236,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     unsafe {
                         raw.pipeline_barrier(
-                            all_buffer_stages() .. all_buffer_stages(),
+                            all_buffer_stages()..all_buffer_stages(),
                             hal::memory::Dependencies::empty(),
                             barriers,
                         );
@@ -234,15 +251,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod compute_ffi {
     use super::{
-        ComputeCommand,
         super::{PhantomSlice, RawPass},
+        ComputeCommand,
     };
-    use crate::{
-        id,
-        RawString,
-    };
-use wgt::{BufferAddress, DynamicOffset};
+    use crate::{id, RawString};
     use std::{convert::TryInto, slice};
+    use wgt::{BufferAddress, DynamicOffset};
 
     /// # Safety
     ///
@@ -264,9 +278,7 @@ use wgt::{BufferAddress, DynamicOffset};
             bind_group_id,
             phantom_offsets: PhantomSlice::default(),
         });
-        pass.encode_slice(
-            slice::from_raw_parts(offsets, offset_length),
-        );
+        pass.encode_slice(slice::from_raw_parts(offsets, offset_length));
     }
 
     #[no_mangle]
@@ -293,24 +305,16 @@ use wgt::{BufferAddress, DynamicOffset};
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        pass.encode(&ComputeCommand::DispatchIndirect {
-            buffer_id,
-            offset,
-        });
+        pass.encode(&ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_push_debug_group(
-        _pass: &mut RawPass,
-        _label: RawString,
-    ) {
+    pub extern "C" fn wgpu_compute_pass_push_debug_group(_pass: &mut RawPass, _label: RawString) {
         //TODO
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_pop_debug_group(
-        _pass: &mut RawPass,
-    ) {
+    pub extern "C" fn wgpu_compute_pass_pop_debug_group(_pass: &mut RawPass) {
         //TODO
     }
 

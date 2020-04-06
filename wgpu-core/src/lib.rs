@@ -103,8 +103,7 @@ impl LifeGuard {
 
     /// Returns `true` if the resource is still needed by the user.
     fn use_at(&self, submit_index: SubmissionIndex) -> bool {
-        self.submission_index
-            .store(submit_index, Ordering::Release);
+        self.submission_index.store(submit_index, Ordering::Release);
         self.ref_count.is_some()
     }
 }

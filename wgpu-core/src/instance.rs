@@ -17,20 +17,19 @@ use serde_crate::{Deserialize, Serialize};
 
 use hal::{
     self,
-    adapter::{
-        AdapterInfo as HalAdapterInfo,
-        DeviceType as HalDeviceType,
-        PhysicalDevice as _,
-    },
+    adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
     queue::QueueFamily as _,
     window::Surface as _,
     Instance as _,
 };
 
-
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
     pub compatible_surface: Option<SurfaceId>,
@@ -125,7 +124,11 @@ pub struct Adapter<B: hal::Backend> {
 
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -160,7 +163,11 @@ impl AdapterInfo {
 
 /// Supported physical device types
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub enum DeviceType {
     /// Other
     Other,
@@ -300,13 +307,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut adapters_vk = match instance.vulkan {
             Some(ref inst) if id_vulkan.is_some() => {
                 let mut adapters = inst.enumerate_adapters();
-                if let Some(&Surface { vulkan: Some(ref surface), .. }) = compatible_surface {
-                    adapters.retain(|a|
+                if let Some(&Surface {
+                    vulkan: Some(ref surface),
+                    ..
+                }) = compatible_surface
+                {
+                    adapters.retain(|a| {
                         a.queue_families
                             .iter()
                             .find(|qf| qf.queue_type().supports_graphics())
                             .map_or(false, |qf| surface.supports_queue_family(qf))
-                    );
+                    });
                 }
                 device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
                 adapters
@@ -317,12 +328,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut adapters_mtl = if id_metal.is_some() {
             let mut adapters = instance.metal.enumerate_adapters();
             if let Some(surface) = compatible_surface {
-                adapters.retain(|a|
+                adapters.retain(|a| {
                     a.queue_families
                         .iter()
                         .find(|qf| qf.queue_type().supports_graphics())
                         .map_or(false, |qf| surface.metal.supports_queue_family(qf))
-                );
+                });
             }
             device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
             adapters
@@ -333,13 +344,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut adapters_dx12 = match instance.dx12 {
             Some(ref inst) if id_dx12.is_some() => {
                 let mut adapters = inst.enumerate_adapters();
-                if let Some(&Surface { dx12: Some(ref surface), .. }) = compatible_surface {
-                    adapters.retain(|a|
+                if let Some(&Surface {
+                    dx12: Some(ref surface),
+                    ..
+                }) = compatible_surface
+                {
+                    adapters.retain(|a| {
                         a.queue_families
                             .iter()
                             .find(|qf| qf.queue_type().supports_graphics())
                             .map_or(false, |qf| surface.supports_queue_family(qf))
-                    );
+                    });
                 }
                 device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
                 adapters
@@ -350,12 +365,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut adapters_dx11 = if id_dx11.is_some() {
             let mut adapters = instance.dx11.enumerate_adapters();
             if let Some(surface) = compatible_surface {
-                adapters.retain(|a|
+                adapters.retain(|a| {
                     a.queue_families
                         .iter()
                         .find(|qf| qf.queue_type().supports_graphics())
                         .map_or(false, |qf| surface.dx11.supports_queue_family(qf))
-                );
+                });
             }
             device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
             adapters
@@ -388,14 +403,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::Default => {
-                match power::is_battery_discharging() {
-                    Ok(false) => discrete.or(integrated).or(other).or(virt),
-                    Ok(true) => integrated.or(discrete).or(other).or(virt),
-                    Err(err) => {
-                        log::debug!("Power info unavailable, preferring integrated gpu ({})", err);
-                        integrated.or(discrete).or(other).or(virt)
-                    }
+            PowerPreference::Default => match power::is_battery_discharging() {
+                Ok(false) => discrete.or(integrated).or(other).or(virt),
+                Ok(true) => integrated.or(discrete).or(other).or(virt),
+                Err(err) => {
+                    log::debug!(
+                        "Power info unavailable, preferring integrated gpu ({})",
+                        err
+                    );
+                    integrated.or(discrete).or(other).or(virt)
                 }
             },
             PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
@@ -500,13 +516,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = {
             let (adapter_guard, _) = hub.adapters.read(&mut token);
             let adapter = &adapter_guard[adapter_id].raw;
-            let wishful_features =
-                hal::Features::VERTEX_STORES_AND_ATOMICS |
-                hal::Features::FRAGMENT_STORES_AND_ATOMICS |
-                hal::Features::NDC_Y_UP;
+            let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
+                | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+                | hal::Features::NDC_Y_UP;
             let enabled_features = adapter.physical_device.features() & wishful_features;
             if enabled_features != wishful_features {
-                log::warn!("Missing features: {:?}", wishful_features - enabled_features);
+                log::warn!(
+                    "Missing features: {:?}",
+                    wishful_features - enabled_features
+                );
             }
 
             let family = adapter

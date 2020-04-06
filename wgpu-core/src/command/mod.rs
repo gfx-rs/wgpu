@@ -14,30 +14,17 @@ pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::{
-    device::{
-        MAX_COLOR_TARGETS,
-        all_buffer_stages,
-        all_image_stages,
-    },
+    device::{all_buffer_stages, all_image_stages, MAX_COLOR_TARGETS},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     resource::{Buffer, Texture},
     track::TrackerSet,
-    Features,
-    LifeGuard,
-    Stored,
+    Features, LifeGuard, Stored,
 };
 
 use peek_poke::PeekPoke;
 
-use std::{
-    marker::PhantomData,
-    mem,
-    ptr,
-    slice,
-    thread::ThreadId,
-};
-
+use std::{marker::PhantomData, mem, ptr, slice, thread::ThreadId};
 
 #[derive(Clone, Copy, Debug, PeekPoke)]
 struct PhantomSlice<T>(PhantomData<T>);
@@ -50,7 +37,10 @@ impl<T> Default for PhantomSlice<T> {
 
 impl<T> PhantomSlice<T> {
     unsafe fn decode_unaligned<'a>(
-        self, pointer: *const u8, count: usize, bound: *const u8
+        self,
+        pointer: *const u8,
+        count: usize,
+        bound: *const u8,
     ) -> (*const u8, &'a [T]) {
         let align_offset = pointer.align_offset(mem::align_of::<T>());
         let aligned = pointer.add(align_offset);
@@ -70,10 +60,7 @@ pub struct RawPass {
 }
 
 impl RawPass {
-    fn from_vec<T>(
-        mut vec: Vec<T>,
-        encoder_id: id::CommandEncoderId,
-    ) -> Self {
+    fn from_vec<T>(mut vec: Vec<T>, encoder_id: id::CommandEncoderId) -> Self {
         let ptr = vec.as_mut_ptr() as *mut u8;
         let capacity = vec.capacity() * mem::size_of::<T>();
         mem::forget(vec);
@@ -89,9 +76,7 @@ impl RawPass {
     ///
     /// The last command is provided, yet the encoder
     /// is guaranteed to have exactly `C::max_size()` space for it.
-    unsafe fn finish<C: peek_poke::Poke>(
-        &mut self, command: C
-    ) {
+    unsafe fn finish<C: peek_poke::Poke>(&mut self, command: C) {
         self.ensure_extra_size(C::max_size());
         let extended_end = self.data.add(C::max_size());
         let end = command.poke_into(self.data);
@@ -169,30 +154,26 @@ impl<B: GfxBackend> CommandBuffer<B> {
         debug_assert_eq!(B::VARIANT, base.backend());
         debug_assert_eq!(B::VARIANT, head.backend());
 
-        let buffer_barriers = base
-            .buffers
-            .merge_replace(&head.buffers)
-            .map(|pending| {
-                let buf = &buffer_guard[pending.id];
-                pending.into_hal(buf)
-            });
-        let texture_barriers = base
-            .textures
-            .merge_replace(&head.textures)
-            .map(|pending| {
-                let tex = &texture_guard[pending.id];
-                pending.into_hal(tex)
-            });
+        let buffer_barriers = base.buffers.merge_replace(&head.buffers).map(|pending| {
+            let buf = &buffer_guard[pending.id];
+            pending.into_hal(buf)
+        });
+        let texture_barriers = base.textures.merge_replace(&head.textures).map(|pending| {
+            let tex = &texture_guard[pending.id];
+            pending.into_hal(tex)
+        });
         base.views.merge_extend(&head.views).unwrap();
         base.bind_groups.merge_extend(&head.bind_groups).unwrap();
         base.samplers.merge_extend(&head.samplers).unwrap();
-        base.compute_pipes.merge_extend(&head.compute_pipes).unwrap();
+        base.compute_pipes
+            .merge_extend(&head.compute_pipes)
+            .unwrap();
         base.render_pipes.merge_extend(&head.render_pipes).unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             raw.pipeline_barrier(
-                stages .. stages,
+                stages..stages,
                 hal::memory::Dependencies::empty(),
                 buffer_barriers.chain(texture_barriers),
             );
@@ -258,7 +239,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         comb.is_recording = false;
         // stop tracking the swapchain image, if used
         if let Some((ref sc_id, _)) = comb.used_swap_chain {
-            let view_id = swap_chain_guard[sc_id.value].acquired_view_id
+            let view_id = swap_chain_guard[sc_id.value]
+                .acquired_view_id
                 .as_ref()
                 .expect("Used swap chain frame has already presented");
             comb.trackers.views.remove(view_id.value);

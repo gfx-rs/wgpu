@@ -36,15 +36,11 @@ use crate::{
     conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId},
-    resource,
-    Features,
-    LifeGuard,
-    Stored,
+    resource, Features, LifeGuard, Stored,
 };
 
-use wgt::SwapChainDescriptor;
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
-
+use wgt::SwapChainDescriptor;
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
 pub const DESIRED_NUM_FRAMES: u32 = 3;
@@ -118,7 +114,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 Err(e) => {
                     log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
-                    let desc = swap_chain_descriptor_to_hal(&sc.desc, sc.num_frames, device.features);
+                    let desc =
+                        swap_chain_descriptor_to_hal(&sc.desc, sc.num_frames, device.features);
                     unsafe {
                         suf.configure_swapchain(&device.raw, desc).unwrap();
                         suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000).unwrap()
@@ -144,8 +141,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             samples: 1,
             range: hal::image::SubresourceRange {
                 aspects: hal::format::Aspects::COLOR,
-                layers: 0 .. 1,
-                levels: 0 .. 1,
+                layers: 0..1,
+                levels: 0..1,
             },
             life_guard: LifeGuard::new(),
         };
