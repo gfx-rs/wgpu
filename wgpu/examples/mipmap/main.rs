@@ -105,12 +105,12 @@ impl Example {
             bind_group_layouts: &[&bind_group_layout],
         });
 
-        let vs_bytes =
-            framework::load_glsl(include_str!("blit.vert"), framework::ShaderStage::Vertex);
-        let fs_bytes =
-            framework::load_glsl(include_str!("blit.frag"), framework::ShaderStage::Fragment);
-        let vs_module = device.create_shader_module(&vs_bytes);
-        let fs_module = device.create_shader_module(&fs_bytes);
+        let vs_bytes = include_bytes!("blit.vert.spv");
+        let fs_bytes = include_bytes!("blit.frag.spv");
+        let vs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
+        let fs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
@@ -153,7 +153,7 @@ impl Example {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::FilterMode::Nearest,
-            lod_min_clamp: -100.0,
+            lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: wgpu::CompareFunction::Undefined,
         });
@@ -299,7 +299,7 @@ impl framework::Example for Example {
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Linear,
-            lod_min_clamp: -100.0,
+            lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: wgpu::CompareFunction::Undefined,
         });
@@ -334,12 +334,12 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
-        let vs_bytes =
-            framework::load_glsl(include_str!("draw.vert"), framework::ShaderStage::Vertex);
-        let fs_bytes =
-            framework::load_glsl(include_str!("draw.frag"), framework::ShaderStage::Fragment);
-        let vs_module = device.create_shader_module(&vs_bytes);
-        let fs_module = device.create_shader_module(&fs_bytes);
+        let vs_bytes = include_bytes!("draw.vert.spv");
+        let fs_bytes = include_bytes!("draw.frag.spv");
+        let vs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
+        let fs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
