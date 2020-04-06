@@ -4,7 +4,7 @@ use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
     BindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor,
     PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, TextureDescriptor,
-    TextureViewDimension,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use arrayvec::ArrayVec;
@@ -710,8 +710,11 @@ pub(crate) fn render_pass_end_pass(render_pass: &RenderPassEncoderId) {
     }
 }
 
-pub(crate) fn texture_create_default_view(texture: &TextureId) -> TextureViewId {
-    wgn::wgpu_texture_create_view(*texture, None)
+pub(crate) fn texture_create_view(
+    texture: &TextureId,
+    desc: Option<&TextureViewDescriptor>,
+) -> TextureViewId {
+    wgn::wgpu_texture_create_view(*texture, desc)
 }
 
 pub(crate) fn swap_chain_present(swap_chain: &SwapChainId) {

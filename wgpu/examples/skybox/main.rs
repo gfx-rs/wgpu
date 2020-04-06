@@ -32,7 +32,7 @@ fn buffer_from_uniforms(
     uniforms: &Uniforms,
     usage: wgpu::BufferUsage,
 ) -> wgpu::Buffer {
-    let uniform_buf = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+    let mut uniform_buf = device.create_buffer_mapped(&wgpu::BufferDescriptor {
         size: std::mem::size_of::<Uniforms>() as u64,
         usage,
         label: None,
@@ -40,7 +40,7 @@ fn buffer_from_uniforms(
     // FIXME: Align and use `LayoutVerified`
     for (u, slot) in uniforms.iter().zip(
         uniform_buf
-            .data
+            .data()
             .chunks_exact_mut(std::mem::size_of::<Uniform>()),
     ) {
         slot.copy_from_slice(bytemuck::cast_slice(AsRef::<[[f32; 4]; 4]>::as_ref(u)));
@@ -82,16 +82,12 @@ impl framework::Example for Skybox {
         });
 
         // Create the render pipeline
-        let vs_bytes = framework::load_glsl(
-            include_str!("skybox_vert.glsl"),
-            framework::ShaderStage::Vertex,
-        );
-        let fs_bytes = framework::load_glsl(
-            include_str!("skybox_frag.glsl"),
-            framework::ShaderStage::Fragment,
-        );
-        let vs_module = device.create_shader_module(&vs_bytes);
-        let fs_module = device.create_shader_module(&fs_bytes);
+        let vs_bytes = include_bytes!("shader.vert.spv");
+        let fs_bytes = include_bytes!("shader.frag.spv");
+        let vs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
+        let fs_module = device
+            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
 
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
@@ -148,7 +144,7 @@ impl framework::Example for Skybox {
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Linear,
             mipmap_filter: wgpu::FilterMode::Nearest,
-            lod_min_clamp: -100.0,
+            lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: wgpu::CompareFunction::Undefined,
         });

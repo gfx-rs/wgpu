@@ -2,7 +2,7 @@ use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType, BufferDescriptor,
     CommandEncoderDescriptor, ComputePipelineDescriptor, PipelineLayoutDescriptor,
     ProgrammableStageDescriptor, RenderPipelineDescriptor, SamplerDescriptor, TextureDescriptor,
-    TextureViewDimension,
+    TextureViewDescriptor, TextureViewDimension,
 };
 
 use std::ops::Range;
@@ -91,7 +91,6 @@ pub(crate) fn create_bind_group_layout(
     desc: &BindGroupLayoutDescriptor,
 ) -> BindGroupLayoutId {
     use web_sys::GpuBindingType as bt;
-    use web_sys::GpuTextureViewDimension as tvd;
 
     let mapped_bindings = desc
         .bindings
@@ -127,15 +126,10 @@ pub(crate) fn create_bind_group_layout(
 
             let mapped_view_dimension = match bind.ty {
                 BindingType::SampledTexture { dimension, .. }
-                | BindingType::StorageTexture { dimension, .. } => match dimension {
-                    TextureViewDimension::D1 => tvd::N1d,
-                    TextureViewDimension::D2 => tvd::N2d,
-                    TextureViewDimension::D2Array => tvd::N2dArray,
-                    TextureViewDimension::Cube => tvd::Cube,
-                    TextureViewDimension::CubeArray => tvd::CubeArray,
-                    TextureViewDimension::D3 => tvd::N3d,
-                },
-                _ => tvd::N2d,
+                | BindingType::StorageTexture { dimension, .. } => {
+                    map_texture_view_dimension(dimension)
+                }
+                _ => web_sys::GpuTextureViewDimension::N2d,
             };
 
             let mut mapped_binding = web_sys::GpuBindGroupLayoutBinding::new(
@@ -491,6 +485,20 @@ fn map_texture_dimension(texture_dimension: wgt::TextureDimension) -> web_sys::G
     }
 }
 
+fn map_texture_view_dimension(
+    texture_view_dimension: wgt::TextureViewDimension,
+) -> web_sys::GpuTextureViewDimension {
+    use web_sys::GpuTextureViewDimension as tvd;
+    match texture_view_dimension {
+        TextureViewDimension::D1 => tvd::N1d,
+        TextureViewDimension::D2 => tvd::N2d,
+        TextureViewDimension::D2Array => tvd::N2dArray,
+        TextureViewDimension::Cube => tvd::Cube,
+        TextureViewDimension::CubeArray => tvd::CubeArray,
+        TextureViewDimension::D3 => tvd::N3d,
+    }
+}
+
 fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> web_sys::GpuBufferCopyView {
     let mut mapped =
         web_sys::GpuBufferCopyView::new(&view.buffer.id, view.rows_per_image, view.bytes_per_row);
@@ -504,6 +512,14 @@ fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> web_sys::GpuTe
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
     mapped
+}
+
+fn map_texture_aspect(aspect: wgt::TextureAspect) -> web_sys::GpuTextureAspect {
+    match aspect {
+        wgt::TextureAspect::All => web_sys::GpuTextureAspect::All,
+        wgt::TextureAspect::StencilOnly => web_sys::GpuTextureAspect::StencilOnly,
+        wgt::TextureAspect::DepthOnly => web_sys::GpuTextureAspect::DepthOnly,
+    }
 }
 
 fn map_filter_mode(mode: wgt::FilterMode) -> web_sys::GpuFilterMode {
@@ -1007,8 +1023,24 @@ pub(crate) fn render_pass_end_pass(render_pass: &RenderPassEncoderId) {
     render_pass.end_pass();
 }
 
-pub(crate) fn texture_create_default_view(texture: &TextureId) -> TextureViewId {
-    texture.create_view()
+pub(crate) fn texture_create_view(
+    texture: &TextureId,
+    desc: Option<&TextureViewDescriptor>,
+) -> TextureViewId {
+    match desc {
+        Some(d) => {
+            let mut mapped_desc = web_sys::GpuTextureViewDescriptor::new();
+            mapped_desc.array_layer_count(d.array_layer_count);
+            mapped_desc.aspect(map_texture_aspect(d.aspect));
+            mapped_desc.base_array_layer(d.base_array_layer);
+            mapped_desc.base_mip_level(d.base_mip_level);
+            mapped_desc.dimension(map_texture_view_dimension(d.dimension));
+            mapped_desc.format(map_texture_format(d.format));
+            mapped_desc.mip_level_count(d.level_count);
+            texture.create_view_with_descriptor(&mapped_desc)
+        }
+        None => texture.create_view(),
+    }
 }
 
 pub(crate) fn swap_chain_present(_swap_chain: &SwapChainId) {
