@@ -7,6 +7,7 @@ mod macros;
 
 use std::{future::Future, ops::Range, thread};
 
+#[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
     read_spirv, AddressMode, Backend, BackendBit, BlendDescriptor, BlendFactor, BlendOperation,
@@ -19,12 +20,6 @@ pub use wgt::{
     TextureFormat, TextureUsage, TextureViewDescriptor, TextureViewDimension,
     VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
 };
-/*
-pub use wgc::instance::{
-    AdapterInfo,
-    DeviceType,
-};
-*/
 
 //TODO: avoid heap allocating vectors during resource creation.
 #[derive(Default, Debug)]
@@ -584,11 +579,10 @@ impl Adapter {
         (device, queue)
     }
 
-    /*
-        pub fn get_info(&self) -> AdapterInfo {
-            wgn::adapter_get_info(self.id)
-        }
-    */
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn get_info(&self) -> AdapterInfo {
+        wgn::adapter_get_info(self.id)
+    }
 }
 
 impl Device {
