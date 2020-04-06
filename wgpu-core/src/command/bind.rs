@@ -10,8 +10,8 @@ use crate::{
 };
 
 use smallvec::{smallvec, SmallVec};
-use wgt::DynamicOffset;
 use std::slice;
+use wgt::DynamicOffset;
 
 pub const DEFAULT_BIND_GROUPS: usize = 4;
 type BindGroupMask = u8;
@@ -44,12 +44,7 @@ impl<'a> Iterator for FollowUpIter<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
-            .and_then(|entry| {
-                Some((
-                    entry.actual_value()?,
-                    entry.dynamic_offsets.as_slice(),
-                ))
-            })
+            .and_then(|entry| Some((entry.actual_value()?, entry.dynamic_offsets.as_slice())))
     }
 }
 
@@ -151,7 +146,7 @@ impl Binder {
     }
 
     pub(crate) fn reset_expectations(&mut self, length: usize) {
-        for entry in self.entries[length ..].iter_mut() {
+        for entry in self.entries[length..].iter_mut() {
             entry.expected_layout_id = None;
         }
     }
@@ -185,8 +180,8 @@ impl Binder {
                     Some((
                         self.pipeline_layout_id?,
                         FollowUpIter {
-                            iter: self.entries[index + 1 .. end].iter(),
-                        }
+                            iter: self.entries[index + 1..end].iter(),
+                        },
                     ))
                 } else {
                     log::trace!("\t\tskipping above compatible {}", compatible_count);

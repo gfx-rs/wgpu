@@ -4,13 +4,7 @@
 
 use smallvec::SmallVec;
 
-use std::{
-    cmp::Ordering,
-    fmt::Debug,
-    iter,
-    ops::Range,
-    slice::Iter,
-};
+use std::{cmp::Ordering, fmt::Debug, iter, ops::Range, slice::Iter};
 
 /// Structure that keeps track of a I -> T mapping,
 /// optimized for a case where keys of the same values
@@ -66,7 +60,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         for a in self.ranges.iter() {
             assert!(a.0.start < a.0.end);
         }
-        for (a, b) in self.ranges.iter().zip(self.ranges[1 ..].iter()) {
+        for (a, b) in self.ranges.iter().zip(self.ranges[1..].iter()) {
             assert!(a.0.end <= b.0.start);
         }
     }
@@ -128,7 +122,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
             None => {
                 let pos = self.ranges.len();
                 self.ranges.push((index.clone(), default));
-                return &mut self.ranges[pos ..];
+                return &mut self.ranges[pos..];
             }
         };
 
@@ -137,7 +131,7 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
             if range.start < index.start {
                 self.ranges[start_pos].0.start = index.start;
                 self.ranges
-                    .insert(start_pos, (range.start .. index.start, value));
+                    .insert(start_pos, (range.start..index.start, value));
                 start_pos += 1;
             }
         }
@@ -146,19 +140,19 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
         loop {
             let (range, value) = self.ranges[pos].clone();
             if range.start >= index.end {
-                self.ranges.insert(pos, (range_pos .. index.end, default));
+                self.ranges.insert(pos, (range_pos..index.end, default));
                 pos += 1;
                 break;
             }
             if range.start > range_pos {
-                self.ranges.insert(pos, (range_pos .. range.start, default));
+                self.ranges.insert(pos, (range_pos..range.start, default));
                 pos += 1;
                 range_pos = range.start;
             }
             if range.end >= index.end {
                 if range.end != index.end {
                     self.ranges[pos].0.start = index.end;
-                    self.ranges.insert(pos, (range_pos .. index.end, value));
+                    self.ranges.insert(pos, (range_pos..index.end, value));
                 }
                 pos += 1;
                 break;
@@ -166,15 +160,14 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
             pos += 1;
             range_pos = range.end;
             if pos == self.ranges.len() {
-                self.ranges.push((range_pos .. index.end, default));
+                self.ranges.push((range_pos..index.end, default));
                 pos += 1;
                 break;
             }
         }
 
-        &mut self.ranges[start_pos .. pos]
+        &mut self.ranges[start_pos..pos]
     }
-
 
     /// Helper method for isolation that checks the sanity of the results.
     #[cfg(test)]
@@ -198,7 +191,6 @@ impl<I: Copy + PartialOrd, T: Copy + PartialEq> RangedStates<I, T> {
     }
 }
 
-
 /// A custom iterator that goes through two `RangedStates` and process a merge.
 #[derive(Debug)]
 pub struct Merge<'a, I, T> {
@@ -218,32 +210,32 @@ impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
                     if self.base == rb.start {
                         // right stream is starting
                         debug_assert!(self.base < ra.end);
-                        (self.base .. ra.end.min(rb.end), Some(*va) .. Some(*vb))
+                        (self.base..ra.end.min(rb.end), Some(*va)..Some(*vb))
                     } else {
                         // right hasn't started yet
                         debug_assert!(self.base < rb.start);
-                        (self.base .. rb.start, Some(*va) .. None)
+                        (self.base..rb.start, Some(*va)..None)
                     }
                 } else if rb.start < self.base {
                     // in the middle of the right stream
                     if self.base == ra.start {
                         // left stream is starting
                         debug_assert!(self.base < rb.end);
-                        (self.base .. ra.end.min(rb.end), Some(*va) .. Some(*vb))
+                        (self.base..ra.end.min(rb.end), Some(*va)..Some(*vb))
                     } else {
                         // left hasn't started yet
                         debug_assert!(self.base < ra.start);
-                        (self.base .. ra.start, None .. Some(*vb))
+                        (self.base..ra.start, None..Some(*vb))
                     }
                 } else {
                     // no active streams
                     match ra.start.cmp(&rb.start) {
                         // both are starting
-                        Ordering::Equal => (ra.start .. ra.end.min(rb.end), Some(*va) .. Some(*vb)),
+                        Ordering::Equal => (ra.start..ra.end.min(rb.end), Some(*va)..Some(*vb)),
                         // only left is starting
-                        Ordering::Less => (ra.start .. rb.start.min(ra.end), Some(*va) .. None),
+                        Ordering::Less => (ra.start..rb.start.min(ra.end), Some(*va)..None),
                         // only right is starting
-                        Ordering::Greater => (rb.start .. ra.start.min(rb.end), None .. Some(*vb)),
+                        Ordering::Greater => (rb.start..ra.start.min(rb.end), None..Some(*vb)),
                     }
                 };
                 self.base = range.end;
@@ -257,17 +249,17 @@ impl<'a, I: Copy + Debug + Ord, T: Copy + Debug> Iterator for Merge<'a, I, T> {
             }
             // only right stream
             (None, Some(&(ref rb, vb))) => {
-                let range = self.base.max(rb.start) .. rb.end;
+                let range = self.base.max(rb.start)..rb.end;
                 self.base = rb.end;
                 let _ = self.sb.next();
-                Some((range, None .. Some(*vb)))
+                Some((range, None..Some(*vb)))
             }
             // only left stream
             (Some(&(ref ra, va)), None) => {
-                let range = self.base.max(ra.start) .. ra.end;
+                let range = self.base.max(ra.start)..ra.end;
                 self.base = ra.end;
                 let _ = self.sa.next();
-                Some((range, Some(*va) .. None))
+                Some((range, Some(*va)..None))
             }
             // done
             (None, None) => None,
@@ -292,104 +284,83 @@ mod test {
 
     #[test]
     fn sane_good() {
-        let rs = RangedStates::from_slice(
-            &[(1 .. 4, 9u8), (4 .. 5, 9)],
-        );
+        let rs = RangedStates::from_slice(&[(1..4, 9u8), (4..5, 9)]);
         rs.check_sanity();
     }
 
     #[test]
     #[should_panic]
     fn sane_empty() {
-        let rs = RangedStates::from_slice(
-            &[(1 .. 4, 9u8), (5 .. 5, 9)],
-        );
+        let rs = RangedStates::from_slice(&[(1..4, 9u8), (5..5, 9)]);
         rs.check_sanity();
     }
 
     #[test]
     #[should_panic]
     fn sane_intersect() {
-        let rs = RangedStates::from_slice(
-            &[(1 .. 4, 9u8), (3 .. 5, 9)],
-        );
+        let rs = RangedStates::from_slice(&[(1..4, 9u8), (3..5, 9)]);
         rs.check_sanity();
     }
 
     #[test]
     fn coalesce() {
-        let mut rs = RangedStates::from_slice(
-            &[(1 .. 4, 9u8), (4 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1)],
-        );
+        let mut rs = RangedStates::from_slice(&[(1..4, 9u8), (4..5, 9), (5..7, 1), (8..9, 1)]);
         rs.coalesce();
         rs.check_sanity();
-        assert_eq!(
-            rs.ranges.as_slice(),
-            &[(1 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1),]
-        );
+        assert_eq!(rs.ranges.as_slice(), &[(1..5, 9), (5..7, 1), (8..9, 1),]);
     }
 
     #[test]
     fn query() {
-        let rs = RangedStates::from_slice(
-            &[(1 .. 4, 1u8), (5 .. 7, 2)],
-        );
-        assert_eq!(rs.query(&(0 .. 1), |v| *v), None);
-        assert_eq!(rs.query(&(1 .. 3), |v| *v), Some(Ok(1)));
-        assert_eq!(rs.query(&(1 .. 6), |v| *v), Some(Err(())));
+        let rs = RangedStates::from_slice(&[(1..4, 1u8), (5..7, 2)]);
+        assert_eq!(rs.query(&(0..1), |v| *v), None);
+        assert_eq!(rs.query(&(1..3), |v| *v), Some(Ok(1)));
+        assert_eq!(rs.query(&(1..6), |v| *v), Some(Err(())));
     }
 
     #[test]
     fn isolate() {
-        let rs = RangedStates::from_slice(
-            &[(1 .. 4, 9u8), (4 .. 5, 9), (5 .. 7, 1), (8 .. 9, 1)],
-        );
-        assert_eq!(&rs.sanely_isolated(4 .. 5, 0), &[(4 .. 5, 9u8),]);
+        let rs = RangedStates::from_slice(&[(1..4, 9u8), (4..5, 9), (5..7, 1), (8..9, 1)]);
+        assert_eq!(&rs.sanely_isolated(4..5, 0), &[(4..5, 9u8),]);
         assert_eq!(
-            &rs.sanely_isolated(0 .. 6, 0),
-            &[(0 .. 1, 0), (1 .. 4, 9u8), (4 .. 5, 9), (5 .. 6, 1),]
+            &rs.sanely_isolated(0..6, 0),
+            &[(0..1, 0), (1..4, 9u8), (4..5, 9), (5..6, 1),]
         );
+        assert_eq!(&rs.sanely_isolated(8..10, 1), &[(8..9, 1), (9..10, 1),]);
         assert_eq!(
-            &rs.sanely_isolated(8 .. 10, 1),
-            &[(8 .. 9, 1), (9 .. 10, 1),]
-        );
-        assert_eq!(
-            &rs.sanely_isolated(6 .. 9, 0),
-            &[(6 .. 7, 1), (7 .. 8, 0), (8 .. 9, 1),]
+            &rs.sanely_isolated(6..9, 0),
+            &[(6..7, 1), (7..8, 0), (8..9, 1),]
         );
     }
 
     #[test]
     fn merge_same() {
         assert_eq!(
-            &easy_merge(&[(1 .. 4, 0u8),], &[(1 .. 4, 2u8),],),
-            &[(1 .. 4, Some(0) .. Some(2)),]
+            &easy_merge(&[(1..4, 0u8),], &[(1..4, 2u8),],),
+            &[(1..4, Some(0)..Some(2)),]
         );
     }
 
     #[test]
     fn merge_empty() {
         assert_eq!(
-            &easy_merge(&[(1 .. 2, 0u8),], &[],),
-            &[(1 .. 2, Some(0) .. None),]
+            &easy_merge(&[(1..2, 0u8),], &[],),
+            &[(1..2, Some(0)..None),]
         );
         assert_eq!(
-            &easy_merge(&[], &[(3 .. 4, 1u8),],),
-            &[(3 .. 4, None .. Some(1)),]
+            &easy_merge(&[], &[(3..4, 1u8),],),
+            &[(3..4, None..Some(1)),]
         );
     }
 
     #[test]
     fn merge_separate() {
         assert_eq!(
-            &easy_merge(
-                &[(1 .. 2, 0u8), (5 .. 6, 1u8),],
-                &[(2 .. 4, 2u8),],
-            ),
+            &easy_merge(&[(1..2, 0u8), (5..6, 1u8),], &[(2..4, 2u8),],),
             &[
-                (1 .. 2, Some(0) .. None),
-                (2 .. 4, None .. Some(2)),
-                (5 .. 6, Some(1) .. None),
+                (1..2, Some(0)..None),
+                (2..4, None..Some(2)),
+                (5..6, Some(1)..None),
             ]
         );
     }
@@ -397,37 +368,31 @@ mod test {
     #[test]
     fn merge_subset() {
         assert_eq!(
-            &easy_merge(
-                &[(1 .. 6, 0u8),],
-                &[(2 .. 4, 2u8),],
-            ),
+            &easy_merge(&[(1..6, 0u8),], &[(2..4, 2u8),],),
             &[
-                (1 .. 2, Some(0) .. None),
-                (2 .. 4, Some(0) .. Some(2)),
-                (4 .. 6, Some(0) .. None),
+                (1..2, Some(0)..None),
+                (2..4, Some(0)..Some(2)),
+                (4..6, Some(0)..None),
             ]
         );
         assert_eq!(
-            &easy_merge(&[(2 .. 4, 0u8),], &[(1 .. 4, 2u8),],),
-            &[(1 .. 2, None .. Some(2)), (2 .. 4, Some(0) .. Some(2)),]
+            &easy_merge(&[(2..4, 0u8),], &[(1..4, 2u8),],),
+            &[(1..2, None..Some(2)), (2..4, Some(0)..Some(2)),]
         );
     }
 
     #[test]
     fn merge_all() {
         assert_eq!(
-            &easy_merge(
-                &[(1 .. 4, 0u8), (5 .. 8, 1u8),],
-                &[(2 .. 6, 2u8), (7 .. 9, 3u8),],
-            ),
+            &easy_merge(&[(1..4, 0u8), (5..8, 1u8),], &[(2..6, 2u8), (7..9, 3u8),],),
             &[
-                (1 .. 2, Some(0) .. None),
-                (2 .. 4, Some(0) .. Some(2)),
-                (4 .. 5, None .. Some(2)),
-                (5 .. 6, Some(1) .. Some(2)),
-                (6 .. 7, Some(1) .. None),
-                (7 .. 8, Some(1) .. Some(3)),
-                (8 .. 9, None .. Some(3)),
+                (1..2, Some(0)..None),
+                (2..4, Some(0)..Some(2)),
+                (4..5, None..Some(2)),
+                (5..6, Some(1)..Some(2)),
+                (6..7, Some(1)..None),
+                (7..8, Some(1)..Some(3)),
+                (8..9, None..Some(3)),
             ]
         );
     }

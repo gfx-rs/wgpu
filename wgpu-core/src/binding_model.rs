@@ -4,16 +4,13 @@
 
 use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
-    track::{DUMMY_SELECTOR, TrackerSet},
-    FastHashMap,
-    LifeGuard,
-    RefCount,
-    Stored,
+    track::{TrackerSet, DUMMY_SELECTOR},
+    FastHashMap, LifeGuard, RefCount, Stored,
 };
 
-use wgt::{BufferAddress, TextureComponentType};
 use arrayvec::ArrayVec;
 use gfx_descriptor::{DescriptorCounts, DescriptorSet};
+use wgt::{BufferAddress, TextureComponentType};
 
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};
@@ -21,7 +18,11 @@ use std::borrow::Borrow;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub enum BindingType {
     UniformBuffer = 0,
     StorageBuffer = 1,
@@ -35,7 +36,11 @@ pub enum BindingType {
 
 #[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub struct BindGroupLayoutEntry {
     pub binding: u32,
     pub visibility: wgt::ShaderStage,
@@ -80,7 +85,11 @@ pub struct PipelineLayout<B: hal::Backend> {
 
 #[repr(C)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub struct BufferBinding {
     pub buffer: BufferId,
     pub offset: BufferAddress,
@@ -89,7 +98,11 @@ pub struct BufferBinding {
 
 #[repr(C)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub enum BindingResource {
     Buffer(BufferBinding),
     Sampler(SamplerId),
@@ -98,7 +111,11 @@ pub enum BindingResource {
 
 #[repr(C)]
 #[derive(Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub struct BindGroupEntry {
     pub binding: u32,
     pub resource: BindingResource,

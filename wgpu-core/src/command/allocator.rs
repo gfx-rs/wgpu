@@ -4,13 +4,7 @@
 
 use super::CommandBuffer;
 use crate::{
-    hub::GfxBackend,
-    id::DeviceId,
-    track::TrackerSet,
-    Features,
-    LifeGuard,
-    Stored,
-    SubmissionIndex,
+    hub::GfxBackend, id::DeviceId, track::TrackerSet, Features, LifeGuard, Stored, SubmissionIndex,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
@@ -27,7 +21,7 @@ struct CommandPool<B: hal::Backend> {
 
 impl<B: hal::Backend> CommandPool<B> {
     fn maintain(&mut self, lowest_active_index: SubmissionIndex) {
-        for i in (0 .. self.pending.len()).rev() {
+        for i in (0..self.pending.len()).rev() {
             let index = self.pending[i]
                 .life_guard
                 .submission_index
@@ -55,7 +49,10 @@ impl<B: hal::Backend> CommandPool<B> {
 
     fn allocate(&mut self) -> B::CommandBuffer {
         if self.available.is_empty() {
-            unsafe { self.raw.allocate(20, hal::command::Level::Primary, &mut self.available) };
+            unsafe {
+                self.raw
+                    .allocate(20, hal::command::Level::Primary, &mut self.available)
+            };
         }
         self.available.pop().unwrap()
     }
@@ -131,7 +128,10 @@ impl<B: hal::Backend> CommandAllocator<B> {
         let pool = inner.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
 
         if pool.available.is_empty() {
-            unsafe { pool.raw.allocate(20, hal::command::Level::Primary, &mut pool.available) };
+            unsafe {
+                pool.raw
+                    .allocate(20, hal::command::Level::Primary, &mut pool.available)
+            };
         }
 
         pool.available.pop().unwrap()

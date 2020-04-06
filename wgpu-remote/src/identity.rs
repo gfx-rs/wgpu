@@ -4,7 +4,6 @@
 
 use core::id;
 
-
 pub type FactoryParam = *mut std::ffi::c_void;
 
 #[derive(Debug)]
@@ -14,7 +13,9 @@ pub struct IdentityRecycler<I> {
     kind: &'static str,
 }
 
-impl<I: id::TypedId + Clone + std::fmt::Debug> core::hub::IdentityHandler<I> for IdentityRecycler<I> {
+impl<I: id::TypedId + Clone + std::fmt::Debug> core::hub::IdentityHandler<I>
+    for IdentityRecycler<I>
+{
     type Input = I;
     fn process(&self, id: I, _backend: wgt::Backend) -> I {
         log::debug!("process {} {:?}", self.kind, id);

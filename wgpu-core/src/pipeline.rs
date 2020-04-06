@@ -5,14 +5,13 @@
 use crate::{
     device::RenderPassContext,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    LifeGuard,
-    RawString,
-    RefCount,
-    Stored,
-    U32Array
+    LifeGuard, RawString, RefCount, Stored, U32Array,
 };
-use wgt::{BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, IndexFormat, InputStepMode, PrimitiveTopology, RasterizationStateDescriptor, VertexAttributeDescriptor};
 use std::borrow::Borrow;
+use wgt::{
+    BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, IndexFormat, InputStepMode,
+    PrimitiveTopology, RasterizationStateDescriptor, VertexAttributeDescriptor,
+};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -40,7 +39,7 @@ pub struct ShaderModuleDescriptor {
 #[derive(Debug)]
 pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
-    pub(crate) device_id: Stored<DeviceId>
+    pub(crate) device_id: Stored<DeviceId>,
 }
 
 #[repr(C)]

@@ -5,11 +5,10 @@
 use super::{range::RangedStates, PendingTransition, ResourceState, Unit};
 use crate::{device::MAX_MIP_LEVELS, id::TextureId};
 
-use wgt::TextureUsage;
 use arrayvec::ArrayVec;
+use wgt::TextureUsage;
 
 use std::{iter, ops::Range};
-
 
 //TODO: store `hal::image::State` here to avoid extra conversions
 type PlaneStates = RangedStates<hal::image::Layer, Unit<TextureUsage>>;
@@ -40,13 +39,10 @@ impl TextureState {
         debug_assert_eq!(range.levels.start, 0);
         TextureState {
             mips: iter::repeat_with(|| {
-                    PlaneStates::from_range(
-                        0 .. range.layers.end,
-                        Unit::new(TextureUsage::UNINITIALIZED),
-                    )
-                })
-                .take(range.levels.end as usize)
-                .collect(),
+                PlaneStates::from_range(0..range.layers.end, Unit::new(TextureUsage::UNINITIALIZED))
+            })
+            .take(range.levels.end as usize)
+            .collect(),
             full: true,
         }
     }
@@ -69,7 +65,7 @@ impl ResourceState for TextureState {
         }
         let mip_start = num_levels.min(selector.levels.start as usize);
         let mip_end = num_levels.min(selector.levels.end as usize);
-        for mip in self.mips[mip_start .. mip_end].iter() {
+        for mip in self.mips[mip_start..mip_end].iter() {
             match mip.query(&selector.layers, |unit| unit.last) {
                 None => {}
                 Some(Ok(usage)) if result == Some(usage) => {}
@@ -96,8 +92,7 @@ impl ResourceState for TextureState {
                 self.mips.push(PlaneStates::empty());
             }
         }
-        for (mip_id, mip) in self.mips
-            [selector.levels.start as usize .. selector.levels.end as usize]
+        for (mip_id, mip) in self.mips[selector.levels.start as usize..selector.levels.end as usize]
             .iter_mut()
             .enumerate()
         {
@@ -115,10 +110,10 @@ impl ResourceState for TextureState {
                     id,
                     selector: hal::image::SubresourceRange {
                         aspects: hal::format::Aspects::empty(),
-                        levels: level .. level + 1,
+                        levels: level..level + 1,
                         layers: range.clone(),
                     },
-                    usage: unit.last .. usage,
+                    usage: unit.last..usage,
                 };
 
                 unit.last = match output {
@@ -175,9 +170,7 @@ impl ResourceState for TextureState {
                         end: Some(end),
                     } => {
                         let to_usage = end.port();
-                        if start.last == to_usage
-                            && TextureUsage::ORDERED.contains(to_usage)
-                        {
+                        if start.last == to_usage && TextureUsage::ORDERED.contains(to_usage) {
                             Unit {
                                 first: start.first,
                                 last: end.last,
@@ -191,19 +184,17 @@ impl ResourceState for TextureState {
                                 id,
                                 selector: hal::image::SubresourceRange {
                                     aspects: hal::format::Aspects::empty(),
-                                    levels: level .. level + 1,
+                                    levels: level..level + 1,
                                     layers: layers.clone(),
                                 },
-                                usage: start.last .. to_usage,
+                                usage: start.last..to_usage,
                             };
 
                             match output {
-                                None => {
-                                    Unit {
-                                        first: start.first,
-                                        last: pending.collapse()?,
-                                    }
-                                }
+                                None => Unit {
+                                    first: start.first,
+                                    last: pending.collapse()?,
+                                },
                                 Some(ref mut out) => {
                                     out.push(pending);
                                     Unit {
@@ -229,7 +220,6 @@ impl ResourceState for TextureState {
     }
 }
 
-
 #[cfg(test)]
 mod test {
     //TODO: change() and merge() tests
@@ -242,16 +232,16 @@ mod test {
         let mut ts = TextureState::default();
         ts.mips.push(PlaneStates::empty());
         ts.mips.push(PlaneStates::from_slice(&[
-            (1 .. 3, Unit::new(TextureUsage::SAMPLED)),
-            (3 .. 5, Unit::new(TextureUsage::SAMPLED)),
-            (5 .. 6, Unit::new(TextureUsage::STORAGE)),
+            (1..3, Unit::new(TextureUsage::SAMPLED)),
+            (3..5, Unit::new(TextureUsage::SAMPLED)),
+            (5..6, Unit::new(TextureUsage::STORAGE)),
         ]));
 
         assert_eq!(
             ts.query(SubresourceRange {
                 aspects: Aspects::COLOR,
-                levels: 1 .. 2,
-                layers: 2 .. 5,
+                levels: 1..2,
+                layers: 2..5,
             }),
             // level 1 matches
             Some(TextureUsage::SAMPLED),
@@ -259,8 +249,8 @@ mod test {
         assert_eq!(
             ts.query(SubresourceRange {
                 aspects: Aspects::COLOR,
-                levels: 0 .. 2,
-                layers: 2 .. 5,
+                levels: 0..2,
+                layers: 2..5,
             }),
             // level 0 is empty, level 1 matches
             Some(TextureUsage::SAMPLED),
@@ -268,8 +258,8 @@ mod test {
         assert_eq!(
             ts.query(SubresourceRange {
                 aspects: Aspects::COLOR,
-                levels: 1 .. 2,
-                layers: 1 .. 5,
+                levels: 1..2,
+                layers: 1..5,
             }),
             // level 1 matches with gaps
             Some(TextureUsage::SAMPLED),
@@ -277,8 +267,8 @@ mod test {
         assert_eq!(
             ts.query(SubresourceRange {
                 aspects: Aspects::COLOR,
-                levels: 1 .. 2,
-                layers: 4 .. 6,
+                levels: 1..2,
+                layers: 4..6,
             }),
             // level 1 doesn't match
             None,

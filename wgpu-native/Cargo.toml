@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-native"
-version = "0.4.0"
+version = "0.5.0"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",
@@ -23,12 +23,12 @@ vulkan-portability = ["core/gfx-backend-vulkan"]
 [dependencies.core]
 path = "../wgpu-core"
 package = "wgpu-core"
-version = "0.1"
+version = "0.5"
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.1"
+version = "0.5"
 
 [dependencies]
 arrayvec = "0.5"
