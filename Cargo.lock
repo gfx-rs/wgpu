@@ -445,19 +445,21 @@ dependencies = [
 [[package]]
 name = "peek-poke"
 version = "0.2.0"
-source = "git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075#969bd7fe2be1a83f87916dc8b388c63cfd457075"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
- "peek-poke-derive 0.2.0 (git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075)",
+ "peek-poke-derive 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "peek-poke-derive"
-version = "0.2.0"
-source = "git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075#969bd7fe2be1a83f87916dc8b388c63cfd457075"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 dependencies = [
  "proc-macro2 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
  "quote 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
  "syn 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "synstructure 0.12.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-xid 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
@@ -561,6 +563,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "synstructure"
+version = "0.12.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "proc-macro2 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)",
+ "quote 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)",
+ "syn 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-xid 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "typenum"
 version = "1.11.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -657,7 +670,7 @@ dependencies = [
  "gfx-memory 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "peek-poke 0.2.0 (git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075)",
+ "peek-poke 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.105 (registry+https://github.com/rust-lang/crates.io-index)",
  "smallvec 1.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "vec_map 0.8.1 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -693,7 +706,7 @@ name = "wgpu-types"
 version = "0.1.0"
 dependencies = [
  "bitflags 1.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "peek-poke 0.2.0 (git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075)",
+ "peek-poke 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde 1.0.105 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
@@ -783,8 +796,8 @@ dependencies = [
 "checksum objc_exception 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)" = "ad970fb455818ad6cba4c122ad012fae53ae8b4795f86378bce65e4f6bab2ca4"
 "checksum parking_lot 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)" = "92e98c49ab0b7ce5b222f2cc9193fc4efe11c6d0bd4f648e374684a6857b1cfc"
 "checksum parking_lot_core 0.7.0 (registry+https://github.com/rust-lang/crates.io-index)" = "7582838484df45743c8434fbff785e8edf260c28748353d44bc0da32e0ceabf1"
-"checksum peek-poke 0.2.0 (git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075)" = "<none>"
-"checksum peek-poke-derive 0.2.0 (git+https://github.com/kvark/peek-poke?rev=969bd7fe2be1a83f87916dc8b388c63cfd457075)" = "<none>"
+"checksum peek-poke 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "d93fd6a575ebf1ac2668d08443c97a22872cfb463fd8b7ddd141e9f6be59af2f"
+"checksum peek-poke-derive 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)" = "6fb44a25c5bba983be0fc8592dfaf3e6d0935ce8be0c6b15b2a39507af34a926"
 "checksum pkg-config 0.3.17 (registry+https://github.com/rust-lang/crates.io-index)" = "05da548ad6865900e60eaba7f589cc0783590a92e940c26953ff81ddbab2d677"
 "checksum proc-macro2 1.0.9 (registry+https://github.com/rust-lang/crates.io-index)" = "6c09721c6781493a2a492a96b5a5bf19b65917fe6728884e7c44dd0c60ca3435"
 "checksum quote 1.0.3 (registry+https://github.com/rust-lang/crates.io-index)" = "2bdc6c187c65bca4260c9011c9e3132efe4909da44726bad24cf7572ae338d7f"
@@ -799,6 +812,7 @@ dependencies = [
 "checksum spirv_cross 0.18.0 (registry+https://github.com/rust-lang/crates.io-index)" = "946216f8793f7199e3ea5b995ee8dc20a0ace1fcf46293a0ef4c17e1d046dbde"
 "checksum storage-map 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "fd0a4829a5c591dc24a944a736d6b1e4053e51339a79fd5d4702c4c999a9c45e"
 "checksum syn 1.0.17 (registry+https://github.com/rust-lang/crates.io-index)" = "0df0eb663f387145cab623dea85b09c2c5b4b0aef44e945d928e682fce71bb03"
+"checksum synstructure 0.12.3 (registry+https://github.com/rust-lang/crates.io-index)" = "67656ea1dc1b41b1451851562ea232ec2e5a80242139f7e679ceccfb5d61f545"
 "checksum typenum 1.11.2 (registry+https://github.com/rust-lang/crates.io-index)" = "6d2783fe2d6b8c1101136184eb41be8b1ad379e4657050b8aaff0c79ee7575f9"
 "checksum unicode-xid 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)" = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
 "checksum uom 0.26.0 (registry+https://github.com/rust-lang/crates.io-index)" = "4cec796ec5f7ac557631709079168286056205c51c60aac33f51764bdc7b8dc4"

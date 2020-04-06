@@ -15,7 +15,7 @@ use crate::{
 
 use wgt::{BufferAddress, BufferUsage, DynamicOffset, BIND_BUFFER_ALIGNMENT};
 use hal::command::CommandBuffer as _;
-use peek_poke::{Peek, PeekCopy, Poke};
+use peek_poke::{Peek, PeekPoke, Poke};
 
 use std::iter;
 
@@ -25,7 +25,7 @@ enum PipelineState {
     Set,
 }
 
-#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
+#[derive(Clone, Copy, Debug, PeekPoke)]
 enum ComputeCommand {
     SetBindGroup {
         index: u8,
@@ -40,6 +40,12 @@ enum ComputeCommand {
         offset: BufferAddress,
     },
     End,
+}
+
+impl Default for ComputeCommand {
+    fn default() -> Self {
+        ComputeCommand::End
+    }
 }
 
 impl super::RawPass {
@@ -90,7 +96,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut command = ComputeCommand::Dispatch([0; 3]); // dummy
         loop {
             assert!(unsafe { peeker.add(ComputeCommand::max_size()) } <= raw_data_end);
-            peeker = unsafe { command.peek_from(peeker) };
+            peeker = unsafe { ComputeCommand::peek_from(peeker, &mut command) };
             match command {
                 ComputeCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
                     let (new_peeker, offsets) = unsafe {
@@ -256,7 +262,7 @@ use wgt::{BufferAddress, DynamicOffset};
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
-            phantom_offsets: PhantomSlice::new(),
+            phantom_offsets: PhantomSlice::default(),
         });
         pass.encode_slice(
             slice::from_raw_parts(offsets, offset_length),

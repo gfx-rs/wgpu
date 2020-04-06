@@ -16,6 +16,13 @@ type Dummy = crate::backend::Empty;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct Id<T>(NonZeroU64, PhantomData<T>);
 
+// required for PeekPoke
+impl<T> Default for Id<T> {
+    fn default() -> Self {
+        Id(unsafe { NonZeroU64::new_unchecked(!0) }, PhantomData)
+    }
+}
+
 impl<T> Id<T> {
     pub fn backend(self) -> Backend {
         match self.0.get() >> (64 - BACKEND_BITS) as u8 {
@@ -76,10 +83,10 @@ unsafe impl<T> peek_poke::Poke for Id<T> {
 }
 
 impl<T> peek_poke::Peek for Id<T> {
-    unsafe fn peek_from(&mut self, mut data: *const u8) -> *const u8 {
+    unsafe fn peek_from(mut data: *const u8, this: *mut Self) -> *const u8 {
         let mut v = 0u64;
-        data = v.peek_from(data);
-        self.0 = NonZeroU64::new(v).unwrap();
+        data = u64::peek_from(data, &mut v);
+        (*this).0 = NonZeroU64::new(v).unwrap();
         data
     }
 }

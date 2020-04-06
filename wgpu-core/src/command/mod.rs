@@ -28,6 +28,8 @@ use crate::{
     Stored,
 };
 
+use peek_poke::PeekPoke;
+
 use std::{
     marker::PhantomData,
     mem,
@@ -37,14 +39,16 @@ use std::{
 };
 
 
-#[derive(Clone, Copy, Debug, peek_poke::PeekCopy, peek_poke::Poke)]
+#[derive(Clone, Copy, Debug, PeekPoke)]
 struct PhantomSlice<T>(PhantomData<T>);
 
-impl<T> PhantomSlice<T> {
-    fn new() -> Self {
+impl<T> Default for PhantomSlice<T> {
+    fn default() -> Self {
         PhantomSlice(PhantomData)
     }
+}
 
+impl<T> PhantomSlice<T> {
     unsafe fn decode_unaligned<'a>(
         self, pointer: *const u8, count: usize, bound: *const u8
     ) -> (*const u8, &'a [T]) {
@@ -197,15 +201,26 @@ impl<B: GfxBackend> CommandBuffer<B> {
 }
 
 #[repr(C)]
-#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
+#[derive(PeekPoke)]
 struct PassComponent<T> {
     load_op: wgt::LoadOp,
     store_op: wgt::StoreOp,
     clear_value: T,
 }
 
+// required for PeekPoke
+impl<T: Default> Default for PassComponent<T> {
+    fn default() -> Self {
+        PassComponent {
+            load_op: wgt::LoadOp::Clear,
+            store_op: wgt::StoreOp::Clear,
+            clear_value: T::default(),
+        }
+    }
+}
+
 #[repr(C)]
-#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
+#[derive(Default, PeekPoke)]
 struct RawRenderPassColorAttachmentDescriptor {
     attachment: u64,
     resolve_target: u64,
@@ -213,7 +228,7 @@ struct RawRenderPassColorAttachmentDescriptor {
 }
 
 #[repr(C)]
-#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
+#[derive(Default, PeekPoke)]
 struct RawRenderPassDepthStencilAttachmentDescriptor {
     attachment: u64,
     depth: PassComponent<f32>,
@@ -221,7 +236,7 @@ struct RawRenderPassDepthStencilAttachmentDescriptor {
 }
 
 #[repr(C)]
-#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
+#[derive(Default, PeekPoke)]
 struct RawRenderTargets {
     colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
     depth_stencil: RawRenderPassDepthStencilAttachmentDescriptor,

@@ -17,4 +17,4 @@ license = "MPL-2.0"
 [dependencies]
 bitflags = "1.0"
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
-peek-poke = { git = "https://github.com/kvark/peek-poke", rev = "969bd7fe2be1a83f87916dc8b388c63cfd457075", optional = true }
+peek-poke = { version = "0.2", optional = true }
