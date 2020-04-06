@@ -96,7 +96,12 @@ async fn run() {
     // be called in an event loop or on another thread.
     device.poll(wgpu::Maintain::Wait);
 
-    // Write the buffer as a PNG
+    // If a file system is available, write the buffer as a PNG
+    let has_file_system_available = cfg!(not(target_arch = "wasm32"));
+    if !has_file_system_available {
+        return;
+    }
+
     if let Ok(mapping) = buffer_future.await {
         let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), size, size);
         png_encoder.set_depth(png::BitDepth::Eight);
@@ -109,8 +114,19 @@ async fn run() {
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen(start))]
+pub fn wasm_main() {
+    console_log::init().expect("could not initialize log");
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    wasm_bindgen_futures::spawn_local(run());
+}
+
+#[cfg(target_arch = "wasm32")]
+fn main() {}
+
+#[cfg(not(target_arch = "wasm32"))]
 fn main() {
     env_logger::init();
-
     futures::executor::block_on(run());
 }
