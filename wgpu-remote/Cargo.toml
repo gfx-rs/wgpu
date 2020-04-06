@@ -7,6 +7,7 @@ authors = [
 ]
 edition = "2018"
 license = "MPL-2.0"
+publish = false
 
 [lib]
 # Enabling these targets makes our CI bots try to build them and fail atm
@@ -18,13 +19,13 @@ default = []
 [dependencies.core]
 path = "../wgpu-core"
 package = "wgpu-core"
-version = "0.1"
+version = "0.5"
 features = ["serde"]
 
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.1"
+version = "0.5"
 features = ["serde"]
 
 [dependencies]
