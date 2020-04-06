@@ -746,6 +746,19 @@ pub(crate) fn command_encoder_copy_buffer_to_texture(
     );
 }
 
+pub(crate) fn command_encoder_copy_texture_to_buffer(
+    command_encoder: &CommandEncoderId,
+    source: crate::TextureCopyView,
+    destination: crate::BufferCopyView,
+    copy_size: wgt::Extent3d,
+) {
+    command_encoder.copy_texture_to_buffer_with_gpu_extent_3d_dict(
+        &map_texture_copy_view(source),
+        &map_buffer_copy_view(destination),
+        &map_extent_3d(copy_size),
+    );
+}
+
 pub(crate) fn begin_compute_pass(command_encoder: &CommandEncoderId) -> ComputePassId {
     let mapped_desc = web_sys::GpuComputePassDescriptor::new();
     command_encoder.begin_compute_pass_with_descriptor(&mapped_desc)

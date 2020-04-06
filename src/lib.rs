@@ -923,7 +923,6 @@ impl CommandEncoder {
         backend::command_encoder_copy_buffer_to_texture(&self.id, source, destination, copy_size);
     }
 
-    /*
     /// Copy data from a texture to a buffer.
     pub fn copy_texture_to_buffer(
         &mut self,
@@ -931,14 +930,10 @@ impl CommandEncoder {
         destination: BufferCopyView,
         copy_size: Extent3d,
     ) {
-        wgn::wgpu_command_encoder_copy_texture_to_buffer(
-            self.id,
-            &source.into_native(),
-            &destination.into_native(),
-            copy_size,
-        );
+        backend::command_encoder_copy_texture_to_buffer(&self.id, source, destination, copy_size);
     }
 
+    /*
         /// Copy data from one texture to another.
         pub fn copy_texture_to_texture(
             &mut self,

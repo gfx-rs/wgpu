@@ -431,6 +431,20 @@ pub(crate) fn command_encoder_copy_buffer_to_texture(
     );
 }
 
+pub(crate) fn command_encoder_copy_texture_to_buffer(
+    command_encoder: &CommandEncoderId,
+    source: crate::TextureCopyView,
+    destination: crate::BufferCopyView,
+    copy_size: wgt::Extent3d,
+) {
+    wgn::wgpu_command_encoder_copy_texture_to_buffer(
+        *command_encoder,
+        &map_texture_copy_view(source),
+        &map_buffer_copy_view(destination),
+        copy_size,
+    );
+}
+
 pub(crate) fn begin_compute_pass(command_encoder: &CommandEncoderId) -> ComputePassId {
     unsafe { wgn::wgpu_command_encoder_begin_compute_pass(*command_encoder, None) }
 }
