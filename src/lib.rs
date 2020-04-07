@@ -1472,7 +1472,7 @@ impl<'a> RenderPass<'a> {
 
     /// Draws primitives from the active vertex buffer(s).
     ///
-    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         unsafe {
             wgn::wgpu_render_pass_draw(
@@ -1488,7 +1488,7 @@ impl<'a> RenderPass<'a> {
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
+    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
         unsafe {
             wgn::wgpu_render_pass_draw_indexed(
@@ -1504,7 +1504,7 @@ impl<'a> RenderPass<'a> {
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
-    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         unsafe {
             wgn::wgpu_render_pass_draw_indirect(
@@ -1519,7 +1519,7 @@ impl<'a> RenderPass<'a> {
     /// based on the contents of the `indirect_buffer`.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
-    /// vertex buffers can be set with [`RenderPass::set_vertex_buffers`].
+    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
