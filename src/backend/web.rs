@@ -103,14 +103,10 @@ pub(crate) fn create_bind_group_layout(
                 } => bt::StorageBuffer,
                 BindingType::StorageBuffer { readonly: true, .. } => bt::ReadonlyStorageBuffer,
                 BindingType::Sampler { comparison: false } => bt::Sampler,
-                BindingType::Sampler { .. } => unimplemented!(), // TODO: bt::ComparisonSampler,
+                BindingType::Sampler { .. } => bt::ComparisonSampler,
                 BindingType::SampledTexture { .. } => bt::SampledTexture,
-                BindingType::StorageTexture { readonly: true, .. } => {
-                    unimplemented!() // TODO: bt::ReadonlyStorageTexture
-                }
-                BindingType::StorageTexture { .. } => {
-                    unimplemented!() // TODO: bt::WriteonlyStorageTexture
-                }
+                BindingType::StorageTexture { readonly: true, .. } => bt::ReadonlyStorageTexture,
+                BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
             };
 
             let mapped_dynamic = match bind.ty {

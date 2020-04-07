@@ -459,12 +459,14 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_bytes =
-                framework::load_glsl(include_str!("bake.vert"), framework::ShaderStage::Vertex);
-            let fs_bytes =
-                framework::load_glsl(include_str!("bake.frag"), framework::ShaderStage::Fragment);
-            let vs_module = device.create_shader_module(&vs_bytes);
-            let fs_module = device.create_shader_module(&fs_bytes);
+            let vs_bytes = include_bytes!("bake.vert.spv");
+            let fs_bytes = include_bytes!("bake.frag.spv");
+            let vs_module = device.create_shader_module(
+                &wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap(),
+            );
+            let fs_module = device.create_shader_module(
+                &wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap(),
+            );
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 layout: &pipeline_layout,
@@ -588,14 +590,14 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_bytes =
-                framework::load_glsl(include_str!("forward.vert"), framework::ShaderStage::Vertex);
-            let fs_bytes = framework::load_glsl(
-                include_str!("forward.frag"),
-                framework::ShaderStage::Fragment,
+            let vs_bytes = include_bytes!("forward.vert.spv");
+            let fs_bytes = include_bytes!("forward.frag.spv");
+            let vs_module = device.create_shader_module(
+                &wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap(),
             );
-            let vs_module = device.create_shader_module(&vs_bytes);
-            let fs_module = device.create_shader_module(&fs_bytes);
+            let fs_module = device.create_shader_module(
+                &wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap(),
+            );
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 layout: &pipeline_layout,
@@ -721,7 +723,7 @@ impl framework::Example for Example {
 
         {
             let size = mem::size_of::<EntityUniforms>();
-            let temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+            let mut temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
                 size: (self.entities.len() * size) as u64,
                 usage: wgpu::BufferUsage::COPY_SRC,
                 label: None,
@@ -731,7 +733,7 @@ impl framework::Example for Example {
             for (entity, slot) in self
                 .entities
                 .iter_mut()
-                .zip(temp_buf_data.data.chunks_exact_mut(size))
+                .zip(temp_buf_data.data().chunks_exact_mut(size))
             {
                 if entity.rotation_speed != 0.0 {
                     let rotation =
@@ -766,7 +768,7 @@ impl framework::Example for Example {
             self.lights_are_dirty = false;
             let size = mem::size_of::<LightRaw>();
             let total_size = size * self.lights.len();
-            let temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
+            let mut temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
                 size: total_size as u64,
                 usage: wgpu::BufferUsage::COPY_SRC,
                 label: None,
@@ -775,7 +777,7 @@ impl framework::Example for Example {
             for (light, slot) in self
                 .lights
                 .iter()
-                .zip(temp_buf_data.data.chunks_exact_mut(size))
+                .zip(temp_buf_data.data().chunks_exact_mut(size))
             {
                 slot.copy_from_slice(bytemuck::bytes_of(&light.to_raw()));
             }
