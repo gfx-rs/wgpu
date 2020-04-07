@@ -8,7 +8,10 @@ autogen_warning = """/* DO NOT MODIFY THIS MANUALLY! This file was generated usi
  *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --lockfile Cargo.lock --crate wgpu-remote -o dom/webgpu/ffi/wgpu_ffi_generated.h`
  */
 
-typedef void WGPUEmpty;
+typedef uint64_t WGPUNonZeroU64;
+typedef uint64_t WGPUOption_AdapterId;
+typedef uint64_t WGPUOption_SurfaceId;
+typedef uint64_t WGPUOption_TextureViewId;
 """
 include_version = true
 braces = "SameLine"
@@ -19,7 +22,7 @@ style = "tag"
 
 [export]
 prefix = "WGPU"
-exclude = ["BufferMapResult"]
+exclude = ["Option_AdapterId", "Option_SurfaceId", "Option_TextureViewId"]
 
 [parse]
 parse_deps = true
