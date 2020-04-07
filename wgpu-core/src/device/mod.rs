@@ -479,13 +479,14 @@ impl<B: hal::Backend> Device<B> {
         unsafe {
             desc_alloc.dispose(&self.raw);
             mem_alloc.dispose(&self.raw);
+            for (_, rp) in self.render_passes.lock().drain() {
+                self.raw.destroy_render_pass(rp);
+            }
+            for (_, fbo) in self.framebuffers.lock().drain() {
+                self.raw.destroy_framebuffer(fbo);
+            }
         }
     }
-}
-
-#[derive(Debug)]
-pub struct ShaderModule<B: hal::Backend> {
-    pub(crate) raw: B::ShaderModule,
 }
 
 
@@ -900,9 +901,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             })
             .collect::<Vec<_>>(); //TODO: avoid heap allocation
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
         let raw = unsafe {
-            let (device_guard, _) = hub.devices.read(&mut token);
-            device_guard[device_id]
+            device
                 .raw
                 .create_descriptor_set_layout(&raw_bindings, &[])
                 .unwrap()
@@ -910,6 +912,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let layout = binding_model::BindGroupLayout {
             raw,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.add_ref(),
+            },
             entries: entry_map,
             desc_ranges: DescriptorRanges::from_bindings(&raw_bindings),
             dynamic_count: entries.iter().filter(|b| b.has_dynamic_offset).count(),
@@ -922,8 +928,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn bind_group_layout_destroy<B: GfxBackend>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        //TODO: track usage by GPU
-        hub.bind_group_layouts.unregister(bind_group_layout_id, &mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (bgl, _) = hub.bind_group_layouts.unregister(bind_group_layout_id, &mut token);
+        unsafe {
+            device_guard[bgl.device_id.value].raw.destroy_descriptor_set_layout(bgl.raw);
+        }
     }
 
     pub fn device_create_pipeline_layout<B: GfxBackend>(
@@ -960,6 +969,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let layout = binding_model::PipelineLayout {
             raw: pipeline_layout,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.add_ref(),
+            },
             bind_group_layout_ids: bind_group_layout_ids.iter().cloned().collect(),
         };
         hub.pipeline_layouts
@@ -969,8 +982,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        //TODO: track usage by GPU
-        hub.pipeline_layouts.unregister(pipeline_layout_id, &mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (pipeline_layout, _) = hub.pipeline_layouts.unregister(pipeline_layout_id, &mut token);
+        unsafe {
+            device_guard[pipeline_layout.device_id.value].raw.destroy_pipeline_layout(pipeline_layout.raw);
+        }
     }
 
     pub fn device_create_bind_group<B: GfxBackend>(
@@ -1192,19 +1208,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> id::ShaderModuleId {
         let hub = B::hub(self);
         let mut token = Token::root();
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
 
         let spv = unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) };
-        let shader = {
-            let (device_guard, _) = hub.devices.read(&mut token);
-            ShaderModule {
-                raw: unsafe {
-                    device_guard[device_id]
-                        .raw
-                        .create_shader_module(spv)
-                        .unwrap()
-                },
-            }
+        let raw = unsafe {
+            device
+                .raw
+                .create_shader_module(spv)
+                .unwrap()
         };
+        let shader = pipeline::ShaderModule {
+            raw,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.add_ref(),
+            },
+        };
+
         hub.shader_modules
             .register_identity(id_in, shader, &mut token)
     }
@@ -1212,8 +1233,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn shader_module_destroy<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        //TODO: track usage by GPU
-        hub.shader_modules.unregister(shader_module_id, &mut token);
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (module, _) = hub.shader_modules.unregister(shader_module_id, &mut token);
+        unsafe {
+            device_guard[module.device_id.value].raw.destroy_shader_module(module.raw);
+        }
     }
 
     pub fn device_create_command_encoder<B: GfxBackend>(
@@ -1564,9 +1588,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             depth_bounds: None,
         };
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
         let raw_pipeline = {
-            let (device_guard, mut token) = hub.devices.read(&mut token);
-            let device = &device_guard[device_id];
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let layout = &pipeline_layout_guard[desc.layout].raw;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
@@ -1712,6 +1736,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let pipeline = pipeline::RenderPipeline {
             raw: raw_pipeline,
             layout_id: desc.layout,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.add_ref(),
+            },
             pass_context,
             flags,
             index_format: desc.vertex_state.index_format,
@@ -1726,6 +1754,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn render_pipeline_destroy<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
         let hub = B::hub(self);
         let mut token = Token::root();
+        let (_, mut token) = hub.devices.read(&mut token);
         //TODO: track usage by GPU
         hub.render_pipelines.unregister(render_pipeline_id, &mut token);
     }
@@ -1739,9 +1768,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
         let raw_pipeline = {
-            let (device_guard, mut token) = hub.devices.read(&mut token);
-            let device = &device_guard[device_id].raw;
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let layout = &pipeline_layout_guard[desc.layout].raw;
             let pipeline_stage = &desc.compute_stage;
@@ -1770,6 +1799,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             unsafe {
                 device
+                    .raw
                     .create_compute_pipeline(&pipeline_desc, None)
                     .unwrap()
             }
@@ -1778,6 +1808,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let pipeline = pipeline::ComputePipeline {
             raw: raw_pipeline,
             layout_id: desc.layout,
+            device_id: Stored {
+                value: device_id,
+                ref_count: device.life_guard.add_ref(),
+            },
         };
         hub.compute_pipelines
             .register_identity(id_in, pipeline, &mut token)
@@ -1786,6 +1820,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn compute_pipeline_destroy<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
         let hub = B::hub(self);
         let mut token = Token::root();
+        let (_, mut token) = hub.devices.read(&mut token);
         //TODO: track usage by GPU
         hub.compute_pipelines.unregister(compute_pipeline_id, &mut token);
     }
@@ -1934,7 +1969,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device, mut token) = hub.devices.unregister(device_id, &mut token);
         device.maintain(self, true, &mut token);
         drop(token);
-        device.com_allocator.destroy(&device.raw);
+        device.dispose();
     }
 
     pub fn buffer_map_async<B: GfxBackend>(
