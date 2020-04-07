@@ -66,7 +66,6 @@ pub struct BindGroupLayoutDescriptor {
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
-    pub(crate) device_id: Stored<DeviceId>,
     pub(crate) entries: FastHashMap<u32, BindGroupLayoutEntry>,
     pub(crate) desc_ranges: DescriptorRanges,
     pub(crate) dynamic_count: usize,
@@ -82,7 +81,6 @@ pub struct PipelineLayoutDescriptor {
 #[derive(Debug)]
 pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
-    pub(crate) device_id: Stored<DeviceId>,
     pub(crate) bind_group_layout_ids: ArrayVec<[BindGroupLayoutId; wgt::MAX_BIND_GROUPS]>,
 }
 
