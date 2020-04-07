@@ -4,9 +4,8 @@
 
 use crate::{
     device::RenderPassContext,
-    id::{DeviceId, PipelineLayoutId, ShaderModuleId},
+    id::{PipelineLayoutId, ShaderModuleId},
     RawString,
-    Stored,
     U32Array
 };
 use wgt::{BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, IndexFormat, InputStepMode, PrimitiveTopology, RasterizationStateDescriptor, VertexAttributeDescriptor};
@@ -34,12 +33,6 @@ pub struct ShaderModuleDescriptor {
     pub code: U32Array,
 }
 
-#[derive(Debug)]
-pub struct ShaderModule<B: hal::Backend> {
-    pub(crate) raw: B::ShaderModule,
-    pub(crate) device_id: Stored<DeviceId>
-}
-
 #[repr(C)]
 #[derive(Debug)]
 pub struct ProgrammableStageDescriptor {
@@ -58,7 +51,6 @@ pub struct ComputePipelineDescriptor {
 pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) raw: B::ComputePipeline,
     pub(crate) layout_id: PipelineLayoutId,
-    pub(crate) device_id: Stored<DeviceId>,
 }
 
 #[repr(C)]
@@ -90,7 +82,6 @@ bitflags::bitflags! {
 pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) raw: B::GraphicsPipeline,
     pub(crate) layout_id: PipelineLayoutId,
-    pub(crate) device_id: Stored<DeviceId>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) index_format: IndexFormat,
