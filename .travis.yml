@@ -5,6 +5,15 @@ os:
   - osx
   - windows
 
+jobs:
+  include:
+    - os: linux
+      rust: nightly
+      script: cargo doc --lib --no-deps
+  allow_failures:
+    - os: linux
+      rust: nightly
+
 branches:
   except:
   - staging.tmp
