@@ -470,6 +470,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             })
             .collect::<FastHashMap<_, _>>();
 
+        log::debug!("Free framebuffers {:?}", remove_list);
         for (ref key, submit_index) in remove_list {
             let framebuffer = framebuffers.remove(key).unwrap();
             self.active

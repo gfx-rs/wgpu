@@ -6,7 +6,7 @@ use crate::{
     backend,
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
     command::CommandBuffer,
-    device::{Device, ShaderModule},
+    device::Device,
     id::{
         AdapterId,
         BindGroupId,
@@ -26,7 +26,7 @@ use crate::{
         TypedId,
     },
     instance::{Adapter, Instance, Surface},
-    pipeline::{ComputePipeline, RenderPipeline},
+    pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
     resource::{Buffer, Sampler, Texture, TextureView},
     swap_chain::SwapChain,
     Epoch,
@@ -180,11 +180,11 @@ impl<B: hal::Backend> Access<BindGroup<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Root {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for SwapChain<B> {}
-impl<B: hal::Backend> Access<ComputePipeline<B>> for Root {}
+impl<B: hal::Backend> Access<ComputePipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
-impl<B: hal::Backend> Access<RenderPipeline<B>> for Root {}
+impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
-impl<B: hal::Backend> Access<ShaderModule<B>> for Root {}
+impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for PipelineLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}
 impl<B: hal::Backend> Access<Buffer<B>> for Device<B> {}
@@ -443,6 +443,7 @@ impl<B: hal::Backend, F: GlobalIdentityHandlerFactory> Drop for Hub<B, F> {
                 }
             }
         }
+
         for (_, (texture, _)) in self.textures.data.write().map.drain() {
             devices[texture.device_id.value].destroy_texture(texture);
         }
@@ -460,14 +461,38 @@ impl<B: hal::Backend, F: GlobalIdentityHandlerFactory> Drop for Hub<B, F> {
             device.destroy_bind_group(bind_group);
         }
 
-        //TODO:
-        // self.compute_pipelines
-        // self.render_pipelines
-        // self.bind_group_layouts
-        // self.pipeline_layouts
-        // self.shader_modules
-        // self.swap_chains
-        // self.adapters
+        for (_, (module, _)) in self.shader_modules.data.write().map.drain() {
+            let device = &devices[module.device_id.value];
+            unsafe {
+                device.raw.destroy_shader_module(module.raw);
+            }
+        }
+        for (_, (bgl, _)) in self.bind_group_layouts.data.write().map.drain() {
+            let device = &devices[bgl.device_id.value];
+            unsafe {
+                device.raw.destroy_descriptor_set_layout(bgl.raw);
+            }
+        }
+        for (_, (pipeline_layout, _)) in self.pipeline_layouts.data.write().map.drain() {
+            let device = &devices[pipeline_layout.device_id.value];
+            unsafe {
+                device.raw.destroy_pipeline_layout(pipeline_layout.raw);
+            }
+        }
+        for (_, (pipeline, _)) in self.compute_pipelines.data.write().map.drain() {
+            let device = &devices[pipeline.device_id.value];
+            unsafe {
+                device.raw.destroy_compute_pipeline(pipeline.raw);
+            }
+        }
+        for (_, (pipeline, _)) in self.render_pipelines.data.write().map.drain() {
+            let device = &devices[pipeline.device_id.value];
+            unsafe {
+                device.raw.destroy_graphics_pipeline(pipeline.raw);
+            }
+        }
+
+        //TODO: self.swap_chains
 
         for (_, (device, _)) in devices.map.drain() {
             device.dispose();
