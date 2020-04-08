@@ -34,7 +34,7 @@ mod life;
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
-pub const MAX_VERTEX_BUFFERS: usize = 8;
+pub const MAX_VERTEX_BUFFERS: usize = 16;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
