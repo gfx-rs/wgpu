@@ -23,6 +23,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekPoke, Poke};
+use smallvec::SmallVec;
 use wgt::{
     BufferAddress, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode, LoadOp,
     RenderPassColorAttachmentDescriptorBase, RenderPassDepthStencilAttachmentDescriptorBase,
@@ -227,7 +228,7 @@ impl VertexBufferState {
 
 #[derive(Debug)]
 pub struct VertexState {
-    inputs: [VertexBufferState; MAX_VERTEX_BUFFERS],
+    inputs: SmallVec<[VertexBufferState; MAX_VERTEX_BUFFERS]>,
     vertex_limit: u32,
     instance_limit: u32,
 }
@@ -798,7 +799,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 limit: 0,
             },
             vertex: VertexState {
-                inputs: [VertexBufferState::EMPTY; MAX_VERTEX_BUFFERS],
+                inputs: SmallVec::new(),
                 vertex_limit: 0,
                 instance_limit: 0,
             },
@@ -968,7 +969,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         vbs.stride = stride;
                         vbs.rate = rate;
                     }
-                    for vbs in state.vertex.inputs[pipeline.vertex_strides.len()..].iter_mut() {
+                    let vertex_strides_len = pipeline.vertex_strides.len();
+                    for vbs in state.vertex.inputs.iter_mut().skip(vertex_strides_len) {
                         vbs.stride = 0;
                         vbs.rate = InputStepMode::Vertex;
                     }
@@ -1017,6 +1019,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::VERTEX)
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::VERTEX));
+                    let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
+                    state
+                        .vertex
+                        .inputs
+                        .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
                     state.vertex.inputs[slot as usize].total_size = if size != 0 {
                         size
                     } else {
