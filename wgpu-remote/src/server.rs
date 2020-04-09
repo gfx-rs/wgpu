@@ -130,6 +130,14 @@ pub extern "C" fn wgpu_server_buffer_map_read(
 }
 
 #[no_mangle]
+pub extern "C" fn wgpu_server_buffer_unmap(
+    global: &Global,
+    buffer_id: id::BufferId,
+) {
+    gfx_select!(buffer_id => global.buffer_unmap(buffer_id));
+}
+
+#[no_mangle]
 pub extern "C" fn wgpu_server_buffer_destroy(global: &Global, self_id: id::BufferId) {
     gfx_select!(self_id => global.buffer_destroy(self_id));
 }
