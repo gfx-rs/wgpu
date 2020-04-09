@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: [ staging.tmp ]
+  pull_request:
+    branches-ignore: [ staging.tmp ]
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-10.15, ubuntu-18.04, windows-2019]
+        include:
+          - os: macos-10.15
+            CHECK_COMMAND: cargo check
+            TEST_COMMAND: cargo test --no-run
+          - os: ubuntu-18.04
+            CHECK_COMMAND: cargo check
+            TEST_COMMAND: cargo test --no-run
+          - os: windows-2019
+            CHECK_COMMAND: rustup default stable-msvc; cargo check
+            TEST_COMMAND: rustup default stable-msvc; cargo test --no-run
+    steps:
+    - uses: actions/checkout@v2
+    - name: cargo check
+      run: ${{ matrix.CHECK_COMMAND }}
+    - name: cargo test
+      run: ${{ matrix.TEST_COMMAND }}
+  docs:
+    runs-on: [ubuntu-18.04]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install latest nightly
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+      continue-on-error: true
+    - name: cargo doc
+      run: cargo --version; cargo doc --lib --no-deps
+      continue-on-error: true
