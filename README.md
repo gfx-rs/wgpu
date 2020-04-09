@@ -1,8 +1,7 @@
 <img align="right" width="25%" src="logo.png">
 
 # wgpu-rs
-
-[![Build Status](https://travis-ci.org/gfx-rs/wgpu-rs.svg)](https://travis-ci.org/gfx-rs/wgpu-rs)
+[![Build Status](https://github.com/gfx-rs/wgpu-rs/workflows/CI/badge.svg?branch=master)](https://github.com/gfx-rs/wgpu-rs/actions)
 [![Crates.io](https://img.shields.io/crates/v/wgpu.svg)](https://crates.io/crates/wgpu)
 [![Docs.rs](https://docs.rs/wgpu/badge.svg)](https://docs.rs/wgpu)
 [![Matrix](https://img.shields.io/matrix/wgpu:matrix.org)](https://matrix.to/#/#wgpu:matrix.org)
