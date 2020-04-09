@@ -476,7 +476,7 @@ pub struct BufferDescriptor<'a> {
 }
 
 /// A description of a command encoder.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor<'a> {
     /// An optional label to apply to the command encoder.
     /// This can be useful for debugging and performance analysis.
