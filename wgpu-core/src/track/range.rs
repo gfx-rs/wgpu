@@ -9,7 +9,7 @@ use std::{cmp::Ordering, fmt::Debug, iter, ops::Range, slice::Iter};
 /// Structure that keeps track of a I -> T mapping,
 /// optimized for a case where keys of the same values
 /// are often grouped together linearly.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RangedStates<I, T> {
     /// List of ranges, each associated with a singe value.
     /// Ranges of keys have to be non-intersecting and ordered.

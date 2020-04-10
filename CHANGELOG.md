@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.5.1 (10-04-2020)
+  - fix tracking of swapchain images that are used multiple times in a command buffer
+  - fix tracking of initial usage of a resource across a command buffer
+
 ## v0.5 (06-04-2020)
   - Crates:
     - `wgpu-types`: common types between native and web targets

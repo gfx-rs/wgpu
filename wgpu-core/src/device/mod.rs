@@ -1503,6 +1503,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // execute resource transitions
                 let mut transit = device.com_allocator.extend(comb);
                 unsafe {
+                    // the last buffer was open, closing now
+                    comb.raw.last_mut().unwrap().finish();
                     transit.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                 }
                 log::trace!("Stitching command buffer {:?} before submission", cmb_id);
@@ -1517,9 +1519,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     transit.finish();
                 }
                 comb.raw.insert(0, transit);
-                unsafe {
-                    comb.raw.last_mut().unwrap().finish();
-                }
             }
 
             log::debug!("Device after submission {}: {:#?}", submit_index, trackers);
