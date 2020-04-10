@@ -107,9 +107,7 @@ pub(crate) type RenderPassKey = AttachmentData<hal::pass::Attachment>;
 pub(crate) type FramebufferKey = AttachmentData<id::TextureViewId>;
 pub(crate) type RenderPassContext = AttachmentData<TextureFormat>;
 
-// This typedef is needed to work around cbindgen limitations.
-type RawBufferMut = *mut u8;
-type BufferMapResult = Result<RawBufferMut, hal::device::MapError>;
+type BufferMapResult = Result<*mut u8, hal::device::MapError>;
 type BufferMapPendingCallback = (resource::BufferMapOperation, BufferMapResult);
 
 pub type BufferMapReadCallback =
