@@ -1159,6 +1159,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+        log::trace!("Merging {:?} with the render pass", encoder_id);
+        unsafe {
+            raw.end_render_pass();
+        }
         super::CommandBuffer::insert_barriers(
             cmb.raw.last_mut().unwrap(),
             &mut cmb.trackers,
@@ -1168,7 +1172,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         unsafe {
             cmb.raw.last_mut().unwrap().finish();
-            raw.end_render_pass();
         }
         cmb.raw.push(raw);
     }
