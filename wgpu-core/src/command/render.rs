@@ -30,9 +30,7 @@ use wgt::{
     TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
-use std::{
-    borrow::Borrow, collections::hash_map::Entry, iter, marker::PhantomData, mem, ops::Range, slice,
-};
+use std::{borrow::Borrow, collections::hash_map::Entry, iter, mem, ops::Range, slice};
 
 pub type RenderPassColorAttachmentDescriptor =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
@@ -439,7 +437,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut resolves = ArrayVec::new();
 
                 for at in &color_attachments {
-                    let view = &view_guard[at.attachment];
+                    let view = trackers
+                        .views
+                        .use_extend(&*view_guard, at.attachment, (), ())
+                        .unwrap();
                     if let Some(ex) = extent {
                         assert_eq!(ex, view.extent);
                     } else {
@@ -449,10 +450,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         view.samples, sample_count,
                         "All attachments must have the same sample_count"
                     );
-                    let first_use = trackers
-                        .views
-                        .init(at.attachment, view.life_guard.add_ref(), PhantomData)
-                        .is_ok();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -478,10 +475,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
 
                             let end = hal::image::Layout::Present;
-                            let start = if first_use {
-                                hal::image::Layout::Undefined
-                            } else {
-                                end
+                            let start = match base_trackers.views.query(at.attachment, ()) {
+                                Some(_) => end,
+                                None => hal::image::Layout::Undefined,
                             };
                             start..end
                         }
@@ -497,16 +493,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
 
                 for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
-                    let view = &view_guard[resolve_target];
+                    let view = trackers
+                        .views
+                        .use_extend(&*view_guard, resolve_target, (), ())
+                        .unwrap();
                     assert_eq!(extent, Some(view.extent));
                     assert_eq!(
                         view.samples, 1,
                         "All resolve_targets must have a sample_count of 1"
                     );
-                    let first_use = trackers
-                        .views
-                        .init(resolve_target, view.life_guard.add_ref(), PhantomData)
-                        .is_ok();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -532,10 +527,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
 
                             let end = hal::image::Layout::Present;
-                            let start = if first_use {
-                                hal::image::Layout::Undefined
-                            } else {
-                                end
+                            let start = match base_trackers.views.query(resolve_target, ()) {
+                                Some(_) => end,
+                                None => hal::image::Layout::Undefined,
                             };
                             start..end
                         }
@@ -1165,6 +1159,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+        log::trace!("Merging {:?} with the render pass", encoder_id);
+        unsafe {
+            raw.end_render_pass();
+        }
         super::CommandBuffer::insert_barriers(
             cmb.raw.last_mut().unwrap(),
             &mut cmb.trackers,
@@ -1174,7 +1172,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         unsafe {
             cmb.raw.last_mut().unwrap().finish();
-            raw.end_render_pass();
         }
         cmb.raw.push(raw);
     }
