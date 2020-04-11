@@ -1201,7 +1201,8 @@ impl SwapChain {
         match backend::swap_chain_get_next_texture(&self.id) {
             Some(id) => Ok(SwapChainOutput {
                 view: TextureView { id, owned: false },
-                swap_chain_id: self.id,
+                // TODO: Remove from web backend
+                swap_chain_id: self.id.clone(),
             }),
             None => Err(TimeOut),
         }

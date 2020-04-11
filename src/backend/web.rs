@@ -132,18 +132,18 @@ pub(crate) fn create_bind_group_layout(
                 _ => web_sys::GpuTextureViewDimension::N2d,
             };
 
-            let mut mapped_binding = web_sys::GpuBindGroupLayoutBinding::new(
+            let mut mapped_entry = web_sys::GpuBindGroupLayoutEntry::new(
                 bind.binding,
                 mapped_type,
                 bind.visibility.bits(),
             );
-            mapped_binding.has_dynamic_offset(mapped_dynamic);
-            mapped_binding.multisampled(mapped_multisampled);
-            mapped_binding.texture_dimension(mapped_view_dimension);
+            mapped_entry.has_dynamic_offset(mapped_dynamic);
+            mapped_entry.multisampled(mapped_multisampled);
+            mapped_entry.view_dimension(mapped_view_dimension);
 
             // TODO: Texture component type, storage texture format
 
-            mapped_binding
+            mapped_entry
         })
         .collect::<js_sys::Array>();
 
@@ -152,7 +152,7 @@ pub(crate) fn create_bind_group_layout(
 }
 
 pub(crate) fn create_bind_group(device: &DeviceId, desc: &BindGroupDescriptor) -> BindGroupId {
-    let mapped_bindings = desc
+    let mapped_entries = desc
         .bindings
         .iter()
         .map(|binding| {
@@ -172,11 +172,11 @@ pub(crate) fn create_bind_group(device: &DeviceId, desc: &BindGroupDescriptor) -
                 }
             };
 
-            web_sys::GpuBindGroupBinding::new(binding.binding, &mapped_resource)
+            web_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)
         })
         .collect::<js_sys::Array>();
 
-    let mapped_desc = web_sys::GpuBindGroupDescriptor::new(&mapped_bindings, &desc.layout.id);
+    let mapped_desc = web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &desc.layout.id);
     device.create_bind_group(&mapped_desc)
 }
 
@@ -500,8 +500,8 @@ fn map_texture_view_dimension(
 }
 
 fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> web_sys::GpuBufferCopyView {
-    let mut mapped =
-        web_sys::GpuBufferCopyView::new(&view.buffer.id, view.rows_per_image, view.bytes_per_row);
+    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id, view.bytes_per_row);
+    mapped.rows_per_image(view.rows_per_image);
     mapped.offset(view.offset as f64);
     mapped
 }
@@ -678,17 +678,14 @@ pub(crate) fn device_create_buffer(device: &DeviceId, desc: &BufferDescriptor) -
 }
 
 pub(crate) fn device_create_texture(device: &DeviceId, desc: &TextureDescriptor) -> TextureId {
-    let extent = map_extent_3d(desc.size);
     let mut mapped_desc = web_sys::GpuTextureDescriptor::new(
         map_texture_format(desc.format),
-        &extent,
+        &map_extent_3d(desc.size),
         desc.usage.bits(),
     );
-    mapped_desc.array_layer_count(desc.array_layer_count);
     mapped_desc.dimension(map_texture_dimension(desc.dimension));
     mapped_desc.mip_level_count(desc.mip_level_count);
     mapped_desc.sample_count(desc.sample_count);
-    mapped_desc.array_layer_count(desc.array_layer_count);
     device.create_texture(&mapped_desc)
 }
 
@@ -1009,7 +1006,7 @@ pub(crate) fn render_pass_draw(
     vertices: Range<u32>,
     instances: Range<u32>,
 ) {
-    render_pass.draw(
+    render_pass.draw_with_instance_count_and_first_vertex_and_first_instance(
         vertices.end - vertices.start,
         instances.end - instances.start,
         vertices.start,
@@ -1023,13 +1020,14 @@ pub(crate) fn render_pass_draw_indexed(
     base_vertex: i32,
     instances: Range<u32>,
 ) {
-    render_pass.draw_indexed(
-        indices.end - indices.start,
-        instances.end - instances.start,
-        indices.start,
-        base_vertex,
-        instances.start,
-    );
+    render_pass
+        .draw_indexed_with_instance_count_and_first_index_and_base_vertex_and_first_instance(
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
+            instances.start,
+        );
 }
 
 pub(crate) fn render_pass_end_pass(render_pass: &RenderPassEncoderId) {
