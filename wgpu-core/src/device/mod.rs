@@ -1044,7 +1044,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
         let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
-        assert_eq!(entries.len(), bind_group_layout.entries.len());
+        assert_eq!(entries.len(), bind_group_layout.entries.len(), "Bind group has {} entries and bind group layout has {} entries, they should be the same.", entries.len(), bind_group_layout.entries.len());
 
         let desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
