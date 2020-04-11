@@ -522,6 +522,11 @@ impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
                 feature = "gfx-backend-vulkan"
             ))]
             vulkan: Hub::new(factory),
+            #[cfg(any(
+                not(any(target_os = "ios", target_os = "macos")),
+                feature = "gfx-backend-vulkan"
+            ))]
+            gl: Hub::new(factory),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             metal: Hub::new(factory),
             #[cfg(windows)]
@@ -585,7 +590,7 @@ impl GfxBackend for backend::Vulkan {
 #[cfg(not(any(target_os = "ios", target_os = "macos")))]
 impl GfxBackend for backend::Gl {
     const VARIANT: Backend = Backend::Gl;
-    fn hub<F>(global: &Global<F>) -> &Hub<Self, F> {
+    fn hub<F: GlobalIdentityHandlerFactory>(global: &Global<F>) -> &Hub<Self, F> {
         &global.hubs.gl
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {

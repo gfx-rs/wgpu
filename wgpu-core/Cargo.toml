@@ -50,11 +50,8 @@ features = ["peek-poke"]
 gfx-backend-metal = { version = "0.5" }
 gfx-backend-vulkan = { version = "0.5", optional = true }
 
-[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
-gfx-backend-gl = { version = "0.4" }
-
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-gl = { version = "0.5"}
+gfx-backend-gl = { version = "0.5" }
 gfx-backend-vulkan = { version = "0.5", features = ["x11"] }
 
 [target.'cfg(windows)'.dependencies]

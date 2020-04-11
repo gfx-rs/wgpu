@@ -651,8 +651,6 @@ pub fn map_rasterization_state_descriptor(
         } else {
             None
         },
-        // TODO: Don't know what the proper value is for this
-        line_width: hal::pso::State::Static(1.),
         conservative: false,
         line_width: pso::State::Static(1.0),
     }
