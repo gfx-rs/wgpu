@@ -1,7 +1,7 @@
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
-    window::Window
+    window::Window,
 };
 
 async fn run(event_loop: EventLoop<()>, window: Window) {
@@ -18,13 +18,14 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     .await
     .unwrap();
 
-    let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
-        extensions: wgpu::Extensions {
-            anisotropic_filtering: false,
-        },
-        limits: wgpu::Limits::default(),
-    })
-    .await;
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            extensions: wgpu::Extensions {
+                anisotropic_filtering: false,
+            },
+            limits: wgpu::Limits::default(),
+        })
+        .await;
 
     let vs = include_bytes!("shader.vert.spv");
     let vs_module =
@@ -95,7 +96,10 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
         *control_flow = ControlFlow::Poll;
         match event {
             Event::MainEventsCleared => window.request_redraw(),
-            Event::WindowEvent { event: WindowEvent::Resized(size), .. } => {
+            Event::WindowEvent {
+                event: WindowEvent::Resized(size),
+                ..
+            } => {
                 sc_desc.width = size.width;
                 sc_desc.height = size.height;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
@@ -104,9 +108,8 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                 let frame = swap_chain
                     .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
-                let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                    label: None,
-                });
+                let mut encoder =
+                    device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
                 {
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                         color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -120,7 +123,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
                     });
                     rpass.set_pipeline(&render_pipeline);
                     rpass.set_bind_group(0, &bind_group, &[]);
-                    rpass.draw(0 .. 3, 0 .. 1);
+                    rpass.draw(0..3, 0..1);
                 }
 
                 queue.submit(&[encoder.finish()]);

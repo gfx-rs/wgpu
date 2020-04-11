@@ -9,76 +9,26 @@ mod macros;
 use arrayvec::ArrayVec;
 use smallvec::SmallVec;
 
-use std::{
-    ffi::CString,
-    ops::Range,
-    future::Future,
-    ptr,
-    slice,
-    thread,
-};
+use std::{ffi::CString, future::Future, ops::Range, ptr, slice, thread};
 
+pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
-    AddressMode,
-    Backend,
-    BackendBit,
-    BlendDescriptor,
-    BlendFactor,
-    BlendOperation,
-    BufferAddress,
-    BufferUsage,
-    Color,
-    ColorStateDescriptor,
-    ColorWrite,
-    CommandBufferDescriptor,
-    CompareFunction,
-    CullMode,
-    DepthStencilStateDescriptor,
-    DeviceDescriptor,
-    DynamicOffset,
-    Extensions,
-    Extent3d,
-    FilterMode,
-    FrontFace,
-    IndexFormat,
-    InputStepMode,
-    Limits,
-    LoadOp,
-    Origin3d,
-    PowerPreference,
-    PresentMode,
-    PrimitiveTopology,
-    RasterizationStateDescriptor,
-    SamplerDescriptor,
-    ShaderLocation,
-    ShaderStage,
-    StencilOperation,
-    StencilStateFaceDescriptor,
-    StoreOp,
-    SwapChainDescriptor,
-    TextureAspect,
-    TextureComponentType,
-    TextureDimension,
-    TextureFormat,
-    TextureUsage,
-    TextureViewDescriptor,
-    TextureViewDimension,
-    VertexAttributeDescriptor,
-    VertexFormat,
-    BIND_BUFFER_ALIGNMENT,
-    MAX_BIND_GROUPS,
-    read_spirv,
-};
-pub use wgc::instance::{
-    AdapterInfo,
-    DeviceType,
+    read_spirv, AddressMode, Backend, BackendBit, BlendDescriptor, BlendFactor, BlendOperation,
+    BufferAddress, BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
+    CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
+    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
+    Origin3d, PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
+    SamplerDescriptor, ShaderLocation, ShaderStage, StencilOperation, StencilStateFaceDescriptor,
+    StoreOp, SwapChainDescriptor, TextureAspect, TextureComponentType, TextureDimension,
+    TextureFormat, TextureUsage, TextureViewDescriptor, TextureViewDimension,
+    VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
 };
 
 //TODO: avoid heap allocating vectors during resource creation.
 #[derive(Default, Debug)]
 struct Temp {
     //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
-    //vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
+//vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
 }
 
 /// A handle to a physical graphics and/or compute device.
@@ -457,8 +407,7 @@ pub struct RenderPassDescriptor<'a, 'b> {
     pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
 
     /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment:
-        Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
 }
 
 /// A description of a buffer.
@@ -587,7 +536,10 @@ impl CreateBufferMapped<'_> {
     /// Unmaps the buffer from host memory and returns a [`Buffer`].
     pub fn finish(self) -> Buffer {
         wgn::wgpu_buffer_unmap(self.id);
-        Buffer { device_id: self.device_id, id: self.id }
+        Buffer {
+            device_id: self.device_id,
+            id: self.id,
+        }
     }
 }
 
@@ -621,7 +573,10 @@ impl Adapter {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
-    pub async fn request(options: &RequestAdapterOptions<'_>, backends: BackendBit) -> Option<Self> {
+    pub async fn request(
+        options: &RequestAdapterOptions<'_>,
+        backends: BackendBit,
+    ) -> Option<Self> {
         unsafe extern "C" fn adapter_callback(
             id: Option<wgc::id::AdapterId>,
             user_data: *mut std::ffi::c_void,
@@ -634,8 +589,7 @@ impl Adapter {
             wgn::wgpu_request_adapter_async(
                 Some(&wgc::instance::RequestAdapterOptions {
                     power_preference: options.power_preference,
-                    compatible_surface: options.compatible_surface
-                        .map(|surface| surface.id),
+                    compatible_surface: options.compatible_surface.map(|surface| surface.id),
                 }),
                 backends,
                 adapter_callback,
@@ -670,10 +624,13 @@ impl Adapter {
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
     pub fn poll(&self, maintain: Maintain) {
-        wgn::wgpu_device_poll(self.id, match maintain {
-            Maintain::Poll => false,
-            Maintain::Wait => true,
-        });
+        wgn::wgpu_device_poll(
+            self.id,
+            match maintain {
+                Maintain::Poll => false,
+                Maintain::Wait => true,
+            },
+        );
     }
 
     /// Creates a shader module from SPIR-V source code.
@@ -769,13 +726,11 @@ impl Device {
                     BindingType::StorageTexture { readonly: true, .. } => {
                         bm::BindingType::ReadonlyStorageTexture
                     }
-                    BindingType::StorageTexture { .. } => {
-                        bm::BindingType::WriteonlyStorageTexture
-                    }
+                    BindingType::StorageTexture { .. } => bm::BindingType::WriteonlyStorageTexture,
                 },
                 has_dynamic_offset: match bind.ty {
-                    BindingType::UniformBuffer { dynamic } |
-                    BindingType::StorageBuffer { dynamic, .. } => dynamic,
+                    BindingType::UniformBuffer { dynamic }
+                    | BindingType::StorageBuffer { dynamic, .. } => dynamic,
                     _ => false,
                 },
                 multisampled: match bind.ty {
@@ -783,13 +738,13 @@ impl Device {
                     _ => false,
                 },
                 view_dimension: match bind.ty {
-                    BindingType::SampledTexture { dimension, .. } |
-                    BindingType::StorageTexture { dimension, .. } => dimension,
+                    BindingType::SampledTexture { dimension, .. }
+                    | BindingType::StorageTexture { dimension, .. } => dimension,
                     _ => TextureViewDimension::D2,
                 },
                 texture_component_type: match bind.ty {
-                    BindingType::SampledTexture { component_type, .. } |
-                    BindingType::StorageTexture { component_type, .. } => component_type,
+                    BindingType::SampledTexture { component_type, .. }
+                    | BindingType::StorageTexture { component_type, .. } => component_type,
                     _ => TextureComponentType::Float,
                 },
                 storage_texture_format: match bind.ty {
@@ -853,7 +808,8 @@ impl Device {
 
         let temp_color_states = desc.color_states.to_vec();
         let temp_vertex_buffers = desc
-            .vertex_state.vertex_buffers
+            .vertex_state
+            .vertex_buffers
             .iter()
             .map(|vbuf| pipe::VertexBufferLayoutDescriptor {
                 array_stride: vbuf.stride,
@@ -927,7 +883,7 @@ impl Device {
                     label: owned_label.as_ptr(),
                     size: desc.size,
                     usage: desc.usage,
-                }
+                },
             ),
         }
     }
@@ -950,12 +906,17 @@ impl Device {
                     size: desc.size,
                     usage: desc.usage,
                 },
-                &mut data_ptr as *mut *mut u8);
+                &mut data_ptr as *mut *mut u8,
+            );
             let data = std::slice::from_raw_parts_mut(data_ptr as *mut u8, desc.size as usize);
             (id, data)
         };
 
-        CreateBufferMapped { device_id: self.id, id, data }
+        CreateBufferMapped {
+            device_id: self.id,
+            id,
+            data,
+        }
     }
 
     /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
@@ -976,16 +937,19 @@ impl Device {
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
         Texture {
-            id: wgn::wgpu_device_create_texture(self.id, &wgt::TextureDescriptor {
-                label: owned_label.as_ptr(),
-                size: desc.size,
-                array_layer_count: desc.array_layer_count,
-                mip_level_count: desc.mip_level_count,
-                sample_count: desc.sample_count,
-                dimension: desc.dimension,
-                format: desc.format,
-                usage: desc.usage,
-            }),
+            id: wgn::wgpu_device_create_texture(
+                self.id,
+                &wgt::TextureDescriptor {
+                    label: owned_label.as_ptr(),
+                    size: desc.size,
+                    array_layer_count: desc.array_layer_count,
+                    mip_level_count: desc.mip_level_count,
+                    sample_count: desc.sample_count,
+                    dimension: desc.dimension,
+                    format: desc.format,
+                    usage: desc.usage,
+                },
+            ),
             owned: true,
         }
     }
@@ -1028,12 +992,9 @@ pub struct BufferReadMapping {
 unsafe impl Send for BufferReadMapping {}
 unsafe impl Sync for BufferReadMapping {}
 
-impl BufferReadMapping
-{
+impl BufferReadMapping {
     pub fn as_slice(&self) -> &[u8] {
-        unsafe {
-            slice::from_raw_parts(self.data as *const u8, self.size)
-        }
+        unsafe { slice::from_raw_parts(self.data as *const u8, self.size) }
     }
 }
 
@@ -1052,12 +1013,9 @@ pub struct BufferWriteMapping {
 unsafe impl Send for BufferWriteMapping {}
 unsafe impl Sync for BufferWriteMapping {}
 
-impl BufferWriteMapping
-{
+impl BufferWriteMapping {
     pub fn as_slice(&mut self) -> &mut [u8] {
-        unsafe {
-            slice::from_raw_parts_mut(self.data as *mut u8, self.size)
-        }
+        unsafe { slice::from_raw_parts_mut(self.data as *mut u8, self.size) }
     }
 }
 
@@ -1067,33 +1025,29 @@ impl Drop for BufferWriteMapping {
     }
 }
 
-
-
 impl Buffer {
     /// Map the buffer for reading. The result is returned in a future.
-    /// 
+    ///
     /// For the future to complete, `device.poll(...)` must be called elsewhere in the runtime, possibly integrated
     /// into an event loop, run on a separate thread, or continually polled in the same task runtime that this
     /// future will be run on.
-    /// 
+    ///
     /// It's expected that wgpu will eventually supply its own event loop infrastructure that will be easy to integrate
     /// into other event loops, like winit's.
-    pub fn map_read(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>>
-    {
-        let (future, completion) = native_gpu_future::new_gpu_future(
-            self.id,
-            size,
-        );
+    pub fn map_read(
+        &self,
+        start: BufferAddress,
+        size: BufferAddress,
+    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>> {
+        let (future, completion) = native_gpu_future::new_gpu_future(self.id, size);
 
         extern "C" fn buffer_map_read_future_wrapper(
             status: wgc::resource::BufferMapAsyncStatus,
             data: *const u8,
             user_data: *mut u8,
-        )
-        {
-            let completion = unsafe {
-                native_gpu_future::GpuFutureCompletion::from_raw(user_data as _)
-            };
+        ) {
+            let completion =
+                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
             let (buffer_id, size) = completion.get_buffer_info();
 
             if let wgc::resource::BufferMapAsyncStatus::Success = status {
@@ -1119,25 +1073,23 @@ impl Buffer {
     }
 
     /// Map the buffer for writing. The result is returned in a future.
-    /// 
+    ///
     /// See the documentation of (map_read)[#method.map_read] for more information about
     /// how to run this future.
-    pub fn map_write(&self, start: BufferAddress, size: BufferAddress) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>>
-    {
-        let (future, completion) = native_gpu_future::new_gpu_future(
-            self.id,
-            size,
-        );
+    pub fn map_write(
+        &self,
+        start: BufferAddress,
+        size: BufferAddress,
+    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> {
+        let (future, completion) = native_gpu_future::new_gpu_future(self.id, size);
 
         extern "C" fn buffer_map_write_future_wrapper(
             status: wgc::resource::BufferMapAsyncStatus,
             data: *mut u8,
             user_data: *mut u8,
-        )
-        {
-            let completion = unsafe {
-                native_gpu_future::GpuFutureCompletion::from_raw(user_data as _)
-            };
+        ) {
+            let completion =
+                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
             let (buffer_id, size) = completion.get_buffer_info();
 
             if let wgc::resource::BufferMapAsyncStatus::Success = status {
@@ -1267,9 +1219,7 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: unsafe {
-                wgn::wgpu_command_encoder_begin_compute_pass(self.id, None)
-            },
+            id: unsafe { wgn::wgpu_command_encoder_begin_compute_pass(self.id, None) },
             _parent: self,
         }
     }
@@ -1363,19 +1313,13 @@ impl<'a> RenderPass<'a> {
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
     pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
         unsafe {
-            wgn::wgpu_render_pass_set_pipeline(
-                self.id.as_mut().unwrap(),
-                pipeline.id,
-            );
+            wgn::wgpu_render_pass_set_pipeline(self.id.as_mut().unwrap(), pipeline.id);
         }
     }
 
     pub fn set_blend_color(&mut self, color: Color) {
         unsafe {
-            wgn::wgpu_render_pass_set_blend_color(
-                self.id.as_mut().unwrap(),
-                &color,
-            );
+            wgn::wgpu_render_pass_set_blend_color(self.id.as_mut().unwrap(), &color);
         }
     }
 
@@ -1438,10 +1382,7 @@ impl<'a> RenderPass<'a> {
     /// Subsequent draw calls will discard any fragments that fall outside this region.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
         unsafe {
-            wgn::wgpu_render_pass_set_scissor_rect(
-                self.id.as_mut().unwrap(),
-                x, y, w, h,
-            );
+            wgn::wgpu_render_pass_set_scissor_rect(self.id.as_mut().unwrap(), x, y, w, h);
         }
     }
 
@@ -1452,8 +1393,12 @@ impl<'a> RenderPass<'a> {
         unsafe {
             wgn::wgpu_render_pass_set_viewport(
                 self.id.as_mut().unwrap(),
-                x, y, w, h,
-                min_depth, max_depth,
+                x,
+                y,
+                w,
+                h,
+                min_depth,
+                max_depth,
             );
         }
     }
@@ -1463,10 +1408,7 @@ impl<'a> RenderPass<'a> {
     /// Subsequent stencil tests will test against this value.
     pub fn set_stencil_reference(&mut self, reference: u32) {
         unsafe {
-            wgn::wgpu_render_pass_set_stencil_reference(
-                self.id.as_mut().unwrap(),
-                reference,
-            );
+            wgn::wgpu_render_pass_set_stencil_reference(self.id.as_mut().unwrap(), reference);
         }
     }
 
@@ -1567,10 +1509,7 @@ impl<'a> ComputePass<'a> {
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
         unsafe {
-            wgn::wgpu_compute_pass_set_pipeline(
-                self.id.as_mut().unwrap(),
-                pipeline.id,
-            );
+            wgn::wgpu_compute_pass_set_pipeline(self.id.as_mut().unwrap(), pipeline.id);
         }
     }
 
@@ -1579,15 +1518,16 @@ impl<'a> ComputePass<'a> {
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         unsafe {
-            wgn::wgpu_compute_pass_dispatch(
-                self.id.as_mut().unwrap(),
-                x, y, z,
-            );
+            wgn::wgpu_compute_pass_dispatch(self.id.as_mut().unwrap(), x, y, z);
         }
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
-    pub fn dispatch_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+    pub fn dispatch_indirect(
+        &mut self,
+        indirect_buffer: &'a Buffer,
+        indirect_offset: BufferAddress,
+    ) {
         unsafe {
             wgn::wgpu_compute_pass_dispatch_indirect(
                 self.id.as_mut().unwrap(),
@@ -1611,7 +1551,8 @@ impl<'a> Drop for ComputePass<'a> {
 impl Queue {
     /// Submits a series of finished command buffers for execution.
     pub fn submit(&self, command_buffers: &[CommandBuffer]) {
-        let temp_command_buffers = command_buffers.iter()
+        let temp_command_buffers = command_buffers
+            .iter()
             .map(|cb| cb.id)
             .collect::<SmallVec<[_; 4]>>();
 

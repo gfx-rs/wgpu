@@ -34,7 +34,7 @@ fn create_vertices() -> Vec<Vertex> {
 fn create_texels(size: usize, cx: f32, cy: f32) -> Vec<u8> {
     use std::iter;
 
-    (0 .. size * size)
+    (0..size * size)
         .flat_map(|id| {
             // get high five for recognizing this ;)
             let mut x = 4.0 * (id % size) as f32 / (size - 1) as f32 - 2.0;
@@ -155,7 +155,7 @@ impl Example {
             compare: wgpu::CompareFunction::Undefined,
         });
 
-        let views = (0 .. mip_count)
+        let views = (0..mip_count)
             .map(|mip| {
                 texture.create_view(&wgpu::TextureViewDescriptor {
                     format: TEXTURE_FORMAT,
@@ -169,7 +169,7 @@ impl Example {
             })
             .collect::<Vec<_>>();
 
-        for target_mip in 1 .. mip_count as usize {
+        for target_mip in 1..mip_count as usize {
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
                 bindings: &[
@@ -197,7 +197,7 @@ impl Example {
             });
             rpass.set_pipeline(&pipeline);
             rpass.set_bind_group(0, &bind_group, &[]);
-            rpass.draw(0 .. 4, 0 .. 1);
+            rpass.draw(0..4, 0..1);
         }
     }
 }
@@ -314,7 +314,7 @@ impl framework::Example for Example {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer {
                         buffer: &uniform_buf,
-                        range: 0 .. 64,
+                        range: 0..64,
                     },
                 },
                 wgpu::Binding {
@@ -434,7 +434,7 @@ impl framework::Example for Example {
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
             rpass.set_vertex_buffer(0, &self.vertex_buf, 0, 0);
-            rpass.draw(0 .. 4, 0 .. 1);
+            rpass.draw(0..4, 0..1);
         }
 
         encoder.finish()

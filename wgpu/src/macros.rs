@@ -33,36 +33,96 @@ macro_rules! vertex_attr_array {
 // For internal usage
 #[macro_export]
 macro_rules! vertex_format_size {
-    (Uchar2) => { 2 };
-    (Uchar4) => { 4 };
-    (Char2) => { 2 };
-    (Char4) => { 4 };
-    (Uchar2Norm) => { 2 };
-    (Uchar4Norm) => { 4 };
-    (Char2Norm) => { 2 };
-    (Char4Norm) => { 4 };
-    (Ushort2) => { 4 };
-    (Ushort4) => { 8 };
-    (Short2) => { 4 };
-    (Short4) => { 8 };
-    (Ushort2Norm) => { 4 };
-    (Ushort4Norm) => { 8 };
-    (Short2Norm) => { 4 };
-    (Short4Norm) => { 8 };
-    (Half2) => { 4 };
-    (Half4) => { 8 };
-    (Float) => { 4 };
-    (Float2) => { 8 };
-    (Float3) => { 12 };
-    (Float4) => { 16 };
-    (Uint) => { 4 };
-    (Uint2) => { 8 };
-    (Uint3) => { 12 };
-    (Uint4) => { 16 };
-    (Int) => { 4 };
-    (Int2) => { 8 };
-    (Int3) => { 12 };
-    (Int4) => { 16 };
+    (Uchar2) => {
+        2
+    };
+    (Uchar4) => {
+        4
+    };
+    (Char2) => {
+        2
+    };
+    (Char4) => {
+        4
+    };
+    (Uchar2Norm) => {
+        2
+    };
+    (Uchar4Norm) => {
+        4
+    };
+    (Char2Norm) => {
+        2
+    };
+    (Char4Norm) => {
+        4
+    };
+    (Ushort2) => {
+        4
+    };
+    (Ushort4) => {
+        8
+    };
+    (Short2) => {
+        4
+    };
+    (Short4) => {
+        8
+    };
+    (Ushort2Norm) => {
+        4
+    };
+    (Ushort4Norm) => {
+        8
+    };
+    (Short2Norm) => {
+        4
+    };
+    (Short4Norm) => {
+        8
+    };
+    (Half2) => {
+        4
+    };
+    (Half4) => {
+        8
+    };
+    (Float) => {
+        4
+    };
+    (Float2) => {
+        8
+    };
+    (Float3) => {
+        12
+    };
+    (Float4) => {
+        16
+    };
+    (Uint) => {
+        4
+    };
+    (Uint2) => {
+        8
+    };
+    (Uint3) => {
+        12
+    };
+    (Uint4) => {
+        16
+    };
+    (Int) => {
+        4
+    };
+    (Int2) => {
+        8
+    };
+    (Int3) => {
+        12
+    };
+    (Int4) => {
+        16
+    };
 }
 
 #[test]

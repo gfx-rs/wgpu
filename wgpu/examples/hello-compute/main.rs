@@ -31,13 +31,14 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     .await
     .unwrap();
 
-    let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
-        extensions: wgpu::Extensions {
-            anisotropic_filtering: false,
-        },
-        limits: wgpu::Limits::default(),
-    })
-    .await;
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            extensions: wgpu::Extensions {
+                anisotropic_filtering: false,
+            },
+            limits: wgpu::Limits::default(),
+        })
+        .await;
 
     let cs = include_bytes!("shader.comp.spv");
     let cs_module =
@@ -74,7 +75,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
             binding: 0,
             resource: wgpu::BindingResource::Buffer {
                 buffer: &storage_buffer,
-                range: 0 .. size,
+                range: 0..size,
             },
         }],
         label: None,
@@ -92,7 +93,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         },
     });
 
-    let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+    let mut encoder =
+        device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
     encoder.copy_buffer_to_buffer(&staging_buffer, 0, &storage_buffer, 0, size);
     {
         let mut cpass = encoder.begin_compute_pass();
@@ -134,15 +136,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_compute_1(){
-        let input = vec!(1, 2, 3, 4);
-        futures::executor::block_on(assert_execute_gpu(input, vec!(0, 1, 7, 2)));
+    fn test_compute_1() {
+        let input = vec![1, 2, 3, 4];
+        futures::executor::block_on(assert_execute_gpu(input, vec![0, 1, 7, 2]));
     }
 
     #[test]
-    fn test_compute_2(){
-        let input = vec!(5, 23, 10, 9);
-        futures::executor::block_on(assert_execute_gpu(input, vec!(5, 15, 6, 19)));
+    fn test_compute_2() {
+        let input = vec![5, 23, 10, 9];
+        futures::executor::block_on(assert_execute_gpu(input, vec![5, 15, 6, 19]));
     }
 
     #[test]
@@ -154,16 +156,16 @@ mod tests {
         let thread_count = 8;
 
         let (tx, rx) = mpsc::channel();
-        for _ in 0 .. thread_count {
+        for _ in 0..thread_count {
             let tx = tx.clone();
             thread::spawn(move || {
                 let input = vec![100, 100, 100];
-                futures::executor::block_on(assert_execute_gpu(input, vec!(25, 25, 25)));
+                futures::executor::block_on(assert_execute_gpu(input, vec![25, 25, 25]));
                 tx.send(true).unwrap();
             });
         }
 
-        for _ in 0 .. thread_count {
+        for _ in 0..thread_count {
             rx.recv_timeout(Duration::from_secs(10))
                 .expect("A thread never completed.");
         }

@@ -239,7 +239,7 @@ impl framework::Example for Skybox {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer {
                         buffer: &uniform_buf,
-                        range: 0 .. uniform_buf_size as wgpu::BufferAddress,
+                        range: 0..uniform_buf_size as wgpu::BufferAddress,
                     },
                 },
                 wgpu::Binding {
@@ -328,7 +328,7 @@ impl framework::Example for Skybox {
 
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.draw(0 .. 3 as u32, 0 .. 1);
+            rpass.draw(0..3 as u32, 0..1);
         }
         init_encoder.finish()
     }

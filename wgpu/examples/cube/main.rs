@@ -66,7 +66,7 @@ fn create_vertices() -> (Vec<Vertex>, Vec<u16>) {
 fn create_texels(size: usize) -> Vec<u8> {
     use std::iter;
 
-    (0 .. size * size)
+    (0..size * size)
         .flat_map(|id| {
             // get high five for recognizing this ;)
             let cx = 3.0 * (id % size) as f32 / (size - 1) as f32 - 2.0;
@@ -221,7 +221,7 @@ impl framework::Example for Example {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer {
                         buffer: &uniform_buf,
-                        range: 0 .. 64,
+                        range: 0..64,
                     },
                 },
                 wgpu::Binding {
@@ -353,9 +353,9 @@ impl framework::Example for Example {
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_index_buffer(&self.index_buf, 0,0 );
+            rpass.set_index_buffer(&self.index_buf, 0, 0);
             rpass.set_vertex_buffer(0, &self.vertex_buf, 0, 0);
-            rpass.draw_indexed(0 .. self.index_count as u32, 0, 0 .. 1);
+            rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
         }
 
         encoder.finish()
