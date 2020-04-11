@@ -63,4 +63,4 @@ gfx-backend-dx12 = { path = "../gfx/src/backend/dx12" }
 gfx-hal = { path = "../gfx/src/hal" }
 ```
 
-If a version needs to be changed, you need to to do `cargo update -p gfx-backend-dx12`.
+If a version needs to be changed, you need to do `cargo update -p gfx-backend-dx12`.
