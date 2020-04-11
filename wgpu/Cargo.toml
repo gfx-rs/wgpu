@@ -52,7 +52,7 @@ cgmath = "0.17"
 #glsl-to-spirv = "0.1"
 log = "0.4"
 png = "0.15"
-winit = { version = "0.22", features = ["web-sys"] }
+winit = { version = "0.22.1", features = ["web-sys"] }
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = "1"
 futures = "0.3"
@@ -62,12 +62,10 @@ name="hello-compute"
 path="examples/hello-compute/main.rs"
 test = true
 
-#[patch.crates-io]
+[patch.crates-io]
 #wgpu-types = { version = "0.5.0", path = "../wgpu/wgpu-types" }
 #wgpu-core = { version = "0.5.0", path = "../wgpu/wgpu-core" }
 #wgpu-native = { version = "0.5.0", path = "../wgpu/wgpu-native" }
-
-#[patch.crates-io]
 #gfx-hal = { version = "0.5.0", path = "../gfx/src/hal" }
 #gfx-backend-empty = { version = "0.5.0", path = "../gfx/src/backend/empty" }
 #gfx-backend-vulkan = { version = "0.5.0", path = "../gfx/src/backend/vulkan" }
@@ -75,13 +73,17 @@ test = true
 #gfx-backend-dx11 = { version = "0.5.0", path = "../gfx/src/backend/dx11" }
 #gfx-descriptor = { version = "0.1.0", path = "../gfx-extras/gfx-descriptor" }
 #gfx-memory = { version = "0.1.0", path = "../gfx-extras/gfx-memory" }
+wasm-bindgen = { git = "https://github.com/rustwasm/wasm-bindgen" }
+wasm-bindgen-futures = { git = "https://github.com/rustwasm/wasm-bindgen" }
+web-sys = { git = "https://github.com/rustwasm/wasm-bindgen" }
+js-sys = { git = "https://github.com/rustwasm/wasm-bindgen" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.59"
-web-sys = { version = "0.3.36", features = [
+wasm-bindgen = "0.2.60"
+web-sys = { version = "0.3.37", features = [
     "Document",
     "Navigator",
     "Node",
@@ -90,10 +92,10 @@ web-sys = { version = "0.3.36", features = [
     "GpuAdapter",
     "GpuAddressMode",
     "GpuBindGroup",
-    "GpuBindGroupBinding",
+    "GpuBindGroupEntry",
     "GpuBindGroupDescriptor",
     "GpuBindGroupLayout",
-    "GpuBindGroupLayoutBinding",
+    "GpuBindGroupLayoutEntry",
     "GpuBindGroupLayoutDescriptor",
     "GpuBlendDescriptor",
     "GpuBlendFactor",
@@ -167,8 +169,8 @@ web-sys = { version = "0.3.36", features = [
     "HtmlCanvasElement",
     "Window",
 ]}
-js-sys = "0.3.36"
-wasm-bindgen-futures = "0.4.9"
+js-sys = "0.3.37"
+wasm-bindgen-futures = "0.4.10"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.6"
