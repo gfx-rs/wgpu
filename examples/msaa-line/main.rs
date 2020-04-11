@@ -145,7 +145,7 @@ impl framework::Example for Example {
         let mut vertex_data = vec![];
 
         let max = 50;
-        for i in 0 .. max {
+        for i in 0..max {
             let percent = i as f32 / max as f32;
             let (sin, cos) = (percent * 2.0 * std::f32::consts::PI).sin_cos();
             vertex_data.push(Vertex {
@@ -259,7 +259,7 @@ impl framework::Example for Example {
             });
             rpass.set_pipeline(&self.pipeline);
             rpass.set_vertex_buffer(0, &self.vertex_buffer, 0, 0);
-            rpass.draw(0 .. self.vertex_count, 0 .. 1);
+            rpass.draw(0..self.vertex_count, 0..1);
         }
 
         encoder.finish()
