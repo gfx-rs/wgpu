@@ -1,9 +1,9 @@
+use crate::BufferAddress;
+use parking_lot::Mutex;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
-use parking_lot::Mutex;
-use crate::BufferAddress;
 
 enum WakerOrResult<T> {
     Waker(Waker),
@@ -28,8 +28,7 @@ pub struct GpuFutureCompletion<T> {
     data: Arc<Data<T>>,
 }
 
-impl<T> Future for GpuFuture<T>
-{
+impl<T> Future for GpuFuture<T> {
     type Output = T;
 
     fn poll(self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
@@ -56,7 +55,7 @@ impl<T> GpuFutureCompletion<T> {
                 // Drop before panicking. Not sure if this is necessary, but it makes me feel better.
                 drop(waker_or_result);
                 unreachable!()
-            },
+            }
         };
     }
 
@@ -66,7 +65,7 @@ impl<T> GpuFutureCompletion<T> {
 
     pub(crate) unsafe fn from_raw(this: *mut OpaqueData) -> Self {
         Self {
-            data: Arc::from_raw(this as _)
+            data: Arc::from_raw(this as _),
         }
     }
 
