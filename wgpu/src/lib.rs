@@ -1505,6 +1505,18 @@ impl<'a> RenderPass<'a> {
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// 
+    /// The structure expected in `indirect_buffer` is the following:
+    /// 
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndirect {
+    ///     vertex_count: u32,
+    ///     instance_count: u32,
+    ///     first_vertex: u32,
+    ///     base_instance: u32,
+    /// }
+    /// ```
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
         unsafe {
             wgn::wgpu_render_pass_draw_indirect(
@@ -1520,6 +1532,19 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    /// 
+    /// The structure expected in `indirect_buffer` is the following:
+    /// 
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndexedIndirect {
+    ///     vertex_count: u32,
+    ///     instance_count: u32,
+    ///     first_index: u32,
+    ///     base_vertex: u32,
+    ///     base_instance: u32,
+    /// }
+    /// ```
     pub fn draw_indexed_indirect(
         &mut self,
         indirect_buffer: &'a Buffer,
