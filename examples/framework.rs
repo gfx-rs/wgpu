@@ -109,13 +109,14 @@ async fn run_async<E: Example>(title: &str) {
     .await
     .unwrap();
 
-    let (device, queue) = adapter.request_device(&wgpu::DeviceDescriptor {
-        extensions: wgpu::Extensions {
-            anisotropic_filtering: false,
-        },
-        limits: wgpu::Limits::default(),
-    })
-    .await;
+    let (device, queue) = adapter
+        .request_device(&wgpu::DeviceDescriptor {
+            extensions: wgpu::Extensions {
+                anisotropic_filtering: false,
+            },
+            limits: wgpu::Limits::default(),
+        })
+        .await;
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -170,7 +171,7 @@ async fn run_async<E: Example>(title: &str) {
                 _ => {
                     example.update(event);
                 }
-            }
+            },
             event::Event::RedrawRequested(_) => {
                 let frame = swap_chain
                     .get_next_texture()
