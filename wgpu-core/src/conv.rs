@@ -443,7 +443,6 @@ pub fn map_texture_dimension_size(
         height,
         depth,
     }: Extent3d,
-    array_size: u32,
     sample_size: u32,
 ) -> hal::image::Kind {
     use hal::image::Kind as H;
@@ -451,31 +450,18 @@ pub fn map_texture_dimension_size(
     match dimension {
         D1 => {
             assert_eq!(height, 1);
-            assert_eq!(depth, 1);
             assert_eq!(sample_size, 1);
-            H::D1(width, checked_u32_as_u16(array_size))
+            H::D1(width, checked_u32_as_u16(depth))
         }
         D2 => {
-            assert_eq!(depth, 1);
             assert!(
-                sample_size == 1
-                    || sample_size == 2
-                    || sample_size == 4
-                    || sample_size == 8
-                    || sample_size == 16
-                    || sample_size == 32,
+                sample_size <= 32 && sample_size & (sample_size - 1) == 0,
                 "Invalid sample_count of {}",
                 sample_size
             );
-            H::D2(
-                width,
-                height,
-                checked_u32_as_u16(array_size),
-                sample_size as u8,
-            )
+            H::D2(width, height, checked_u32_as_u16(depth), sample_size as u8)
         }
         D3 => {
-            assert_eq!(array_size, 1);
             assert_eq!(sample_size, 1);
             H::D3(width, height, depth)
         }
