@@ -29,7 +29,7 @@ fxhash = "0.2"
 log = "0.4"
 hal = { package = "gfx-hal", version = "0.4" }
 gfx-backend-empty = { version = "0.4" }
-parking_lot = "0.9"
+parking_lot = "0.10"
 peek-poke = { git = "https://github.com/kvark/peek-poke", rev = "969bd7fe2be1a83f87916dc8b388c63cfd457075" }
 rendy-memory = "0.5"
 rendy-descriptor = "0.5"
