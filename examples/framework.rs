@@ -94,8 +94,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
         *control_flow = if cfg!(feature = "metal-auto-capture") {
             ControlFlow::Exit
         } else {
-            // TODO: ControlFlow::Poll
-            ControlFlow::Wait
+            ControlFlow::Poll
         };
         match event {
             event::Event::MainEventsCleared => window.request_redraw(),

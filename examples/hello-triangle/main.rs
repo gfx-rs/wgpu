@@ -93,8 +93,7 @@ async fn run(event_loop: EventLoop<()>, window: Window) {
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     event_loop.run(move |event, _, control_flow| {
-        // TODO: ControlFlow::Poll;
-        *control_flow = ControlFlow::Wait;
+        *control_flow = ControlFlow::Poll;
         match event {
             Event::MainEventsCleared => window.request_redraw(),
             Event::WindowEvent {
