@@ -300,7 +300,7 @@ mod test {
         assert_eq!(
             ts1.merge(id, &ts2, None),
             Ok(()),
-            "failed to merge with an emtpy"
+            "failed to merge with an empty"
         );
 
         ts2.mips.push(PlaneStates::from_slice(&[(
