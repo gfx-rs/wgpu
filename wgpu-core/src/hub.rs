@@ -39,7 +39,7 @@ use vec_map::VecMap;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{fmt::Debug, marker::PhantomData, ops};
+use std::{fmt::Debug, iter, marker::PhantomData, ops};
 
 
 /// A simple structure to manage identities of objects.
@@ -184,6 +184,7 @@ impl<B: hal::Backend> Access<ComputePipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
+impl<B: hal::Backend> Access<RenderPipeline<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for PipelineLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}
@@ -270,7 +271,7 @@ impl<I: TypedId + Debug> IdentityHandler<I> for Mutex<IdentityManager> {
 
 pub trait IdentityHandlerFactory<I> {
     type Filter: IdentityHandler<I>;
-    fn spawn(&self) -> Self::Filter;
+    fn spawn(&self, min_index: Index) -> Self::Filter;
 }
 
 #[derive(Debug)]
@@ -278,8 +279,11 @@ pub struct IdentityManagerFactory;
 
 impl<I: TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
     type Filter = Mutex<IdentityManager>;
-    fn spawn(&self) -> Self::Filter {
-        Mutex::new(IdentityManager::default())
+    fn spawn(&self, min_index: Index) -> Self::Filter {
+        let mut man = IdentityManager::default();
+        man.free.extend(0 .. min_index);
+        man.epochs.extend(iter::repeat(1).take(min_index as usize));
+        Mutex::new(man)
     }
 }
 
@@ -316,12 +320,23 @@ pub struct Registry<T, I: TypedId, F: IdentityHandlerFactory<I>> {
 impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     fn new(backend: Backend, factory: &F) -> Self {
         Registry {
-            identity: factory.spawn(),
+            identity: factory.spawn(0),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
                 _phantom: PhantomData,
             }),
             backend,
+        }
+    }
+
+    fn without_backend(factory: &F) -> Self {
+        Registry {
+            identity: factory.spawn(1),
+            data: RwLock::new(Storage {
+                map: VecMap::new(),
+                _phantom: PhantomData,
+            }),
+            backend: Backend::Empty,
         }
     }
 }
@@ -544,7 +559,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G) -> Self {
         Global {
             instance: Instance::new(name, 1),
-            surfaces: Registry::new(Backend::Empty, &factory),
+            surfaces: Registry::without_backend(&factory),
             hubs: Hubs::new(&factory),
         }
     }

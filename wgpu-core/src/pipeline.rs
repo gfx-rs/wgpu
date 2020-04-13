@@ -5,11 +5,14 @@
 use crate::{
     device::RenderPassContext,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
+    LifeGuard,
     RawString,
+    RefCount,
     Stored,
     U32Array
 };
 use wgt::{BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, IndexFormat, InputStepMode, PrimitiveTopology, RasterizationStateDescriptor, VertexAttributeDescriptor};
+use std::borrow::Borrow;
 
 #[repr(C)]
 #[derive(Debug)]
@@ -59,6 +62,13 @@ pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) raw: B::ComputePipeline,
     pub(crate) layout_id: PipelineLayoutId,
     pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
+}
+
+impl<B: hal::Backend> Borrow<RefCount> for ComputePipeline<B> {
+    fn borrow(&self) -> &RefCount {
+        self.life_guard.ref_count.as_ref().unwrap()
+    }
 }
 
 #[repr(C)]
@@ -96,4 +106,11 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) index_format: IndexFormat,
     pub(crate) sample_count: u8,
     pub(crate) vertex_strides: Vec<(BufferAddress, InputStepMode)>,
+    pub(crate) life_guard: LifeGuard,
+}
+
+impl<B: hal::Backend> Borrow<RefCount> for RenderPipeline<B> {
+    fn borrow(&self) -> &RefCount {
+        self.life_guard.ref_count.as_ref().unwrap()
+    }
 }

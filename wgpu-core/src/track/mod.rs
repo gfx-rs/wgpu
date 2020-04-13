@@ -9,7 +9,7 @@ mod texture;
 use crate::{
     conv,
     hub::Storage,
-    id::{BindGroupId, SamplerId, TextureViewId, TypedId},
+    id::{self, TypedId},
     resource,
     Epoch,
     FastHashMap,
@@ -138,7 +138,7 @@ impl PendingTransition<BufferState> {
         hal::memory::Barrier::Buffer {
             states: conv::map_buffer_state(self.usage.start) .. conv::map_buffer_state(self.usage.end),
             target: &buf.raw,
-            range: None .. None,
+            range: hal::buffer::SubRange::WHOLE,
             families: None,
         }
     }
@@ -464,9 +464,11 @@ pub const DUMMY_SELECTOR: () = ();
 pub struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
     pub textures: ResourceTracker<TextureState>,
-    pub views: ResourceTracker<PhantomData<TextureViewId>>,
-    pub bind_groups: ResourceTracker<PhantomData<BindGroupId>>,
-    pub samplers: ResourceTracker<PhantomData<SamplerId>>,
+    pub views: ResourceTracker<PhantomData<id::TextureViewId>>,
+    pub bind_groups: ResourceTracker<PhantomData<id::BindGroupId>>,
+    pub samplers: ResourceTracker<PhantomData<id::SamplerId>>,
+    pub compute_pipes: ResourceTracker<PhantomData<id::ComputePipelineId>>,
+    pub render_pipes: ResourceTracker<PhantomData<id::RenderPipelineId>>,
 }
 
 impl TrackerSet {
@@ -478,6 +480,8 @@ impl TrackerSet {
             views: ResourceTracker::new(backend),
             bind_groups: ResourceTracker::new(backend),
             samplers: ResourceTracker::new(backend),
+            compute_pipes: ResourceTracker::new(backend),
+            render_pipes: ResourceTracker::new(backend),
         }
     }
 
@@ -488,6 +492,8 @@ impl TrackerSet {
         self.views.clear();
         self.bind_groups.clear();
         self.samplers.clear();
+        self.compute_pipes.clear();
+        self.render_pipes.clear();
     }
 
     /// Try to optimize the tracking representation.
@@ -497,6 +503,8 @@ impl TrackerSet {
         self.views.optimize();
         self.bind_groups.optimize();
         self.samplers.optimize();
+        self.compute_pipes.optimize();
+        self.render_pipes.optimize();
     }
 
     /// Merge all the trackers of another instance by extending
@@ -507,6 +515,8 @@ impl TrackerSet {
         self.views.merge_extend(&other.views).unwrap();
         self.bind_groups.merge_extend(&other.bind_groups).unwrap();
         self.samplers.merge_extend(&other.samplers).unwrap();
+        self.compute_pipes.merge_extend(&other.compute_pipes).unwrap();
+        self.render_pipes.merge_extend(&other.render_pipes).unwrap();
     }
 
     pub fn backend(&self) -> wgt::Backend {

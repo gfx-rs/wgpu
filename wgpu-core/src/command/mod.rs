@@ -28,6 +28,8 @@ use crate::{
     Stored,
 };
 
+use peek_poke::PeekPoke;
+
 use std::{
     marker::PhantomData,
     mem,
@@ -35,17 +37,18 @@ use std::{
     slice,
     thread::ThreadId,
 };
-use wgt::RenderPassColorAttachmentDescriptorBase;
 
 
-#[derive(Clone, Copy, Debug, peek_poke::PeekCopy, peek_poke::Poke)]
+#[derive(Clone, Copy, Debug, PeekPoke)]
 struct PhantomSlice<T>(PhantomData<T>);
 
-impl<T> PhantomSlice<T> {
-    fn new() -> Self {
+impl<T> Default for PhantomSlice<T> {
+    fn default() -> Self {
         PhantomSlice(PhantomData)
     }
+}
 
+impl<T> PhantomSlice<T> {
     unsafe fn decode_unaligned<'a>(
         self, pointer: *const u8, count: usize, bound: *const u8
     ) -> (*const u8, &'a [T]) {
@@ -183,6 +186,8 @@ impl<B: GfxBackend> CommandBuffer<B> {
         base.views.merge_extend(&head.views).unwrap();
         base.bind_groups.merge_extend(&head.bind_groups).unwrap();
         base.samplers.merge_extend(&head.samplers).unwrap();
+        base.compute_pipes.merge_extend(&head.compute_pipes).unwrap();
+        base.render_pipes.merge_extend(&head.render_pipes).unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {
@@ -196,26 +201,52 @@ impl<B: GfxBackend> CommandBuffer<B> {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
-pub struct CommandBufferDescriptor {
-    pub todo: u32,
+#[derive(PeekPoke)]
+struct PassComponent<T> {
+    load_op: wgt::LoadOp,
+    store_op: wgt::StoreOp,
+    clear_value: T,
 }
 
-pub type RawRenderPassColorAttachmentDescriptor =
-    RenderPassColorAttachmentDescriptorBase<id::TextureViewId, id::TextureViewId>;
+// required for PeekPoke
+impl<T: Default> Default for PassComponent<T> {
+    fn default() -> Self {
+        PassComponent {
+            load_op: wgt::LoadOp::Clear,
+            store_op: wgt::StoreOp::Clear,
+            clear_value: T::default(),
+        }
+    }
+}
 
 #[repr(C)]
-#[derive(peek_poke::PeekCopy, peek_poke::Poke)]
-pub struct RawRenderTargets {
-    pub colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
-    pub depth_stencil: RenderPassDepthStencilAttachmentDescriptor,
+#[derive(Default, PeekPoke)]
+struct RawRenderPassColorAttachmentDescriptor {
+    attachment: u64,
+    resolve_target: u64,
+    component: PassComponent<wgt::Color>,
+}
+
+#[repr(C)]
+#[derive(Default, PeekPoke)]
+struct RawRenderPassDepthStencilAttachmentDescriptor {
+    attachment: u64,
+    depth: PassComponent<f32>,
+    stencil: PassComponent<u32>,
+}
+
+#[repr(C)]
+#[derive(Default, PeekPoke)]
+struct RawRenderTargets {
+    colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
+    depth_stencil: RawRenderPassDepthStencilAttachmentDescriptor,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        _desc: &CommandBufferDescriptor,
+        _desc: &wgt::CommandBufferDescriptor,
     ) -> id::CommandBufferId {
         let hub = B::hub(self);
         let mut token = Token::root();

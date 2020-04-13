@@ -69,6 +69,7 @@ int main(
 
     WGPUBufferId buffer = wgpu_device_create_buffer_mapped(device,
             &(WGPUBufferDescriptor){
+                .label = "buffer",
                 .size = size,
 				.usage = WGPUBufferUsage_STORAGE | WGPUBufferUsage_MAP_READ},
             &staging_memory);
@@ -80,6 +81,7 @@ int main(
     WGPUBindGroupLayoutId bind_group_layout =
         wgpu_device_create_bind_group_layout(device,
             &(WGPUBindGroupLayoutDescriptor){
+                .label = "bind group layout",
                 .entries = &(WGPUBindGroupLayoutEntry){
 					.binding = 0,
                     .visibility = WGPUShaderStage_COMPUTE,
@@ -94,7 +96,9 @@ int main(
 			.offset = 0}}};
 
     WGPUBindGroupId bind_group = wgpu_device_create_bind_group(device,
-            &(WGPUBindGroupDescriptor){.layout = bind_group_layout,
+            &(WGPUBindGroupDescriptor){
+                .label = "bind group",
+                .layout = bind_group_layout,
                 .entries = &(WGPUBindGroupEntry){
 					.binding = 0,
 					.resource = resource},
@@ -124,7 +128,7 @@ int main(
 
     WGPUCommandEncoderId encoder = wgpu_device_create_command_encoder(
         device, &(WGPUCommandEncoderDescriptor){
-            .todo = 0
+            .label = "command encoder",
         });
 
     WGPUComputePassId command_pass =

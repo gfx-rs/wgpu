@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.13.1 */
+/* Generated with cbindgen:0.14.0 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -11,13 +11,21 @@
  *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --lockfile Cargo.lock --crate wgpu-remote -o dom/webgpu/ffi/wgpu_ffi_generated.h`
  */
 
-#define WGPU_LOCAL
+typedef unsigned long long WGPUNonZeroU64;
+typedef unsigned long long WGPUOption_AdapterId;
+typedef unsigned long long WGPUOption_SurfaceId;
+typedef unsigned long long WGPUOption_TextureViewId;
 
 
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+
+/**
+ * Bound uniform/storage buffer offsets must be aligned to this number.
+ */
+#define WGPUBIND_BUFFER_ALIGNMENT 256
 
 #define WGPUDEFAULT_BIND_GROUPS 4
 
@@ -80,14 +88,15 @@ typedef enum {
 } WGPUBufferMapAsyncStatus;
 
 typedef enum {
-  WGPUCompareFunction_Never = 0,
-  WGPUCompareFunction_Less = 1,
-  WGPUCompareFunction_Equal = 2,
-  WGPUCompareFunction_LessEqual = 3,
-  WGPUCompareFunction_Greater = 4,
-  WGPUCompareFunction_NotEqual = 5,
-  WGPUCompareFunction_GreaterEqual = 6,
-  WGPUCompareFunction_Always = 7,
+  WGPUCompareFunction_Undefined = 0,
+  WGPUCompareFunction_Never = 1,
+  WGPUCompareFunction_Less = 2,
+  WGPUCompareFunction_Equal = 3,
+  WGPUCompareFunction_LessEqual = 4,
+  WGPUCompareFunction_Greater = 5,
+  WGPUCompareFunction_NotEqual = 6,
+  WGPUCompareFunction_GreaterEqual = 7,
+  WGPUCompareFunction_Always = 8,
 } WGPUCompareFunction;
 
 typedef enum {
@@ -275,11 +284,11 @@ typedef enum {
   WGPUVertexFormat_Int4 = 48,
 } WGPUVertexFormat;
 
-typedef uint64_t WGPUId_Adapter_Dummy;
+typedef WGPUNonZeroU64 WGPUId_Adapter_Dummy;
 
 typedef WGPUId_Adapter_Dummy WGPUAdapterId;
 
-typedef uint64_t WGPUId_Device_Dummy;
+typedef WGPUNonZeroU64 WGPUId_Device_Dummy;
 
 typedef WGPUId_Device_Dummy WGPUDeviceId;
 
@@ -296,11 +305,11 @@ typedef struct {
   WGPULimits limits;
 } WGPUDeviceDescriptor;
 
-typedef uint64_t WGPUId_BindGroup_Dummy;
+typedef WGPUNonZeroU64 WGPUId_BindGroup_Dummy;
 
 typedef WGPUId_BindGroup_Dummy WGPUBindGroupId;
 
-typedef uint64_t WGPUId_Buffer_Dummy;
+typedef WGPUNonZeroU64 WGPUId_Buffer_Dummy;
 
 typedef WGPUId_Buffer_Dummy WGPUBufferId;
 
@@ -310,7 +319,7 @@ typedef void (*WGPUBufferMapReadCallback)(WGPUBufferMapAsyncStatus status, const
 
 typedef void (*WGPUBufferMapWriteCallback)(WGPUBufferMapAsyncStatus status, uint8_t *data, uint8_t *userdata);
 
-typedef uint64_t WGPUId_CommandBuffer_Dummy;
+typedef WGPUNonZeroU64 WGPUId_CommandBuffer_Dummy;
 
 typedef WGPUId_CommandBuffer_Dummy WGPUCommandBufferId;
 
@@ -327,11 +336,9 @@ typedef struct {
   uint32_t todo;
 } WGPUComputePassDescriptor;
 
-typedef uint64_t WGPUId_TextureView_Dummy;
+typedef WGPUNonZeroU64 WGPUId_TextureView_Dummy;
 
 typedef WGPUId_TextureView_Dummy WGPUTextureViewId;
-
-typedef const WGPUTextureViewId *WGPUOptionRef_TextureViewId;
 
 typedef struct {
   double r;
@@ -348,13 +355,13 @@ typedef struct {
 
 typedef struct {
   WGPUTextureViewId attachment;
-  WGPUOptionRef_TextureViewId resolve_target;
+  WGPUOption_TextureViewId resolve_target;
   WGPULoadOp load_op;
   WGPUStoreOp store_op;
   WGPUColor clear_color;
-} WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId;
+} WGPURenderPassColorAttachmentDescriptorBase_TextureViewId;
 
-typedef WGPURenderPassColorAttachmentDescriptorBase_TextureViewId__OptionRef_TextureViewId WGPURenderPassColorAttachmentDescriptor;
+typedef WGPURenderPassColorAttachmentDescriptorBase_TextureViewId WGPURenderPassColorAttachmentDescriptor;
 
 typedef struct {
   WGPUTextureViewId attachment;
@@ -381,7 +388,7 @@ typedef struct {
   uint32_t rows_per_image;
 } WGPUBufferCopyView;
 
-typedef uint64_t WGPUId_Texture_Dummy;
+typedef WGPUNonZeroU64 WGPUId_Texture_Dummy;
 
 typedef WGPUId_Texture_Dummy WGPUTextureId;
 
@@ -415,15 +422,15 @@ typedef const char *WGPURawString;
 
 typedef uint32_t WGPUDynamicOffset;
 
-typedef uint64_t WGPUId_ComputePipeline_Dummy;
+typedef WGPUNonZeroU64 WGPUId_ComputePipeline_Dummy;
 
 typedef WGPUId_ComputePipeline_Dummy WGPUComputePipelineId;
 
-typedef uint64_t WGPUId_Surface;
+typedef WGPUNonZeroU64 WGPUId_Surface;
 
 typedef WGPUId_Surface WGPUSurfaceId;
 
-typedef uint64_t WGPUId_BindGroupLayout_Dummy;
+typedef WGPUNonZeroU64 WGPUId_BindGroupLayout_Dummy;
 
 typedef WGPUId_BindGroupLayout_Dummy WGPUBindGroupLayoutId;
 
@@ -433,7 +440,7 @@ typedef struct {
   WGPUBufferAddress size;
 } WGPUBufferBinding;
 
-typedef uint64_t WGPUId_Sampler_Dummy;
+typedef WGPUNonZeroU64 WGPUId_Sampler_Dummy;
 
 typedef WGPUId_Sampler_Dummy WGPUSamplerId;
 
@@ -470,6 +477,7 @@ typedef struct {
 } WGPUBindGroupEntry;
 
 typedef struct {
+  const char *label;
   WGPUBindGroupLayoutId layout;
   const WGPUBindGroupEntry *entries;
   uintptr_t entries_length;
@@ -493,6 +501,7 @@ typedef struct {
 } WGPUBindGroupLayoutEntry;
 
 typedef struct {
+  const char *label;
   const WGPUBindGroupLayoutEntry *entries;
   uintptr_t entries_length;
 } WGPUBindGroupLayoutDescriptor;
@@ -511,19 +520,20 @@ typedef uint32_t WGPUBufferUsage;
 #define WGPUBufferUsage_NONE 0
 
 typedef struct {
+  const char *label;
   WGPUBufferAddress size;
   WGPUBufferUsage usage;
 } WGPUBufferDescriptor;
 
 typedef struct {
-  uint32_t todo;
+  const char *label;
 } WGPUCommandEncoderDescriptor;
 
-typedef uint64_t WGPUId_PipelineLayout_Dummy;
+typedef WGPUNonZeroU64 WGPUId_PipelineLayout_Dummy;
 
 typedef WGPUId_PipelineLayout_Dummy WGPUPipelineLayoutId;
 
-typedef uint64_t WGPUId_ShaderModule_Dummy;
+typedef WGPUNonZeroU64 WGPUId_ShaderModule_Dummy;
 
 typedef WGPUId_ShaderModule_Dummy WGPUShaderModuleId;
 
@@ -542,7 +552,7 @@ typedef struct {
   uintptr_t bind_group_layouts_length;
 } WGPUPipelineLayoutDescriptor;
 
-typedef uint64_t WGPUId_RenderPipeline_Dummy;
+typedef WGPUNonZeroU64 WGPUId_RenderPipeline_Dummy;
 
 typedef WGPUId_RenderPipeline_Dummy WGPURenderPipelineId;
 
@@ -637,7 +647,7 @@ typedef struct {
   WGPUFilterMode mipmap_filter;
   float lod_min_clamp;
   float lod_max_clamp;
-  const WGPUCompareFunction *compare;
+  WGPUCompareFunction compare;
 } WGPUSamplerDescriptor;
 
 typedef struct {
@@ -649,7 +659,7 @@ typedef struct {
   WGPUU32Array code;
 } WGPUShaderModuleDescriptor;
 
-typedef uint64_t WGPUId_SwapChain_Dummy;
+typedef WGPUNonZeroU64 WGPUId_SwapChain_Dummy;
 
 typedef WGPUId_SwapChain_Dummy WGPUSwapChainId;
 
@@ -671,6 +681,7 @@ typedef struct {
 } WGPUSwapChainDescriptor;
 
 typedef struct {
+  const char *label;
   WGPUExtent3d size;
   uint32_t array_layer_count;
   uint32_t mip_level_count;
@@ -684,20 +695,21 @@ typedef WGPUDeviceId WGPUQueueId;
 
 typedef WGPURawPass *WGPURenderPassId;
 
-typedef uint64_t WGPUId_RenderBundle_Dummy;
+typedef WGPUNonZeroU64 WGPUId_RenderBundle_Dummy;
 
 typedef WGPUId_RenderBundle_Dummy WGPURenderBundleId;
 
 typedef struct {
   WGPUPowerPreference power_preference;
+  WGPUOption_SurfaceId compatible_surface;
 } WGPURequestAdapterOptions;
 
 typedef uint32_t WGPUBackendBit;
 
-typedef void (*WGPURequestAdapterCallback)(WGPUAdapterId id, void *userdata);
+typedef void (*WGPURequestAdapterCallback)(WGPUOption_AdapterId id, void *userdata);
 
 typedef struct {
-  WGPUTextureViewId view_id;
+  WGPUOption_TextureViewId view_id;
 } WGPUSwapChainOutput;
 
 typedef struct {

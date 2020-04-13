@@ -2,14 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use std::{io, slice};
+use std::{io, slice, ptr};
 #[cfg(feature = "serde")]
 use serde::{Serialize, Deserialize};
 #[cfg(feature = "peek-poke")]
-use peek_poke::{PeekCopy, Poke};
+use peek_poke::{PeekPoke};
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Backend {
     Empty = 0,
@@ -22,27 +22,12 @@ pub enum Backend {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
     HighPerformance = 2,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RequestAdapterOptions {
-    pub power_preference: PowerPreference,
-}
-
-impl Default for RequestAdapterOptions {
-    fn default() -> Self {
-        RequestAdapterOptions {
-            power_preference: PowerPreference::Default,
-        }
-    }
 }
 
 bitflags::bitflags! {
@@ -72,14 +57,14 @@ impl From<Backend> for BackendBit {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
@@ -170,6 +155,7 @@ pub type BufferAddress = u64;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendFactor {
     Zero = 0,
     One = 1,
@@ -188,6 +174,7 @@ pub enum BlendFactor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendOperation {
     Add = 0,
     Subtract = 1,
@@ -203,7 +190,8 @@ impl Default for BlendOperation {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlendDescriptor {
     pub src_factor: BlendFactor,
     pub dst_factor: BlendFactor,
@@ -235,7 +223,8 @@ impl Default for BlendDescriptor {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColorStateDescriptor {
     pub format: TextureFormat,
     pub alpha_blend: BlendDescriptor,
@@ -245,6 +234,7 @@ pub struct ColorStateDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PrimitiveTopology {
     PointList = 0,
     LineList = 1,
@@ -255,6 +245,7 @@ pub enum PrimitiveTopology {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FrontFace {
     Ccw = 0,
     Cw = 1,
@@ -268,6 +259,7 @@ impl Default for FrontFace {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CullMode {
     None = 0,
     Front = 1,
@@ -281,7 +273,8 @@ impl Default for CullMode {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
@@ -349,6 +342,7 @@ pub enum TextureFormat {
 
 bitflags::bitflags! {
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ColorWrite: u32 {
         const RED = 1;
         const GREEN = 2;
@@ -366,7 +360,8 @@ impl Default for ColorWrite {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilStateDescriptor {
     pub format: TextureFormat,
     pub depth_write_enabled: bool,
@@ -385,6 +380,7 @@ impl DepthStencilStateDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum IndexFormat {
     Uint16 = 0,
     Uint32 = 1,
@@ -392,6 +388,7 @@ pub enum IndexFormat {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilOperation {
     Keep = 0,
     Zero = 1,
@@ -410,7 +407,8 @@ impl Default for StencilOperation {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StencilStateFaceDescriptor {
     pub compare: CompareFunction,
     pub fail_op: StencilOperation,
@@ -435,15 +433,17 @@ impl Default for StencilStateFaceDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CompareFunction {
-    Never = 0,
-    Less = 1,
-    Equal = 2,
-    LessEqual = 3,
-    Greater = 4,
-    NotEqual = 5,
-    GreaterEqual = 6,
-    Always = 7,
+    Undefined = 0,
+    Never = 1,
+    Less = 2,
+    Equal = 3,
+    LessEqual = 4,
+    Greater = 5,
+    NotEqual = 6,
+    GreaterEqual = 7,
+    Always = 8,
 }
 
 impl CompareFunction {
@@ -459,13 +459,15 @@ pub type ShaderLocation = u32;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum InputStepMode {
     Vertex = 0,
     Instance = 1,
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VertexAttributeDescriptor {
     pub offset: BufferAddress,
     pub format: VertexFormat,
@@ -474,6 +476,7 @@ pub struct VertexAttributeDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum VertexFormat {
     Uchar2 = 1,
     Uchar4 = 3,
@@ -536,25 +539,35 @@ bitflags::bitflags! {
 }
 
 #[repr(C)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct BufferDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub size: BufferAddress,
     pub usage: BufferUsage,
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor {
     // MSVC doesn't allow zero-sized structs
     // We can remove this when we actually have a field
-    pub todo: u32,
+    // pub todo: u32,
+    pub label: *const std::os::raw::c_char,
+}
+
+impl Default for CommandEncoderDescriptor {
+    fn default() -> CommandEncoderDescriptor {
+        CommandEncoderDescriptor {
+            label: ptr::null(),
+        }
+    }
 }
 
 pub type DynamicOffset = u32;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PresentMode {
     /// The presentation engine does **not** wait for a vertical blanking period and
     /// the request is presented immediately. This is a low-latency presentation mode,
@@ -574,6 +587,7 @@ pub enum PresentMode {
 
 bitflags::bitflags! {
     #[repr(transparent)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct TextureUsage: u32 {
         const COPY_SRC = 1;
         const COPY_DST = 2;
@@ -594,7 +608,8 @@ bitflags::bitflags! {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SwapChainDescriptor {
     pub usage: TextureUsage,
     pub format: TextureFormat,
@@ -605,7 +620,8 @@ pub struct SwapChainDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum LoadOp {
     Clear = 0,
     Load = 1,
@@ -613,18 +629,20 @@ pub enum LoadOp {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum StoreOp {
     Clear = 0,
     Store = 1,
 }
 
 #[repr(C)]
-#[derive(Debug)]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
-pub struct RenderPassColorAttachmentDescriptorBase<T, R> {
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
+pub struct RenderPassColorAttachmentDescriptorBase<T> {
     pub attachment: T,
-    pub resolve_target: R,
+    pub resolve_target: Option<T>,
     pub load_op: LoadOp,
     pub store_op: StoreOp,
     pub clear_color: Color,
@@ -632,7 +650,8 @@ pub struct RenderPassColorAttachmentDescriptorBase<T, R> {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     pub attachment: T,
     pub depth_load_op: LoadOp,
@@ -644,8 +663,9 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "peek-poke", derive(PeekCopy, Poke))]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct Color {
     pub r: f64,
     pub g: f64,
@@ -691,3 +711,148 @@ impl Color {
         a: 1.0,
     };
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TextureDimension {
+    D1,
+    D2,
+    D3,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Origin3d {
+    pub x: u32,
+    pub y: u32,
+    pub z: u32,
+}
+
+impl Origin3d {
+    pub const ZERO: Self = Origin3d {
+        x: 0,
+        y: 0,
+        z: 0,
+    };
+}
+
+impl Default for Origin3d {
+    fn default() -> Self {
+        Origin3d::ZERO
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Extent3d {
+    pub width: u32,
+    pub height: u32,
+    pub depth: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TextureDescriptor {
+    pub label: *const std::os::raw::c_char,
+    pub size: Extent3d,
+    pub array_layer_count: u32,
+    pub mip_level_count: u32,
+    pub sample_count: u32,
+    pub dimension: TextureDimension,
+    pub format: TextureFormat,
+    pub usage: TextureUsage,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TextureAspect {
+    All,
+    StencilOnly,
+    DepthOnly,
+}
+
+impl Default for TextureAspect {
+    fn default() -> Self {
+        TextureAspect::All
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TextureViewDescriptor {
+    pub format: TextureFormat,
+    pub dimension: TextureViewDimension,
+    pub aspect: TextureAspect,
+    pub base_mip_level: u32,
+    pub level_count: u32,
+    pub base_array_layer: u32,
+    pub array_layer_count: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum AddressMode {
+    ClampToEdge = 0,
+    Repeat = 1,
+    MirrorRepeat = 2,
+}
+
+impl Default for AddressMode {
+    fn default() -> Self {
+        AddressMode::ClampToEdge
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum FilterMode {
+    Nearest = 0,
+    Linear = 1,
+}
+
+impl Default for FilterMode {
+    fn default() -> Self {
+        FilterMode::Nearest
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SamplerDescriptor {
+    pub address_mode_u: AddressMode,
+    pub address_mode_v: AddressMode,
+    pub address_mode_w: AddressMode,
+    pub mag_filter: FilterMode,
+    pub min_filter: FilterMode,
+    pub mipmap_filter: FilterMode,
+    pub lod_min_clamp: f32,
+    pub lod_max_clamp: f32,
+    pub compare: CompareFunction,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct CommandBufferDescriptor {
+    pub todo: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum TextureComponentType {
+    Float,
+    Sint,
+    Uint,
+}
+
+/// Bound uniform/storage buffer offsets must be aligned to this number.
+pub const BIND_BUFFER_ALIGNMENT: u64 = 256;

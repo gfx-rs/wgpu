@@ -6,7 +6,7 @@ use crate::{Epoch, Index};
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};
 use wgt::Backend;
-use std::{fmt, marker::PhantomData, mem};
+use std::{fmt, marker::PhantomData, mem, num::NonZeroU64};
 
 const BACKEND_BITS: usize = 3;
 const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
@@ -14,13 +14,18 @@ type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
-pub struct Id<T>(u64, PhantomData<T>);
+pub struct Id<T>(NonZeroU64, PhantomData<T>);
+
+// required for PeekPoke
+impl<T> Default for Id<T> {
+    fn default() -> Self {
+        Id(unsafe { NonZeroU64::new_unchecked(!0) }, PhantomData)
+    }
+}
 
 impl<T> Id<T> {
-    pub const ERROR: Self = Self(0, PhantomData);
-
     pub fn backend(self) -> Backend {
-        match self.0 >> (64 - BACKEND_BITS) as u8 {
+        match self.0.get() >> (64 - BACKEND_BITS) as u8 {
             0 => Backend::Empty,
             1 => Backend::Vulkan,
             2 => Backend::Metal,
@@ -29,6 +34,14 @@ impl<T> Id<T> {
             5 => Backend::Gl,
             _ => unreachable!(),
         }
+    }
+
+    pub(crate) fn into_raw(self) -> u64 {
+        self.0.get()
+    }
+
+    pub(crate) fn from_raw(value: u64) -> Option<Self> {
+        NonZeroU64::new(value).map(|nz| Id(nz, PhantomData))
     }
 }
 
@@ -58,18 +71,23 @@ impl<T> PartialEq for Id<T> {
     }
 }
 
+impl<T> Eq for Id<T> {}
+
 unsafe impl<T> peek_poke::Poke for Id<T> {
     fn max_size() -> usize {
          mem::size_of::<u64>()
     }
     unsafe fn poke_into(&self, data: *mut u8) -> *mut u8 {
-        self.0.poke_into(data)
+        self.0.get().poke_into(data)
     }
 }
 
 impl<T> peek_poke::Peek for Id<T> {
-    unsafe fn peek_from(&mut self, data: *const u8) -> *const u8 {
-        self.0.peek_from(data)
+    unsafe fn peek_from(mut data: *const u8, this: *mut Self) -> *const u8 {
+        let mut v = 0u64;
+        data = u64::peek_from(data, &mut v);
+        (*this).0 = NonZeroU64::new(v).unwrap();
+        data
     }
 }
 
@@ -82,13 +100,13 @@ impl<T> TypedId for Id<T> {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self {
         assert_eq!(0, epoch >> (32 - BACKEND_BITS));
         let v = index as u64 | ((epoch as u64) << 32) | ((backend as u64) << (64 - BACKEND_BITS));
-        Id(v, PhantomData)
+        Id(NonZeroU64::new(v).unwrap(), PhantomData)
     }
 
     fn unzip(self) -> (Index, Epoch, Backend) {
         (
-            self.0 as u32,
-            (self.0 >> 32) as u32 & EPOCH_MASK,
+            self.0.get() as u32,
+            (self.0.get() >> 32) as u32 & EPOCH_MASK,
             self.backend(),
         )
     }
@@ -145,7 +163,7 @@ fn test_id_backend() {
         Backend::Dx11,
         Backend::Gl,
     ] {
-        let id: Id<()> = Id::zip(0, 0, b);
+        let id: Id<()> = Id::zip(1, 0, b);
         assert_eq!(id.backend(), b);
     }
 }

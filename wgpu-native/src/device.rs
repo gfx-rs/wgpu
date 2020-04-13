@@ -4,7 +4,7 @@
 
 use crate::GLOBAL;
 
-use wgt::{BackendBit, DeviceDescriptor, Limits, RequestAdapterOptions};
+use wgt::{BackendBit, DeviceDescriptor, Limits};
 use core::{gfx_select, hub::Token, id};
 
 use std::{marker::PhantomData, slice};
@@ -13,7 +13,7 @@ use std::{marker::PhantomData, slice};
 use objc::{msg_send, runtime::Object, sel, sel_impl};
 
 pub type RequestAdapterCallback =
-    unsafe extern "C" fn(id: id::AdapterId, userdata: *mut std::ffi::c_void);
+    unsafe extern "C" fn(id: Option<id::AdapterId>, userdata: *mut std::ffi::c_void);
 
 pub fn wgpu_create_surface(raw_handle: raw_window_handle::RawWindowHandle) -> id::SurfaceId {
     use raw_window_handle::RawWindowHandle as Rwh;
@@ -153,7 +153,7 @@ pub fn wgpu_enumerate_adapters(mask: BackendBit) -> Vec<id::AdapterId> {
 /// This function is unsafe as it calls an unsafe extern callback.
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_request_adapter_async(
-    desc: Option<&RequestAdapterOptions>,
+    desc: Option<&core::instance::RequestAdapterOptions>,
     mask: BackendBit,
     callback: RequestAdapterCallback,
     userdata: *mut std::ffi::c_void,
@@ -162,10 +162,7 @@ pub unsafe extern "C" fn wgpu_request_adapter_async(
         &desc.cloned().unwrap_or_default(),
         core::instance::AdapterInputs::Mask(mask, || PhantomData),
     );
-    callback(
-        id.unwrap_or(id::AdapterId::ERROR),
-        userdata,
-    );
+    callback(id, userdata);
 }
 
 #[no_mangle]
@@ -225,7 +222,7 @@ pub extern "C" fn wgpu_buffer_destroy(buffer_id: id::BufferId) {
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_texture(
     device_id: id::DeviceId,
-    desc: &core::resource::TextureDescriptor,
+    desc: &wgt::TextureDescriptor,
 ) -> id::TextureId {
     gfx_select!(device_id => GLOBAL.device_create_texture(device_id, desc, PhantomData))
 }
@@ -238,7 +235,7 @@ pub extern "C" fn wgpu_texture_destroy(texture_id: id::TextureId) {
 #[no_mangle]
 pub extern "C" fn wgpu_texture_create_view(
     texture_id: id::TextureId,
-    desc: Option<&core::resource::TextureViewDescriptor>,
+    desc: Option<&wgt::TextureViewDescriptor>,
 ) -> id::TextureViewId {
     gfx_select!(texture_id => GLOBAL.texture_create_view(texture_id, desc, PhantomData))
 }
@@ -251,7 +248,7 @@ pub extern "C" fn wgpu_texture_view_destroy(texture_view_id: id::TextureViewId) 
 #[no_mangle]
 pub extern "C" fn wgpu_device_create_sampler(
     device_id: id::DeviceId,
-    desc: &core::resource::SamplerDescriptor,
+    desc: &wgt::SamplerDescriptor,
 ) -> id::SamplerId {
     gfx_select!(device_id => GLOBAL.device_create_sampler(device_id, desc, PhantomData))
 }
@@ -380,11 +377,11 @@ pub extern "C" fn wgpu_buffer_map_read_async(
     callback: core::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
-    let operation = core::resource::BufferMapOperation::Read(
-        Box::new(move |status, data| unsafe {
-            callback(status, data, userdata)
-        }),
-    );
+    let operation = core::resource::BufferMapOperation::Read {
+        callback,
+        userdata,
+    };
+
     gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, wgt::BufferUsage::MAP_READ, start .. start + size, operation))
 }
 
@@ -396,11 +393,11 @@ pub extern "C" fn wgpu_buffer_map_write_async(
     callback: core::device::BufferMapWriteCallback,
     userdata: *mut u8,
 ) {
-    let operation = core::resource::BufferMapOperation::Write(
-        Box::new(move |status, data| unsafe {
-            callback(status, data, userdata)
-        }),
-    );
+    let operation = core::resource::BufferMapOperation::Write {
+        callback,
+        userdata,
+    };
+
     gfx_select!(buffer_id => GLOBAL.buffer_map_async(buffer_id, wgt::BufferUsage::MAP_WRITE, start .. start + size, operation))
 }
 
@@ -415,7 +412,7 @@ pub extern "C" fn wgpu_swap_chain_get_next_texture(
 ) -> core::swap_chain::SwapChainOutput {
     gfx_select!(swap_chain_id => GLOBAL.swap_chain_get_next_texture(swap_chain_id, PhantomData))
         .unwrap_or(core::swap_chain::SwapChainOutput {
-            view_id: id::TextureViewId::ERROR,
+            view_id: None,
         })
 }
 

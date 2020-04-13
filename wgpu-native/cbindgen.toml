@@ -8,7 +8,10 @@ autogen_warning = """/* DO NOT MODIFY THIS MANUALLY! This file was generated usi
  *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --lockfile Cargo.lock --crate wgpu-remote -o dom/webgpu/ffi/wgpu_ffi_generated.h`
  */
 
-#define WGPU_LOCAL
+typedef unsigned long long WGPUNonZeroU64;
+typedef unsigned long long WGPUOption_AdapterId;
+typedef unsigned long long WGPUOption_SurfaceId;
+typedef unsigned long long WGPUOption_TextureViewId;
 """
 include_version = true
 braces = "SameLine"
@@ -18,8 +21,7 @@ language = "C"
 
 [export]
 prefix = "WGPU"
-#TODO: figure out why cbindgen even tries to export a private type...
-exclude = ["BufferMapResult"]
+exclude = ["Option_AdapterId", "Option_SurfaceId", "Option_TextureViewId"]
 
 [parse]
 parse_deps = true

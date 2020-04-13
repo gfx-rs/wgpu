@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model, resource, Extent3d, Features, Origin3d};
+use crate::{binding_model, Features};
 use wgt::{
     BlendDescriptor,
     BlendFactor,
@@ -12,13 +12,15 @@ use wgt::{
     CompareFunction,
     CullMode,
     DepthStencilStateDescriptor,
+    Extent3d,
     FrontFace,
     IndexFormat,
+    Origin3d,
     PrimitiveTopology,
+    RasterizationStateDescriptor,
     StencilOperation,
     StencilStateFaceDescriptor,
     TextureFormat,
-    RasterizationStateDescriptor,
     VertexFormat,
 };
 
@@ -99,28 +101,61 @@ pub fn map_binding_type(
     binding: &binding_model::BindGroupLayoutEntry,
 ) -> hal::pso::DescriptorType {
     use crate::binding_model::BindingType as Bt;
-    use hal::pso::DescriptorType as H;
+    use hal::pso;
     match binding.ty {
         Bt::UniformBuffer => {
-            if binding.has_dynamic_offset {
-                H::UniformBufferDynamic
-            } else {
-                H::UniformBuffer
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Uniform,
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: binding.has_dynamic_offset,
+                },
             }
         }
-        Bt::StorageBuffer |
+        Bt::StorageBuffer => {
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Storage {
+                    read_only: false,
+                },
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: binding.has_dynamic_offset,
+                },
+            }
+        }
         Bt::ReadonlyStorageBuffer => {
-            if binding.has_dynamic_offset {
-                H::StorageBufferDynamic
-            } else {
-                H::StorageBuffer
+            pso::DescriptorType::Buffer {
+                ty: pso::BufferDescriptorType::Storage {
+                    read_only: true,
+                },
+                format: pso::BufferDescriptorFormat::Structured {
+                    dynamic_offset: binding.has_dynamic_offset,
+                },
             }
         }
         Bt::Sampler |
-        Bt::ComparisonSampler => H::Sampler,
-        Bt::SampledTexture => H::SampledImage,
-        Bt::ReadonlyStorageTexture |
-        Bt::WriteonlyStorageTexture => H::StorageImage,
+        Bt::ComparisonSampler => {
+            pso::DescriptorType::Sampler
+        }
+        Bt::SampledTexture => {
+            pso::DescriptorType::Image {
+                ty: pso::ImageDescriptorType::Sampled {
+                    with_sampler: false,
+                },
+            }
+        }
+        Bt::ReadonlyStorageTexture => {
+            pso::DescriptorType::Image {
+                ty: pso::ImageDescriptorType::Storage {
+                    read_only: true,
+                },
+            }
+        }
+        Bt::WriteonlyStorageTexture => {
+            pso::DescriptorType::Image {
+                ty: pso::ImageDescriptorType::Storage {
+                    read_only: false,
+                },
+            }
+        }
     }
 }
 
@@ -262,7 +297,7 @@ pub fn map_depth_stencil_state_descriptor(
             || desc.depth_compare != CompareFunction::Always
         {
             Some(hal::pso::DepthTest {
-                fun: map_compare_function(desc.depth_compare),
+                fun: map_compare_function(desc.depth_compare).expect("DepthStencilStateDescriptor has undefined compare function"),
                 write: desc.depth_write_enabled,
             })
         } else {
@@ -297,25 +332,26 @@ fn map_stencil_face(
     stencil_state_face_desc: &StencilStateFaceDescriptor,
 ) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
-        fun: map_compare_function(stencil_state_face_desc.compare),
+        fun: map_compare_function(stencil_state_face_desc.compare).expect("StencilStateFaceDescriptor has undefined compare function"),
         op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
         op_depth_fail: map_stencil_operation(stencil_state_face_desc.depth_fail_op),
         op_pass: map_stencil_operation(stencil_state_face_desc.pass_op),
     }
 }
 
-pub fn map_compare_function(compare_function: CompareFunction) -> hal::pso::Comparison {
+pub fn map_compare_function(compare_function: CompareFunction) -> Option<hal::pso::Comparison> {
     use wgt::CompareFunction as Cf;
     use hal::pso::Comparison as H;
     match compare_function {
-        Cf::Never => H::Never,
-        Cf::Less => H::Less,
-        Cf::Equal => H::Equal,
-        Cf::LessEqual => H::LessEqual,
-        Cf::Greater => H::Greater,
-        Cf::NotEqual => H::NotEqual,
-        Cf::GreaterEqual => H::GreaterEqual,
-        Cf::Always => H::Always,
+        Cf::Undefined => None,
+        Cf::Never => Some(H::Never),
+        Cf::Less => Some(H::Less),
+        Cf::Equal => Some(H::Equal),
+        Cf::LessEqual => Some(H::LessEqual),
+        Cf::Greater => Some(H::Greater),
+        Cf::NotEqual => Some(H::NotEqual),
+        Cf::GreaterEqual => Some(H::GreaterEqual),
+        Cf::Always => Some(H::Always),
     }
 }
 
@@ -450,7 +486,7 @@ fn checked_u32_as_u16(value: u32) -> u16 {
 }
 
 pub fn map_texture_dimension_size(
-    dimension: resource::TextureDimension,
+    dimension: wgt::TextureDimension,
     Extent3d {
         width,
         height,
@@ -459,7 +495,7 @@ pub fn map_texture_dimension_size(
     array_size: u32,
     sample_size: u32,
 ) -> hal::image::Kind {
-    use crate::resource::TextureDimension::*;
+    use wgt::TextureDimension::*;
     use hal::image::Kind as H;
     match dimension {
         D1 => {
@@ -624,15 +660,15 @@ pub fn map_color_u32(color: &Color) -> [u32; 4] {
     ]
 }
 
-pub fn map_filter(filter: resource::FilterMode) -> hal::image::Filter {
+pub fn map_filter(filter: wgt::FilterMode) -> hal::image::Filter {
     match filter {
-        resource::FilterMode::Nearest => hal::image::Filter::Nearest,
-        resource::FilterMode::Linear => hal::image::Filter::Linear,
+        wgt::FilterMode::Nearest => hal::image::Filter::Nearest,
+        wgt::FilterMode::Linear => hal::image::Filter::Linear,
     }
 }
 
-pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
-    use crate::resource::AddressMode as Am;
+pub fn map_wrap(address: wgt::AddressMode) -> hal::image::WrapMode {
+    use wgt::AddressMode as Am;
     use hal::image::WrapMode as W;
     match address {
         Am::ClampToEdge => W::Clamp,
@@ -644,23 +680,24 @@ pub fn map_wrap(address: resource::AddressMode) -> hal::image::WrapMode {
 pub fn map_rasterization_state_descriptor(
     desc: &RasterizationStateDescriptor,
 ) -> hal::pso::Rasterizer {
-    hal::pso::Rasterizer {
+    use hal::pso;
+    pso::Rasterizer {
         depth_clamping: false,
-        polygon_mode: hal::pso::PolygonMode::Fill,
+        polygon_mode: pso::PolygonMode::Fill,
         cull_face: match desc.cull_mode {
-            CullMode::None => hal::pso::Face::empty(),
-            CullMode::Front => hal::pso::Face::FRONT,
-            CullMode::Back => hal::pso::Face::BACK,
+            CullMode::None => pso::Face::empty(),
+            CullMode::Front => pso::Face::FRONT,
+            CullMode::Back => pso::Face::BACK,
         },
         front_face: match desc.front_face {
-            FrontFace::Ccw => hal::pso::FrontFace::CounterClockwise,
-            FrontFace::Cw => hal::pso::FrontFace::Clockwise,
+            FrontFace::Ccw => pso::FrontFace::CounterClockwise,
+            FrontFace::Cw => pso::FrontFace::Clockwise,
         },
         depth_bias: if desc.depth_bias != 0
             || desc.depth_bias_slope_scale != 0.0
             || desc.depth_bias_clamp != 0.0
         {
-            Some(hal::pso::State::Static(hal::pso::DepthBias {
+            Some(pso::State::Static(pso::DepthBias {
                 const_factor: desc.depth_bias as f32,
                 slope_factor: desc.depth_bias_slope_scale,
                 clamp: desc.depth_bias_clamp,
@@ -669,6 +706,7 @@ pub fn map_rasterization_state_descriptor(
             None
         },
         conservative: false,
+        line_width: pso::State::Static(1.0),
     }
 }
 

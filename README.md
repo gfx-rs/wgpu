@@ -9,7 +9,7 @@ This is an active GitHub mirror of the WebGPU implementation in Rust, which now 
 [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core)
 [![Crates.io](https://img.shields.io/crates/v/wgpu-native.svg?label=wgpu-native)](https://crates.io/crates/wgpu-native)
 
-This is an experimental [WebGPU](https://www.w3.org/community/gpu/) implementation, exposing both Rust and C interfaces as a native static library. It's written in Rust and is based on [gfx-hal](https://github.com/gfx-rs/gfx) and a few [Rendy](https://github.com/amethyst/rendy) bits. See the upstream [WebGPU specification](https://gpuweb.github.io/gpuweb/) (work in progress).
+This is an experimental [WebGPU](https://www.w3.org/community/gpu/) implementation, exposing both Rust and C interfaces as a native static library. It's written in Rust and is based on [gfx-hal](https://github.com/gfx-rs/gfx) with help of [gfx-extras](https://github.com/gfx-rs/gfx-extras). See the upstream [WebGPU specification](https://gpuweb.github.io/gpuweb/) (work in progress).
 
 The implementation consists of the following parts:
 
@@ -35,6 +35,8 @@ The implementation consists of the following parts:
   Vulkan | :heavy_check_mark: | :heavy_check_mark: |                    |
   Metal  |                    |                    | :heavy_check_mark: |
   OpenGL | :construction:     | :construction:     | :construction:     |
+  
+:heavy_check_mark: = Primary support — :white_check_mark: = Secondary support — :construction: = Unsupported, but support in progress
 
 ## Usage
 

@@ -6,7 +6,7 @@ authors = [
 	"Joshua Groves <josh@joshgroves.com>",
 ]
 edition = "2018"
-description = "WebGPU core logic on gfx-hal/rendy"
+description = "WebGPU core logic on gfx-hal"
 homepage = "https://github.com/gfx-rs/wgpu"
 repository = "https://github.com/gfx-rs/wgpu"
 keywords = ["graphics"]
@@ -27,13 +27,13 @@ bitflags = "1.0"
 copyless = "0.1"
 fxhash = "0.2"
 log = "0.4"
-hal = { package = "gfx-hal", version = "0.4" }
-gfx-backend-empty = { version = "0.4" }
+hal = { package = "gfx-hal", version = "0.5" }
+gfx-backend-empty = "0.5"
+gfx-descriptor = "0.1"
+gfx-memory = "0.1"
 parking_lot = "0.10"
-peek-poke = { git = "https://github.com/kvark/peek-poke", rev = "969bd7fe2be1a83f87916dc8b388c63cfd457075" }
-rendy-memory = "0.5"
-rendy-descriptor = "0.5"
-smallvec = "1.0"
+peek-poke = "0.2"
+smallvec = "1"
 vec_map = "0.8"
 
 [dependencies.serde_crate]
@@ -49,16 +49,16 @@ version = "0.1"
 features = ["peek-poke"]
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { version = "0.4" }
-gfx-backend-vulkan = { version = "0.4", optional = true }
+gfx-backend-metal = { version = "0.5" }
+gfx-backend-vulkan = { version = "0.5", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.4", features = ["x11"] }
+gfx-backend-vulkan = { version = "0.5", features = ["x11"] }
 
 [target.'cfg(windows)'.dependencies]
-gfx-backend-dx12 = { version = "0.4.1" }
-gfx-backend-dx11 = { version = "0.4" }
-gfx-backend-vulkan = { version = "0.4" }
+gfx-backend-dx12 = { version = "0.5" }
+gfx-backend-dx11 = { version = "0.5" }
+gfx-backend-vulkan = { version = "0.5" }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "dragonfly", target_os = "freebsd"))'.dependencies]
 battery = { version = "0.7", optional = true }

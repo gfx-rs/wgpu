@@ -5,8 +5,10 @@
 use crate::{
     command::{
         bind::{Binder, LayoutChange},
+        PassComponent,
         PhantomSlice,
         RawRenderPassColorAttachmentDescriptor,
+        RawRenderPassDepthStencilAttachmentDescriptor,
         RawRenderTargets,
     },
     conv,
@@ -14,7 +16,6 @@ use crate::{
         FramebufferKey,
         RenderPassContext,
         RenderPassKey,
-        BIND_BUFFER_ALIGNMENT,
         MAX_VERTEX_BUFFERS,
         MAX_COLOR_TARGETS,
     },
@@ -37,10 +38,11 @@ use wgt::{
     RenderPassColorAttachmentDescriptorBase,
     RenderPassDepthStencilAttachmentDescriptorBase,
     TextureUsage,
+    BIND_BUFFER_ALIGNMENT
 };
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
-use peek_poke::{Peek, PeekCopy, Poke};
+use peek_poke::{Peek, PeekPoke, Poke};
 
 use std::{
     borrow::Borrow,
@@ -52,23 +54,20 @@ use std::{
     slice,
 };
 
-//Note: this could look better if `cbindgen` wasn't confused by &T used in place of
-// a generic parameter, it's not able to manage
-pub type OptionRef<'a, T> = Option<&'a T>;
-pub type RenderPassColorAttachmentDescriptor<'a> =
-    RenderPassColorAttachmentDescriptorBase<id::TextureViewId, OptionRef<'a, id::TextureViewId>>;
+pub type RenderPassColorAttachmentDescriptor =
+    RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
 pub type RenderPassDepthStencilAttachmentDescriptor =
     RenderPassDepthStencilAttachmentDescriptorBase<id::TextureViewId>;
 
 #[repr(C)]
 #[derive(Debug)]
 pub struct RenderPassDescriptor<'a> {
-    pub color_attachments: *const RenderPassColorAttachmentDescriptor<'a>,
+    pub color_attachments: *const RenderPassColorAttachmentDescriptor,
     pub color_attachments_length: usize,
     pub depth_stencil_attachment: Option<&'a RenderPassDepthStencilAttachmentDescriptor>,
 }
 
-#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
+#[derive(Clone, Copy, Debug, Default, PeekPoke)]
 pub struct Rect<T> {
     pub x: T,
     pub y: T,
@@ -76,7 +75,7 @@ pub struct Rect<T> {
     pub h: T,
 }
 
-#[derive(Clone, Copy, Debug, PeekCopy, Poke)]
+#[derive(Clone, Copy, Debug, PeekPoke)]
 enum RenderCommand {
     SetBindGroup {
         index: u8,
@@ -129,26 +128,46 @@ enum RenderCommand {
     End,
 }
 
+// required for PeekPoke
+impl Default for RenderCommand {
+    fn default() -> Self {
+        RenderCommand::End
+    }
+}
+
 impl super::RawPass {
     pub unsafe fn new_render(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
         let mut pass = Self::from_vec(Vec::<RenderCommand>::with_capacity(1), parent_id);
 
-        let mut targets = RawRenderTargets {
-            depth_stencil: desc.depth_stencil_attachment
-                .cloned()
-                .unwrap_or_else(|| mem::zeroed()),
-            colors: mem::zeroed(),
-        };
+        let mut targets: RawRenderTargets = mem::zeroed();
+        if let Some(ds) = desc.depth_stencil_attachment {
+            targets.depth_stencil = RawRenderPassDepthStencilAttachmentDescriptor {
+                attachment: ds.attachment.into_raw(),
+                depth: PassComponent {
+                    load_op: ds.depth_load_op,
+                    store_op: ds.depth_store_op,
+                    clear_value: ds.clear_depth,
+                },
+                stencil: PassComponent {
+                    load_op: ds.stencil_load_op,
+                    store_op: ds.stencil_store_op,
+                    clear_value: ds.clear_stencil,
+                },
+            };
+        }
+
         for (color, at) in targets.colors
             .iter_mut()
             .zip(slice::from_raw_parts(desc.color_attachments, desc.color_attachments_length))
         {
             *color = RawRenderPassColorAttachmentDescriptor {
-                attachment: at.attachment,
-                resolve_target: at.resolve_target.map_or(id::TextureViewId::ERROR, |rt| *rt),
-                load_op: at.load_op,
-                store_op: at.store_op,
-                clear_color: at.clear_color,
+                attachment: at.attachment.into_raw(),
+                resolve_target: at.resolve_target.map_or(0, |id| id.into_raw()),
+                component: PassComponent {
+                    load_op: at.load_op,
+                    store_op: at.store_op,
+                    clear_value: at.clear_color,
+                },
             };
         }
 
@@ -182,6 +201,7 @@ impl OptionalState {
 enum DrawError {
     MissingBlendColor,
     MissingStencilReference,
+    MissingPipeline,
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
@@ -255,6 +275,7 @@ struct State {
     binder: Binder,
     blend_color: OptionalState,
     stencil_reference: OptionalState,
+    pipeline: OptionalState,
     index: IndexState,
     vertex: VertexState,
 }
@@ -266,8 +287,11 @@ impl State {
         if bind_mask != 0 {
             //let (expected, provided) = self.binder.entries[index as usize].info();
             return Err(DrawError::IncompatibleBindGroup {
-                index: bind_mask.trailing_zeros() as u32,
+                index: bind_mask.trailing_zeros(),
             });
+        }
+        if self.pipeline == OptionalState::Required {
+            return Err(DrawError::MissingPipeline);
         }
         if self.blend_color == OptionalState::Required {
             return Err(DrawError::MissingBlendColor);
@@ -317,29 +341,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let mut targets: RawRenderTargets = unsafe { mem::zeroed() };
         assert!(unsafe { peeker.add(RawRenderTargets::max_size()) <= raw_data_end });
-        peeker = unsafe { targets.peek_from(peeker) };
+        peeker = unsafe { RawRenderTargets::peek_from(peeker, &mut targets) };
 
         let color_attachments = targets.colors
             .iter()
-            .take_while(|at| at.attachment != id::TextureViewId::ERROR)
+            .take_while(|at| at.attachment != 0)
             .map(|at| {
                 RenderPassColorAttachmentDescriptor {
-                    attachment: at.attachment,
-                    resolve_target: if at.resolve_target == id::TextureViewId::ERROR {
-                        None
-                    } else {
-                        Some(&at.resolve_target)
-                    },
-                    load_op: at.load_op,
-                    store_op: at.store_op,
-                    clear_color: at.clear_color,
+                    attachment: id::TextureViewId::from_raw(at.attachment).unwrap(),
+                    resolve_target: id::TextureViewId::from_raw(at.resolve_target),
+                    load_op: at.component.load_op,
+                    store_op: at.component.store_op,
+                    clear_color: at.component.clear_value,
                 }
             })
-            .collect::<arrayvec::ArrayVec<[_; MAX_COLOR_TARGETS]>>();
-        let depth_stencil_attachment = if targets.depth_stencil.attachment == id::TextureViewId::ERROR {
+            .collect::<ArrayVec<[_; MAX_COLOR_TARGETS]>>();
+        let depth_stencil_attachment_body;
+        let depth_stencil_attachment = if targets.depth_stencil.attachment == 0 {
             None
         } else {
-            Some(&targets.depth_stencil)
+            let at = &targets.depth_stencil;
+            depth_stencil_attachment_body = RenderPassDepthStencilAttachmentDescriptor {
+                attachment: id::TextureViewId::from_raw(at.attachment).unwrap(),
+                depth_load_op: at.depth.load_op,
+                depth_store_op: at.depth.store_op,
+                clear_depth: at.depth.clear_value,
+                stencil_load_op: at.stencil.load_op,
+                stencil_store_op: at.stencil.store_op,
+                clear_stencil: at.stencil.clear_value,
+            };
+            Some(&depth_stencil_attachment_body)
         };
 
         let (context, sample_count) = {
@@ -485,7 +516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     });
                 }
 
-                for &resolve_target in color_attachments
+                for resolve_target in color_attachments
                     .iter()
                     .flat_map(|at| at.resolve_target)
                 {
@@ -602,7 +633,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             } else {
                                 let sample_count_check =
                                     view_guard[color_attachments[i].attachment].samples;
-                                assert!(sample_count_check > 1, "RenderPassColorAttachmentDescriptor with a resolve_target must have an attachment with sample_count > 1");
+                                assert!(sample_count_check > 1,
+                                    "RenderPassColorAttachmentDescriptor with a resolve_target must have an attachment with sample_count > 1");
                                 resolve_ids.push((
                                     attachment_index,
                                     hal::image::Layout::ColorAttachmentOptimal,
@@ -641,7 +673,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 resolves: color_attachments
                     .iter()
                     .filter_map(|at| at.resolve_target)
-                    .cloned()
                     .collect(),
                 depth_stencil: depth_stencil_attachment.map(|at| at.attachment),
             };
@@ -773,7 +804,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 resolves: color_attachments
                     .iter()
                     .filter_map(|at| at.resolve_target)
-                    .map(|resolve| view_guard[*resolve].format)
+                    .map(|resolve| view_guard[resolve].format)
                     .collect(),
                 depth_stencil: depth_stencil_attachment.map(|at| view_guard[at.attachment].format),
             };
@@ -784,6 +815,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             binder: Binder::new(cmb.features.max_bind_groups),
             blend_color: OptionalState::Unused,
             stencil_reference: OptionalState::Unused,
+            pipeline: OptionalState::Required,
             index: IndexState {
                 bound_buffer_view: None,
                 format: IndexFormat::Uint16,
@@ -804,7 +836,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         loop {
             assert!(unsafe { peeker.add(RenderCommand::max_size()) } <= raw_data_end);
-            peeker = unsafe { command.peek_from(peeker) };
+            peeker = unsafe { RenderCommand::peek_from(peeker, &mut command) };
             match command {
                 RenderCommand::SetBindGroup { index, num_dynamic_offsets, bind_group_id, phantom_offsets } => {
                     let (new_peeker, offsets) = unsafe {
@@ -845,13 +877,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 offsets
                                     .iter()
                                     .chain(follow_ups.flat_map(|(_, offsets)| offsets))
-                                    .map(|&off| off as hal::command::DescriptorSetOffset),
+                                    .cloned()
                             );
                         }
                     };
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let pipeline = &pipeline_guard[pipeline_id];
+                    state.pipeline = OptionalState::Set;
+                    let pipeline = trackers
+                        .render_pipes
+                        .use_extend(&*pipeline_guard, pipeline_id, (), ())
+                        .unwrap();
 
                     assert!(
                         context.compatible(&pipeline.pass_context),
@@ -894,7 +930,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             &pipeline_layout.raw,
                                             index,
                                             iter::once(desc_set),
-                                            offsets.iter().map(|offset| *offset as u32),
+                                            offsets.iter().cloned(),
                                         );
                                     }
                                 }
@@ -919,7 +955,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                             let view = hal::buffer::IndexBufferView {
                                 buffer: &buffer.raw,
-                                offset: range.start,
+                                range: hal::buffer::SubRange {
+                                    offset: range.start,
+                                    size: Some(range.end - range.start),
+                                },
                                 index_type: conv::map_index_format(state.index.format),
                             };
 
@@ -957,7 +996,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let view = hal::buffer::IndexBufferView {
                         buffer: &buffer.raw,
-                        offset,
+                        range: hal::buffer::SubRange {
+                            offset,
+                            size: Some(end - offset),
+                        },
                         index_type: conv::map_index_format(state.index.format),
                     };
 
@@ -977,8 +1019,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         buffer.size - offset
                     };
 
+                    let range = hal::buffer::SubRange {
+                        offset,
+                        size: if size != 0 { Some(size) } else { None },
+                    };
                     unsafe {
-                        raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, offset)));
+                        raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
                     }
                     state.vertex.update_limits();
                 }
@@ -1151,7 +1197,7 @@ pub mod render_ffi {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
-            phantom_offsets: PhantomSlice::new(),
+            phantom_offsets: PhantomSlice::default(),
         });
         pass.encode_slice(
             slice::from_raw_parts(offsets, offset_length),

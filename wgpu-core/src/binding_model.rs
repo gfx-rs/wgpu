@@ -11,9 +11,9 @@ use crate::{
     Stored,
 };
 
-use wgt::BufferAddress;
+use wgt::{BufferAddress, TextureComponentType};
 use arrayvec::ArrayVec;
-use rendy_descriptor::{DescriptorRanges, DescriptorSet};
+use gfx_descriptor::{DescriptorCounts, DescriptorSet};
 
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};
@@ -34,15 +34,6 @@ pub enum BindingType {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
-pub enum TextureComponentType {
-    Float,
-    Sint,
-    Uint,
-}
-
-#[repr(C)]
 #[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
 pub struct BindGroupLayoutEntry {
@@ -59,6 +50,7 @@ pub struct BindGroupLayoutEntry {
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupLayoutDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub entries: *const BindGroupLayoutEntry,
     pub entries_length: usize,
 }
@@ -68,7 +60,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) entries: FastHashMap<u32, BindGroupLayoutEntry>,
-    pub(crate) desc_ranges: DescriptorRanges,
+    pub(crate) desc_counts: DescriptorCounts,
     pub(crate) dynamic_count: usize,
 }
 
@@ -115,6 +107,7 @@ pub struct BindGroupEntry {
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub layout: BindGroupLayoutId,
     pub entries: *const BindGroupEntry,
     pub entries_length: usize,
