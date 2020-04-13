@@ -4,13 +4,9 @@
 
 use crate::GLOBAL;
 
-pub use core::command::{
-    compute_ffi::*,
-    render_ffi::*,
-};
+pub use core::command::{compute_ffi::*, render_ffi::*};
 
 use core::{gfx_select, id};
-
 
 #[no_mangle]
 pub extern "C" fn wgpu_command_encoder_finish(
@@ -79,7 +75,6 @@ pub extern "C" fn wgpu_command_encoder_copy_texture_to_texture(
         destination,
         copy_size))
 }
-
 
 /// # Safety
 ///

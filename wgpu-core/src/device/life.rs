@@ -4,25 +4,18 @@
 
 use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
-    id,
-    resource,
+    id, resource,
     track::TrackerSet,
-    FastHashMap,
-    Stored,
-    RefCount,
-    SubmissionIndex,
+    FastHashMap, RefCount, Stored, SubmissionIndex,
 };
 
 use copyless::VecHelper as _;
-use hal::device::Device as _;
-use parking_lot::Mutex;
 use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
 use gfx_memory::{Heaps, MemoryBlock};
+use hal::device::Device as _;
+use parking_lot::Mutex;
 
-use std::{
-    sync::atomic::Ordering,
-};
-
+use std::sync::atomic::Ordering;
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 
@@ -55,8 +48,10 @@ impl SuspectedResources {
         self.texture_views.extend_from_slice(&other.texture_views);
         self.samplers.extend_from_slice(&other.samplers);
         self.bind_groups.extend_from_slice(&other.bind_groups);
-        self.compute_pipelines.extend_from_slice(&other.compute_pipelines);
-        self.render_pipelines.extend_from_slice(&other.render_pipelines);
+        self.compute_pipelines
+            .extend_from_slice(&other.compute_pipelines);
+        self.render_pipelines
+            .extend_from_slice(&other.render_pipelines);
     }
 }
 
@@ -197,14 +192,12 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         new_suspects: &SuspectedResources,
     ) {
         self.suspected_resources.extend(new_suspects);
-        self.active
-            .alloc()
-            .init(ActiveSubmission {
-                index,
-                fence,
-                last_resources: NonReferencedResources::new(),
-                mapped: Vec::new(),
-            });
+        self.active.alloc().init(ActiveSubmission {
+            index,
+            fence,
+            last_resources: NonReferencedResources::new(),
+            mapped: Vec::new(),
+        });
     }
 
     pub fn map(&mut self, buffer: id::BufferId, ref_count: RefCount) {
@@ -238,11 +231,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     }
 
     /// Returns the last submission index that is done.
-    pub fn triage_submissions(
-        &mut self,
-        device: &B::Device,
-        force_wait: bool,
-    ) -> SubmissionIndex {
+    pub fn triage_submissions(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
         if force_wait {
             self.wait_idle(device);
         }
@@ -259,7 +248,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             return 0;
         };
 
-        for a in self.active.drain(.. done_count) {
+        for a in self.active.drain(..done_count) {
             log::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
@@ -278,14 +267,9 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         descriptor_allocator_mutex: &Mutex<DescriptorAllocator<B>>,
     ) {
         unsafe {
-            self.free_resources.clean(
-                device,
-                heaps_mutex,
-                descriptor_allocator_mutex,
-            );
-            descriptor_allocator_mutex
-                .lock()
-                .cleanup(device);
+            self.free_resources
+                .clean(device, heaps_mutex, descriptor_allocator_mutex);
+            descriptor_allocator_mutex.lock().cleanup(device);
         }
     }
 }
@@ -309,17 +293,26 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     let res = guard.remove(id).unwrap();
 
                     assert!(res.used.bind_groups.is_empty());
-                    self.suspected_resources.buffers.extend(res.used.buffers.used());
-                    self.suspected_resources.textures.extend(res.used.textures.used());
-                    self.suspected_resources.texture_views.extend(res.used.views.used());
-                    self.suspected_resources.samplers.extend(res.used.samplers.used());
+                    self.suspected_resources
+                        .buffers
+                        .extend(res.used.buffers.used());
+                    self.suspected_resources
+                        .textures
+                        .extend(res.used.textures.used());
+                    self.suspected_resources
+                        .texture_views
+                        .extend(res.used.views.used());
+                    self.suspected_resources
+                        .samplers
+                        .extend(res.used.samplers.used());
 
                     let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
                     self.active
                         .iter_mut()
                         .find(|a| a.index == submit_index)
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .desc_sets.push(res.raw);
+                        .desc_sets
+                        .push(res.raw);
                 }
             }
         }
@@ -346,7 +339,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .iter_mut()
                         .find(|a| a.index == submit_index)
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .image_views.push((id, raw));
+                        .image_views
+                        .push((id, raw));
                 }
             }
         }
@@ -365,7 +359,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .iter_mut()
                         .find(|a| a.index == submit_index)
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .images.push((res.raw, res.memory));
+                        .images
+                        .push((res.raw, res.memory));
                 }
             }
         }
@@ -384,7 +379,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .iter_mut()
                         .find(|a| a.index == submit_index)
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .samplers.push(res.raw);
+                        .samplers
+                        .push(res.raw);
                 }
             }
         }
@@ -404,7 +400,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .iter_mut()
                         .find(|a| a.index == submit_index)
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .buffers.push((res.raw, res.memory));
+                        .buffers
+                        .push((res.raw, res.memory));
                 }
             }
         }
@@ -423,7 +420,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .iter_mut()
                         .find(|a| a.index == submit_index)
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .compute_pipes.push(res.raw);
+                        .compute_pipes
+                        .push(res.raw);
                 }
             }
         }
@@ -442,7 +440,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .iter_mut()
                         .find(|a| a.index == submit_index)
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                        .graphics_pipes.push(res.raw);
+                        .graphics_pipes
+                        .push(res.raw);
                 }
             }
         }
@@ -517,7 +516,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     // Between all attachments, we need the smallest index, because that's the last
                     // time this framebuffer is still valid
                     if let Some(attachment_last_submit) = attachment_last_submit {
-                        let min = last_submit.unwrap_or(std::usize::MAX).min(attachment_last_submit);
+                        let min = last_submit
+                            .unwrap_or(std::usize::MAX)
+                            .min(attachment_last_submit);
                         last_submit = Some(min);
                     }
                 }
@@ -537,7 +538,8 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                 .iter_mut()
                 .find(|a| a.index == submit_index)
                 .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                .framebuffers.push(framebuffer);
+                .framebuffers
+                .push(framebuffer);
         }
     }
 
@@ -553,18 +555,25 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
         let hub = B::hub(global);
         let (mut buffer_guard, _) = B::hub(global).buffers.write(token);
-        let mut pending_callbacks: Vec<super::BufferMapPendingCallback> = Vec::with_capacity(self.ready_to_map.len());
+        let mut pending_callbacks: Vec<super::BufferMapPendingCallback> =
+            Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();
         for buffer_id in self.ready_to_map.drain(..) {
             let buffer = &mut buffer_guard[buffer_id];
-            if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id) {
+            if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id)
+            {
                 buffer.map_state = resource::BufferMapState::Idle;
                 log::debug!("Mapping request is dropped because the buffer is destroyed.");
                 hub.buffers.free_id(buffer_id);
                 let buffer = buffer_guard.remove(buffer_id).unwrap();
-                self.free_resources.buffers.push((buffer.raw, buffer.memory));
+                self.free_resources
+                    .buffers
+                    .push((buffer.raw, buffer.memory));
             } else {
-                let mapping = match std::mem::replace(&mut buffer.map_state, resource::BufferMapState::Active) {
+                let mapping = match std::mem::replace(
+                    &mut buffer.map_state,
+                    resource::BufferMapState::Active,
+                ) {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     _ => panic!("No pending mapping."),
                 };

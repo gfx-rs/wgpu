@@ -5,15 +5,19 @@
 use crate::{Epoch, Index};
 #[cfg(feature = "serde")]
 use serde_crate::{Deserialize, Serialize};
-use wgt::Backend;
 use std::{fmt, marker::PhantomData, mem, num::NonZeroU64};
+use wgt::Backend;
 
 const BACKEND_BITS: usize = 3;
 const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize), serde(crate="serde_crate"))]
+#[cfg_attr(
+    feature = "serde",
+    derive(Serialize, Deserialize),
+    serde(crate = "serde_crate")
+)]
 pub struct Id<T>(NonZeroU64, PhantomData<T>);
 
 // required for PeekPoke
@@ -75,7 +79,7 @@ impl<T> Eq for Id<T> {}
 
 unsafe impl<T> peek_poke::Poke for Id<T> {
     fn max_size() -> usize {
-         mem::size_of::<u64>()
+        mem::size_of::<u64>()
     }
     unsafe fn poke_into(&self, data: *mut u8) -> *mut u8 {
         self.0.get().poke_into(data)
@@ -111,7 +115,6 @@ impl<T> TypedId for Id<T> {
         )
     }
 }
-
 
 pub type AdapterId = Id<crate::instance::Adapter<Dummy>>;
 pub type SurfaceId = Id<crate::instance::Surface>;

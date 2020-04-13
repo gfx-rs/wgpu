@@ -8,7 +8,6 @@ use core::{gfx_select, id};
 
 use std::slice;
 
-
 pub type Global = core::hub::Global<IdentityRecyclerFactory>;
 
 #[no_mangle]
@@ -71,10 +70,7 @@ pub extern "C" fn wgpu_server_adapter_request_device(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_adapter_destroy(
-    global: &Global,
-    adapter_id: id::AdapterId,
-) {
+pub extern "C" fn wgpu_server_adapter_destroy(global: &Global, adapter_id: id::AdapterId) {
     gfx_select!(adapter_id => global.adapter_destroy(adapter_id))
 }
 
@@ -123,10 +119,7 @@ pub extern "C" fn wgpu_server_buffer_map_read(
     callback: core::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
-    let operation = core::resource::BufferMapOperation::Read {
-        callback,
-        userdata,
-    };
+    let operation = core::resource::BufferMapOperation::Read { callback, userdata };
 
     gfx_select!(buffer_id => global.buffer_map_async(
         buffer_id,
@@ -137,10 +130,7 @@ pub extern "C" fn wgpu_server_buffer_map_read(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_buffer_unmap(
-    global: &Global,
-    buffer_id: id::BufferId,
-) {
+pub extern "C" fn wgpu_server_buffer_unmap(global: &Global, buffer_id: id::BufferId) {
     gfx_select!(buffer_id => global.buffer_unmap(buffer_id));
 }
 
@@ -169,10 +159,7 @@ pub extern "C" fn wgpu_server_encoder_finish(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_encoder_destroy(
-    global: &Global,
-    self_id: id::CommandEncoderId,
-) {
+pub extern "C" fn wgpu_server_encoder_destroy(global: &Global, self_id: id::CommandEncoderId) {
     gfx_select!(self_id => global.command_encoder_destroy(self_id));
 }
 
@@ -328,10 +315,7 @@ pub extern "C" fn wgpu_server_device_create_bind_group(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_bind_group_destroy(
-    global: &Global,
-    self_id: id::BindGroupId,
-) {
+pub extern "C" fn wgpu_server_bind_group_destroy(global: &Global, self_id: id::BindGroupId) {
     gfx_select!(self_id => global.bind_group_destroy(self_id));
 }
 
@@ -346,10 +330,7 @@ pub extern "C" fn wgpu_server_device_create_shader_module(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_shader_module_destroy(
-    global: &Global,
-    self_id: id::ShaderModuleId,
-) {
+pub extern "C" fn wgpu_server_shader_module_destroy(global: &Global, self_id: id::ShaderModuleId) {
     gfx_select!(self_id => global.shader_module_destroy(self_id));
 }
 
@@ -410,18 +391,12 @@ pub extern "C" fn wgpu_server_texture_create_view(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_texture_destroy(
-    global: &Global,
-    self_id: id::TextureId,
-) {
+pub extern "C" fn wgpu_server_texture_destroy(global: &Global, self_id: id::TextureId) {
     gfx_select!(self_id => global.texture_destroy(self_id));
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_texture_view_destroy(
-    global: &Global,
-    self_id: id::TextureViewId,
-) {
+pub extern "C" fn wgpu_server_texture_view_destroy(global: &Global, self_id: id::TextureViewId) {
     gfx_select!(self_id => global.texture_view_destroy(self_id));
 }
 
@@ -436,9 +411,6 @@ pub extern "C" fn wgpu_server_device_create_sampler(
 }
 
 #[no_mangle]
-pub extern "C" fn wgpu_server_sampler_destroy(
-    global: &Global,
-    self_id: id::SamplerId,
-) {
+pub extern "C" fn wgpu_server_sampler_destroy(global: &Global, self_id: id::SamplerId) {
     gfx_select!(self_id => global.sampler_destroy(self_id));
 }

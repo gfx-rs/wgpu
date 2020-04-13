@@ -19,13 +19,16 @@ impl fmt::Display for Error {
     }
 }
 
-#[cfg(all(feature = "battery", any(
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "windows",
-    target_os = "dragonfly",
-    target_os = "freebsd"
-)))]
+#[cfg(all(
+    feature = "battery",
+    any(
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "dragonfly",
+        target_os = "freebsd"
+    )
+))]
 mod platform {
     use super::Error;
     use battery::{self, Manager, State};
@@ -49,13 +52,16 @@ mod platform {
     }
 }
 
-#[cfg(any(not(feature = "battery"), not(any(
-    target_os = "linux",
-    target_os = "macos",
-    target_os = "windows",
-    target_os = "dragonfly",
-    target_os = "freebsd"
-))))]
+#[cfg(any(
+    not(feature = "battery"),
+    not(any(
+        target_os = "linux",
+        target_os = "macos",
+        target_os = "windows",
+        target_os = "dragonfly",
+        target_os = "freebsd"
+    ))
+))]
 mod platform {
     use super::Error;
 

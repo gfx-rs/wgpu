@@ -3,22 +3,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model,
-    command,
-    conv,
+    binding_model, command, conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
-    id,
-    pipeline,
-    resource,
-    swap_chain,
+    id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    FastHashMap,
-    Features,
-    LifeGuard,
-    Stored,
+    FastHashMap, Features, LifeGuard, Stored,
 };
 
-use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, BIND_BUFFER_ALIGNMENT};
 use arrayvec::ArrayVec;
 use copyless::VecHelper as _;
 use gfx_descriptor::DescriptorAllocator;
@@ -32,14 +23,10 @@ use hal::{
 };
 use parking_lot::{Mutex, MutexGuard};
 use smallvec::SmallVec;
+use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, BIND_BUFFER_ALIGNMENT};
 
 use std::{
-    collections::hash_map::Entry,
-    ffi,
-    iter,
-    marker::PhantomData,
-    ptr,
-    slice,
+    collections::hash_map::Entry, ffi, iter, marker::PhantomData, ptr, slice,
     sync::atomic::Ordering,
 };
 
@@ -108,8 +95,11 @@ type RawBufferMut = *mut u8;
 type BufferMapResult = Result<RawBufferMut, hal::device::MapError>;
 type BufferMapPendingCallback = (resource::BufferMapOperation, BufferMapResult);
 
-pub type BufferMapReadCallback =
-    unsafe extern "C" fn(status: resource::BufferMapAsyncStatus, data: *const u8, userdata: *mut u8);
+pub type BufferMapReadCallback = unsafe extern "C" fn(
+    status: resource::BufferMapAsyncStatus,
+    data: *const u8,
+    userdata: *mut u8,
+);
 pub type BufferMapWriteCallback =
     unsafe extern "C" fn(status: resource::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8);
 
@@ -140,11 +130,8 @@ fn map_buffer<B: hal::Backend>(
         };
         match kind {
             HostMap::Read => unsafe {
-                raw.invalidate_mapped_memory_ranges(iter::once((
-                    buffer.memory.memory(),
-                    segment,
-                )))
-                .unwrap();
+                raw.invalidate_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
+                    .unwrap();
             },
             HostMap::Write => {
                 buffer.mapped_write_segments.push(segment);
@@ -154,28 +141,24 @@ fn map_buffer<B: hal::Backend>(
     Ok(ptr.as_ptr())
 }
 
-fn unmap_buffer<B: hal::Backend>(
-    raw: &B::Device,
-    buffer: &mut resource::Buffer<B>,
-) {
+fn unmap_buffer<B: hal::Backend>(raw: &B::Device, buffer: &mut resource::Buffer<B>) {
     match buffer.map_state {
         resource::BufferMapState::Idle => {
             log::error!("Buffer already unmapped");
             return;
-        },
+        }
         _ => buffer.map_state = resource::BufferMapState::Idle,
     }
 
     if !buffer.mapped_write_segments.is_empty() {
         unsafe {
-            raw
-                .flush_mapped_memory_ranges(
-                    buffer
-                        .mapped_write_segments
-                        .iter()
-                        .map(|r| (buffer.memory.memory(), r.clone())),
-                )
-                .unwrap()
+            raw.flush_mapped_memory_ranges(
+                buffer
+                    .mapped_write_segments
+                    .iter()
+                    .map(|r| (buffer.memory.memory(), r.clone())),
+            )
+            .unwrap()
         };
         buffer.mapped_write_segments.clear();
     }
@@ -195,14 +178,13 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
         match operation {
             resource::BufferMapOperation::Read { callback, userdata } => unsafe {
                 callback(status, ptr, userdata)
-            }
+            },
             resource::BufferMapOperation::Write { callback, userdata } => unsafe {
                 callback(status, ptr, userdata)
-            }
+            },
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct Device<B: hal::Backend> {
@@ -272,7 +254,8 @@ impl<B: GfxBackend> Device<B> {
     }
 
     fn lock_life<'a>(
-        &'a self, _token: &mut Token<'a, Self>
+        &'a self,
+        _token: &mut Token<'a, Self>,
     ) -> MutexGuard<'a, life::LifetimeTracker<B>> {
         self.life_tracker.lock()
     }
@@ -290,11 +273,7 @@ impl<B: GfxBackend> Device<B> {
         life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
         let _last_done = life_tracker.triage_submissions(&self.raw, force_wait);
         let callbacks = life_tracker.handle_mapping(global, &self.raw, &self.trackers, token);
-        life_tracker.cleanup(
-            &self.raw,
-            &self.mem_allocator,
-            &self.desc_allocator,
-        );
+        life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
         callbacks
     }
 
@@ -317,7 +296,12 @@ impl<B: GfxBackend> Device<B> {
             } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
                 (Kind::Linear, MemoryUsage::Staging { read_back: true })
             } else {
-                (Kind::General, MemoryUsage::Dynamic { sparse_updates: false })
+                (
+                    Kind::General,
+                    MemoryUsage::Dynamic {
+                        sparse_updates: false,
+                    },
+                )
             }
         };
 
@@ -344,11 +328,7 @@ impl<B: GfxBackend> Device<B> {
 
         unsafe {
             self.raw
-                .bind_buffer_memory(
-                    memory.memory(),
-                    memory.segment().offset,
-                    &mut buffer,
-                )
+                .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
                 .unwrap()
         };
 
@@ -378,9 +358,9 @@ impl<B: GfxBackend> Device<B> {
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
-                assert!(!desc.usage.intersects(
-                    wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST
-                ));
+                assert!(!desc
+                    .usage
+                    .intersects(wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST));
             }
             _ => {}
         }
@@ -407,14 +387,17 @@ impl<B: GfxBackend> Device<B> {
         // TODO: 2D arrays, cubemap arrays
 
         let mut image = unsafe {
-            let mut image = self.raw.create_image(
-                kind,
-                desc.mip_level_count as hal::image::Level,
-                format,
-                hal::image::Tiling::Optimal,
-                usage,
-                view_capabilities,
-            ).unwrap();
+            let mut image = self
+                .raw
+                .create_image(
+                    kind,
+                    desc.mip_level_count as hal::image::Level,
+                    format,
+                    hal::image::Tiling::Optimal,
+                    usage,
+                    view_capabilities,
+                )
+                .unwrap();
             if !desc.label.is_null() {
                 let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
                 self.raw.set_image_name(&mut image, &label);
@@ -438,11 +421,7 @@ impl<B: GfxBackend> Device<B> {
 
         unsafe {
             self.raw
-                .bind_image_memory(
-                    memory.memory(),
-                    memory.segment().offset,
-                    &mut image,
-                )
+                .bind_image_memory(memory.memory(), memory.segment().offset, &mut image)
                 .unwrap()
         };
 
@@ -457,8 +436,8 @@ impl<B: GfxBackend> Device<B> {
             format: desc.format,
             full_range: hal::image::SubresourceRange {
                 aspects,
-                levels: 0 .. desc.mip_level_count as hal::image::Level,
-                layers: 0 .. desc.array_layer_count as hal::image::Layer,
+                levels: 0..desc.mip_level_count as hal::image::Level,
+                layers: 0..desc.array_layer_count as hal::image::Layer,
             },
             memory,
             life_guard: LifeGuard::new(),
@@ -489,11 +468,9 @@ impl<B: hal::Backend> Device<B> {
 
     pub(crate) fn dispose(self) {
         self.life_tracker.lock().triage_submissions(&self.raw, true);
-        self.life_tracker.lock().cleanup(
-            &self.raw,
-            &self.mem_allocator,
-            &self.desc_allocator,
-        );
+        self.life_tracker
+            .lock()
+            .cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
         self.com_allocator.destroy(&self.raw);
         let mut desc_alloc = self.desc_allocator.into_inner();
         let mut mem_alloc = self.mem_allocator.into_inner();
@@ -509,7 +486,6 @@ impl<B: hal::Backend> Device<B> {
         }
     }
 }
-
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_buffer<B: GfxBackend>(
@@ -568,7 +544,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Ok(ptr) => {
                 buffer.map_state = resource::BufferMapState::Active;
                 ptr
-            },
+            }
             Err(e) => {
                 log::error!("failed to create buffer in a mapped state: {:?}", e);
                 ptr::null_mut()
@@ -577,9 +553,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         log::info!("Created mapped buffer {:?} with {:?}", id, desc);
-        device.trackers
+        device
+            .trackers
             .lock()
-            .buffers.init(
+            .buffers
+            .init(
                 id,
                 ref_count,
                 BufferState::with_usage(wgt::BufferUsage::MAP_WRITE),
@@ -609,7 +587,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match map_buffer(
             &device.raw,
             &mut buffer,
-            hal::buffer::SubRange { offset, size: Some(data.len() as BufferAddress) },
+            hal::buffer::SubRange {
+                offset,
+                size: Some(data.len() as BufferAddress),
+            },
             HostMap::Write,
         ) {
             Ok(ptr) => unsafe {
@@ -644,7 +625,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match map_buffer(
             &device.raw,
             &mut buffer,
-            hal::buffer::SubRange { offset, size: Some(data.len() as BufferAddress) },
+            hal::buffer::SubRange {
+                offset,
+                size: Some(data.len() as BufferAddress),
+            },
             HostMap::Read,
         ) {
             Ok(ptr) => unsafe {
@@ -674,7 +658,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources.buffers.push(buffer_id);
+            .suspected_resources
+            .buffers
+            .push(buffer_id);
     }
 
     pub fn device_create_texture<B: GfxBackend>(
@@ -693,13 +679,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let ref_count = texture.life_guard.add_ref();
 
         let id = hub.textures.register_identity(id_in, texture, &mut token);
-        device.trackers
+        device
+            .trackers
             .lock()
-            .textures.init(
-                id,
-                ref_count,
-                TextureState::with_range(&range),
-            )
+            .textures
+            .init(id, ref_count, TextureState::with_range(&range))
             .unwrap();
         id
     }
@@ -718,7 +702,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources.textures.push(texture_id);
+            .suspected_resources
+            .textures
+            .push(texture_id);
     }
 
     pub fn texture_create_view<B: GfxBackend>(
@@ -750,8 +736,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
                 let range = hal::image::SubresourceRange {
                     aspects: texture.full_range.aspects,
-                    levels: desc.base_mip_level as u8 .. end_level,
-                    layers: desc.base_array_layer as u16 .. end_layer,
+                    levels: desc.base_mip_level as u8..end_level,
+                    layers: desc.base_array_layer as u16..end_layer,
                 };
                 (desc.format, kind, range)
             }
@@ -797,9 +783,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let ref_count = view.life_guard.add_ref();
 
         let id = hub.texture_views.register_identity(id_in, view, &mut token);
-        device.trackers
+        device
+            .trackers
             .lock()
-            .views.init(id, ref_count, PhantomData)
+            .views
+            .init(id, ref_count, PhantomData)
             .unwrap();
         id
     }
@@ -827,7 +815,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources.texture_views.push(texture_view_id);
+            .suspected_resources
+            .texture_views
+            .push(texture_view_id);
     }
 
     pub fn device_create_sampler<B: GfxBackend>(
@@ -851,7 +841,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 conv::map_wrap(desc.address_mode_w),
             ),
             lod_bias: hal::image::Lod(0.0),
-            lod_range: hal::image::Lod(desc.lod_min_clamp) .. hal::image::Lod(desc.lod_max_clamp),
+            lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
             comparison: conv::map_compare_function(desc.compare),
             border: hal::image::PackedColor(0),
             normalized: true,
@@ -869,9 +859,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let ref_count = sampler.life_guard.add_ref();
 
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
-        device.trackers
+        device
+            .trackers
             .lock()
-            .samplers.init(id, ref_count, PhantomData)
+            .samplers
+            .init(id, ref_count, PhantomData)
             .unwrap();
         id
     }
@@ -890,7 +882,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources.samplers.push(sampler_id);
+            .suspected_resources
+            .samplers
+            .push(sampler_id);
     }
 
     pub fn device_create_bind_group_layout<B: GfxBackend>(
@@ -902,11 +896,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let hub = B::hub(self);
         let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
-        let entry_map: FastHashMap<_, _> = entries
-            .iter()
-            .cloned()
-            .map(|b| (b.binding, b))
-            .collect();
+        let entry_map: FastHashMap<_, _> =
+            entries.iter().cloned().map(|b| (b.binding, b)).collect();
 
         // TODO: deduplicate the bind group layouts at some level.
         // We can't do it right here, because in the remote scenario
@@ -942,7 +933,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .unwrap();
             if !desc.label.is_null() {
                 let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
-                device.raw.set_descriptor_set_layout_name(&mut raw_layout, &label);
+                device
+                    .raw
+                    .set_descriptor_set_layout_name(&mut raw_layout, &label);
             }
             raw_layout
         };
@@ -962,13 +955,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, layout, &mut token)
     }
 
-    pub fn bind_group_layout_destroy<B: GfxBackend>(&self, bind_group_layout_id: id::BindGroupLayoutId) {
+    pub fn bind_group_layout_destroy<B: GfxBackend>(
+        &self,
+        bind_group_layout_id: id::BindGroupLayoutId,
+    ) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (bgl, _) = hub.bind_group_layouts.unregister(bind_group_layout_id, &mut token);
+        let (bgl, _) = hub
+            .bind_group_layouts
+            .unregister(bind_group_layout_id, &mut token);
         unsafe {
-            device_guard[bgl.device_id.value].raw.destroy_descriptor_set_layout(bgl.raw);
+            device_guard[bgl.device_id.value]
+                .raw
+                .destroy_descriptor_set_layout(bgl.raw);
         }
     }
 
@@ -1020,9 +1020,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (pipeline_layout, _) = hub.pipeline_layouts.unregister(pipeline_layout_id, &mut token);
+        let (pipeline_layout, _) = hub
+            .pipeline_layouts
+            .unregister(pipeline_layout_id, &mut token);
         unsafe {
-            device_guard[pipeline_layout.device_id.value].raw.destroy_pipeline_layout(pipeline_layout.raw);
+            device_guard[pipeline_layout.device_id.value]
+                .raw
+                .destroy_pipeline_layout(pipeline_layout.raw);
         }
     }
 
@@ -1039,8 +1043,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
-        let entries =
-            unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
+        let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
         assert_eq!(entries.len(), bind_group_layout.entries.len());
 
         let desc_set = unsafe {
@@ -1078,7 +1081,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             //TODO: group writes into contiguous sections
             let mut writes = Vec::new();
             for b in entries.iter() {
-                let decl = bind_group_layout.entries.get(&b.binding)
+                let decl = bind_group_layout
+                    .entries
+                    .get(&b.binding)
                     .expect("Failed to find binding declaration for binding");
                 let descriptor = match b.resource {
                     binding_model::BindingResource::Buffer(ref bb) => {
@@ -1092,11 +1097,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             binding_model::BindingType::ReadonlyStorageBuffer => {
                                 (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::STORAGE_READ)
                             }
-                            binding_model::BindingType::Sampler |
-                            binding_model::BindingType::ComparisonSampler |
-                            binding_model::BindingType::SampledTexture |
-                            binding_model::BindingType::ReadonlyStorageTexture |
-                            binding_model::BindingType::WriteonlyStorageTexture => {
+                            binding_model::BindingType::Sampler
+                            | binding_model::BindingType::ComparisonSampler
+                            | binding_model::BindingType::SampledTexture
+                            | binding_model::BindingType::ReadonlyStorageTexture
+                            | binding_model::BindingType::WriteonlyStorageTexture => {
                                 panic!("Mismatched buffer binding for {:?}", decl)
                             }
                         };
@@ -1118,12 +1123,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         let sub_range = hal::buffer::SubRange {
                             offset: bb.offset,
-                            size: if bb.size == 0 { None } else {
+                            size: if bb.size == 0 {
+                                None
+                            } else {
                                 let end = bb.offset + bb.size;
                                 assert!(
                                     end <= buffer.size,
                                     "Bound buffer range {:?} does not fit in buffer size {}",
-                                    bb.offset .. end,
+                                    bb.offset..end,
                                     buffer.size
                                 );
                                 Some(bb.size)
@@ -1133,8 +1140,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     binding_model::BindingResource::Sampler(id) => {
                         match decl.ty {
-                            binding_model::BindingType::Sampler |
-                            binding_model::BindingType::ComparisonSampler => {}
+                            binding_model::BindingType::Sampler
+                            | binding_model::BindingType::ComparisonSampler => {}
                             _ => panic!("Wrong binding type for a sampler: {:?}", decl.ty),
                         }
                         let sampler = used
@@ -1149,8 +1156,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 wgt::TextureUsage::SAMPLED,
                                 hal::image::Layout::ShaderReadOnlyOptimal,
                             ),
-                            binding_model::BindingType::ReadonlyStorageTexture |
-                            binding_model::BindingType::WriteonlyStorageTexture => {
+                            binding_model::BindingType::ReadonlyStorageTexture
+                            | binding_model::BindingType::WriteonlyStorageTexture => {
                                 (wgt::TextureUsage::STORAGE, hal::image::Layout::General)
                             }
                             _ => panic!("Mismatched texture binding for {:?}", decl),
@@ -1211,12 +1218,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         let ref_count = bind_group.life_guard.add_ref();
 
-
         let id = hub
             .bind_groups
             .register_identity(id_in, bind_group, &mut token);
-        log::debug!("Bind group {:?} {:#?}",
-            id, hub.bind_groups.read(&mut token).0[id].used);
+        log::debug!(
+            "Bind group {:?} {:#?}",
+            id,
+            hub.bind_groups.read(&mut token).0[id].used
+        );
 
         device
             .trackers
@@ -1241,7 +1250,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources.bind_groups.push(bind_group_id);
+            .suspected_resources
+            .bind_groups
+            .push(bind_group_id);
     }
 
     pub fn device_create_shader_module<B: GfxBackend>(
@@ -1256,12 +1267,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
 
         let spv = unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) };
-        let raw = unsafe {
-            device
-                .raw
-                .create_shader_module(spv)
-                .unwrap()
-        };
+        let raw = unsafe { device.raw.create_shader_module(spv).unwrap() };
         let shader = pipeline::ShaderModule {
             raw,
             device_id: Stored {
@@ -1280,7 +1286,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (module, _) = hub.shader_modules.unregister(shader_module_id, &mut token);
         unsafe {
-            device_guard[module.device_id.value].raw.destroy_shader_module(module.raw);
+            device_guard[module.device_id.value]
+                .raw
+                .destroy_shader_module(module.raw);
         }
     }
 
@@ -1301,31 +1309,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ref_count: device.life_guard.add_ref(),
         };
 
-        let lowest_active_index = device
-            .lock_life(&mut token)
-            .lowest_active_submission();
+        let lowest_active_index = device.lock_life(&mut token).lowest_active_submission();
 
-        let mut command_buffer = device
-            .com_allocator
-            .allocate(dev_stored, &device.raw, device.features, lowest_active_index);
+        let mut command_buffer = device.com_allocator.allocate(
+            dev_stored,
+            &device.raw,
+            device.features,
+            lowest_active_index,
+        );
         unsafe {
             let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
             if !desc.label.is_null() {
                 let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
-                device.raw.set_command_buffer_name(raw_command_buffer, &label);
+                device
+                    .raw
+                    .set_command_buffer_name(raw_command_buffer, &label);
             }
-            raw_command_buffer.begin_primary(
-                hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-            );
+            raw_command_buffer.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
         }
 
         hub.command_buffers
             .register_identity(id_in, command_buffer, &mut token)
     }
 
-    pub fn command_encoder_destroy<B: GfxBackend>(
-        &self, command_encoder_id: id::CommandEncoderId
-    ) {
+    pub fn command_encoder_destroy<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -1387,13 +1394,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         device
             .lock_life(&mut token)
-            .suspected_resources.extend(&device.temp_suspected);
+            .suspected_resources
+            .extend(&device.temp_suspected);
         device.com_allocator.discard(comb);
     }
 
-    pub fn command_buffer_destroy<B: GfxBackend>(
-        &self, command_buffer_id: id::CommandBufferId
-    ) {
+    pub fn command_buffer_destroy<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
         self.command_encoder_destroy::<B>(command_buffer_id)
     }
 
@@ -1497,9 +1503,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // execute resource transitions
                 let mut transit = device.com_allocator.extend(comb);
                 unsafe {
-                    transit.begin_primary(
-                        hal::command::CommandBufferFlags::ONE_TIME_SUBMIT,
-                    );
+                    transit.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                 }
                 log::trace!("Stitching command buffer {:?} before submission", cmb_id);
                 command::CommandBuffer::insert_barriers(
@@ -1530,7 +1534,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 signal_semaphores: signal_swapchain_semaphores
                     .into_iter()
                     .map(|sc_id| &swap_chain_guard[sc_id].semaphore),
-
             };
 
             unsafe {
@@ -1547,9 +1550,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let device = &device_guard[queue_id];
 
             let callbacks = device.maintain(self, false, &mut token);
-            device
-                .lock_life(&mut token)
-                .track_submission(submit_index, fence, &device.temp_suspected);
+            device.lock_life(&mut token).track_submission(
+                submit_index,
+                fence,
+                &device.temp_suspected,
+            );
 
             // finally, return the command buffers to the allocator
             for &cmb_id in command_buffer_ids {
@@ -1681,7 +1686,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         samples: sc,
                         ops: hal::pass::AttachmentOps::PRESERVE,
                         stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                        layouts: hal::image::Layout::General .. hal::image::Layout::General,
+                        layouts: hal::image::Layout::General..hal::image::Layout::General,
                     })
                     .collect(),
                 // We can ignore the resolves as the vulkan specs says:
@@ -1694,7 +1699,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     samples: sc,
                     ops: hal::pass::AttachmentOps::PRESERVE,
                     stencil_ops: hal::pass::AttachmentOps::PRESERVE,
-                    layouts: hal::image::Layout::General .. hal::image::Layout::General,
+                    layouts: hal::image::Layout::General..hal::image::Layout::General,
                 }),
             };
 
@@ -1715,7 +1720,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
 
                     let subpass = hal::pass::SubpassDesc {
-                        colors: &color_ids[.. desc.color_states_length],
+                        colors: &color_ids[..desc.color_states_length],
                         depth_stencil: depth_stencil_state.map(|_| &depth_id),
                         inputs: &[],
                         resolves: &[],
@@ -1844,7 +1849,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources.render_pipelines.push(render_pipeline_id);
+            .suspected_resources
+            .render_pipelines
+            .push(render_pipeline_id);
     }
 
     pub fn device_create_compute_pipeline<B: GfxBackend>(
@@ -1906,7 +1913,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, pipeline, &mut token)
     }
 
-    pub fn compute_pipeline_destroy<B: GfxBackend>(&self, compute_pipeline_id: id::ComputePipelineId) {
+    pub fn compute_pipeline_destroy<B: GfxBackend>(
+        &self,
+        compute_pipeline_id: id::ComputePipelineId,
+    ) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1920,8 +1930,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources.compute_pipelines.push(compute_pipeline_id);
-
+            .suspected_resources
+            .compute_pipelines
+            .push(compute_pipeline_id);
     }
 
     pub fn device_create_swap_chain<B: GfxBackend>(
@@ -1980,7 +1991,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let num_frames = swap_chain::DESIRED_NUM_FRAMES
             .max(*caps.image_count.start())
             .min(*caps.image_count.end());
-        let mut config = swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.features);
+        let mut config =
+            swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.features);
         if let Some(formats) = formats {
             assert!(
                 formats.contains(&config.format),
@@ -2100,14 +2112,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     operation.call_error();
                     return;
                 }
-                resource::BufferMapState::Idle => resource::BufferMapState::Waiting(resource::BufferPendingMapping {
-                    sub_range: hal::buffer::SubRange {
-                        offset: range.start,
-                        size: Some(range.end - range.start),
-                    },
-                    op: operation,
-                    parent_ref_count: buffer.life_guard.add_ref(),
-                }),
+                resource::BufferMapState::Idle => {
+                    resource::BufferMapState::Waiting(resource::BufferPendingMapping {
+                        sub_range: hal::buffer::SubRange {
+                            offset: range.start,
+                            size: Some(range.end - range.start),
+                        },
+                        op: operation,
+                        parent_ref_count: buffer.life_guard.add_ref(),
+                    })
+                }
             };
             log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
@@ -2122,9 +2136,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .change_replace(buffer_id, &ref_count, (), usage);
 
-        device
-            .lock_life(&mut token)
-            .map(buffer_id, ref_count);
+        device.lock_life(&mut token).map(buffer_id, ref_count);
     }
 
     pub fn buffer_unmap<B: GfxBackend>(&self, buffer_id: id::BufferId) {
@@ -2136,9 +2148,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer = &mut buffer_guard[buffer_id];
 
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        unmap_buffer(
-            &device_guard[buffer.device_id.value].raw,
-            buffer,
-        );
+        unmap_buffer(&device_guard[buffer.device_id.value].raw, buffer);
     }
 }

@@ -59,7 +59,7 @@ impl ResourceState for BufferState {
             let pending = PendingTransition {
                 id,
                 selector: (),
-                usage: old .. usage,
+                usage: old..usage,
             };
             self.last = match output {
                 None => pending.collapse()?,
@@ -92,7 +92,7 @@ impl ResourceState for BufferState {
             let pending = PendingTransition {
                 id,
                 selector: (),
-                usage: old .. new,
+                usage: old..new,
             };
             match output {
                 None => pending.collapse()?,
@@ -114,7 +114,7 @@ impl ResourceState for BufferState {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::{id::TypedId};
+    use crate::id::TypedId;
 
     #[test]
     fn change() {
