@@ -365,12 +365,7 @@ impl<B: GfxBackend> Device<B> {
             _ => {}
         }
 
-        let kind = conv::map_texture_dimension_size(
-            desc.dimension,
-            desc.size,
-            desc.array_layer_count,
-            desc.sample_count,
-        );
+        let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count);
         let format = conv::map_texture_format(desc.format, self.features);
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
@@ -380,7 +375,7 @@ impl<B: GfxBackend> Device<B> {
 
         // 2D textures with array layer counts that are multiples of 6 could be cubemaps
         // Following gpuweb/gpuweb#68 always add the hint in that case
-        if desc.dimension == TextureDimension::D2 && desc.array_layer_count % 6 == 0 {
+        if desc.dimension == TextureDimension::D2 && desc.size.depth % 6 == 0 {
             view_capabilities |= hal::image::ViewCapabilities::KIND_CUBE;
         };
 
@@ -437,7 +432,7 @@ impl<B: GfxBackend> Device<B> {
             full_range: hal::image::SubresourceRange {
                 aspects,
                 levels: 0..desc.mip_level_count as hal::image::Level,
-                layers: 0..desc.array_layer_count as hal::image::Layer,
+                layers: 0..kind.num_layers(),
             },
             memory,
             life_guard: LifeGuard::new(),
