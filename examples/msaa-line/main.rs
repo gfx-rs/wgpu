@@ -268,12 +268,6 @@ impl framework::Example for Example {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen(start))]
-pub fn wasm_main() {
-    main();
-}
-
 fn main() {
     framework::run::<Example>("msaa-line");
 }
