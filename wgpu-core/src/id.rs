@@ -23,13 +23,7 @@ pub struct Id<T>(NonZeroU64, PhantomData<T>);
 // required for PeekPoke
 impl<T> Default for Id<T> {
     fn default() -> Self {
-        Id(
-            // Create an ID that doesn't make sense:
-            // the high `BACKEND_BITS` are to be set to 0, which matches `Backend::Empty`,
-            // the other bits are all 1s
-            unsafe { NonZeroU64::new_unchecked(!0 >> BACKEND_BITS) },
-            PhantomData,
-        )
+        Id(unsafe { NonZeroU64::new_unchecked(!0) }, PhantomData)
     }
 }
 

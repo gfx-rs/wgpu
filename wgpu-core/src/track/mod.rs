@@ -111,7 +111,7 @@ struct Resource<S> {
 /// A structure containing all the information about a particular resource
 /// transition. User code should be able to generate a pipeline barrier
 /// based on the contents.
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct PendingTransition<S: ResourceState> {
     pub id: S::Id,
     pub selector: S::Selector,

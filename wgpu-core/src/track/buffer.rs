@@ -55,28 +55,22 @@ impl ResourceState for BufferState {
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
-        if old != usage || !BufferUsage::ORDERED.contains(usage) {
+        if usage != old || !BufferUsage::ORDERED.contains(usage) {
             let pending = PendingTransition {
                 id,
                 selector: (),
                 usage: old..usage,
             };
-            *self = match output {
-                None => {
-                    assert_eq!(
-                        self.first, None,
-                        "extending a state that is already a transition"
-                    );
-                    Unit::new(pending.collapse()?)
-                }
+            self.last = match output {
+                None => pending.collapse()?,
                 Some(transitions) => {
                     transitions.push(pending);
-                    Unit {
-                        first: self.first.or(Some(old)),
-                        last: usage,
+                    if self.first.is_none() {
+                        self.first = Some(old);
                     }
+                    usage
                 }
-            };
+            }
         }
         Ok(())
     }
@@ -89,33 +83,28 @@ impl ResourceState for BufferState {
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
         let new = other.port();
-        if old == new && BufferUsage::ORDERED.contains(new) {
-            if output.is_some() && self.first.is_none() {
+        self.last = if old == new && BufferUsage::ORDERED.contains(new) {
+            if self.first.is_none() {
                 self.first = Some(old);
             }
+            other.last
         } else {
             let pending = PendingTransition {
                 id,
                 selector: (),
                 usage: old..new,
             };
-            *self = match output {
-                None => {
-                    assert_eq!(
-                        self.first, None,
-                        "extending a state that is already a transition"
-                    );
-                    Unit::new(pending.collapse()?)
-                }
+            match output {
+                None => pending.collapse()?,
                 Some(transitions) => {
                     transitions.push(pending);
-                    Unit {
-                        first: self.first.or(Some(old)),
-                        last: other.last,
+                    if self.first.is_none() {
+                        self.first = Some(old);
                     }
+                    other.last
                 }
-            };
-        }
+            }
+        };
         Ok(())
     }
 
@@ -125,71 +114,19 @@ impl ResourceState for BufferState {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::id::Id;
+    use crate::id::TypedId;
 
     #[test]
-    fn change_extend() {
+    fn change() {
         let mut bs = Unit {
-            first: None,
-            last: BufferUsage::INDEX,
-        };
-        let id = Id::default();
-        assert_eq!(
-            bs.change(id, (), BufferUsage::STORAGE, None),
-            Err(PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUsage::INDEX..BufferUsage::STORAGE,
-            }),
-        );
-        bs.change(id, (), BufferUsage::VERTEX, None).unwrap();
-        bs.change(id, (), BufferUsage::INDEX, None).unwrap();
-        assert_eq!(bs, Unit::new(BufferUsage::VERTEX | BufferUsage::INDEX));
-    }
-
-    #[test]
-    fn change_replace() {
-        let mut bs = Unit {
-            first: None,
+            first: Some(BufferUsage::INDEX),
             last: BufferUsage::STORAGE,
         };
-        let id = Id::default();
-        let mut list = Vec::new();
-        bs.change(id, (), BufferUsage::VERTEX, Some(&mut list))
+        let id = TypedId::zip(1, 0, wgt::Backend::Empty);
+        assert!(bs.change(id, (), BufferUsage::VERTEX, None).is_err());
+        bs.change(id, (), BufferUsage::VERTEX, Some(&mut Vec::new()))
             .unwrap();
-        assert_eq!(
-            &list,
-            &[PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUsage::STORAGE..BufferUsage::VERTEX,
-            }],
-        );
-        assert_eq!(
-            bs,
-            Unit {
-                first: Some(BufferUsage::STORAGE),
-                last: BufferUsage::VERTEX,
-            }
-        );
-
-        list.clear();
-        bs.change(id, (), BufferUsage::STORAGE, Some(&mut list))
-            .unwrap();
-        assert_eq!(
-            &list,
-            &[PendingTransition {
-                id,
-                selector: (),
-                usage: BufferUsage::VERTEX..BufferUsage::STORAGE,
-            }],
-        );
-        assert_eq!(
-            bs,
-            Unit {
-                first: Some(BufferUsage::STORAGE),
-                last: BufferUsage::STORAGE,
-            }
-        );
+        bs.change(id, (), BufferUsage::INDEX, None).unwrap();
+        assert_eq!(bs.last, BufferUsage::VERTEX | BufferUsage::INDEX);
     }
 }
