@@ -59,7 +59,7 @@ pub struct ComputePipelineDescriptor {
 #[derive(Debug)]
 pub struct ComputePipeline<B: hal::Backend> {
     pub(crate) raw: B::ComputePipeline,
-    pub(crate) layout_id: PipelineLayoutId,
+    pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
 }
@@ -98,7 +98,7 @@ bitflags::bitflags! {
 #[derive(Debug)]
 pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) raw: B::GraphicsPipeline,
-    pub(crate) layout_id: PipelineLayoutId,
+    pub(crate) layout_id: Stored<PipelineLayoutId>,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
