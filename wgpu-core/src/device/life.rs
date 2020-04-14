@@ -29,6 +29,7 @@ pub struct SuspectedResources {
     pub(crate) bind_groups: Vec<id::BindGroupId>,
     pub(crate) compute_pipelines: Vec<id::ComputePipelineId>,
     pub(crate) render_pipelines: Vec<id::RenderPipelineId>,
+    pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
 }
 
 impl SuspectedResources {
@@ -40,6 +41,7 @@ impl SuspectedResources {
         self.bind_groups.clear();
         self.compute_pipelines.clear();
         self.render_pipelines.clear();
+        self.pipeline_layouts.clear();
     }
 
     pub fn extend(&mut self, other: &Self) {
@@ -52,6 +54,8 @@ impl SuspectedResources {
             .extend_from_slice(&other.compute_pipelines);
         self.render_pipelines
             .extend_from_slice(&other.render_pipelines);
+        self.pipeline_layouts
+            .extend_from_slice(&other.pipeline_layouts);
     }
 }
 
@@ -68,6 +72,7 @@ struct NonReferencedResources<B: hal::Backend> {
     desc_sets: Vec<DescriptorSet<B>>,
     compute_pipes: Vec<B::ComputePipeline>,
     graphics_pipes: Vec<B::GraphicsPipeline>,
+    pipeline_layouts: Vec<B::PipelineLayout>,
 }
 
 impl<B: hal::Backend> NonReferencedResources<B> {
@@ -81,6 +86,7 @@ impl<B: hal::Backend> NonReferencedResources<B> {
             desc_sets: Vec::new(),
             compute_pipes: Vec::new(),
             graphics_pipes: Vec::new(),
+            pipeline_layouts: Vec::new(),
         }
     }
 
@@ -138,6 +144,9 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         }
         for raw in self.graphics_pipes.drain(..) {
             device.destroy_graphics_pipeline(raw);
+        }
+        for raw in self.pipeline_layouts.drain(..) {
+            device.destroy_pipeline_layout(raw);
         }
     }
 }
@@ -442,6 +451,23 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                         .graphics_pipes
                         .push(res.raw);
+                }
+            }
+        }
+
+        if !self.suspected_resources.pipeline_layouts.is_empty() {
+            let (mut guard, _) = hub.pipeline_layouts.write(token);
+
+            for Stored {
+                value: id,
+                ref_count,
+            } in self.suspected_resources.pipeline_layouts.drain(..)
+            {
+                //Note: this has to happen after all the suspected pipelines are destroyed
+                if ref_count.load() == 1 {
+                    hub.pipeline_layouts.free_id(id);
+                    let layout = guard.remove(id).unwrap();
+                    self.free_resources.pipeline_layouts.push(layout.raw);
                 }
             }
         }

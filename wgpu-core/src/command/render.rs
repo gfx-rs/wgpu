@@ -896,9 +896,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     // Rebind resource
-                    if state.binder.pipeline_layout_id != Some(pipeline.layout_id) {
-                        let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-                        state.binder.pipeline_layout_id = Some(pipeline.layout_id);
+                    if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
+                        let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                        state.binder.pipeline_layout_id = Some(pipeline.layout_id.value);
                         state
                             .binder
                             .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
