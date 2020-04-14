@@ -351,6 +351,10 @@ pub(crate) fn buffer_unmap(buffer: &BufferId) {
     wgn::wgpu_buffer_unmap(*buffer);
 }
 
+pub(crate) fn buffer_drop(buffer: &BufferId) {
+    wgn::wgpu_buffer_destroy(*buffer);
+}
+
 pub(crate) fn device_create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate::Buffer {
     let owned_label = OwnedLabel::new(desc.label.as_deref());
     crate::Buffer {
@@ -441,6 +445,20 @@ pub(crate) fn command_encoder_copy_texture_to_buffer(
         *command_encoder,
         &map_texture_copy_view(source),
         &map_buffer_copy_view(destination),
+        copy_size,
+    );
+}
+
+pub(crate) fn command_encoder_copy_texture_to_texture(
+    command_encoder: &CommandEncoderId,
+    source: crate::TextureCopyView,
+    destination: crate::TextureCopyView,
+    copy_size: wgt::Extent3d,
+) {
+    wgn::wgpu_command_encoder_copy_texture_to_texture(
+        *command_encoder,
+        &map_texture_copy_view(source),
+        &map_texture_copy_view(destination),
         copy_size,
     );
 }
@@ -554,15 +572,67 @@ pub(crate) fn buffer_map_read(
     future
 }
 
+pub(crate) fn buffer_map_write(
+    buffer: &crate::Buffer,
+    start: wgt::BufferAddress,
+    size: wgt::BufferAddress,
+) -> impl Future<Output = Result<crate::BufferWriteMapping, crate::BufferAsyncErr>> {
+    let (future, completion) = native_gpu_future::new_gpu_future(buffer.id, size);
+
+    extern "C" fn buffer_map_write_future_wrapper(
+        status: wgc::resource::BufferMapAsyncStatus,
+        data: *mut u8,
+        user_data: *mut u8,
+    ) {
+        let completion =
+            unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
+        let (buffer_id, size) = completion.get_buffer_info();
+
+        if let wgc::resource::BufferMapAsyncStatus::Success = status {
+            completion.complete(Ok(crate::BufferWriteMapping {
+                detail: BufferWriteMappingDetail {
+                    data,
+                    size: size as usize,
+                    buffer_id,
+                },
+            }));
+        } else {
+            completion.complete(Err(crate::BufferAsyncErr));
+        }
+    }
+
+    wgn::wgpu_buffer_map_write_async(
+        buffer.id,
+        start,
+        size,
+        buffer_map_write_future_wrapper,
+        completion.to_raw() as _,
+    );
+
+    future
+}
+
 pub(crate) struct BufferReadMappingDetail {
+    pub(crate) buffer_id: BufferId,
     data: *const u8,
     size: usize,
-    pub(crate) buffer_id: BufferId,
 }
 
 impl BufferReadMappingDetail {
     pub(crate) fn as_slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.data as *const u8, self.size) }
+    }
+}
+
+pub(crate) struct BufferWriteMappingDetail {
+    pub(crate) buffer_id: BufferId,
+    data: *mut u8,
+    size: usize,
+}
+
+impl BufferWriteMappingDetail {
+    pub(crate) fn as_slice(&mut self) -> &mut [u8] {
+        unsafe { slice::from_raw_parts_mut(self.data as *mut u8, self.size) }
     }
 }
 
@@ -633,6 +703,12 @@ pub(crate) fn render_pass_set_pipeline(
     }
 }
 
+pub(crate) fn render_pass_set_blend_color(render_pass: &RenderPassEncoderId, color: wgt::Color) {
+    unsafe {
+        wgn::wgpu_render_pass_set_blend_color(render_pass.as_mut().unwrap(), &color);
+    }
+}
+
 pub(crate) fn render_pass_set_bind_group(
     render_pass: &RenderPassEncoderId,
     index: u32,
@@ -684,6 +760,46 @@ pub(crate) fn render_pass_set_vertex_buffer<'a>(
     };
 }
 
+pub(crate) fn render_pass_set_scissor_rect(
+    render_pass: &RenderPassEncoderId,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+) {
+    unsafe {
+        wgn::wgpu_render_pass_set_scissor_rect(render_pass.as_mut().unwrap(), x, y, width, height);
+    }
+}
+
+pub(crate) fn render_pass_set_viewport(
+    render_pass: &RenderPassEncoderId,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    min_depth: f32,
+    max_depth: f32,
+) {
+    unsafe {
+        wgn::wgpu_render_pass_set_viewport(
+            render_pass.as_mut().unwrap(),
+            x,
+            y,
+            width,
+            height,
+            min_depth,
+            max_depth,
+        );
+    }
+}
+
+pub(crate) fn render_pass_set_stencil_reference(render_pass: &RenderPassEncoderId, reference: u32) {
+    unsafe {
+        wgn::wgpu_render_pass_set_stencil_reference(render_pass.as_mut().unwrap(), reference);
+    }
+}
+
 pub(crate) fn render_pass_draw(
     render_pass: &RenderPassEncoderId,
     vertices: Range<u32>,
@@ -718,6 +834,34 @@ pub(crate) fn render_pass_draw_indexed(
     }
 }
 
+pub(crate) fn render_pass_draw_indirect<'a>(
+    render_pass: &RenderPassEncoderId,
+    indirect_buffer: &'a crate::Buffer,
+    indirect_offset: wgt::BufferAddress,
+) {
+    unsafe {
+        wgn::wgpu_render_pass_draw_indirect(
+            render_pass.as_mut().unwrap(),
+            indirect_buffer.id,
+            indirect_offset,
+        );
+    }
+}
+
+pub(crate) fn render_pass_draw_indexed_indirect<'a>(
+    render_pass: &RenderPassEncoderId,
+    indirect_buffer: &'a crate::Buffer,
+    indirect_offset: wgt::BufferAddress,
+) {
+    unsafe {
+        wgn::wgpu_render_pass_draw_indexed_indirect(
+            render_pass.as_mut().unwrap(),
+            indirect_buffer.id,
+            indirect_offset,
+        );
+    }
+}
+
 pub(crate) fn render_pass_end_pass(render_pass: &RenderPassEncoderId) {
     unsafe {
         wgn::wgpu_render_pass_end_pass(*render_pass);
@@ -729,6 +873,14 @@ pub(crate) fn texture_create_view(
     desc: Option<&TextureViewDescriptor>,
 ) -> TextureViewId {
     wgn::wgpu_texture_create_view(*texture, desc)
+}
+
+pub(crate) fn texture_drop(texture: &TextureId) {
+    wgn::wgpu_texture_destroy(*texture);
+}
+
+pub(crate) fn texture_view_drop(texture_view: &TextureViewId) {
+    wgn::wgpu_texture_view_destroy(*texture_view);
 }
 
 pub(crate) fn swap_chain_present(swap_chain: &SwapChainId) {

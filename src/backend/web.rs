@@ -533,6 +533,10 @@ fn map_address_mode(mode: wgt::AddressMode) -> web_sys::GpuAddressMode {
     }
 }
 
+fn map_color(color: wgt::Color) -> web_sys::GpuColorDict {
+    web_sys::GpuColorDict::new(color.a, color.b, color.g, color.r)
+}
+
 pub(crate) fn create_render_pipeline(
     device: &DeviceId,
     desc: &RenderPipelineDescriptor,
@@ -665,6 +669,10 @@ pub(crate) fn buffer_unmap(buffer: &BufferId) {
     buffer.unmap();
 }
 
+pub(crate) fn buffer_drop(_buffer: &BufferId) {
+    // Buffer is dropped automatically
+}
+
 pub(crate) fn device_create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate::Buffer {
     let mapped_desc = web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
     crate::Buffer {
@@ -752,6 +760,19 @@ pub(crate) fn command_encoder_copy_texture_to_buffer(
     );
 }
 
+pub(crate) fn command_encoder_copy_texture_to_texture(
+    command_encoder: &CommandEncoderId,
+    source: crate::TextureCopyView,
+    destination: crate::TextureCopyView,
+    copy_size: wgt::Extent3d,
+) {
+    command_encoder.copy_texture_to_texture_with_gpu_extent_3d_dict(
+        &map_texture_copy_view(source),
+        &map_texture_copy_view(destination),
+        &map_extent_3d(copy_size),
+    );
+}
+
 pub(crate) fn begin_compute_pass(command_encoder: &CommandEncoderId) -> ComputePassId {
     let mapped_desc = web_sys::GpuComputePassDescriptor::new();
     command_encoder.begin_compute_pass_with_descriptor(&mapped_desc)
@@ -831,6 +852,26 @@ pub(crate) async fn buffer_map_read(
     })
 }
 
+pub(crate) async fn buffer_map_write(
+    buffer: &crate::Buffer,
+    _start: wgt::BufferAddress,
+    _size: wgt::BufferAddress,
+) -> Result<crate::BufferWriteMapping, crate::BufferAsyncErr> {
+    let array_buffer_promise = buffer.id.map_write_async();
+    let array_buffer: js_sys::ArrayBuffer =
+        wasm_bindgen_futures::JsFuture::from(array_buffer_promise)
+            .await
+            .expect("Unable to map buffer")
+            .into();
+    let view = js_sys::Uint8Array::new(&array_buffer);
+    Ok(crate::BufferWriteMapping {
+        detail: BufferWriteMappingDetail {
+            buffer_id: buffer.id.clone(),
+            mapped: view.to_vec(),
+        },
+    })
+}
+
 pub(crate) struct BufferReadMappingDetail {
     pub(crate) buffer_id: BufferId,
     mapped: Vec<u8>,
@@ -839,6 +880,17 @@ pub(crate) struct BufferReadMappingDetail {
 impl BufferReadMappingDetail {
     pub(crate) fn as_slice(&self) -> &[u8] {
         &self.mapped[..]
+    }
+}
+
+pub(crate) struct BufferWriteMappingDetail {
+    pub(crate) buffer_id: BufferId,
+    mapped: Vec<u8>,
+}
+
+impl BufferWriteMappingDetail {
+    pub(crate) fn as_slice(&mut self) -> &mut [u8] {
+        &mut self.mapped[..]
     }
 }
 
@@ -901,12 +953,7 @@ pub(crate) fn command_encoder_begin_render_pass<'a>(
             let mut mapped_color_attachment = web_sys::GpuRenderPassColorAttachmentDescriptor::new(
                 &ca.attachment.id,
                 &match ca.load_op {
-                    wgt::LoadOp::Clear => {
-                        let color = ca.clear_color;
-                        let mapped_color =
-                            web_sys::GpuColorDict::new(color.a, color.b, color.g, color.r);
-                        wasm_bindgen::JsValue::from(mapped_color)
-                    }
+                    wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(map_color(ca.clear_color)),
                     wgt::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
                 },
             );
@@ -950,6 +997,10 @@ pub(crate) fn render_pass_set_pipeline(
     pipeline: &RenderPipelineId,
 ) {
     render_pass.set_pipeline(&pipeline);
+}
+
+pub(crate) fn render_pass_set_blend_color(render_pass: &RenderPassEncoderId, color: wgt::Color) {
+    render_pass.set_blend_color_with_gpu_color_dict(&map_color(color));
 }
 
 pub(crate) fn render_pass_set_bind_group(
@@ -997,6 +1048,32 @@ pub(crate) fn render_pass_set_vertex_buffer<'a>(
     );
 }
 
+pub(crate) fn render_pass_set_scissor_rect(
+    render_pass: &RenderPassEncoderId,
+    x: u32,
+    y: u32,
+    width: u32,
+    height: u32,
+) {
+    render_pass.set_scissor_rect(x, y, width, height);
+}
+
+pub(crate) fn render_pass_set_viewport(
+    render_pass: &RenderPassEncoderId,
+    x: f32,
+    y: f32,
+    width: f32,
+    height: f32,
+    min_depth: f32,
+    max_depth: f32,
+) {
+    render_pass.set_viewport(x, y, width, height, min_depth, max_depth);
+}
+
+pub(crate) fn render_pass_set_stencil_reference(render_pass: &RenderPassEncoderId, reference: u32) {
+    render_pass.set_stencil_reference(reference);
+}
+
 pub(crate) fn render_pass_draw(
     render_pass: &RenderPassEncoderId,
     vertices: Range<u32>,
@@ -1026,6 +1103,22 @@ pub(crate) fn render_pass_draw_indexed(
         );
 }
 
+pub(crate) fn render_pass_draw_indirect<'a>(
+    render_pass: &RenderPassEncoderId,
+    indirect_buffer: &'a crate::Buffer,
+    indirect_offset: wgt::BufferAddress,
+) {
+    render_pass.draw_indirect_with_f64(&indirect_buffer.id, indirect_offset as f64);
+}
+
+pub(crate) fn render_pass_draw_indexed_indirect<'a>(
+    render_pass: &RenderPassEncoderId,
+    indirect_buffer: &'a crate::Buffer,
+    indirect_offset: wgt::BufferAddress,
+) {
+    render_pass.draw_indexed_indirect_with_f64(&indirect_buffer.id, indirect_offset as f64);
+}
+
 pub(crate) fn render_pass_end_pass(render_pass: &RenderPassEncoderId) {
     render_pass.end_pass();
 }
@@ -1048,6 +1141,14 @@ pub(crate) fn texture_create_view(
         }
         None => texture.create_view(),
     }
+}
+
+pub(crate) fn texture_drop(_texture: &TextureId) {
+    // Texture is dropped automatically
+}
+
+pub(crate) fn texture_view_drop(_texture_view: &TextureViewId) {
+    // Texture view is dropped automatically
 }
 
 pub(crate) fn swap_chain_present(_swap_chain: &SwapChainId) {

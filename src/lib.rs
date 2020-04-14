@@ -528,26 +528,23 @@ impl Surface {
         }
     }
 
-    /*
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        pub fn create_surface_from_core_animation_layer(layer: *mut std::ffi::c_void) -> Self {
-            Surface {
-                id: wgn::wgpu_create_surface_from_metal_layer(layer),
-            }
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub fn create_surface_from_core_animation_layer(layer: *mut std::ffi::c_void) -> Self {
+        Surface {
+            id: wgn::wgpu_create_surface_from_metal_layer(layer),
         }
-    */
+    }
 }
 
 impl Adapter {
-    /*
-        /// Retrieves all available [`Adapter`]s that match the given backends.
-        pub fn enumerate(backends: BackendBit) -> Vec<Self> {
-            wgn::wgpu_enumerate_adapters(backends)
-                .into_iter()
-                .map(|id| Adapter { id })
-                .collect()
-        }
-    */
+    /// Retrieves all available [`Adapter`]s that match the given backends.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enumerate(backends: BackendBit) -> Vec<Self> {
+        wgn::wgpu_enumerate_adapters(backends)
+            .into_iter()
+            .map(|id| Adapter { id })
+            .collect()
+    }
 
     /// Retrieves an [`Adapter`] which matches the given options.
     ///
@@ -723,11 +720,8 @@ impl Drop for BufferReadMapping {
     }
 }
 
-/*
 pub struct BufferWriteMapping {
-    data: *mut u8,
-    size: usize,
-    buffer_id: wgc::id::BufferId,
+    detail: backend::BufferWriteMappingDetail,
 }
 
 unsafe impl Send for BufferWriteMapping {}
@@ -735,16 +729,15 @@ unsafe impl Sync for BufferWriteMapping {}
 
 impl BufferWriteMapping {
     pub fn as_slice(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.data as *mut u8, self.size) }
+        self.detail.as_slice()
     }
 }
 
 impl Drop for BufferWriteMapping {
     fn drop(&mut self) {
-        wgn::wgpu_buffer_unmap(self.buffer_id);
+        backend::buffer_unmap(&self.detail.buffer_id);
     }
 }
-*/
 
 impl Buffer {
     /// Map the buffer for reading. The result is returned in a future.
@@ -763,63 +756,29 @@ impl Buffer {
         backend::buffer_map_read(self, start, size)
     }
 
-    /*
-        /// Map the buffer for writing. The result is returned in a future.
-        ///
-        /// See the documentation of (map_read)[#method.map_read] for more information about
-        /// how to run this future.
-        pub fn map_write(
-            &self,
-            start: BufferAddress,
-            size: BufferAddress,
-        ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> {
-            let (future, completion) = native_gpu_future::new_gpu_future(self.id, size);
+    /// Map the buffer for writing. The result is returned in a future.
+    ///
+    /// See the documentation of (map_read)[#method.map_read] for more information about
+    /// how to run this future.
+    pub fn map_write(
+        &self,
+        start: BufferAddress,
+        size: BufferAddress,
+    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> + '_ {
+        backend::buffer_map_write(self, start, size)
+    }
 
-            extern "C" fn buffer_map_write_future_wrapper(
-                status: wgc::resource::BufferMapAsyncStatus,
-                data: *mut u8,
-                user_data: *mut u8,
-            ) {
-                let completion =
-                    unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-                let (buffer_id, size) = completion.get_buffer_info();
-
-                if let wgc::resource::BufferMapAsyncStatus::Success = status {
-                    completion.complete(Ok(BufferWriteMapping {
-                        data,
-                        size: size as usize,
-                        buffer_id,
-                    }));
-                } else {
-                    completion.complete(Err(BufferAsyncErr));
-                }
-            }
-
-            wgn::wgpu_buffer_map_write_async(
-                self.id,
-                start,
-                size,
-                buffer_map_write_future_wrapper,
-                completion.to_raw() as _,
-            );
-
-            future
-        }
-
-        /// Flushes any pending write operations and unmaps the buffer from host memory.
-        pub fn unmap(&self) {
-            wgn::wgpu_buffer_unmap(self.id);
-        }
-    */
-}
-
-/*
-impl Drop for Buffer {
-    fn drop(&mut self) {
-        wgn::wgpu_buffer_destroy(self.id);
+    /// Flushes any pending write operations and unmaps the buffer from host memory.
+    pub fn unmap(&self) {
+        backend::buffer_unmap(&self.id);
     }
 }
-*/
+
+impl Drop for Buffer {
+    fn drop(&mut self) {
+        backend::buffer_drop(&self.id);
+    }
+}
 
 impl Texture {
     /// Creates a view of this texture.
@@ -839,11 +798,10 @@ impl Texture {
     }
 }
 
-/*
 impl Drop for Texture {
     fn drop(&mut self) {
         if self.owned {
-            wgn::wgpu_texture_destroy(self.id);
+            backend::texture_drop(&self.id);
         }
     }
 }
@@ -851,11 +809,10 @@ impl Drop for Texture {
 impl Drop for TextureView {
     fn drop(&mut self) {
         if self.owned {
-            wgn::wgpu_texture_view_destroy(self.id);
+            backend::texture_view_drop(&self.id);
         }
     }
 }
-*/
 
 impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
@@ -927,22 +884,15 @@ impl CommandEncoder {
         backend::command_encoder_copy_texture_to_buffer(&self.id, source, destination, copy_size);
     }
 
-    /*
-        /// Copy data from one texture to another.
-        pub fn copy_texture_to_texture(
-            &mut self,
-            source: TextureCopyView,
-            destination: TextureCopyView,
-            copy_size: Extent3d,
-        ) {
-            wgn::wgpu_command_encoder_copy_texture_to_texture(
-                self.id,
-                &source.into_native(),
-                &destination.into_native(),
-                copy_size,
-            );
-        }
-    */
+    /// Copy data from one texture to another.
+    pub fn copy_texture_to_texture(
+        &mut self,
+        source: TextureCopyView,
+        destination: TextureCopyView,
+        copy_size: Extent3d,
+    ) {
+        backend::command_encoder_copy_texture_to_texture(&self.id, source, destination, copy_size);
+    }
 }
 
 impl<'a> RenderPass<'a> {
@@ -963,14 +913,9 @@ impl<'a> RenderPass<'a> {
         backend::render_pass_set_pipeline(&self.id, &pipeline.id)
     }
 
-    /*
-            pub fn set_blend_color(&mut self, color: Color) {
-                unsafe {
-                    wgn::wgpu_render_pass_set_blend_color(self.id.as_mut().unwrap(), &color);
-                }
-            }
-        }
-    */
+    pub fn set_blend_color(&mut self, color: Color) {
+        backend::render_pass_set_blend_color(&self.id, color)
+    }
 
     /// Sets the active index buffer.
     ///
@@ -1011,42 +956,26 @@ impl<'a> RenderPass<'a> {
         backend::render_pass_set_vertex_buffer(&self.id, slot, buffer, offset, size)
     }
 
-    /*
-        /// Sets the scissor region.
-        ///
-        /// Subsequent draw calls will discard any fragments that fall outside this region.
-        pub fn set_scissor_rect(&mut self, x: u32, y: u32, w: u32, h: u32) {
-            unsafe {
-                wgn::wgpu_render_pass_set_scissor_rect(self.id.as_mut().unwrap(), x, y, w, h);
-            }
-        }
+    /// Sets the scissor region.
+    ///
+    /// Subsequent draw calls will discard any fragments that fall outside this region.
+    pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
+        backend::render_pass_set_scissor_rect(&self.id, x, y, width, height);
+    }
 
-        /// Sets the viewport region.
-        ///
-        /// Subsequent draw calls will draw any fragments in this region.
-        pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
-            unsafe {
-                wgn::wgpu_render_pass_set_viewport(
-                    self.id.as_mut().unwrap(),
-                    x,
-                    y,
-                    w,
-                    h,
-                    min_depth,
-                    max_depth,
-                );
-            }
-        }
+    /// Sets the viewport region.
+    ///
+    /// Subsequent draw calls will draw any fragments in this region.
+    pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
+        backend::render_pass_set_viewport(&self.id, x, y, w, h, min_depth, max_depth);
+    }
 
-        /// Sets the stencil reference.
-        ///
-        /// Subsequent stencil tests will test against this value.
-        pub fn set_stencil_reference(&mut self, reference: u32) {
-            unsafe {
-                wgn::wgpu_render_pass_set_stencil_reference(self.id.as_mut().unwrap(), reference);
-            }
-        }
-    */
+    /// Sets the stencil reference.
+    ///
+    /// Subsequent stencil tests will test against this value.
+    pub fn set_stencil_reference(&mut self, reference: u32) {
+        backend::render_pass_set_stencil_reference(&self.id, reference);
+    }
 
     /// Draws primitives from the active vertex buffer(s).
     ///
@@ -1063,7 +992,6 @@ impl<'a> RenderPass<'a> {
         backend::render_pass_draw_indexed(&self.id, indices, base_vertex, instances);
     }
 
-    /*
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
@@ -1080,13 +1008,7 @@ impl<'a> RenderPass<'a> {
     /// }
     /// ```
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
-        unsafe {
-            wgn::wgpu_render_pass_draw_indirect(
-                self.id.as_mut().unwrap(),
-                indirect_buffer.id,
-                indirect_offset,
-            );
-        }
+        backend::render_pass_draw_indirect(&self.id, indirect_buffer, indirect_offset);
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -1112,15 +1034,8 @@ impl<'a> RenderPass<'a> {
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
-        unsafe {
-            wgn::wgpu_render_pass_draw_indexed_indirect(
-                self.id.as_mut().unwrap(),
-                indirect_buffer.id,
-                indirect_offset,
-            );
-        }
+        backend::render_pass_draw_indexed_indirect(&self.id, indirect_buffer, indirect_offset);
     }
-    */
 }
 
 impl<'a> Drop for RenderPass<'a> {
