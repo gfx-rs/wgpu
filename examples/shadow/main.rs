@@ -176,7 +176,7 @@ impl Example {
     const SHADOW_SIZE: wgpu::Extent3d = wgpu::Extent3d {
         width: 512,
         height: 512,
-        depth: 1,
+        depth: Self::MAX_LIGHTS as u32,
     };
     const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 
@@ -341,7 +341,6 @@ impl framework::Example for Example {
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: Self::SHADOW_SIZE,
-            array_layer_count: Self::MAX_LIGHTS as u32,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -635,7 +634,6 @@ impl framework::Example for Example {
                 height: sc_desc.height,
                 depth: 1,
             },
-            array_layer_count: 1,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -683,7 +681,6 @@ impl framework::Example for Example {
                 height: sc_desc.height,
                 depth: 1,
             },
-            array_layer_count: 1,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,

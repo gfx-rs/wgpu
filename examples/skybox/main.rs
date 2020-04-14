@@ -180,15 +180,12 @@ impl framework::Example for Skybox {
             })
             .collect::<Vec<_>>();
 
-        let texture_extent = wgpu::Extent3d {
-            width: image_width,
-            height: image_height,
-            depth: 1,
-        };
-
         let texture = device.create_texture(&wgpu::TextureDescriptor {
-            size: texture_extent,
-            array_layer_count: 6,
+            size: wgpu::Extent3d {
+                width: image_width,
+                height: image_height,
+                depth: 6,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -219,7 +216,11 @@ impl framework::Example for Skybox {
                     array_layer: i as u32,
                     origin: wgpu::Origin3d::ZERO,
                 },
-                texture_extent,
+                wgpu::Extent3d {
+                    width: image_width,
+                    height: image_height,
+                    depth: 1,
+                },
             );
         }
 
