@@ -34,7 +34,7 @@ mod life;
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
-pub const MAX_VERTEX_BUFFERS: usize = 8;
+pub const MAX_VERTEX_BUFFERS: usize = 16;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -1044,7 +1044,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
         let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
-        assert_eq!(entries.len(), bind_group_layout.entries.len());
+        assert_eq!(entries.len(), bind_group_layout.entries.len(), "Bind group has {} entries and bind group layout has {} entries, they should be the same.", entries.len(), bind_group_layout.entries.len());
 
         let desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
@@ -1503,6 +1503,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // execute resource transitions
                 let mut transit = device.com_allocator.extend(comb);
                 unsafe {
+                    // the last buffer was open, closing now
+                    comb.raw.last_mut().unwrap().finish();
                     transit.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                 }
                 log::trace!("Stitching command buffer {:?} before submission", cmb_id);
@@ -1517,9 +1519,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     transit.finish();
                 }
                 comb.raw.insert(0, transit);
-                unsafe {
-                    comb.raw.last_mut().unwrap().finish();
-                }
             }
 
             log::debug!("Device after submission {}: {:#?}", submit_index, trackers);
