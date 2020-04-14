@@ -159,6 +159,7 @@ pub fn run<E: Example>(title: &str) {
     #[cfg(target_arch = "wasm32")]
     {
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        console_log::init().expect("could not initialize logger");
         use winit::platform::web::WindowExtWebSys;
         // On wasm, append the canvas to the document body
         web_sys::window()
