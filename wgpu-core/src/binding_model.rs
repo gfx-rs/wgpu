@@ -80,6 +80,7 @@ pub struct PipelineLayoutDescriptor {
 pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
     pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) life_guard: LifeGuard,
     pub(crate) bind_group_layout_ids: ArrayVec<[BindGroupLayoutId; wgt::MAX_BIND_GROUPS]>,
 }
 
