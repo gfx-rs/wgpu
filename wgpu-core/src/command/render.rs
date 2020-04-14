@@ -977,7 +977,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDEX));
+                    assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
                     let end = if size != 0 {
                         offset + size
@@ -1010,7 +1010,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::VERTEX)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::VERTEX));
+                    assert!(buffer.usage.contains(BufferUsage::VERTEX), "An invalid setVertexBuffer call has been made. The buffer usage is {:?} which does not contain required usage VERTEX", buffer.usage);
                     state.vertex.inputs[slot as usize].total_size = if size != 0 {
                         size
                     } else {
@@ -1129,7 +1129,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDIRECT)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDIRECT));
+                    assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
 
                     unsafe {
                         raw.draw_indirect(&buffer.raw, offset, 1, 0);
@@ -1142,7 +1142,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDIRECT)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDIRECT));
+                    assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndexedIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
 
                     unsafe {
                         raw.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
