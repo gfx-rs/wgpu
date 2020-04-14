@@ -167,7 +167,6 @@ impl framework::Example for Example {
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: texture_extent,
-            array_layer_count: 1,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,

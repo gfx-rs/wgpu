@@ -442,9 +442,6 @@ pub struct TextureDescriptor<'a> {
     /// The size of the texture.
     pub size: Extent3d,
 
-    /// The array layer count.
-    pub array_layer_count: u32,
-
     /// The mip level count.
     pub mip_level_count: u32,
 
@@ -942,7 +939,6 @@ impl Device {
                 &wgt::TextureDescriptor {
                     label: owned_label.as_ptr(),
                     size: desc.size,
-                    array_layer_count: desc.array_layer_count,
                     mip_level_count: desc.mip_level_count,
                     sample_count: desc.sample_count,
                     dimension: desc.dimension,
