@@ -23,15 +23,14 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekPoke, Poke};
+use smallvec::SmallVec;
 use wgt::{
     BufferAddress, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode, LoadOp,
     RenderPassColorAttachmentDescriptorBase, RenderPassDepthStencilAttachmentDescriptorBase,
     TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
-use std::{
-    borrow::Borrow, collections::hash_map::Entry, iter, marker::PhantomData, mem, ops::Range, slice,
-};
+use std::{borrow::Borrow, collections::hash_map::Entry, iter, mem, ops::Range, slice};
 
 pub type RenderPassColorAttachmentDescriptor =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
@@ -227,7 +226,7 @@ impl VertexBufferState {
 
 #[derive(Debug)]
 pub struct VertexState {
-    inputs: [VertexBufferState; MAX_VERTEX_BUFFERS],
+    inputs: SmallVec<[VertexBufferState; MAX_VERTEX_BUFFERS]>,
     vertex_limit: u32,
     instance_limit: u32,
 }
@@ -438,7 +437,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let mut resolves = ArrayVec::new();
 
                 for at in &color_attachments {
-                    let view = &view_guard[at.attachment];
+                    let view = trackers
+                        .views
+                        .use_extend(&*view_guard, at.attachment, (), ())
+                        .unwrap();
                     if let Some(ex) = extent {
                         assert_eq!(ex, view.extent);
                     } else {
@@ -448,10 +450,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         view.samples, sample_count,
                         "All attachments must have the same sample_count"
                     );
-                    let first_use = trackers
-                        .views
-                        .init(at.attachment, view.life_guard.add_ref(), PhantomData)
-                        .is_ok();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -477,10 +475,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
 
                             let end = hal::image::Layout::Present;
-                            let start = if first_use {
-                                hal::image::Layout::Undefined
-                            } else {
-                                end
+                            let start = match base_trackers.views.query(at.attachment, ()) {
+                                Some(_) => end,
+                                None => hal::image::Layout::Undefined,
                             };
                             start..end
                         }
@@ -496,16 +493,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
 
                 for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
-                    let view = &view_guard[resolve_target];
+                    let view = trackers
+                        .views
+                        .use_extend(&*view_guard, resolve_target, (), ())
+                        .unwrap();
                     assert_eq!(extent, Some(view.extent));
                     assert_eq!(
                         view.samples, 1,
                         "All resolve_targets must have a sample_count of 1"
                     );
-                    let first_use = trackers
-                        .views
-                        .init(resolve_target, view.life_guard.add_ref(), PhantomData)
-                        .is_ok();
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -531,10 +527,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
 
                             let end = hal::image::Layout::Present;
-                            let start = if first_use {
-                                hal::image::Layout::Undefined
-                            } else {
-                                end
+                            let start = match base_trackers.views.query(resolve_target, ()) {
+                                Some(_) => end,
+                                None => hal::image::Layout::Undefined,
                             };
                             start..end
                         }
@@ -798,7 +793,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 limit: 0,
             },
             vertex: VertexState {
-                inputs: [VertexBufferState::EMPTY; MAX_VERTEX_BUFFERS],
+                inputs: SmallVec::new(),
                 vertex_limit: 0,
                 instance_limit: 0,
             },
@@ -968,7 +963,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         vbs.stride = stride;
                         vbs.rate = rate;
                     }
-                    for vbs in state.vertex.inputs[pipeline.vertex_strides.len()..].iter_mut() {
+                    let vertex_strides_len = pipeline.vertex_strides.len();
+                    for vbs in state.vertex.inputs.iter_mut().skip(vertex_strides_len) {
                         vbs.stride = 0;
                         vbs.rate = InputStepMode::Vertex;
                     }
@@ -1017,6 +1013,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::VERTEX)
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::VERTEX));
+                    let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
+                    state
+                        .vertex
+                        .inputs
+                        .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
                     state.vertex.inputs[slot as usize].total_size = if size != 0 {
                         size
                     } else {
@@ -1158,6 +1159,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
+        log::trace!("Merging {:?} with the render pass", encoder_id);
+        unsafe {
+            raw.end_render_pass();
+        }
         super::CommandBuffer::insert_barriers(
             cmb.raw.last_mut().unwrap(),
             &mut cmb.trackers,
@@ -1167,7 +1172,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         unsafe {
             cmb.raw.last_mut().unwrap().finish();
-            raw.end_render_pass();
         }
         cmb.raw.push(raw);
     }

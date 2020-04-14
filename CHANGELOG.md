@@ -1,5 +1,35 @@
 # Change Log
 
+## v0.5 (06-04-2020)
+  - Crates:
+    - `wgpu-types`: common types between native and web targets
+    - `wgpu-core`: internal API for the native and remote wrappers
+  - Features:
+    - based on gfx-hal-0.5
+    - moved from Rendy to the new `gfx-memory` and `gfx-descriptor` crates
+    - passes are now recorded on the client side. The user is also responsible to keep all resources referenced in the pass up until it ends recording.
+    - revised GPU lifetime tracking of all resources
+    - revised usage tracking logic
+    - all IDs are now non-zero
+    - Mailbox present mode
+  - Validation:
+    - active pipeline
+  - Fixes:
+    - lots of small API changes to closely match upstream WebGPU
+    - true read-only storage bindings
+    - unmapping dropped buffers
+    - better error messages on misused swapchain frames
+
+## v0.4.3 (20-01-2020)
+  - improved swap chain error handling
+
+## v0.4.2 (15-12-2019)
+  - fixed render pass transitions
+
+## v0.4.1 (28-11-2019)
+  - fixed depth/stencil transitions
+  - fixed dynamic offset iteration
+
 ## v0.4 (03-11-2019)
   - Platforms: removed OpenGL/WebGL support temporarily
   - Features:
