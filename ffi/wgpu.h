@@ -683,7 +683,6 @@ typedef struct {
 typedef struct {
   const char *label;
   WGPUExtent3d size;
-  uint32_t array_layer_count;
   uint32_t mip_level_count;
   uint32_t sample_count;
   WGPUTextureDimension dimension;
