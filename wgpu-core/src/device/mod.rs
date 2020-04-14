@@ -142,14 +142,6 @@ fn map_buffer<B: hal::Backend>(
 }
 
 fn unmap_buffer<B: hal::Backend>(raw: &B::Device, buffer: &mut resource::Buffer<B>) {
-    match buffer.map_state {
-        resource::BufferMapState::Idle => {
-            log::error!("Buffer already unmapped");
-            return;
-        }
-        _ => buffer.map_state = resource::BufferMapState::Idle,
-    }
-
     if !buffer.mapped_write_segments.is_empty() {
         unsafe {
             raw.flush_mapped_memory_ranges(
@@ -2142,6 +2134,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer = &mut buffer_guard[buffer_id];
 
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        unmap_buffer(&device_guard[buffer.device_id.value].raw, buffer);
+        match buffer.map_state {
+            resource::BufferMapState::Idle => {
+                log::error!("Buffer already unmapped");
+            }
+            _ => {
+                buffer.map_state = resource::BufferMapState::Idle;
+                unmap_buffer(&device_guard[buffer.device_id.value].raw, buffer);
+            }
+        }
     }
 }
