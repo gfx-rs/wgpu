@@ -1,5 +1,10 @@
 # Change Log
 
+## v0.5.2 (15-04-2020)
+  - fix read-only storage flags
+  - fix pipeline layout life time
+  - improve various assert messages
+
 ## v0.5.1 (10-04-2020)
   - fix tracking of swapchain images that are used multiple times in a command buffer
   - fix tracking of initial usage of a resource across a command buffer
