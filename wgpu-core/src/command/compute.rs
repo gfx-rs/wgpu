@@ -176,9 +176,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     // Rebind resources
-                    if binder.pipeline_layout_id != Some(pipeline.layout_id) {
-                        let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id];
-                        binder.pipeline_layout_id = Some(pipeline.layout_id);
+                    if binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
+                        let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                        binder.pipeline_layout_id = Some(pipeline.layout_id.value);
                         binder.reset_expectations(pipeline_layout.bind_group_layout_ids.len());
                         let mut is_compatible = true;
 
