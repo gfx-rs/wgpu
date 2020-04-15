@@ -30,7 +30,7 @@ use wgt::{
     TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
-use std::{borrow::Borrow, collections::hash_map::Entry, iter, mem, ops::Range, slice};
+use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, mem, ops::Range, slice};
 
 pub type RenderPassColorAttachmentDescriptor =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
@@ -175,7 +175,7 @@ impl OptionalState {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 enum DrawError {
     MissingBlendColor,
     MissingStencilReference,
@@ -185,6 +185,17 @@ enum DrawError {
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
+}
+
+impl fmt::Debug for DrawError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DrawError::MissingBlendColor => write!(f, "MissingBlendColor. A blend color is required to be set using RenderPass::set_blend_color."),
+            DrawError::MissingStencilReference => write!(f, "MissingStencilReference. A stencil reference is required to be set using RenderPass::set_stencil_reference."),
+            DrawError::MissingPipeline => write!(f, "MissingPipeline. You must first set the render pipeline using RenderPass::set_pipeline."),
+            DrawError::IncompatibleBindGroup { index } => write!(f, "IncompatibleBindGroup. The current render pipeline has a layout which is incompatible with a currently set bind group. They first differ at entry index {}.", index),
+        }
+    }
 }
 
 #[derive(Debug)]
