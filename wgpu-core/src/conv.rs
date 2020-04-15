@@ -98,7 +98,7 @@ pub fn map_binding_type(binding: &binding_model::BindGroupLayoutEntry) -> hal::p
             },
         },
         Bt::ReadonlyStorageBuffer => pso::DescriptorType::Buffer {
-            ty: pso::BufferDescriptorType::Storage { read_only: false },
+            ty: pso::BufferDescriptorType::Storage { read_only: true },
             format: pso::BufferDescriptorFormat::Structured {
                 dynamic_offset: binding.has_dynamic_offset,
             },
@@ -110,10 +110,10 @@ pub fn map_binding_type(binding: &binding_model::BindGroupLayoutEntry) -> hal::p
             },
         },
         Bt::ReadonlyStorageTexture => pso::DescriptorType::Image {
-            ty: pso::ImageDescriptorType::Storage { read_only: false },
+            ty: pso::ImageDescriptorType::Storage { read_only: true },
         },
         Bt::WriteonlyStorageTexture => pso::DescriptorType::Image {
-            ty: pso::ImageDescriptorType::Storage { read_only: true },
+            ty: pso::ImageDescriptorType::Storage { read_only: false },
         },
     }
 }

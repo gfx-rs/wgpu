@@ -142,14 +142,6 @@ fn map_buffer<B: hal::Backend>(
 }
 
 fn unmap_buffer<B: hal::Backend>(raw: &B::Device, buffer: &mut resource::Buffer<B>) {
-    match buffer.map_state {
-        resource::BufferMapState::Idle => {
-            log::error!("Buffer already unmapped");
-            return;
-        }
-        _ => buffer.map_state = resource::BufferMapState::Idle,
-    }
-
     if !buffer.mapped_write_segments.is_empty() {
         unsafe {
             raw.flush_mapped_memory_ranges(
@@ -1010,6 +1002,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
             },
+            life_guard: LifeGuard::new(),
             bind_group_layout_ids: bind_group_layout_ids.iter().cloned().collect(),
         };
         hub.pipeline_layouts
@@ -1019,15 +1012,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
         let hub = B::hub(self);
         let mut token = Token::root();
+        let (device_id, ref_count) = {
+            let (mut pipeline_layout_guard, _) = hub.pipeline_layouts.write(&mut token);
+            let layout = &mut pipeline_layout_guard[pipeline_layout_id];
+            (
+                layout.device_id.value,
+                layout.life_guard.ref_count.take().unwrap(),
+            )
+        };
+
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (pipeline_layout, _) = hub
+        device_guard[device_id]
+            .lock_life(&mut token)
+            .suspected_resources
             .pipeline_layouts
-            .unregister(pipeline_layout_id, &mut token);
-        unsafe {
-            device_guard[pipeline_layout.device_id.value]
-                .raw
-                .destroy_pipeline_layout(pipeline_layout.raw);
-        }
+            .push(Stored {
+                value: pipeline_layout_id,
+                ref_count,
+            });
     }
 
     pub fn device_create_bind_group<B: GfxBackend>(
@@ -1044,7 +1046,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
         let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
-        assert_eq!(entries.len(), bind_group_layout.entries.len());
+        assert_eq!(entries.len(), bind_group_layout.entries.len(), "Bind group has {} entries and bind group layout has {} entries, they should be the same.", entries.len(), bind_group_layout.entries.len());
 
         let desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
@@ -1672,9 +1674,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let raw_pipeline = {
+        let (raw_pipeline, layout_ref_count) = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-            let layout = &pipeline_layout_guard[desc.layout].raw;
+            let layout = &pipeline_layout_guard[desc.layout];
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
             let rp_key = RenderPassKey {
@@ -1782,19 +1784,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 depth_stencil,
                 multisampling,
                 baked_states,
-                layout,
+                layout: &layout.raw,
                 subpass,
                 flags,
                 parent,
             };
 
             // TODO: cache
-            unsafe {
+            let pipeline = unsafe {
                 device
                     .raw
                     .create_graphics_pipeline(&pipeline_desc, None)
                     .unwrap()
-            }
+            };
+            (pipeline, layout.life_guard.add_ref())
         };
 
         let pass_context = RenderPassContext {
@@ -1817,7 +1820,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let pipeline = pipeline::RenderPipeline {
             raw: raw_pipeline,
-            layout_id: desc.layout,
+            layout_id: Stored {
+                value: desc.layout,
+                ref_count: layout_ref_count,
+            },
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
@@ -1839,18 +1845,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let device_id = {
+        let (device_id, layout_id) = {
             let (mut pipeline_guard, _) = hub.render_pipelines.write(&mut token);
             let pipeline = &mut pipeline_guard[render_pipeline_id];
             pipeline.life_guard.ref_count.take();
-            pipeline.device_id.value
+            (pipeline.device_id.value, pipeline.layout_id.clone())
         };
 
-        device_guard[device_id]
-            .lock_life(&mut token)
+        let mut life_lock = device_guard[device_id].lock_life(&mut token);
+        life_lock
             .suspected_resources
             .render_pipelines
             .push(render_pipeline_id);
+        life_lock
+            .suspected_resources
+            .pipeline_layouts
+            .push(layout_id);
     }
 
     pub fn device_create_compute_pipeline<B: GfxBackend>(
@@ -1864,9 +1874,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let raw_pipeline = {
+        let (raw_pipeline, layout_ref_count) = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-            let layout = &pipeline_layout_guard[desc.layout].raw;
+            let layout = &pipeline_layout_guard[desc.layout];
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
@@ -1886,22 +1896,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let pipeline_desc = hal::pso::ComputePipelineDesc {
                 shader,
-                layout,
+                layout: &layout.raw,
                 flags,
                 parent,
             };
 
-            unsafe {
+            let pipeline = unsafe {
                 device
                     .raw
                     .create_compute_pipeline(&pipeline_desc, None)
                     .unwrap()
-            }
+            };
+            (pipeline, layout.life_guard.add_ref())
         };
 
         let pipeline = pipeline::ComputePipeline {
             raw: raw_pipeline,
-            layout_id: desc.layout,
+            layout_id: Stored {
+                value: desc.layout,
+                ref_count: layout_ref_count,
+            },
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
@@ -1920,18 +1934,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let device_id = {
+        let (device_id, layout_id) = {
             let (mut pipeline_guard, _) = hub.compute_pipelines.write(&mut token);
             let pipeline = &mut pipeline_guard[compute_pipeline_id];
             pipeline.life_guard.ref_count.take();
-            pipeline.device_id.value
+            (pipeline.device_id.value, pipeline.layout_id.clone())
         };
 
-        device_guard[device_id]
-            .lock_life(&mut token)
+        let mut life_lock = device_guard[device_id].lock_life(&mut token);
+        life_lock
             .suspected_resources
             .compute_pipelines
             .push(compute_pipeline_id);
+        life_lock
+            .suspected_resources
+            .pipeline_layouts
+            .push(layout_id);
     }
 
     pub fn device_create_swap_chain<B: GfxBackend>(
@@ -2147,6 +2165,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer = &mut buffer_guard[buffer_id];
 
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        unmap_buffer(&device_guard[buffer.device_id.value].raw, buffer);
+        match buffer.map_state {
+            resource::BufferMapState::Idle => {
+                log::error!("Buffer already unmapped");
+            }
+            _ => {
+                buffer.map_state = resource::BufferMapState::Idle;
+                unmap_buffer(&device_guard[buffer.device_id.value].raw, buffer);
+            }
+        }
     }
 }
