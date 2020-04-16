@@ -1099,7 +1099,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             | binding_model::BindingType::SampledTexture
                             | binding_model::BindingType::ReadonlyStorageTexture
                             | binding_model::BindingType::WriteonlyStorageTexture => {
-                                panic!("Mismatched buffer binding for {:?}", decl)
+                                panic!("Mismatched buffer binding type for {:?}. Expected a type of UniformBuffer, StorageBuffer or ReadonlyStorageBuffer but found {:?}", decl, decl.ty)
                             }
                         };
                         assert_eq!(
@@ -1139,7 +1139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         match decl.ty {
                             binding_model::BindingType::Sampler
                             | binding_model::BindingType::ComparisonSampler => {}
-                            _ => panic!("Wrong binding type for a sampler: {:?}", decl.ty),
+                            found => panic!("Mismatched sampler binding type in {:?}. Expected a type of Sampler or ComparisonSampler but found {:?}", decl.ty, found),
                         }
                         let sampler = used
                             .samplers
@@ -1157,7 +1157,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             | binding_model::BindingType::WriteonlyStorageTexture => {
                                 (wgt::TextureUsage::STORAGE, hal::image::Layout::General)
                             }
-                            _ => panic!("Mismatched texture binding for {:?}", decl),
+                            found => panic!("Mismatched texture binding type in {:?}. Expected a type of SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture but found {:?}", decl, found),
                         };
                         let view = used
                             .views
