@@ -1461,6 +1461,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     if !buffer_guard[id].life_guard.use_at(submit_index) {
                         if let resource::BufferMapState::Active = buffer_guard[id].map_state {
+                            log::warn!("Dropped buffer has a pending mapping.");
                             unmap_buffer(&device.raw, &mut buffer_guard[id]);
                         }
                         device.temp_suspected.buffers.push(id);
