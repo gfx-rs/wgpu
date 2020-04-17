@@ -1,8 +1,6 @@
 #[path = "../framework.rs"]
 mod framework;
 
-use zerocopy::AsBytes as _;
-
 const SKYBOX_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
 type Uniform = cgmath::Matrix4<f32>;
@@ -45,7 +43,7 @@ fn buffer_from_uniforms(
             .data
             .chunks_exact_mut(std::mem::size_of::<Uniform>()),
     ) {
-        slot.copy_from_slice(AsRef::<[[f32; 4]; 4]>::as_ref(u).as_bytes());
+        slot.copy_from_slice(bytemuck::cast_slice(AsRef::<[[f32; 4]; 4]>::as_ref(u)));
     }
     uniform_buf.finish()
 }
@@ -280,8 +278,8 @@ impl framework::Example for Skybox {
         let mx_total = uniforms[0] * uniforms[1];
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
-        let temp_buf =
-            device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
+        let temp_buf = device
+            .create_buffer_with_data(bytemuck::cast_slice(mx_ref), wgpu::BufferUsage::COPY_SRC);
 
         let mut init_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

@@ -7,7 +7,6 @@ extern crate rand;
 mod framework;
 
 use std::fmt::Write;
-use zerocopy::AsBytes;
 
 use wgpu::vertex_attr_array;
 
@@ -165,7 +164,7 @@ impl framework::Example for Example {
 
         let vertex_buffer_data = [-0.01f32, -0.02, 0.01, -0.02, 0.00, 0.02];
         let vertices_buffer = device.create_buffer_with_data(
-            vertex_buffer_data.as_bytes(),
+            bytemuck::bytes_of(&vertex_buffer_data),
             wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
         );
 
@@ -182,7 +181,7 @@ impl framework::Example for Example {
         ]
         .to_vec();
         let sim_param_buffer = device.create_buffer_with_data(
-            sim_param_data.as_bytes(),
+            bytemuck::cast_slice(&sim_param_data),
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
 
@@ -204,7 +203,7 @@ impl framework::Example for Example {
         let mut particle_bind_groups = Vec::<wgpu::BindGroup>::new();
         for _i in 0..2 {
             particle_buffers.push(device.create_buffer_with_data(
-                initial_particle_data.as_bytes(),
+                bytemuck::cast_slice(&initial_particle_data),
                 wgpu::BufferUsage::VERTEX
                     | wgpu::BufferUsage::STORAGE
                     | wgpu::BufferUsage::COPY_DST,

@@ -1443,9 +1443,9 @@ impl<'a> RenderPass<'a> {
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
-    /// 
+    ///
     /// The structure expected in `indirect_buffer` is the following:
-    /// 
+    ///
     /// ```rust
     /// #[repr(C)]
     /// struct DrawIndirect {
@@ -1470,9 +1470,9 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
-    /// 
+    ///
     /// The structure expected in `indirect_buffer` is the following:
-    /// 
+    ///
     /// ```rust
     /// #[repr(C)]
     /// struct DrawIndexedIndirect {
