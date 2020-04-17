@@ -1,5 +1,4 @@
 use std::{convert::TryInto as _, str::FromStr};
-use zerocopy::AsBytes as _;
 
 async fn run() {
     let numbers = if std::env::args().len() == 1 {
@@ -45,7 +44,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
 
     let staging_buffer = device.create_buffer_with_data(
-        numbers.as_slice().as_bytes(),
+        bytemuck::cast_slice(&numbers),
         wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
     );
 

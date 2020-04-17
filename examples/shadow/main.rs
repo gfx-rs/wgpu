@@ -3,17 +3,20 @@ use std::{mem, ops::Range, rc::Rc};
 #[path = "../framework.rs"]
 mod framework;
 
-use zerocopy::{AsBytes, FromBytes};
+use bytemuck::{Pod, Zeroable};
 
 use wgpu::vertex_attr_array;
 
 #[repr(C)]
-#[derive(Clone, Copy, AsBytes, FromBytes)]
+#[derive(Clone, Copy)]
 
 struct Vertex {
     _pos: [i8; 4],
     _normal: [i8; 4],
 }
+
+unsafe impl Pod for Vertex {}
+unsafe impl Zeroable for Vertex {}
 
 fn vertex(pos: [i8; 3], nor: [i8; 3]) -> Vertex {
     Vertex {
@@ -101,12 +104,15 @@ struct Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, AsBytes, FromBytes)]
+#[derive(Clone, Copy)]
 struct LightRaw {
     proj: [[f32; 4]; 4],
     pos: [f32; 4],
     color: [f32; 4],
 }
+
+unsafe impl Pod for LightRaw {}
+unsafe impl Zeroable for LightRaw {}
 
 impl Light {
     fn to_raw(&self) -> LightRaw {
@@ -136,18 +142,24 @@ impl Light {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy, AsBytes, FromBytes)]
+#[derive(Clone, Copy)]
 struct ForwardUniforms {
     proj: [[f32; 4]; 4],
     num_lights: [u32; 4],
 }
 
+unsafe impl Pod for ForwardUniforms {}
+unsafe impl Zeroable for ForwardUniforms {}
+
 #[repr(C)]
-#[derive(Clone, Copy, AsBytes, FromBytes)]
+#[derive(Clone, Copy)]
 struct EntityUniforms {
     model: [[f32; 4]; 4],
     color: [f32; 4],
 }
+
+unsafe impl Pod for EntityUniforms {}
+unsafe impl Zeroable for EntityUniforms {}
 
 #[repr(C)]
 struct ShadowUniforms {
@@ -200,20 +212,26 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
-        let cube_vertex_buf = Rc::new(
-            device.create_buffer_with_data(cube_vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX),
-        );
+        let cube_vertex_buf = Rc::new(device.create_buffer_with_data(
+            bytemuck::cast_slice(&cube_vertex_data),
+            wgpu::BufferUsage::VERTEX,
+        ));
 
-        let cube_index_buf = Rc::new(
-            device.create_buffer_with_data(cube_index_data.as_bytes(), wgpu::BufferUsage::INDEX),
-        );
+        let cube_index_buf = Rc::new(device.create_buffer_with_data(
+            bytemuck::cast_slice(&cube_index_data),
+            wgpu::BufferUsage::INDEX,
+        ));
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
-        let plane_vertex_buf =
-            device.create_buffer_with_data(plane_vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
+        let plane_vertex_buf = device.create_buffer_with_data(
+            bytemuck::cast_slice(&plane_vertex_data),
+            wgpu::BufferUsage::VERTEX,
+        );
 
-        let plane_index_buf =
-            device.create_buffer_with_data(plane_index_data.as_bytes(), wgpu::BufferUsage::INDEX);
+        let plane_index_buf = device.create_buffer_with_data(
+            bytemuck::cast_slice(&plane_index_data),
+            wgpu::BufferUsage::INDEX,
+        );
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -535,7 +553,7 @@ impl framework::Example for Example {
             };
             let uniform_size = mem::size_of::<ForwardUniforms>() as wgpu::BufferAddress;
             let uniform_buf = device.create_buffer_with_data(
-                forward_uniforms.as_bytes(),
+                bytemuck::bytes_of(&forward_uniforms),
                 wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             );
 
@@ -666,8 +684,8 @@ impl framework::Example for Example {
         let command_buf = {
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
             let mx_ref: &[f32; 16] = mx_total.as_ref();
-            let temp_buf =
-                device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
+            let temp_buf = device
+                .create_buffer_with_data(bytemuck::cast_slice(mx_ref), wgpu::BufferUsage::COPY_SRC);
 
             let mut encoder =
                 device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
@@ -720,18 +738,15 @@ impl framework::Example for Example {
                         cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
                     entity.mx_world = entity.mx_world * rotation;
                 }
-                slot.copy_from_slice(
-                    EntityUniforms {
-                        model: entity.mx_world.into(),
-                        color: [
-                            entity.color.r as f32,
-                            entity.color.g as f32,
-                            entity.color.b as f32,
-                            entity.color.a as f32,
-                        ],
-                    }
-                    .as_bytes(),
-                );
+                slot.copy_from_slice(bytemuck::bytes_of(&EntityUniforms {
+                    model: entity.mx_world.into(),
+                    color: [
+                        entity.color.r as f32,
+                        entity.color.g as f32,
+                        entity.color.b as f32,
+                        entity.color.a as f32,
+                    ],
+                }));
             }
 
             let temp_buf = temp_buf_data.finish();
@@ -762,7 +777,7 @@ impl framework::Example for Example {
                 .iter()
                 .zip(temp_buf_data.data.chunks_exact_mut(size))
             {
-                slot.copy_from_slice(light.to_raw().as_bytes());
+                slot.copy_from_slice(bytemuck::bytes_of(&light.to_raw()));
             }
             encoder.copy_buffer_to_buffer(
                 &temp_buf_data.finish(),

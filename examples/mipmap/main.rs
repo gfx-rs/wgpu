@@ -1,18 +1,21 @@
 #[path = "../framework.rs"]
 mod framework;
 
-use zerocopy::{AsBytes, FromBytes};
+use bytemuck::{Pod, Zeroable};
 
 use wgpu::vertex_attr_array;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 #[repr(C)]
-#[derive(Clone, Copy, AsBytes, FromBytes)]
+#[derive(Clone, Copy)]
 struct Vertex {
     #[allow(dead_code)]
     pos: [f32; 4],
 }
+
+unsafe impl Pod for Vertex {}
+unsafe impl Zeroable for Vertex {}
 
 fn create_vertices() -> Vec<Vertex> {
     vec![
@@ -215,8 +218,10 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
-        let vertex_buf =
-            device.create_buffer_with_data(vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
+        let vertex_buf = device.create_buffer_with_data(
+            bytemuck::cast_slice(&vertex_data),
+            wgpu::BufferUsage::VERTEX,
+        );
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -301,7 +306,7 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         let uniform_buf = device.create_buffer_with_data(
-            mx_ref.as_bytes(),
+            bytemuck::cast_slice(mx_ref),
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
 
@@ -398,8 +403,8 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
-        let temp_buf =
-            device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
+        let temp_buf = device
+            .create_buffer_with_data(bytemuck::cast_slice(mx_ref), wgpu::BufferUsage::COPY_SRC);
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
