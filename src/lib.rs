@@ -140,8 +140,7 @@ pub struct BindGroup {
 
 impl Drop for BindGroup {
     fn drop(&mut self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        wgn::wgpu_bind_group_destroy(self.id);
+        backend::bind_group_drop(&self.id);
     }
 }
 
@@ -460,7 +459,7 @@ pub struct TextureDescriptor<'a> {
 #[derive(Debug)]
 pub struct SwapChainOutput {
     pub view: TextureView,
-    swap_chain_id: backend::SwapChainId,
+    detail: backend::SwapChainOutputDetail,
 }
 
 /// A view of a buffer which can be used to copy to or from a texture.
@@ -689,12 +688,7 @@ impl Device {
 // TODO
 impl Drop for Device {
     fn drop(&mut self) {
-        #[cfg(not(target_arch = "wasm32"))]
-        wgn::wgpu_device_poll(self.id, true);
-        //TODO: make this work in general
-        #[cfg(not(target_arch = "wasm32"))]
-        #[cfg(feature = "metal-auto-capture")]
-        wgn::wgpu_device_destroy(self.id);
+        backend::device_drop(&self.id);
     }
 }
 
@@ -1097,7 +1091,7 @@ impl Queue {
 impl Drop for SwapChainOutput {
     fn drop(&mut self) {
         if !thread::panicking() {
-            backend::swap_chain_present(&self.swap_chain_id);
+            backend::swap_chain_present(&self);
         }
     }
 }
@@ -1113,13 +1107,6 @@ impl SwapChain {
     /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
     pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, TimeOut> {
-        match backend::swap_chain_get_next_texture(&self.id) {
-            Some(id) => Ok(SwapChainOutput {
-                view: TextureView { id, owned: false },
-                // TODO: Remove from web backend
-                swap_chain_id: self.id.clone(),
-            }),
-            None => Err(TimeOut),
-        }
+        backend::swap_chain_get_next_texture(&self.id)
     }
 }

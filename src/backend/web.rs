@@ -67,7 +67,6 @@ pub(crate) async fn request_device_and_queue(
             // TODO: Extensions
             let mut mapped_limits = web_sys::GpuLimits::new();
             mapped_limits.max_bind_groups(d.limits.max_bind_groups);
-            // TODO: Other fields
             mapped_descriptor.limits(&mapped_limits);
             adapter.request_device_with_descriptor(&mapped_descriptor)
         }
@@ -109,35 +108,43 @@ pub(crate) fn create_bind_group_layout(
                 BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
             };
 
-            let mapped_dynamic = match bind.ty {
-                BindingType::UniformBuffer { dynamic }
-                | BindingType::StorageBuffer { dynamic, .. } => dynamic,
-                _ => false,
-            };
-
-            let mapped_multisampled = match bind.ty {
-                BindingType::SampledTexture { multisampled, .. } => multisampled,
-                _ => false,
-            };
-
-            let mapped_view_dimension = match bind.ty {
-                BindingType::SampledTexture { dimension, .. }
-                | BindingType::StorageTexture { dimension, .. } => {
-                    map_texture_view_dimension(dimension)
-                }
-                _ => web_sys::GpuTextureViewDimension::N2d,
-            };
-
             let mut mapped_entry = web_sys::GpuBindGroupLayoutEntry::new(
                 bind.binding,
                 mapped_type,
                 bind.visibility.bits(),
             );
-            mapped_entry.has_dynamic_offset(mapped_dynamic);
-            mapped_entry.multisampled(mapped_multisampled);
-            mapped_entry.view_dimension(mapped_view_dimension);
 
-            // TODO: Texture component type, storage texture format
+            match bind.ty {
+                BindingType::UniformBuffer { dynamic }
+                | BindingType::StorageBuffer { dynamic, .. } => {
+                    mapped_entry.has_dynamic_offset(dynamic);
+                }
+                _ => {}
+            }
+
+            if let BindingType::SampledTexture { multisampled, .. } = bind.ty {
+                mapped_entry.multisampled(multisampled);
+            }
+
+            match bind.ty {
+                BindingType::SampledTexture { dimension, .. }
+                | BindingType::StorageTexture { dimension, .. } => {
+                    mapped_entry.view_dimension(map_texture_view_dimension(dimension));
+                }
+                _ => {}
+            }
+
+            if let BindingType::StorageTexture { format, .. } = bind.ty {
+                mapped_entry.storage_texture_format(map_texture_format(format));
+            }
+
+            match bind.ty {
+                BindingType::SampledTexture { component_type, .. }
+                | BindingType::StorageTexture { component_type, .. } => {
+                    mapped_entry.texture_component_type(map_texture_component_type(component_type));
+                }
+                _ => {}
+            }
 
             mapped_entry
         })
@@ -180,7 +187,6 @@ pub(crate) fn create_pipeline_layout(
     device: &DeviceId,
     desc: &PipelineLayoutDescriptor,
 ) -> PipelineLayoutId {
-    //TODO: avoid allocation here
     let temp_layouts = desc
         .bind_group_layouts
         .iter()
@@ -232,6 +238,16 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Depth32Float => tf::Depth32float,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
+    }
+}
+
+fn map_texture_component_type(
+    texture_component_type: wgt::TextureComponentType,
+) -> web_sys::GpuTextureComponentType {
+    match texture_component_type {
+        wgt::TextureComponentType::Float => web_sys::GpuTextureComponentType::Float,
+        wgt::TextureComponentType::Sint => web_sys::GpuTextureComponentType::Sint,
+        wgt::TextureComponentType::Uint => web_sys::GpuTextureComponentType::Uint,
     }
 }
 
@@ -794,9 +810,7 @@ pub(crate) fn compute_pass_set_bind_group<'a>(
     compute_pass.set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
         index,
         bind_group,
-        // TODO: `offsets` currently requires `&mut` so we have to clone it
-        // here, but this should be fixed upstream in web-sys in the future
-        &mut offsets.to_vec(),
+        offsets,
         0f64,
         offsets.len() as u32,
     );
@@ -929,11 +943,25 @@ pub(crate) fn device_create_swap_chain(
     surface.configure_swap_chain(&mapped)
 }
 
-pub(crate) fn swap_chain_get_next_texture(swap_chain: &SwapChainId) -> Option<TextureViewId> {
+pub(crate) fn device_drop(_device: &DeviceId) {
+    // Device is dropped automatically
+}
+
+pub(crate) fn swap_chain_get_next_texture(
+    swap_chain: &SwapChainId,
+) -> Result<crate::SwapChainOutput, crate::TimeOut> {
     // TODO: Should we pass a descriptor here?
     // Or is the default view always correct?
-    Some(swap_chain.get_current_texture().create_view())
+    Ok(crate::SwapChainOutput {
+        view: crate::TextureView {
+            id: swap_chain.get_current_texture().create_view(),
+            owned: false,
+        },
+        detail: (),
+    })
 }
+
+pub(crate) type SwapChainOutputDetail = ();
 
 fn map_store_op(op: wgt::StoreOp) -> web_sys::GpuStoreOp {
     match op {
@@ -1012,9 +1040,7 @@ pub(crate) fn render_pass_set_bind_group(
     render_pass.set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
         index,
         bind_group,
-        // TODO: `offsets` currently requires `&mut` so we have to clone it
-        // here, but this should be fixed upstream in web-sys in the future
-        &mut offsets.to_vec(),
+        offsets,
         0f64,
         offsets.len() as u32,
     );
@@ -1024,13 +1050,9 @@ pub(crate) fn render_pass_set_index_buffer<'a>(
     render_pass: &RenderPassEncoderId,
     buffer: &'a crate::Buffer,
     offset: wgt::BufferAddress,
-    _size: wgt::BufferAddress,
+    size: wgt::BufferAddress,
 ) {
-    render_pass.set_index_buffer_with_f64(
-        &buffer.id,
-        offset as f64,
-        // TODO: size,
-    );
+    render_pass.set_index_buffer_with_f64_and_f64(&buffer.id, offset as f64, size as f64);
 }
 
 pub(crate) fn render_pass_set_vertex_buffer<'a>(
@@ -1038,14 +1060,9 @@ pub(crate) fn render_pass_set_vertex_buffer<'a>(
     slot: u32,
     buffer: &'a crate::Buffer,
     offset: wgt::BufferAddress,
-    _size: wgt::BufferAddress,
+    size: wgt::BufferAddress,
 ) {
-    render_pass.set_vertex_buffer_with_f64(
-        slot,
-        &buffer.id,
-        offset as f64,
-        // TODO: size,
-    );
+    render_pass.set_vertex_buffer_with_f64_and_f64(slot, &buffer.id, offset as f64, size as f64);
 }
 
 pub(crate) fn render_pass_set_scissor_rect(
@@ -1151,7 +1168,11 @@ pub(crate) fn texture_view_drop(_texture_view: &TextureViewId) {
     // Texture view is dropped automatically
 }
 
-pub(crate) fn swap_chain_present(_swap_chain: &SwapChainId) {
+pub(crate) fn bind_group_drop(_bind_group: &BindGroupId) {
+    // Bind group is dropped automatically
+}
+
+pub(crate) fn swap_chain_present(_swap_chain_output: &crate::SwapChainOutput) {
     // Swapchain is presented automatically
 }
 
