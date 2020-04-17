@@ -486,9 +486,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
 
                             let end = hal::image::Layout::Present;
-                            let start = match base_trackers.views.query(at.attachment, ()) {
-                                Some(_) => end,
-                                None => hal::image::Layout::Undefined,
+                            let start = match at.load_op {
+                                LoadOp::Clear => hal::image::Layout::Undefined,
+                                LoadOp::Load => end,
                             };
                             start..end
                         }
@@ -536,13 +536,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 assert!(used_swap_chain.is_none());
                                 used_swap_chain = Some(source_id.clone());
                             }
-
-                            let end = hal::image::Layout::Present;
-                            let start = match base_trackers.views.query(resolve_target, ()) {
-                                Some(_) => end,
-                                None => hal::image::Layout::Undefined,
-                            };
-                            start..end
+                            hal::image::Layout::Undefined..hal::image::Layout::Present
                         }
                     };
 
