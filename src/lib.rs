@@ -83,7 +83,7 @@ pub enum TypeInner {
     Sampler,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Constant {
     pub name: Option<String>,
     pub specialization: Option<spirv::Word>,
@@ -91,7 +91,7 @@ pub struct Constant {
     pub ty: Handle<Type>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ConstantInner {
     Sint(i64),
     Uint(u64),

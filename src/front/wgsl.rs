@@ -467,7 +467,7 @@ impl Parser {
                 return Ok(expr);
             }
             Token::Word("true") => {
-                let handle = ctx.constants.append(crate::Constant {
+                let handle = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(true),
@@ -482,7 +482,7 @@ impl Parser {
                 crate::Expression::Constant(handle)
             }
             Token::Word("false") => {
-                let handle = ctx.constants.append(crate::Constant {
+                let handle = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner: crate::ConstantInner::Bool(false),
@@ -498,7 +498,7 @@ impl Parser {
             }
             Token::Number(word) => {
                 let (inner, kind) = Self::get_constant_inner(word)?;
-                let handle = ctx.constants.append(crate::Constant {
+                let handle = ctx.constants.fetch_or_append(crate::Constant {
                     name: None,
                     specialization: None,
                     inner,
