@@ -650,8 +650,32 @@ pub(crate) fn device_create_swap_chain(
     wgn::wgpu_device_create_swap_chain(*device, *surface, desc)
 }
 
-pub(crate) fn swap_chain_get_next_texture(swap_chain: &SwapChainId) -> Option<TextureViewId> {
-    wgn::wgpu_swap_chain_get_next_texture(*swap_chain).view_id
+pub(crate) fn device_drop(device: &DeviceId) {
+    #[cfg(not(target_arch = "wasm32"))]
+    wgn::wgpu_device_poll(*device, true);
+    //TODO: make this work in general
+    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(feature = "metal-auto-capture")]
+    wgn::wgpu_device_destroy(*device);
+}
+
+pub(crate) fn swap_chain_get_next_texture(
+    swap_chain: &SwapChainId,
+) -> Result<crate::SwapChainOutput, crate::TimeOut> {
+    match wgn::wgpu_swap_chain_get_next_texture(*swap_chain).view_id {
+        Some(id) => Ok(crate::SwapChainOutput {
+            view: crate::TextureView { id, owned: false },
+            detail: SwapChainOutputDetail {
+                swap_chain_id: *swap_chain,
+            },
+        }),
+        None => Err(crate::TimeOut),
+    }
+}
+
+#[derive(Debug)]
+pub(crate) struct SwapChainOutputDetail {
+    swap_chain_id: SwapChainId,
 }
 
 pub(crate) fn command_encoder_begin_render_pass<'a>(
@@ -883,8 +907,12 @@ pub(crate) fn texture_view_drop(texture_view: &TextureViewId) {
     wgn::wgpu_texture_view_destroy(*texture_view);
 }
 
-pub(crate) fn swap_chain_present(swap_chain: &SwapChainId) {
-    wgn::wgpu_swap_chain_present(*swap_chain);
+pub(crate) fn bind_group_drop(bind_group: &BindGroupId) {
+    wgn::wgpu_bind_group_destroy(*bind_group);
+}
+
+pub(crate) fn swap_chain_present(swap_chain_output: &crate::SwapChainOutput) {
+    wgn::wgpu_swap_chain_present(swap_chain_output.detail.swap_chain_id);
 }
 
 pub(crate) fn device_poll(device: &DeviceId, maintain: crate::Maintain) {
