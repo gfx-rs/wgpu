@@ -1,14 +1,17 @@
 #[path = "../framework.rs"]
 mod framework;
 
-use zerocopy::{AsBytes, FromBytes};
+use bytemuck::{Pod, Zeroable};
 
 #[repr(C)]
-#[derive(Clone, Copy, AsBytes, FromBytes)]
+#[derive(Clone, Copy)]
 struct Vertex {
     _pos: [f32; 4],
     _tex_coord: [f32; 2],
 }
+
+unsafe impl Pod for Vertex {}
+unsafe impl Zeroable for Vertex {}
 
 fn vertex(pos: [i8; 3], tc: [i8; 2]) -> Vertex {
     Vertex {
@@ -122,11 +125,13 @@ impl framework::Example for Example {
         let vertex_size = mem::size_of::<Vertex>();
         let (vertex_data, index_data) = create_vertices();
 
-        let vertex_buf =
-            device.create_buffer_with_data(vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
+        let vertex_buf = device.create_buffer_with_data(
+            bytemuck::cast_slice(&vertex_data),
+            wgpu::BufferUsage::VERTEX,
+        );
 
-        let index_buf =
-            device.create_buffer_with_data(index_data.as_bytes(), wgpu::BufferUsage::INDEX);
+        let index_buf = device
+            .create_buffer_with_data(bytemuck::cast_slice(&index_data), wgpu::BufferUsage::INDEX);
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -208,7 +213,7 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         let uniform_buf = device.create_buffer_with_data(
-            mx_ref.as_bytes(),
+            bytemuck::cast_slice(mx_ref),
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
 
@@ -318,8 +323,8 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
 
-        let temp_buf =
-            device.create_buffer_with_data(mx_ref.as_bytes(), wgpu::BufferUsage::COPY_SRC);
+        let temp_buf = device
+            .create_buffer_with_data(bytemuck::cast_slice(mx_ref), wgpu::BufferUsage::COPY_SRC);
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
