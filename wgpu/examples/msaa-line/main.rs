@@ -10,16 +10,19 @@
 #[path = "../framework.rs"]
 mod framework;
 
-use zerocopy::{AsBytes, FromBytes};
+use bytemuck::{Pod, Zeroable};
 
 use wgpu::vertex_attr_array;
 
 #[repr(C)]
-#[derive(Clone, Copy, AsBytes, FromBytes)]
+#[derive(Clone, Copy)]
 struct Vertex {
     _pos: [f32; 2],
     _color: [f32; 4],
 }
+
+unsafe impl Pod for Vertex {}
+unsafe impl Zeroable for Vertex {}
 
 struct Example {
     vs_module: wgpu::ShaderModule,
@@ -157,8 +160,10 @@ impl framework::Example for Example {
             });
         }
 
-        let vertex_buffer =
-            device.create_buffer_with_data(vertex_data.as_bytes(), wgpu::BufferUsage::VERTEX);
+        let vertex_buffer = device.create_buffer_with_data(
+            bytemuck::cast_slice(&vertex_data),
+            wgpu::BufferUsage::VERTEX,
+        );
         let vertex_count = vertex_data.len() as u32;
 
         let this = Example {
