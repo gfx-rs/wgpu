@@ -76,7 +76,12 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
-        format: wgpu::TextureFormat::Bgra8Unorm,
+        // TODO: Allow srgb unconditionally
+        format: if cfg!(target_arch = "wasm32") {
+            wgpu::TextureFormat::Bgra8Unorm
+        } else {
+            wgpu::TextureFormat::Bgra8UnormSrgb
+        },
         width: size.width,
         height: size.height,
         present_mode: wgpu::PresentMode::Mailbox,
