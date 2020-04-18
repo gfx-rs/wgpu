@@ -500,6 +500,12 @@ pub fn map_buffer_state(usage: wgt::BufferUsage) -> hal::buffer::State {
     use wgt::BufferUsage as W;
 
     let mut access = A::empty();
+    if usage.contains(W::MAP_READ) {
+        access |= A::HOST_READ;
+    }
+    if usage.contains(W::MAP_WRITE) {
+        access |= A::HOST_WRITE;
+    }
     if usage.contains(W::COPY_SRC) {
         access |= A::TRANSFER_READ;
     }
