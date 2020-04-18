@@ -1,5 +1,0 @@
-IndentWidth: 4
-
-# Reduce left indentation for nested structs
-AlignOperands: false
-AlignAfterOpenBracket: DontAlign
