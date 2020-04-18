@@ -9,19 +9,29 @@ on:
 jobs:
   build:
     runs-on: ${{ matrix.os }}
+    env:
+      RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
     strategy:
       matrix:
         os: [macos-10.15, ubuntu-18.04, windows-2019]
+        wasm: [true, false]
         include:
           - os: macos-10.15
-            CHECK_COMMAND: cargo check
-            TEST_COMMAND: cargo test --no-run
+            wasm: false
+            CHECK_COMMAND: cargo check --all-targets
+            TEST_COMMAND: cargo test --all-targets --no-run
           - os: ubuntu-18.04
-            CHECK_COMMAND: cargo check
-            TEST_COMMAND: cargo test --no-run
+            wasm: false
+            CHECK_COMMAND: cargo check --all-targets
+            TEST_COMMAND: cargo test --all-targets --no-run
           - os: windows-2019
-            CHECK_COMMAND: rustup default stable-msvc; cargo check
-            TEST_COMMAND: rustup default stable-msvc; cargo test --no-run
+            wasm: false
+            CHECK_COMMAND: rustup default stable-msvc && cargo check --all-targets
+            TEST_COMMAND: rustup default stable-msvc && cargo test --all-targets --no-run
+          - wasm: true
+            CHECK_COMMAND: rustup target add wasm32-unknown-unknown && cargo check --all-targets --target=wasm32-unknown-unknown
+            TEST_COMMAND: rustup target add wasm32-unknown-unknown && cargo test --all-targets --no-run --target=wasm32-unknown-unknown
+            RUSTFLAGS: --cfg=web_sys_unstable_apis
     steps:
     - uses: actions/checkout@v2
     - name: cargo check
