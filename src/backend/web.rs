@@ -63,12 +63,12 @@ pub(crate) async fn request_device_and_queue(
 ) -> (DeviceId, QueueId) {
     let device_promise = match desc {
         Some(d) => {
-            let mut mapped_descriptor = web_sys::GpuDeviceDescriptor::new();
-            // TODO: Extensions
+            let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
+            // TODO: label, extensions
             let mut mapped_limits = web_sys::GpuLimits::new();
             mapped_limits.max_bind_groups(d.limits.max_bind_groups);
-            mapped_descriptor.limits(&mapped_limits);
-            adapter.request_device_with_descriptor(&mapped_descriptor)
+            mapped_desc.limits(&mapped_limits);
+            adapter.request_device_with_descriptor(&mapped_desc)
         }
         None => adapter.request_device(),
     };
@@ -82,6 +82,7 @@ pub(crate) async fn request_device_and_queue(
 
 pub(crate) fn create_shader_module(device: &DeviceId, spv: &[u32]) -> ShaderModuleId {
     let desc = web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(spv));
+    // TODO: label
     device.create_shader_module(&desc)
 }
 
@@ -150,7 +151,10 @@ pub(crate) fn create_bind_group_layout(
         })
         .collect::<js_sys::Array>();
 
-    let mapped_desc = web_sys::GpuBindGroupLayoutDescriptor::new(&mapped_bindings);
+    let mut mapped_desc = web_sys::GpuBindGroupLayoutDescriptor::new(&mapped_bindings);
+    if let Some(label) = desc.label {
+        mapped_desc.label(label);
+    }
     device.create_bind_group_layout(&mapped_desc)
 }
 
@@ -179,7 +183,10 @@ pub(crate) fn create_bind_group(device: &DeviceId, desc: &BindGroupDescriptor) -
         })
         .collect::<js_sys::Array>();
 
-    let mapped_desc = web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &desc.layout.id);
+    let mut mapped_desc = web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &desc.layout.id);
+    if let Some(label) = desc.label {
+        mapped_desc.label(label);
+    }
     device.create_bind_group(&mapped_desc)
 }
 
@@ -193,6 +200,7 @@ pub(crate) fn create_pipeline_layout(
         .map(|bgl| bgl.id.clone())
         .collect::<js_sys::Array>();
     let mapped_desc = web_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
+    // TODO: label
     device.create_pipeline_layout(&mapped_desc)
 }
 
@@ -591,6 +599,8 @@ pub(crate) fn create_render_pipeline(
         &mapped_vertex_stage,
     );
 
+    // TODO: label
+
     if let Some(ref frag) = desc.fragment_stage {
         mapped_desc.fragment_stage(&map_stage_descriptor(frag));
     }
@@ -618,7 +628,7 @@ pub(crate) fn create_compute_pipeline(
     let mapped_compute_stage = map_stage_descriptor(&desc.compute_stage);
     let mapped_desc =
         web_sys::GpuComputePipelineDescriptor::new(&desc.layout.id, &mapped_compute_stage);
-
+    // TODO: label
     device.create_compute_pipeline(&mapped_desc)
 }
 
@@ -633,7 +643,10 @@ pub(crate) fn device_create_buffer_mapped<'a>(
     device: &DeviceId,
     desc: &BufferDescriptor,
 ) -> crate::CreateBufferMapped<'a> {
-    let mapped_desc = web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+    let mut mapped_desc = web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+    if let Some(label) = desc.label {
+        mapped_desc.label(label);
+    }
     unsafe {
         let pair = device.create_buffer_mapped(&mapped_desc);
         let id = pair.get(0).into();
@@ -690,7 +703,10 @@ pub(crate) fn buffer_drop(_buffer: &BufferId) {
 }
 
 pub(crate) fn device_create_buffer(device: &DeviceId, desc: &BufferDescriptor) -> crate::Buffer {
-    let mapped_desc = web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+    let mut mapped_desc = web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
+    if let Some(label) = desc.label {
+        mapped_desc.label(label);
+    }
     crate::Buffer {
         id: device.create_buffer(&mapped_desc),
         detail: (),
@@ -703,6 +719,9 @@ pub(crate) fn device_create_texture(device: &DeviceId, desc: &TextureDescriptor)
         &map_extent_3d(desc.size),
         desc.usage.bits(),
     );
+    if let Some(label) = desc.label {
+        mapped_desc.label(label);
+    }
     mapped_desc.dimension(map_texture_dimension(desc.dimension));
     mapped_desc.mip_level_count(desc.mip_level_count);
     mapped_desc.sample_count(desc.sample_count);
@@ -711,6 +730,7 @@ pub(crate) fn device_create_texture(device: &DeviceId, desc: &TextureDescriptor)
 
 pub(crate) fn device_create_sampler(device: &DeviceId, desc: &SamplerDescriptor) -> SamplerId {
     let mut mapped_desc = web_sys::GpuSamplerDescriptor::new();
+    // TODO: label
     mapped_desc.address_mode_u(map_address_mode(desc.address_mode_u));
     mapped_desc.address_mode_v(map_address_mode(desc.address_mode_v));
     mapped_desc.address_mode_w(map_address_mode(desc.address_mode_w));
@@ -727,9 +747,12 @@ pub(crate) fn device_create_sampler(device: &DeviceId, desc: &SamplerDescriptor)
 
 pub(crate) fn create_command_encoder(
     device: &DeviceId,
-    _desc: &CommandEncoderDescriptor,
+    desc: &CommandEncoderDescriptor,
 ) -> CommandEncoderId {
-    let mapped_desc = web_sys::GpuCommandEncoderDescriptor::new();
+    let mut mapped_desc = web_sys::GpuCommandEncoderDescriptor::new();
+    if let Some(label) = desc.label {
+        mapped_desc.label(label);
+    }
     device.create_command_encoder_with_descriptor(&mapped_desc)
 }
 
@@ -790,7 +813,10 @@ pub(crate) fn command_encoder_copy_texture_to_texture(
 }
 
 pub(crate) fn begin_compute_pass(command_encoder: &CommandEncoderId) -> ComputePassId {
-    let mapped_desc = web_sys::GpuComputePassDescriptor::new();
+    let mut mapped_desc = web_sys::GpuComputePassDescriptor::new();
+    if let Some(ref label) = command_encoder.label() {
+        mapped_desc.label(label);
+    }
     command_encoder.begin_compute_pass_with_descriptor(&mapped_desc)
 }
 
@@ -833,7 +859,10 @@ pub(crate) fn compute_pass_end_pass(compute_pass: &ComputePassId) {
 }
 
 pub(crate) fn command_encoder_finish(command_encoder: &CommandEncoderId) -> CommandBufferId {
-    let mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
+    let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
+    if let Some(ref label) = command_encoder.label() {
+        mapped_desc.label(label);
+    }
     command_encoder.finish_with_descriptor(&mapped_desc)
 }
 
@@ -996,7 +1025,9 @@ pub(crate) fn command_encoder_begin_render_pass<'a>(
         })
         .collect::<js_sys::Array>();
 
-    let mut mapped = web_sys::GpuRenderPassDescriptor::new(&mapped_color_attachments);
+    let mut mapped_desc = web_sys::GpuRenderPassDescriptor::new(&mapped_color_attachments);
+
+    // TODO: label
 
     if let Some(dsa) = &desc.depth_stencil_attachment {
         let mapped_depth_stencil_attachment =
@@ -1014,10 +1045,10 @@ pub(crate) fn command_encoder_begin_render_pass<'a>(
                 map_store_op(dsa.stencil_store_op),
             );
 
-        mapped.depth_stencil_attachment(&mapped_depth_stencil_attachment);
+        mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
     }
 
-    command_encoder.begin_render_pass(&mapped)
+    command_encoder.begin_render_pass(&mapped_desc)
 }
 
 pub(crate) fn render_pass_set_pipeline(
@@ -1154,6 +1185,7 @@ pub(crate) fn texture_create_view(
             mapped_desc.dimension(map_texture_view_dimension(d.dimension));
             mapped_desc.format(map_texture_format(d.format));
             mapped_desc.mip_level_count(d.level_count);
+            // TODO: label
             texture.create_view_with_descriptor(&mapped_desc)
         }
         None => texture.create_view(),
