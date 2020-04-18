@@ -554,7 +554,7 @@ pub fn map_texture_state(
         access |= A::SHADER_READ;
     }
     if usage.contains(W::STORAGE) {
-        access |= A::SHADER_WRITE;
+        access |= A::SHADER_READ | A::SHADER_WRITE;
     }
     if usage.contains(W::OUTPUT_ATTACHMENT) {
         //TODO: read-only attachments
