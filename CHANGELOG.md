@@ -1,5 +1,9 @@
 # Change Log
 
+## v0.5.3 (18-04-2020)
+  - fix reading access to storage textures
+  - another fix to layout transitions for swapchain images
+
 ## v0.5.2 (15-04-2020)
   - fix read-only storage flags
   - fix pipeline layout life time

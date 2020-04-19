@@ -500,6 +500,12 @@ pub fn map_buffer_state(usage: wgt::BufferUsage) -> hal::buffer::State {
     use wgt::BufferUsage as W;
 
     let mut access = A::empty();
+    if usage.contains(W::MAP_READ) {
+        access |= A::HOST_READ;
+    }
+    if usage.contains(W::MAP_WRITE) {
+        access |= A::HOST_WRITE;
+    }
     if usage.contains(W::COPY_SRC) {
         access |= A::TRANSFER_READ;
     }
@@ -554,7 +560,7 @@ pub fn map_texture_state(
         access |= A::SHADER_READ;
     }
     if usage.contains(W::STORAGE) {
-        access |= A::SHADER_WRITE;
+        access |= A::SHADER_READ | A::SHADER_WRITE;
     }
     if usage.contains(W::OUTPUT_ATTACHMENT) {
         //TODO: read-only attachments
