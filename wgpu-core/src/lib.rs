@@ -26,7 +26,7 @@ pub mod backend {
 
 pub mod binding_model;
 pub mod command;
-pub mod conv;
+mod conv;
 pub mod device;
 pub mod hub;
 pub mod id;
@@ -35,7 +35,7 @@ pub mod pipeline;
 pub mod power;
 pub mod resource;
 pub mod swap_chain;
-pub mod track;
+mod track;
 
 pub use hal::pso::read_spirv;
 

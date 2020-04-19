@@ -7,6 +7,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id::{BufferId, CommandEncoderId, TextureId},
+    resource::{BufferUse, TextureUse},
 };
 
 use hal::command::CommandBuffer as _;
@@ -92,16 +93,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_buffer, src_pending) =
             cmb.trackers
                 .buffers
-                .use_replace(&*buffer_guard, source, (), BufferUsage::COPY_SRC);
+                .use_replace(&*buffer_guard, source, (), BufferUse::COPY_SRC);
         assert!(src_buffer.usage.contains(BufferUsage::COPY_SRC));
         barriers.extend(src_pending.map(|pending| pending.into_hal(src_buffer)));
 
-        let (dst_buffer, dst_pending) = cmb.trackers.buffers.use_replace(
-            &*buffer_guard,
-            destination,
-            (),
-            BufferUsage::COPY_DST,
-        );
+        let (dst_buffer, dst_pending) =
+            cmb.trackers
+                .buffers
+                .use_replace(&*buffer_guard, destination, (), BufferUse::COPY_DST);
         assert!(dst_buffer.usage.contains(BufferUsage::COPY_DST));
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_buffer)));
 
@@ -140,7 +139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &*buffer_guard,
             source.buffer,
             (),
-            BufferUsage::COPY_SRC,
+            BufferUse::COPY_SRC,
         );
         assert!(src_buffer.usage.contains(BufferUsage::COPY_SRC));
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
@@ -149,7 +148,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &*texture_guard,
             destination.texture,
             destination.to_selector(aspects),
-            TextureUsage::COPY_DST,
+            TextureUse::COPY_DST,
         );
         assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
@@ -204,7 +203,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &*texture_guard,
             source.texture,
             source.to_selector(aspects),
-            TextureUsage::COPY_SRC,
+            TextureUse::COPY_SRC,
         );
         assert!(src_texture.usage.contains(TextureUsage::COPY_SRC));
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_texture));
@@ -213,7 +212,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &*buffer_guard,
             destination.buffer,
             (),
-            BufferUsage::COPY_DST,
+            BufferUse::COPY_DST,
         );
         assert!(dst_buffer.usage.contains(BufferUsage::COPY_DST));
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
@@ -273,7 +272,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &*texture_guard,
             source.texture,
             source.to_selector(aspects),
-            TextureUsage::COPY_SRC,
+            TextureUse::COPY_SRC,
         );
         assert!(src_texture.usage.contains(TextureUsage::COPY_SRC));
         barriers.extend(src_pending.map(|pending| pending.into_hal(src_texture)));
@@ -282,7 +281,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &*texture_guard,
             destination.texture,
             destination.to_selector(aspects),
-            TextureUsage::COPY_DST,
+            TextureUse::COPY_DST,
         );
         assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
