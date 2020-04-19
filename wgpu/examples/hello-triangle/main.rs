@@ -144,7 +144,7 @@ fn main() {
     {
         env_logger::init();
         // Temporarily avoid srgb formats for the swapchain on the web
-        futures::executor::block_on(run(event_loop, window, wgpu::TextureFormat::Bgra8Unorm));
+        futures::executor::block_on(run(event_loop, window, wgpu::TextureFormat::Bgra8UnormSrgb));
     }
     #[cfg(target_arch = "wasm32")]
     {
@@ -163,7 +163,7 @@ fn main() {
         wasm_bindgen_futures::spawn_local(run(
             event_loop,
             window,
-            wgpu::TextureFormat::Bgra8UnormSrgb,
+            wgpu::TextureFormat::Bgra8Unorm,
         ));
     }
 }
