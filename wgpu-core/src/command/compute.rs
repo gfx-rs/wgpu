@@ -10,6 +10,7 @@ use crate::{
     device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
+    resource::BufferUse,
 };
 
 use hal::command::CommandBuffer as _;
@@ -228,7 +229,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &*buffer_guard,
                         buffer_id,
                         (),
-                        BufferUsage::INDIRECT,
+                        BufferUse::INDIRECT,
                     );
                     assert!(src_buffer.usage.contains(BufferUsage::INDIRECT));
 

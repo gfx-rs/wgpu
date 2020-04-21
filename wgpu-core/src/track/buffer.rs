@@ -3,18 +3,16 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{PendingTransition, ResourceState, Unit};
-use crate::id::BufferId;
-
-use wgt::BufferUsage;
+use crate::{id::BufferId, resource::BufferUse};
 
 //TODO: store `hal::buffer::State` here to avoid extra conversions
-pub type BufferState = Unit<BufferUsage>;
+pub(crate) type BufferState = Unit<BufferUse>;
 
 impl PendingTransition<BufferState> {
-    fn collapse(self) -> Result<BufferUsage, Self> {
+    fn collapse(self) -> Result<BufferUse, Self> {
         if self.usage.start.is_empty()
             || self.usage.start == self.usage.end
-            || !BufferUsage::WRITE_ALL.intersects(self.usage.start | self.usage.end)
+            || !BufferUse::WRITE_ALL.intersects(self.usage.start | self.usage.end)
         {
             Ok(self.usage.start | self.usage.end)
         } else {
@@ -27,13 +25,13 @@ impl Default for BufferState {
     fn default() -> Self {
         BufferState {
             first: None,
-            last: BufferUsage::empty(),
+            last: BufferUse::empty(),
         }
     }
 }
 
 impl BufferState {
-    pub fn with_usage(usage: BufferUsage) -> Self {
+    pub fn with_usage(usage: BufferUse) -> Self {
         Unit::new(usage)
     }
 }
@@ -41,7 +39,7 @@ impl BufferState {
 impl ResourceState for BufferState {
     type Id = BufferId;
     type Selector = ();
-    type Usage = BufferUsage;
+    type Usage = BufferUse;
 
     fn query(&self, _selector: Self::Selector) -> Option<Self::Usage> {
         Some(self.last)
@@ -55,7 +53,7 @@ impl ResourceState for BufferState {
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
-        if old != usage || !BufferUsage::ORDERED.contains(usage) {
+        if old != usage || !BufferUse::ORDERED.contains(usage) {
             let pending = PendingTransition {
                 id,
                 selector: (),
@@ -89,7 +87,7 @@ impl ResourceState for BufferState {
     ) -> Result<(), PendingTransition<Self>> {
         let old = self.last;
         let new = other.port();
-        if old == new && BufferUsage::ORDERED.contains(new) {
+        if old == new && BufferUse::ORDERED.contains(new) {
             if output.is_some() && self.first.is_none() {
                 self.first = Some(old);
             }
@@ -131,64 +129,64 @@ mod test {
     fn change_extend() {
         let mut bs = Unit {
             first: None,
-            last: BufferUsage::INDEX,
+            last: BufferUse::INDEX,
         };
         let id = Id::default();
         assert_eq!(
-            bs.change(id, (), BufferUsage::STORAGE, None),
+            bs.change(id, (), BufferUse::STORAGE_STORE, None),
             Err(PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUsage::INDEX..BufferUsage::STORAGE,
+                usage: BufferUse::INDEX..BufferUse::STORAGE_STORE,
             }),
         );
-        bs.change(id, (), BufferUsage::VERTEX, None).unwrap();
-        bs.change(id, (), BufferUsage::INDEX, None).unwrap();
-        assert_eq!(bs, Unit::new(BufferUsage::VERTEX | BufferUsage::INDEX));
+        bs.change(id, (), BufferUse::VERTEX, None).unwrap();
+        bs.change(id, (), BufferUse::INDEX, None).unwrap();
+        assert_eq!(bs, Unit::new(BufferUse::VERTEX | BufferUse::INDEX));
     }
 
     #[test]
     fn change_replace() {
         let mut bs = Unit {
             first: None,
-            last: BufferUsage::STORAGE,
+            last: BufferUse::STORAGE_STORE,
         };
         let id = Id::default();
         let mut list = Vec::new();
-        bs.change(id, (), BufferUsage::VERTEX, Some(&mut list))
+        bs.change(id, (), BufferUse::VERTEX, Some(&mut list))
             .unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUsage::STORAGE..BufferUsage::VERTEX,
+                usage: BufferUse::STORAGE_STORE..BufferUse::VERTEX,
             }],
         );
         assert_eq!(
             bs,
             Unit {
-                first: Some(BufferUsage::STORAGE),
-                last: BufferUsage::VERTEX,
+                first: Some(BufferUse::STORAGE_STORE),
+                last: BufferUse::VERTEX,
             }
         );
 
         list.clear();
-        bs.change(id, (), BufferUsage::STORAGE, Some(&mut list))
+        bs.change(id, (), BufferUse::STORAGE_STORE, Some(&mut list))
             .unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {
                 id,
                 selector: (),
-                usage: BufferUsage::VERTEX..BufferUsage::STORAGE,
+                usage: BufferUse::VERTEX..BufferUse::STORAGE_STORE,
             }],
         );
         assert_eq!(
             bs,
             Unit {
-                first: Some(BufferUsage::STORAGE),
-                last: BufferUsage::STORAGE,
+                first: Some(BufferUse::STORAGE_STORE),
+                last: BufferUse::STORAGE_STORE,
             }
         );
     }
