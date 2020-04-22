@@ -12,6 +12,7 @@ jobs:
     env:
       RUSTFLAGS: ${{ matrix.RUSTFLAGS }}
     strategy:
+      fail-fast: false
       matrix:
         os: [macos-10.15, ubuntu-18.04, windows-2019]
         wasm: [true, false]
