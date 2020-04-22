@@ -242,28 +242,96 @@ pub struct Binding<'a> {
     pub resource: BindingResource<'a>,
 }
 
-/// Specific type of a binding..
+/// Specific type of a binding.
+/// WebGPU spec: https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum BindingType {
+    /// A buffer for uniform values.
+    ///
+    /// Example GLSL syntax:
+    /// ```
+    /// layout(std140, binding = 0)
+    /// uniform Globals {
+    ///     vec2 aUniform;
+    ///     vec2 anotherUniform;
+    /// };
+    /// ```
     UniformBuffer {
+        /// Indicates that the binding has a dynamic offset.
+        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
         dynamic: bool,
     },
+    /// A storage buffer.
+    ///
+    /// Example GLSL syntax:
+    /// ```
+    /// layout (set=0, binding=0) buffer myStorageBuffer {
+    ///     vec4 myElement[];
+    /// };
+    /// ```
     StorageBuffer {
+        /// Indicates that the binding has a dynamic offset.
+        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
         dynamic: bool,
+        /// The buffer can only be read in the shader and it must be annotated with `readonly`.
+        ///
+        /// Example GLSL syntax:
+        /// ```
+        /// layout (set=0, binding=0) readonly buffer myStorageBuffer {
+        ///     vec4 myElement[];
+        /// };
+        /// ```
         readonly: bool,
     },
+    /// A sampler that can be used to sample a texture.
+    ///
+    /// Example GLSL syntax:
+    /// ```
+    /// layout(binding = 0)
+    /// uniform sampler s;
+    /// ```
     Sampler {
+        /// Use as a comparison sampler instead of a normal sampler.
+        /// For more info take a look at the analogous functionality in OpenGL: https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode.
         comparison: bool,
     },
+    /// A texture.
+    ///
+    /// Example GLSL syntax:
+    /// ```
+    /// layout(binding = 0)
+    /// uniform texture2D t;
+    /// ```
     SampledTexture {
+        /// Dimension of the texture view that is going to be sampled.
         dimension: TextureViewDimension,
+        /// Component type of the texture.
+        /// This must be compatible with the format of the texture.
         component_type: TextureComponentType,
+        /// True if the texture has a sample count greater than 1.
         multisampled: bool,
     },
+    /// A storage texture.
+    /// Example GLSL syntax:
+    /// ```
+    /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
+    /// ```
+    /// Note that the texture format must be specified in the shader as well.
+    /// A list of valid formats can be found in the specification here: https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers
     StorageTexture {
+        /// Dimension of the texture view that is going to be sampled.
         dimension: TextureViewDimension,
+        /// Component type of the texture.
+        /// This must be compatible with the format of the texture.
         component_type: TextureComponentType,
+        /// Format of the texture.
         format: TextureFormat,
+        /// The texture can only be read in the shader and it must be annotated with `readonly`.
+        ///
+        /// Example GLSL syntax:
+        /// ```
+        /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
+        /// ```
         readonly: bool,
     },
 }
