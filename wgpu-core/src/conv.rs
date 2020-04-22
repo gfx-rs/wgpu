@@ -436,10 +436,6 @@ fn checked_u32_as_u16(value: u32) -> u16 {
     value as u16
 }
 
-fn is_power_or_two(val: u32) -> bool {
-    val != 0 && (val & (val - 1)) == 0
-}
-
 pub fn map_texture_dimension_size(
     dimension: wgt::TextureDimension,
     Extent3d {
@@ -459,7 +455,7 @@ pub fn map_texture_dimension_size(
         }
         D2 => {
             assert!(
-                sample_size <= 32 && is_power_or_two(sample_size),
+                sample_size <= 32 && sample_size & (sample_size - 1) == 0,
                 "Invalid sample_count of {}",
                 sample_size
             );

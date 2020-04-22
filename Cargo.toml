@@ -1,7 +1,31 @@
-[workspace]
-members = [
-	"wgpu-core",
-    "wgpu-native",
-    "wgpu-remote",
-    "wgpu-types",
+[package]
+name = "wgpu_bindings"
+version = "0.1.0"
+authors = [
+	"Dzmitry Malyshau <kvark@mozilla.com>",
+	"Joshua Groves <josh@joshgroves.com>",
 ]
+edition = "2018"
+license = "MPL-2.0"
+publish = false
+
+[lib]
+
+[features]
+default = []
+
+[dependencies.wgc]
+path = "../wgpu/wgpu-core"
+package = "wgpu-core"
+version = "0.5"
+features = ["serde"]
+
+[dependencies.wgt]
+path = "../wgpu/wgpu-types"
+package = "wgpu-types"
+version = "0.5"
+features = ["serde"]
+
+[dependencies]
+log = "0.4"
+parking_lot = { version = "0.10" }

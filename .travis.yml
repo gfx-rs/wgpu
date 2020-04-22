@@ -52,23 +52,11 @@ matrix:
         - TARGET=aarch64-apple-ios
         - BUILD_COMMAND=clippy
 
-addons:
-  apt:
-    packages:
-    - cmake
-    - libglfw3-dev
-  homebrew:
-    update: true
-    packages:
-    - cmake
-    - glfw3
-
 branches:
   except:
   - staging.tmp
 
 before_install:
-- if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
 - if [[ $TRAVIS_RUST_VERSION != "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then rustup default stable-msvc; fi
 - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then rustup default nightly-msvc; fi
 
@@ -77,37 +65,5 @@ before_script:
 
 script:
   - cargo test
-  # TODO: enable GL backend
   - (cd wgpu-core && cargo $BUILD_COMMAND --all-features)
-  - (cd wgpu-native && cargo $BUILD_COMMAND)
-  - (cd wgpu-remote && cargo $BUILD_COMMAND --all-features)
-  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then (cd wgpu-native && cargo $BUILD_COMMAND --features vulkan-portability); fi
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then cargo $BUILD_COMMAND --release; fi
-  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]]; then cargo +nightly install cbindgen; fi
-  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME == "windows" ]]; then
-      wget -nc -O glfw.zip https://github.com/glfw/glfw/archive/3.3.zip &&
-      7z x glfw.zip -oglfw &&
-      cd glfw/glfw-3.3 &&
-      export GLFW3_INCLUDE_DIR=`pwd`/include &&
-      export GLFW3_INSTALL_DIR=`pwd`/install &&
-      cmake . -DCMAKE_INSTALL_PREFIX=$GLFW3_INSTALL_DIR -DCMAKE_GENERATOR_PLATFORM=x64 &&
-      cmake --build . --target install &&
-      cd ../.. &&
-      export CMAKE_PREFIX_PATH=$GLFW3_INSTALL_DIR &&
-      make example-compute example-triangle VERBOSE=1;
-    fi
-  - if [[ $TRAVIS_RUST_VERSION == "nightly" ]] && [[ $TRAVIS_OS_NAME != "windows" ]]; then make VERBOSE=1; fi
-  - if [[ $TRAVIS_RUST_VERSION == "stable" ]]; then make package; fi
-
-deploy:
-  provider: releases
-  api_key:
-    secure: GcBxH6M6X9UU+5QBR4nEdNbXDfGpCrggZkPaztfK1vGAjmOyvHnK6P3M00C5Pf0nLmyWhGT5P0I4Rpy0z8WyQLOaHNWUuRGlRqlehWiJEmi6MpS2O8noJEfbLut9vYPpl0sdrtFrU5e0F77fWm5UWYQLMaeqXj66xv4lVxZp/JkXwhChTpU0PRJtSBuYiLFzbwz9CEjsvBXjw5ZzxmGTHnbw5p19B63yy3mORV91QQrRfCAHMg9z9zthpoZHEGqXXTIFuvh1DZqC5SHhUbt865MHMJS/2IaPH5zA/fOzZCCk6IvbNKLJ/ghE0zRJjHeVU4vjxNMxrFEBKVFCmQB7CpTqGCLy2qTB0tnSmNzqY82xUehl23jZ0LxnKODzCjx4hgfskWnr5p7Pv1Ql9UcAZXDV8UG+7JL34BQY4yyvknpTxK4MTXN9ZNahKJv+zSB9jDuLnB6uVbNV1hwFOUNm7KyAWA7XjFN7k8p4h678Xfg+EUWYxtV1auOItuXdxvzMWgDUDGmk74FdUWxy+GVzjboAmBMVRW/KMQFp4INIaS0gPRPK/jodLqrrZ+1otgYvMM/CsnOh4GLl86RTewuyid2jNnUeXepHPuU+JsDLLCJfyYoAfSxDCdQEuqNLAvpFPJJrBcWREVoqXWVUlWmwhEIWbLRUi2l5AhHnu+PfVhE=
-  skip_cleanup: true
-  overwrite: true
-  file_glob: true
-  file: dist/wgpu-*.zip
-  on:
-    repo: gfx-rs/wgpu
-    tags: true
-    condition: $TRAVIS_RUST_VERSION == "stable" && $TRAVIS_BRANCH == $TRAVIS_TAG && ${TRAVIS_TAG::1} == "v"

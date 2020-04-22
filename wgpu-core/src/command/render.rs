@@ -30,7 +30,7 @@ use wgt::{
     TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
-use std::{borrow::Borrow, collections::hash_map::Entry, iter, mem, ops::Range, slice};
+use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, mem, ops::Range, slice};
 
 pub type RenderPassColorAttachmentDescriptor =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
@@ -175,7 +175,7 @@ impl OptionalState {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 enum DrawError {
     MissingBlendColor,
     MissingStencilReference,
@@ -185,6 +185,17 @@ enum DrawError {
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
+}
+
+impl fmt::Debug for DrawError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            DrawError::MissingBlendColor => write!(f, "MissingBlendColor. A blend color is required to be set using RenderPass::set_blend_color."),
+            DrawError::MissingStencilReference => write!(f, "MissingStencilReference. A stencil reference is required to be set using RenderPass::set_stencil_reference."),
+            DrawError::MissingPipeline => write!(f, "MissingPipeline. You must first set the render pipeline using RenderPass::set_pipeline."),
+            DrawError::IncompatibleBindGroup { index } => write!(f, "IncompatibleBindGroup. The current render pipeline has a layout which is incompatible with a currently set bind group. They first differ at entry index {}.", index),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -979,7 +990,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDEX));
+                    assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
                     let end = if size != 0 {
                         offset + size
@@ -1012,7 +1023,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::VERTEX)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::VERTEX));
+                    assert!(buffer.usage.contains(BufferUsage::VERTEX), "An invalid setVertexBuffer call has been made. The buffer usage is {:?} which does not contain required usage VERTEX", buffer.usage);
                     let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
                     state
                         .vertex
@@ -1136,7 +1147,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDIRECT)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDIRECT));
+                    assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
 
                     unsafe {
                         raw.draw_indirect(&buffer.raw, offset, 1, 0);
@@ -1149,7 +1160,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDIRECT)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDIRECT));
+                    assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndexedIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
 
                     unsafe {
                         raw.draw_indexed_indirect(&buffer.raw, offset, 1, 0);

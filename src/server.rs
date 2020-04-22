@@ -4,11 +4,11 @@
 
 use crate::identity::IdentityRecyclerFactory;
 
-use core::{gfx_select, id};
+use wgc::{gfx_select, id};
 
 use std::slice;
 
-pub type Global = core::hub::Global<IdentityRecyclerFactory>;
+pub type Global = wgc::hub::Global<IdentityRecyclerFactory>;
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_new(factory: IdentityRecyclerFactory) -> *mut Global {
@@ -45,14 +45,14 @@ pub extern "C" fn wgpu_server_poll_all_devices(global: &Global, force_wait: bool
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_server_instance_request_adapter(
     global: &Global,
-    desc: &core::instance::RequestAdapterOptions,
+    desc: &wgc::instance::RequestAdapterOptions,
     ids: *const id::AdapterId,
     id_length: usize,
 ) -> i8 {
     let ids = slice::from_raw_parts(ids, id_length);
     match global.pick_adapter(
         desc,
-        core::instance::AdapterInputs::IdSet(ids, |i| i.backend()),
+        wgc::instance::AdapterInputs::IdSet(ids, |i| i.backend()),
     ) {
         Some(id) => ids.iter().position(|&i| i == id).unwrap() as i8,
         None => -1,
@@ -116,10 +116,10 @@ pub extern "C" fn wgpu_server_buffer_map_read(
     buffer_id: id::BufferId,
     start: wgt::BufferAddress,
     size: wgt::BufferAddress,
-    callback: core::device::BufferMapReadCallback,
+    callback: wgc::device::BufferMapReadCallback,
     userdata: *mut u8,
 ) {
-    let operation = core::resource::BufferMapOperation::Read { callback, userdata };
+    let operation = wgc::resource::BufferMapOperation::Read { callback, userdata };
 
     gfx_select!(buffer_id => global.buffer_map_async(
         buffer_id,
@@ -192,8 +192,8 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_buffer(
 pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_buffer(
     global: &Global,
     self_id: id::CommandEncoderId,
-    source: &core::command::TextureCopyView,
-    destination: &core::command::BufferCopyView,
+    source: &wgc::command::TextureCopyView,
+    destination: &wgc::command::BufferCopyView,
     size: wgt::Extent3d,
 ) {
     gfx_select!(self_id => global.command_encoder_copy_texture_to_buffer(self_id, source, destination, size));
@@ -203,8 +203,8 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_buffer(
 pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_texture(
     global: &Global,
     self_id: id::CommandEncoderId,
-    source: &core::command::BufferCopyView,
-    destination: &core::command::TextureCopyView,
+    source: &wgc::command::BufferCopyView,
+    destination: &wgc::command::TextureCopyView,
     size: wgt::Extent3d,
 ) {
     gfx_select!(self_id => global.command_encoder_copy_buffer_to_texture(self_id, source, destination, size));
@@ -214,8 +214,8 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_texture(
 pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_texture(
     global: &Global,
     self_id: id::CommandEncoderId,
-    source: &core::command::TextureCopyView,
-    destination: &core::command::TextureCopyView,
+    source: &wgc::command::TextureCopyView,
+    destination: &wgc::command::TextureCopyView,
     size: wgt::Extent3d,
 ) {
     gfx_select!(self_id => global.command_encoder_copy_texture_to_texture(self_id, source, destination, size));
@@ -272,7 +272,7 @@ pub unsafe extern "C" fn wgpu_server_queue_submit(
 pub extern "C" fn wgpu_server_device_create_bind_group_layout(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::binding_model::BindGroupLayoutDescriptor,
+    desc: &wgc::binding_model::BindGroupLayoutDescriptor,
     new_id: id::BindGroupLayoutId,
 ) {
     gfx_select!(self_id => global.device_create_bind_group_layout(self_id, desc, new_id));
@@ -290,7 +290,7 @@ pub extern "C" fn wgpu_server_bind_group_layout_destroy(
 pub extern "C" fn wgpu_server_device_create_pipeline_layout(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::binding_model::PipelineLayoutDescriptor,
+    desc: &wgc::binding_model::PipelineLayoutDescriptor,
     new_id: id::PipelineLayoutId,
 ) {
     gfx_select!(self_id => global.device_create_pipeline_layout(self_id, desc, new_id));
@@ -308,7 +308,7 @@ pub extern "C" fn wgpu_server_pipeline_layout_destroy(
 pub extern "C" fn wgpu_server_device_create_bind_group(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::binding_model::BindGroupDescriptor,
+    desc: &wgc::binding_model::BindGroupDescriptor,
     new_id: id::BindGroupId,
 ) {
     gfx_select!(self_id => global.device_create_bind_group(self_id, desc, new_id));
@@ -323,7 +323,7 @@ pub extern "C" fn wgpu_server_bind_group_destroy(global: &Global, self_id: id::B
 pub extern "C" fn wgpu_server_device_create_shader_module(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::pipeline::ShaderModuleDescriptor,
+    desc: &wgc::pipeline::ShaderModuleDescriptor,
     new_id: id::ShaderModuleId,
 ) {
     gfx_select!(self_id => global.device_create_shader_module(self_id, desc, new_id));
@@ -338,7 +338,7 @@ pub extern "C" fn wgpu_server_shader_module_destroy(global: &Global, self_id: id
 pub extern "C" fn wgpu_server_device_create_compute_pipeline(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::pipeline::ComputePipelineDescriptor,
+    desc: &wgc::pipeline::ComputePipelineDescriptor,
     new_id: id::ComputePipelineId,
 ) {
     gfx_select!(self_id => global.device_create_compute_pipeline(self_id, desc, new_id));
@@ -356,7 +356,7 @@ pub extern "C" fn wgpu_server_compute_pipeline_destroy(
 pub extern "C" fn wgpu_server_device_create_render_pipeline(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &core::pipeline::RenderPipelineDescriptor,
+    desc: &wgc::pipeline::RenderPipelineDescriptor,
     new_id: id::RenderPipelineId,
 ) {
     gfx_select!(self_id => global.device_create_render_pipeline(self_id, desc, new_id));

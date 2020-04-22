@@ -2,11 +2,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use core::{hub::IdentityManager, id};
+use wgc::{hub::IdentityManager, id};
 
 use wgt::Backend;
 
-pub use core::command::{compute_ffi::*, render_ffi::*};
+pub use wgc::command::{compute_ffi::*, render_ffi::*};
 
 use parking_lot::Mutex;
 
@@ -275,26 +275,26 @@ pub extern "C" fn wgpu_client_kill_encoder_id(client: &Client, id: id::CommandEn
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
     encoder_id: id::CommandEncoderId,
-    _desc: Option<&core::command::ComputePassDescriptor>,
-) -> core::command::RawPass {
-    core::command::RawPass::new_compute(encoder_id)
+    _desc: Option<&wgc::command::ComputePassDescriptor>,
+) -> wgc::command::RawPass {
+    wgc::command::RawPass::new_compute(encoder_id)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: core::command::RawPass) {
+pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: wgc::command::RawPass) {
     let _ = pass.into_vec();
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
     encoder_id: id::CommandEncoderId,
-    desc: &core::command::RenderPassDescriptor,
-) -> core::command::RawPass {
-    core::command::RawPass::new_render(encoder_id, desc)
+    desc: &wgc::command::RenderPassDescriptor,
+) -> wgc::command::RawPass {
+    wgc::command::RawPass::new_render(encoder_id, desc)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_render_pass_destroy(pass: core::command::RawPass) {
+pub unsafe extern "C" fn wgpu_render_pass_destroy(pass: wgc::command::RawPass) {
     let _ = pass.into_vec();
 }
 

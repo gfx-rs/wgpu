@@ -5,19 +5,20 @@ autogen_warning = """/* DO NOT MODIFY THIS MANUALLY! This file was generated usi
  * To generate this file:
  *   1. Get the latest cbindgen using `cargo install --force cbindgen`
  *      a. Alternatively, you can clone `https://github.com/eqrion/cbindgen` and use a tagged release
- *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --lockfile Cargo.lock --crate wgpu-remote -o dom/webgpu/ffi/wgpu_ffi_generated.h`
+ *   2. Run `rustup run nightly cbindgen toolkit/library/rust/ --lockfile Cargo.lock --crate wgpu_bindings -o dom/webgpu/ffi/wgpu_ffi_generated.h`
  */
 
-typedef unsigned long long WGPUNonZeroU64;
-typedef unsigned long long WGPUOption_AdapterId;
-typedef unsigned long long WGPUOption_SurfaceId;
-typedef unsigned long long WGPUOption_TextureViewId;
+typedef uint64_t WGPUNonZeroU64;
+typedef uint64_t WGPUOption_AdapterId;
+typedef uint64_t WGPUOption_SurfaceId;
+typedef uint64_t WGPUOption_TextureViewId;
 """
 include_version = true
 braces = "SameLine"
 line_length = 100
 tab_width = 2
 language = "C"
+style = "tag"
 
 [export]
 prefix = "WGPU"
@@ -30,6 +31,10 @@ include = ["wgpu-core", "wgpu-types"]
 extra_bindings = ["wgpu-core", "wgpu-types"]
 
 [fn]
+prefix = "WGPU_INLINE"
+postfix = "WGPU_FUNC"
+args = "Vertical"
+rename_args = "GeckoCase"
 
 [struct]
 derive_eq = true
@@ -37,12 +42,12 @@ derive_eq = true
 [enum]
 prefix_with_name = true
 derive_helper_methods = true
+add_sentinel = true
 
 [macro_expansion]
 bitflags = true
 
 [defines]
-#"target_os = ios" = "WGPU_TARGET_IOS"
-#"target_os = macos" = "WGPU_TARGET_MACOS"
-#"unix" = "WGPU_TARGET_FAMILY_UNIX"
-#"windows" = "WGPU_TARGET_WINDOWS"
+"target_os = windows" = "XP_WIN"
+"target_os = macos" = "XP_MACOSX"
+"target_os = android" = "ANDROID"
