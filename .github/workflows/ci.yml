@@ -60,5 +60,8 @@ jobs:
         toolchain: nightly
         override: true
     - uses: actions/checkout@v2
+    - if: contains(matrix.build_command, 'clippy')
+      run: rustup component add clippy
+    - uses: actions/checkout@v2
     - name: cargo check
       run: ${{ matrix.build_command }}
