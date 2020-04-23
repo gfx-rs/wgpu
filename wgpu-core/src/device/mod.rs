@@ -1105,7 +1105,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             | binding_model::BindingType::SampledTexture
                             | binding_model::BindingType::ReadonlyStorageTexture
                             | binding_model::BindingType::WriteonlyStorageTexture => {
-                                panic!("Mismatched buffer binding type for {:?}. Expected a type of UniformBuffer, StorageBuffer or ReadonlyStorageBuffer but found {:?}", decl, decl.ty)
+                                panic!("Mismatched buffer binding type for {:?}. Expected a type of UniformBuffer, StorageBuffer or ReadonlyStorageBuffer", decl)
                             }
                         };
                         assert_eq!(
@@ -1145,7 +1145,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         match decl.ty {
                             binding_model::BindingType::Sampler
                             | binding_model::BindingType::ComparisonSampler => {}
-                            found => panic!("Mismatched sampler binding type in {:?}. Expected a type of Sampler or ComparisonSampler but found {:?}", decl.ty, found),
+                            _ => panic!("Mismatched sampler binding type in {:?}. Expected a type of Sampler or ComparisonSampler", decl.ty),
                         }
                         let sampler = used
                             .samplers
@@ -1170,7 +1170,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 resource::TextureUse::STORAGE_STORE,
                                 hal::image::Layout::General,
                             ),
-                            found => panic!("Mismatched texture binding type in {:?}. Expected a type of SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture but found {:?}", decl, found),
+                            _ => panic!("Mismatched texture binding type in {:?}. Expected a type of SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture", decl),
                         };
                         let view = used
                             .views
