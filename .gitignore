@@ -12,8 +12,9 @@ Cargo.lock
 # Other
 .DS_Store
 
-# VSCode project
+# IDE/Editor configuration files
 .vscode
+.idea
 
 # Output from capture example
 red.png
