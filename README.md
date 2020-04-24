@@ -35,6 +35,8 @@ cargo run --example hello-compute 1 2 3 4
 
 #### Run Examples on the Web (`wasm32-unknown-unknown`)
 
+Running on the web is still work-in-progress. You may need to enable experimental flags on your browser. Check browser implementation status on [webgpu.io](https://webgpu.io).
+
 To run examples on the `wasm32-unknown-unknown` target, first build the example as usual, then run `wasm-bindgen`:
 
 ```bash
@@ -45,6 +47,27 @@ RUSTFLAGS=--cfg=web_sys_unstable_apis cargo build --target wasm32-unknown-unknow
 # Generate bindings in a `target/generated` directory
 wasm-bindgen --out-dir target/generated --web target/wasm32-unknown-unknown/debug/examples/hello-triangle.wasm
 ```
+
+Create an `index.html` file into `target/generated` directory and add the following code:
+
+```html
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="google" content="notranslate">
+    <title>hello-triangle</title>
+  </head>
+  <body>
+    <script type="module">
+      import init from "./hello-triangle.js";
+      init();
+    </script>
+  </body>
+</html>
+```
+
+Now run a web server locally inside the `target/generated` directory to see the `hello-triangle` in the browser.
 
 ## Friends
 
