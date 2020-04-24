@@ -50,7 +50,7 @@ jobs:
           - os: windows-2019
             name: Windows Nightly
             channel: nightly
-            build_command: rustup default nightly-msvc; cargo clippy
+            build_command: rustup default nightly-msvc; cargo check
     steps:
     - uses: actions/checkout@v2
     - if: matrix.channel == 'nightly'
@@ -59,9 +59,7 @@ jobs:
       with:
         toolchain: nightly
         override: true
-    - uses: actions/checkout@v2
     - if: contains(matrix.build_command, 'clippy')
       run: rustup component add clippy
-    - uses: actions/checkout@v2
     - name: cargo check
       run: ${{ matrix.build_command }}
