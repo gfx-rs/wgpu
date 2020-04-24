@@ -123,7 +123,6 @@ pub extern "C" fn wgpu_server_buffer_map_read(
 
     gfx_select!(buffer_id => global.buffer_map_async(
         buffer_id,
-        wgt::BufferUsage::MAP_READ,
         start .. start + size,
         operation
     ));

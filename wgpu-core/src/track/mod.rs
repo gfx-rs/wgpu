@@ -17,8 +17,8 @@ use std::{
     borrow::Borrow, collections::hash_map::Entry, fmt, marker::PhantomData, ops, vec::Drain,
 };
 
-pub use buffer::BufferState;
-pub use texture::TextureState;
+pub(crate) use buffer::BufferState;
+pub(crate) use texture::TextureState;
 
 /// A single unit of state tracking. It keeps an initial
 /// usage as well as the last/current one, similar to `Range`.
@@ -436,7 +436,7 @@ pub const DUMMY_SELECTOR: () = ();
 
 /// A set of trackers for all relevant resources.
 #[derive(Debug)]
-pub struct TrackerSet {
+pub(crate) struct TrackerSet {
     pub buffers: ResourceTracker<BufferState>,
     pub textures: ResourceTracker<TextureState>,
     pub views: ResourceTracker<PhantomData<id::TextureViewId>>,

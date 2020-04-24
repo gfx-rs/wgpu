@@ -2,13 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model, Features};
-use wgt::{
-    BlendDescriptor, BlendFactor, Color, ColorStateDescriptor, ColorWrite, CompareFunction,
-    CullMode, DepthStencilStateDescriptor, Extent3d, FrontFace, IndexFormat, Origin3d,
-    PrimitiveTopology, RasterizationStateDescriptor, StencilOperation, StencilStateFaceDescriptor,
-    TextureFormat, VertexFormat,
-};
+use crate::{binding_model, resource, Features};
 
 pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
@@ -39,7 +33,7 @@ pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::me
     if usage.contains(W::UNIFORM) {
         hal_usage |= U::UNIFORM;
     }
-    if usage.intersects(W::STORAGE | W::STORAGE_READ) {
+    if usage.contains(W::STORAGE) {
         hal_usage |= U::STORAGE;
     }
     if usage.contains(W::INDIRECT) {
@@ -135,7 +129,7 @@ pub fn map_shader_stage_flags(shader_stage_flags: wgt::ShaderStage) -> hal::pso:
     value
 }
 
-pub fn map_origin(origin: Origin3d) -> hal::image::Offset {
+pub fn map_origin(origin: wgt::Origin3d) -> hal::image::Offset {
     hal::image::Offset {
         x: origin.x as i32,
         y: origin.y as i32,
@@ -143,7 +137,7 @@ pub fn map_origin(origin: Origin3d) -> hal::image::Offset {
     }
 }
 
-pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
+pub fn map_extent(extent: wgt::Extent3d) -> hal::image::Extent {
     hal::image::Extent {
         width: extent.width,
         height: extent.height,
@@ -151,7 +145,7 @@ pub fn map_extent(extent: Extent3d) -> hal::image::Extent {
     }
 }
 
-pub fn map_primitive_topology(primitive_topology: PrimitiveTopology) -> hal::pso::Primitive {
+pub fn map_primitive_topology(primitive_topology: wgt::PrimitiveTopology) -> hal::pso::Primitive {
     use hal::pso::Primitive as H;
     use wgt::PrimitiveTopology as Pt;
     match primitive_topology {
@@ -163,10 +157,10 @@ pub fn map_primitive_topology(primitive_topology: PrimitiveTopology) -> hal::pso
     }
 }
 
-pub fn map_color_state_descriptor(desc: &ColorStateDescriptor) -> hal::pso::ColorBlendDesc {
+pub fn map_color_state_descriptor(desc: &wgt::ColorStateDescriptor) -> hal::pso::ColorBlendDesc {
     let color_mask = desc.write_mask;
-    let blend_state = if desc.color_blend != BlendDescriptor::REPLACE
-        || desc.alpha_blend != BlendDescriptor::REPLACE
+    let blend_state = if desc.color_blend != wgt::BlendDescriptor::REPLACE
+        || desc.alpha_blend != wgt::BlendDescriptor::REPLACE
     {
         Some(hal::pso::BlendState {
             color: map_blend_descriptor(&desc.color_blend),
@@ -181,7 +175,7 @@ pub fn map_color_state_descriptor(desc: &ColorStateDescriptor) -> hal::pso::Colo
     }
 }
 
-fn map_color_write_flags(flags: ColorWrite) -> hal::pso::ColorMask {
+fn map_color_write_flags(flags: wgt::ColorWrite) -> hal::pso::ColorMask {
     use hal::pso::ColorMask as H;
     use wgt::ColorWrite as Cw;
 
@@ -201,7 +195,7 @@ fn map_color_write_flags(flags: ColorWrite) -> hal::pso::ColorMask {
     value
 }
 
-fn map_blend_descriptor(blend_desc: &BlendDescriptor) -> hal::pso::BlendOp {
+fn map_blend_descriptor(blend_desc: &wgt::BlendDescriptor) -> hal::pso::BlendOp {
     use hal::pso::BlendOp as H;
     use wgt::BlendOperation as Bo;
     match blend_desc.operation {
@@ -222,7 +216,7 @@ fn map_blend_descriptor(blend_desc: &BlendDescriptor) -> hal::pso::BlendOp {
     }
 }
 
-fn map_blend_factor(blend_factor: BlendFactor) -> hal::pso::Factor {
+fn map_blend_factor(blend_factor: wgt::BlendFactor) -> hal::pso::Factor {
     use hal::pso::Factor as H;
     use wgt::BlendFactor as Bf;
     match blend_factor {
@@ -243,10 +237,10 @@ fn map_blend_factor(blend_factor: BlendFactor) -> hal::pso::Factor {
 }
 
 pub fn map_depth_stencil_state_descriptor(
-    desc: &DepthStencilStateDescriptor,
+    desc: &wgt::DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
-        depth: if desc.depth_write_enabled || desc.depth_compare != CompareFunction::Always {
+        depth: if desc.depth_write_enabled || desc.depth_compare != wgt::CompareFunction::Always {
             Some(hal::pso::DepthTest {
                 fun: map_compare_function(desc.depth_compare)
                     .expect("DepthStencilStateDescriptor has undefined compare function"),
@@ -258,8 +252,8 @@ pub fn map_depth_stencil_state_descriptor(
         depth_bounds: false, // TODO
         stencil: if desc.stencil_read_mask != !0
             || desc.stencil_write_mask != !0
-            || desc.stencil_front != StencilStateFaceDescriptor::IGNORE
-            || desc.stencil_back != StencilStateFaceDescriptor::IGNORE
+            || desc.stencil_front != wgt::StencilStateFaceDescriptor::IGNORE
+            || desc.stencil_back != wgt::StencilStateFaceDescriptor::IGNORE
         {
             Some(hal::pso::StencilTest {
                 faces: hal::pso::Sided {
@@ -280,7 +274,9 @@ pub fn map_depth_stencil_state_descriptor(
     }
 }
 
-fn map_stencil_face(stencil_state_face_desc: &StencilStateFaceDescriptor) -> hal::pso::StencilFace {
+fn map_stencil_face(
+    stencil_state_face_desc: &wgt::StencilStateFaceDescriptor,
+) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
         fun: map_compare_function(stencil_state_face_desc.compare)
             .expect("StencilStateFaceDescriptor has undefined compare function"),
@@ -290,7 +286,9 @@ fn map_stencil_face(stencil_state_face_desc: &StencilStateFaceDescriptor) -> hal
     }
 }
 
-pub fn map_compare_function(compare_function: CompareFunction) -> Option<hal::pso::Comparison> {
+pub fn map_compare_function(
+    compare_function: wgt::CompareFunction,
+) -> Option<hal::pso::Comparison> {
     use hal::pso::Comparison as H;
     use wgt::CompareFunction as Cf;
     match compare_function {
@@ -306,7 +304,7 @@ pub fn map_compare_function(compare_function: CompareFunction) -> Option<hal::ps
     }
 }
 
-fn map_stencil_operation(stencil_operation: StencilOperation) -> hal::pso::StencilOp {
+fn map_stencil_operation(stencil_operation: wgt::StencilOperation) -> hal::pso::StencilOp {
     use hal::pso::StencilOp as H;
     use wgt::StencilOperation as So;
     match stencil_operation {
@@ -322,7 +320,7 @@ fn map_stencil_operation(stencil_operation: StencilOperation) -> hal::pso::Stenc
 }
 
 pub(crate) fn map_texture_format(
-    texture_format: TextureFormat,
+    texture_format: wgt::TextureFormat,
     features: Features,
 ) -> hal::format::Format {
     use hal::format::Format as H;
@@ -394,7 +392,7 @@ pub(crate) fn map_texture_format(
     }
 }
 
-pub fn map_vertex_format(vertex_format: VertexFormat) -> hal::format::Format {
+pub fn map_vertex_format(vertex_format: wgt::VertexFormat) -> hal::format::Format {
     use hal::format::Format as H;
     use wgt::VertexFormat as Vf;
     match vertex_format {
@@ -436,13 +434,17 @@ fn checked_u32_as_u16(value: u32) -> u16 {
     value as u16
 }
 
+fn is_power_of_two(val: u32) -> bool {
+    val != 0 && (val & (val - 1)) == 0
+}
+
 pub fn map_texture_dimension_size(
     dimension: wgt::TextureDimension,
-    Extent3d {
+    wgt::Extent3d {
         width,
         height,
         depth,
-    }: Extent3d,
+    }: wgt::Extent3d,
     sample_size: u32,
 ) -> hal::image::Kind {
     use hal::image::Kind as H;
@@ -455,7 +457,7 @@ pub fn map_texture_dimension_size(
         }
         D2 => {
             assert!(
-                sample_size <= 32 && sample_size & (sample_size - 1) == 0,
+                sample_size <= 32 && is_power_of_two(sample_size),
                 "Invalid sample_count of {}",
                 sample_size
             );
@@ -481,11 +483,17 @@ pub fn map_texture_view_dimension(dimension: wgt::TextureViewDimension) -> hal::
     }
 }
 
-pub fn map_buffer_state(usage: wgt::BufferUsage) -> hal::buffer::State {
+pub(crate) fn map_buffer_state(usage: resource::BufferUse) -> hal::buffer::State {
+    use crate::resource::BufferUse as W;
     use hal::buffer::Access as A;
-    use wgt::BufferUsage as W;
 
     let mut access = A::empty();
+    if usage.contains(W::MAP_READ) {
+        access |= A::HOST_READ;
+    }
+    if usage.contains(W::MAP_WRITE) {
+        access |= A::HOST_WRITE;
+    }
     if usage.contains(W::COPY_SRC) {
         access |= A::TRANSFER_READ;
     }
@@ -501,22 +509,22 @@ pub fn map_buffer_state(usage: wgt::BufferUsage) -> hal::buffer::State {
     if usage.contains(W::UNIFORM) {
         access |= A::UNIFORM_READ | A::SHADER_READ;
     }
-    if usage.contains(W::STORAGE_READ) {
+    if usage.contains(W::STORAGE_LOAD) {
         access |= A::SHADER_READ;
     }
-    if usage.contains(W::STORAGE) {
+    if usage.contains(W::STORAGE_STORE) {
         access |= A::SHADER_WRITE;
     }
 
     access
 }
 
-pub fn map_texture_state(
-    usage: wgt::TextureUsage,
+pub(crate) fn map_texture_state(
+    usage: resource::TextureUse,
     aspects: hal::format::Aspects,
 ) -> hal::image::State {
+    use crate::resource::TextureUse as W;
     use hal::image::{Access as A, Layout as L};
-    use wgt::TextureUsage as W;
 
     let is_color = aspects.contains(hal::format::Aspects::COLOR);
     let layout = match usage {
@@ -539,9 +547,6 @@ pub fn map_texture_state(
     if usage.contains(W::SAMPLED) {
         access |= A::SHADER_READ;
     }
-    if usage.contains(W::STORAGE) {
-        access |= A::SHADER_WRITE;
-    }
     if usage.contains(W::OUTPUT_ATTACHMENT) {
         //TODO: read-only attachments
         access |= if is_color {
@@ -549,6 +554,12 @@ pub fn map_texture_state(
         } else {
             A::DEPTH_STENCIL_ATTACHMENT_WRITE
         };
+    }
+    if usage.contains(W::STORAGE_LOAD) {
+        access |= A::SHADER_READ;
+    }
+    if usage.contains(W::STORAGE_STORE) {
+        access |= A::SHADER_WRITE;
     }
 
     (access, layout)
@@ -567,7 +578,7 @@ pub fn map_load_store_ops(load: wgt::LoadOp, store: wgt::StoreOp) -> hal::pass::
     }
 }
 
-pub fn map_color_f32(color: &Color) -> hal::pso::ColorValue {
+pub fn map_color_f32(color: &wgt::Color) -> hal::pso::ColorValue {
     [
         color.r as f32,
         color.g as f32,
@@ -575,7 +586,7 @@ pub fn map_color_f32(color: &Color) -> hal::pso::ColorValue {
         color.a as f32,
     ]
 }
-pub fn map_color_i32(color: &Color) -> [i32; 4] {
+pub fn map_color_i32(color: &wgt::Color) -> [i32; 4] {
     [
         color.r as i32,
         color.g as i32,
@@ -583,7 +594,7 @@ pub fn map_color_i32(color: &Color) -> [i32; 4] {
         color.a as i32,
     ]
 }
-pub fn map_color_u32(color: &Color) -> [u32; 4] {
+pub fn map_color_u32(color: &wgt::Color) -> [u32; 4] {
     [
         color.r as u32,
         color.g as u32,
@@ -610,20 +621,20 @@ pub fn map_wrap(address: wgt::AddressMode) -> hal::image::WrapMode {
 }
 
 pub fn map_rasterization_state_descriptor(
-    desc: &RasterizationStateDescriptor,
+    desc: &wgt::RasterizationStateDescriptor,
 ) -> hal::pso::Rasterizer {
     use hal::pso;
     pso::Rasterizer {
         depth_clamping: false,
         polygon_mode: pso::PolygonMode::Fill,
         cull_face: match desc.cull_mode {
-            CullMode::None => pso::Face::empty(),
-            CullMode::Front => pso::Face::FRONT,
-            CullMode::Back => pso::Face::BACK,
+            wgt::CullMode::None => pso::Face::empty(),
+            wgt::CullMode::Front => pso::Face::FRONT,
+            wgt::CullMode::Back => pso::Face::BACK,
         },
         front_face: match desc.front_face {
-            FrontFace::Ccw => pso::FrontFace::CounterClockwise,
-            FrontFace::Cw => pso::FrontFace::Clockwise,
+            wgt::FrontFace::Ccw => pso::FrontFace::CounterClockwise,
+            wgt::FrontFace::Cw => pso::FrontFace::Clockwise,
         },
         depth_bias: if desc.depth_bias != 0
             || desc.depth_bias_slope_scale != 0.0
@@ -642,9 +653,9 @@ pub fn map_rasterization_state_descriptor(
     }
 }
 
-pub fn map_index_format(index_format: IndexFormat) -> hal::IndexType {
+pub fn map_index_format(index_format: wgt::IndexFormat) -> hal::IndexType {
     match index_format {
-        IndexFormat::Uint16 => hal::IndexType::U16,
-        IndexFormat::Uint32 => hal::IndexType::U32,
+        wgt::IndexFormat::Uint16 => hal::IndexType::U16,
+        wgt::IndexFormat::Uint32 => hal::IndexType::U32,
     }
 }

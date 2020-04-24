@@ -13,6 +13,55 @@ use wgt::{BufferAddress, BufferUsage, TextureFormat, TextureUsage};
 
 use std::{borrow::Borrow, fmt};
 
+bitflags::bitflags! {
+    /// The internal enum mirrored from `BufferUsage`. The values don't have to match!
+    pub (crate) struct BufferUse: u32 {
+        const EMPTY = 0;
+        const MAP_READ = 1;
+        const MAP_WRITE = 2;
+        const COPY_SRC = 4;
+        const COPY_DST = 8;
+        const INDEX = 16;
+        const VERTEX = 32;
+        const UNIFORM = 64;
+        const STORAGE_LOAD = 128;
+        const STORAGE_STORE = 256;
+        const INDIRECT = 512;
+        /// The combination of all read-only usages.
+        const READ_ALL = Self::MAP_READ.bits | Self::COPY_SRC.bits |
+            Self::INDEX.bits | Self::VERTEX.bits | Self::UNIFORM.bits |
+            Self::STORAGE_LOAD.bits | Self::INDIRECT.bits;
+        /// The combination of all write-only and read-write usages.
+        const WRITE_ALL = Self::MAP_WRITE.bits | Self::COPY_DST.bits | Self::STORAGE_STORE.bits;
+        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
+        /// still need to be pipeline barriers inserted for synchronization.
+        const ORDERED = Self::READ_ALL.bits | Self::MAP_WRITE.bits | Self::COPY_DST.bits;
+    }
+}
+
+bitflags::bitflags! {
+    /// The internal enum mirrored from `TextureUsage`. The values don't have to match!
+    pub(crate) struct TextureUse: u32 {
+        const EMPTY = 0;
+        const COPY_SRC = 1;
+        const COPY_DST = 2;
+        const SAMPLED = 4;
+        const OUTPUT_ATTACHMENT = 8;
+        const STORAGE_LOAD = 16;
+        const STORAGE_STORE = 32;
+        /// The combination of all read-only usages.
+        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::STORAGE_LOAD.bits;
+        /// The combination of all write-only and read-write usages.
+        const WRITE_ALL = Self::COPY_DST.bits | Self::OUTPUT_ATTACHMENT.bits | Self::STORAGE_STORE.bits;
+        /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
+        /// If a usage is not ordered, then even if it doesn't change between draw calls, there
+        /// still need to be pipeline barriers inserted for synchronization.
+        const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::OUTPUT_ATTACHMENT.bits;
+        const UNINITIALIZED = 0xFFFF;
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub enum BufferMapAsyncStatus {

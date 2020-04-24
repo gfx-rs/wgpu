@@ -58,7 +58,7 @@ pub fn all_image_stages() -> hal::pso::PipelineStage {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-enum HostMap {
+pub enum HostMap {
     Read,
     Write,
 }
@@ -500,7 +500,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .init(
                 id,
                 ref_count,
-                BufferState::with_usage(wgt::BufferUsage::empty()),
+                BufferState::with_usage(resource::BufferUse::EMPTY),
             )
             .unwrap();
         id
@@ -547,7 +547,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .init(
                 id,
                 ref_count,
-                BufferState::with_usage(wgt::BufferUsage::MAP_WRITE),
+                BufferState::with_usage(resource::BufferUse::MAP_WRITE),
             )
             .unwrap();
 
@@ -1084,22 +1084,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .expect("Failed to find binding declaration for binding");
                 let descriptor = match b.resource {
                     binding_model::BindingResource::Buffer(ref bb) => {
-                        let (alignment, usage) = match decl.ty {
-                            binding_model::BindingType::UniformBuffer => {
-                                (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::UNIFORM)
-                            }
-                            binding_model::BindingType::StorageBuffer => {
-                                (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::STORAGE)
-                            }
-                            binding_model::BindingType::ReadonlyStorageBuffer => {
-                                (BIND_BUFFER_ALIGNMENT, wgt::BufferUsage::STORAGE_READ)
-                            }
+                        let (alignment, pub_usage, internal_use) = match decl.ty {
+                            binding_model::BindingType::UniformBuffer => (
+                                BIND_BUFFER_ALIGNMENT,
+                                wgt::BufferUsage::UNIFORM,
+                                resource::BufferUse::UNIFORM,
+                            ),
+                            binding_model::BindingType::StorageBuffer => (
+                                BIND_BUFFER_ALIGNMENT,
+                                wgt::BufferUsage::STORAGE,
+                                resource::BufferUse::STORAGE_STORE,
+                            ),
+                            binding_model::BindingType::ReadonlyStorageBuffer => (
+                                BIND_BUFFER_ALIGNMENT,
+                                wgt::BufferUsage::STORAGE,
+                                resource::BufferUse::STORAGE_LOAD,
+                            ),
                             binding_model::BindingType::Sampler
                             | binding_model::BindingType::ComparisonSampler
                             | binding_model::BindingType::SampledTexture
                             | binding_model::BindingType::ReadonlyStorageTexture
                             | binding_model::BindingType::WriteonlyStorageTexture => {
-                                panic!("Mismatched buffer binding for {:?}", decl)
+                                panic!("Mismatched buffer binding type for {:?}. Expected a type of UniformBuffer, StorageBuffer or ReadonlyStorageBuffer", decl)
                             }
                         };
                         assert_eq!(
@@ -1110,12 +1116,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         let buffer = used
                             .buffers
-                            .use_extend(&*buffer_guard, bb.buffer, (), usage)
+                            .use_extend(&*buffer_guard, bb.buffer, (), internal_use)
                             .unwrap();
                         assert!(
-                            buffer.usage.contains(usage),
+                            buffer.usage.contains(pub_usage),
                             "Expected buffer usage {:?}",
-                            usage
+                            pub_usage
                         );
 
                         let sub_range = hal::buffer::SubRange {
@@ -1139,7 +1145,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         match decl.ty {
                             binding_model::BindingType::Sampler
                             | binding_model::BindingType::ComparisonSampler => {}
-                            _ => panic!("Wrong binding type for a sampler: {:?}", decl.ty),
+                            _ => panic!("Mismatched sampler binding type in {:?}. Expected a type of Sampler or ComparisonSampler", decl.ty),
                         }
                         let sampler = used
                             .samplers
@@ -1148,16 +1154,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         hal::pso::Descriptor::Sampler(&sampler.raw)
                     }
                     binding_model::BindingResource::TextureView(id) => {
-                        let (usage, image_layout) = match decl.ty {
+                        let (pub_usage, internal_use, image_layout) = match decl.ty {
                             binding_model::BindingType::SampledTexture => (
                                 wgt::TextureUsage::SAMPLED,
+                                resource::TextureUse::SAMPLED,
                                 hal::image::Layout::ShaderReadOnlyOptimal,
                             ),
-                            binding_model::BindingType::ReadonlyStorageTexture
-                            | binding_model::BindingType::WriteonlyStorageTexture => {
-                                (wgt::TextureUsage::STORAGE, hal::image::Layout::General)
-                            }
-                            _ => panic!("Mismatched texture binding for {:?}", decl),
+                            binding_model::BindingType::ReadonlyStorageTexture => (
+                                wgt::TextureUsage::STORAGE,
+                                resource::TextureUse::STORAGE_LOAD,
+                                hal::image::Layout::General,
+                            ),
+                            binding_model::BindingType::WriteonlyStorageTexture => (
+                                wgt::TextureUsage::STORAGE,
+                                resource::TextureUse::STORAGE_STORE,
+                                hal::image::Layout::General,
+                            ),
+                            _ => panic!("Mismatched texture binding type in {:?}. Expected a type of SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture", decl),
                         };
                         let view = used
                             .views
@@ -1176,10 +1189,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         source_id.value,
                                         &source_id.ref_count,
                                         view.range.clone(),
-                                        usage,
+                                        internal_use,
                                     )
                                     .unwrap();
-                                assert!(texture.usage.contains(usage));
+                                assert!(
+                                    texture.usage.contains(pub_usage),
+                                    "Expected buffer usage {:?}",
+                                    pub_usage
+                                );
 
                                 hal::pso::Descriptor::Image(raw, image_layout)
                             }
@@ -1461,6 +1478,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     if !buffer_guard[id].life_guard.use_at(submit_index) {
                         if let resource::BufferMapState::Active = buffer_guard[id].map_state {
+                            log::warn!("Dropped buffer has a pending mapping.");
                             unmap_buffer(&device.raw, &mut buffer_guard[id]);
                         }
                         device.temp_suspected.buffers.push(id);
@@ -2098,26 +2116,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn buffer_map_async<B: GfxBackend>(
         &self,
         buffer_id: id::BufferId,
-        usage: wgt::BufferUsage,
         range: std::ops::Range<BufferAddress>,
         operation: resource::BufferMapOperation,
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (pub_usage, internal_use) = match operation {
+            resource::BufferMapOperation::Read { .. } => {
+                (wgt::BufferUsage::MAP_READ, resource::BufferUse::MAP_READ)
+            }
+            resource::BufferMapOperation::Write { .. } => {
+                (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE)
+            }
+        };
 
         let (device_id, ref_count) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
-            if usage.contains(wgt::BufferUsage::MAP_READ) {
-                assert!(buffer.usage.contains(wgt::BufferUsage::MAP_READ));
-            }
-
-            if usage.contains(wgt::BufferUsage::MAP_WRITE) {
-                assert!(buffer.usage.contains(wgt::BufferUsage::MAP_WRITE));
-            }
-
+            assert!(buffer.usage.contains(pub_usage));
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Active => panic!("Buffer already mapped"),
                 resource::BufferMapState::Waiting(_) => {
@@ -2146,7 +2164,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .lock()
             .buffers
-            .change_replace(buffer_id, &ref_count, (), usage);
+            .change_replace(buffer_id, &ref_count, (), internal_use);
 
         device.lock_life(&mut token).map(buffer_id, ref_count);
     }

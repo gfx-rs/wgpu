@@ -15,7 +15,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     pipeline::PipelineFlags,
-    resource::TextureViewInner,
+    resource::{BufferUse, TextureUse, TextureViewInner},
     track::TrackerSet,
     Stored,
 };
@@ -385,7 +385,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             type OutputAttachment<'a> = (
                 &'a Stored<id::TextureId>,
                 &'a hal::image::SubresourceRange,
-                Option<TextureUsage>,
+                Option<TextureUse>,
             );
             let mut output_attachments =
                 ArrayVec::<[OutputAttachment; MAX_TOTAL_ATTACHMENTS]>::new();
@@ -414,12 +414,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
 
                         // Using render pass for transition.
-                        let consistent_usage = base_trackers
+                        let consistent_use = base_trackers
                             .textures
                             .query(source_id.value, view.range.clone());
-                        output_attachments.push((source_id, &view.range, consistent_usage));
+                        output_attachments.push((source_id, &view.range, consistent_use));
 
-                        let old_layout = match consistent_usage {
+                        let old_layout = match consistent_use {
                             Some(usage) => {
                                 conv::map_texture_state(
                                     usage,
@@ -464,12 +464,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
-                            let consistent_usage = base_trackers
+                            let consistent_use = base_trackers
                                 .textures
                                 .query(source_id.value, view.range.clone());
-                            output_attachments.push((source_id, &view.range, consistent_usage));
+                            output_attachments.push((source_id, &view.range, consistent_use));
 
-                            let old_layout = match consistent_usage {
+                            let old_layout = match consistent_use {
                                 Some(usage) => {
                                     conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
                                 }
@@ -486,9 +486,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
 
                             let end = hal::image::Layout::Present;
-                            let start = match base_trackers.views.query(at.attachment, ()) {
-                                Some(_) => end,
-                                None => hal::image::Layout::Undefined,
+                            let start = match at.load_op {
+                                LoadOp::Clear => hal::image::Layout::Undefined,
+                                LoadOp::Load => end,
                             };
                             start..end
                         }
@@ -516,12 +516,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
-                            let consistent_usage = base_trackers
+                            let consistent_use = base_trackers
                                 .textures
                                 .query(source_id.value, view.range.clone());
-                            output_attachments.push((source_id, &view.range, consistent_usage));
+                            output_attachments.push((source_id, &view.range, consistent_use));
 
-                            let old_layout = match consistent_usage {
+                            let old_layout = match consistent_use {
                                 Some(usage) => {
                                     conv::map_texture_state(usage, hal::format::Aspects::COLOR).1
                                 }
@@ -536,13 +536,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 assert!(used_swap_chain.is_none());
                                 used_swap_chain = Some(source_id.clone());
                             }
-
-                            let end = hal::image::Layout::Present;
-                            let start = match base_trackers.views.query(resolve_target, ()) {
-                                Some(_) => end,
-                                None => hal::image::Layout::Undefined,
-                            };
-                            start..end
+                            hal::image::Layout::Undefined..hal::image::Layout::Present
                         }
                     };
 
@@ -565,11 +559,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            for (source_id, view_range, consistent_usage) in output_attachments {
+            for (source_id, view_range, consistent_use) in output_attachments {
                 let texture = &texture_guard[source_id.value];
                 assert!(texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT));
 
-                let usage = consistent_usage.unwrap_or(TextureUsage::OUTPUT_ATTACHMENT);
+                let usage = consistent_use.unwrap_or(TextureUse::OUTPUT_ATTACHMENT);
                 // this is important to record the `first` state.
                 let _ = trackers.textures.change_replace(
                     source_id.value,
@@ -577,14 +571,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     view_range.clone(),
                     usage,
                 );
-                if consistent_usage.is_some() {
+                if consistent_use.is_some() {
                     // If we expect the texture to be transited to a new state by the
                     // render pass configuration, make the tracker aware of that.
                     let _ = trackers.textures.change_replace(
                         source_id.value,
                         &source_id.ref_count,
                         view_range.clone(),
-                        TextureUsage::OUTPUT_ATTACHMENT,
+                        TextureUse::OUTPUT_ATTACHMENT,
                     );
                 };
             }
@@ -950,7 +944,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if let Some((buffer_id, ref range)) = state.index.bound_buffer_view {
                             let buffer = trackers
                                 .buffers
-                                .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
+                                .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                                 .unwrap();
 
                             let view = hal::buffer::IndexBufferView {
@@ -988,7 +982,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let buffer = trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDEX)
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
@@ -1021,7 +1015,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let buffer = trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::VERTEX)
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::VERTEX), "An invalid setVertexBuffer call has been made. The buffer usage is {:?} which does not contain required usage VERTEX", buffer.usage);
                     let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
@@ -1145,7 +1139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let buffer = trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
 
@@ -1158,7 +1152,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let buffer = trackers
                         .buffers
-                        .use_extend(&*buffer_guard, buffer_id, (), BufferUsage::INDIRECT)
+                        .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndexedIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
 
