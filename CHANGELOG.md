@@ -1,5 +1,8 @@
 # Change Log
 
+## v0.5.4 (24-04-2020)
+  - fix memory management of staging buffers
+
 ## v0.5.3 (18-04-2020)
   - fix reading access to storage textures
   - another fix to layout transitions for swapchain images
@@ -21,6 +24,7 @@
     - based on gfx-hal-0.5
     - moved from Rendy to the new `gfx-memory` and `gfx-descriptor` crates
     - passes are now recorded on the client side. The user is also responsible to keep all resources referenced in the pass up until it ends recording.
+    - coordinate system is changed to have Y up in the rendering space
     - revised GPU lifetime tracking of all resources
     - revised usage tracking logic
     - all IDs are now non-zero
