@@ -281,12 +281,13 @@ impl<B: GfxBackend> Device<B> {
         let (kind, mem_usage) = {
             use wgt::BufferUsage as Bu;
 
+            //TODO: use linear allocation when we can ensure the freeing is linear
             if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
                 (Kind::General, MemoryUsage::Private)
             } else if (Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage) {
-                (Kind::Linear, MemoryUsage::Staging { read_back: false })
+                (Kind::General, MemoryUsage::Staging { read_back: false })
             } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
-                (Kind::Linear, MemoryUsage::Staging { read_back: true })
+                (Kind::General, MemoryUsage::Staging { read_back: true })
             } else {
                 (
                     Kind::General,
