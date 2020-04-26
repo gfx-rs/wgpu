@@ -1,14 +1,15 @@
 /// This example shows how to describe the adapter in use.
 async fn run() {
-    let adapter = wgpu::Adapter::request(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: None,
-        },
-        wgpu::BackendBit::PRIMARY,
-    )
-    .await
-    .unwrap();
+    let adapter = wgpu::Instance::new()
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: None,
+            },
+            wgpu::BackendBit::PRIMARY,
+        )
+        .await
+        .unwrap();
 
     #[cfg(not(target_arch = "wasm32"))]
     println!("{:?}", adapter.get_info())

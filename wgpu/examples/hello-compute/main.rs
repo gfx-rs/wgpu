@@ -20,15 +20,17 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let slice_size = numbers.len() * std::mem::size_of::<u32>();
     let size = slice_size as wgpu::BufferAddress;
 
-    let adapter = wgpu::Adapter::request(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: None,
-        },
-        wgpu::BackendBit::PRIMARY,
-    )
-    .await
-    .unwrap();
+    let instace = wgpu::Instance::new();
+    let adapter = instace
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: None,
+            },
+            wgpu::BackendBit::PRIMARY,
+        )
+        .await
+        .unwrap();
 
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -103,7 +105,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     }
     encoder.copy_buffer_to_buffer(&storage_buffer, 0, &staging_buffer, 0, size);
 
-    queue.submit(&[encoder.finish()]);
+    queue.submit(Some(encoder.finish()));
 
     // Note that we're not calling `.await` here.
     let buffer_future = staging_buffer.map_read(0, size);
