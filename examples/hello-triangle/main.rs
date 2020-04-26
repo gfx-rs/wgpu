@@ -7,7 +7,7 @@ use winit::{
 async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::TextureFormat) {
     let size = window.inner_size();
     let instance = wgpu::Instance::new();
-    let surface = instance.create_surface(&window);
+    let surface = unsafe { instance.create_surface(&window) };
     let adapter = instance
         .request_adapter(
             &wgpu::RequestAdapterOptions {
@@ -26,7 +26,8 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
             },
             limits: wgpu::Limits::default(),
         })
-        .await;
+        .await
+        .unwrap();
 
     let vs = include_bytes!("shader.vert.spv");
     let vs_module =

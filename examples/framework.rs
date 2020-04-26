@@ -50,7 +50,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
     log::info!("Initializing the surface...");
 
     let instance = wgpu::Instance::new();
-    let (size, surface) = {
+    let (size, surface) = unsafe {
         let size = window.inner_size();
         let surface = instance.create_surface(&window);
         (size, surface)
@@ -74,7 +74,8 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
             },
             limits: wgpu::Limits::default(),
         })
-        .await;
+        .await
+        .unwrap();
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
