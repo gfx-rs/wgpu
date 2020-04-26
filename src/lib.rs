@@ -5,6 +5,7 @@ mod backend;
 #[macro_use]
 mod macros;
 
+use futures::FutureExt as _;
 use std::{future::Future, marker::PhantomData, ops::Range, sync::Arc, thread};
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -108,13 +109,27 @@ trait Context: Sized {
     type BufferWriteMappingDetail;
     type SwapChainOutputDetail;
 
-    //TODO: include async functions
-    fn init() -> Self;
+    type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>>;
+    type RequestDeviceFuture: Future<Output = (Self::DeviceId, Self::QueueId)>;
+    type MapReadFuture: Future<Output = Result<Self::BufferReadMappingDetail, BufferAsyncErr>>;
+    type MapWriteFuture: Future<Output = Result<Self::BufferWriteMappingDetail, BufferAsyncErr>>;
 
-    fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    fn init() -> Self;
+    fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
         &self,
         window: &W,
     ) -> Self::SurfaceId;
+    fn instance_request_adapter(
+        &self,
+        options: &RequestAdapterOptions<'_>,
+        backends: wgt::BackendBit,
+    ) -> Self::RequestAdapterFuture;
+    fn adapter_request_device(
+        &self,
+        adapter: &Self::AdapterId,
+        desc: &DeviceDescriptor,
+    ) -> Self::RequestDeviceFuture;
+
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
@@ -179,6 +194,18 @@ trait Context: Sized {
     fn device_drop(&self, device: &Self::DeviceId);
     fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
 
+    fn buffer_map_read(
+        &self,
+        buffer: &Self::BufferId,
+        start: BufferAddress,
+        size: BufferAddress,
+    ) -> Self::MapReadFuture;
+    fn buffer_map_write(
+        &self,
+        buffer: &Self::BufferId,
+        start: BufferAddress,
+        size: BufferAddress,
+    ) -> Self::MapWriteFuture;
     fn buffer_unmap(&self, buffer: &Self::BufferId);
     fn swap_chain_get_next_texture(
         &self,
@@ -900,7 +927,7 @@ impl Instance {
     /// Creates a surface from a raw window handle.
     pub fn create_surface<W: raw_window_handle::HasRawWindowHandle>(&self, window: &W) -> Surface {
         Surface {
-            id: self.context.create_surface(window),
+            id: self.context.instance_create_surface(window),
         }
     }
 
@@ -937,15 +964,15 @@ impl Instance {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
-    pub async fn request_adapter(
+    pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
         backends: BackendBit,
-    ) -> Option<Adapter> {
+    ) -> impl Future<Output = Option<Adapter>> {
         let context = Arc::clone(&self.context);
-        backend::request_adapter(&self.context, options, backends)
-            .await
-            .map(|id| Adapter { context, id })
+        self.context
+            .instance_request_adapter(options, backends)
+            .map(|option| option.map(|id| Adapter { context, id }))
     }
 }
 
@@ -956,18 +983,22 @@ impl Adapter {
     /// # Panics
     ///
     /// Panics if the extensions specified by `desc` are not supported by this adapter.
-    pub async fn request_device(&self, desc: &DeviceDescriptor) -> (Device, Queue) {
-        let (device_id, queue_id) =
-            backend::request_device_and_queue(&self.context, &self.id, Some(desc)).await;
-        let device = Device {
-            context: Arc::clone(&self.context),
-            id: device_id,
-        };
-        let queue = Queue {
-            context: Arc::clone(&self.context),
-            id: queue_id,
-        };
-        (device, queue)
+    pub fn request_device(&self, desc: &DeviceDescriptor) -> impl Future<Output = (Device, Queue)> {
+        let context = Arc::clone(&self.context);
+        Context::adapter_request_device(&*self.context, &self.id, desc).map(
+            |(device_id, queue_id)| {
+                (
+                    Device {
+                        context: Arc::clone(&context),
+                        id: device_id,
+                    },
+                    Queue {
+                        context,
+                        id: queue_id,
+                    },
+                )
+            },
+        )
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1168,11 +1199,10 @@ impl Buffer {
         &self,
         start: BufferAddress,
         size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>> + '_ {
-        use futures::FutureExt;
-
+    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>> {
         let context = Arc::clone(&self.context);
-        backend::buffer_map_read(&self.context, &self.id, start, size)
+        self.context
+            .buffer_map_read(&self.id, start, size)
             .map(|result| result.map(|detail| BufferReadMapping { context, detail }))
     }
 
@@ -1184,11 +1214,10 @@ impl Buffer {
         &self,
         start: BufferAddress,
         size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> + '_ {
-        use futures::FutureExt;
-
+    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> {
         let context = Arc::clone(&self.context);
-        backend::buffer_map_write(&self.context, &self.id, start, size)
+        self.context
+            .buffer_map_write(&self.id, start, size)
             .map(|result| result.map(|detail| BufferWriteMapping { context, detail }))
     }
 

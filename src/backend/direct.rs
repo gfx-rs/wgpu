@@ -6,8 +6,9 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
+use futures::future::{ready, Ready};
 use smallvec::SmallVec;
-use std::{ffi::CString, future::Future, marker::PhantomData, ptr, slice};
+use std::{ffi::CString, marker::PhantomData, ptr, slice};
 
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
@@ -23,31 +24,6 @@ macro_rules! gfx_select {
             _ => unreachable!()
         }
     };
-}
-
-pub(crate) async fn request_adapter(
-    context: &Context,
-    options: &crate::RequestAdapterOptions<'_>,
-    backends: wgt::BackendBit,
-) -> Option<wgc::id::AdapterId> {
-    context.pick_adapter(
-        &wgc::instance::RequestAdapterOptions {
-            power_preference: options.power_preference,
-            compatible_surface: options.compatible_surface.map(|surface| surface.id),
-        },
-        wgc::instance::AdapterInputs::Mask(backends, || PhantomData),
-    )
-}
-
-pub(crate) async fn request_device_and_queue(
-    context: &Context,
-    adapter: &wgc::id::AdapterId,
-    desc: Option<&wgt::DeviceDescriptor>,
-) -> (wgc::id::DeviceId, wgc::id::QueueId) {
-    let desc = &desc.cloned().unwrap_or_default();
-    let device_id =
-        gfx_select!(*adapter => context.adapter_request_device(*adapter, desc, PhantomData));
-    (device_id, device_id)
 }
 
 fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> wgc::command::BufferCopyView {
@@ -234,11 +210,18 @@ impl crate::Context for Context {
     type BufferWriteMappingDetail = BufferWriteMappingDetail;
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
+    type RequestAdapterFuture = Ready<Option<Self::AdapterId>>;
+    type RequestDeviceFuture = Ready<(Self::DeviceId, Self::QueueId)>;
+    type MapReadFuture =
+        native_gpu_future::GpuFuture<Result<BufferReadMappingDetail, crate::BufferAsyncErr>>;
+    type MapWriteFuture =
+        native_gpu_future::GpuFuture<Result<BufferWriteMappingDetail, crate::BufferAsyncErr>>;
+
     fn init() -> Self {
         wgc::hub::Global::new("wgpu", wgc::hub::IdentityManagerFactory)
     }
 
-    fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
         &self,
         window: &W,
     ) -> Self::SurfaceId {
@@ -312,6 +295,31 @@ impl crate::Context for Context {
         let mut token = wgc::hub::Token::root();
         self.surfaces
             .register_identity(PhantomData, surface, &mut token)
+    }
+
+    fn instance_request_adapter(
+        &self,
+        options: &crate::RequestAdapterOptions<'_>,
+        backends: wgt::BackendBit,
+    ) -> Self::RequestAdapterFuture {
+        let id = self.pick_adapter(
+            &wgc::instance::RequestAdapterOptions {
+                power_preference: options.power_preference,
+                compatible_surface: options.compatible_surface.map(|surface| surface.id),
+            },
+            wgc::instance::AdapterInputs::Mask(backends, || PhantomData),
+        );
+        ready(id)
+    }
+
+    fn adapter_request_device(
+        &self,
+        adapter: &Self::AdapterId,
+        desc: &crate::DeviceDescriptor,
+    ) -> Self::RequestDeviceFuture {
+        let device_id =
+            gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, PhantomData));
+        ready((device_id, device_id))
     }
 
     fn device_create_swap_chain(
@@ -662,6 +670,80 @@ impl crate::Context for Context {
         ));
     }
 
+    fn buffer_map_read(
+        &self,
+        buffer: &Self::BufferId,
+        start: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+    ) -> Self::MapReadFuture {
+        let (future, completion) = native_gpu_future::new_gpu_future(*buffer, size);
+
+        extern "C" fn buffer_map_read_future_wrapper(
+            status: wgc::resource::BufferMapAsyncStatus,
+            data: *const u8,
+            user_data: *mut u8,
+        ) {
+            let completion =
+                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
+            let (buffer_id, size) = completion.get_buffer_info();
+
+            if let wgc::resource::BufferMapAsyncStatus::Success = status {
+                completion.complete(Ok(BufferReadMappingDetail {
+                    data,
+                    size: size as usize,
+                    buffer_id,
+                }));
+            } else {
+                completion.complete(Err(crate::BufferAsyncErr));
+            }
+        }
+
+        let operation = wgc::resource::BufferMapOperation::Read {
+            callback: buffer_map_read_future_wrapper,
+            userdata: completion.to_raw() as _,
+        };
+        gfx_select!(*buffer => self.buffer_map_async(*buffer, start .. start + size, operation));
+
+        future
+    }
+
+    fn buffer_map_write(
+        &self,
+        buffer: &Self::BufferId,
+        start: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+    ) -> Self::MapWriteFuture {
+        let (future, completion) = native_gpu_future::new_gpu_future(*buffer, size);
+
+        extern "C" fn buffer_map_write_future_wrapper(
+            status: wgc::resource::BufferMapAsyncStatus,
+            data: *mut u8,
+            user_data: *mut u8,
+        ) {
+            let completion =
+                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
+            let (buffer_id, size) = completion.get_buffer_info();
+
+            if let wgc::resource::BufferMapAsyncStatus::Success = status {
+                completion.complete(Ok(BufferWriteMappingDetail {
+                    data,
+                    size: size as usize,
+                    buffer_id,
+                }));
+            } else {
+                completion.complete(Err(crate::BufferAsyncErr));
+            }
+        }
+
+        let operation = wgc::resource::BufferMapOperation::Write {
+            callback: buffer_map_write_future_wrapper,
+            userdata: completion.to_raw() as _,
+        };
+        gfx_select!(*buffer => self.buffer_map_async(*buffer, start .. start + size, operation));
+
+        future
+    }
+
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
         gfx_select!(*buffer => self.buffer_unmap(*buffer))
     }
@@ -882,80 +964,6 @@ impl crate::Context for Context {
 }
 
 pub(crate) struct CreateBufferMappedDetail;
-
-pub(crate) fn buffer_map_read(
-    context: &Context,
-    buffer: &wgc::id::BufferId,
-    start: wgt::BufferAddress,
-    size: wgt::BufferAddress,
-) -> impl Future<Output = Result<BufferReadMappingDetail, crate::BufferAsyncErr>> {
-    let (future, completion) = native_gpu_future::new_gpu_future(*buffer, size);
-
-    extern "C" fn buffer_map_read_future_wrapper(
-        status: wgc::resource::BufferMapAsyncStatus,
-        data: *const u8,
-        user_data: *mut u8,
-    ) {
-        let completion =
-            unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-        let (buffer_id, size) = completion.get_buffer_info();
-
-        if let wgc::resource::BufferMapAsyncStatus::Success = status {
-            completion.complete(Ok(BufferReadMappingDetail {
-                data,
-                size: size as usize,
-                buffer_id,
-            }));
-        } else {
-            completion.complete(Err(crate::BufferAsyncErr));
-        }
-    }
-
-    let operation = wgc::resource::BufferMapOperation::Read {
-        callback: buffer_map_read_future_wrapper,
-        userdata: completion.to_raw() as _,
-    };
-    gfx_select!(*buffer => context.buffer_map_async(*buffer, start .. start + size, operation));
-
-    future
-}
-
-pub(crate) fn buffer_map_write(
-    context: &Context,
-    buffer: &wgc::id::BufferId,
-    start: wgt::BufferAddress,
-    size: wgt::BufferAddress,
-) -> impl Future<Output = Result<BufferWriteMappingDetail, crate::BufferAsyncErr>> {
-    let (future, completion) = native_gpu_future::new_gpu_future(*buffer, size);
-
-    extern "C" fn buffer_map_write_future_wrapper(
-        status: wgc::resource::BufferMapAsyncStatus,
-        data: *mut u8,
-        user_data: *mut u8,
-    ) {
-        let completion =
-            unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-        let (buffer_id, size) = completion.get_buffer_info();
-
-        if let wgc::resource::BufferMapAsyncStatus::Success = status {
-            completion.complete(Ok(BufferWriteMappingDetail {
-                data,
-                size: size as usize,
-                buffer_id,
-            }));
-        } else {
-            completion.complete(Err(crate::BufferAsyncErr));
-        }
-    }
-
-    let operation = wgc::resource::BufferMapOperation::Write {
-        callback: buffer_map_write_future_wrapper,
-        userdata: completion.to_raw() as _,
-    };
-    gfx_select!(*buffer => context.buffer_map_async(*buffer, start .. start + size, operation));
-
-    future
-}
 
 pub(crate) struct BufferReadMappingDetail {
     pub(crate) buffer_id: wgc::id::BufferId,

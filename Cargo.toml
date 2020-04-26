@@ -58,7 +58,6 @@ test = true
 [patch.crates-io]
 #wgpu-types = { version = "0.5.0", path = "../wgpu/wgpu-types" }
 #wgpu-core = { version = "0.5.0", path = "../wgpu/wgpu-core" }
-#wgpu-native = { version = "0.5.0", path = "../wgpu/wgpu-native" }
 #gfx-hal = { version = "0.5.0", path = "../gfx/src/hal" }
 #gfx-backend-empty = { version = "0.5.0", path = "../gfx/src/backend/empty" }
 #gfx-backend-vulkan = { version = "0.5.0", path = "../gfx/src/backend/vulkan" }
