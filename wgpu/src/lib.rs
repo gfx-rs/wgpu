@@ -110,9 +110,11 @@ trait Context: Sized {
     type SwapChainOutputDetail;
 
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>>;
-    type RequestDeviceFuture: Future<Output = (Self::DeviceId, Self::QueueId)>;
-    type MapReadFuture: Future<Output = Result<Self::BufferReadMappingDetail, BufferAsyncErr>>;
-    type MapWriteFuture: Future<Output = Result<Self::BufferWriteMappingDetail, BufferAsyncErr>>;
+    type RequestDeviceFuture: Future<
+        Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>,
+    >;
+    type MapReadFuture: Future<Output = Result<Self::BufferReadMappingDetail, BufferAsyncError>>;
+    type MapWriteFuture: Future<Output = Result<Self::BufferWriteMappingDetail, BufferAsyncError>>;
 
     fn init() -> Self;
     fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
@@ -483,21 +485,13 @@ impl Drop for ComputePipeline {
 /// a [`CommandEncoder`] and then calling [`CommandEncoder::finish`].
 pub struct CommandBuffer {
     context: Arc<C>,
-    id: <C as Context>::CommandBufferId,
-    alive: bool,
-}
-
-impl CommandBuffer {
-    fn commit(mut self) -> <C as Context>::CommandBufferId {
-        self.alive = false;
-        self.id
-    }
+    id: Option<<C as Context>::CommandBufferId>,
 }
 
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
-        if self.alive {
-            self.context.command_buffer_drop(&self.id);
+        if let Some(ref id) = self.id {
+            self.context.command_buffer_drop(id);
         }
     }
 }
@@ -514,7 +508,7 @@ pub struct CommandEncoder {
     id: <C as Context>::CommandEncoderId,
     /// This type should be !Send !Sync, because it represents an allocation on this thread's
     /// command buffer.
-    _p: std::marker::PhantomData<*const u8>,
+    _p: PhantomData<*const u8>,
 }
 
 /// An in-progress recording of a render pass.
@@ -913,26 +907,29 @@ impl Instance {
 
     /// Retrieves all available [`Adapter`]s that match the given backends.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> Vec<Adapter> {
+    pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> impl Iterator<Item = Adapter> {
+        let context = Arc::clone(&self.context);
         self.context
             .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, || PhantomData))
             .into_iter()
-            .map(|id| crate::Adapter {
+            .map(move |id| crate::Adapter {
                 id,
-                context: Arc::clone(&self.context),
+                context: Arc::clone(&context),
             })
-            .collect()
     }
 
     /// Creates a surface from a raw window handle.
-    pub fn create_surface<W: raw_window_handle::HasRawWindowHandle>(&self, window: &W) -> Surface {
+    pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
+        &self,
+        window: &W,
+    ) -> Surface {
         Surface {
             id: self.context.instance_create_surface(window),
         }
     }
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub fn create_surface_from_core_animation_layer(
+    pub unsafe fn create_surface_from_core_animation_layer(
         &self,
         layer: *mut std::ffi::c_void,
     ) -> Surface {
@@ -983,10 +980,13 @@ impl Adapter {
     /// # Panics
     ///
     /// Panics if the extensions specified by `desc` are not supported by this adapter.
-    pub fn request_device(&self, desc: &DeviceDescriptor) -> impl Future<Output = (Device, Queue)> {
+    pub fn request_device(
+        &self,
+        desc: &DeviceDescriptor,
+    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> {
         let context = Arc::clone(&self.context);
-        Context::adapter_request_device(&*self.context, &self.id, desc).map(
-            |(device_id, queue_id)| {
+        Context::adapter_request_device(&*self.context, &self.id, desc).map(|result| {
+            result.map(|(device_id, queue_id)| {
                 (
                     Device {
                         context: Arc::clone(&context),
@@ -997,8 +997,8 @@ impl Adapter {
                         id: queue_id,
                     },
                 )
-            },
-        )
+            })
+        })
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1144,7 +1144,10 @@ impl Drop for Device {
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct BufferAsyncErr;
+pub struct RequestDeviceError;
+
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct BufferAsyncError;
 
 pub struct BufferReadMapping {
     context: Arc<C>,
@@ -1199,7 +1202,7 @@ impl Buffer {
         &self,
         start: BufferAddress,
         size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>> {
+    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncError>> {
         let context = Arc::clone(&self.context);
         self.context
             .buffer_map_read(&self.id, start, size)
@@ -1214,7 +1217,7 @@ impl Buffer {
         &self,
         start: BufferAddress,
         size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> {
+    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncError>> {
         let context = Arc::clone(&self.context);
         self.context
             .buffer_map_write(&self.id, start, size)
@@ -1274,8 +1277,7 @@ impl CommandEncoder {
     pub fn finish(self) -> CommandBuffer {
         CommandBuffer {
             context: Arc::clone(&self.context),
-            id: Context::encoder_finish(&*self.context, &self.id),
-            alive: true,
+            id: Some(Context::encoder_finish(&*self.context, &self.id)),
         }
     }
 
@@ -1405,7 +1407,7 @@ impl<'a> RenderPass<'a> {
         offset: BufferAddress,
         size: BufferAddress,
     ) {
-        self.id.set_index_buffer(&buffer.id, offset, size)
+        RenderPassInner::set_index_buffer(&mut self.id, &buffer.id, offset, size)
     }
 
     /// Assign a vertex buffer to a slot.
@@ -1429,7 +1431,7 @@ impl<'a> RenderPass<'a> {
         offset: BufferAddress,
         size: BufferAddress,
     ) {
-        self.id.set_vertex_buffer(slot, &buffer.id, offset, size)
+        RenderPassInner::set_vertex_buffer(&mut self.id, slot, &buffer.id, offset, size)
     }
 
     /// Sets the scissor region.
@@ -1457,7 +1459,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        self.id.draw(vertices, instances)
+        RenderPassInner::draw(&mut self.id, vertices, instances)
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
@@ -1465,7 +1467,7 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        self.id.draw_indexed(indices, base_vertex, instances);
+        RenderPassInner::draw_indexed(&mut self.id, indices, base_vertex, instances);
     }
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
@@ -1545,7 +1547,7 @@ impl<'a> ComputePass<'a> {
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        self.id.dispatch(x, y, z);
+        ComputePassInner::dispatch(&mut self.id, x, y, z);
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
@@ -1554,8 +1556,7 @@ impl<'a> ComputePass<'a> {
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
-        self.id
-            .dispatch_indirect(&indirect_buffer.id, indirect_offset);
+        ComputePassInner::dispatch_indirect(&mut self.id, &indirect_buffer.id, indirect_offset);
     }
 }
 
@@ -1575,7 +1576,9 @@ impl Queue {
         Context::queue_submit(
             &*self.context,
             &self.id,
-            command_buffers.into_iter().map(CommandBuffer::commit),
+            command_buffers
+                .into_iter()
+                .map(|mut comb| comb.id.take().unwrap()),
         );
     }
 }

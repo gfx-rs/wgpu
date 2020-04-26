@@ -23,7 +23,8 @@ async fn run() {
             },
             limits: wgpu::Limits::default(),
         })
-        .await;
+        .await
+        .unwrap();
 
     // Rendered image is 256×256 with 32-bit RGBA color
     let size = 256u32;

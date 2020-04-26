@@ -26,24 +26,6 @@ macro_rules! gfx_select {
     };
 }
 
-fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> wgc::command::BufferCopyView {
-    wgc::command::BufferCopyView {
-        buffer: view.buffer.id,
-        offset: view.offset,
-        bytes_per_row: view.bytes_per_row,
-        rows_per_image: view.rows_per_image,
-    }
-}
-
-fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> wgc::command::TextureCopyView {
-    wgc::command::TextureCopyView {
-        texture: view.texture.id,
-        mip_level: view.mip_level,
-        array_layer: view.array_layer,
-        origin: view.origin,
-    }
-}
-
 pub type Context = wgc::hub::Global<wgc::hub::IdentityManagerFactory>;
 
 mod pass_impl {
@@ -184,6 +166,24 @@ mod pass_impl {
     }
 }
 
+fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> wgc::command::BufferCopyView {
+    wgc::command::BufferCopyView {
+        buffer: view.buffer.id,
+        offset: view.offset,
+        bytes_per_row: view.bytes_per_row,
+        rows_per_image: view.rows_per_image,
+    }
+}
+
+fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> wgc::command::TextureCopyView {
+    wgc::command::TextureCopyView {
+        texture: view.texture.id,
+        mip_level: view.mip_level,
+        array_layer: view.array_layer,
+        origin: view.origin,
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = wgc::id::DeviceId;
@@ -211,11 +211,12 @@ impl crate::Context for Context {
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
     type RequestAdapterFuture = Ready<Option<Self::AdapterId>>;
-    type RequestDeviceFuture = Ready<(Self::DeviceId, Self::QueueId)>;
+    type RequestDeviceFuture =
+        Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
     type MapReadFuture =
-        native_gpu_future::GpuFuture<Result<BufferReadMappingDetail, crate::BufferAsyncErr>>;
+        native_gpu_future::GpuFuture<Result<BufferReadMappingDetail, crate::BufferAsyncError>>;
     type MapWriteFuture =
-        native_gpu_future::GpuFuture<Result<BufferWriteMappingDetail, crate::BufferAsyncErr>>;
+        native_gpu_future::GpuFuture<Result<BufferWriteMappingDetail, crate::BufferAsyncError>>;
 
     fn init() -> Self {
         wgc::hub::Global::new("wgpu", wgc::hub::IdentityManagerFactory)
@@ -319,7 +320,7 @@ impl crate::Context for Context {
     ) -> Self::RequestDeviceFuture {
         let device_id =
             gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, PhantomData));
-        ready((device_id, device_id))
+        ready(Ok((device_id, device_id)))
     }
 
     fn device_create_swap_chain(
@@ -694,7 +695,7 @@ impl crate::Context for Context {
                     buffer_id,
                 }));
             } else {
-                completion.complete(Err(crate::BufferAsyncErr));
+                completion.complete(Err(crate::BufferAsyncError));
             }
         }
 
@@ -731,7 +732,7 @@ impl crate::Context for Context {
                     buffer_id,
                 }));
             } else {
-                completion.complete(Err(crate::BufferAsyncErr));
+                completion.complete(Err(crate::BufferAsyncError));
             }
         }
 

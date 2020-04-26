@@ -39,7 +39,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
             },
             limits: wgpu::Limits::default(),
         })
-        .await;
+        .await
+        .unwrap();
 
     let cs = include_bytes!("shader.comp.spv");
     let cs_module =
