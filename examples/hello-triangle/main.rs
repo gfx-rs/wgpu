@@ -6,17 +6,18 @@ use winit::{
 
 async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::TextureFormat) {
     let size = window.inner_size();
-    let surface = wgpu::Surface::create(&window);
-
-    let adapter = wgpu::Adapter::request(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: Some(&surface),
-        },
-        wgpu::BackendBit::PRIMARY,
-    )
-    .await
-    .unwrap();
+    let instance = wgpu::Instance::new();
+    let surface = instance.create_surface(&window);
+    let adapter = instance
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: Some(&surface),
+            },
+            wgpu::BackendBit::PRIMARY,
+        )
+        .await
+        .unwrap();
 
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -116,7 +117,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                     rpass.draw(0..3, 0..1);
                 }
 
-                queue.submit(&[encoder.finish()]);
+                queue.submit(Some(encoder.finish()));
             }
             Event::WindowEvent {
                 event: WindowEvent::CloseRequested,
@@ -150,10 +151,6 @@ fn main() {
                     .ok()
             })
             .expect("couldn't append canvas to document body");
-        wasm_bindgen_futures::spawn_local(run(
-            event_loop,
-            window,
-            wgpu::TextureFormat::Bgra8Unorm,
-        ));
+        wasm_bindgen_futures::spawn_local(run(event_loop, window, wgpu::TextureFormat::Bgra8Unorm));
     }
 }

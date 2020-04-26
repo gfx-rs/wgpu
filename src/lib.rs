@@ -5,7 +5,7 @@ mod backend;
 #[macro_use]
 mod macros;
 
-use std::{future::Future, ops::Range, thread};
+use std::{future::Future, marker::PhantomData, ops::Range, sync::Arc, thread};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
@@ -21,24 +21,262 @@ pub use wgt::{
     VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
 };
 
-//TODO: avoid heap allocating vectors during resource creation.
-#[derive(Default, Debug)]
-struct Temp {
-    //bind_group_descriptors: Vec<wgn::BindGroupDescriptor>,
-//vertex_buffers: Vec<wgn::VertexBufferDescriptor>,
+use backend::Context as C;
+
+trait ComputePassInner<Ctx: Context> {
+    fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: &Ctx::BindGroupId,
+        offsets: &[DynamicOffset],
+    );
+    fn dispatch(&mut self, x: u32, y: u32, z: u32);
+    fn dispatch_indirect(
+        &mut self,
+        indirect_buffer: &Ctx::BufferId,
+        indirect_offset: BufferAddress,
+    );
+}
+
+trait RenderPassInner<Ctx: Context> {
+    fn set_pipeline(&mut self, pipeline: &Ctx::RenderPipelineId);
+    fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: &Ctx::BindGroupId,
+        offsets: &[DynamicOffset],
+    );
+    fn set_index_buffer(
+        &mut self,
+        buffer: &Ctx::BufferId,
+        offset: BufferAddress,
+        size: BufferAddress,
+    );
+    fn set_vertex_buffer(
+        &mut self,
+        slot: u32,
+        buffer: &Ctx::BufferId,
+        offset: BufferAddress,
+        size: BufferAddress,
+    );
+    fn set_blend_color(&mut self, color: wgt::Color);
+    fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
+    fn set_viewport(
+        &mut self,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        min_depth: f32,
+        max_depth: f32,
+    );
+    fn set_stencil_reference(&mut self, reference: u32);
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
+    fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
+    fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &Ctx::BufferId,
+        indirect_offset: BufferAddress,
+    );
+}
+
+trait Context: Sized {
+    type AdapterId;
+    type DeviceId;
+    type QueueId;
+    type ShaderModuleId;
+    type BindGroupLayoutId;
+    type BindGroupId;
+    type TextureViewId;
+    type SamplerId;
+    type BufferId;
+    type TextureId;
+    type PipelineLayoutId;
+    type RenderPipelineId;
+    type ComputePipelineId;
+    type CommandEncoderId;
+    type ComputePassId: ComputePassInner<Self>;
+    type CommandBufferId;
+    type SurfaceId;
+    type SwapChainId;
+    type RenderPassId: RenderPassInner<Self>;
+
+    type CreateBufferMappedDetail;
+    type BufferReadMappingDetail;
+    type BufferWriteMappingDetail;
+    type SwapChainOutputDetail;
+
+    //TODO: include async functions
+    fn init() -> Self;
+
+    fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
+        &self,
+        window: &W,
+    ) -> Self::SurfaceId;
+    fn device_create_swap_chain(
+        &self,
+        device: &Self::DeviceId,
+        surface: &Self::SurfaceId,
+        desc: &SwapChainDescriptor,
+    ) -> Self::SwapChainId;
+    fn device_create_shader_module(
+        &self,
+        device: &Self::DeviceId,
+        spv: &[u32],
+    ) -> Self::ShaderModuleId;
+    fn device_create_bind_group_layout(
+        &self,
+        device: &Self::DeviceId,
+        desc: &BindGroupLayoutDescriptor,
+    ) -> Self::BindGroupLayoutId;
+    fn device_create_bind_group(
+        &self,
+        device: &Self::DeviceId,
+        desc: &BindGroupDescriptor,
+    ) -> Self::BindGroupId;
+    fn device_create_pipeline_layout(
+        &self,
+        device: &Self::DeviceId,
+        desc: &PipelineLayoutDescriptor,
+    ) -> Self::PipelineLayoutId;
+    fn device_create_render_pipeline(
+        &self,
+        device: &Self::DeviceId,
+        desc: &RenderPipelineDescriptor,
+    ) -> Self::RenderPipelineId;
+    fn device_create_compute_pipeline(
+        &self,
+        device: &Self::DeviceId,
+        desc: &ComputePipelineDescriptor,
+    ) -> Self::ComputePipelineId;
+    fn device_create_buffer_mapped<'a>(
+        &self,
+        device: &Self::DeviceId,
+        desc: &BufferDescriptor,
+    ) -> (Self::BufferId, &'a mut [u8], Self::CreateBufferMappedDetail);
+    fn device_create_buffer(
+        &self,
+        device: &Self::DeviceId,
+        desc: &BufferDescriptor,
+    ) -> Self::BufferId;
+    fn device_create_texture(
+        &self,
+        device: &Self::DeviceId,
+        desc: &TextureDescriptor,
+    ) -> Self::TextureId;
+    fn device_create_sampler(
+        &self,
+        device: &Self::DeviceId,
+        desc: &SamplerDescriptor,
+    ) -> Self::SamplerId;
+    fn device_create_command_encoder(
+        &self,
+        device: &Self::DeviceId,
+        desc: &CommandEncoderDescriptor,
+    ) -> Self::CommandEncoderId;
+    fn device_drop(&self, device: &Self::DeviceId);
+    fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
+
+    fn buffer_unmap(&self, buffer: &Self::BufferId);
+    fn swap_chain_get_next_texture(
+        &self,
+        swap_chain: &Self::SwapChainId,
+    ) -> Result<(Self::TextureViewId, Self::SwapChainOutputDetail), TimeOut>;
+    fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail);
+    fn texture_create_view(
+        &self,
+        texture: &Self::TextureId,
+        desc: Option<&TextureViewDescriptor>,
+    ) -> Self::TextureViewId;
+    fn texture_drop(&self, texture: &Self::TextureId);
+    fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
+    fn sampler_drop(&self, sampler: &Self::SamplerId);
+    fn buffer_drop(&self, buffer: &Self::BufferId);
+    fn bind_group_drop(&self, bind_group: &Self::BindGroupId);
+    fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId);
+    fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId);
+    fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId);
+    fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId);
+    fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId);
+    fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId);
+
+    fn encoder_copy_buffer_to_buffer(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        source: &Self::BufferId,
+        source_offset: BufferAddress,
+        destination: &Self::BufferId,
+        destination_offset: BufferAddress,
+        copy_size: BufferAddress,
+    );
+    fn encoder_copy_buffer_to_texture(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        source: BufferCopyView,
+        destination: TextureCopyView,
+        copy_size: Extent3d,
+    );
+    fn encoder_copy_texture_to_buffer(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        source: TextureCopyView,
+        destination: BufferCopyView,
+        copy_size: Extent3d,
+    );
+    fn encoder_copy_texture_to_texture(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        source: TextureCopyView,
+        destination: TextureCopyView,
+        copy_size: Extent3d,
+    );
+
+    fn flush_mapped_data(data: &mut [u8], detail: Self::CreateBufferMappedDetail);
+    fn encoder_begin_compute_pass(&self, encoder: &Self::CommandEncoderId) -> Self::ComputePassId;
+    fn encoder_end_compute_pass(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        pass: &mut Self::ComputePassId,
+    );
+    fn encoder_begin_render_pass<'a>(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        desc: &RenderPassDescriptor<'a, '_>,
+    ) -> Self::RenderPassId;
+    fn encoder_end_render_pass(
+        &self,
+        encoder: &Self::CommandEncoderId,
+        pass: &mut Self::RenderPassId,
+    );
+    fn encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId;
+    fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
+        &self,
+        queue: &Self::QueueId,
+        command_buffers: I,
+    );
+}
+
+/// An instance sets up the context for all other wgpu objects.
+///
+/// An `Adapter` can be used to open a connection to the corresponding device on the host system,
+/// yielding a [`Device`] object.
+pub struct Instance {
+    context: Arc<C>,
 }
 
 /// A handle to a physical graphics and/or compute device.
 ///
 /// An `Adapter` can be used to open a connection to the corresponding device on the host system,
 /// yielding a [`Device`] object.
-#[derive(Debug, PartialEq)]
 pub struct Adapter {
-    id: backend::AdapterId,
+    context: Arc<C>,
+    id: <C as Context>::AdapterId,
 }
 
 /// Options for requesting adapter.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RequestAdapterOptions<'a> {
     /// Power preference for the adapter.
     pub power_preference: PowerPreference,
@@ -50,10 +288,9 @@ pub struct RequestAdapterOptions<'a> {
 ///
 /// The `Device` is the responsible for the creation of most rendering and compute resources, as
 /// well as exposing [`Queue`] objects.
-#[derive(Debug)]
 pub struct Device {
-    id: backend::DeviceId,
-    temp: Temp,
+    context: Arc<C>,
+    id: <C as Context>::DeviceId,
 }
 
 /// This is passed to `Device::poll` to control whether
@@ -65,16 +302,16 @@ pub enum Maintain {
 }
 
 /// A handle to a GPU-accessible buffer.
-#[derive(Debug, PartialEq)]
 pub struct Buffer {
-    id: backend::BufferId,
-    detail: backend::BufferDetail,
+    context: Arc<C>,
+    id: <C as Context>::BufferId,
+    //detail: <C as Context>::BufferDetail,
 }
 
 /// A handle to a texture on the GPU.
-#[derive(Debug, PartialEq)]
 pub struct Texture {
-    id: backend::TextureId,
+    context: Arc<C>,
+    id: <C as Context>::TextureId,
     owned: bool,
 }
 
@@ -82,9 +319,9 @@ pub struct Texture {
 ///
 /// A `TextureView` object describes a texture and associated metadata needed by a
 /// [`RenderPipeline`] or [`BindGroup`].
-#[derive(Debug, PartialEq)]
 pub struct TextureView {
-    id: backend::TextureViewId,
+    context: Arc<C>,
+    id: <C as Context>::TextureViewId,
     owned: bool,
 }
 
@@ -93,27 +330,32 @@ pub struct TextureView {
 /// A `Sampler` object defines how a pipeline will sample from a [`TextureView`]. Samplers define
 /// image filters (including anisotropy) and address (wrapping) modes, among other things. See
 /// the documentation for [`SamplerDescriptor`] for more information.
-#[derive(Debug, PartialEq)]
 pub struct Sampler {
-    id: backend::SamplerId,
+    context: Arc<C>,
+    id: <C as Context>::SamplerId,
+}
+
+impl Drop for Sampler {
+    fn drop(&mut self) {
+        self.context.sampler_drop(&self.id);
+    }
 }
 
 /// A handle to a presentable surface.
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) to which rendered images may
 /// be presented. A `Surface` may be created with [`Surface::create`].
-#[derive(Debug, PartialEq)]
 pub struct Surface {
-    id: backend::SurfaceId,
+    id: <C as Context>::SurfaceId,
 }
 
 /// A handle to a swap chain.
 ///
 /// A `SwapChain` represents the image or series of images that will be presented to a [`Surface`].
 /// A `SwapChain` may be created with [`Device::create_swap_chain`].
-#[derive(Debug, PartialEq)]
 pub struct SwapChain {
-    id: backend::SwapChainId,
+    context: Arc<C>,
+    id: <C as Context>::SwapChainId,
 }
 
 /// An opaque handle to a binding group layout.
@@ -122,9 +364,15 @@ pub struct SwapChain {
 /// create a [`BindGroupDescriptor`] object, which in turn can be used to create a [`BindGroup`]
 /// object with [`Device::create_bind_group`]. A series of `BindGroupLayout`s can also be used to
 /// create a [`PipelineLayoutDescriptor`], which can be used to create a [`PipelineLayout`].
-#[derive(Debug, PartialEq)]
 pub struct BindGroupLayout {
-    id: backend::BindGroupLayoutId,
+    context: Arc<C>,
+    id: <C as Context>::BindGroupLayoutId,
+}
+
+impl Drop for BindGroupLayout {
+    fn drop(&mut self) {
+        self.context.bind_group_layout_drop(&self.id);
+    }
 }
 
 /// An opaque handle to a binding group.
@@ -133,14 +381,14 @@ pub struct BindGroupLayout {
 /// [`BindGroupLayout`]. It can be created with [`Device::create_bind_group`]. A `BindGroup` can
 /// be bound to a particular [`RenderPass`] with [`RenderPass::set_bind_group`], or to a
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
-#[derive(Debug, PartialEq)]
 pub struct BindGroup {
-    id: backend::BindGroupId,
+    context: Arc<C>,
+    id: <C as Context>::BindGroupId,
 }
 
 impl Drop for BindGroup {
     fn drop(&mut self) {
-        backend::bind_group_drop(&self.id);
+        self.context.bind_group_drop(&self.id);
     }
 }
 
@@ -149,32 +397,56 @@ impl Drop for BindGroup {
 /// A `ShaderModule` represents a compiled shader module on the GPU. It can be created by passing
 /// valid SPIR-V source code to [`Device::create_shader_module`]. Shader modules are used to define
 /// programmable stages of a pipeline.
-#[derive(Debug, PartialEq)]
 pub struct ShaderModule {
-    id: backend::ShaderModuleId,
+    context: Arc<C>,
+    id: <C as Context>::ShaderModuleId,
+}
+
+impl Drop for ShaderModule {
+    fn drop(&mut self) {
+        self.context.shader_module_drop(&self.id);
+    }
 }
 
 /// An opaque handle to a pipeline layout.
 ///
 /// A `PipelineLayout` object describes the available binding groups of a pipeline.
-#[derive(Debug, PartialEq)]
 pub struct PipelineLayout {
-    id: backend::PipelineLayoutId,
+    context: Arc<C>,
+    id: <C as Context>::PipelineLayoutId,
+}
+
+impl Drop for PipelineLayout {
+    fn drop(&mut self) {
+        self.context.pipeline_layout_drop(&self.id);
+    }
 }
 
 /// A handle to a rendering (graphics) pipeline.
 ///
 /// A `RenderPipeline` object represents a graphics pipeline and its stages, bindings, vertex
 /// buffers and targets. A `RenderPipeline` may be created with [`Device::create_render_pipeline`].
-#[derive(Debug, PartialEq)]
 pub struct RenderPipeline {
-    id: backend::RenderPipelineId,
+    context: Arc<C>,
+    id: <C as Context>::RenderPipelineId,
+}
+
+impl Drop for RenderPipeline {
+    fn drop(&mut self) {
+        self.context.render_pipeline_drop(&self.id);
+    }
 }
 
 /// A handle to a compute pipeline.
-#[derive(Debug, PartialEq)]
 pub struct ComputePipeline {
-    id: backend::ComputePipelineId,
+    context: Arc<C>,
+    id: <C as Context>::ComputePipelineId,
+}
+
+impl Drop for ComputePipeline {
+    fn drop(&mut self) {
+        self.context.compute_pipeline_drop(&self.id);
+    }
 }
 
 /// An opaque handle to a command buffer on the GPU.
@@ -182,9 +454,25 @@ pub struct ComputePipeline {
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
 /// queue with [`Queue::submit`]. A `CommandBuffer` is obtained by recording a series of commands to
 /// a [`CommandEncoder`] and then calling [`CommandEncoder::finish`].
-#[derive(Debug, PartialEq)]
 pub struct CommandBuffer {
-    id: backend::CommandBufferId,
+    context: Arc<C>,
+    id: <C as Context>::CommandBufferId,
+    alive: bool,
+}
+
+impl CommandBuffer {
+    fn commit(mut self) -> <C as Context>::CommandBufferId {
+        self.alive = false;
+        self.id
+    }
+}
+
+impl Drop for CommandBuffer {
+    fn drop(&mut self) {
+        if self.alive {
+            self.context.command_buffer_drop(&self.id);
+        }
+    }
 }
 
 /// An object that encodes GPU operations.
@@ -194,38 +482,35 @@ pub struct CommandBuffer {
 ///
 /// When finished recording, call [`CommandEncoder::finish`] to obtain a [`CommandBuffer`] which may
 /// be submitted for execution.
-#[derive(Debug)]
 pub struct CommandEncoder {
-    id: backend::CommandEncoderId,
+    context: Arc<C>,
+    id: <C as Context>::CommandEncoderId,
     /// This type should be !Send !Sync, because it represents an allocation on this thread's
     /// command buffer.
     _p: std::marker::PhantomData<*const u8>,
 }
 
 /// An in-progress recording of a render pass.
-#[derive(Debug)]
 pub struct RenderPass<'a> {
-    id: backend::RenderPassEncoderId,
-    _parent: &'a mut CommandEncoder,
+    id: <C as Context>::RenderPassId,
+    parent: &'a mut CommandEncoder,
 }
 
 /// An in-progress recording of a compute pass.
-#[derive(Debug)]
 pub struct ComputePass<'a> {
-    id: backend::ComputePassId,
-    _parent: &'a mut CommandEncoder,
+    id: <C as Context>::ComputePassId,
+    parent: &'a mut CommandEncoder,
 }
 
 /// A handle to a command queue on a device.
 ///
 /// A `Queue` executes recorded [`CommandBuffer`] objects.
-#[derive(Debug, PartialEq)]
 pub struct Queue {
-    id: backend::QueueId,
+    context: Arc<C>,
+    id: <C as Context>::QueueId,
 }
 
 /// A resource that can be bound to a pipeline.
-#[derive(Clone, Debug)]
 pub enum BindingResource<'a> {
     Buffer {
         buffer: &'a Buffer,
@@ -236,7 +521,6 @@ pub enum BindingResource<'a> {
 }
 
 /// A bindable resource and the slot to bind it to.
-#[derive(Clone, Debug)]
 pub struct Binding<'a> {
     pub binding: u32,
     pub resource: BindingResource<'a>,
@@ -249,7 +533,7 @@ pub enum BindingType {
     /// A buffer for uniform values.
     ///
     /// Example GLSL syntax:
-    /// ```
+    /// ```cpp,ignore
     /// layout(std140, binding = 0)
     /// uniform Globals {
     ///     vec2 aUniform;
@@ -264,7 +548,7 @@ pub enum BindingType {
     /// A storage buffer.
     ///
     /// Example GLSL syntax:
-    /// ```
+    /// ```cpp,ignore
     /// layout (set=0, binding=0) buffer myStorageBuffer {
     ///     vec4 myElement[];
     /// };
@@ -276,7 +560,7 @@ pub enum BindingType {
         /// The buffer can only be read in the shader and it must be annotated with `readonly`.
         ///
         /// Example GLSL syntax:
-        /// ```
+        /// ```cpp,ignore
         /// layout (set=0, binding=0) readonly buffer myStorageBuffer {
         ///     vec4 myElement[];
         /// };
@@ -286,7 +570,7 @@ pub enum BindingType {
     /// A sampler that can be used to sample a texture.
     ///
     /// Example GLSL syntax:
-    /// ```
+    /// ```cpp,ignore
     /// layout(binding = 0)
     /// uniform sampler s;
     /// ```
@@ -298,7 +582,7 @@ pub enum BindingType {
     /// A texture.
     ///
     /// Example GLSL syntax:
-    /// ```
+    /// ```cpp,ignore
     /// layout(binding = 0)
     /// uniform texture2D t;
     /// ```
@@ -313,7 +597,7 @@ pub enum BindingType {
     },
     /// A storage texture.
     /// Example GLSL syntax:
-    /// ```
+    /// ```cpp,ignore
     /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
     /// ```
     /// Note that the texture format must be specified in the shader as well.
@@ -329,7 +613,7 @@ pub enum BindingType {
         /// The texture can only be read in the shader and it must be annotated with `readonly`.
         ///
         /// Example GLSL syntax:
-        /// ```
+        /// ```cpp,ignore
         /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
         /// ```
         readonly: bool,
@@ -355,7 +639,7 @@ pub struct BindGroupLayoutDescriptor<'a> {
 }
 
 /// A description of a group of bindings and the resources to be bound.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BindGroupDescriptor<'a> {
     /// The layout for this bind group.
     pub layout: &'a BindGroupLayout,
@@ -372,13 +656,13 @@ pub struct BindGroupDescriptor<'a> {
 ///
 /// A `PipelineLayoutDescriptor` can be passed to [`Device::create_pipeline_layout`] to obtain a
 /// [`PipelineLayout`].
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct PipelineLayoutDescriptor<'a> {
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
 }
 
 /// A description of a programmable pipeline stage.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ProgrammableStageDescriptor<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
@@ -410,7 +694,7 @@ pub struct VertexBufferDescriptor<'a> {
 }
 
 /// A complete description of a render (graphics) pipeline.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RenderPipelineDescriptor<'a> {
     /// The layout of bind groups for this pipeline.
     pub layout: &'a PipelineLayout,
@@ -451,7 +735,7 @@ pub struct RenderPipelineDescriptor<'a> {
 }
 
 /// A complete description of a compute pipeline.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ComputePipelineDescriptor<'a> {
     /// The layout of bind groups for this pipeline.
     pub layout: &'a PipelineLayout,
@@ -466,7 +750,6 @@ pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
     wgt::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
 
 /// A description of all the attachments of a render pass.
-#[derive(Debug)]
 pub struct RenderPassDescriptor<'a, 'b> {
     /// The color attachments of the render pass.
     pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
@@ -524,14 +807,13 @@ pub struct TextureDescriptor<'a> {
 }
 
 /// A swap chain image that can be rendered to.
-#[derive(Debug)]
 pub struct SwapChainOutput {
     pub view: TextureView,
-    detail: backend::SwapChainOutputDetail,
+    detail: <C as Context>::SwapChainOutputDetail,
 }
 
 /// A view of a buffer which can be used to copy to or from a texture.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct BufferCopyView<'a> {
     /// The buffer to be copied to or from.
     pub buffer: &'a Buffer,
@@ -550,7 +832,7 @@ pub struct BufferCopyView<'a> {
 }
 
 /// A view of a texture which can be used to copy to or from a buffer or another texture.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TextureCopyView<'a> {
     /// The texture to be copied to or from.
     pub texture: &'a Texture,
@@ -567,12 +849,13 @@ pub struct TextureCopyView<'a> {
 
 /// A buffer being created, mapped in host memory.
 pub struct CreateBufferMapped<'a> {
-    id: backend::BufferId,
+    context: Arc<C>,
+    id: <C as Context>::BufferId,
     /// The backing field for `data()`. This isn't `pub` because users shouldn't
     /// be able to replace it to point somewhere else. We rely on it pointing to
     /// to the correct memory later during `unmap()`.
     mapped_data: &'a mut [u8],
-    detail: backend::CreateBufferMappedDetail,
+    detail: <C as Context>::CreateBufferMappedDetail,
 }
 
 impl CreateBufferMapped<'_> {
@@ -583,34 +866,70 @@ impl CreateBufferMapped<'_> {
 
     /// Unmaps the buffer from host memory and returns a [`Buffer`].
     pub fn finish(self) -> Buffer {
-        backend::device_create_buffer_mapped_finish(self)
+        <C as Context>::flush_mapped_data(self.mapped_data, self.detail);
+        Context::buffer_unmap(&*self.context, &self.id);
+        Buffer {
+            context: self.context,
+            id: self.id,
+            //detail: self.detail,
+        }
     }
 }
 
-impl Surface {
+impl Instance {
+    /// Create an new instance.
+    pub fn new() -> Self {
+        Instance {
+            context: Arc::new(C::init()),
+        }
+    }
+
+    /// Retrieves all available [`Adapter`]s that match the given backends.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> Vec<Adapter> {
+        self.context
+            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, || PhantomData))
+            .into_iter()
+            .map(|id| crate::Adapter {
+                id,
+                context: Arc::clone(&self.context),
+            })
+            .collect()
+    }
+
     /// Creates a surface from a raw window handle.
-    pub fn create<W: raw_window_handle::HasRawWindowHandle>(window: &W) -> Self {
+    pub fn create_surface<W: raw_window_handle::HasRawWindowHandle>(&self, window: &W) -> Surface {
         Surface {
-            id: backend::device_create_surface(window),
+            id: self.context.create_surface(window),
         }
     }
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub fn create_surface_from_core_animation_layer(layer: *mut std::ffi::c_void) -> Self {
-        Surface {
-            id: wgn::wgpu_create_surface_from_metal_layer(layer),
-        }
-    }
-}
+    pub fn create_surface_from_core_animation_layer(
+        &self,
+        layer: *mut std::ffi::c_void,
+    ) -> Surface {
+        let surface = wgc::instance::Surface {
+            #[cfg(feature = "vulkan-portability")]
+            vulkan: self
+                .context
+                .instance
+                .vulkan
+                .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
+            metal: self
+                .context
+                .instance
+                .metal
+                .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
+        };
 
-impl Adapter {
-    /// Retrieves all available [`Adapter`]s that match the given backends.
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn enumerate(backends: BackendBit) -> Vec<Self> {
-        wgn::wgpu_enumerate_adapters(backends)
-            .into_iter()
-            .map(|id| Adapter { id })
-            .collect()
+        crate::Surface {
+            id: self.context.surfaces.register_identity(
+                PhantomData,
+                surface,
+                &mut wgc::hub::Token::root(),
+            ),
+        }
     }
 
     /// Retrieves an [`Adapter`] which matches the given options.
@@ -618,15 +937,19 @@ impl Adapter {
     /// Some options are "soft", so treated as non-mandatory. Others are "hard".
     ///
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
-    pub async fn request(
+    pub async fn request_adapter(
+        &self,
         options: &RequestAdapterOptions<'_>,
         backends: BackendBit,
-    ) -> Option<Self> {
-        backend::request_adapter(options, backends)
+    ) -> Option<Adapter> {
+        let context = Arc::clone(&self.context);
+        backend::request_adapter(&self.context, options, backends)
             .await
-            .map(|id| Adapter { id })
+            .map(|id| Adapter { context, id })
     }
+}
 
+impl Adapter {
     /// Requests a connection to a physical device, creating a logical device.
     /// Returns the device together with a queue that executes command buffers.
     ///
@@ -634,75 +957,95 @@ impl Adapter {
     ///
     /// Panics if the extensions specified by `desc` are not supported by this adapter.
     pub async fn request_device(&self, desc: &DeviceDescriptor) -> (Device, Queue) {
-        let (device_id, queue_id) = backend::request_device_and_queue(&self.id, Some(desc)).await;
+        let (device_id, queue_id) =
+            backend::request_device_and_queue(&self.context, &self.id, Some(desc)).await;
         let device = Device {
+            context: Arc::clone(&self.context),
             id: device_id,
-            temp: Temp::default(),
         };
-        let queue = Queue { id: queue_id };
+        let queue = Queue {
+            context: Arc::clone(&self.context),
+            id: queue_id,
+        };
         (device, queue)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_info(&self) -> AdapterInfo {
-        wgn::adapter_get_info(self.id)
+        //wgn::adapter_get_info(self.id)
+        unimplemented!()
     }
 }
 
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
     pub fn poll(&self, maintain: Maintain) {
-        backend::device_poll(&self.id, maintain);
+        Context::device_poll(&*self.context, &self.id, maintain);
     }
 
     /// Creates a shader module from SPIR-V source code.
     pub fn create_shader_module(&self, spv: &[u32]) -> ShaderModule {
         ShaderModule {
-            id: backend::create_shader_module(&self.id, spv),
+            context: Arc::clone(&self.context),
+            id: Context::device_create_shader_module(&*self.context, &self.id, spv),
         }
     }
 
     /// Creates an empty [`CommandEncoder`].
     pub fn create_command_encoder(&self, desc: &CommandEncoderDescriptor) -> CommandEncoder {
         CommandEncoder {
-            id: backend::create_command_encoder(&self.id, desc),
+            context: Arc::clone(&self.context),
+            id: Context::device_create_command_encoder(&*self.context, &self.id, desc),
             _p: Default::default(),
         }
     }
 
     /// Creates a new bind group.
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
-        let id = backend::create_bind_group(&self.id, desc);
-        BindGroup { id }
+        BindGroup {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_bind_group(&*self.context, &self.id, desc),
+        }
     }
 
     /// Creates a bind group layout.
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
-        let id = backend::create_bind_group_layout(&self.id, desc);
-        BindGroupLayout { id }
+        BindGroupLayout {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_bind_group_layout(&*self.context, &self.id, desc),
+        }
     }
 
     /// Creates a pipeline layout.
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
-        let id = backend::create_pipeline_layout(&self.id, desc);
-        PipelineLayout { id }
+        PipelineLayout {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_pipeline_layout(&*self.context, &self.id, desc),
+        }
     }
 
     /// Creates a render pipeline.
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
-        let id = backend::create_render_pipeline(&self.id, desc);
-        RenderPipeline { id }
+        RenderPipeline {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_render_pipeline(&*self.context, &self.id, desc),
+        }
     }
 
     /// Creates a compute pipeline.
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
-        let id = backend::create_compute_pipeline(&self.id, desc);
-        ComputePipeline { id }
+        ComputePipeline {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_compute_pipeline(&*self.context, &self.id, desc),
+        }
     }
 
     /// Creates a new buffer.
     pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
-        backend::device_create_buffer(&self.id, desc)
+        Buffer {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_buffer(&*self.context, &self.id, desc),
+        }
     }
 
     /// Creates a new buffer and maps it into host-visible memory.
@@ -711,7 +1054,14 @@ impl Device {
     /// will not be created until calling [`CreateBufferMapped::finish`].
     pub fn create_buffer_mapped(&self, desc: &BufferDescriptor) -> CreateBufferMapped<'_> {
         assert_ne!(desc.size, 0);
-        backend::device_create_buffer_mapped(&self.id, desc)
+        let (id, mapped_data, detail) =
+            Context::device_create_buffer_mapped(&*self.context, &self.id, desc);
+        CreateBufferMapped {
+            context: Arc::clone(&self.context),
+            id,
+            mapped_data,
+            detail,
+        }
     }
 
     /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
@@ -731,7 +1081,8 @@ impl Device {
     /// `desc` specifies the general format of the texture.
     pub fn create_texture(&self, desc: &TextureDescriptor) -> Texture {
         Texture {
-            id: backend::device_create_texture(&self.id, desc),
+            context: Arc::clone(&self.context),
+            id: Context::device_create_texture(&*self.context, &self.id, desc),
             owned: true,
         }
     }
@@ -741,22 +1092,23 @@ impl Device {
     /// `desc` specifies the behavior of the sampler.
     pub fn create_sampler(&self, desc: &SamplerDescriptor) -> Sampler {
         Sampler {
-            id: backend::device_create_sampler(&self.id, desc),
+            context: Arc::clone(&self.context),
+            id: Context::device_create_sampler(&*self.context, &self.id, desc),
         }
     }
 
     /// Create a new [`SwapChain`] which targets `surface`.
     pub fn create_swap_chain(&self, surface: &Surface, desc: &SwapChainDescriptor) -> SwapChain {
         SwapChain {
-            id: backend::device_create_swap_chain(&self.id, &surface.id, desc),
+            context: Arc::clone(&self.context),
+            id: Context::device_create_swap_chain(&*self.context, &self.id, &surface.id, desc),
         }
     }
 }
 
-// TODO
 impl Drop for Device {
     fn drop(&mut self) {
-        backend::device_drop(&self.id);
+        self.context.device_drop(&self.id);
     }
 }
 
@@ -764,7 +1116,8 @@ impl Drop for Device {
 pub struct BufferAsyncErr;
 
 pub struct BufferReadMapping {
-    detail: backend::BufferReadMappingDetail,
+    context: Arc<C>,
+    detail: <C as Context>::BufferReadMappingDetail,
 }
 
 unsafe impl Send for BufferReadMapping {}
@@ -778,12 +1131,13 @@ impl BufferReadMapping {
 
 impl Drop for BufferReadMapping {
     fn drop(&mut self) {
-        backend::buffer_unmap(&self.detail.buffer_id);
+        Context::buffer_unmap(&*self.context, &self.detail.buffer_id);
     }
 }
 
 pub struct BufferWriteMapping {
-    detail: backend::BufferWriteMappingDetail,
+    context: Arc<C>,
+    detail: <C as Context>::BufferWriteMappingDetail,
 }
 
 unsafe impl Send for BufferWriteMapping {}
@@ -797,7 +1151,7 @@ impl BufferWriteMapping {
 
 impl Drop for BufferWriteMapping {
     fn drop(&mut self) {
-        backend::buffer_unmap(&self.detail.buffer_id);
+        Context::buffer_unmap(&*self.context, &self.detail.buffer_id);
     }
 }
 
@@ -815,7 +1169,11 @@ impl Buffer {
         start: BufferAddress,
         size: BufferAddress,
     ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncErr>> + '_ {
-        backend::buffer_map_read(self, start, size)
+        use futures::FutureExt;
+
+        let context = Arc::clone(&self.context);
+        backend::buffer_map_read(&self.context, &self.id, start, size)
+            .map(|result| result.map(|detail| BufferReadMapping { context, detail }))
     }
 
     /// Map the buffer for writing. The result is returned in a future.
@@ -827,18 +1185,22 @@ impl Buffer {
         start: BufferAddress,
         size: BufferAddress,
     ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncErr>> + '_ {
-        backend::buffer_map_write(self, start, size)
+        use futures::FutureExt;
+
+        let context = Arc::clone(&self.context);
+        backend::buffer_map_write(&self.context, &self.id, start, size)
+            .map(|result| result.map(|detail| BufferWriteMapping { context, detail }))
     }
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.
     pub fn unmap(&self) {
-        backend::buffer_unmap(&self.id);
+        Context::buffer_unmap(&*self.context, &self.id);
     }
 }
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        backend::buffer_drop(&self.id);
+        self.context.buffer_drop(&self.id);
     }
 }
 
@@ -846,7 +1208,8 @@ impl Texture {
     /// Creates a view of this texture.
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
-            id: backend::texture_create_view(&self.id, Some(desc)),
+            context: Arc::clone(&self.context),
+            id: Context::texture_create_view(&*self.context, &self.id, Some(desc)),
             owned: true,
         }
     }
@@ -854,7 +1217,8 @@ impl Texture {
     /// Creates a default view of this whole texture.
     pub fn create_default_view(&self) -> TextureView {
         TextureView {
-            id: backend::texture_create_view(&self.id, None),
+            context: Arc::clone(&self.context),
+            id: Context::texture_create_view(&*self.context, &self.id, None),
             owned: true,
         }
     }
@@ -863,7 +1227,7 @@ impl Texture {
 impl Drop for Texture {
     fn drop(&mut self) {
         if self.owned {
-            backend::texture_drop(&self.id);
+            self.context.texture_drop(&self.id);
         }
     }
 }
@@ -871,7 +1235,7 @@ impl Drop for Texture {
 impl Drop for TextureView {
     fn drop(&mut self) {
         if self.owned {
-            backend::texture_view_drop(&self.id);
+            self.context.texture_view_drop(&self.id);
         }
     }
 }
@@ -880,7 +1244,9 @@ impl CommandEncoder {
     /// Finishes recording and returns a [`CommandBuffer`] that can be submitted for execution.
     pub fn finish(self) -> CommandBuffer {
         CommandBuffer {
-            id: backend::command_encoder_finish(&self.id),
+            context: Arc::clone(&self.context),
+            id: Context::encoder_finish(&*self.context, &self.id),
+            alive: true,
         }
     }
 
@@ -892,8 +1258,8 @@ impl CommandEncoder {
         desc: &RenderPassDescriptor<'a, '_>,
     ) -> RenderPass<'a> {
         RenderPass {
-            id: backend::command_encoder_begin_render_pass(&self.id, desc),
-            _parent: self,
+            id: Context::encoder_begin_render_pass(&*self.context, &self.id, desc),
+            parent: self,
         }
     }
 
@@ -902,8 +1268,8 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: backend::begin_compute_pass(&self.id),
-            _parent: self,
+            id: Context::encoder_begin_compute_pass(&*self.context, &self.id),
+            parent: self,
         }
     }
 
@@ -916,11 +1282,12 @@ impl CommandEncoder {
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
     ) {
-        backend::command_encoder_copy_buffer_to_buffer(
+        Context::encoder_copy_buffer_to_buffer(
+            &*self.context,
             &self.id,
-            source,
+            &source.id,
             source_offset,
-            destination,
+            &destination.id,
             destination_offset,
             copy_size,
         );
@@ -933,7 +1300,13 @@ impl CommandEncoder {
         destination: TextureCopyView,
         copy_size: Extent3d,
     ) {
-        backend::command_encoder_copy_buffer_to_texture(&self.id, source, destination, copy_size);
+        Context::encoder_copy_buffer_to_texture(
+            &*self.context,
+            &self.id,
+            source,
+            destination,
+            copy_size,
+        );
     }
 
     /// Copy data from a texture to a buffer.
@@ -943,7 +1316,13 @@ impl CommandEncoder {
         destination: BufferCopyView,
         copy_size: Extent3d,
     ) {
-        backend::command_encoder_copy_texture_to_buffer(&self.id, source, destination, copy_size);
+        Context::encoder_copy_texture_to_buffer(
+            &*self.context,
+            &self.id,
+            source,
+            destination,
+            copy_size,
+        );
     }
 
     /// Copy data from one texture to another.
@@ -953,7 +1332,13 @@ impl CommandEncoder {
         destination: TextureCopyView,
         copy_size: Extent3d,
     ) {
-        backend::command_encoder_copy_texture_to_texture(&self.id, source, destination, copy_size);
+        Context::encoder_copy_texture_to_texture(
+            &*self.context,
+            &self.id,
+            source,
+            destination,
+            copy_size,
+        );
     }
 }
 
@@ -965,18 +1350,18 @@ impl<'a> RenderPass<'a> {
         bind_group: &'a BindGroup,
         offsets: &[DynamicOffset],
     ) {
-        backend::render_pass_set_bind_group(&self.id, index, &bind_group.id, offsets)
+        RenderPassInner::set_bind_group(&mut self.id, index, &bind_group.id, offsets)
     }
 
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
     pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
-        backend::render_pass_set_pipeline(&self.id, &pipeline.id)
+        RenderPassInner::set_pipeline(&mut self.id, &pipeline.id)
     }
 
     pub fn set_blend_color(&mut self, color: Color) {
-        backend::render_pass_set_blend_color(&self.id, color)
+        self.id.set_blend_color(color)
     }
 
     /// Sets the active index buffer.
@@ -991,7 +1376,7 @@ impl<'a> RenderPass<'a> {
         offset: BufferAddress,
         size: BufferAddress,
     ) {
-        backend::render_pass_set_index_buffer(&self.id, buffer, offset, size)
+        self.id.set_index_buffer(&buffer.id, offset, size)
     }
 
     /// Assign a vertex buffer to a slot.
@@ -1015,35 +1400,35 @@ impl<'a> RenderPass<'a> {
         offset: BufferAddress,
         size: BufferAddress,
     ) {
-        backend::render_pass_set_vertex_buffer(&self.id, slot, buffer, offset, size)
+        self.id.set_vertex_buffer(slot, &buffer.id, offset, size)
     }
 
     /// Sets the scissor region.
     ///
     /// Subsequent draw calls will discard any fragments that fall outside this region.
     pub fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        backend::render_pass_set_scissor_rect(&self.id, x, y, width, height);
+        self.id.set_scissor_rect(x, y, width, height);
     }
 
     /// Sets the viewport region.
     ///
     /// Subsequent draw calls will draw any fragments in this region.
     pub fn set_viewport(&mut self, x: f32, y: f32, w: f32, h: f32, min_depth: f32, max_depth: f32) {
-        backend::render_pass_set_viewport(&self.id, x, y, w, h, min_depth, max_depth);
+        self.id.set_viewport(x, y, w, h, min_depth, max_depth);
     }
 
     /// Sets the stencil reference.
     ///
     /// Subsequent stencil tests will test against this value.
     pub fn set_stencil_reference(&mut self, reference: u32) {
-        backend::render_pass_set_stencil_reference(&self.id, reference);
+        self.id.set_stencil_reference(reference);
     }
 
     /// Draws primitives from the active vertex buffer(s).
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        backend::render_pass_draw(&self.id, vertices, instances)
+        self.id.draw(vertices, instances)
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
@@ -1051,7 +1436,7 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        backend::render_pass_draw_indexed(&self.id, indices, base_vertex, instances);
+        self.id.draw_indexed(indices, base_vertex, instances);
     }
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
@@ -1070,7 +1455,7 @@ impl<'a> RenderPass<'a> {
     /// }
     /// ```
     pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
-        backend::render_pass_draw_indirect(&self.id, indirect_buffer, indirect_offset);
+        self.id.draw_indirect(&indirect_buffer.id, indirect_offset);
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers,
@@ -1096,14 +1481,17 @@ impl<'a> RenderPass<'a> {
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
-        backend::render_pass_draw_indexed_indirect(&self.id, indirect_buffer, indirect_offset);
+        self.id
+            .draw_indexed_indirect(&indirect_buffer.id, indirect_offset);
     }
 }
 
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            backend::render_pass_end_pass(&self.id);
+            self.parent
+                .context
+                .encoder_end_render_pass(&self.parent.id, &mut self.id);
         }
     }
 }
@@ -1116,19 +1504,19 @@ impl<'a> ComputePass<'a> {
         bind_group: &'a BindGroup,
         offsets: &[DynamicOffset],
     ) {
-        backend::compute_pass_set_bind_group(&self.id, index, &bind_group.id, offsets);
+        ComputePassInner::set_bind_group(&mut self.id, index, &bind_group.id, offsets);
     }
 
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
-        backend::compute_pass_set_pipeline(&self.id, &pipeline.id);
+        ComputePassInner::set_pipeline(&mut self.id, &pipeline.id);
     }
 
     /// Dispatches compute work operations.
     ///
     /// `x`, `y` and `z` denote the number of work groups to dispatch in each dimension.
     pub fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-        backend::compute_pass_dispatch(&self.id, x, y, z);
+        self.id.dispatch(x, y, z);
     }
 
     /// Dispatches compute work operations, based on the contents of the `indirect_buffer`.
@@ -1137,29 +1525,36 @@ impl<'a> ComputePass<'a> {
         indirect_buffer: &'a Buffer,
         indirect_offset: BufferAddress,
     ) {
-        backend::compute_pass_dispatch_indirect(&self.id, &indirect_buffer.id, indirect_offset);
+        self.id
+            .dispatch_indirect(&indirect_buffer.id, indirect_offset);
     }
 }
 
 impl<'a> Drop for ComputePass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            backend::compute_pass_end_pass(&self.id);
+            self.parent
+                .context
+                .encoder_end_compute_pass(&self.parent.id, &mut self.id);
         }
     }
 }
 
 impl Queue {
     /// Submits a series of finished command buffers for execution.
-    pub fn submit(&self, command_buffers: &[CommandBuffer]) {
-        backend::queue_submit(&self.id, command_buffers);
+    pub fn submit<I: IntoIterator<Item = CommandBuffer>>(&self, command_buffers: I) {
+        Context::queue_submit(
+            &*self.context,
+            &self.id,
+            command_buffers.into_iter().map(CommandBuffer::commit),
+        );
     }
 }
 
 impl Drop for SwapChainOutput {
     fn drop(&mut self) {
         if !thread::panicking() {
-            backend::swap_chain_present(&self);
+            Context::swap_chain_present(&*self.view.context, &self.view.id, &self.detail);
         }
     }
 }
@@ -1175,6 +1570,15 @@ impl SwapChain {
     /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
     pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, TimeOut> {
-        backend::swap_chain_get_next_texture(&self.id)
+        Context::swap_chain_get_next_texture(&*self.context, &self.id).map(|(id, detail)| {
+            SwapChainOutput {
+                view: TextureView {
+                    context: Arc::clone(&self.context),
+                    id,
+                    owned: false,
+                },
+                detail,
+            }
+        })
     }
 }

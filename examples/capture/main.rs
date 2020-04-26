@@ -5,15 +5,16 @@ use std::fs::File;
 use std::mem::size_of;
 
 async fn run() {
-    let adapter = wgpu::Adapter::request(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: None,
-        },
-        wgpu::BackendBit::PRIMARY,
-    )
-    .await
-    .unwrap();
+    let adapter = wgpu::Instance::new()
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: None,
+            },
+            wgpu::BackendBit::PRIMARY,
+        )
+        .await
+        .unwrap();
 
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -86,7 +87,7 @@ async fn run() {
         encoder.finish()
     };
 
-    queue.submit(&[command_buffer]);
+    queue.submit(Some(command_buffer));
 
     // Note that we're not calling `.await` here.
     let buffer_future = output_buffer.map_read(0, (size * size) as u64 * size_of::<u32>() as u64);
