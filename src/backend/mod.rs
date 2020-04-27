@@ -1,13 +1,13 @@
 #[cfg(target_arch = "wasm32")]
 mod web;
 #[cfg(target_arch = "wasm32")]
-pub use web::*;
+pub(crate) use web::Context;
 
 #[cfg(not(target_arch = "wasm32"))]
-mod native;
+mod direct;
 
 #[cfg(not(target_arch = "wasm32"))]
-pub use native::*;
+pub(crate) use direct::Context;
 
 #[cfg(not(target_arch = "wasm32"))]
 mod native_gpu_future;

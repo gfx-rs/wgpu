@@ -8,7 +8,7 @@
 
 wgpu-rs is an idiomatic Rust wrapper over [wgpu-core](https://github.com/gfx-rs/wgpu). It's designed to be suitable for general purpose graphics and computation needs of Rust community.
 
-Currently wgpu-rs works on native platforms, but [WASM support is currently being added](https://github.com/gfx-rs/wgpu-rs/issues/101) as well.
+wgpu-rs can target both the natively supported backends and WASM directly.
 
 ## Gallery
 

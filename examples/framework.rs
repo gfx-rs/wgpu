@@ -49,21 +49,23 @@ pub trait Example: 'static + Sized {
 async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
     log::info!("Initializing the surface...");
 
-    let (size, surface) = {
+    let instance = wgpu::Instance::new();
+    let (size, surface) = unsafe {
         let size = window.inner_size();
-        let surface = wgpu::Surface::create(&window);
+        let surface = instance.create_surface(&window);
         (size, surface)
     };
 
-    let adapter = wgpu::Adapter::request(
-        &wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::Default,
-            compatible_surface: Some(&surface),
-        },
-        wgpu::BackendBit::PRIMARY,
-    )
-    .await
-    .unwrap();
+    let adapter = instance
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: Some(&surface),
+            },
+            wgpu::BackendBit::PRIMARY,
+        )
+        .await
+        .unwrap();
 
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -72,7 +74,8 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
             },
             limits: wgpu::Limits::default(),
         })
-        .await;
+        .await
+        .unwrap();
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -90,8 +93,8 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
 
     log::info!("Initializing the example...");
     let (mut example, init_command_buf) = E::init(&sc_desc, &device);
-    if let Some(command_buf) = init_command_buf {
-        queue.submit(&[command_buf]);
+    if init_command_buf.is_some() {
+        queue.submit(init_command_buf);
     }
 
     log::info!("Entering render loop...");
@@ -112,8 +115,8 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 sc_desc.height = size.height;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
                 let command_buf = example.resize(&sc_desc, &device);
-                if let Some(command_buf) = command_buf {
-                    queue.submit(&[command_buf]);
+                if command_buf.is_some() {
+                    queue.submit(command_buf);
                 }
             }
             event::Event::WindowEvent { event, .. } => match event {
@@ -138,7 +141,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                     .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
                 let command_buf = example.render(&frame, &device);
-                queue.submit(&[command_buf]);
+                queue.submit(Some(command_buf));
             }
             _ => {}
         }
