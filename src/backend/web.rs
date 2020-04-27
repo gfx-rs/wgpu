@@ -634,6 +634,9 @@ impl crate::Context for Context {
         options: &crate::RequestAdapterOptions<'_>,
         _backends: wgt::BackendBit,
     ) -> Self::RequestAdapterFuture {
+        //TODO: support this check, return `None` if the flag is not set.
+        // It's not trivial, since we need the Future logic to have this check,
+        // and currently the Future her has no room for extra parameter `backends`.
         //assert!(backends.contains(wgt::BackendBit::BROWSER_WEBGPU));
         let mut mapped_options = web_sys::GpuRequestAdapterOptions::new();
         let mapped_power_preference = match options.power_preference {
