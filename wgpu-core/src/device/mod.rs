@@ -125,50 +125,38 @@ fn map_buffer<B: hal::Backend>(
     sub_range: hal::buffer::SubRange,
     kind: HostMap,
 ) -> BufferMapResult {
-    let (ptr, sync_range) = {
+    let (ptr, segment, needs_sync) = {
         let segment = hal::memory::Segment {
             offset: sub_range.offset,
             size: sub_range.size,
         };
         let mapped = buffer.memory.map(raw, segment)?;
-        let sync_range = if mapped.is_coherent() {
-            None
-        } else {
-            Some(mapped.range())
+        let mr = mapped.range();
+        let segment = hal::memory::Segment {
+            offset: mr.start,
+            size: Some(mr.end - mr.start),
         };
-        (mapped.ptr(), sync_range)
+        (mapped.ptr(), segment, !mapped.is_coherent())
     };
 
-    if let Some(range) = sync_range {
-        let segment = hal::memory::Segment {
-            offset: range.start,
-            size: Some(range.end - range.start),
-        };
-        match kind {
-            HostMap::Read => unsafe {
-                raw.invalidate_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
-                    .unwrap();
-            },
-            HostMap::Write => {
-                buffer.mapped_write_segments.push(segment);
-            }
-        }
-    }
+    buffer.sync_mapped_writes = match kind {
+        HostMap::Read if needs_sync => unsafe {
+            raw.invalidate_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
+                .unwrap();
+            None
+        },
+        HostMap::Write if needs_sync => Some(segment),
+        _ => None,
+    };
     Ok(ptr.as_ptr())
 }
 
 fn unmap_buffer<B: hal::Backend>(raw: &B::Device, buffer: &mut resource::Buffer<B>) {
-    if !buffer.mapped_write_segments.is_empty() {
+    if let Some(segment) = buffer.sync_mapped_writes.take() {
         unsafe {
-            raw.flush_mapped_memory_ranges(
-                buffer
-                    .mapped_write_segments
-                    .iter()
-                    .map(|r| (buffer.memory.memory(), r.clone())),
-            )
-            .unwrap()
+            raw.flush_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
+                .unwrap()
         };
-        buffer.mapped_write_segments.clear();
     }
 }
 
@@ -368,7 +356,7 @@ impl<B: GfxBackend> Device<B> {
             memory,
             size: desc.size,
             full_range: (),
-            mapped_write_segments: Vec::new(),
+            sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(),
         }
@@ -572,7 +560,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write,
         ) {
             Ok(ptr) => {
-                buffer.map_state = resource::BufferMapState::Active;
+                buffer.map_state = resource::BufferMapState::Active {
+                    ptr,
+                    sub_range: hal::buffer::SubRange::WHOLE,
+                    host: HostMap::Write,
+                };
                 ptr
             }
             Err(e) => {
@@ -613,6 +605,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut buffer = &mut buffer_guard[buffer_id];
         assert!(buffer.usage.contains(wgt::BufferUsage::MAP_WRITE));
         //assert!(buffer isn't used by the GPU);
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => {
+                let mut trace = trace.lock();
+                let data_path = trace.make_binary("buffer", data);
+                trace.add(trace::Action::WriteBuffer {
+                    id: buffer_id,
+                    data: data_path,
+                    range: offset..offset + data.len() as BufferAddress,
+                });
+            }
+            None => (),
+        };
 
         match map_buffer(
             &device.raw,
@@ -686,7 +692,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
+        let device = &device_guard[device_id];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::DestroyBuffer(buffer_id)),
+            None => (),
+        };
+
+        device
             .lock_life(&mut token)
             .suspected_resources
             .buffers
@@ -739,7 +752,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
+        let device = &device_guard[device_id];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::DestroyTexture(texture_id)),
+            None => (),
+        };
+
+        device
             .lock_life(&mut token)
             .suspected_resources
             .textures
@@ -822,6 +842,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let ref_count = view.life_guard.add_ref();
 
         let id = hub.texture_views.register_identity(id_in, view, &mut token);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateTextureView {
+                id,
+                parent_id: texture_id,
+                desc: desc.map(|d| d.map_label(own_label)),
+            }),
+            None => (),
+        };
+
         device
             .trackers
             .lock()
@@ -852,7 +882,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
+        let device = &device_guard[device_id];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::DestroyTextureView(texture_view_id)),
+            None => (),
+        };
+
+        device
             .lock_life(&mut token)
             .suspected_resources
             .texture_views
@@ -928,7 +967,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
+        let device = &device_guard[device_id];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::DestroySampler(sampler_id)),
+            None => (),
+        };
+
+        device
             .lock_life(&mut token)
             .suspected_resources
             .samplers
@@ -999,8 +1045,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dynamic_count: entries.iter().filter(|b| b.has_dynamic_offset).count(),
         };
 
-        hub.bind_group_layouts
-            .register_identity(id_in, layout, &mut token)
+        let id = hub
+            .bind_group_layouts
+            .register_identity(id_in, layout, &mut token);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroupLayout {
+                id,
+                label: own_label(&desc.label),
+                entries: entries.to_owned(),
+            }),
+            None => (),
+        };
+        id
     }
 
     pub fn bind_group_layout_destroy<B: GfxBackend>(
@@ -1013,10 +1070,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (bgl, _) = hub
             .bind_group_layouts
             .unregister(bind_group_layout_id, &mut token);
+
+        let device = &device_guard[bgl.device_id.value];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::DestroyBindGroupLayout(bind_group_layout_id)),
+            None => (),
+        };
         unsafe {
-            device_guard[bgl.device_id.value]
-                .raw
-                .destroy_descriptor_set_layout(bgl.raw);
+            device.raw.destroy_descriptor_set_layout(bgl.raw);
         }
     }
 
@@ -1061,8 +1125,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             life_guard: LifeGuard::new(),
             bind_group_layout_ids: bind_group_layout_ids.iter().cloned().collect(),
         };
-        hub.pipeline_layouts
-            .register_identity(id_in, layout, &mut token)
+
+        let id = hub
+            .pipeline_layouts
+            .register_identity(id_in, layout, &mut token);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout {
+                id,
+                bind_group_layouts: bind_group_layout_ids.to_owned(),
+            }),
+            None => (),
+        };
+        id
     }
 
     pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
@@ -1078,7 +1153,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
+        let device = &device_guard[device_id];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::DestroyPipelineLayout(pipeline_layout_id)),
+            None => (),
+        };
+
+        device
             .lock_life(&mut token)
             .suspected_resources
             .pipeline_layouts
@@ -1301,6 +1385,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             id,
             hub.bind_groups.read(&mut token).0[id].used
         );
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroup {
+                id,
+                label: own_label(&desc.label),
+                layout_id: desc.layout,
+                entries: entries
+                    .iter()
+                    .map(|entry| {
+                        let res = match entry.resource {
+                            binding_model::BindingResource::Buffer(ref b) => {
+                                trace::BindingResource::Buffer {
+                                    id: b.buffer,
+                                    offset: b.offset,
+                                    size: b.size,
+                                }
+                            }
+                            binding_model::BindingResource::TextureView(id) => {
+                                trace::BindingResource::TextureView(id)
+                            }
+                            binding_model::BindingResource::Sampler(id) => {
+                                trace::BindingResource::Sampler(id)
+                            }
+                        };
+                        (entry.binding, res)
+                    })
+                    .collect(),
+            }),
+            None => (),
+        };
 
         device
             .trackers
@@ -1323,7 +1437,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
+        let device = &device_guard[device_id];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::DestroyBindGroup(bind_group_id)),
+            None => (),
+        };
+
+        device
             .lock_life(&mut token)
             .suspected_resources
             .bind_groups
@@ -1351,8 +1474,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
         };
 
-        hub.shader_modules
-            .register_identity(id_in, shader, &mut token)
+        let id = hub
+            .shader_modules
+            .register_identity(id_in, shader, &mut token);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => {
+                let mut trace = trace.lock();
+                let data = trace.make_binary("shader", unsafe {
+                    slice::from_raw_parts(desc.code.bytes as *const u8, desc.code.length * 4)
+                });
+                trace.add(trace::Action::CreateShaderModule { id, data });
+            }
+            None => {}
+        };
+        id
     }
 
     pub fn shader_module_destroy<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
@@ -1360,10 +1496,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (module, _) = hub.shader_modules.unregister(shader_module_id, &mut token);
+
+        let device = &device_guard[module.device_id.value];
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::DestroyShaderModule(shader_module_id)),
+            None => (),
+        };
+
         unsafe {
-            device_guard[module.device_id.value]
-                .raw
-                .destroy_shader_module(module.raw);
+            device.raw.destroy_shader_module(module.raw);
         }
     }
 
@@ -1539,7 +1683,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         panic!("Buffer has a pending mapping.");
                     }
                     if !buffer_guard[id].life_guard.use_at(submit_index) {
-                        if let resource::BufferMapState::Active = buffer_guard[id].map_state {
+                        if let resource::BufferMapState::Active { .. } = buffer_guard[id].map_state
+                        {
                             log::warn!("Dropped buffer has a pending mapping.");
                             unmap_buffer(&device.raw, &mut buffer_guard[id]);
                         }
@@ -2208,7 +2353,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             assert!(buffer.usage.contains(pub_usage));
             buffer.map_state = match buffer.map_state {
-                resource::BufferMapState::Active => panic!("Buffer already mapped"),
+                resource::BufferMapState::Active { .. } => panic!("Buffer already mapped"),
                 resource::BufferMapState::Waiting(_) => {
                     operation.call_error();
                     return;
@@ -2253,10 +2398,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::BufferMapState::Idle => {
                 log::error!("Buffer already unmapped");
             }
-            _ => {
-                buffer.map_state = resource::BufferMapState::Idle;
-                unmap_buffer(&device_guard[buffer.device_id.value].raw, buffer);
+            resource::BufferMapState::Waiting(_) => {}
+            resource::BufferMapState::Active {
+                ptr,
+                ref sub_range,
+                host,
+            } => {
+                let device = &device_guard[buffer.device_id.value];
+                if host == HostMap::Write {
+                    #[cfg(feature = "trace")]
+                    match device.trace {
+                        Some(ref trace) => {
+                            let mut trace = trace.lock();
+                            let size = sub_range.size_to(buffer.size);
+                            let data = trace.make_binary("buffer", unsafe {
+                                slice::from_raw_parts(ptr, size as usize)
+                            });
+                            trace.add(trace::Action::WriteBuffer {
+                                id: buffer_id,
+                                data,
+                                range: sub_range.offset..sub_range.offset + size,
+                            });
+                        }
+                        None => (),
+                    };
+                    let _ = (ptr, sub_range);
+                }
+                unmap_buffer(&device.raw, buffer);
             }
         }
+        buffer.map_state = resource::BufferMapState::Idle;
     }
 }

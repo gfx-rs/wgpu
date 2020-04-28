@@ -598,20 +598,24 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             } else {
                 let mapping = match std::mem::replace(
                     &mut buffer.map_state,
-                    resource::BufferMapState::Active,
+                    resource::BufferMapState::Idle,
                 ) {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     _ => panic!("No pending mapping."),
                 };
                 log::debug!("Buffer {:?} map state -> Active", buffer_id);
-                let result = match mapping.op {
-                    resource::BufferMapOperation::Read { .. } => {
-                        super::map_buffer(raw, buffer, mapping.sub_range, super::HostMap::Read)
-                    }
-                    resource::BufferMapOperation::Write { .. } => {
-                        super::map_buffer(raw, buffer, mapping.sub_range, super::HostMap::Write)
-                    }
+                let host = match mapping.op {
+                    resource::BufferMapOperation::Read { .. } => super::HostMap::Read,
+                    resource::BufferMapOperation::Write { .. } => super::HostMap::Write,
                 };
+                let result = super::map_buffer(raw, buffer, mapping.sub_range.clone(), host);
+                if let Ok(ptr) = result {
+                    buffer.map_state = resource::BufferMapState::Active {
+                        ptr,
+                        sub_range: mapping.sub_range,
+                        host,
+                    };
+                }
                 pending_callbacks.push((mapping.op, result));
             }
         }
