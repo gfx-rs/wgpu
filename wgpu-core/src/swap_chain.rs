@@ -32,6 +32,8 @@
     In `present()` we return the swap chain image back and wait on the semaphore.
 !*/
 
+#[cfg(feature = "trace")]
+use crate::device::trace::Action;
 use crate::{
     conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
@@ -154,6 +156,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .texture_views
             .register_identity(view_id_in, view, &mut token);
 
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(Action::GetSwapChainTexture {
+                object_id: swap_chain_id,
+                view_id: id,
+            }),
+            None => (),
+        };
+
         assert!(
             sc.acquired_view_id.is_none(),
             "Swap chain image is already acquired"
@@ -176,6 +187,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
         let sc = &mut swap_chain_guard[swap_chain_id];
         let device = &mut device_guard[sc.device_id.value];
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(Action::PresentSwapChain {
+                object_id: swap_chain_id,
+            }),
+            None => (),
+        };
 
         let view_id = sc
             .acquired_view_id

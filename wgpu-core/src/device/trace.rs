@@ -2,11 +2,39 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+use crate::id;
 use std::io::Write as _;
+
+//TODO: consider a readable Id that doesn't include the backend
 
 #[derive(serde::Serialize)]
 pub enum Action {
-    Init { limits: wgt::Limits },
+    Init {
+        limits: wgt::Limits,
+    },
+    CreateBuffer {
+        id: id::BufferId,
+        desc: wgt::BufferDescriptor<String>,
+    },
+    CreateTexture {
+        id: id::TextureId,
+        desc: wgt::TextureDescriptor<String>,
+    },
+    CreateSampler {
+        id: id::SamplerId,
+        desc: wgt::SamplerDescriptor<String>,
+    },
+    CreateSwapChain {
+        id: id::SwapChainId,
+        desc: wgt::SwapChainDescriptor,
+    },
+    GetSwapChainTexture {
+        object_id: id::SwapChainId,
+        view_id: id::TextureViewId,
+    },
+    PresentSwapChain {
+        object_id: id::SwapChainId,
+    },
 }
 
 #[derive(Debug)]
