@@ -431,7 +431,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
 
                         Some(hal::pass::Attachment {
-                            format: Some(conv::map_texture_format(view.format, device.features)),
+                            format: Some(conv::map_texture_format(
+                                view.format,
+                                device.private_features,
+                            )),
                             samples: view.samples,
                             ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
                             stencil_ops: conv::map_load_store_ops(
@@ -495,7 +498,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     colors.push(hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(view.format, device.features)),
+                        format: Some(conv::map_texture_format(
+                            view.format,
+                            device.private_features,
+                        )),
                         samples: view.samples,
                         ops: conv::map_load_store_ops(at.load_op, at.store_op),
                         stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
@@ -541,7 +547,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     resolves.push(hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(view.format, device.features)),
+                        format: Some(conv::map_texture_format(
+                            view.format,
+                            device.private_features,
+                        )),
                         samples: view.samples,
                         ops: hal::pass::AttachmentOps::new(
                             hal::pass::AttachmentLoadOp::DontCare,
@@ -788,7 +797,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut state = State {
-            binder: Binder::new(cmb.features.max_bind_groups),
+            binder: Binder::new(cmb.limits.max_bind_groups),
             blend_color: OptionalState::Unused,
             stencil_reference: OptionalState::Unused,
             pipeline: OptionalState::Required,
