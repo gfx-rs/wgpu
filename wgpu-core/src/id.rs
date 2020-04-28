@@ -3,8 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{Epoch, Index};
-#[cfg(feature = "serde")]
-use serde_crate::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData, mem, num::NonZeroU64};
 use wgt::Backend;
 
@@ -13,11 +11,8 @@ const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
-#[cfg_attr(
-    feature = "serde",
-    derive(Serialize, Deserialize),
-    serde(crate = "serde_crate")
-)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct Id<T>(NonZeroU64, PhantomData<T>);
 
 // required for PeekPoke

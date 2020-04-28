@@ -27,30 +27,37 @@ jobs:
             name: iOS Stable
             channel: stable
             build_command: rustup target add aarch64-apple-ios; cargo clippy --target aarch64-apple-ios
+            additional_core_features:
           - os: macos-10.15
             name: MacOS Stable
             channel: stable
             build_command: cargo clippy
+            additional_core_features: trace
           - os: macos-10.15
             name: MacOS Nightly
             channel: nightly
             build_command: cargo test
+            additional_core_features:
           - os: ubuntu-18.04
             name: Ubuntu Stable
             channel: stable
             build_command: cargo clippy
+            additional_core_features: trace,replay
           - os: ubuntu-18.04
             name: Ubuntu Nightly
             channel: nightly
             build_command: cargo test
+            additional_core_features:
           - os: windows-2019
             name: Windows Stable
             channel: stable
             build_command: rustup default stable-msvc; cargo clippy
+            additional_core_features: replay
           - os: windows-2019
             name: Windows Nightly
             channel: nightly
             build_command: rustup default nightly-msvc; cargo test
+            additional_core_features:
     steps:
     - uses: actions/checkout@v2
     - if: matrix.channel == 'nightly'
@@ -63,3 +70,5 @@ jobs:
       run: rustup component add clippy
     - name: cargo clippy/test
       run: ${{ matrix.build_command }}
+    - if: matrix.additional_core_features != ''
+      run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}

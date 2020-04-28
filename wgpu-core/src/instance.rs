@@ -12,8 +12,10 @@ use crate::{
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
 
-#[cfg(feature = "serde")]
-use serde_crate::{Deserialize, Serialize};
+#[cfg(feature = "replay")]
+use serde::Deserialize;
+#[cfg(feature = "trace")]
+use serde::Serialize;
 
 use hal::{
     self,
@@ -25,11 +27,8 @@ use hal::{
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(
-    feature = "serde",
-    derive(Serialize, Deserialize),
-    serde(crate = "serde_crate")
-)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct RequestAdapterOptions {
     pub power_preference: PowerPreference,
     pub compatible_surface: Option<SurfaceId>,
@@ -124,11 +123,8 @@ pub struct Adapter<B: hal::Backend> {
 
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(
-    feature = "serde",
-    derive(Serialize, Deserialize),
-    serde(crate = "serde_crate")
-)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -163,11 +159,8 @@ impl AdapterInfo {
 
 /// Supported physical device types
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(
-    feature = "serde",
-    derive(Serialize, Deserialize),
-    serde(crate = "serde_crate")
-)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum DeviceType {
     /// Other
     Other,
