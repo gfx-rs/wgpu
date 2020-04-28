@@ -33,6 +33,8 @@ use std::{
 mod life;
 #[cfg(feature = "trace")]
 mod trace;
+#[cfg(feature = "trace")]
+use trace::{Action, Trace};
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
@@ -198,7 +200,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     #[cfg(feature = "trace")]
-    trace: Option<Mutex<trace::Trace>>,
+    trace: Option<Mutex<Trace>>,
 }
 
 impl<B: GfxBackend> Device<B> {
@@ -244,18 +246,23 @@ impl<B: GfxBackend> Device<B> {
             framebuffers: Mutex::new(FastHashMap::default()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: life::SuspectedResources::default(),
-            private_features: PrivateFeatures {
-                supports_texture_d24_s8,
-            },
-            limits,
             #[cfg(feature = "trace")]
-            trace: trace_path.and_then(|path| match trace::Trace::new(path) {
-                Ok(trace) => Some(Mutex::new(trace)),
+            trace: trace_path.and_then(|path| match Trace::new(path) {
+                Ok(mut trace) => {
+                    trace.add(Action::Init {
+                        limits: limits.clone(),
+                    });
+                    Some(Mutex::new(trace))
+                }
                 Err(e) => {
                     log::warn!("Unable to start a trace in '{:?}': {:?}", path, e);
                     None
                 }
             }),
+            private_features: PrivateFeatures {
+                supports_texture_d24_s8,
+            },
+            limits,
         }
     }
 

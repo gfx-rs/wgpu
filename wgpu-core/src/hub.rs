@@ -545,17 +545,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             hubs: Hubs::new(&factory),
         }
     }
+}
 
-    pub fn delete(self) {
-        let Global {
-            mut instance,
-            surfaces,
-            hubs,
-        } = self;
-        drop(hubs);
+impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
+    fn drop(&mut self) {
         // destroy surfaces
-        for (_, (surface, _)) in surfaces.data.write().map.drain() {
-            instance.destroy_surface(surface);
+        for (_, (surface, _)) in self.surfaces.data.write().map.drain() {
+            self.instance.destroy_surface(surface);
         }
     }
 }
