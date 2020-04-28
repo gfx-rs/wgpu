@@ -16,7 +16,7 @@ license = "MPL-2.0"
 
 [features]
 default = []
-trace = ["serde", "wgt/trace"]
+trace = ["ron", "serde", "wgt/trace"]
 replay = ["serde", "wgt/replay"]
 metal-auto-capture = ["gfx-backend-metal/auto-capture"]
 #NOTE: glutin feature is not stable, use at your own risk
@@ -34,6 +34,7 @@ gfx-descriptor = "0.1"
 gfx-memory = "0.1"
 parking_lot = "0.10"
 peek-poke = "0.2"
+ron = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 vec_map = "0.8"
