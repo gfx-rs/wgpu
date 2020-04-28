@@ -159,8 +159,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         match device.trace {
             Some(ref trace) => trace.lock().add(Action::GetSwapChainTexture {
-                object_id: swap_chain_id,
-                view_id: id,
+                id,
+                parent_id: swap_chain_id,
             }),
             None => (),
         };
@@ -190,9 +190,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(Action::PresentSwapChain {
-                object_id: swap_chain_id,
-            }),
+            Some(ref trace) => trace.lock().add(Action::PresentSwapChain(swap_chain_id)),
             None => (),
         };
 
