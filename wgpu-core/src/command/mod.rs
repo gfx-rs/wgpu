@@ -27,7 +27,7 @@ use peek_poke::PeekPoke;
 use std::{marker::PhantomData, mem, ptr, slice, thread::ThreadId};
 
 #[derive(Clone, Copy, Debug, PeekPoke)]
-struct PhantomSlice<T>(PhantomData<T>);
+pub(crate) struct PhantomSlice<T>(PhantomData<T>);
 
 impl<T> Default for PhantomSlice<T> {
     fn default() -> Self {
@@ -140,6 +140,8 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) used_swap_chain: Option<(Stored<id::SwapChainId>, B::Framebuffer)>,
     limits: wgt::Limits,
     private_features: PrivateFeatures,
+    #[cfg(feature = "trace")]
+    pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
