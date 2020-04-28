@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model, Features};
+use crate::{binding_model, PrivateFeatures};
 use wgt::{
     BlendDescriptor, BlendFactor, Color, ColorStateDescriptor, ColorWrite, CompareFunction,
     CullMode, DepthStencilStateDescriptor, Extent3d, FrontFace, IndexFormat, Origin3d,
@@ -323,7 +323,7 @@ fn map_stencil_operation(stencil_operation: StencilOperation) -> hal::pso::Stenc
 
 pub(crate) fn map_texture_format(
     texture_format: TextureFormat,
-    features: Features,
+    private_features: PrivateFeatures,
 ) -> hal::format::Format {
     use hal::format::Format as H;
     use wgt::TextureFormat as Tf;
@@ -378,14 +378,14 @@ pub(crate) fn map_texture_format(
         // Depth and stencil formats
         Tf::Depth32Float => H::D32Sfloat,
         Tf::Depth24Plus => {
-            if features.supports_texture_d24_s8 {
+            if private_features.supports_texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32Sfloat
             }
         }
         Tf::Depth24PlusStencil8 => {
-            if features.supports_texture_d24_s8 {
+            if private_features.supports_texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32SfloatS8Uint
