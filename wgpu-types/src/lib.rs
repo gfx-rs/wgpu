@@ -541,7 +541,7 @@ pub enum VertexFormat {
 bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct BufferUsage: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
@@ -557,10 +557,22 @@ bitflags::bitflags! {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BufferDescriptor {
-    pub label: *const std::os::raw::c_char,
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BufferDescriptor<L> {
+    pub label: L,
     pub size: BufferAddress,
     pub usage: BufferUsage,
+}
+
+impl<L> BufferDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
+        BufferDescriptor {
+            label: fun(&self.label),
+            size: self.size,
+            usage: self.usage,
+        }
+    }
 }
 
 #[repr(C)]
@@ -767,14 +779,30 @@ pub struct Extent3d {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TextureDescriptor {
-    pub label: *const std::os::raw::c_char,
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct TextureDescriptor<L> {
+    pub label: L,
     pub size: Extent3d,
     pub mip_level_count: u32,
     pub sample_count: u32,
     pub dimension: TextureDimension,
     pub format: TextureFormat,
     pub usage: TextureUsage,
+}
+
+impl<L> TextureDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
+        TextureDescriptor {
+            label: fun(&self.label),
+            size: self.size,
+            mip_level_count: self.mip_level_count,
+            sample_count: self.sample_count,
+            dimension: self.dimension,
+            format: self.format,
+            usage: self.usage,
+        }
+    }
 }
 
 #[repr(C)]
@@ -797,7 +825,8 @@ impl Default for TextureAspect {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureViewDescriptor {
+pub struct TextureViewDescriptor<L> {
+    pub label: L,
     pub format: TextureFormat,
     pub dimension: TextureViewDimension,
     pub aspect: TextureAspect,
@@ -805,6 +834,21 @@ pub struct TextureViewDescriptor {
     pub level_count: u32,
     pub base_array_layer: u32,
     pub array_layer_count: u32,
+}
+
+impl<L> TextureViewDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureViewDescriptor<K> {
+        TextureViewDescriptor {
+            label: fun(&self.label),
+            format: self.format,
+            dimension: self.dimension,
+            aspect: self.aspect,
+            base_mip_level: self.base_mip_level,
+            level_count: self.level_count,
+            base_array_layer: self.base_array_layer,
+            array_layer_count: self.array_layer_count,
+        }
+    }
 }
 
 #[repr(C)]
@@ -842,7 +886,8 @@ impl Default for FilterMode {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct SamplerDescriptor {
+pub struct SamplerDescriptor<L> {
+    pub label: L,
     pub address_mode_u: AddressMode,
     pub address_mode_v: AddressMode,
     pub address_mode_w: AddressMode,
@@ -852,6 +897,23 @@ pub struct SamplerDescriptor {
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
     pub compare: CompareFunction,
+}
+
+impl<L> SamplerDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> SamplerDescriptor<K> {
+        SamplerDescriptor {
+            label: fun(&self.label),
+            address_mode_u: self.address_mode_u,
+            address_mode_v: self.address_mode_v,
+            address_mode_w: self.address_mode_w,
+            mag_filter: self.mag_filter,
+            min_filter: self.min_filter,
+            mipmap_filter: self.mipmap_filter,
+            lod_min_clamp: self.lod_min_clamp,
+            lod_max_clamp: self.lod_max_clamp,
+            compare: self.compare,
+        }
+    }
 }
 
 #[repr(C)]

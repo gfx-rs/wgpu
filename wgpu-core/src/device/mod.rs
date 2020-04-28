@@ -32,9 +32,21 @@ use std::{
 
 mod life;
 #[cfg(feature = "trace")]
-mod trace;
+pub(crate) mod trace;
 #[cfg(feature = "trace")]
 use trace::{Action, Trace};
+
+pub type Label = *const std::os::raw::c_char;
+#[cfg(feature = "trace")]
+fn own_label(label: &Label) -> String {
+    if label.is_null() {
+        String::new()
+    } else {
+        unsafe { ffi::CStr::from_ptr(*label) }
+            .to_string_lossy()
+            .to_string()
+    }
+}
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
@@ -200,7 +212,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     #[cfg(feature = "trace")]
-    trace: Option<Mutex<Trace>>,
+    pub(crate) trace: Option<Mutex<Trace>>,
 }
 
 impl<B: GfxBackend> Device<B> {
@@ -293,7 +305,7 @@ impl<B: GfxBackend> Device<B> {
     fn create_buffer(
         &self,
         self_id: id::DeviceId,
-        desc: &wgt::BufferDescriptor,
+        desc: &wgt::BufferDescriptor<Label>,
     ) -> resource::Buffer<B> {
         use gfx_memory::{Kind, MemoryUsage};
 
@@ -365,7 +377,7 @@ impl<B: GfxBackend> Device<B> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
-        desc: &wgt::TextureDescriptor,
+        desc: &wgt::TextureDescriptor<Label>,
     ) -> resource::Texture<B> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
@@ -500,7 +512,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_buffer<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::BufferDescriptor,
+        desc: &wgt::BufferDescriptor<Label>,
         id_in: Input<G, id::BufferId>,
     ) -> id::BufferId {
         let hub = B::hub(self);
@@ -515,6 +527,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         log::info!("Created buffer {:?} with {:?}", id, desc);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateBuffer {
+                id,
+                desc: desc.map_label(own_label),
+            }),
+            None => (),
+        };
+
         device
             .trackers
             .lock()
@@ -531,7 +552,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_buffer_mapped<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::BufferDescriptor,
+        desc: &wgt::BufferDescriptor<Label>,
         id_in: Input<G, id::BufferId>,
     ) -> (id::BufferId, *mut u8) {
         let hub = B::hub(self);
@@ -675,7 +696,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_texture<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::TextureDescriptor,
+        desc: &wgt::TextureDescriptor<Label>,
         id_in: Input<G, id::TextureId>,
     ) -> id::TextureId {
         let hub = B::hub(self);
@@ -688,6 +709,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let ref_count = texture.life_guard.add_ref();
 
         let id = hub.textures.register_identity(id_in, texture, &mut token);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateTexture {
+                id,
+                desc: desc.map_label(own_label),
+            }),
+            None => (),
+        };
+
         device
             .trackers
             .lock()
@@ -719,7 +749,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn texture_create_view<B: GfxBackend>(
         &self,
         texture_id: id::TextureId,
-        desc: Option<&wgt::TextureViewDescriptor>,
+        desc: Option<&wgt::TextureViewDescriptor<Label>>,
         id_in: Input<G, id::TextureViewId>,
     ) -> id::TextureViewId {
         let hub = B::hub(self);
@@ -832,7 +862,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_sampler<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::SamplerDescriptor,
+        desc: &wgt::SamplerDescriptor<Label>,
         id_in: Input<G, id::SamplerId>,
     ) -> id::SamplerId {
         let hub = B::hub(self);
@@ -868,6 +898,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let ref_count = sampler.life_guard.add_ref();
 
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateSampler {
+                id,
+                desc: desc.map_label(own_label),
+            }),
+            None => (),
+        };
+
         device
             .trackers
             .lock()
@@ -2068,6 +2107,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.raw.destroy_semaphore(sc.semaphore);
             }
         }
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(Action::CreateSwapChain {
+                id: sc_id,
+                desc: desc.clone(),
+            }),
+            None => (),
+        };
+
         let swap_chain = swap_chain::SwapChain {
             life_guard: LifeGuard::new(),
             device_id: Stored {
