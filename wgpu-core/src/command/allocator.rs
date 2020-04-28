@@ -80,6 +80,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
         limits: wgt::Limits,
         private_features: PrivateFeatures,
         lowest_active_index: SubmissionIndex,
+        #[cfg(feature = "trace")] enable_tracing: bool,
     ) -> CommandBuffer<B> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
         let thread_id = thread::current().id();
@@ -112,6 +113,12 @@ impl<B: GfxBackend> CommandAllocator<B> {
             used_swap_chain: None,
             limits,
             private_features,
+            #[cfg(feature = "trace")]
+            commands: if enable_tracing {
+                Some(Vec::new())
+            } else {
+                None
+            },
         }
     }
 }

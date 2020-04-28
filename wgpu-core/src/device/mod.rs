@@ -1536,6 +1536,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.limits.clone(),
             device.private_features,
             lowest_active_index,
+            #[cfg(feature = "trace")]
+            device.trace.is_some(),
         );
         unsafe {
             let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
@@ -1662,6 +1664,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // finish all the command buffers first
             for &cmb_id in command_buffer_ids {
                 let comb = &mut command_buffer_guard[cmb_id];
+                #[cfg(feature = "trace")]
+                match device.trace {
+                    Some(ref trace) => trace
+                        .lock()
+                        .add(Action::Submit(comb.commands.take().unwrap())),
+                    None => (),
+                };
 
                 if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
                     let sc = &mut swap_chain_guard[sc_id.value];

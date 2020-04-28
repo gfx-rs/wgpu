@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::id;
+use crate::{
+    command::{BufferCopyView, TextureCopyView},
+    id,
+};
 use std::{io::Write as _, ops::Range};
 
 //TODO: consider a readable Id that doesn't include the backend
@@ -20,7 +23,7 @@ pub enum BindingResource {
 }
 
 #[derive(serde::Serialize)]
-pub enum Action {
+pub(crate) enum Action {
     Init {
         limits: wgt::Limits,
     },
@@ -82,6 +85,43 @@ pub enum Action {
         data: FileName,
         range: Range<wgt::BufferAddress>,
     },
+    Submit(Vec<Command>),
+}
+
+#[derive(Debug, serde::Serialize)]
+pub(crate) enum Command {
+    CopyBufferToBuffer {
+        src: id::BufferId,
+        src_offset: wgt::BufferAddress,
+        dst: id::BufferId,
+        dst_offset: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+    },
+    CopyBufferToTexture {
+        src: BufferCopyView,
+        dst: TextureCopyView,
+        size: wgt::Extent3d,
+    },
+    CopyTextureToBuffer {
+        src: TextureCopyView,
+        dst: BufferCopyView,
+        size: wgt::Extent3d,
+    },
+    CopyTextureToTexture {
+        src: TextureCopyView,
+        dst: TextureCopyView,
+        size: wgt::Extent3d,
+    },
+    RunComputePass {
+        commands: Vec<crate::command::ComputeCommand>,
+        dynamic_offsets: Vec<wgt::DynamicOffset>,
+    },
+    RunRenderPass {
+        target_colors: Vec<crate::command::RenderPassColorAttachmentDescriptor>,
+        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachmentDescriptor>,
+        commands: Vec<crate::command::RenderCommand>,
+        dynamic_offsets: Vec<wgt::DynamicOffset>,
+    },
 }
 
 #[derive(Debug)]
@@ -112,7 +152,7 @@ impl Trace {
         name
     }
 
-    pub fn add(&mut self, action: Action) {
+    pub(crate) fn add(&mut self, action: Action) {
         match ron::ser::to_string_pretty(&action, self.config.clone()) {
             Ok(string) => {
                 let _ = write!(self.file, "{},\n", string);
