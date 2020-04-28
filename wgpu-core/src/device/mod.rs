@@ -7,7 +7,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    FastHashMap, Features, LifeGuard, Stored,
+    FastHashMap, LifeGuard, PrivateFeatures, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -31,6 +31,8 @@ use std::{
 };
 
 mod life;
+#[cfg(feature = "trace")]
+mod trace;
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
@@ -193,7 +195,10 @@ pub struct Device<B: hal::Backend> {
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<life::LifetimeTracker<B>>,
     temp_suspected: life::SuspectedResources,
-    pub(crate) features: Features,
+    pub(crate) private_features: PrivateFeatures,
+    limits: wgt::Limits,
+    #[cfg(feature = "trace")]
+    trace: Option<Mutex<trace::Trace>>,
 }
 
 impl<B: GfxBackend> Device<B> {
@@ -204,7 +209,8 @@ impl<B: GfxBackend> Device<B> {
         mem_props: hal::adapter::MemoryProperties,
         non_coherent_atom_size: u64,
         supports_texture_d24_s8: bool,
-        max_bind_groups: u32,
+        limits: wgt::Limits,
+        #[cfg(feature = "trace")] trace_path: Option<&std::path::Path>,
     ) -> Self {
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
@@ -238,10 +244,18 @@ impl<B: GfxBackend> Device<B> {
             framebuffers: Mutex::new(FastHashMap::default()),
             life_tracker: Mutex::new(life::LifetimeTracker::new()),
             temp_suspected: life::SuspectedResources::default(),
-            features: Features {
-                max_bind_groups,
+            private_features: PrivateFeatures {
                 supports_texture_d24_s8,
             },
+            limits,
+            #[cfg(feature = "trace")]
+            trace: trace_path.and_then(|path| match trace::Trace::new(path) {
+                Ok(trace) => Some(Mutex::new(trace)),
+                Err(e) => {
+                    log::warn!("Unable to start a trace in '{:?}': {:?}", path, e);
+                    None
+                }
+            }),
         }
     }
 
@@ -359,7 +373,7 @@ impl<B: GfxBackend> Device<B> {
         }
 
         let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count);
-        let format = conv::map_texture_format(desc.format, self.features);
+        let format = conv::map_texture_format(desc.format, self.private_features);
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
 
@@ -747,7 +761,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .create_image_view(
                     &texture.raw,
                     view_kind,
-                    conv::map_texture_format(format, device.features),
+                    conv::map_texture_format(format, device.private_features),
                     hal::format::Swizzle::NO,
                     range.clone(),
                 )
@@ -975,7 +989,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
         };
 
-        assert!(desc.bind_group_layouts_length <= (device.features.max_bind_groups as usize),
+        assert!(desc.bind_group_layouts_length <= (device.limits.max_bind_groups as usize),
             "Cannot set a bind group which is beyond the `max_bind_groups` limit requested on device creation");
 
         // TODO: push constants
@@ -1329,7 +1343,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut command_buffer = device.com_allocator.allocate(
             dev_stored,
             &device.raw,
-            device.features,
+            device.limits.clone(),
+            device.private_features,
             lowest_active_index,
         );
         unsafe {
@@ -1697,7 +1712,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 colors: color_states
                     .iter()
                     .map(|at| hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(at.format, device.features)),
+                        format: Some(conv::map_texture_format(at.format, device.private_features)),
                         samples: sc,
                         ops: hal::pass::AttachmentOps::PRESERVE,
                         stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
@@ -1710,7 +1725,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // or depth/stencil resolve modes but satisfy the other compatibility conditions.
                 resolves: ArrayVec::new(),
                 depth_stencil: depth_stencil_state.map(|at| hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(at.format, device.features)),
+                    format: Some(conv::map_texture_format(at.format, device.private_features)),
                     samples: sc,
                     ops: hal::pass::AttachmentOps::PRESERVE,
                     stencil_ops: hal::pass::AttachmentOps::PRESERVE,
@@ -2023,7 +2038,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .max(*caps.image_count.start())
             .min(*caps.image_count.end());
         let mut config =
-            swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.features);
+            swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.private_features);
         if let Some(formats) = formats {
             assert!(
                 formats.contains(&config.format),

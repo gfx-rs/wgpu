@@ -153,7 +153,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
-        let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.features)
+        let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
@@ -217,7 +217,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         assert!(dst_buffer.usage.contains(BufferUsage::COPY_DST));
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
 
-        let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.features)
+        let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
