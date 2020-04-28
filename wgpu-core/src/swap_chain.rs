@@ -36,7 +36,7 @@ use crate::{
     conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId},
-    resource, Features, LifeGuard, Stored,
+    resource, LifeGuard, PrivateFeatures, Stored,
 };
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
@@ -59,12 +59,12 @@ pub struct SwapChain<B: hal::Backend> {
 pub(crate) fn swap_chain_descriptor_to_hal(
     desc: &SwapChainDescriptor,
     num_frames: u32,
-    features: Features,
+    private_features: PrivateFeatures,
 ) -> hal::window::SwapchainConfig {
     let mut config = hal::window::SwapchainConfig::new(
         desc.width,
         desc.height,
-        conv::map_texture_format(desc.format, features),
+        conv::map_texture_format(desc.format, private_features),
         num_frames,
     );
     //TODO: check for supported
@@ -114,8 +114,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 Err(e) => {
                     log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
-                    let desc =
-                        swap_chain_descriptor_to_hal(&sc.desc, sc.num_frames, device.features);
+                    let desc = swap_chain_descriptor_to_hal(
+                        &sc.desc,
+                        sc.num_frames,
+                        device.private_features,
+                    );
                     unsafe {
                         suf.configure_swapchain(&device.raw, desc).unwrap();
                         suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000).unwrap()

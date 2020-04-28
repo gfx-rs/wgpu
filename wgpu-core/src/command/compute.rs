@@ -78,7 +78,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmb = &mut cmb_guard[encoder_id];
         let raw = cmb.raw.last_mut().unwrap();
-        let mut binder = Binder::new(cmb.features.max_bind_groups);
+        let mut binder = Binder::new(cmb.limits.max_bind_groups);
 
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
