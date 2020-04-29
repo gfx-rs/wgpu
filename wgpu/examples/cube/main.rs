@@ -135,6 +135,7 @@ impl framework::Example for Example {
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: None,
             bindings: &[
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
@@ -156,7 +157,6 @@ impl framework::Example for Example {
                     ty: wgpu::BindingType::Sampler { comparison: false },
                 },
             ],
-            label: None,
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&bind_group_layout],
@@ -171,13 +171,13 @@ impl framework::Example for Example {
             depth: 1,
         };
         let texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
             size: texture_extent,
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
-            label: None,
         });
         let texture_view = texture.create_default_view();
         let temp_buf =
@@ -200,6 +200,7 @@ impl framework::Example for Example {
 
         // Create other resources
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: None,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
