@@ -3,7 +3,7 @@ use std::{convert::TryInto, str::FromStr};
 async fn run() {
     let numbers = if std::env::args().len() <= 1 {
         let default = vec![1, 2, 3, 4];
-        log::info!("No numbers were provided, defaulting to {:?}", default);
+        println!("No numbers were provided, defaulting to {:?}", default);
         default
     } else {
         std::env::args()
@@ -12,8 +12,10 @@ async fn run() {
             .collect()
     };
 
-    // To see the output, run `RUST_LOG=info cargo run --example hello-compute`.
-    log::info!("Times: {:?}", execute_gpu(numbers).await);
+    let times = execute_gpu(numbers).await;
+    println!("Times: {:?}", times);
+    #[cfg(target_arch = "wasm32")]
+    log::info!("Times: {:?}", times);
 }
 
 async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
@@ -38,7 +40,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 anisotropic_filtering: false,
             },
             limits: wgpu::Limits::default(),
-        })
+        }, None)
         .await
         .unwrap();
 

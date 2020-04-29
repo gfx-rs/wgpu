@@ -22,7 +22,7 @@ async fn run() {
                 anisotropic_filtering: false,
             },
             limits: wgpu::Limits::default(),
-        })
+        }, None)
         .await
         .unwrap();
 
