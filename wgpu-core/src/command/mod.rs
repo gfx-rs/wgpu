@@ -109,13 +109,13 @@ impl RawPass {
     }
 
     #[inline]
-    unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
+    pub unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
         self.ensure_extra_size(C::max_size());
         self.data = command.poke_into(self.data);
     }
 
     #[inline]
-    unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
+    pub unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
         let align_offset = self.data.align_offset(mem::align_of::<T>());
         let extra = align_offset + mem::size_of::<T>() * data.len();
         self.ensure_extra_size(extra);

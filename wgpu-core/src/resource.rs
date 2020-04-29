@@ -85,6 +85,9 @@ pub enum BufferMapState {
     Idle,
 }
 
+unsafe impl Send for BufferMapState {}
+unsafe impl Sync for BufferMapState {}
+
 pub enum BufferMapOperation {
     Read {
         callback: crate::device::BufferMapReadCallback,

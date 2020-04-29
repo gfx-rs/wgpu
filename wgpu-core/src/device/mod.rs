@@ -610,7 +610,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => {
                 let mut trace = trace.lock();
-                let data_path = trace.make_binary("buffer", data);
+                let data_path = trace.make_binary("bin", data);
                 trace.add(trace::Action::WriteBuffer {
                     id: buffer_id,
                     data: data_path,
@@ -1481,7 +1481,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => {
                 let mut trace = trace.lock();
-                let data = trace.make_binary("shader", unsafe {
+                let data = trace.make_binary("spv", unsafe {
                     slice::from_raw_parts(desc.code.bytes as *const u8, desc.code.length * 4)
                 });
                 trace.add(trace::Action::CreateShaderModule { id, data });
@@ -2420,7 +2420,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         Some(ref trace) => {
                             let mut trace = trace.lock();
                             let size = sub_range.size_to(buffer.size);
-                            let data = trace.make_binary("buffer", unsafe {
+                            let data = trace.make_binary("bin", unsafe {
                                 slice::from_raw_parts(ptr, size as usize)
                             });
                             trace.add(trace::Action::WriteBuffer {
