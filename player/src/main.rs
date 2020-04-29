@@ -2,6 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+/*! This is a player for WebGPU traces.
+ *
+ * # Notes
+ * - we call device_maintain_ids() before creating any refcounted resource,
+ *   which is basically everything except for BGL and shader modules,
+ *   so that we don't accidentally try to use the same ID.
+!*/
+
 use wgc::device::trace;
 
 use std::{
@@ -96,6 +104,13 @@ trait GlobalExt {
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
     ) -> wgc::id::CommandBufferId;
+    /*fn process<B: wgc::hub::GfxBackend>(
+        &self,
+        device: wgc::id::DeviceId,
+        action: trace::Action,
+    ) {
+
+    }*/
 }
 
 impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
@@ -186,6 +201,7 @@ fn main() {
     env_logger::init();
 
     //TODO: setting for the backend bits
+    //TODO: setting for the target frame, or controls
 
     let dir = match std::env::args().nth(1) {
         Some(arg) if Path::new(&arg).is_dir() => PathBuf::from(arg),
@@ -194,7 +210,8 @@ fn main() {
 
     log::info!("Loading trace '{:?}'", dir);
     let file = File::open(dir.join(trace::FILE_NAME)).unwrap();
-    let actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
+    let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
+    actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());
 
     #[cfg(feature = "winit")]
@@ -239,27 +256,32 @@ fn main() {
         )
         .unwrap();
 
-    let mut device = wgc::id::DeviceId::default();
+    log::info!("Initializing the device");
+    let device = match actions.pop() {
+        Some(trace::Action::Init { limits }) => {
+            gfx_select!(adapter => global.adapter_request_device(
+                adapter,
+                &wgt::DeviceDescriptor {
+                    extensions: wgt::Extensions {
+                        anisotropic_filtering: false,
+                    },
+                    limits,
+                },
+                wgc::id::TypedId::zip(1, 0, wgt::Backend::Empty)
+            ))
+        }
+        _ => panic!("Expected Action::Init"),
+    };
+    let mut frame_count = 0;
 
     log::info!("Executing actions");
     for action in actions {
         use wgc::device::trace::Action as A;
         match action {
-            A::Init { limits } => {
-                log::info!("Initializing the device");
-                device = gfx_select!(adapter => global.adapter_request_device(
-                    adapter,
-                    &wgt::DeviceDescriptor {
-                        extensions: wgt::Extensions {
-                            anisotropic_filtering: false,
-                        },
-                        limits,
-                    },
-                    wgc::id::TypedId::zip(1, 0, wgt::Backend::Empty)
-                ));
-            }
+            A::Init { .. } => panic!("Unexpected Action::Init"),
             A::CreateBuffer { id, desc } => {
                 let label = Label::new(&desc.label);
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.device_create_buffer(device, &desc.map_label(|_| label.as_ptr()), id));
             }
             A::DestroyBuffer(id) => {
@@ -267,6 +289,7 @@ fn main() {
             }
             A::CreateTexture { id, desc } => {
                 let label = Label::new(&desc.label);
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.device_create_texture(device, &desc.map_label(|_| label.as_ptr()), id));
             }
             A::DestroyTexture(id) => {
@@ -278,6 +301,7 @@ fn main() {
                 desc,
             } => {
                 let label = desc.as_ref().map_or(Label(None), |d| Label::new(&d.label));
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.texture_create_view(parent_id, desc.map(|d| d.map_label(|_| label.as_ptr())).as_ref(), id));
             }
             A::DestroyTextureView(id) => {
@@ -285,6 +309,7 @@ fn main() {
             }
             A::CreateSampler { id, desc } => {
                 let label = Label::new(&desc.label);
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.device_create_sampler(device, &desc.map_label(|_| label.as_ptr()), id));
             }
             A::DestroySampler(id) => {
@@ -308,6 +333,8 @@ fn main() {
                 gfx_select!(device => global.swap_chain_get_next_texture(parent_id, id)).unwrap();
             }
             A::PresentSwapChain(id) => {
+                frame_count += 1;
+                log::debug!("Presenting frame {}", frame_count);
                 gfx_select!(device => global.swap_chain_present(id));
             }
             A::CreateBindGroupLayout { id, label, entries } => {
@@ -328,6 +355,7 @@ fn main() {
                 id,
                 bind_group_layouts,
             } => {
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.device_create_pipeline_layout(
                     device,
                     &wgc::binding_model::PipelineLayoutDescriptor {
@@ -366,6 +394,7 @@ fn main() {
                         },
                     })
                     .collect::<Vec<_>>();
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.device_create_bind_group(
                     device,
                     &wgc::binding_model::BindGroupDescriptor {
@@ -398,6 +427,7 @@ fn main() {
             }
             A::CreateComputePipeline { id, desc } => {
                 let cs_stage = OwnedProgrammableStage::from(desc.compute_stage);
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.device_create_compute_pipeline(
                     device,
                     &wgc::pipeline::ComputePipelineDescriptor {
@@ -423,6 +453,7 @@ fn main() {
                         attributes_length: vb.attributes.len(),
                     })
                     .collect::<Vec<_>>();
+                gfx_select!(device => global.device_maintain_ids(device));
                 gfx_select!(device => global.device_create_render_pipeline(
                     device,
                     &wgc::pipeline::RenderPipelineDescriptor {
@@ -451,6 +482,7 @@ fn main() {
             A::WriteBuffer { id, data, range } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
+                gfx_select!(device => global.device_wait_for_buffer(device, id));
                 gfx_select!(device => global.device_set_buffer_sub_data(device, id, range.start, &bin[..size]));
             }
             A::Submit(commands) => {

@@ -282,8 +282,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut token = Token::root();
-        self.surfaces
-            .register_identity(id_in, surface, &mut token)
+        self.surfaces.register_identity(id_in, surface, &mut token)
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {

@@ -6,9 +6,9 @@ use crate::{
     command::{BufferCopyView, TextureCopyView},
     id,
 };
-use std::ops::Range;
 #[cfg(feature = "trace")]
 use std::io::Write as _;
+use std::ops::Range;
 
 //TODO: consider a readable Id that doesn't include the backend
 

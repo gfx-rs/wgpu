@@ -2,14 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#[cfg(feature = "trace")]
+use crate::device::trace;
 use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id, resource,
     track::TrackerSet,
     FastHashMap, RefCount, Stored, SubmissionIndex,
 };
-#[cfg(feature = "trace")]
-use crate::device::trace;
 
 use copyless::VecHelper as _;
 use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
@@ -290,8 +290,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         &mut self,
         global: &Global<G>,
         trackers: &Mutex<TrackerSet>,
-        #[cfg(feature = "trace")]
-        trace: Option<&Mutex<trace::Trace>>,
+        #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
         token: &mut Token<super::Device<B>>,
     ) {
         let hub = B::hub(global);
