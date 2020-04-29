@@ -10,6 +10,7 @@ use std::{
     fs::File,
     marker::PhantomData,
     path::{Path, PathBuf},
+    ptr,
 };
 
 macro_rules! gfx_select {
@@ -41,7 +42,26 @@ impl Label {
     fn as_ptr(&self) -> *const std::os::raw::c_char {
         match self.0 {
             Some(ref c_string) => c_string.as_ptr(),
-            None => std::ptr::null(),
+            None => ptr::null(),
+        }
+    }
+}
+
+struct OwnedProgrammableStage {
+    desc: wgc::pipeline::ProgrammableStageDescriptor,
+    #[allow(dead_code)]
+    entry_point: CString,
+}
+
+impl From<trace::ProgrammableStageDescriptor> for OwnedProgrammableStage {
+    fn from(stage: trace::ProgrammableStageDescriptor) -> Self {
+        let entry_point = CString::new(stage.entry_point.as_str()).unwrap();
+        OwnedProgrammableStage {
+            desc: wgc::pipeline::ProgrammableStageDescriptor {
+                module: stage.module,
+                entry_point: entry_point.as_ptr(),
+            },
+            entry_point,
         }
     }
 }
@@ -178,7 +198,7 @@ fn main() {
     log::info!("Found {} actions", actions.len());
 
     #[cfg(feature = "winit")]
-    let event_loop = {
+    let mut event_loop = {
         log::info!("Creating a window");
         EventLoop::new()
     };
@@ -194,12 +214,10 @@ fn main() {
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
 
     #[cfg(feature = "winit")]
-    let (_size, surface) = {
-        let size = window.inner_size();
-        let id = wgc::id::TypedId::zip(1, 0, wgt::Backend::Empty);
-        let surface = global.instance_create_surface(window.raw_window_handle(), id);
-        (size, surface)
-    };
+    let surface = global.instance_create_surface(
+        raw_window_handle::HasRawWindowHandle::raw_window_handle(&window),
+        wgc::id::TypedId::zip(0, 1, wgt::Backend::Empty),
+    );
 
     let adapter = global
         .pick_adapter(
@@ -272,15 +290,19 @@ fn main() {
             A::DestroySampler(id) => {
                 gfx_select!(device => global.sampler_destroy(id));
             }
-            A::CreateSwapChain { id: _, desc } => {
+            A::CreateSwapChain { id, desc } => {
                 #[cfg(feature = "winit")]
                 {
                     log::info!("Initializing the swapchain");
+                    assert_eq!(id.to_surface_id(), surface);
                     window.set_inner_size(winit::dpi::PhysicalSize::new(desc.width, desc.height));
                     gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
                 }
                 #[cfg(not(feature = "winit"))]
-                let _ = desc;
+                {
+                    let _ = (id, desc);
+                    panic!("Enable `winit` feature to work with swapchains");
+                }
             }
             A::GetSwapChainTexture { id, parent_id } => {
                 gfx_select!(device => global.swap_chain_get_next_texture(parent_id, id)).unwrap();
@@ -374,6 +396,58 @@ fn main() {
             A::DestroyShaderModule(id) => {
                 gfx_select!(device => global.shader_module_destroy(id));
             }
+            A::CreateComputePipeline { id, desc } => {
+                let cs_stage = OwnedProgrammableStage::from(desc.compute_stage);
+                gfx_select!(device => global.device_create_compute_pipeline(
+                    device,
+                    &wgc::pipeline::ComputePipelineDescriptor {
+                        layout: desc.layout,
+                        compute_stage: cs_stage.desc,
+                    },
+                    id));
+            }
+            A::DestroyComputePipeline(id) => {
+                gfx_select!(device => global.compute_pipeline_destroy(id));
+            }
+            A::CreateRenderPipeline { id, desc } => {
+                let vs_stage = OwnedProgrammableStage::from(desc.vertex_stage);
+                let fs_stage = desc.fragment_stage.map(OwnedProgrammableStage::from);
+                let vertex_buffers = desc
+                    .vertex_state
+                    .vertex_buffers
+                    .iter()
+                    .map(|vb| wgc::pipeline::VertexBufferLayoutDescriptor {
+                        array_stride: vb.array_stride,
+                        step_mode: vb.step_mode,
+                        attributes: vb.attributes.as_ptr(),
+                        attributes_length: vb.attributes.len(),
+                    })
+                    .collect::<Vec<_>>();
+                gfx_select!(device => global.device_create_render_pipeline(
+                    device,
+                    &wgc::pipeline::RenderPipelineDescriptor {
+                        layout: desc.layout,
+                        vertex_stage: vs_stage.desc,
+                        fragment_stage: fs_stage.as_ref().map_or(ptr::null(), |s| &s.desc),
+                        primitive_topology: desc.primitive_topology,
+                        rasterization_state: desc.rasterization_state.as_ref().map_or(ptr::null(), |rs| rs),
+                        color_states: desc.color_states.as_ptr(),
+                        color_states_length: desc.color_states.len(),
+                        depth_stencil_state: desc.depth_stencil_state.as_ref().map_or(ptr::null(), |ds| ds),
+                        vertex_state: wgc::pipeline::VertexStateDescriptor {
+                            index_format: desc.vertex_state.index_format,
+                            vertex_buffers: vertex_buffers.as_ptr(),
+                            vertex_buffers_length: vertex_buffers.len(),
+                        },
+                        sample_count: desc.sample_count,
+                        sample_mask: desc.sample_mask,
+                        alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
+                    },
+                    id));
+            }
+            A::DestroyRenderPipeline(id) => {
+                gfx_select!(device => global.render_pipeline_destroy(id));
+            }
             A::WriteBuffer { id, data, range } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
@@ -383,7 +457,7 @@ fn main() {
                 let encoder = gfx_select!(device => global.device_create_command_encoder(
                     device,
                     &wgt::CommandEncoderDescriptor {
-                        label: std::ptr::null(),
+                        label: ptr::null(),
                     },
                     command_buffer_id_manager.alloc(device.backend())
                 ));
@@ -392,4 +466,33 @@ fn main() {
             }
         }
     }
+
+    log::info!("Done replay");
+    #[cfg(feature = "winit")]
+    winit::platform::desktop::EventLoopExtDesktop::run_return(
+        &mut event_loop,
+        move |event, _, control_flow| {
+            use winit::{
+                event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+                event_loop::ControlFlow,
+            };
+
+            *control_flow = match event {
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    }
+                    | WindowEvent::CloseRequested => ControlFlow::Exit,
+                    _ => ControlFlow::Poll,
+                },
+                _ => ControlFlow::Poll,
+            }
+        },
+    );
 }
