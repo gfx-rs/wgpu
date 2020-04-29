@@ -166,7 +166,7 @@ pub enum Action {
         data: FileName,
         range: Range<wgt::BufferAddress>,
     },
-    Submit(Vec<Command>),
+    Submit(crate::SubmissionIndex, Vec<Command>),
 }
 
 #[derive(Debug)]
