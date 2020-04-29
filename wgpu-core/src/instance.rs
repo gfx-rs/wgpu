@@ -208,14 +208,14 @@ impl<I: Clone> AdapterInputs<'_, I> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(feature = "raw-window-handle")]
-    pub fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    pub fn instance_create_surface(
         &self,
-        window: &W,
+        handle: raw_window_handle::RawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
         use raw_window_handle::RawWindowHandle as Rwh;
 
-        let surface = match window.raw_window_handle() {
+        let surface = match handle {
             #[cfg(target_os = "ios")]
             Rwh::IOS(h) => Surface {
                 #[cfg(feature = "gfx-backend-vulkan")]

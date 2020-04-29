@@ -16,8 +16,9 @@ publish = false
 
 [dependencies]
 env_logger = "0.7"
-ron = { version = "0.5" }
-winit = { version = "0.22" }
+log = "0.4"
+ron = "0.5"
+winit = { version = "0.22", optional = true }
 
 [dependencies.wgt]
 path = "../wgpu-types"

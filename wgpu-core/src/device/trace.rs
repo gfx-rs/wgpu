@@ -160,7 +160,7 @@ impl Trace {
 
     pub fn make_binary(&mut self, kind: &str, data: &[u8]) -> String {
         self.binary_id += 1;
-        let name = format!("{}{}.bin", kind, self.binary_id);
+        let name = format!("data{}.{}", self.binary_id, kind);
         let _ = std::fs::write(self.path.join(&name), data);
         name
     }
