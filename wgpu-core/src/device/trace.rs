@@ -6,12 +6,19 @@ use crate::{
     command::{BufferCopyView, TextureCopyView},
     id,
 };
-use std::{io::Write as _, ops::Range};
+use std::ops::Range;
+#[cfg(feature = "trace")]
+use std::io::Write as _;
 
 //TODO: consider a readable Id that doesn't include the backend
+
 type FileName = String;
 
-#[derive(serde::Serialize)]
+pub const FILE_NAME: &str = "trace.ron";
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum BindingResource {
     Buffer {
         id: id::BufferId,
@@ -22,8 +29,10 @@ pub enum BindingResource {
     TextureView(id::TextureViewId),
 }
 
-#[derive(serde::Serialize)]
-pub(crate) enum Action {
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum Action {
     Init {
         limits: wgt::Limits,
     },
@@ -88,8 +97,10 @@ pub(crate) enum Action {
     Submit(Vec<Command>),
 }
 
-#[derive(Debug, serde::Serialize)]
-pub(crate) enum Command {
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum Command {
     CopyBufferToBuffer {
         src: id::BufferId,
         src_offset: wgt::BufferAddress,
@@ -124,6 +135,7 @@ pub(crate) enum Command {
     },
 }
 
+#[cfg(feature = "trace")]
 #[derive(Debug)]
 pub struct Trace {
     path: std::path::PathBuf,
@@ -132,10 +144,11 @@ pub struct Trace {
     binary_id: usize,
 }
 
+#[cfg(feature = "trace")]
 impl Trace {
     pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
         log::info!("Tracing into '{:?}'", path);
-        let mut file = std::fs::File::create(path.join("trace.ron"))?;
+        let mut file = std::fs::File::create(path.join(FILE_NAME))?;
         file.write(b"[\n")?;
         Ok(Trace {
             path: path.to_path_buf(),
@@ -164,6 +177,7 @@ impl Trace {
     }
 }
 
+#[cfg(feature = "trace")]
 impl Drop for Trace {
     fn drop(&mut self) {
         let _ = self.file.write(b"]");

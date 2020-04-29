@@ -31,8 +31,8 @@ use std::{
 };
 
 mod life;
-#[cfg(feature = "trace")]
-pub(crate) mod trace;
+#[cfg(any(feature = "trace", feature = "replay"))]
+pub mod trace;
 #[cfg(feature = "trace")]
 use trace::{Action, Trace};
 

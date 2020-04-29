@@ -188,7 +188,7 @@ impl From<HalDeviceType> for DeviceType {
 
 pub enum AdapterInputs<'a, I> {
     IdSet(&'a [I], fn(&I) -> Backend),
-    Mask(BackendBit, fn() -> I),
+    Mask(BackendBit, fn(Backend) -> I),
 }
 
 impl<I: Clone> AdapterInputs<'_, I> {
@@ -197,7 +197,7 @@ impl<I: Clone> AdapterInputs<'_, I> {
             AdapterInputs::IdSet(ids, ref fun) => ids.iter().find(|id| fun(id) == b).cloned(),
             AdapterInputs::Mask(bits, ref fun) => {
                 if bits.contains(b.into()) {
-                    Some(fun())
+                    Some(fun(b))
                 } else {
                     None
                 }
@@ -207,6 +207,85 @@ impl<I: Clone> AdapterInputs<'_, I> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    #[cfg(feature = "raw-window-handle")]
+    pub fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
+        &self,
+        window: &W,
+        id_in: Input<G, SurfaceId>,
+    ) -> SurfaceId {
+        use raw_window_handle::RawWindowHandle as Rwh;
+
+        let surface = match window.raw_window_handle() {
+            #[cfg(target_os = "ios")]
+            Rwh::IOS(h) => Surface {
+                #[cfg(feature = "gfx-backend-vulkan")]
+                vulkan: None,
+                metal: self
+                    .instance
+                    .metal
+                    .create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
+            },
+            #[cfg(target_os = "macos")]
+            Rwh::MacOS(h) => {
+                //TODO: figure out when this is needed, and how to get that without `objc`
+                //use objc::{msg_send, runtime::Object, sel, sel_impl};
+                //let ns_view = if h.ns_view.is_null() {
+                //    let ns_window = h.ns_window as *mut Object;
+                //    unsafe { msg_send![ns_window, contentView] }
+                //} else {
+                //    h.ns_view
+                //};
+                Surface {
+                    #[cfg(feature = "gfx-backend-vulkan")]
+                    vulkan: self
+                        .instance
+                        .vulkan
+                        .as_ref()
+                        .map(|inst| inst.create_surface_from_ns_view(h.ns_view)),
+                    metal: self
+                        .instance
+                        .metal
+                        .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
+                }
+            }
+            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
+            Rwh::Xlib(h) => Surface {
+                vulkan: self
+                    .instance
+                    .vulkan
+                    .as_ref()
+                    .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
+            },
+            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
+            Rwh::Wayland(h) => Surface {
+                vulkan: self
+                    .instance
+                    .vulkan
+                    .as_ref()
+                    .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
+            },
+            #[cfg(windows)]
+            Rwh::Windows(h) => Surface {
+                vulkan: self
+                    .instance
+                    .vulkan
+                    .as_ref()
+                    .map(|inst| inst.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd)),
+                dx12: self
+                    .instance
+                    .dx12
+                    .as_ref()
+                    .map(|inst| inst.create_surface_from_hwnd(h.hwnd)),
+                dx11: self.instance.dx11.create_surface_from_hwnd(h.hwnd),
+            },
+            _ => panic!("Unsupported window handle"),
+        };
+
+        let mut token = Token::root();
+        self.surfaces
+            .register_identity(id_in, surface, &mut token)
+    }
+
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         let instance = &self.instance;
         let mut token = Token::root();
