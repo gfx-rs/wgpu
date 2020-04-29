@@ -1663,7 +1663,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 match device.trace {
                     Some(ref trace) => trace
                         .lock()
-                        .add(Action::Submit(comb.commands.take().unwrap())),
+                        .add(Action::Submit(submit_index, comb.commands.take().unwrap())),
                     None => (),
                 };
 

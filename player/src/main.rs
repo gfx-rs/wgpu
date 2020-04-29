@@ -104,13 +104,13 @@ trait GlobalExt {
         encoder: wgc::id::CommandEncoderId,
         commands: Vec<trace::Command>,
     ) -> wgc::id::CommandBufferId;
-    /*fn process<B: wgc::hub::GfxBackend>(
+    fn process<B: wgc::hub::GfxBackend>(
         &self,
         device: wgc::id::DeviceId,
         action: trace::Action,
-    ) {
-
-    }*/
+        dir: &PathBuf,
+        comb_manager: &mut wgc::hub::IdentityManager,
+    );
 }
 
 impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
@@ -192,6 +192,233 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
         }
         self.command_encoder_finish::<B>(encoder, &wgt::CommandBufferDescriptor { todo: 0 })
     }
+
+    fn process<B: wgc::hub::GfxBackend>(
+        &self,
+        device: wgc::id::DeviceId,
+        action: trace::Action,
+        dir: &PathBuf,
+        comb_manager: &mut wgc::hub::IdentityManager,
+    ) {
+        use wgc::device::trace::Action as A;
+        match action {
+            A::Init { .. } => panic!("Unexpected Action::Init: has to be the first action only"),
+            A::CreateSwapChain { .. } | A::PresentSwapChain(_) => {
+                panic!("Unexpected SwapChain action: winit feature is not enabled")
+            }
+            A::CreateBuffer { id, desc } => {
+                let label = Label::new(&desc.label);
+                self.device_maintain_ids::<B>(device);
+                self.device_create_buffer::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
+            }
+            A::DestroyBuffer(id) => {
+                self.buffer_destroy::<B>(id);
+            }
+            A::CreateTexture { id, desc } => {
+                let label = Label::new(&desc.label);
+                self.device_maintain_ids::<B>(device);
+                self.device_create_texture::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
+            }
+            A::DestroyTexture(id) => {
+                self.texture_destroy::<B>(id);
+            }
+            A::CreateTextureView {
+                id,
+                parent_id,
+                desc,
+            } => {
+                let label = desc.as_ref().map_or(Label(None), |d| Label::new(&d.label));
+                self.device_maintain_ids::<B>(device);
+                self.texture_create_view::<B>(
+                    parent_id,
+                    desc.map(|d| d.map_label(|_| label.as_ptr())).as_ref(),
+                    id,
+                );
+            }
+            A::DestroyTextureView(id) => {
+                self.texture_view_destroy::<B>(id);
+            }
+            A::CreateSampler { id, desc } => {
+                let label = Label::new(&desc.label);
+                self.device_maintain_ids::<B>(device);
+                self.device_create_sampler::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
+            }
+            A::DestroySampler(id) => {
+                self.sampler_destroy::<B>(id);
+            }
+            A::GetSwapChainTexture { id, parent_id } => {
+                self.swap_chain_get_next_texture::<B>(parent_id, id)
+                    .unwrap();
+            }
+            A::CreateBindGroupLayout { id, label, entries } => {
+                let label = Label::new(&label);
+                self.device_create_bind_group_layout::<B>(
+                    device,
+                    &wgc::binding_model::BindGroupLayoutDescriptor {
+                        label: label.as_ptr(),
+                        entries: entries.as_ptr(),
+                        entries_length: entries.len(),
+                    },
+                    id,
+                );
+            }
+            A::DestroyBindGroupLayout(id) => {
+                self.bind_group_layout_destroy::<B>(id);
+            }
+            A::CreatePipelineLayout {
+                id,
+                bind_group_layouts,
+            } => {
+                self.device_maintain_ids::<B>(device);
+                self.device_create_pipeline_layout::<B>(
+                    device,
+                    &wgc::binding_model::PipelineLayoutDescriptor {
+                        bind_group_layouts: bind_group_layouts.as_ptr(),
+                        bind_group_layouts_length: bind_group_layouts.len(),
+                    },
+                    id,
+                );
+            }
+            A::DestroyPipelineLayout(id) => {
+                self.pipeline_layout_destroy::<B>(id);
+            }
+            A::CreateBindGroup {
+                id,
+                label,
+                layout_id,
+                entries,
+            } => {
+                use wgc::binding_model as bm;
+                let label = Label::new(&label);
+                let entry_vec = entries
+                    .into_iter()
+                    .map(|(binding, res)| wgc::binding_model::BindGroupEntry {
+                        binding,
+                        resource: match res {
+                            trace::BindingResource::Buffer { id, offset, size } => {
+                                bm::BindingResource::Buffer(bm::BufferBinding {
+                                    buffer: id,
+                                    offset,
+                                    size,
+                                })
+                            }
+                            trace::BindingResource::Sampler(id) => bm::BindingResource::Sampler(id),
+                            trace::BindingResource::TextureView(id) => {
+                                bm::BindingResource::TextureView(id)
+                            }
+                        },
+                    })
+                    .collect::<Vec<_>>();
+                self.device_maintain_ids::<B>(device);
+                self.device_create_bind_group::<B>(
+                    device,
+                    &wgc::binding_model::BindGroupDescriptor {
+                        label: label.as_ptr(),
+                        layout: layout_id,
+                        entries: entry_vec.as_ptr(),
+                        entries_length: entry_vec.len(),
+                    },
+                    id,
+                );
+            }
+            A::DestroyBindGroup(id) => {
+                self.bind_group_destroy::<B>(id);
+            }
+            A::CreateShaderModule { id, data } => {
+                let spv = wgt::read_spirv(File::open(dir.join(data)).unwrap()).unwrap();
+                self.device_create_shader_module::<B>(
+                    device,
+                    &wgc::pipeline::ShaderModuleDescriptor {
+                        code: wgc::U32Array {
+                            bytes: spv.as_ptr(),
+                            length: spv.len(),
+                        },
+                    },
+                    id,
+                );
+            }
+            A::DestroyShaderModule(id) => {
+                self.shader_module_destroy::<B>(id);
+            }
+            A::CreateComputePipeline { id, desc } => {
+                let cs_stage = OwnedProgrammableStage::from(desc.compute_stage);
+                self.device_maintain_ids::<B>(device);
+                self.device_create_compute_pipeline::<B>(
+                    device,
+                    &wgc::pipeline::ComputePipelineDescriptor {
+                        layout: desc.layout,
+                        compute_stage: cs_stage.desc,
+                    },
+                    id,
+                );
+            }
+            A::DestroyComputePipeline(id) => {
+                self.compute_pipeline_destroy::<B>(id);
+            }
+            A::CreateRenderPipeline { id, desc } => {
+                let vs_stage = OwnedProgrammableStage::from(desc.vertex_stage);
+                let fs_stage = desc.fragment_stage.map(OwnedProgrammableStage::from);
+                let vertex_buffers = desc
+                    .vertex_state
+                    .vertex_buffers
+                    .iter()
+                    .map(|vb| wgc::pipeline::VertexBufferLayoutDescriptor {
+                        array_stride: vb.array_stride,
+                        step_mode: vb.step_mode,
+                        attributes: vb.attributes.as_ptr(),
+                        attributes_length: vb.attributes.len(),
+                    })
+                    .collect::<Vec<_>>();
+                self.device_maintain_ids::<B>(device);
+                self.device_create_render_pipeline::<B>(
+                    device,
+                    &wgc::pipeline::RenderPipelineDescriptor {
+                        layout: desc.layout,
+                        vertex_stage: vs_stage.desc,
+                        fragment_stage: fs_stage.as_ref().map_or(ptr::null(), |s| &s.desc),
+                        primitive_topology: desc.primitive_topology,
+                        rasterization_state: desc
+                            .rasterization_state
+                            .as_ref()
+                            .map_or(ptr::null(), |rs| rs),
+                        color_states: desc.color_states.as_ptr(),
+                        color_states_length: desc.color_states.len(),
+                        depth_stencil_state: desc
+                            .depth_stencil_state
+                            .as_ref()
+                            .map_or(ptr::null(), |ds| ds),
+                        vertex_state: wgc::pipeline::VertexStateDescriptor {
+                            index_format: desc.vertex_state.index_format,
+                            vertex_buffers: vertex_buffers.as_ptr(),
+                            vertex_buffers_length: vertex_buffers.len(),
+                        },
+                        sample_count: desc.sample_count,
+                        sample_mask: desc.sample_mask,
+                        alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
+                    },
+                    id,
+                );
+            }
+            A::DestroyRenderPipeline(id) => {
+                self.render_pipeline_destroy::<B>(id);
+            }
+            A::WriteBuffer { id, data, range } => {
+                let bin = std::fs::read(dir.join(data)).unwrap();
+                let size = (range.end - range.start) as usize;
+                self.device_wait_for_buffer::<B>(device, id);
+                self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
+            }
+            A::Submit(_index, commands) => {
+                let encoder = self.device_create_command_encoder::<B>(
+                    device,
+                    &wgt::CommandEncoderDescriptor { label: ptr::null() },
+                    comb_manager.alloc(device.backend()),
+                );
+                let comb = self.encode_commands::<B>(encoder, commands);
+                self.queue_submit::<B>(device, &[comb]);
+            }
+        }
+    }
 }
 
 fn main() {
@@ -272,259 +499,74 @@ fn main() {
         }
         _ => panic!("Expected Action::Init"),
     };
-    let mut frame_count = 0;
 
     log::info!("Executing actions");
-    for action in actions {
-        use wgc::device::trace::Action as A;
-        match action {
-            A::Init { .. } => panic!("Unexpected Action::Init"),
-            A::CreateBuffer { id, desc } => {
-                let label = Label::new(&desc.label);
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.device_create_buffer(device, &desc.map_label(|_| label.as_ptr()), id));
-            }
-            A::DestroyBuffer(id) => {
-                gfx_select!(device => global.buffer_destroy(id));
-            }
-            A::CreateTexture { id, desc } => {
-                let label = Label::new(&desc.label);
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.device_create_texture(device, &desc.map_label(|_| label.as_ptr()), id));
-            }
-            A::DestroyTexture(id) => {
-                gfx_select!(device => global.texture_destroy(id));
-            }
-            A::CreateTextureView {
-                id,
-                parent_id,
-                desc,
-            } => {
-                let label = desc.as_ref().map_or(Label(None), |d| Label::new(&d.label));
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.texture_create_view(parent_id, desc.map(|d| d.map_label(|_| label.as_ptr())).as_ref(), id));
-            }
-            A::DestroyTextureView(id) => {
-                gfx_select!(device => global.texture_view_destroy(id));
-            }
-            A::CreateSampler { id, desc } => {
-                let label = Label::new(&desc.label);
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.device_create_sampler(device, &desc.map_label(|_| label.as_ptr()), id));
-            }
-            A::DestroySampler(id) => {
-                gfx_select!(device => global.sampler_destroy(id));
-            }
-            A::CreateSwapChain { id, desc } => {
-                #[cfg(feature = "winit")]
-                {
-                    log::info!("Initializing the swapchain");
-                    assert_eq!(id.to_surface_id(), surface);
-                    window.set_inner_size(winit::dpi::PhysicalSize::new(desc.width, desc.height));
-                    gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
-                }
-                #[cfg(not(feature = "winit"))]
-                {
-                    let _ = (id, desc);
-                    panic!("Enable `winit` feature to work with swapchains");
-                }
-            }
-            A::GetSwapChainTexture { id, parent_id } => {
-                gfx_select!(device => global.swap_chain_get_next_texture(parent_id, id)).unwrap();
-            }
-            A::PresentSwapChain(id) => {
-                frame_count += 1;
-                log::debug!("Presenting frame {}", frame_count);
-                gfx_select!(device => global.swap_chain_present(id));
-            }
-            A::CreateBindGroupLayout { id, label, entries } => {
-                let label = Label::new(&label);
-                gfx_select!(device => global.device_create_bind_group_layout(
-                    device,
-                    &wgc::binding_model::BindGroupLayoutDescriptor {
-                        label: label.as_ptr(),
-                        entries: entries.as_ptr(),
-                        entries_length: entries.len(),
-                    },
-                    id));
-            }
-            A::DestroyBindGroupLayout(id) => {
-                gfx_select!(device => global.bind_group_layout_destroy(id));
-            }
-            A::CreatePipelineLayout {
-                id,
-                bind_group_layouts,
-            } => {
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.device_create_pipeline_layout(
-                    device,
-                    &wgc::binding_model::PipelineLayoutDescriptor {
-                        bind_group_layouts: bind_group_layouts.as_ptr(),
-                        bind_group_layouts_length: bind_group_layouts.len(),
-                    },
-                    id));
-            }
-            A::DestroyPipelineLayout(id) => {
-                gfx_select!(device => global.pipeline_layout_destroy(id));
-            }
-            A::CreateBindGroup {
-                id,
-                label,
-                layout_id,
-                entries,
-            } => {
-                use wgc::binding_model as bm;
-                let label = Label::new(&label);
-                let entry_vec = entries
-                    .into_iter()
-                    .map(|(binding, res)| wgc::binding_model::BindGroupEntry {
-                        binding,
-                        resource: match res {
-                            trace::BindingResource::Buffer { id, offset, size } => {
-                                bm::BindingResource::Buffer(bm::BufferBinding {
-                                    buffer: id,
-                                    offset,
-                                    size,
-                                })
+    #[cfg(feature = "winit")]
+    {
+        let mut frame_count = 0;
+        winit::platform::desktop::EventLoopExtDesktop::run_return(
+            &mut event_loop,
+            move |event, _, control_flow| {
+                use winit::{
+                    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+                    event_loop::ControlFlow,
+                };
+
+                *control_flow = ControlFlow::Poll;
+                match event {
+                    Event::MainEventsCleared => {
+                        window.request_redraw();
+                    }
+                    Event::RedrawRequested(_) => loop {
+                        match actions.pop() {
+                            Some(trace::Action::CreateSwapChain { id, desc }) => {
+                                log::info!("Initializing the swapchain");
+                                assert_eq!(id.to_surface_id(), surface);
+                                window.set_inner_size(winit::dpi::PhysicalSize::new(
+                                    desc.width,
+                                    desc.height,
+                                ));
+                                gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
                             }
-                            trace::BindingResource::Sampler(id) => bm::BindingResource::Sampler(id),
-                            trace::BindingResource::TextureView(id) => {
-                                bm::BindingResource::TextureView(id)
+                            Some(trace::Action::PresentSwapChain(id)) => {
+                                frame_count += 1;
+                                log::debug!("Presenting frame {}", frame_count);
+                                gfx_select!(device => global.swap_chain_present(id));
+                                break;
                             }
-                        },
-                    })
-                    .collect::<Vec<_>>();
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.device_create_bind_group(
-                    device,
-                    &wgc::binding_model::BindGroupDescriptor {
-                        label: label.as_ptr(),
-                        layout: layout_id,
-                        entries: entry_vec.as_ptr(),
-                        entries_length: entry_vec.len(),
+                            Some(action) => {
+                                gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+                            }
+                            None => break,
+                        }
                     },
-                    id
-                ));
-            }
-            A::DestroyBindGroup(id) => {
-                gfx_select!(device => global.bind_group_destroy(id));
-            }
-            A::CreateShaderModule { id, data } => {
-                let spv = wgt::read_spirv(File::open(dir.join(data)).unwrap()).unwrap();
-                gfx_select!(device => global.device_create_shader_module(
-                    device,
-                    &wgc::pipeline::ShaderModuleDescriptor {
-                        code: wgc::U32Array {
-                            bytes: spv.as_ptr(),
-                            length: spv.len(),
-                        },
+                    Event::WindowEvent { event, .. } => match event {
+                        WindowEvent::KeyboardInput {
+                            input:
+                                KeyboardInput {
+                                    virtual_keycode: Some(VirtualKeyCode::Escape),
+                                    state: ElementState::Pressed,
+                                    ..
+                                },
+                            ..
+                        }
+                        | WindowEvent::CloseRequested => {
+                            *control_flow = ControlFlow::Exit;
+                        }
+                        _ => {}
                     },
-                    id
-                ));
-            }
-            A::DestroyShaderModule(id) => {
-                gfx_select!(device => global.shader_module_destroy(id));
-            }
-            A::CreateComputePipeline { id, desc } => {
-                let cs_stage = OwnedProgrammableStage::from(desc.compute_stage);
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.device_create_compute_pipeline(
-                    device,
-                    &wgc::pipeline::ComputePipelineDescriptor {
-                        layout: desc.layout,
-                        compute_stage: cs_stage.desc,
-                    },
-                    id));
-            }
-            A::DestroyComputePipeline(id) => {
-                gfx_select!(device => global.compute_pipeline_destroy(id));
-            }
-            A::CreateRenderPipeline { id, desc } => {
-                let vs_stage = OwnedProgrammableStage::from(desc.vertex_stage);
-                let fs_stage = desc.fragment_stage.map(OwnedProgrammableStage::from);
-                let vertex_buffers = desc
-                    .vertex_state
-                    .vertex_buffers
-                    .iter()
-                    .map(|vb| wgc::pipeline::VertexBufferLayoutDescriptor {
-                        array_stride: vb.array_stride,
-                        step_mode: vb.step_mode,
-                        attributes: vb.attributes.as_ptr(),
-                        attributes_length: vb.attributes.len(),
-                    })
-                    .collect::<Vec<_>>();
-                gfx_select!(device => global.device_maintain_ids(device));
-                gfx_select!(device => global.device_create_render_pipeline(
-                    device,
-                    &wgc::pipeline::RenderPipelineDescriptor {
-                        layout: desc.layout,
-                        vertex_stage: vs_stage.desc,
-                        fragment_stage: fs_stage.as_ref().map_or(ptr::null(), |s| &s.desc),
-                        primitive_topology: desc.primitive_topology,
-                        rasterization_state: desc.rasterization_state.as_ref().map_or(ptr::null(), |rs| rs),
-                        color_states: desc.color_states.as_ptr(),
-                        color_states_length: desc.color_states.len(),
-                        depth_stencil_state: desc.depth_stencil_state.as_ref().map_or(ptr::null(), |ds| ds),
-                        vertex_state: wgc::pipeline::VertexStateDescriptor {
-                            index_format: desc.vertex_state.index_format,
-                            vertex_buffers: vertex_buffers.as_ptr(),
-                            vertex_buffers_length: vertex_buffers.len(),
-                        },
-                        sample_count: desc.sample_count,
-                        sample_mask: desc.sample_mask,
-                        alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
-                    },
-                    id));
-            }
-            A::DestroyRenderPipeline(id) => {
-                gfx_select!(device => global.render_pipeline_destroy(id));
-            }
-            A::WriteBuffer { id, data, range } => {
-                let bin = std::fs::read(dir.join(data)).unwrap();
-                let size = (range.end - range.start) as usize;
-                gfx_select!(device => global.device_wait_for_buffer(device, id));
-                gfx_select!(device => global.device_set_buffer_sub_data(device, id, range.start, &bin[..size]));
-            }
-            A::Submit(commands) => {
-                let encoder = gfx_select!(device => global.device_create_command_encoder(
-                    device,
-                    &wgt::CommandEncoderDescriptor {
-                        label: ptr::null(),
-                    },
-                    command_buffer_id_manager.alloc(device.backend())
-                ));
-                let comb = gfx_select!(device => global.encode_commands(encoder, commands));
-                gfx_select!(device => global.queue_submit(device, &[comb]));
-            }
-        }
+                    Event::LoopDestroyed => {
+                        log::info!("Closing");
+                        gfx_select!(device => global.device_poll(device, true));
+                    }
+                    _ => {}
+                }
+            },
+        );
     }
 
-    log::info!("Done replay");
-    #[cfg(feature = "winit")]
-    winit::platform::desktop::EventLoopExtDesktop::run_return(
-        &mut event_loop,
-        move |event, _, control_flow| {
-            use winit::{
-                event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-                event_loop::ControlFlow,
-            };
-
-            *control_flow = match event {
-                Event::WindowEvent { event, .. } => match event {
-                    WindowEvent::KeyboardInput {
-                        input:
-                            KeyboardInput {
-                                virtual_keycode: Some(VirtualKeyCode::Escape),
-                                state: ElementState::Pressed,
-                                ..
-                            },
-                        ..
-                    }
-                    | WindowEvent::CloseRequested => ControlFlow::Exit,
-                    _ => ControlFlow::Poll,
-                },
-                _ => ControlFlow::Poll,
-            }
-        },
-    );
+    #[cfg(not(feature = "winit"))]
+    while let Some(action) = actions.pop() {
+        gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+    }
 }
