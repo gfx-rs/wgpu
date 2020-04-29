@@ -58,7 +58,7 @@ pub struct Rect<T> {
 #[derive(Clone, Copy, Debug, PeekPoke)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub(crate) enum RenderCommand {
+pub enum RenderCommand {
     SetBindGroup {
         index: u8,
         num_dynamic_offsets: u8,

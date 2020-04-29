@@ -25,7 +25,7 @@ use wgt::Backend;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{fmt::Debug, iter, marker::PhantomData, ops};
+use std::{fmt::Debug, marker::PhantomData, ops};
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
@@ -44,6 +44,13 @@ impl Default for IdentityManager {
 }
 
 impl IdentityManager {
+    pub fn from_index(min_index: u32) -> Self {
+        IdentityManager {
+            free: (0 .. min_index).collect(),
+            epochs: vec![1; min_index as usize],
+        }
+    }
+
     pub fn alloc<I: TypedId>(&mut self, backend: Backend) -> I {
         match self.free.pop() {
             Some(index) => I::zip(index, self.epochs[index as usize], backend),
@@ -262,10 +269,7 @@ pub struct IdentityManagerFactory;
 impl<I: TypedId + Debug> IdentityHandlerFactory<I> for IdentityManagerFactory {
     type Filter = Mutex<IdentityManager>;
     fn spawn(&self, min_index: Index) -> Self::Filter {
-        let mut man = IdentityManager::default();
-        man.free.extend(0..min_index);
-        man.epochs.extend(iter::repeat(1).take(min_index as usize));
-        Mutex::new(man)
+        Mutex::new(IdentityManager::from_index(min_index))
     }
 }
 
@@ -549,6 +553,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
+        log::info!("Dropping Global");
         // destroy surfaces
         for (_, (surface, _)) in self.surfaces.data.write().map.drain() {
             self.instance.destroy_surface(surface);

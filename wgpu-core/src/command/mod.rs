@@ -27,7 +27,7 @@ use peek_poke::PeekPoke;
 use std::{marker::PhantomData, mem, ptr, slice, thread::ThreadId};
 
 #[derive(Clone, Copy, Debug, PeekPoke)]
-pub(crate) struct PhantomSlice<T>(PhantomData<T>);
+pub struct PhantomSlice<T>(PhantomData<T>);
 
 impl<T> Default for PhantomSlice<T> {
     fn default() -> Self {
