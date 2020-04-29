@@ -32,6 +32,68 @@ pub enum BindingResource {
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ProgrammableStageDescriptor {
+    pub module: id::ShaderModuleId,
+    pub entry_point: String,
+}
+
+#[cfg(feature = "trace")]
+impl ProgrammableStageDescriptor {
+    pub fn new(desc: &crate::pipeline::ProgrammableStageDescriptor) -> Self {
+        ProgrammableStageDescriptor {
+            module: desc.module,
+            entry_point: unsafe { std::ffi::CStr::from_ptr(desc.entry_point) }
+                .to_string_lossy()
+                .to_string(),
+        }
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct ComputePipelineDescriptor {
+    pub layout: id::PipelineLayoutId,
+    pub compute_stage: ProgrammableStageDescriptor,
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct VertexBufferLayoutDescriptor {
+    pub array_stride: wgt::BufferAddress,
+    pub step_mode: wgt::InputStepMode,
+    pub attributes: Vec<wgt::VertexAttributeDescriptor>,
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct VertexStateDescriptor {
+    pub index_format: wgt::IndexFormat,
+    pub vertex_buffers: Vec<VertexBufferLayoutDescriptor>,
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct RenderPipelineDescriptor {
+    pub layout: id::PipelineLayoutId,
+    pub vertex_stage: ProgrammableStageDescriptor,
+    pub fragment_stage: Option<ProgrammableStageDescriptor>,
+    pub primitive_topology: wgt::PrimitiveTopology,
+    pub rasterization_state: Option<wgt::RasterizationStateDescriptor>,
+    pub color_states: Vec<wgt::ColorStateDescriptor>,
+    pub depth_stencil_state: Option<wgt::DepthStencilStateDescriptor>,
+    pub vertex_state: VertexStateDescriptor,
+    pub sample_count: u32,
+    pub sample_mask: u32,
+    pub alpha_to_coverage_enabled: bool,
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum Action {
     Init {
         limits: wgt::Limits,
@@ -89,6 +151,16 @@ pub enum Action {
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),
+    CreateComputePipeline {
+        id: id::ComputePipelineId,
+        desc: ComputePipelineDescriptor,
+    },
+    DestroyComputePipeline(id::ComputePipelineId),
+    CreateRenderPipeline {
+        id: id::RenderPipelineId,
+        desc: RenderPipelineDescriptor,
+    },
+    DestroyRenderPipeline(id::RenderPipelineId),
     WriteBuffer {
         id: id::BufferId,
         data: FileName,

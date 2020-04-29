@@ -151,7 +151,7 @@ impl SurfaceId {
     }
 }
 impl SwapChainId {
-    pub(crate) fn to_surface_id(self) -> SurfaceId {
+    pub fn to_surface_id(self) -> SurfaceId {
         let (index, epoch, _) = self.unzip();
         Id::zip(index, epoch, Backend::Empty)
     }

@@ -281,7 +281,13 @@ impl<B: GfxBackend> Device<B> {
     ) -> Vec<BufferMapPendingCallback> {
         let mut life_tracker = self.lock_life(token);
 
-        life_tracker.triage_suspected(global, &self.trackers, token);
+        life_tracker.triage_suspected(
+            global,
+            &self.trackers,
+            #[cfg(feature = "trace")]
+            self.trace.as_ref(),
+            token,
+        );
         life_tracker.triage_mapped(global, token);
         life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
         let _last_done = life_tracker.triage_submissions(&self.raw, force_wait);
@@ -575,6 +581,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         log::info!("Created mapped buffer {:?} with {:?}", id, desc);
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateBuffer {
+                id,
+                desc: desc.map_label(own_label),
+            }),
+            None => (),
+        };
+
         device
             .trackers
             .lock()
@@ -692,14 +707,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::DestroyBuffer(buffer_id)),
-            None => (),
-        };
-
-        device
+        device_guard[device_id]
             .lock_life(&mut token)
             .suspected_resources
             .buffers
@@ -752,14 +760,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::DestroyTexture(texture_id)),
-            None => (),
-        };
-
-        device
+        device_guard[device_id]
             .lock_life(&mut token)
             .suspected_resources
             .textures
@@ -882,16 +883,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
-                .lock()
-                .add(trace::Action::DestroyTextureView(texture_view_id)),
-            None => (),
-        };
-
-        device
+        device_guard[device_id]
             .lock_life(&mut token)
             .suspected_resources
             .texture_views
@@ -967,14 +959,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::DestroySampler(sampler_id)),
-            None => (),
-        };
-
-        device
+        device_guard[device_id]
             .lock_life(&mut token)
             .suspected_resources
             .samplers
@@ -1153,16 +1138,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
-                .lock()
-                .add(trace::Action::DestroyPipelineLayout(pipeline_layout_id)),
-            None => (),
-        };
-
-        device
+        device_guard[device_id]
             .lock_life(&mut token)
             .suspected_resources
             .pipeline_layouts
@@ -1437,16 +1413,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
-                .lock()
-                .add(trace::Action::DestroyBindGroup(bind_group_id)),
-            None => (),
-        };
-
-        device
+        device_guard[device_id]
             .lock_life(&mut token)
             .suspected_resources
             .bind_groups
@@ -1505,7 +1472,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .add(trace::Action::DestroyShaderModule(shader_module_id)),
             None => (),
         };
-
         unsafe {
             device.raw.destroy_shader_module(module.raw);
         }
@@ -2065,8 +2031,38 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             life_guard: LifeGuard::new(),
         };
 
-        hub.render_pipelines
-            .register_identity(id_in, pipeline, &mut token)
+        let id = hub.render_pipelines
+            .register_identity(id_in, pipeline, &mut token);
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline {
+                id,
+                desc: trace::RenderPipelineDescriptor {
+                    layout: desc.layout, 
+                    vertex_stage: trace::ProgrammableStageDescriptor::new(&desc.vertex_stage),
+                    fragment_stage: unsafe { desc.fragment_stage.as_ref() }.map(trace::ProgrammableStageDescriptor::new),
+                    primitive_topology: desc.primitive_topology,
+                    rasterization_state: unsafe { desc.rasterization_state.as_ref() }.cloned(),
+                    color_states: color_states.to_vec(),
+                    depth_stencil_state: depth_stencil_state.cloned(),
+                    vertex_state: trace::VertexStateDescriptor {
+                        index_format: desc.vertex_state.index_format,
+                        vertex_buffers: desc_vbs.iter().map(|vbl| trace::VertexBufferLayoutDescriptor {
+                            array_stride: vbl.array_stride,
+                            step_mode: vbl.step_mode,
+                            attributes: unsafe { slice::from_raw_parts(vbl.attributes, vbl.attributes_length) }
+                                .iter().cloned().collect(),
+                        }).collect(),
+                    },
+                    sample_count: desc.sample_count,
+                    sample_mask: desc.sample_mask,
+                    alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
+                },
+            }),
+            None => (),
+        };
+        id
     }
 
     pub fn render_pipeline_destroy<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
@@ -2151,8 +2147,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
             life_guard: LifeGuard::new(),
         };
-        hub.compute_pipelines
-            .register_identity(id_in, pipeline, &mut token)
+        let id = hub.compute_pipelines
+            .register_identity(id_in, pipeline, &mut token);
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(trace::Action::CreateComputePipeline {
+                id,
+                desc: trace::ComputePipelineDescriptor {
+                    layout: desc.layout, 
+                    compute_stage: trace::ProgrammableStageDescriptor::new(&desc.compute_stage),
+                },
+            }),
+            None => (),
+        };
+        id
     }
 
     pub fn compute_pipeline_destroy<B: GfxBackend>(
