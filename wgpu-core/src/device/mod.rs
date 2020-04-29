@@ -604,6 +604,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         (id, pointer)
     }
 
+    #[cfg(feature = "replay")]
+    pub fn device_wait_for_buffer<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+        buffer_id: id::BufferId,
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let last_submission = {
+            let (buffer_guard, _) = hub.buffers.write(&mut token);
+            buffer_guard[buffer_id]
+                .life_guard
+                .submission_index
+                .load(Ordering::Acquire)
+        };
+
+        let device = &device_guard[device_id];
+        let mut life_lock = device.lock_life(&mut token);
+        if life_lock.lowest_active_submission() <= last_submission {
+            log::info!(
+                "Waiting for submission {:?} before accessing buffer {:?}",
+                last_submission,
+                buffer_id
+            );
+            life_lock.triage_submissions(&device.raw, true);
+        }
+    }
+
     pub fn device_set_buffer_sub_data<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
@@ -2031,7 +2060,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             life_guard: LifeGuard::new(),
         };
 
-        let id = hub.render_pipelines
+        let id = hub
+            .render_pipelines
             .register_identity(id_in, pipeline, &mut token);
 
         #[cfg(feature = "trace")]
@@ -2039,21 +2069,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline {
                 id,
                 desc: trace::RenderPipelineDescriptor {
-                    layout: desc.layout, 
+                    layout: desc.layout,
                     vertex_stage: trace::ProgrammableStageDescriptor::new(&desc.vertex_stage),
-                    fragment_stage: unsafe { desc.fragment_stage.as_ref() }.map(trace::ProgrammableStageDescriptor::new),
+                    fragment_stage: unsafe { desc.fragment_stage.as_ref() }
+                        .map(trace::ProgrammableStageDescriptor::new),
                     primitive_topology: desc.primitive_topology,
                     rasterization_state: unsafe { desc.rasterization_state.as_ref() }.cloned(),
                     color_states: color_states.to_vec(),
                     depth_stencil_state: depth_stencil_state.cloned(),
                     vertex_state: trace::VertexStateDescriptor {
                         index_format: desc.vertex_state.index_format,
-                        vertex_buffers: desc_vbs.iter().map(|vbl| trace::VertexBufferLayoutDescriptor {
-                            array_stride: vbl.array_stride,
-                            step_mode: vbl.step_mode,
-                            attributes: unsafe { slice::from_raw_parts(vbl.attributes, vbl.attributes_length) }
-                                .iter().cloned().collect(),
-                        }).collect(),
+                        vertex_buffers: desc_vbs
+                            .iter()
+                            .map(|vbl| trace::VertexBufferLayoutDescriptor {
+                                array_stride: vbl.array_stride,
+                                step_mode: vbl.step_mode,
+                                attributes: unsafe {
+                                    slice::from_raw_parts(vbl.attributes, vbl.attributes_length)
+                                }
+                                .iter()
+                                .cloned()
+                                .collect(),
+                            })
+                            .collect(),
                     },
                     sample_count: desc.sample_count,
                     sample_mask: desc.sample_mask,
@@ -2147,7 +2185,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
             life_guard: LifeGuard::new(),
         };
-        let id = hub.compute_pipelines
+        let id = hub
+            .compute_pipelines
             .register_identity(id_in, pipeline, &mut token);
 
         #[cfg(feature = "trace")]
@@ -2155,7 +2194,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref trace) => trace.lock().add(trace::Action::CreateComputePipeline {
                 id,
                 desc: trace::ComputePipelineDescriptor {
-                    layout: desc.layout, 
+                    layout: desc.layout,
                     compute_stage: trace::ProgrammableStageDescriptor::new(&desc.compute_stage),
                 },
             }),
@@ -2293,6 +2332,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         swap_chain_guard.insert(sc_id, swap_chain);
         sc_id
+    }
+
+    #[cfg(feature = "replay")]
+    /// Only triange suspected resource IDs. This helps us to avoid ID collisions
+    /// upon creating new resources when re-plaing a trace.
+    pub fn device_maintain_ids<B: GfxBackend>(&self, device_id: id::DeviceId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+        device.lock_life(&mut token).triage_suspected(
+            self,
+            &device.trackers,
+            #[cfg(feature = "trace")]
+            None,
+            &mut token,
+        );
     }
 
     pub fn device_poll<B: GfxBackend>(&self, device_id: id::DeviceId, force_wait: bool) {

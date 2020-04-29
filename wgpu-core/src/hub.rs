@@ -46,7 +46,7 @@ impl Default for IdentityManager {
 impl IdentityManager {
     pub fn from_index(min_index: u32) -> Self {
         IdentityManager {
-            free: (0 .. min_index).collect(),
+            free: (0..min_index).collect(),
             epochs: vec![1; min_index as usize],
         }
     }
