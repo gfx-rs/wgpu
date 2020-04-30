@@ -17,6 +17,7 @@ jobs:
           iOS Stable,
           MacOS Stable,
           MacOS Nightly,
+          Android Stable,
           Ubuntu Stable,
           Ubuntu Nightly,
           Windows Stable,
@@ -40,6 +41,12 @@ jobs:
             channel: nightly
             build_command: cargo test
             additional_core_features:
+            additional_player_features:
+          - os: ubuntu-18.04
+            name: Android Stable
+            channel: stable
+            build_command: rustup target add aarch64-linux-android; cargo clippy --target aarch64-linux-android
+            additional_core_features: trace
             additional_player_features:
           - os: ubuntu-18.04
             name: Ubuntu Stable
@@ -67,13 +74,20 @@ jobs:
             additional_player_features:
     steps:
     - uses: actions/checkout@v2
+    - if: matrix.name == 'Android Stable'
+      run: |
+        curl -LO https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
+        unzip -qq android-ndk-r21b-linux-x86_64.zip -d $GITHUB_WORKSPACE
+        export NDK_HOME_BIN=$GITHUB_WORKSPACE/android-ndk-r21b/toolchains/llvm/prebuilt/linux-x86_64/bin
+        ln -s $NDK_HOME_BIN/aarch64-linux-android21-clang $NDK_HOME_BIN/aarch64-linux-android-clang
+        echo "::add-path::$NDK_HOME_BIN"
     - if: matrix.channel == 'nightly'
       name: Install latest nightly
       uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly
         override: true
-    - if: contains(matrix.build_command, 'clippy')
+    - if: matrix.channel == 'stable'
       run: rustup component add clippy
     - name: cargo clippy/test
       run: ${{ matrix.build_command }}

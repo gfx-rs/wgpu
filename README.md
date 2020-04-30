@@ -25,7 +25,7 @@ If you are looking for the native implementation or bindings to the API in other
 
 ## Supported Platforms
 
-   API   |       Windows      |       Linux        |    macOS & iOS     |
+   API   |    Windows 7/10    |  Linux & Android   |    macOS & iOS     |
   -----  | ------------------ | ------------------ | ------------------ |
   DX11   | :white_check_mark: |                    |                    |
   DX12   | :heavy_check_mark: |                    |                    |

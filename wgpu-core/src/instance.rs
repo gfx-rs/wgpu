@@ -248,21 +248,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
                 }
             }
-            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
+            #[cfg(all(
+                unix,
+                not(target_os = "android"),
+                not(target_os = "ios"),
+                not(target_os = "macos")
+            ))]
             Rwh::Xlib(h) => Surface {
                 vulkan: self
                     .instance
                     .vulkan
                     .as_ref()
-                    .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
+                    .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window)),
             },
-            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
+            #[cfg(all(
+                unix,
+                not(target_os = "android"),
+                not(target_os = "ios"),
+                not(target_os = "macos")
+            ))]
             Rwh::Wayland(h) => Surface {
                 vulkan: self
                     .instance
                     .vulkan
                     .as_ref()
                     .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
+            },
+            #[cfg(target_os = "android")]
+            Rwh::Android(h) => Surface {
+                vulkan: self
+                    .instance
+                    .vulkan
+                    .as_ref()
+                    .map(|inst| inst.create_surface_android(h.a_native_window)),
             },
             #[cfg(windows)]
             Rwh::Windows(h) => Surface {
