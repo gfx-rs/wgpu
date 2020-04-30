@@ -76,10 +76,17 @@ pub enum BufferMapState {
     /// Waiting for GPU to be done before mapping
     Waiting(BufferPendingMapping),
     /// Mapped
-    Active,
+    Active {
+        ptr: *mut u8,
+        sub_range: hal::buffer::SubRange,
+        host: crate::device::HostMap,
+    },
     /// Not mapped
     Idle,
 }
+
+unsafe impl Send for BufferMapState {}
+unsafe impl Sync for BufferMapState {}
 
 pub enum BufferMapOperation {
     Read {
@@ -141,7 +148,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) size: BufferAddress,
     pub(crate) full_range: (),
-    pub(crate) mapped_write_segments: Vec<hal::memory::Segment>,
+    pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) map_state: BufferMapState,
 }
