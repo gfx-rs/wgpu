@@ -37,7 +37,7 @@ pub enum PowerPreference {
 bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct BackendBit: u32 {
         const VULKAN = 1 << Backend::Vulkan as u32;
         const GL = 1 << Backend::Gl as u32;

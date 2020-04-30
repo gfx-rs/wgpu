@@ -580,7 +580,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         adapter_id: AdapterId,
         desc: &DeviceDescriptor,
-        #[cfg(feature = "trace")] trace_path: Option<&std::path::Path>,
+        trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> DeviceId {
         let hub = B::hub(self);
@@ -646,8 +646,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 mem_props,
                 limits.non_coherent_atom_size as u64,
                 supports_texture_d24_s8,
-                desc.limits.clone(),
-                #[cfg(feature = "trace")]
+                desc,
                 trace_path,
             )
         };
