@@ -454,7 +454,6 @@ fn main() {
         .unwrap();
 
     let global = wgc::hub::Global::new("player", IdentityPassThroughFactory);
-    let mut adapter_id_manager = wgc::hub::IdentityManager::default();
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
 
     #[cfg(feature = "winit")]
@@ -463,37 +462,28 @@ fn main() {
         wgc::id::TypedId::zip(0, 1, wgt::Backend::Empty),
     );
 
-    let adapter = global
-        .pick_adapter(
-            &wgc::instance::RequestAdapterOptions {
-                power_preference: wgt::PowerPreference::Default,
-                #[cfg(feature = "winit")]
-                compatible_surface: Some(surface),
-                #[cfg(not(feature = "winit"))]
-                compatible_surface: None,
-            },
-            wgc::instance::AdapterInputs::IdSet(
-                &vec![
-                    adapter_id_manager.alloc(wgt::Backend::Vulkan),
-                    adapter_id_manager.alloc(wgt::Backend::Dx12),
-                    adapter_id_manager.alloc(wgt::Backend::Metal),
-                ],
-                |id| id.backend(),
-            ),
-        )
-        .unwrap();
-
-    log::info!("Initializing the device");
     let device = match actions.pop() {
-        Some(trace::Action::Init { limits }) => {
+        Some(trace::Action::Init { desc, backend }) => {
+            log::info!("Initializing the device for backend: {:?}", backend);
+            let adapter = global
+                .pick_adapter(
+                    &wgc::instance::RequestAdapterOptions {
+                        power_preference: wgt::PowerPreference::Default,
+                        #[cfg(feature = "winit")]
+                        compatible_surface: Some(surface),
+                        #[cfg(not(feature = "winit"))]
+                        compatible_surface: None,
+                    },
+                    wgc::instance::AdapterInputs::IdSet(
+                        &[wgc::id::TypedId::zip(0, 0, backend)],
+                        |id| id.backend(),
+                    ),
+                )
+                .expect("Unable to find an adapter for selected backend");
             gfx_select!(adapter => global.adapter_request_device(
                 adapter,
-                &wgt::DeviceDescriptor {
-                    extensions: wgt::Extensions {
-                        anisotropic_filtering: false,
-                    },
-                    limits,
-                },
+                &desc,
+                None,
                 wgc::id::TypedId::zip(1, 0, wgt::Backend::Empty)
             ))
         }
@@ -501,72 +491,69 @@ fn main() {
     };
 
     log::info!("Executing actions");
-    #[cfg(feature = "winit")]
-    {
-        let mut frame_count = 0;
-        winit::platform::desktop::EventLoopExtDesktop::run_return(
-            &mut event_loop,
-            move |event, _, control_flow| {
-                use winit::{
-                    event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
-                    event_loop::ControlFlow,
-                };
-
-                *control_flow = ControlFlow::Poll;
-                match event {
-                    Event::MainEventsCleared => {
-                        window.request_redraw();
-                    }
-                    Event::RedrawRequested(_) => loop {
-                        match actions.pop() {
-                            Some(trace::Action::CreateSwapChain { id, desc }) => {
-                                log::info!("Initializing the swapchain");
-                                assert_eq!(id.to_surface_id(), surface);
-                                window.set_inner_size(winit::dpi::PhysicalSize::new(
-                                    desc.width,
-                                    desc.height,
-                                ));
-                                gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
-                            }
-                            Some(trace::Action::PresentSwapChain(id)) => {
-                                frame_count += 1;
-                                log::debug!("Presenting frame {}", frame_count);
-                                gfx_select!(device => global.swap_chain_present(id));
-                                break;
-                            }
-                            Some(action) => {
-                                gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
-                            }
-                            None => break,
-                        }
-                    },
-                    Event::WindowEvent { event, .. } => match event {
-                        WindowEvent::KeyboardInput {
-                            input:
-                                KeyboardInput {
-                                    virtual_keycode: Some(VirtualKeyCode::Escape),
-                                    state: ElementState::Pressed,
-                                    ..
-                                },
-                            ..
-                        }
-                        | WindowEvent::CloseRequested => {
-                            *control_flow = ControlFlow::Exit;
-                        }
-                        _ => {}
-                    },
-                    Event::LoopDestroyed => {
-                        log::info!("Closing");
-                        gfx_select!(device => global.device_poll(device, true));
-                    }
-                    _ => {}
-                }
-            },
-        );
-    }
-
     #[cfg(not(feature = "winit"))]
     while let Some(action) = actions.pop() {
         gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+    }
+    #[cfg(feature = "winit")]
+    {
+        use winit::{
+            event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
+            event_loop::ControlFlow,
+            platform::desktop::EventLoopExtDesktop,
+        };
+
+        let mut frame_count = 0;
+        event_loop.run(move |event, _, control_flow| {
+            *control_flow = ControlFlow::Poll;
+            match event {
+                Event::MainEventsCleared => {
+                    window.request_redraw();
+                }
+                Event::RedrawRequested(_) => loop {
+                    match actions.pop() {
+                        Some(trace::Action::CreateSwapChain { id, desc }) => {
+                            log::info!("Initializing the swapchain");
+                            assert_eq!(id.to_surface_id(), surface);
+                            window.set_inner_size(winit::dpi::PhysicalSize::new(
+                                desc.width,
+                                desc.height,
+                            ));
+                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                        }
+                        Some(trace::Action::PresentSwapChain(id)) => {
+                            frame_count += 1;
+                            log::debug!("Presenting frame {}", frame_count);
+                            gfx_select!(device => global.swap_chain_present(id));
+                            break;
+                        }
+                        Some(action) => {
+                            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+                        }
+                        None => break,
+                    }
+                },
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                state: ElementState::Pressed,
+                                ..
+                            },
+                        ..
+                    }
+                    | WindowEvent::CloseRequested => {
+                        *control_flow = ControlFlow::Exit;
+                    }
+                    _ => {}
+                },
+                Event::LoopDestroyed => {
+                    log::info!("Closing");
+                    gfx_select!(device => global.device_poll(device, true));
+                }
+                _ => {}
+            }
+        });
     }
 }

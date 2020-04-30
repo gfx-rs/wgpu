@@ -96,7 +96,8 @@ pub struct RenderPipelineDescriptor {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum Action {
     Init {
-        limits: wgt::Limits,
+        desc: wgt::DeviceDescriptor,
+        backend: wgt::Backend,
     },
     CreateBuffer {
         id: id::BufferId,

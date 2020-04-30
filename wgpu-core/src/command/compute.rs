@@ -33,7 +33,7 @@ pub enum ComputeCommand {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        #[cfg_attr(feature = "serde", serde(skip))]
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
         phantom_offsets: PhantomSlice<DynamicOffset>,
     },
     SetPipeline(id::ComputePipelineId),

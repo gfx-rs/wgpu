@@ -11,9 +11,37 @@ const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
 type Dummy = crate::backend::Empty;
 
 #[repr(transparent)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize), serde(into = "SerialId"))]
+#[cfg_attr(
+    feature = "replay",
+    derive(serde::Deserialize),
+    serde(from = "SerialId")
+)]
+pub struct Id<T>(NonZeroU64, PhantomData<T>);
+
+// This type represents Id in a more readable (and editable) way.
+#[allow(dead_code)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct Id<T>(NonZeroU64, PhantomData<T>);
+enum SerialId {
+    // The only variant forces RON to not ignore "Id"
+    Id(Index, Epoch, Backend),
+}
+#[cfg(feature = "trace")]
+impl<T> From<Id<T>> for SerialId {
+    fn from(id: Id<T>) -> Self {
+        let (index, epoch, backend) = id.unzip();
+        SerialId::Id(index, epoch, backend)
+    }
+}
+#[cfg(feature = "replay")]
+impl<T> From<SerialId> for Id<T> {
+    fn from(id: SerialId) -> Self {
+        match id {
+            SerialId::Id(index, epoch, backend) => TypedId::zip(index, epoch, backend),
+        }
+    }
+}
 
 // required for PeekPoke
 impl<T> Default for Id<T> {

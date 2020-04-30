@@ -199,6 +199,7 @@ pub struct Device<B: hal::Backend> {
     temp_suspected: life::SuspectedResources,
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
+    extensions: wgt::Extensions,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<Trace>>,
 }
@@ -211,8 +212,8 @@ impl<B: GfxBackend> Device<B> {
         mem_props: hal::adapter::MemoryProperties,
         non_coherent_atom_size: u64,
         supports_texture_d24_s8: bool,
-        limits: wgt::Limits,
-        #[cfg(feature = "trace")] trace_path: Option<&std::path::Path>,
+        desc: &wgt::DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
     ) -> Self {
         // don't start submission index at zero
         let life_guard = LifeGuard::new();
@@ -232,6 +233,11 @@ impl<B: GfxBackend> Device<B> {
                 non_coherent_atom_size,
             )
         };
+        #[cfg(not(feature = "trace"))]
+        match trace_path {
+            Some(_) => log::warn!("Tracing feature is not enabled"),
+            None => (),
+        }
 
         Device {
             raw,
@@ -250,7 +256,8 @@ impl<B: GfxBackend> Device<B> {
             trace: trace_path.and_then(|path| match Trace::new(path) {
                 Ok(mut trace) => {
                     trace.add(Action::Init {
-                        limits: limits.clone(),
+                        desc: desc.clone(),
+                        backend: B::VARIANT,
                     });
                     Some(Mutex::new(trace))
                 }
@@ -262,7 +269,8 @@ impl<B: GfxBackend> Device<B> {
             private_features: PrivateFeatures {
                 supports_texture_d24_s8,
             },
-            limits,
+            limits: desc.limits.clone(),
+            extensions: desc.extensions.clone(),
         }
     }
 
@@ -2336,7 +2344,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     #[cfg(feature = "replay")]
     /// Only triange suspected resource IDs. This helps us to avoid ID collisions
-    /// upon creating new resources when re-plaing a trace.
+    /// upon creating new resources when re-playing a trace.
     pub fn device_maintain_ids<B: GfxBackend>(&self, device_id: id::DeviceId) {
         let hub = B::hub(self);
         let mut token = Token::root();
