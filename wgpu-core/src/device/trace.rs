@@ -241,7 +241,7 @@ impl Trace {
     pub(crate) fn add(&mut self, action: Action) {
         match ron::ser::to_string_pretty(&action, self.config.clone()) {
             Ok(string) => {
-                let _ = write!(self.file, "{},\n", string);
+                let _ = writeln!(self.file, "{},", string);
             }
             Err(e) => {
                 log::warn!("RON serialization failure: {:?}", e);

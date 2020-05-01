@@ -2,6 +2,7 @@ status = [
   "iOS Stable",
   "MacOS Stable",
   "MacOS Nightly",
+  "Android Stable",
   "Ubuntu Stable",
   "Ubuntu Nightly",
   "Windows Stable",
