@@ -7,7 +7,7 @@ use crate::{
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId},
-    power,
+    power, LifeGuard, Stored,
 };
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -119,6 +119,16 @@ pub struct Surface {
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
+    life_guard: LifeGuard,
+}
+
+impl<B: hal::Backend> Adapter<B> {
+    fn new(raw: hal::adapter::Adapter<B>) -> Self {
+        Adapter {
+            raw,
+            life_guard: LifeGuard::new(),
+        }
+    }
 }
 
 /// Metadata about a backend adapter.
@@ -316,7 +326,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref inst) = instance.vulkan {
                 if let Some(id_vulkan) = inputs.find(Backend::Vulkan) {
                     for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter { raw };
+                        let adapter = Adapter::new(raw);
                         log::info!("Adapter Vulkan {:?}", adapter.raw.info);
                         adapters.push(backend::Vulkan::hub(self).adapters.register_identity(
                             id_vulkan.clone(),
@@ -331,7 +341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             if let Some(id_metal) = inputs.find(Backend::Metal) {
                 for raw in instance.metal.enumerate_adapters() {
-                    let adapter = Adapter { raw };
+                    let adapter = Adapter::new(raw);
                     log::info!("Adapter Metal {:?}", adapter.raw.info);
                     adapters.push(backend::Metal::hub(self).adapters.register_identity(
                         id_metal.clone(),
@@ -346,7 +356,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref inst) = instance.dx12 {
                 if let Some(id_dx12) = inputs.find(Backend::Dx12) {
                     for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter { raw };
+                        let adapter = Adapter::new(raw);
                         log::info!("Adapter Dx12 {:?}", adapter.raw.info);
                         adapters.push(backend::Dx12::hub(self).adapters.register_identity(
                             id_dx12.clone(),
@@ -359,7 +369,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             if let Some(id_dx11) = inputs.find(Backend::Dx11) {
                 for raw in instance.dx11.enumerate_adapters() {
-                    let adapter = Adapter { raw };
+                    let adapter = Adapter::new(raw);
                     log::info!("Adapter Dx11 {:?}", adapter.raw.info);
                     adapters.push(backend::Dx11::hub(self).adapters.register_identity(
                         id_dx11.clone(),
@@ -514,9 +524,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         ))]
         {
             if selected < adapters_vk.len() {
-                let adapter = Adapter {
-                    raw: adapters_vk.swap_remove(selected),
-                };
+                let adapter = Adapter::new(adapters_vk.swap_remove(selected));
                 log::info!("Adapter Vulkan {:?}", adapter.raw.info);
                 let id = backend::Vulkan::hub(self).adapters.register_identity(
                     id_vulkan.unwrap(),
@@ -530,9 +538,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
             if selected < adapters_mtl.len() {
-                let adapter = Adapter {
-                    raw: adapters_mtl.swap_remove(selected),
-                };
+                let adapter = Adapter::new(adapters_mtl.swap_remove(selected));
                 log::info!("Adapter Metal {:?}", adapter.raw.info);
                 let id = backend::Metal::hub(self).adapters.register_identity(
                     id_metal.unwrap(),
@@ -546,9 +552,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(windows)]
         {
             if selected < adapters_dx12.len() {
-                let adapter = Adapter {
-                    raw: adapters_dx12.swap_remove(selected),
-                };
+                let adapter = Adapter::new(adapters_dx12.swap_remove(selected));
                 log::info!("Adapter Dx12 {:?}", adapter.raw.info);
                 let id = backend::Dx12::hub(self).adapters.register_identity(
                     id_dx12.unwrap(),
@@ -559,9 +563,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             selected -= adapters_dx12.len();
             if selected < adapters_dx11.len() {
-                let adapter = Adapter {
-                    raw: adapters_dx11.swap_remove(selected),
-                };
+                let adapter = Adapter::new(adapters_dx11.swap_remove(selected));
                 log::info!("Adapter Dx11 {:?}", adapter.raw.info);
                 let id = backend::Dx11::hub(self).adapters.register_identity(
                     id_dx11.unwrap(),
@@ -589,7 +591,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (_adapter, _) = hub.adapters.unregister(adapter_id, &mut token);
+        let (mut guard, _) = hub.adapters.write(&mut token);
+
+        if guard[adapter_id]
+            .life_guard
+            .ref_count
+            .take()
+            .unwrap()
+            .load()
+            == 1
+        {
+            hub.adapters.free_id(adapter_id);
+            let _adapter = guard.remove(adapter_id).unwrap();
+        }
     }
 }
 
@@ -605,11 +619,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let device = {
             let (adapter_guard, _) = hub.adapters.read(&mut token);
-            let adapter = &adapter_guard[adapter_id].raw;
+            let adapter = &adapter_guard[adapter_id];
+            let phd = &adapter.raw.physical_device;
             let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
                 | hal::Features::NDC_Y_UP;
-            let enabled_features = adapter.physical_device.features() & wishful_features;
+            let enabled_features = adapter.raw.physical_device.features() & wishful_features;
             if enabled_features != wishful_features {
                 log::warn!(
                     "Missing features: {:?}",
@@ -618,18 +633,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let family = adapter
+                .raw
                 .queue_families
                 .iter()
                 .find(|family| family.queue_type().supports_graphics())
                 .unwrap();
-            let mut gpu = unsafe {
-                adapter
-                    .physical_device
-                    .open(&[(family, &[1.0])], enabled_features)
-                    .unwrap()
-            };
+            let mut gpu = unsafe { phd.open(&[(family, &[1.0])], enabled_features).unwrap() };
 
-            let limits = adapter.physical_device.limits();
+            let limits = phd.limits();
             assert_eq!(
                 0,
                 BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
@@ -649,17 +660,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
 
-            let mem_props = adapter.physical_device.memory_properties();
-
-            let supports_texture_d24_s8 = adapter
-                .physical_device
+            let mem_props = phd.memory_properties();
+            let supports_texture_d24_s8 = phd
                 .format_properties(Some(hal::format::Format::D24UnormS8Uint))
                 .optimal_tiling
                 .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
 
             Device::new(
                 gpu.device,
-                adapter_id,
+                Stored {
+                    value: adapter_id,
+                    ref_count: adapter.life_guard.add_ref(),
+                },
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
                 limits.non_coherent_atom_size as u64,
