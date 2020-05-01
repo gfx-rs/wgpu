@@ -65,7 +65,7 @@ jobs:
             channel: stable
             build_command: rustup default stable-msvc; cargo clippy
             additional_core_features: trace
-            additional_player_features:
+            additional_player_features: renderdoc
           - os: windows-2019
             name: Windows Nightly
             channel: nightly
