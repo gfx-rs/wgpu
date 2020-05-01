@@ -25,7 +25,7 @@ use wgt::Backend;
 
 #[cfg(debug_assertions)]
 use std::cell::Cell;
-use std::{fmt::Debug, marker::PhantomData, ops};
+use std::{fmt::Debug, marker::PhantomData, ops, thread};
 
 /// A simple structure to manage identities of objects.
 #[derive(Debug)]
@@ -553,10 +553,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
-        log::info!("Dropping Global");
-        // destroy surfaces
-        for (_, (surface, _)) in self.surfaces.data.write().map.drain() {
-            self.instance.destroy_surface(surface);
+        if !thread::panicking() {
+            log::info!("Dropping Global");
+            // destroy surfaces
+            for (_, (surface, _)) in self.surfaces.data.write().map.drain() {
+                self.instance.destroy_surface(surface);
+            }
         }
     }
 }
