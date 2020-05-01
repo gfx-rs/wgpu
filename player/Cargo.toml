@@ -18,6 +18,7 @@ publish = false
 env_logger = "0.7"
 log = "0.4"
 raw-window-handle = "0.3"
+renderdoc = { version = "0.8", optional = true, default_features = false }
 ron = "0.5"
 winit = { version = "0.22", optional = true }
 
