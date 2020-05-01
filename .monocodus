@@ -1,0 +1,7 @@
+version: 1.0.0
+
+rust:
+  formatter:
+    name: rustfmt
+    ignore_paths:
+      - ".*"
