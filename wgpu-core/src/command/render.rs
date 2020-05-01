@@ -362,7 +362,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (context, sample_count) = {
             use hal::{adapter::PhysicalDevice as _, device::Device as _};
 
-            let limits = adapter_guard[device.adapter_id]
+            let limits = adapter_guard[device.adapter_id.value]
                 .raw
                 .physical_device
                 .limits();

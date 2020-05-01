@@ -181,7 +181,7 @@ fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callback
 #[derive(Debug)]
 pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
-    pub(crate) adapter_id: id::AdapterId,
+    pub(crate) adapter_id: Stored<id::AdapterId>,
     pub(crate) queue_group: hal::queue::QueueGroup<B>,
     pub(crate) com_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<Heaps<B>>,
@@ -199,7 +199,7 @@ pub struct Device<B: hal::Backend> {
 impl<B: GfxBackend> Device<B> {
     pub(crate) fn new(
         raw: B::Device,
-        adapter_id: id::AdapterId,
+        adapter_id: Stored<id::AdapterId>,
         queue_group: hal::queue::QueueGroup<B>,
         mem_props: hal::adapter::MemoryProperties,
         non_coherent_atom_size: u64,
@@ -245,18 +245,18 @@ impl<B: GfxBackend> Device<B> {
         }
     }
 
-    fn lock_life<'a>(
-        &'a self,
-        _token: &mut Token<'a, Self>,
-    ) -> MutexGuard<'a, life::LifetimeTracker<B>> {
+    fn lock_life<'this, 'token: 'this>(
+        &'this self,
+        _token: &mut Token<'token, Self>,
+    ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
         self.life_tracker.lock()
     }
 
-    fn maintain<'a, G: GlobalIdentityHandlerFactory>(
-        &'a self,
+    fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
+        &'this self,
         global: &Global<G>,
         force_wait: bool,
-        token: &mut Token<'a, Self>,
+        token: &mut Token<'token, Self>,
     ) -> Vec<BufferMapPendingCallback> {
         let mut life_tracker = self.lock_life(token);
 
@@ -2012,7 +2012,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (caps, formats) = {
             let suf = B::get_surface_mut(surface);
-            let adapter = &adapter_guard[device.adapter_id];
+            let adapter = &adapter_guard[device.adapter_id.value];
             assert!(suf.supports_queue_family(&adapter.raw.queue_families[0]));
             let formats = suf.supported_formats(&adapter.raw.physical_device);
             let caps = suf.capabilities(&adapter.raw.physical_device);
@@ -2107,9 +2107,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_destroy<B: GfxBackend>(&self, device_id: id::DeviceId) {
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device, mut token) = hub.devices.unregister(device_id, &mut token);
-        device.maintain(self, true, &mut token);
-        drop(token);
+        let device = {
+            let (device, mut token) = hub.devices.unregister(device_id, &mut token);
+            device.maintain(self, true, &mut token);
+            device
+        };
+
+        // Adapter is only referenced by the device and itself.
+        // This isn't a robust way to destroy them, we should find a better one.
+        if device.adapter_id.ref_count.load() == 1 {
+            let (_adapter, _) = hub.adapters.unregister(device.adapter_id.value, &mut token);
+        }
+
         device.dispose();
     }
 
