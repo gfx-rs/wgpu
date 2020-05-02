@@ -484,6 +484,9 @@ fn main() {
                     ),
                 )
                 .expect("Unable to find an adapter for selected backend");
+
+            let info = gfx_select!(adapter => global.adapter_get_info(adapter));
+            log::info!("Picked '{}'", info.name);
             gfx_select!(adapter => global.adapter_request_device(
                 adapter,
                 &desc,
@@ -506,6 +509,7 @@ fn main() {
 
         #[cfg(feature = "renderdoc")]
         rd.end_frame_capture(ptr::null(), ptr::null());
+        gfx_select!(device => global.device_poll(device, true));
     }
     #[cfg(feature = "winit")]
     {
