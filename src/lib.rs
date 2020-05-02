@@ -16,10 +16,10 @@ pub use wgt::{
     CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
     Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
     Origin3d, PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
-    SamplerDescriptor, ShaderLocation, ShaderStage, StencilOperation, StencilStateFaceDescriptor,
-    StoreOp, SwapChainDescriptor, TextureAspect, TextureComponentType, TextureDimension,
-    TextureFormat, TextureUsage, TextureViewDescriptor, TextureViewDimension,
-    VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
+    ShaderLocation, ShaderStage, StencilOperation, StencilStateFaceDescriptor, StoreOp,
+    SwapChainDescriptor, TextureAspect, TextureComponentType, TextureDimension, TextureFormat,
+    TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
+    BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
 };
 
 use backend::Context as C;
@@ -117,9 +117,9 @@ trait Context: Sized {
     type MapWriteFuture: Future<Output = Result<Self::BufferWriteMappingDetail, BufferAsyncError>>;
 
     fn init() -> Self;
-    fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    fn instance_create_surface(
         &self,
-        window: &W,
+        handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId;
     fn instance_request_adapter(
         &self,
@@ -130,6 +130,7 @@ trait Context: Sized {
         &self,
         adapter: &Self::AdapterId,
         desc: &DeviceDescriptor,
+        trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
 
     fn device_create_swap_chain(
@@ -780,18 +781,7 @@ pub struct RenderPassDescriptor<'a, 'b> {
 }
 
 /// A description of a buffer.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BufferDescriptor<'a> {
-    /// An optional label to apply to the buffer.
-    /// This can be useful for debugging and performance analysis.
-    pub label: Option<&'a str>,
-
-    /// The size of the buffer (in bytes).
-    pub size: BufferAddress,
-
-    /// All possible ways the buffer can be used.
-    pub usage: BufferUsage,
-}
+pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Option<&'a str>>;
 
 /// A description of a command encoder.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -802,30 +792,13 @@ pub struct CommandEncoderDescriptor<'a> {
 }
 
 /// A description of a texture.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct TextureDescriptor<'a> {
-    /// An optional label to apply to the texture.
-    /// This can be useful for debugging and performance analysis.
-    pub label: Option<&'a str>,
+pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Option<&'a str>>;
 
-    /// The size of the texture.
-    pub size: Extent3d,
+/// A description of a texture view.
+pub type TextureViewDescriptor<'a> = wgt::TextureViewDescriptor<Option<&'a str>>;
 
-    /// The mip level count.
-    pub mip_level_count: u32,
-
-    /// The sample count.
-    pub sample_count: u32,
-
-    /// The texture dimension.
-    pub dimension: TextureDimension,
-
-    /// The texture format.
-    pub format: TextureFormat,
-
-    /// All possible ways the texture can be used.
-    pub usage: TextureUsage,
-}
+/// A description of a sampler.
+pub type SamplerDescriptor<'a> = wgt::SamplerDescriptor<Option<&'a str>>;
 
 /// A swap chain image that can be rendered to.
 pub struct SwapChainOutput {
@@ -910,7 +883,9 @@ impl Instance {
     pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, || PhantomData))
+            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
+                PhantomData
+            }))
             .into_iter()
             .map(move |id| crate::Adapter {
                 id,
@@ -924,7 +899,7 @@ impl Instance {
         window: &W,
     ) -> Surface {
         Surface {
-            id: self.context.instance_create_surface(window),
+            id: Context::instance_create_surface(&*self.context, window.raw_window_handle()),
         }
     }
 
@@ -983,9 +958,10 @@ impl Adapter {
     pub fn request_device(
         &self,
         desc: &DeviceDescriptor,
+        trace_path: Option<&std::path::Path>,
     ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> {
         let context = Arc::clone(&self.context);
-        Context::adapter_request_device(&*self.context, &self.id, desc).map(|result| {
+        Context::adapter_request_device(&*self.context, &self.id, desc, trace_path).map(|result| {
             result.map(|(device_id, queue_id)| {
                 (
                     Device {

@@ -25,7 +25,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                 anisotropic_filtering: false,
             },
             limits: wgpu::Limits::default(),
-        })
+        }, None)
         .await
         .unwrap();
 
@@ -86,6 +86,15 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     event_loop.run(move |event, _, control_flow| {
+        // force ownership by the closure
+        let _ = (
+            &instance,
+            &adapter,
+            &vs_module,
+            &fs_module,
+            &pipeline_layout,
+        );
+
         *control_flow = ControlFlow::Poll;
         match event {
             Event::MainEventsCleared => window.request_redraw(),

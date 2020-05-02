@@ -603,11 +603,10 @@ impl crate::Context for Context {
         web_sys::window().unwrap().navigator().gpu()
     }
 
-    fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    fn instance_create_surface(
         &self,
-        window: &W,
+        handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId {
-        let handle = window.raw_window_handle();
         let canvas_attribute = match handle {
             raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
             _ => panic!("expected valid handle for canvas"),
@@ -654,7 +653,11 @@ impl crate::Context for Context {
         &self,
         adapter: &Self::AdapterId,
         desc: &crate::DeviceDescriptor,
+        trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
+        if trace_dir.is_some() {
+            //Error: Tracing isn't supported on the Web target
+        }
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
         // TODO: label, extensions
         let mut mapped_limits = web_sys::GpuLimits::new();
