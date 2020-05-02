@@ -20,6 +20,7 @@ exclude = ["etc/**/*", "examples/**/*", "tests/**/*", "Cargo.lock", "target/**/*
 
 [features]
 default = []
+trace = ["wgc/trace"]
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
 vulkan = ["wgc/gfx-backend-vulkan"]
 
@@ -27,13 +28,14 @@ vulkan = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "5c172dd4756aa152b4f3350e624d7b1b5d24ddda"
+rev = "f64b2dd3bb9e11c1dfc0eb3be44fbaae81b18c7b"
+features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "5c172dd4756aa152b4f3350e624d7b1b5d24ddda"
+rev = "f64b2dd3bb9e11c1dfc0eb3be44fbaae81b18c7b"
 
 [dependencies]
 arrayvec = "0.5"

@@ -13,7 +13,7 @@ use std::{ffi::CString, marker::PhantomData, ptr, slice};
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
         match $id.backend() {
-            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "gfx-backend-vulkan"))]
+            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "vulkan-portability"))]
             wgt::Backend::Vulkan => $global.$method::<wgc::backend::Vulkan>( $($param),+ ),
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             wgt::Backend::Metal => $global.$method::<wgc::backend::Metal>( $($param),+ ),
@@ -222,80 +222,11 @@ impl crate::Context for Context {
         wgc::hub::Global::new("wgpu", wgc::hub::IdentityManagerFactory)
     }
 
-    fn instance_create_surface<W: raw_window_handle::HasRawWindowHandle>(
+    fn instance_create_surface(
         &self,
-        window: &W,
+        handle: raw_window_handle::RawWindowHandle,
     ) -> Self::SurfaceId {
-        use raw_window_handle::RawWindowHandle as Rwh;
-
-        let surface = match window.raw_window_handle() {
-            #[cfg(target_os = "ios")]
-            Rwh::IOS(h) => wgc::instance::Surface {
-                #[cfg(feature = "vulkan-portability")]
-                vulkan: None,
-                metal: self
-                    .instance
-                    .metal
-                    .create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
-            },
-            #[cfg(target_os = "macos")]
-            Rwh::MacOS(h) => {
-                use objc::{msg_send, runtime::Object, sel, sel_impl};
-                let ns_view = if h.ns_view.is_null() {
-                    let ns_window = h.ns_window as *mut Object;
-                    unsafe { msg_send![ns_window, contentView] }
-                } else {
-                    h.ns_view
-                };
-                wgc::instance::Surface {
-                    #[cfg(feature = "vulkan-portability")]
-                    vulkan: self
-                        .instance
-                        .vulkan
-                        .as_ref()
-                        .map(|inst| inst.create_surface_from_ns_view(ns_view)),
-                    metal: self
-                        .instance
-                        .metal
-                        .create_surface_from_nsview(ns_view, cfg!(debug_assertions)),
-                }
-            }
-            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
-            Rwh::Xlib(h) => wgc::instance::Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window as _)),
-            },
-            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
-            Rwh::Wayland(h) => wgc::instance::Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
-            },
-            #[cfg(windows)]
-            Rwh::Windows(h) => wgc::instance::Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd)),
-                dx12: self
-                    .instance
-                    .dx12
-                    .as_ref()
-                    .map(|inst| inst.create_surface_from_hwnd(h.hwnd)),
-                dx11: self.instance.dx11.create_surface_from_hwnd(h.hwnd),
-            },
-            _ => panic!("Unsupported window handle"),
-        };
-
-        let mut token = wgc::hub::Token::root();
-        self.surfaces
-            .register_identity(PhantomData, surface, &mut token)
+        self.instance_create_surface(handle, PhantomData)
     }
 
     fn instance_request_adapter(
@@ -308,7 +239,7 @@ impl crate::Context for Context {
                 power_preference: options.power_preference,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
             },
-            wgc::instance::AdapterInputs::Mask(backends, || PhantomData),
+            wgc::instance::AdapterInputs::Mask(backends, |_| PhantomData),
         );
         ready(id)
     }
@@ -317,9 +248,9 @@ impl crate::Context for Context {
         &self,
         adapter: &Self::AdapterId,
         desc: &crate::DeviceDescriptor,
+        trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
-        let device_id =
-            gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, PhantomData));
+        let device_id = gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, trace_dir, PhantomData));
         ready(Ok((device_id, device_id)))
     }
 
@@ -579,11 +510,7 @@ impl crate::Context for Context {
         unsafe {
             let (id, ptr) = gfx_select!(*device => self.device_create_buffer_mapped(
                 *device,
-                &wgt::BufferDescriptor {
-                    label: owned_label.as_ptr(),
-                    size: desc.size,
-                    usage: desc.usage,
-                },
+                &desc.map_label(|_| owned_label.as_ptr()),
                 PhantomData
             ));
             let mapped_data = std::slice::from_raw_parts_mut(ptr, desc.size as usize);
@@ -599,11 +526,7 @@ impl crate::Context for Context {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
         gfx_select!(*device => self.device_create_buffer(
             *device,
-            &wgt::BufferDescriptor {
-                label: owned_label.as_ptr(),
-                size: desc.size,
-                usage: desc.usage,
-            },
+            &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
         ))
     }
@@ -616,15 +539,7 @@ impl crate::Context for Context {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
         gfx_select!(*device => self.device_create_texture(
             *device,
-            &wgt::TextureDescriptor {
-                label: owned_label.as_ptr(),
-                size: desc.size,
-                mip_level_count: desc.mip_level_count,
-                sample_count: desc.sample_count,
-                dimension: desc.dimension,
-                format: desc.format,
-                usage: desc.usage,
-            },
+            &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
         ))
     }
@@ -634,7 +549,12 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &SamplerDescriptor,
     ) -> Self::SamplerId {
-        gfx_select!(*device => self.device_create_sampler(*device, desc, PhantomData))
+        let owned_label = OwnedLabel::new(desc.label.as_deref());
+        gfx_select!(*device => self.device_create_sampler(
+            *device,
+            &desc.map_label(|_| owned_label.as_ptr()),
+            PhantomData
+        ))
     }
 
     fn device_create_command_encoder(
@@ -774,7 +694,9 @@ impl crate::Context for Context {
         texture: &Self::TextureId,
         desc: Option<&TextureViewDescriptor>,
     ) -> Self::TextureViewId {
-        gfx_select!(*texture => self.texture_create_view(*texture, desc, PhantomData))
+        let owned_label = OwnedLabel::new(desc.and_then(|d| d.label.as_deref()));
+        let descriptor = desc.map(|d| d.map_label(|_| owned_label.as_ptr()));
+        gfx_select!(*texture => self.texture_create_view(*texture, descriptor.as_ref(), PhantomData))
     }
 
     fn texture_drop(&self, texture: &Self::TextureId) {

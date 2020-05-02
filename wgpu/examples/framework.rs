@@ -73,7 +73,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 anisotropic_filtering: false,
             },
             limits: wgpu::Limits::default(),
-        })
+        }, None)
         .await
         .unwrap();
 
@@ -99,6 +99,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
 
     log::info!("Entering render loop...");
     event_loop.run(move |event, _, control_flow| {
+        let _ = (&instance, &adapter); // force ownership by the closure
         *control_flow = if cfg!(feature = "metal-auto-capture") {
             ControlFlow::Exit
         } else {

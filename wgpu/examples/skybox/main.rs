@@ -138,6 +138,7 @@ impl framework::Example for Skybox {
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: None,
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -219,6 +220,7 @@ impl framework::Example for Skybox {
         }
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
+            label: None,
             format: SKYBOX_FORMAT,
             dimension: wgpu::TextureViewDimension::Cube,
             aspect: wgpu::TextureAspect::default(),
