@@ -67,11 +67,6 @@ test = true
 #gfx-backend-dx11 = { version = "0.5.0", path = "../gfx/src/backend/dx11" }
 #gfx-descriptor = { version = "0.1.0", path = "../gfx-extras/gfx-descriptor" }
 #gfx-memory = { version = "0.1.0", path = "../gfx-extras/gfx-memory" }
-# Make sure to remove these patches from the README.md when they are are no longer needed
-wasm-bindgen = { git = "https://github.com/rustwasm/wasm-bindgen" }
-wasm-bindgen-futures = { git = "https://github.com/rustwasm/wasm-bindgen" }
-web-sys = { git = "https://github.com/rustwasm/wasm-bindgen" }
-js-sys = { git = "https://github.com/rustwasm/wasm-bindgen" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
@@ -80,8 +75,8 @@ objc = "0.2.7"
 env_logger = "0.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = "0.2.60"
-web-sys = { version = "0.3.37", features = [
+wasm-bindgen = "0.2.62"
+web-sys = { version = "0.3.39", features = [
     "Document",
     "Navigator",
     "Node",
@@ -168,8 +163,8 @@ web-sys = { version = "0.3.37", features = [
     "HtmlCanvasElement",
     "Window",
 ]}
-js-sys = "0.3.37"
-wasm-bindgen-futures = "0.4.10"
+js-sys = "0.3.39"
+wasm-bindgen-futures = "0.4.12"
 
 [target.'cfg(target_arch = "wasm32")'.dev-dependencies]
 console_error_panic_hook = "0.1.6"

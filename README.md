@@ -66,15 +66,7 @@ Create an `index.html` file into `target/generated` directory and add the follow
 ```
 
 Now run a web server locally inside the `target/generated` directory to see the `hello-triangle` in the browser.
-
-If you want to adapt the above to run your own crate on the web you will also need to add the following to your Cargo.toml:
-```toml
-[patch.crates-io]
-wasm-bindgen = { git = "https://github.com/rustwasm/wasm-bindgen" }
-wasm-bindgen-futures = { git = "https://github.com/rustwasm/wasm-bindgen" }
-web-sys = { git = "https://github.com/rustwasm/wasm-bindgen" }
-js-sys = { git = "https://github.com/rustwasm/wasm-bindgen" }
-```
+e.g. `python -m http.server`
 
 ## Friends
 
