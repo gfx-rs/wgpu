@@ -418,6 +418,9 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
         use hal::{device::Device as _, window::PresentationSurface as _};
 
         let mut devices = self.devices.data.write();
+        for (device, _) in devices.map.values_mut() {
+            device.prepare_to_die();
+        }
 
         for (_, (sampler, _)) in self.samplers.data.write().map.drain() {
             unsafe {
