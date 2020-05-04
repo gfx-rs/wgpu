@@ -461,10 +461,8 @@ fn main() {
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
 
     #[cfg(feature = "winit")]
-    let surface = global.instance_create_surface(
-        raw_window_handle::HasRawWindowHandle::raw_window_handle(&window),
-        wgc::id::TypedId::zip(0, 1, wgt::Backend::Empty),
-    );
+    let surface =
+        global.instance_create_surface(&window, wgc::id::TypedId::zip(0, 1, wgt::Backend::Empty));
 
     let device = match actions.pop() {
         Some(trace::Action::Init { desc, backend }) => {
