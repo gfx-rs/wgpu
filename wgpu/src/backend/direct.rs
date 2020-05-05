@@ -224,7 +224,7 @@ impl crate::Context for Context {
 
     fn instance_create_surface(
         &self,
-        handle: raw_window_handle::RawWindowHandle,
+        handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Self::SurfaceId {
         self.instance_create_surface(handle, PhantomData)
     }

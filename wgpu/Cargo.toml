@@ -28,14 +28,14 @@ vulkan = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "f64b2dd3bb9e11c1dfc0eb3be44fbaae81b18c7b"
+rev = "bee826e79dcbe11b544296179a6bbb2c05d9639b"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "f64b2dd3bb9e11c1dfc0eb3be44fbaae81b18c7b"
+rev = "bee826e79dcbe11b544296179a6bbb2c05d9639b"
 
 [dependencies]
 arrayvec = "0.5"
@@ -57,9 +57,11 @@ name="hello-compute"
 path="examples/hello-compute/main.rs"
 test = true
 
-[patch.crates-io]
+[patch."https://github.com/gfx-rs/wgpu"]
 #wgpu-types = { version = "0.5.0", path = "../wgpu/wgpu-types" }
 #wgpu-core = { version = "0.5.0", path = "../wgpu/wgpu-core" }
+
+[patch.crates-io]
 #gfx-hal = { version = "0.5.0", path = "../gfx/src/hal" }
 #gfx-backend-empty = { version = "0.5.0", path = "../gfx/src/backend/empty" }
 #gfx-backend-vulkan = { version = "0.5.0", path = "../gfx/src/backend/vulkan" }
