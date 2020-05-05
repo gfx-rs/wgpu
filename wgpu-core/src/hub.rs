@@ -80,6 +80,7 @@ impl IdentityManager {
 pub struct Storage<T, I: TypedId> {
     //TODO: consider concurrent hashmap?
     map: VecMap<(T, Epoch)>,
+    kind: &'static str,
     _phantom: PhantomData<I>,
 }
 
@@ -87,8 +88,15 @@ impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
     type Output = T;
     fn index(&self, id: I) -> &T {
         let (index, epoch, _) = id.unzip();
-        let (ref value, storage_epoch) = self.map[index as usize];
-        assert_eq!(epoch, storage_epoch);
+        let (ref value, storage_epoch) = match self.map.get(index as usize) {
+            Some(v) => v,
+            None => panic!("{}[{}] does not exist", self.kind, index),
+        };
+        assert_eq!(
+            epoch, *storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
         value
     }
 }
@@ -96,8 +104,15 @@ impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
 impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
     fn index_mut(&mut self, id: I) -> &mut T {
         let (index, epoch, _) = id.unzip();
-        let (ref mut value, storage_epoch) = self.map[index as usize];
-        assert_eq!(epoch, storage_epoch);
+        let (ref mut value, storage_epoch) = match self.map.get_mut(index as usize) {
+            Some(v) => v,
+            None => panic!("{}[{}] does not exist", self.kind, index),
+        };
+        assert_eq!(
+            epoch, *storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
         value
     }
 }
@@ -304,22 +319,24 @@ pub struct Registry<T, I: TypedId, F: IdentityHandlerFactory<I>> {
 }
 
 impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    fn new(backend: Backend, factory: &F) -> Self {
+    fn new(backend: Backend, factory: &F, kind: &'static str) -> Self {
         Registry {
             identity: factory.spawn(0),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
+                kind,
                 _phantom: PhantomData,
             }),
             backend,
         }
     }
 
-    fn without_backend(factory: &F) -> Self {
+    fn without_backend(factory: &F, kind: &'static str) -> Self {
         Registry {
             identity: factory.spawn(1),
             data: RwLock::new(Storage {
                 map: VecMap::new(),
+                kind,
                 _phantom: PhantomData,
             }),
             backend: Backend::Empty,
@@ -398,20 +415,20 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
 impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
     fn new(factory: &F) -> Self {
         Hub {
-            adapters: Registry::new(B::VARIANT, factory),
-            devices: Registry::new(B::VARIANT, factory),
-            swap_chains: Registry::new(B::VARIANT, factory),
-            pipeline_layouts: Registry::new(B::VARIANT, factory),
-            shader_modules: Registry::new(B::VARIANT, factory),
-            bind_group_layouts: Registry::new(B::VARIANT, factory),
-            bind_groups: Registry::new(B::VARIANT, factory),
-            command_buffers: Registry::new(B::VARIANT, factory),
-            render_pipelines: Registry::new(B::VARIANT, factory),
-            compute_pipelines: Registry::new(B::VARIANT, factory),
-            buffers: Registry::new(B::VARIANT, factory),
-            textures: Registry::new(B::VARIANT, factory),
-            texture_views: Registry::new(B::VARIANT, factory),
-            samplers: Registry::new(B::VARIANT, factory),
+            adapters: Registry::new(B::VARIANT, factory, "Adapter"),
+            devices: Registry::new(B::VARIANT, factory, "Device"),
+            swap_chains: Registry::new(B::VARIANT, factory, "SwapChain"),
+            pipeline_layouts: Registry::new(B::VARIANT, factory, "PipelineLayout"),
+            shader_modules: Registry::new(B::VARIANT, factory, "ShaderModule"),
+            bind_group_layouts: Registry::new(B::VARIANT, factory, "BindGroupLayout"),
+            bind_groups: Registry::new(B::VARIANT, factory, "BindGroup"),
+            command_buffers: Registry::new(B::VARIANT, factory, "CommandBuffer"),
+            render_pipelines: Registry::new(B::VARIANT, factory, "RenderPipeline"),
+            compute_pipelines: Registry::new(B::VARIANT, factory, "ComputePipeline"),
+            buffers: Registry::new(B::VARIANT, factory, "Buffer"),
+            textures: Registry::new(B::VARIANT, factory, "Texture"),
+            texture_views: Registry::new(B::VARIANT, factory, "TextureView"),
+            samplers: Registry::new(B::VARIANT, factory, "Sampler"),
         }
     }
 }
@@ -556,7 +573,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G) -> Self {
         Global {
             instance: Instance::new(name, 1),
-            surfaces: Registry::without_backend(&factory),
+            surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
     }
