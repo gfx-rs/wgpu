@@ -29,6 +29,7 @@ pub struct SuspectedResources {
     pub(crate) bind_groups: Vec<id::BindGroupId>,
     pub(crate) compute_pipelines: Vec<id::ComputePipelineId>,
     pub(crate) render_pipelines: Vec<id::RenderPipelineId>,
+    pub(crate) bind_group_layouts: Vec<Stored<id::BindGroupLayoutId>>,
     pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
 }
 
@@ -41,6 +42,7 @@ impl SuspectedResources {
         self.bind_groups.clear();
         self.compute_pipelines.clear();
         self.render_pipelines.clear();
+        self.bind_group_layouts.clear();
         self.pipeline_layouts.clear();
     }
 
@@ -54,6 +56,8 @@ impl SuspectedResources {
             .extend_from_slice(&other.compute_pipelines);
         self.render_pipelines
             .extend_from_slice(&other.render_pipelines);
+        self.bind_group_layouts
+            .extend_from_slice(&other.bind_group_layouts);
         self.pipeline_layouts
             .extend_from_slice(&other.pipeline_layouts);
     }
@@ -72,6 +76,7 @@ struct NonReferencedResources<B: hal::Backend> {
     desc_sets: Vec<DescriptorSet<B>>,
     compute_pipes: Vec<B::ComputePipeline>,
     graphics_pipes: Vec<B::GraphicsPipeline>,
+    descriptor_set_layouts: Vec<B::DescriptorSetLayout>,
     pipeline_layouts: Vec<B::PipelineLayout>,
 }
 
@@ -86,6 +91,7 @@ impl<B: hal::Backend> NonReferencedResources<B> {
             desc_sets: Vec::new(),
             compute_pipes: Vec::new(),
             graphics_pipes: Vec::new(),
+            descriptor_set_layouts: Vec::new(),
             pipeline_layouts: Vec::new(),
         }
     }
@@ -99,6 +105,8 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         self.desc_sets.extend(other.desc_sets);
         self.compute_pipes.extend(other.compute_pipes);
         self.graphics_pipes.extend(other.graphics_pipes);
+        assert!(other.descriptor_set_layouts.is_empty());
+        assert!(other.pipeline_layouts.is_empty());
     }
 
     unsafe fn clean(
@@ -144,6 +152,9 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         }
         for raw in self.graphics_pipes.drain(..) {
             device.destroy_graphics_pipeline(raw);
+        }
+        for raw in self.descriptor_set_layouts.drain(..) {
+            device.destroy_descriptor_set_layout(raw);
         }
         for raw in self.pipeline_layouts.drain(..) {
             device.destroy_pipeline_layout(raw);
@@ -451,6 +462,25 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                         .map_or(&mut self.free_resources, |a| &mut a.last_resources)
                         .graphics_pipes
                         .push(res.raw);
+                }
+            }
+        }
+
+        if !self.suspected_resources.bind_group_layouts.is_empty() {
+            let (mut guard, _) = hub.bind_group_layouts.write(token);
+
+            for Stored {
+                value: id,
+                ref_count,
+            } in self.suspected_resources.bind_group_layouts.drain(..)
+            {
+                //Note: this has to happen after all the suspected pipelines are destroyed
+                if ref_count.load() == 1 {
+                    #[cfg(feature = "trace")]
+                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id)));
+                    hub.bind_group_layouts.free_id(id);
+                    let layout = guard.remove(id).unwrap();
+                    self.free_resources.descriptor_set_layouts.push(layout.raw);
                 }
             }
         }
