@@ -223,66 +223,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        unsafe {
-            #[cfg(target_os = "ios")]
-            let surface = Surface {
-                #[cfg(feature = "gfx-backend-vulkan")]
-                vulkan: None,
+        let surface = unsafe {
+            Surface {
+                #[cfg(any(
+                    windows,
+                    all(unix, not(any(target_os = "ios", target_os = "macos"))),
+                    feature = "gfx-backend-vulkan",
+                ))]
+                vulkan: self
+                    .instance
+                    .vulkan
+                    .as_ref()
+                    .and_then(|inst| inst.create_surface(handle).ok()),
+                #[cfg(any(target_os = "ios", target_os = "macos"))]
                 metal: self.instance.metal.create_surface(handle).unwrap(),
-            };
-            #[cfg(target_os = "macos")]
-            let surface = Surface {
-                #[cfg(feature = "gfx-backend-vulkan")]
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface(handle)),
-                metal: self.instance.metal.create_surface(handle).unwrap(),
-            };
-            #[cfg(all(
-                unix,
-                not(target_os = "android"),
-                not(target_os = "ios"),
-                not(target_os = "macos")
-            ))]
-            let surface = Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface(handle).ok())
-                    .flatten(),
-            };
-            #[cfg(target_os = "android")]
-            let surface = Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface(handle).ok())
-                    .flatten(),
-            };
-            #[cfg(windows)]
-            let surface = Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface(handle).ok())
-                    .flatten(),
+                #[cfg(windows)]
                 dx12: self
                     .instance
                     .dx12
                     .as_ref()
-                    .map(|inst| inst.create_surface(handle).ok())
-                    .flatten(),
+                    .and_then(|inst| inst.create_surface(handle).ok()),
+                #[cfg(windows)]
                 dx11: self.instance.dx11.create_surface(handle).unwrap(),
-            };
+            }
+        };
 
-            let mut token = Token::root();
-            self.surfaces.register_identity(id_in, surface, &mut token)
-        }
+        let mut token = Token::root();
+        self.surfaces.register_identity(id_in, surface, &mut token)
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
