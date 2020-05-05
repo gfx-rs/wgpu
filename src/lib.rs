@@ -119,7 +119,7 @@ trait Context: Sized {
     fn init() -> Self;
     fn instance_create_surface(
         &self,
-        handle: raw_window_handle::RawWindowHandle,
+        handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Self::SurfaceId;
     fn instance_request_adapter(
         &self,
@@ -899,7 +899,7 @@ impl Instance {
         window: &W,
     ) -> Surface {
         Surface {
-            id: Context::instance_create_surface(&*self.context, window.raw_window_handle()),
+            id: Context::instance_create_surface(&*self.context, window),
         }
     }
 
