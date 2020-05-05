@@ -605,9 +605,9 @@ impl crate::Context for Context {
 
     fn instance_create_surface(
         &self,
-        handle: raw_window_handle::RawWindowHandle,
+        handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Self::SurfaceId {
-        let canvas_attribute = match handle {
+        let canvas_attribute = match handle.raw_window_handle() {
             raw_window_handle::RawWindowHandle::Web(web_handle) => web_handle.id,
             _ => panic!("expected valid handle for canvas"),
         };
