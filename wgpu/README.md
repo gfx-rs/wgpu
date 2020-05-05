@@ -82,6 +82,7 @@ Shout out to the following projects that work best with wgpu-rs:
 - [oxidator](https://github.com/Ruddle/oxidator) - RTS game engine
 - [nannou](https://github.com/nannou-org/nannou) - a creative coding framework
 - [harmony](https://github.com/StarArawn/harmony) - a modern 2D/3D engine
+- [wgpu-pbr](https://github.com/tedsta/wgpu-pbr) - realtime PBR renderer for games
 
 Also, libraries that have support for wgpu-rs:
 
