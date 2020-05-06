@@ -68,12 +68,15 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
         .unwrap();
 
     let (device, queue) = adapter
-        .request_device(&wgpu::DeviceDescriptor {
-            extensions: wgpu::Extensions {
-                anisotropic_filtering: false,
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                extensions: wgpu::Extensions {
+                    anisotropic_filtering: false,
+                },
+                limits: wgpu::Limits::default(),
             },
-            limits: wgpu::Limits::default(),
-        }, None)
+            None,
+        )
         .await
         .unwrap();
 
