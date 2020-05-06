@@ -267,6 +267,9 @@ impl<B: GfxBackend> Device<B> {
         let _last_done = life_tracker.triage_submissions(&self.raw, force_wait);
         let callbacks = life_tracker.handle_mapping(global, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
+
+        self.com_allocator
+            .maintain(&self.raw, life_tracker.lowest_active_submission());
         callbacks
     }
 
@@ -1335,15 +1338,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ref_count: device.life_guard.add_ref(),
         };
 
-        let lowest_active_index = device.lock_life(&mut token).lowest_active_submission();
-
         let mut command_buffer = device.com_allocator.allocate(
             dev_stored,
             &device.raw,
             device.limits.clone(),
             device.private_features,
-            lowest_active_index,
         );
+
         unsafe {
             let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
             if !desc.label.is_null() {
