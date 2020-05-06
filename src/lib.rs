@@ -84,37 +84,38 @@ trait RenderPassInner<Ctx: Context> {
 }
 
 trait Context: Sized {
-    type AdapterId;
-    type DeviceId;
-    type QueueId;
-    type ShaderModuleId;
-    type BindGroupLayoutId;
-    type BindGroupId;
-    type TextureViewId;
-    type SamplerId;
-    type BufferId;
-    type TextureId;
-    type PipelineLayoutId;
-    type RenderPipelineId;
-    type ComputePipelineId;
+    type AdapterId: Send + Sync;
+    type DeviceId: Send + Sync;
+    type QueueId: Send + Sync;
+    type ShaderModuleId: Send + Sync;
+    type BindGroupLayoutId: Send + Sync;
+    type BindGroupId: Send + Sync;
+    type TextureViewId: Send + Sync;
+    type SamplerId: Send + Sync;
+    type BufferId: Send + Sync;
+    type TextureId: Send + Sync;
+    type PipelineLayoutId: Send + Sync;
+    type RenderPipelineId: Send + Sync;
+    type ComputePipelineId: Send + Sync;
     type CommandEncoderId;
     type ComputePassId: ComputePassInner<Self>;
-    type CommandBufferId;
-    type SurfaceId;
-    type SwapChainId;
+    type CommandBufferId: Send + Sync;
+    type SurfaceId: Send + Sync;
+    type SwapChainId: Send + Sync;
     type RenderPassId: RenderPassInner<Self>;
 
-    type CreateBufferMappedDetail;
-    type BufferReadMappingDetail;
-    type BufferWriteMappingDetail;
-    type SwapChainOutputDetail;
+    type CreateBufferMappedDetail: Send;
+    type BufferReadMappingDetail: Send;
+    type BufferWriteMappingDetail: Send;
+    type SwapChainOutputDetail: Send;
 
-    type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>>;
-    type RequestDeviceFuture: Future<
-        Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>,
-    >;
-    type MapReadFuture: Future<Output = Result<Self::BufferReadMappingDetail, BufferAsyncError>>;
-    type MapWriteFuture: Future<Output = Result<Self::BufferWriteMappingDetail, BufferAsyncError>>;
+    type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
+    type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
+        + Send;
+    type MapReadFuture: Future<Output = Result<Self::BufferReadMappingDetail, BufferAsyncError>>
+        + Send;
+    type MapWriteFuture: Future<Output = Result<Self::BufferWriteMappingDetail, BufferAsyncError>>
+        + Send;
 
     fn init() -> Self;
     fn instance_create_surface(
@@ -940,7 +941,7 @@ impl Instance {
         &self,
         options: &RequestAdapterOptions<'_>,
         backends: BackendBit,
-    ) -> impl Future<Output = Option<Adapter>> {
+    ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
         self.context
             .instance_request_adapter(options, backends)
@@ -959,7 +960,7 @@ impl Adapter {
         &self,
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> {
+    ) -> impl Future<Output = Result<(Device, Queue), RequestDeviceError>> + Send {
         let context = Arc::clone(&self.context);
         Context::adapter_request_device(&*self.context, &self.id, desc, trace_path).map(|result| {
             result.map(|(device_id, queue_id)| {
@@ -1178,7 +1179,7 @@ impl Buffer {
         &self,
         start: BufferAddress,
         size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncError>> {
+    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncError>> + Send {
         let context = Arc::clone(&self.context);
         self.context
             .buffer_map_read(&self.id, start, size)
@@ -1193,7 +1194,7 @@ impl Buffer {
         &self,
         start: BufferAddress,
         size: BufferAddress,
-    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncError>> {
+    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncError>> + Send {
         let context = Arc::clone(&self.context);
         self.context
             .buffer_map_write(&self.id, start, size)
