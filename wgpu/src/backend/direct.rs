@@ -813,7 +813,8 @@ impl crate::Context for Context {
             let ptr = wgc::command::compute_ffi::wgpu_compute_pass_finish(pass, &mut length);
             slice::from_raw_parts(ptr, length)
         };
-        gfx_select!(*encoder => self.command_encoder_run_compute_pass(*encoder, data))
+        gfx_select!(*encoder => self.command_encoder_run_compute_pass(*encoder, data));
+        unsafe { pass.invalidate() };
     }
 
     fn encoder_begin_render_pass<'a>(
@@ -867,7 +868,8 @@ impl crate::Context for Context {
             let ptr = wgc::command::render_ffi::wgpu_render_pass_finish(pass, &mut length);
             slice::from_raw_parts(ptr, length)
         };
-        gfx_select!(*encoder => self.command_encoder_run_render_pass(*encoder, data))
+        gfx_select!(*encoder => self.command_encoder_run_render_pass(*encoder, data));
+        unsafe { pass.invalidate() };
     }
 
     fn encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
