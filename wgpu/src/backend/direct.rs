@@ -908,6 +908,12 @@ pub(crate) struct BufferWriteMappingDetail {
     size: usize,
 }
 
+// SAFETY: It is safe to implement Send for `BufferReadMappingDetail` and `BufferWriteMappingDetail`
+// because the only !Send field is `data`, and it is used similarly to `&[u8]` or `&mut [u8]`.
+
+unsafe impl Send for BufferReadMappingDetail {}
+unsafe impl Send for BufferWriteMappingDetail {}
+
 impl BufferWriteMappingDetail {
     pub(crate) fn as_slice(&mut self) -> &mut [u8] {
         unsafe { slice::from_raw_parts_mut(self.data as *mut u8, self.size) }

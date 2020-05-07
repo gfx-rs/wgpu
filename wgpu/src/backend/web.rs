@@ -6,27 +6,66 @@ use crate::{
 };
 
 use futures::FutureExt;
-use std::{marker::PhantomData, ops::Range};
+use std::{
+    future::Future,
+    marker::PhantomData,
+    ops::Range,
+    pin::Pin,
+    task::{self, Poll},
+};
 use wasm_bindgen::prelude::*;
 
-pub type Context = web_sys::Gpu;
+// We need to make a wrapper for some of the handle types returned by the web backend to make them
+// implement `Send` and `Sync` to match native.
+//
+// SAFETY: All webgpu handle types in wasm32 are internally a `JsValue`, and `JsValue` is neither
+// Send nor Sync.  Currently, wasm32 has no threading support so implementing `Send` or `Sync` for a
+// type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
+// is integrated (or not integrated) with values like those in webgpu, this may become unsound.
+
+#[derive(Debug, Clone)]
+pub(crate) struct Sendable<T>(T);
+unsafe impl<T> Send for Sendable<T> {}
+unsafe impl<T> Sync for Sendable<T> {}
+
+pub(crate) type Context = Sendable<web_sys::Gpu>;
+
 pub(crate) struct ComputePass(web_sys::GpuComputePassEncoder);
 pub(crate) struct RenderPass(web_sys::GpuRenderPassEncoder);
 
+// We need to assert that any future we return is Send to match the native API.
+//
+// This is safe on wasm32 *for now*, but similarly to the unsafe Send impls for the handle type
+// wrappers, the full story for threading on wasm32 is still unfolding.
+
+pub(crate) struct MakeSendFuture<F>(F);
+
+impl<F: Future> Future for MakeSendFuture<F> {
+    type Output = F::Output;
+
+    fn poll(self: Pin<&mut Self>, cx: &mut task::Context) -> Poll<Self::Output> {
+        // This is safe because we have no Drop implementation to violate the Pin requirements and
+        // do not provide any means of moving the inner future.
+        unsafe { self.map_unchecked_mut(|s| &mut s.0) }.poll(cx)
+    }
+}
+
+unsafe impl<F> Send for MakeSendFuture<F> {}
+
 impl crate::ComputePassInner<Context> for ComputePass {
-    fn set_pipeline(&mut self, pipeline: &web_sys::GpuComputePipeline) {
-        self.0.set_pipeline(pipeline);
+    fn set_pipeline(&mut self, pipeline: &Sendable<web_sys::GpuComputePipeline>) {
+        self.0.set_pipeline(&pipeline.0);
     }
     fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &web_sys::GpuBindGroup,
+        bind_group: &Sendable<web_sys::GpuBindGroup>,
         offsets: &[wgt::DynamicOffset],
     ) {
         self.0
             .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
                 index,
-                bind_group,
+                &bind_group.0,
                 offsets,
                 0f64,
                 offsets.len() as u32,
@@ -37,28 +76,28 @@ impl crate::ComputePassInner<Context> for ComputePass {
     }
     fn dispatch_indirect(
         &mut self,
-        indirect_buffer: &web_sys::GpuBuffer,
+        indirect_buffer: &Sendable<web_sys::GpuBuffer>,
         indirect_offset: wgt::BufferAddress,
     ) {
         self.0
-            .dispatch_indirect_with_f64(indirect_buffer, indirect_offset as f64);
+            .dispatch_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
     }
 }
 
 impl crate::RenderPassInner<Context> for RenderPass {
-    fn set_pipeline(&mut self, pipeline: &web_sys::GpuRenderPipeline) {
-        self.0.set_pipeline(pipeline);
+    fn set_pipeline(&mut self, pipeline: &Sendable<web_sys::GpuRenderPipeline>) {
+        self.0.set_pipeline(&pipeline.0);
     }
     fn set_bind_group(
         &mut self,
         index: u32,
-        bind_group: &web_sys::GpuBindGroup,
+        bind_group: &Sendable<web_sys::GpuBindGroup>,
         offsets: &[wgt::DynamicOffset],
     ) {
         self.0
             .set_bind_group_with_u32_array_and_f64_and_dynamic_offsets_data_length(
                 index,
-                bind_group,
+                &bind_group.0,
                 offsets,
                 0f64,
                 offsets.len() as u32,
@@ -66,22 +105,22 @@ impl crate::RenderPassInner<Context> for RenderPass {
     }
     fn set_index_buffer(
         &mut self,
-        buffer: &web_sys::GpuBuffer,
+        buffer: &Sendable<web_sys::GpuBuffer>,
         offset: wgt::BufferAddress,
         size: wgt::BufferAddress,
     ) {
         self.0
-            .set_index_buffer_with_f64_and_f64(buffer, offset as f64, size as f64);
+            .set_index_buffer_with_f64_and_f64(&buffer.0, offset as f64, size as f64);
     }
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
-        buffer: &web_sys::GpuBuffer,
+        buffer: &Sendable<web_sys::GpuBuffer>,
         offset: wgt::BufferAddress,
         size: wgt::BufferAddress,
     ) {
         self.0
-            .set_vertex_buffer_with_f64_and_f64(slot, buffer, offset as f64, size as f64);
+            .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, size as f64);
     }
     fn set_blend_color(&mut self, color: wgt::Color) {
         self.0
@@ -126,19 +165,19 @@ impl crate::RenderPassInner<Context> for RenderPass {
     }
     fn draw_indirect(
         &mut self,
-        indirect_buffer: &web_sys::GpuBuffer,
+        indirect_buffer: &Sendable<web_sys::GpuBuffer>,
         indirect_offset: wgt::BufferAddress,
     ) {
         self.0
-            .draw_indirect_with_f64(indirect_buffer, indirect_offset as f64);
+            .draw_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
     }
     fn draw_indexed_indirect(
         &mut self,
-        indirect_buffer: &web_sys::GpuBuffer,
+        indirect_buffer: &Sendable<web_sys::GpuBuffer>,
         indirect_offset: wgt::BufferAddress,
     ) {
         self.0
-            .draw_indexed_indirect_with_f64(indirect_buffer, indirect_offset as f64);
+            .draw_indexed_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
     }
 }
 
@@ -200,7 +239,7 @@ fn map_texture_component_type(
 fn map_stage_descriptor(
     desc: &ProgrammableStageDescriptor,
 ) -> web_sys::GpuProgrammableStageDescriptor {
-    web_sys::GpuProgrammableStageDescriptor::new(desc.entry_point, &desc.module.id)
+    web_sys::GpuProgrammableStageDescriptor::new(desc.entry_point, &desc.module.id.0)
 }
 
 fn map_cull_mode(cull_mode: wgt::CullMode) -> web_sys::GpuCullMode {
@@ -458,14 +497,14 @@ fn map_texture_view_dimension(
 }
 
 fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> web_sys::GpuBufferCopyView {
-    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id, view.bytes_per_row);
+    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id.0, view.bytes_per_row);
     mapped.rows_per_image(view.rows_per_image);
     mapped.offset(view.offset as f64);
     mapped
 }
 
 fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> web_sys::GpuTextureCopyView {
-    let mut mapped = web_sys::GpuTextureCopyView::new(&view.texture.id);
+    let mut mapped = web_sys::GpuTextureCopyView::new(&view.texture.id.0);
     mapped.array_layer(view.array_layer);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
@@ -509,20 +548,21 @@ fn map_store_op(op: wgt::StoreOp) -> web_sys::GpuStoreOp {
 type JsFutureResult = Result<wasm_bindgen::JsValue, wasm_bindgen::JsValue>;
 type FutureMap<T> = futures::future::Map<wasm_bindgen_futures::JsFuture, fn(JsFutureResult) -> T>;
 
-fn future_request_adapter(result: JsFutureResult) -> Option<web_sys::GpuAdapter> {
+fn future_request_adapter(result: JsFutureResult) -> Option<Sendable<web_sys::GpuAdapter>> {
     match result {
-        Ok(js_value) => Some(web_sys::GpuAdapter::from(js_value)),
+        Ok(js_value) => Some(Sendable(web_sys::GpuAdapter::from(js_value))),
         Err(_) => None,
     }
 }
 fn future_request_device(
     result: JsFutureResult,
-) -> Result<(web_sys::GpuDevice, web_sys::GpuQueue), crate::RequestDeviceError> {
+) -> Result<(Sendable<web_sys::GpuDevice>, Sendable<web_sys::GpuQueue>), crate::RequestDeviceError>
+{
     result
         .map(|js_value| {
             let device_id = web_sys::GpuDevice::from(js_value);
             let queue_id = device_id.default_queue();
-            (device_id, queue_id)
+            (Sendable(device_id), Sendable(queue_id))
         })
         .map_err(|_| crate::RequestDeviceError)
 }
@@ -536,12 +576,18 @@ impl<T> Unpin for MapFuture<T> {}
 type MapData = (web_sys::GpuBuffer, Vec<u8>);
 impl From<MapData> for BufferReadMappingDetail {
     fn from((buffer_id, mapped): MapData) -> Self {
-        BufferReadMappingDetail { buffer_id, mapped }
+        BufferReadMappingDetail {
+            buffer_id: Sendable(buffer_id),
+            mapped,
+        }
     }
 }
 impl From<MapData> for BufferWriteMappingDetail {
     fn from((buffer_id, mapped): MapData) -> Self {
-        BufferWriteMappingDetail { buffer_id, mapped }
+        BufferWriteMappingDetail {
+            buffer_id: Sendable(buffer_id),
+            mapped,
+        }
     }
 }
 impl<T: From<MapData>> std::future::Future for MapFuture<T> {
@@ -568,24 +614,24 @@ impl<T: From<MapData>> std::future::Future for MapFuture<T> {
 }
 
 impl crate::Context for Context {
-    type AdapterId = web_sys::GpuAdapter;
-    type DeviceId = web_sys::GpuDevice;
-    type QueueId = web_sys::GpuQueue;
-    type ShaderModuleId = web_sys::GpuShaderModule;
-    type BindGroupLayoutId = web_sys::GpuBindGroupLayout;
-    type BindGroupId = web_sys::GpuBindGroup;
-    type TextureViewId = web_sys::GpuTextureView;
-    type SamplerId = web_sys::GpuSampler;
-    type BufferId = web_sys::GpuBuffer;
-    type TextureId = web_sys::GpuTexture;
-    type PipelineLayoutId = web_sys::GpuPipelineLayout;
-    type RenderPipelineId = web_sys::GpuRenderPipeline;
-    type ComputePipelineId = web_sys::GpuComputePipeline;
+    type AdapterId = Sendable<web_sys::GpuAdapter>;
+    type DeviceId = Sendable<web_sys::GpuDevice>;
+    type QueueId = Sendable<web_sys::GpuQueue>;
+    type ShaderModuleId = Sendable<web_sys::GpuShaderModule>;
+    type BindGroupLayoutId = Sendable<web_sys::GpuBindGroupLayout>;
+    type BindGroupId = Sendable<web_sys::GpuBindGroup>;
+    type TextureViewId = Sendable<web_sys::GpuTextureView>;
+    type SamplerId = Sendable<web_sys::GpuSampler>;
+    type BufferId = Sendable<web_sys::GpuBuffer>;
+    type TextureId = Sendable<web_sys::GpuTexture>;
+    type PipelineLayoutId = Sendable<web_sys::GpuPipelineLayout>;
+    type RenderPipelineId = Sendable<web_sys::GpuRenderPipeline>;
+    type ComputePipelineId = Sendable<web_sys::GpuComputePipeline>;
     type CommandEncoderId = web_sys::GpuCommandEncoder;
     type ComputePassId = ComputePass;
-    type CommandBufferId = web_sys::GpuCommandBuffer;
-    type SurfaceId = web_sys::GpuCanvasContext;
-    type SwapChainId = web_sys::GpuSwapChain;
+    type CommandBufferId = Sendable<web_sys::GpuCommandBuffer>;
+    type SurfaceId = Sendable<web_sys::GpuCanvasContext>;
+    type SwapChainId = Sendable<web_sys::GpuSwapChain>;
     type RenderPassId = RenderPass;
 
     type CreateBufferMappedDetail = CreateBufferMappedDetail;
@@ -593,14 +639,15 @@ impl crate::Context for Context {
     type BufferWriteMappingDetail = BufferWriteMappingDetail;
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
-    type RequestAdapterFuture = FutureMap<Option<web_sys::GpuAdapter>>;
-    type RequestDeviceFuture =
-        FutureMap<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
-    type MapReadFuture = MapFuture<BufferReadMappingDetail>;
-    type MapWriteFuture = MapFuture<BufferWriteMappingDetail>;
+    type RequestAdapterFuture = MakeSendFuture<FutureMap<Option<Self::AdapterId>>>;
+    type RequestDeviceFuture = MakeSendFuture<
+        FutureMap<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>,
+    >;
+    type MapReadFuture = MakeSendFuture<MapFuture<BufferReadMappingDetail>>;
+    type MapWriteFuture = MakeSendFuture<MapFuture<BufferWriteMappingDetail>>;
 
     fn init() -> Self {
-        web_sys::window().unwrap().navigator().gpu()
+        Sendable(web_sys::window().unwrap().navigator().gpu())
     }
 
     fn instance_create_surface(
@@ -625,7 +672,7 @@ impl crate::Context for Context {
             Ok(Some(ctx)) => ctx.into(),
             _ => panic!("expected to get context from canvas"),
         };
-        context.into()
+        Sendable(context.into())
     }
 
     fn instance_request_adapter(
@@ -645,8 +692,10 @@ impl crate::Context for Context {
             }
         };
         mapped_options.power_preference(mapped_power_preference);
-        let adapter_promise = self.request_adapter_with_options(&mapped_options);
-        wasm_bindgen_futures::JsFuture::from(adapter_promise).map(future_request_adapter)
+        let adapter_promise = self.0.request_adapter_with_options(&mapped_options);
+        MakeSendFuture(
+            wasm_bindgen_futures::JsFuture::from(adapter_promise).map(future_request_adapter),
+        )
     }
 
     fn adapter_request_device(
@@ -663,9 +712,11 @@ impl crate::Context for Context {
         let mut mapped_limits = web_sys::GpuLimits::new();
         mapped_limits.max_bind_groups(desc.limits.max_bind_groups);
         mapped_desc.limits(&mapped_limits);
-        let device_promise = adapter.request_device_with_descriptor(&mapped_desc);
+        let device_promise = adapter.0.request_device_with_descriptor(&mapped_desc);
 
-        wasm_bindgen_futures::JsFuture::from(device_promise).map(future_request_device)
+        MakeSendFuture(
+            wasm_bindgen_futures::JsFuture::from(device_promise).map(future_request_device),
+        )
     }
 
     fn device_create_swap_chain(
@@ -675,9 +726,9 @@ impl crate::Context for Context {
         desc: &wgt::SwapChainDescriptor,
     ) -> Self::SwapChainId {
         let mut mapped =
-            web_sys::GpuSwapChainDescriptor::new(device, map_texture_format(desc.format));
+            web_sys::GpuSwapChainDescriptor::new(&device.0, map_texture_format(desc.format));
         mapped.usage(desc.usage.bits());
-        surface.configure_swap_chain(&mapped)
+        Sendable(surface.0.configure_swap_chain(&mapped))
     }
 
     fn device_create_shader_module(
@@ -687,7 +738,7 @@ impl crate::Context for Context {
     ) -> Self::ShaderModuleId {
         let desc = web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(spv));
         // TODO: label
-        device.create_shader_module(&desc)
+        Sendable(device.0.create_shader_module(&desc))
     }
 
     fn device_create_bind_group_layout(
@@ -763,7 +814,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        device.create_bind_group_layout(&mapped_desc)
+        Sendable(device.0.create_bind_group_layout(&mapped_desc))
     }
 
     fn device_create_bind_group(
@@ -780,14 +831,15 @@ impl crate::Context for Context {
                         ref buffer,
                         ref range,
                     } => {
-                        let mut mapped_buffer_binding = web_sys::GpuBufferBinding::new(&buffer.id);
+                        let mut mapped_buffer_binding =
+                            web_sys::GpuBufferBinding::new(&buffer.id.0);
                         mapped_buffer_binding.offset(range.start as f64);
                         mapped_buffer_binding.size((range.end - range.start) as f64);
                         JsValue::from(mapped_buffer_binding.clone())
                     }
-                    BindingResource::Sampler(ref sampler) => JsValue::from(sampler.id.clone()),
+                    BindingResource::Sampler(ref sampler) => JsValue::from(sampler.id.0.clone()),
                     BindingResource::TextureView(ref texture_view) => {
-                        JsValue::from(texture_view.id.clone())
+                        JsValue::from(texture_view.id.0.clone())
                     }
                 };
 
@@ -796,11 +848,11 @@ impl crate::Context for Context {
             .collect::<js_sys::Array>();
 
         let mut mapped_desc =
-            web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &desc.layout.id);
+            web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &desc.layout.id.0);
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        device.create_bind_group(&mapped_desc)
+        Sendable(device.0.create_bind_group(&mapped_desc))
     }
 
     fn device_create_pipeline_layout(
@@ -811,11 +863,11 @@ impl crate::Context for Context {
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
-            .map(|bgl| bgl.id.clone())
+            .map(|bgl| bgl.id.0.clone())
             .collect::<js_sys::Array>();
         let mapped_desc = web_sys::GpuPipelineLayoutDescriptor::new(&temp_layouts);
         // TODO: label
-        device.create_pipeline_layout(&mapped_desc)
+        Sendable(device.0.create_pipeline_layout(&mapped_desc))
     }
 
     fn device_create_render_pipeline(
@@ -852,7 +904,7 @@ impl crate::Context for Context {
         let mapped_vertex_stage = map_stage_descriptor(&desc.vertex_stage);
 
         let mut mapped_desc = web_sys::GpuRenderPipelineDescriptor::new(
-            &desc.layout.id,
+            &desc.layout.id.0,
             &mapped_color_states,
             mapped_primitive_topology,
             &mapped_vertex_stage,
@@ -877,7 +929,7 @@ impl crate::Context for Context {
         mapped_desc.sample_mask(desc.sample_mask);
         mapped_desc.alpha_to_coverage_enabled(desc.alpha_to_coverage_enabled);
 
-        device.create_render_pipeline(&mapped_desc)
+        Sendable(device.0.create_render_pipeline(&mapped_desc))
     }
 
     fn device_create_compute_pipeline(
@@ -887,9 +939,9 @@ impl crate::Context for Context {
     ) -> Self::ComputePipelineId {
         let mapped_compute_stage = map_stage_descriptor(&desc.compute_stage);
         let mapped_desc =
-            web_sys::GpuComputePipelineDescriptor::new(&desc.layout.id, &mapped_compute_stage);
+            web_sys::GpuComputePipelineDescriptor::new(&desc.layout.id.0, &mapped_compute_stage);
         // TODO: label
-        device.create_compute_pipeline(&mapped_desc)
+        Sendable(device.0.create_compute_pipeline(&mapped_desc))
     }
 
     fn device_create_buffer_mapped<'a>(
@@ -903,7 +955,7 @@ impl crate::Context for Context {
             mapped_desc.label(label);
         }
         unsafe {
-            let pair = device.create_buffer_mapped(&mapped_desc);
+            let pair = device.0.create_buffer_mapped(&mapped_desc);
             let id = pair.get(0).into();
             let array_buffer = pair.get(1).into();
             // TODO: Use `Vec::from_raw_parts` once it's stable
@@ -912,7 +964,11 @@ impl crate::Context for Context {
                 Box::into_raw(memory) as *mut u8,
                 desc.size as usize,
             );
-            (id, mapped_data, CreateBufferMappedDetail { array_buffer })
+            (
+                Sendable(id),
+                mapped_data,
+                CreateBufferMappedDetail { array_buffer },
+            )
         }
     }
 
@@ -926,7 +982,7 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        device.create_buffer(&mapped_desc)
+        Sendable(device.0.create_buffer(&mapped_desc))
     }
 
     fn device_create_texture(
@@ -945,7 +1001,7 @@ impl crate::Context for Context {
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
         mapped_desc.mip_level_count(desc.mip_level_count);
         mapped_desc.sample_count(desc.sample_count);
-        device.create_texture(&mapped_desc)
+        Sendable(device.0.create_texture(&mapped_desc))
     }
 
     fn device_create_sampler(
@@ -966,7 +1022,7 @@ impl crate::Context for Context {
         mapped_desc.mag_filter(map_filter_mode(desc.mag_filter));
         mapped_desc.min_filter(map_filter_mode(desc.min_filter));
         mapped_desc.mipmap_filter(map_filter_mode(desc.mipmap_filter));
-        device.create_sampler_with_descriptor(&mapped_desc)
+        Sendable(device.0.create_sampler_with_descriptor(&mapped_desc))
     }
 
     fn device_create_command_encoder(
@@ -978,7 +1034,9 @@ impl crate::Context for Context {
         if let Some(label) = desc.label {
             mapped_desc.label(label);
         }
-        device.create_command_encoder_with_descriptor(&mapped_desc)
+        device
+            .0
+            .create_command_encoder_with_descriptor(&mapped_desc)
     }
 
     fn device_drop(&self, _device: &Self::DeviceId) {
@@ -995,11 +1053,11 @@ impl crate::Context for Context {
         _start: wgt::BufferAddress,
         _size: wgt::BufferAddress,
     ) -> Self::MapReadFuture {
-        MapFuture {
-            child: wasm_bindgen_futures::JsFuture::from(buffer.map_read_async()),
-            buffer: Some(buffer.clone()),
+        MakeSendFuture(MapFuture {
+            child: wasm_bindgen_futures::JsFuture::from(buffer.0.map_read_async()),
+            buffer: Some(buffer.0.clone()),
             marker: PhantomData,
-        }
+        })
     }
 
     fn buffer_map_write(
@@ -1008,15 +1066,15 @@ impl crate::Context for Context {
         _start: wgt::BufferAddress,
         _size: wgt::BufferAddress,
     ) -> Self::MapWriteFuture {
-        MapFuture {
-            child: wasm_bindgen_futures::JsFuture::from(buffer.map_write_async()),
-            buffer: Some(buffer.clone()),
+        MakeSendFuture(MapFuture {
+            child: wasm_bindgen_futures::JsFuture::from(buffer.0.map_write_async()),
+            buffer: Some(buffer.0.clone()),
             marker: PhantomData,
-        }
+        })
     }
 
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
-        buffer.unmap();
+        buffer.0.unmap();
     }
 
     fn swap_chain_get_next_texture(
@@ -1025,7 +1083,10 @@ impl crate::Context for Context {
     ) -> Result<(Self::TextureViewId, Self::SwapChainOutputDetail), crate::TimeOut> {
         // TODO: Should we pass a descriptor here?
         // Or is the default view always correct?
-        Ok((swap_chain.get_current_texture().create_view(), ()))
+        Ok((
+            Sendable(swap_chain.0.get_current_texture().create_view()),
+            (),
+        ))
     }
 
     fn swap_chain_present(
@@ -1041,7 +1102,7 @@ impl crate::Context for Context {
         texture: &Self::TextureId,
         desc: Option<&TextureViewDescriptor>,
     ) -> Self::TextureViewId {
-        match desc {
+        Sendable(match desc {
             Some(d) => {
                 let mut mapped_desc = web_sys::GpuTextureViewDescriptor::new();
                 mapped_desc.array_layer_count(d.array_layer_count);
@@ -1052,10 +1113,10 @@ impl crate::Context for Context {
                 mapped_desc.format(map_texture_format(d.format));
                 mapped_desc.mip_level_count(d.level_count);
                 // TODO: label
-                texture.create_view_with_descriptor(&mapped_desc)
+                texture.0.create_view_with_descriptor(&mapped_desc)
             }
-            None => texture.create_view(),
-        }
+            None => texture.0.create_view(),
+        })
     }
 
     fn texture_drop(&self, _texture: &Self::TextureId) {
@@ -1122,9 +1183,9 @@ impl crate::Context for Context {
         copy_size: wgt::BufferAddress,
     ) {
         encoder.copy_buffer_to_buffer_with_f64_and_f64_and_f64(
-            source,
+            &source.0,
             source_offset as f64,
-            destination,
+            &destination.0,
             destination_offset as f64,
             copy_size as f64,
         )
@@ -1199,7 +1260,7 @@ impl crate::Context for Context {
             .map(|ca| {
                 let mut mapped_color_attachment =
                     web_sys::GpuRenderPassColorAttachmentDescriptor::new(
-                        &ca.attachment.id,
+                        &ca.attachment.id.0,
                         &match ca.load_op {
                             wgt::LoadOp::Clear => {
                                 wasm_bindgen::JsValue::from(map_color(ca.clear_color))
@@ -1211,7 +1272,7 @@ impl crate::Context for Context {
                     );
 
                 if let Some(rt) = ca.resolve_target {
-                    mapped_color_attachment.resolve_target(&rt.id);
+                    mapped_color_attachment.resolve_target(&rt.id.0);
                 }
 
                 mapped_color_attachment.store_op(map_store_op(ca.store_op));
@@ -1227,7 +1288,7 @@ impl crate::Context for Context {
         if let Some(dsa) = &desc.depth_stencil_attachment {
             let mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachmentDescriptor::new(
-                    &dsa.attachment.id,
+                    &dsa.attachment.id.0,
                     &match dsa.depth_load_op {
                         wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(dsa.clear_depth),
                         wgt::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
@@ -1259,7 +1320,7 @@ impl crate::Context for Context {
         if let Some(ref label) = encoder.label() {
             mapped_desc.label(label);
         }
-        encoder.finish_with_descriptor(&mapped_desc)
+        Sendable(encoder.finish_with_descriptor(&mapped_desc))
     }
 
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
@@ -1267,9 +1328,9 @@ impl crate::Context for Context {
         queue: &Self::QueueId,
         command_buffers: I,
     ) {
-        let temp_command_buffers = command_buffers.collect::<js_sys::Array>();
+        let temp_command_buffers = command_buffers.map(|i| i.0).collect::<js_sys::Array>();
 
-        queue.submit(&temp_command_buffers);
+        queue.0.submit(&temp_command_buffers);
     }
 }
 
@@ -1280,8 +1341,14 @@ pub(crate) struct CreateBufferMappedDetail {
     array_buffer: js_sys::ArrayBuffer,
 }
 
+// `CreateBufferMappedDetail` must be `Send` to match native.
+//
+// SAFETY: This is safe on wasm32 *for now*, but similarly to the unsafe Send impls for the handle
+// type wrappers, the full story for threading on wasm32 is still unfolding.
+unsafe impl Send for CreateBufferMappedDetail {}
+
 pub(crate) struct BufferReadMappingDetail {
-    pub(crate) buffer_id: web_sys::GpuBuffer,
+    pub(crate) buffer_id: Sendable<web_sys::GpuBuffer>,
     mapped: Vec<u8>,
 }
 
@@ -1292,7 +1359,7 @@ impl BufferReadMappingDetail {
 }
 
 pub(crate) struct BufferWriteMappingDetail {
-    pub(crate) buffer_id: web_sys::GpuBuffer,
+    pub(crate) buffer_id: Sendable<web_sys::GpuBuffer>,
     mapped: Vec<u8>,
 }
 
