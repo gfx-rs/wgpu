@@ -96,7 +96,6 @@ impl framework::Example for Skybox {
             &uniforms,
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
-        let uniform_buf_size = std::mem::size_of::<Uniforms>();
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[&bind_group_layout],
@@ -234,10 +233,7 @@ impl framework::Example for Skybox {
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &uniform_buf,
-                        range: 0..uniform_buf_size as wgpu::BufferAddress,
-                    },
+                    resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                 },
                 wgpu::Binding {
                     binding: 1,

@@ -80,10 +80,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         layout: &bind_group_layout,
         bindings: &[wgpu::Binding {
             binding: 0,
-            resource: wgpu::BindingResource::Buffer {
-                buffer: &storage_buffer,
-                range: 0..size,
-            },
+            resource: wgpu::BindingResource::Buffer(storage_buffer.slice(..)),
         }],
         label: None,
     });
