@@ -15,7 +15,6 @@ use copyless::VecHelper as _;
 use gfx_descriptor::DescriptorAllocator;
 use gfx_memory::{Block, Heaps};
 use hal::{
-    self,
     command::CommandBuffer as _,
     device::Device as _,
     queue::CommandQueue as _,
@@ -202,6 +201,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     extensions: wgt::Extensions,
+    pending_write_command_buffer: Option<B::CommandBuffer>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<Trace>>,
 }
@@ -273,6 +273,7 @@ impl<B: GfxBackend> Device<B> {
             },
             limits: desc.limits.clone(),
             extensions: desc.extensions.clone(),
+            pending_write_command_buffer: None,
         }
     }
 
@@ -1683,6 +1684,116 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.command_encoder_destroy::<B>(command_buffer_id)
     }
 
+    pub fn queue_write_buffer<B: GfxBackend>(
+        &self,
+        queue_id: id::QueueId,
+        data: &[u8],
+        buffer_id: id::BufferId,
+        buffer_offset: BufferAddress,
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let device = &mut device_guard[queue_id];
+        let (buffer_guard, _) = hub.buffers.read(&mut token);
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => {
+                let mut trace = trace.lock();
+                let data_path = trace.make_binary("bin", data);
+                trace.add(trace::Action::WriteBuffer {
+                    id: buffer_id,
+                    data: data_path,
+                    range: buffer_offset..buffer_offset + data.len() as BufferAddress,
+                });
+            }
+            None => {}
+        }
+
+        let mut trackers = device.trackers.lock();
+        let (dst, transition) = trackers.buffers.use_replace(
+            &*buffer_guard,
+            buffer_id,
+            (),
+            resource::BufferUse::COPY_DST,
+        );
+        assert!(
+            dst.usage.contains(wgt::BufferUsage::COPY_DST),
+            "Write buffer usage {:?} must contain usage flag DST_SRC",
+            dst.usage
+        );
+
+        let submit_index = 1 + device.life_guard.submission_index.load(Ordering::Relaxed);
+        if !dst.life_guard.use_at(submit_index) {
+            device.temp_suspected.buffers.push(buffer_id);
+        }
+
+        let src_raw = unsafe {
+            let mut buf = device
+                .raw
+                .create_buffer(
+                    data.len() as BufferAddress,
+                    hal::buffer::Usage::TRANSFER_SRC,
+                )
+                .unwrap();
+            device.raw.set_buffer_name(&mut buf, "<write_buffer_temp>");
+            buf
+        };
+        //TODO: do we need to transition into HOST_WRITE access first?
+        let requirements = unsafe { device.raw.get_buffer_requirements(&src_raw) };
+
+        let mut memory = device
+            .mem_allocator
+            .lock()
+            .allocate(
+                &device.raw,
+                requirements.type_mask as u32,
+                gfx_memory::MemoryUsage::Staging { read_back: false },
+                gfx_memory::Kind::Linear,
+                requirements.size,
+                requirements.alignment,
+            )
+            .unwrap();
+
+        let mut mapped = memory.map(&device.raw, hal::memory::Segment::ALL).unwrap();
+        unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
+            .unwrap()
+            .slice
+            .copy_from_slice(data);
+
+        let mut comb = match device.pending_write_command_buffer.take() {
+            Some(comb) => comb,
+            None => {
+                let mut comb = device.com_allocator.allocate_internal();
+                unsafe {
+                    comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                }
+                comb
+            }
+        };
+        let region = hal::command::BufferCopy {
+            src: 0,
+            dst: buffer_offset,
+            size: data.len() as _,
+        };
+        unsafe {
+            comb.pipeline_barrier(
+                all_buffer_stages()..all_buffer_stages(),
+                hal::memory::Dependencies::empty(),
+                iter::once(hal::memory::Barrier::Buffer {
+                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
+                    target: &src_raw,
+                    range: hal::buffer::SubRange::WHOLE,
+                    families: None,
+                })
+                .chain(transition.map(|pending| pending.into_hal(dst))),
+            );
+            comb.copy_buffer(&src_raw, &dst.raw, iter::once(region));
+        }
+        device.pending_write_command_buffer = Some(comb);
+    }
+
     pub fn queue_submit<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
@@ -1694,6 +1805,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut token = Token::root();
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
             let device = &mut device_guard[queue_id];
+            let pending_write_command_buffer = device.pending_write_command_buffer.take();
             device.temp_suspected.clear();
 
             let submit_index = 1 + device
@@ -1815,9 +1927,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // now prepare the GPU submission
             let fence = device.raw.create_fence(false).unwrap();
             let submission = hal::queue::Submission {
-                command_buffers: command_buffer_ids
-                    .iter()
-                    .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
+                command_buffers: pending_write_command_buffer.as_ref().into_iter().chain(
+                    command_buffer_ids
+                        .iter()
+                        .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
+                ),
                 wait_semaphores: Vec::new(),
                 signal_semaphores: signal_swapchain_semaphores
                     .into_iter()
@@ -1828,6 +1942,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.queue_group.queues[0].submit(submission, Some(&fence));
             }
 
+            if let Some(comb_raw) = pending_write_command_buffer {
+                device
+                    .com_allocator
+                    .after_submit_internal(comb_raw, submit_index);
+            }
             (submit_index, fence)
         };
 
