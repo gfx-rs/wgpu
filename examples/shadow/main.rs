@@ -257,10 +257,7 @@ impl framework::Example for Example {
                 layout: &local_bind_group_layout,
                 bindings: &[wgpu::Binding {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &plane_uniform_buf,
-                        range: 0..entity_uniform_size,
-                    },
+                    resource: wgpu::BindingResource::Buffer(plane_uniform_buf.slice(..)),
                 }],
                 label: None,
             });
@@ -333,10 +330,7 @@ impl framework::Example for Example {
                     layout: &local_bind_group_layout,
                     bindings: &[wgpu::Binding {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &uniform_buf,
-                            range: 0..entity_uniform_size,
-                        },
+                        resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                     }],
                     label: None,
                 }),
@@ -452,10 +446,7 @@ impl framework::Example for Example {
                 layout: &bind_group_layout,
                 bindings: &[wgpu::Binding {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &uniform_buf,
-                        range: 0..uniform_size,
-                    },
+                    resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                 }],
                 label: None,
             });
@@ -555,7 +546,6 @@ impl framework::Example for Example {
                 proj: *mx_total.as_ref(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
-            let uniform_size = mem::size_of::<ForwardUniforms>() as wgpu::BufferAddress;
             let uniform_buf = device.create_buffer_with_data(
                 bytemuck::bytes_of(&forward_uniforms),
                 wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
@@ -567,17 +557,11 @@ impl framework::Example for Example {
                 bindings: &[
                     wgpu::Binding {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &uniform_buf,
-                            range: 0..uniform_size,
-                        },
+                        resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                     },
                     wgpu::Binding {
                         binding: 1,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &light_uniform_buf,
-                            range: 0..light_uniform_size,
-                        },
+                        resource: wgpu::BindingResource::Buffer(light_uniform_buf.slice(..)),
                     },
                     wgpu::Binding {
                         binding: 2,
@@ -820,8 +804,8 @@ impl framework::Example for Example {
 
             for entity in &self.entities {
                 pass.set_bind_group(1, &entity.bind_group, &[]);
-                pass.set_index_buffer(&entity.index_buf, 0, 0);
-                pass.set_vertex_buffer(0, &entity.vertex_buf, 0, 0);
+                pass.set_index_buffer(entity.index_buf.slice(..));
+                pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
             }
         }
@@ -856,8 +840,8 @@ impl framework::Example for Example {
 
             for entity in &self.entities {
                 pass.set_bind_group(1, &entity.bind_group, &[]);
-                pass.set_index_buffer(&entity.index_buf, 0, 0);
-                pass.set_vertex_buffer(0, &entity.vertex_buf, 0, 0);
+                pass.set_index_buffer(entity.index_buf.slice(..));
+                pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
             }
         }

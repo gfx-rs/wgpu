@@ -6,7 +6,13 @@ mod backend;
 mod macros;
 
 use futures::FutureExt as _;
-use std::{future::Future, marker::PhantomData, ops::Range, sync::Arc, thread};
+use std::{
+    future::Future,
+    marker::PhantomData,
+    ops::{Bound, Range, RangeBounds},
+    sync::Arc,
+    thread,
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
@@ -339,6 +345,21 @@ pub struct Buffer {
     //detail: <C as Context>::BufferDetail,
 }
 
+/// A description of what portion of a buffer to use
+pub struct BufferSlice<'a> {
+    buffer: &'a Buffer,
+    offset: BufferAddress,
+    size: Option<BufferAddress>,
+}
+
+impl<'a> BufferSlice<'a> {
+    /// This fn can be used for calling lower-level APIs where `0` denotes that the slice should
+    /// extend to the end of the buffer.
+    fn size_or_0(&self) -> BufferAddress {
+        self.size.unwrap_or(0)
+    }
+}
+
 /// A handle to a texture on the GPU.
 pub struct Texture {
     context: Arc<C>,
@@ -535,10 +556,7 @@ pub struct Queue {
 
 /// A resource that can be bound to a pipeline.
 pub enum BindingResource<'a> {
-    Buffer {
-        buffer: &'a Buffer,
-        range: Range<BufferAddress>,
-    },
+    Buffer(BufferSlice<'a>),
     Sampler(&'a Sampler),
     TextureView(&'a TextureView),
 }
@@ -1167,6 +1185,26 @@ impl Drop for BufferWriteMapping {
 }
 
 impl Buffer {
+    /// Use only a portion of this Buffer for a given operation. Choosing a range with 0 size will
+    /// return a slice that extends to the end of the buffer.
+    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
+        let offset = match bounds.start_bound() {
+            Bound::Included(&bound) => bound,
+            Bound::Excluded(&bound) => bound + 1,
+            Bound::Unbounded => 0,
+        };
+        let size = match bounds.end_bound() {
+            Bound::Included(&bound) => Some(bound + 1 - offset),
+            Bound::Excluded(&bound) => Some(bound - offset),
+            Bound::Unbounded => None,
+        };
+        BufferSlice {
+            buffer: self,
+            offset,
+            size,
+        }
+    }
+
     /// Map the buffer for reading. The result is returned in a future.
     ///
     /// For the future to complete, `device.poll(...)` must be called elsewhere in the runtime, possibly integrated
@@ -1376,15 +1414,13 @@ impl<'a> RenderPass<'a> {
     ///
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
-    ///
-    /// If `size == 0`, the remaining part of the buffer is considered.
-    pub fn set_index_buffer(
-        &mut self,
-        buffer: &'a Buffer,
-        offset: BufferAddress,
-        size: BufferAddress,
-    ) {
-        RenderPassInner::set_index_buffer(&mut self.id, &buffer.id, offset, size)
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>) {
+        RenderPassInner::set_index_buffer(
+            &mut self.id,
+            &buffer_slice.buffer.id,
+            buffer_slice.offset,
+            buffer_slice.size_or_0(),
+        )
     }
 
     /// Assign a vertex buffer to a slot.
@@ -1395,20 +1431,18 @@ impl<'a> RenderPass<'a> {
     /// The `slot` refers to the index of the matching descriptor in
     /// [`RenderPipelineDescriptor::vertex_buffers`].
     ///
-    /// If `size == 0`, the remaining part of the buffer is considered.
-    ///
     /// [`draw`]: #method.draw
     /// [`draw_indexed`]: #method.draw_indexed
     /// [`RenderPass`]: struct.RenderPass.html
     /// [`RenderPipelineDescriptor::vertex_buffers`]: struct.RenderPipelineDescriptor.html#structfield.vertex_buffers
-    pub fn set_vertex_buffer(
-        &mut self,
-        slot: u32,
-        buffer: &'a Buffer,
-        offset: BufferAddress,
-        size: BufferAddress,
-    ) {
-        RenderPassInner::set_vertex_buffer(&mut self.id, slot, &buffer.id, offset, size)
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+        RenderPassInner::set_vertex_buffer(
+            &mut self.id,
+            slot,
+            &buffer_slice.buffer.id,
+            buffer_slice.offset,
+            buffer_slice.size_or_0(),
+        )
     }
 
     /// Sets the scissor region.
