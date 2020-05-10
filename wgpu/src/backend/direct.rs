@@ -356,15 +356,14 @@ impl crate::Context for Context {
             .iter()
             .map(|binding| bm::BindGroupEntry {
                 binding: binding.binding,
-                resource: match binding.resource {
-                    BindingResource::Buffer {
-                        ref buffer,
-                        ref range,
-                    } => bm::BindingResource::Buffer(bm::BufferBinding {
-                        buffer: buffer.id,
-                        offset: range.start,
-                        size: range.end - range.start,
-                    }),
+                resource: match &binding.resource {
+                    BindingResource::Buffer(buffer_slice) => {
+                        bm::BindingResource::Buffer(bm::BufferBinding {
+                            buffer: buffer_slice.buffer.id,
+                            offset: buffer_slice.offset,
+                            size: buffer_slice.size_or_0(),
+                        })
+                    }
                     BindingResource::Sampler(ref sampler) => {
                         bm::BindingResource::Sampler(sampler.id)
                     }

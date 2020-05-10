@@ -319,10 +319,7 @@ impl framework::Example for Example {
             bindings: &[
                 wgpu::Binding {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer {
-                        buffer: &uniform_buf,
-                        range: 0..64,
-                    },
+                    resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                 },
                 wgpu::Binding {
                     binding: 1,
@@ -440,7 +437,7 @@ impl framework::Example for Example {
             });
             rpass.set_pipeline(&self.draw_pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.set_vertex_buffer(0, &self.vertex_buf, 0, 0);
+            rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
             rpass.draw(0..4, 0..1);
         }
 

@@ -826,15 +826,12 @@ impl crate::Context for Context {
             .bindings
             .iter()
             .map(|binding| {
-                let mapped_resource = match binding.resource {
-                    BindingResource::Buffer {
-                        ref buffer,
-                        ref range,
-                    } => {
+                let mapped_resource = match &binding.resource {
+                    BindingResource::Buffer(buffer_slice) => {
                         let mut mapped_buffer_binding =
-                            web_sys::GpuBufferBinding::new(&buffer.id.0);
-                        mapped_buffer_binding.offset(range.start as f64);
-                        mapped_buffer_binding.size((range.end - range.start) as f64);
+                            web_sys::GpuBufferBinding::new(&buffer_slice.buffer.id.0);
+                        mapped_buffer_binding.offset(buffer_slice.offset as f64);
+                        mapped_buffer_binding.size(buffer_slice.size_or_0() as f64);
                         JsValue::from(mapped_buffer_binding.clone())
                     }
                     BindingResource::Sampler(ref sampler) => JsValue::from(sampler.id.0.clone()),

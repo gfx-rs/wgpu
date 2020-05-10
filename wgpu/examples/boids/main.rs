@@ -202,24 +202,17 @@ impl framework::Example for Example {
                 bindings: &[
                     wgpu::Binding {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &sim_param_buffer,
-                            range: 0..(4 * sim_param_data.len() as u64), // 4 = size_of f32
-                        },
+                        resource: wgpu::BindingResource::Buffer(sim_param_buffer.slice(..)),
                     },
                     wgpu::Binding {
                         binding: 1,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &particle_buffers[i],
-                            range: 0..(4 * initial_particle_data.len() as u64), // 4 = size_of f32
-                        },
+                        resource: wgpu::BindingResource::Buffer(particle_buffers[i].slice(..)),
                     },
                     wgpu::Binding {
                         binding: 2,
-                        resource: wgpu::BindingResource::Buffer {
-                            buffer: &particle_buffers[(i + 1) % 2], // bind to opposite buffer
-                            range: 0..(4 * initial_particle_data.len() as u64), // 4 = size_of f32
-                        },
+                        resource: wgpu::BindingResource::Buffer(
+                            particle_buffers[(i + 1) % 2].slice(..), // bind to opposite buffer
+                        ),
                     },
                 ],
                 label: None,
@@ -296,9 +289,9 @@ impl framework::Example for Example {
             let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor);
             rpass.set_pipeline(&self.render_pipeline);
             // render dst particles
-            rpass.set_vertex_buffer(0, &self.particle_buffers[(self.frame_num + 1) % 2], 0, 0);
+            rpass.set_vertex_buffer(0, self.particle_buffers[(self.frame_num + 1) % 2].slice(..));
             // the three instance-local vertices
-            rpass.set_vertex_buffer(1, &self.vertices_buffer, 0, 0);
+            rpass.set_vertex_buffer(1, self.vertices_buffer.slice(..));
             rpass.draw(0..3, 0..NUM_PARTICLES);
         }
 
