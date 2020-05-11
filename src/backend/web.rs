@@ -1320,6 +1320,16 @@ impl crate::Context for Context {
         Sendable(encoder.finish_with_descriptor(&mapped_desc))
     }
 
+    fn queue_write_buffer(
+        &self,
+        _queue: &Self::QueueId,
+        _data: &[u8],
+        _buffer: &Self::BufferId,
+        _offset: wgt::BufferAddress,
+    ) {
+        unimplemented!()
+    }
+
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
         queue: &Self::QueueId,

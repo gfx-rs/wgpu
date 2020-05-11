@@ -249,8 +249,9 @@ impl framework::Example for Example {
         &mut self,
         _sc_desc: &wgpu::SwapChainDescriptor,
         _device: &wgpu::Device,
-    ) -> Option<wgpu::CommandBuffer> {
-        None
+        _queue: &wgpu::Queue,
+    ) {
+        //empty
     }
 
     /// render is called each frame, dispatching compute groups proportional
@@ -259,6 +260,7 @@ impl framework::Example for Example {
         &mut self,
         frame: &wgpu::SwapChainOutput,
         device: &wgpu::Device,
+        _queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
         // create render pass descriptor
         let render_pass_descriptor = wgpu::RenderPassDescriptor {

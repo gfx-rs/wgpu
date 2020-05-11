@@ -288,6 +288,13 @@ trait Context: Sized {
         pass: &mut Self::RenderPassId,
     );
     fn encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId;
+    fn queue_write_buffer(
+        &self,
+        queue: &Self::QueueId,
+        data: &[u8],
+        buffer: &Self::BufferId,
+        offset: BufferAddress,
+    );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
         queue: &Self::QueueId,
@@ -1582,6 +1589,11 @@ impl<'a> Drop for ComputePass<'a> {
 }
 
 impl Queue {
+    /// Schedule a data write into `buffer` starting at `offset`.
+    pub fn write_buffer(&self, data: &[u8], buffer: &Buffer, offset: BufferAddress) {
+        Context::queue_write_buffer(&*self.context, &self.id, data, &buffer.id, offset)
+    }
+
     /// Submits a series of finished command buffers for execution.
     pub fn submit<I: IntoIterator<Item = CommandBuffer>>(&self, command_buffers: I) {
         Context::queue_submit(
