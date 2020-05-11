@@ -67,6 +67,7 @@ struct Inner<B: hal::Backend> {
 #[derive(Debug)]
 pub struct CommandAllocator<B: hal::Backend> {
     queue_family: hal::queue::QueueFamilyId,
+    internal_thread_id: thread::ThreadId,
     inner: Mutex<Inner<B>>,
 }
 
@@ -124,6 +125,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     pub fn new(queue_family: hal::queue::QueueFamilyId) -> Self {
         CommandAllocator {
             queue_family,
+            internal_thread_id: thread::current().id(),
             inner: Mutex::new(Inner {
                 pools: HashMap::new(),
             }),
@@ -136,7 +138,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
     }
 
     pub fn allocate_internal(&self) -> B::CommandBuffer {
-        self.allocate_for_thread_id(thread::current().id())
+        self.allocate_for_thread_id(self.internal_thread_id)
     }
 
     pub fn extend(&self, cmd_buf: &CommandBuffer<B>) -> B::CommandBuffer {
