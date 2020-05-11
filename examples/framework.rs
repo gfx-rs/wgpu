@@ -1,3 +1,4 @@
+use std::time;
 use winit::{
     event::{self, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -100,16 +101,37 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
         queue.submit(init_command_buf);
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
+    let mut last_update_inst = time::Instant::now();
+
     log::info!("Entering render loop...");
     event_loop.run(move |event, _, control_flow| {
         let _ = (&instance, &adapter); // force ownership by the closure
         *control_flow = if cfg!(feature = "metal-auto-capture") {
             ControlFlow::Exit
         } else {
-            ControlFlow::Poll
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                ControlFlow::WaitUntil(time::Instant::now() + time::Duration::from_millis(10))
+            }
+            #[cfg(target_arch = "wasm32")]
+            {
+                ControlFlow::Poll
+            }
         };
         match event {
-            event::Event::MainEventsCleared => window.request_redraw(),
+            event::Event::MainEventsCleared => {
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    if last_update_inst.elapsed() > time::Duration::from_millis(20) {
+                        window.request_redraw();
+                        last_update_inst = time::Instant::now();
+                    }
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                window.request_redraw();
+            }
             event::Event::WindowEvent {
                 event: WindowEvent::Resized(size),
                 ..

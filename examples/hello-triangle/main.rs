@@ -100,7 +100,6 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
 
         *control_flow = ControlFlow::Poll;
         match event {
-            Event::MainEventsCleared => window.request_redraw(),
             Event::WindowEvent {
                 event: WindowEvent::Resized(size),
                 ..
