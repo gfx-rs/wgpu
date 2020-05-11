@@ -208,17 +208,18 @@ impl framework::Example for Example {
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
-    ) -> Option<wgpu::CommandBuffer> {
+        _queue: &wgpu::Queue,
+    ) {
         self.sc_desc = sc_desc.clone();
         self.multisampled_framebuffer =
             Example::create_multisampled_framebuffer(device, sc_desc, self.sample_count);
-        None
     }
 
     fn render(
         &mut self,
         frame: &wgpu::SwapChainOutput,
         device: &wgpu::Device,
+        _queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
         if self.rebuild_pipeline {
             self.pipeline = Example::create_pipeline(

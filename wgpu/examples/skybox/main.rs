@@ -6,6 +6,13 @@ const SKYBOX_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 type Uniform = cgmath::Matrix4<f32>;
 type Uniforms = [Uniform; 2];
 
+fn raw_uniforms(uniforms: &Uniforms) -> [f32; 16 * 2] {
+    let mut raw = [0f32; 16 * 2];
+    raw[..16].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&uniforms[0])[..]);
+    raw[16..].copy_from_slice(&AsRef::<[f32; 16]>::as_ref(&uniforms[1])[..]);
+    raw
+}
+
 pub struct Skybox {
     aspect: f32,
     pipeline: wgpu::RenderPipeline,
@@ -25,27 +32,6 @@ impl Skybox {
         let mx_correction = framework::OPENGL_TO_WGPU_MATRIX;
         [mx_correction * mx_projection, mx_correction * mx_view]
     }
-}
-
-fn buffer_from_uniforms(
-    device: &wgpu::Device,
-    uniforms: &Uniforms,
-    usage: wgpu::BufferUsage,
-) -> wgpu::Buffer {
-    let mut uniform_buf = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-        size: std::mem::size_of::<Uniforms>() as u64,
-        usage,
-        label: None,
-    });
-    // FIXME: Align and use `LayoutVerified`
-    for (u, slot) in uniforms.iter().zip(
-        uniform_buf
-            .data()
-            .chunks_exact_mut(std::mem::size_of::<Uniform>()),
-    ) {
-        slot.copy_from_slice(bytemuck::cast_slice(AsRef::<[[f32; 4]; 4]>::as_ref(u)));
-    }
-    uniform_buf.finish()
 }
 
 impl framework::Example for Skybox {
@@ -91,9 +77,8 @@ impl framework::Example for Skybox {
 
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
-        let uniform_buf = buffer_from_uniforms(
-            &device,
-            &uniforms,
+        let uniform_buf = device.create_buffer_with_data(
+            bytemuck::cast_slice(&raw_uniforms(&uniforms)),
             wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
 
@@ -265,45 +250,35 @@ impl framework::Example for Skybox {
     fn resize(
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
-        device: &wgpu::Device,
-    ) -> Option<wgpu::CommandBuffer> {
+        _device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
         self.aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Skybox::generate_uniforms(self.aspect);
         let mx_total = uniforms[0] * uniforms[1];
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-
-        let temp_buf = device
-            .create_buffer_with_data(bytemuck::cast_slice(mx_ref), wgpu::BufferUsage::COPY_SRC);
-
-        let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        init_encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
-        self.uniforms = uniforms;
-        Some(init_encoder.finish())
+        queue.write_buffer(bytemuck::cast_slice(mx_ref), &self.uniform_buf, 0);
     }
 
     fn render(
         &mut self,
         frame: &wgpu::SwapChainOutput,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
-        let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        // update rotation
         let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
         self.uniforms[1] = self.uniforms[1] * rotation;
-        let uniform_buf_size = std::mem::size_of::<Uniforms>();
-        let temp_buf = buffer_from_uniforms(&device, &self.uniforms, wgpu::BufferUsage::COPY_SRC);
-
-        init_encoder.copy_buffer_to_buffer(
-            &temp_buf,
-            0,
+        queue.write_buffer(
+            bytemuck::cast_slice(&raw_uniforms(&self.uniforms)),
             &self.uniform_buf,
             0,
-            uniform_buf_size as wgpu::BufferAddress,
         );
 
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
-            let mut rpass = init_encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
@@ -323,7 +298,7 @@ impl framework::Example for Skybox {
             rpass.set_bind_group(0, &self.bind_group, &[]);
             rpass.draw(0..3 as u32, 0..1);
         }
-        init_encoder.finish()
+        encoder.finish()
     }
 }
 

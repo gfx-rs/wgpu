@@ -314,24 +314,19 @@ impl framework::Example for Example {
     fn resize(
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
-        device: &wgpu::Device,
-    ) -> Option<wgpu::CommandBuffer> {
+        _device: &wgpu::Device,
+        queue: &wgpu::Queue,
+    ) {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-
-        let temp_buf = device
-            .create_buffer_with_data(bytemuck::cast_slice(mx_ref), wgpu::BufferUsage::COPY_SRC);
-
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-        encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.uniform_buf, 0, 64);
-        Some(encoder.finish())
+        queue.write_buffer(bytemuck::cast_slice(mx_ref), &self.uniform_buf, 0);
     }
 
     fn render(
         &mut self,
         frame: &wgpu::SwapChainOutput,
         device: &wgpu::Device,
+        _queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

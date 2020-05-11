@@ -38,12 +38,14 @@ pub trait Example: 'static + Sized {
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
-    ) -> Option<wgpu::CommandBuffer>;
+        queue: &wgpu::Queue,
+    );
     fn update(&mut self, event: WindowEvent);
     fn render(
         &mut self,
         frame: &wgpu::SwapChainOutput,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer;
 }
 
@@ -76,7 +78,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 },
                 limits: wgpu::Limits::default(),
             },
-            None,
+            Some(std::path::Path::new("trace")),
         )
         .await
         .unwrap();
@@ -140,10 +142,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 sc_desc.width = size.width;
                 sc_desc.height = size.height;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
-                let command_buf = example.resize(&sc_desc, &device);
-                if command_buf.is_some() {
-                    queue.submit(command_buf);
-                }
+                example.resize(&sc_desc, &device, &queue);
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
@@ -166,7 +165,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 let frame = swap_chain
                     .get_next_texture()
                     .expect("Timeout when acquiring next swap chain texture");
-                let command_buf = example.render(&frame, &device);
+                let command_buf = example.render(&frame, &device, &queue);
                 queue.submit(Some(command_buf));
             }
             _ => {}

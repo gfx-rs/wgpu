@@ -668,18 +668,16 @@ impl framework::Example for Example {
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
-    ) -> Option<wgpu::CommandBuffer> {
-        let command_buf = {
-            let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
-            let mx_ref: &[f32; 16] = mx_total.as_ref();
-            let temp_buf = device
-                .create_buffer_with_data(bytemuck::cast_slice(mx_ref), wgpu::BufferUsage::COPY_SRC);
-
-            let mut encoder =
-                device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-            encoder.copy_buffer_to_buffer(&temp_buf, 0, &self.forward_pass.uniform_buf, 0, 64);
-            encoder.finish()
-        };
+        queue: &wgpu::Queue,
+    ) {
+        // update view-projection matrix
+        let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
+        let mx_ref: &[f32; 16] = mx_total.as_ref();
+        queue.write_buffer(
+            bytemuck::cast_slice(mx_ref),
+            &self.forward_pass.uniform_buf,
+            0,
+        );
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
@@ -695,86 +693,45 @@ impl framework::Example for Example {
             label: None,
         });
         self.forward_depth = depth_texture.create_default_view();
-
-        Some(command_buf)
     }
 
     fn render(
         &mut self,
         frame: &wgpu::SwapChainOutput,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
-        {
-            let size = mem::size_of::<EntityUniforms>();
-            let mut temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                size: (self.entities.len() * size) as u64,
-                usage: wgpu::BufferUsage::COPY_SRC,
-                label: None,
-            });
-
-            // FIXME: Align and use `LayoutVerified`
-            for (entity, slot) in self
-                .entities
-                .iter_mut()
-                .zip(temp_buf_data.data().chunks_exact_mut(size))
-            {
-                if entity.rotation_speed != 0.0 {
-                    let rotation =
-                        cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
-                    entity.mx_world = entity.mx_world * rotation;
-                }
-                slot.copy_from_slice(bytemuck::bytes_of(&EntityUniforms {
-                    model: entity.mx_world.into(),
-                    color: [
-                        entity.color.r as f32,
-                        entity.color.g as f32,
-                        entity.color.b as f32,
-                        entity.color.a as f32,
-                    ],
-                }));
+        // update uniforms
+        for entity in self.entities.iter_mut() {
+            if entity.rotation_speed != 0.0 {
+                let rotation = cgmath::Matrix4::from_angle_x(cgmath::Deg(entity.rotation_speed));
+                entity.mx_world = entity.mx_world * rotation;
             }
-
-            let temp_buf = temp_buf_data.finish();
-
-            for (i, entity) in self.entities.iter().enumerate() {
-                encoder.copy_buffer_to_buffer(
-                    &temp_buf,
-                    (i * size) as wgpu::BufferAddress,
-                    &entity.uniform_buf,
-                    0,
-                    size as wgpu::BufferAddress,
-                );
-            }
+            let data = EntityUniforms {
+                model: entity.mx_world.into(),
+                color: [
+                    entity.color.r as f32,
+                    entity.color.g as f32,
+                    entity.color.b as f32,
+                    entity.color.a as f32,
+                ],
+            };
+            queue.write_buffer(bytemuck::bytes_of(&data), &entity.uniform_buf, 0);
         }
 
         if self.lights_are_dirty {
             self.lights_are_dirty = false;
-            let size = mem::size_of::<LightRaw>();
-            let total_size = size * self.lights.len();
-            let mut temp_buf_data = device.create_buffer_mapped(&wgpu::BufferDescriptor {
-                size: total_size as u64,
-                usage: wgpu::BufferUsage::COPY_SRC,
-                label: None,
-            });
-            // FIXME: Align and use `LayoutVerified`
-            for (light, slot) in self
-                .lights
-                .iter()
-                .zip(temp_buf_data.data().chunks_exact_mut(size))
-            {
-                slot.copy_from_slice(bytemuck::bytes_of(&light.to_raw()));
+            for (i, light) in self.lights.iter().enumerate() {
+                queue.write_buffer(
+                    bytemuck::bytes_of(&light.to_raw()),
+                    &self.light_uniform_buf,
+                    (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
+                );
             }
-            encoder.copy_buffer_to_buffer(
-                &temp_buf_data.finish(),
-                0,
-                &self.light_uniform_buf,
-                0,
-                total_size as wgpu::BufferAddress,
-            );
         }
+
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
         for (i, light) in self.lights.iter().enumerate() {
             // The light uniform buffer already has the projection,

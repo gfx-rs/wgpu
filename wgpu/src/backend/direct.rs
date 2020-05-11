@@ -876,6 +876,16 @@ impl crate::Context for Context {
         gfx_select!(*encoder => self.command_encoder_finish(*encoder, &desc))
     }
 
+    fn queue_write_buffer(
+        &self,
+        queue: &Self::QueueId,
+        data: &[u8],
+        buffer: &Self::BufferId,
+        offset: wgt::BufferAddress,
+    ) {
+        gfx_select!(*queue => self.queue_write_buffer(*queue, data, *buffer, offset))
+    }
+
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
         queue: &Self::QueueId,
