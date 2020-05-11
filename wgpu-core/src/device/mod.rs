@@ -201,7 +201,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     extensions: wgt::Extensions,
-    pending_write_command_buffer: Option<B::CommandBuffer>,
+    pending_writes: queue::PendingWrites<B>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<Trace>>,
 }
@@ -273,15 +273,22 @@ impl<B: GfxBackend> Device<B> {
             },
             limits: desc.limits.clone(),
             extensions: desc.extensions.clone(),
-            pending_write_command_buffer: None,
+            pending_writes: queue::PendingWrites::new(),
         }
+    }
+
+    fn lock_life_internal<'this, 'token: 'this>(
+        tracker: &'this Mutex<life::LifetimeTracker<B>>,
+        _token: &mut Token<'token, Self>,
+    ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
+        tracker.lock()
     }
 
     fn lock_life<'this, 'token: 'this>(
         &'this self,
-        _token: &mut Token<'token, Self>,
+        token: &mut Token<'token, Self>,
     ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
-        self.life_tracker.lock()
+        Self::lock_life_internal(&self.life_tracker, token)
     }
 
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
@@ -688,6 +695,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     id: buffer_id,
                     data: data_path,
                     range: offset..offset + data.len() as BufferAddress,
+                    queued: false,
                 });
             }
             None => (),
@@ -2451,6 +2459,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 id: buffer_id,
                                 data,
                                 range: sub_range.offset..sub_range.offset + size,
+                                queued: false,
                             });
                         }
                         None => (),
