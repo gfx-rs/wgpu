@@ -2,13 +2,16 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#[cfg(feature = "trace")]
+use crate::device::trace::Action;
 use crate::{
-    command::CommandBuffer,
+    command::{CommandAllocator, CommandBuffer},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::{BufferMapState, BufferUse},
 };
-use gfx_memory::{Block, MemoryBlock};
+
+use gfx_memory::{Block, Heaps, MemoryBlock};
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
 use std::{iter, sync::atomic::Ordering};
@@ -24,6 +27,23 @@ impl<B: hal::Backend> PendingWrites<B> {
         PendingWrites {
             command_buffer: None,
             temp_buffers: Vec::new(),
+        }
+    }
+
+    pub fn dispose(
+        self,
+        device: &B::Device,
+        com_allocator: &CommandAllocator<B>,
+        mem_allocator: &mut Heaps<B>,
+    ) {
+        if let Some(raw) = self.command_buffer {
+            com_allocator.discard_internal(raw);
+        }
+        for (buffer, memory) in self.temp_buffers {
+            mem_allocator.free(device, memory);
+            unsafe {
+                device.destroy_buffer(buffer);
+            }
         }
     }
 }
@@ -47,7 +67,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref trace) => {
                 let mut trace = trace.lock();
                 let data_path = trace.make_binary("bin", data);
-                trace.add(trace::Action::WriteBuffer {
+                trace.add(Action::WriteBuffer {
                     id: buffer_id,
                     data: data_path,
                     range: buffer_offset..buffer_offset + data.len() as wgt::BufferAddress,
@@ -71,16 +91,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
         dst.life_guard.use_at(last_submit_index + 1);
 
-        let src_raw = unsafe {
-            let mut buf = device
+        let mut src_raw = unsafe {
+            device
                 .raw
                 .create_buffer(
                     data.len() as wgt::BufferAddress,
                     hal::buffer::Usage::TRANSFER_SRC,
                 )
-                .unwrap();
-            device.raw.set_buffer_name(&mut buf, "<write_buffer_temp>");
-            buf
+                .unwrap()
         };
         //TODO: do we need to transition into HOST_WRITE access first?
         let requirements = unsafe { device.raw.get_buffer_requirements(&src_raw) };
@@ -97,11 +115,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 requirements.alignment,
             )
             .unwrap();
+        unsafe {
+            device
+                .raw
+                .set_buffer_name(&mut src_raw, "<write_buffer_temp>");
+            device
+                .raw
+                .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut src_raw)
+                .unwrap();
+        }
 
         let mut mapped = memory.map(&device.raw, hal::memory::Segment::ALL).unwrap();
         unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
             .unwrap()
-            .slice
+            .slice[..data.len()]
             .copy_from_slice(data);
 
         let mut comb = match device.pending_writes.command_buffer.take() {
@@ -148,7 +175,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut token = Token::root();
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
             let device = &mut device_guard[queue_id];
-            let pending_write_command_buffer = device.pending_writes.command_buffer.take();
+            let pending_write_command_buffer =
+                device
+                    .pending_writes
+                    .command_buffer
+                    .take()
+                    .map(|mut comb_raw| unsafe {
+                        comb_raw.finish();
+                        comb_raw
+                    });
             device.temp_suspected.clear();
 
             let submit_index = 1 + device

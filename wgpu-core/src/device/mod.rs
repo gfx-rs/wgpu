@@ -221,6 +221,7 @@ impl<B: GfxBackend> Device<B> {
         let life_guard = LifeGuard::new();
         life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
 
+        let com_allocator = command::CommandAllocator::new(queue_group.family, &raw);
         let heaps = unsafe {
             Heaps::new(
                 &mem_props,
@@ -230,7 +231,7 @@ impl<B: GfxBackend> Device<B> {
                     min_device_allocation: 0x1_0000,
                 },
                 gfx_memory::LinearConfig {
-                    linear_size: 0x10_0000,
+                    linear_size: 0x100_0000,
                 },
                 non_coherent_atom_size,
             )
@@ -244,7 +245,7 @@ impl<B: GfxBackend> Device<B> {
         Device {
             raw,
             adapter_id,
-            com_allocator: command::CommandAllocator::new(queue_group.family),
+            com_allocator,
             mem_allocator: Mutex::new(heaps),
             desc_allocator: Mutex::new(DescriptorAllocator::new()),
             queue_group,
@@ -518,9 +519,11 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub(crate) fn dispose(self) {
-        self.com_allocator.destroy(&self.raw);
         let mut desc_alloc = self.desc_allocator.into_inner();
         let mut mem_alloc = self.mem_allocator.into_inner();
+        self.pending_writes
+            .dispose(&self.raw, &self.com_allocator, &mut mem_alloc);
+        self.com_allocator.destroy(&self.raw);
         unsafe {
             desc_alloc.clear(&self.raw);
             mem_alloc.clear(&self.raw);

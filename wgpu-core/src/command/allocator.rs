@@ -4,13 +4,14 @@
 
 use super::CommandBuffer;
 use crate::{
-    hub::GfxBackend, id::DeviceId, track::TrackerSet, PrivateFeatures, Stored, SubmissionIndex,
+    hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap, PrivateFeatures, Stored,
+    SubmissionIndex,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
 use parking_lot::Mutex;
 
-use std::{collections::HashMap, thread};
+use std::thread;
 
 const GROW_AMOUNT: usize = 20;
 
@@ -61,7 +62,7 @@ impl<B: hal::Backend> CommandPool<B> {
 
 #[derive(Debug)]
 struct Inner<B: hal::Backend> {
-    pools: HashMap<thread::ThreadId, CommandPool<B>>,
+    pools: FastHashMap<thread::ThreadId, CommandPool<B>>,
 }
 
 #[derive(Debug)]
@@ -122,13 +123,30 @@ impl<B: GfxBackend> CommandAllocator<B> {
 }
 
 impl<B: hal::Backend> CommandAllocator<B> {
-    pub fn new(queue_family: hal::queue::QueueFamilyId) -> Self {
+    pub fn new(queue_family: hal::queue::QueueFamilyId, device: &B::Device) -> Self {
+        let internal_thread_id = thread::current().id();
+        log::info!("Starting on (internal) thread {:?}", internal_thread_id);
+        let mut pools = FastHashMap::default();
+        pools.insert(
+            internal_thread_id,
+            CommandPool {
+                raw: unsafe {
+                    device
+                        .create_command_pool(
+                            queue_family,
+                            hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                        )
+                        .unwrap()
+                },
+                total: 0,
+                available: Vec::new(),
+                pending: Vec::new(),
+            },
+        );
         CommandAllocator {
             queue_family,
-            internal_thread_id: thread::current().id(),
-            inner: Mutex::new(Inner {
-                pools: HashMap::new(),
-            }),
+            internal_thread_id,
+            inner: Mutex::new(Inner { pools }),
         }
     }
 
@@ -143,6 +161,15 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
     pub fn extend(&self, cmd_buf: &CommandBuffer<B>) -> B::CommandBuffer {
         self.allocate_for_thread_id(cmd_buf.recorded_thread_id)
+    }
+
+    pub fn discard_internal(&self, raw: B::CommandBuffer) {
+        let mut inner = self.inner.lock();
+        inner
+            .pools
+            .get_mut(&self.internal_thread_id)
+            .unwrap()
+            .recycle(raw);
     }
 
     pub fn discard(&self, mut cmd_buf: CommandBuffer<B>) {

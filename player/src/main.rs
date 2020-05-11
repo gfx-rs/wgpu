@@ -455,7 +455,7 @@ fn main() {
     log::info!("Found {} actions", actions.len());
 
     #[cfg(feature = "winit")]
-    let mut event_loop = {
+    let event_loop = {
         log::info!("Creating a window");
         EventLoop::new()
     };
@@ -523,7 +523,6 @@ fn main() {
         use winit::{
             event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
             event_loop::ControlFlow,
-            platform::desktop::EventLoopExtDesktop,
         };
 
         let mut frame_count = 0;
