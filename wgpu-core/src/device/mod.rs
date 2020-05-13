@@ -15,14 +15,11 @@ use copyless::VecHelper as _;
 use gfx_descriptor::DescriptorAllocator;
 use gfx_memory::{Block, Heaps};
 use hal::{
-    self,
     command::CommandBuffer as _,
     device::Device as _,
-    queue::CommandQueue as _,
     window::{PresentationSurface as _, Surface as _},
 };
 use parking_lot::{Mutex, MutexGuard};
-use smallvec::SmallVec;
 use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, BIND_BUFFER_ALIGNMENT};
 
 use std::{
@@ -33,8 +30,10 @@ use std::{
 use spirv_headers::ExecutionModel;
 
 mod life;
+mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
+
 #[cfg(feature = "trace")]
 use trace::{Action, Trace};
 
@@ -202,6 +201,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     extensions: wgt::Extensions,
+    pending_writes: queue::PendingWrites<B>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<Trace>>,
 }
@@ -221,6 +221,7 @@ impl<B: GfxBackend> Device<B> {
         let life_guard = LifeGuard::new();
         life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
 
+        let com_allocator = command::CommandAllocator::new(queue_group.family, &raw);
         let heaps = unsafe {
             Heaps::new(
                 &mem_props,
@@ -230,7 +231,7 @@ impl<B: GfxBackend> Device<B> {
                     min_device_allocation: 0x1_0000,
                 },
                 gfx_memory::LinearConfig {
-                    linear_size: 0x10_0000,
+                    linear_size: 0x100_0000,
                 },
                 non_coherent_atom_size,
             )
@@ -244,7 +245,7 @@ impl<B: GfxBackend> Device<B> {
         Device {
             raw,
             adapter_id,
-            com_allocator: command::CommandAllocator::new(queue_group.family),
+            com_allocator,
             mem_allocator: Mutex::new(heaps),
             desc_allocator: Mutex::new(DescriptorAllocator::new()),
             queue_group,
@@ -273,14 +274,22 @@ impl<B: GfxBackend> Device<B> {
             },
             limits: desc.limits.clone(),
             extensions: desc.extensions.clone(),
+            pending_writes: queue::PendingWrites::new(),
         }
+    }
+
+    fn lock_life_internal<'this, 'token: 'this>(
+        tracker: &'this Mutex<life::LifetimeTracker<B>>,
+        _token: &mut Token<'token, Self>,
+    ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
+        tracker.lock()
     }
 
     fn lock_life<'this, 'token: 'this>(
         &'this self,
-        _token: &mut Token<'token, Self>,
+        token: &mut Token<'token, Self>,
     ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
-        self.life_tracker.lock()
+        Self::lock_life_internal(&self.life_tracker, token)
     }
 
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
@@ -510,9 +519,11 @@ impl<B: hal::Backend> Device<B> {
     }
 
     pub(crate) fn dispose(self) {
-        self.com_allocator.destroy(&self.raw);
         let mut desc_alloc = self.desc_allocator.into_inner();
         let mut mem_alloc = self.mem_allocator.into_inner();
+        self.pending_writes
+            .dispose(&self.raw, &self.com_allocator, &mut mem_alloc);
+        self.com_allocator.destroy(&self.raw);
         unsafe {
             desc_alloc.clear(&self.raw);
             mem_alloc.clear(&self.raw);
@@ -687,6 +698,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     id: buffer_id,
                     data: data_path,
                     range: offset..offset + data.len() as BufferAddress,
+                    queued: false,
                 });
             }
             None => (),
@@ -1683,179 +1695,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.command_encoder_destroy::<B>(command_buffer_id)
     }
 
-    pub fn queue_submit<B: GfxBackend>(
-        &self,
-        queue_id: id::QueueId,
-        command_buffer_ids: &[id::CommandBufferId],
-    ) {
-        let hub = B::hub(self);
-
-        let (submit_index, fence) = {
-            let mut token = Token::root();
-            let (mut device_guard, mut token) = hub.devices.write(&mut token);
-            let device = &mut device_guard[queue_id];
-            device.temp_suspected.clear();
-
-            let submit_index = 1 + device
-                .life_guard
-                .submission_index
-                .fetch_add(1, Ordering::Relaxed);
-
-            let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
-            let (mut command_buffer_guard, mut token) = hub.command_buffers.write(&mut token);
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
-            let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (mut buffer_guard, mut token) = hub.buffers.write(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (sampler_guard, _) = hub.samplers.read(&mut token);
-
-            //Note: locking the trackers has to be done after the storages
-            let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
-            let mut trackers = device.trackers.lock();
-
-            //TODO: if multiple command buffers are submitted, we can re-use the last
-            // native command buffer of the previous chain instead of always creating
-            // a temporary one, since the chains are not finished.
-
-            // finish all the command buffers first
-            for &cmb_id in command_buffer_ids {
-                let comb = &mut command_buffer_guard[cmb_id];
-                #[cfg(feature = "trace")]
-                match device.trace {
-                    Some(ref trace) => trace
-                        .lock()
-                        .add(Action::Submit(submit_index, comb.commands.take().unwrap())),
-                    None => (),
-                };
-
-                if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
-                    let sc = &mut swap_chain_guard[sc_id.value];
-                    assert!(sc.acquired_view_id.is_some(),
-                        "SwapChainOutput for {:?} was dropped before the respective command buffer {:?} got submitted!",
-                        sc_id.value, cmb_id);
-                    if sc.acquired_framebuffers.is_empty() {
-                        signal_swapchain_semaphores.push(sc_id.value);
-                    }
-                    sc.acquired_framebuffers.push(fbo);
-                }
-
-                // optimize the tracked states
-                comb.trackers.optimize();
-
-                // update submission IDs
-                for id in comb.trackers.buffers.used() {
-                    if let resource::BufferMapState::Waiting(_) = buffer_guard[id].map_state {
-                        panic!("Buffer has a pending mapping.");
-                    }
-                    if !buffer_guard[id].life_guard.use_at(submit_index) {
-                        if let resource::BufferMapState::Active { .. } = buffer_guard[id].map_state
-                        {
-                            log::warn!("Dropped buffer has a pending mapping.");
-                            unmap_buffer(&device.raw, &mut buffer_guard[id]);
-                        }
-                        device.temp_suspected.buffers.push(id);
-                    }
-                }
-                for id in comb.trackers.textures.used() {
-                    if !texture_guard[id].life_guard.use_at(submit_index) {
-                        device.temp_suspected.textures.push(id);
-                    }
-                }
-                for id in comb.trackers.views.used() {
-                    if !texture_view_guard[id].life_guard.use_at(submit_index) {
-                        device.temp_suspected.texture_views.push(id);
-                    }
-                }
-                for id in comb.trackers.bind_groups.used() {
-                    if !bind_group_guard[id].life_guard.use_at(submit_index) {
-                        device.temp_suspected.bind_groups.push(id);
-                    }
-                }
-                for id in comb.trackers.samplers.used() {
-                    if !sampler_guard[id].life_guard.use_at(submit_index) {
-                        device.temp_suspected.samplers.push(id);
-                    }
-                }
-                for id in comb.trackers.compute_pipes.used() {
-                    if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
-                        device.temp_suspected.compute_pipelines.push(id);
-                    }
-                }
-                for id in comb.trackers.render_pipes.used() {
-                    if !render_pipe_guard[id].life_guard.use_at(submit_index) {
-                        device.temp_suspected.render_pipelines.push(id);
-                    }
-                }
-
-                // execute resource transitions
-                let mut transit = device.com_allocator.extend(comb);
-                unsafe {
-                    // the last buffer was open, closing now
-                    comb.raw.last_mut().unwrap().finish();
-                    transit.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-                }
-                log::trace!("Stitching command buffer {:?} before submission", cmb_id);
-                command::CommandBuffer::insert_barriers(
-                    &mut transit,
-                    &mut *trackers,
-                    &comb.trackers,
-                    &*buffer_guard,
-                    &*texture_guard,
-                );
-                unsafe {
-                    transit.finish();
-                }
-                comb.raw.insert(0, transit);
-            }
-
-            log::debug!("Device after submission {}: {:#?}", submit_index, trackers);
-
-            // now prepare the GPU submission
-            let fence = device.raw.create_fence(false).unwrap();
-            let submission = hal::queue::Submission {
-                command_buffers: command_buffer_ids
-                    .iter()
-                    .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
-                wait_semaphores: Vec::new(),
-                signal_semaphores: signal_swapchain_semaphores
-                    .into_iter()
-                    .map(|sc_id| &swap_chain_guard[sc_id].semaphore),
-            };
-
-            unsafe {
-                device.queue_group.queues[0].submit(submission, Some(&fence));
-            }
-
-            (submit_index, fence)
-        };
-
-        // No need for write access to the device from here on out
-        let callbacks = {
-            let mut token = Token::root();
-            let (device_guard, mut token) = hub.devices.read(&mut token);
-            let device = &device_guard[queue_id];
-
-            let callbacks = device.maintain(self, false, &mut token);
-            device.lock_life(&mut token).track_submission(
-                submit_index,
-                fence,
-                &device.temp_suspected,
-            );
-
-            // finally, return the command buffers to the allocator
-            for &cmb_id in command_buffer_ids {
-                let (cmd_buf, _) = hub.command_buffers.unregister(cmb_id, &mut token);
-                device.com_allocator.after_submit(cmd_buf, submit_index);
-            }
-
-            callbacks
-        };
-
-        fire_map_callbacks(callbacks);
-    }
-
     pub fn device_create_render_pipeline<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
@@ -2623,6 +2462,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 id: buffer_id,
                                 data,
                                 range: sub_range.offset..sub_range.offset + size,
+                                queued: false,
                             });
                         }
                         None => (),

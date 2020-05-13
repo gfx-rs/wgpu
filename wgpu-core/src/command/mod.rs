@@ -19,7 +19,7 @@ use crate::{
     id,
     resource::{Buffer, Texture},
     track::TrackerSet,
-    LifeGuard, PrivateFeatures, Stored,
+    PrivateFeatures, Stored,
 };
 
 use peek_poke::PeekPoke;
@@ -157,7 +157,6 @@ pub struct CommandBuffer<B: hal::Backend> {
     is_recording: bool,
     recorded_thread_id: ThreadId,
     pub(crate) device_id: Stored<id::DeviceId>,
-    pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chain: Option<(Stored<id::SwapChainId>, B::Framebuffer)>,
     limits: wgt::Limits,

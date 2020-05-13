@@ -402,11 +402,20 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
             }
-            A::WriteBuffer { id, data, range } => {
+            A::WriteBuffer {
+                id,
+                data,
+                range,
+                queued,
+            } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
-                self.device_wait_for_buffer::<B>(device, id);
-                self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
+                if queued {
+                    self.queue_write_buffer::<B>(device, &bin, id, range.start);
+                } else {
+                    self.device_wait_for_buffer::<B>(device, id);
+                    self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
+                }
             }
             A::Submit(_index, commands) => {
                 let encoder = self.device_create_command_encoder::<B>(
@@ -446,7 +455,7 @@ fn main() {
     log::info!("Found {} actions", actions.len());
 
     #[cfg(feature = "winit")]
-    let mut event_loop = {
+    let event_loop = {
         log::info!("Creating a window");
         EventLoop::new()
     };
@@ -514,7 +523,6 @@ fn main() {
         use winit::{
             event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
             event_loop::ControlFlow,
-            platform::desktop::EventLoopExtDesktop,
         };
 
         let mut frame_count = 0;

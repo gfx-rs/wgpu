@@ -212,12 +212,15 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         index: SubmissionIndex,
         fence: B::Fence,
         new_suspects: &SuspectedResources,
+        temp_buffers: impl Iterator<Item = (B::Buffer, MemoryBlock<B>)>,
     ) {
+        let mut last_resources = NonReferencedResources::new();
+        last_resources.buffers.extend(temp_buffers);
         self.suspected_resources.extend(new_suspects);
         self.active.alloc().init(ActiveSubmission {
             index,
             fence,
-            last_resources: NonReferencedResources::new(),
+            last_resources,
             mapped: Vec::new(),
         });
     }

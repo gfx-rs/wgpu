@@ -166,6 +166,7 @@ pub enum Action {
         id: id::BufferId,
         data: FileName,
         range: Range<wgt::BufferAddress>,
+        queued: bool,
     },
     Submit(crate::SubmissionIndex, Vec<Command>),
 }
