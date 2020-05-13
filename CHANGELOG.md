@@ -1,6 +1,6 @@
 # Change Log
 
-## v0.5 (06-04-2020)
+## v0.5 (2020-04-06)
   - Crates:
     - `wgpu-types`: common types between native and web targets
     - `wgpu-core`: internal API for the native and remote wrappers
@@ -20,17 +20,17 @@
     - unmapping dropped buffers
     - better error messages on misused swapchain frames
 
-## v0.4.3 (20-01-2020)
+## v0.4.3 (2020-01-20)
   - improved swap chain error handling
 
-## v0.4.2 (15-12-2019)
+## v0.4.2 (2019-12-15)
   - fixed render pass transitions
 
-## v0.4.1 (28-11-2019)
+## v0.4.1 (2019-11-28)
   - fixed depth/stencil transitions
   - fixed dynamic offset iteration
 
-## v0.4 (03-11-2019)
+## v0.4 (2019-11-03)
   - Platforms: removed OpenGL/WebGL support temporarily
   - Features:
     - based on gfx-hal-0.4 with the new swapchain model
@@ -40,13 +40,13 @@
   - Validation:
     - buffer and texture usage
 
-## v0.3.3 (22-08-2019)
+## v0.3.3 (2019-08-22)
   - fixed instance creation on Windows
 
-## v0.3.1 (21-08-2019)
+## v0.3.1 (2019-08-21)
   - fixed pipeline barriers that aren't transitions
 
-## v0.3 (21-08-2019)
+## v0.3 (2019-08-21)
   - Platforms: experimental OpenGL/WebGL
   - Crates:
     - Rust API is moved out to [another repository](https://github.com/gfx-rs/wgpu-rs)
@@ -66,23 +66,23 @@
     - bind group buffer ranges
     - required stencil reference, blend color
 
-## v0.2.6 (04-04-2019)
+## v0.2.6 (2019-04-04)
   - fixed frame acquisition GPU waits
 
-## v0.2.5 (31-03-2019)
+## v0.2.5 (2019-03-31)
   - fixed submission tracking
   - added support for blend colors
   - fixed bind group compatibility at the gfx-hal level
   - validating the bind groups and blend colors
 
-## v0.2.3 (20-03-2019)
+## v0.2.3 (2019-03-20)
   - fixed vertex format mapping
   - fixed building with "empty" backend on Windows
   - bumped the default descriptor pool size
   - fixed host mapping alignments
   - validating the uniform buffer offset
 
-## v0.2 (06-03-2019)
+## v0.2 (2019-03-06)
   - Platforms: iOS/Metal, D3D11
   - Crates:
     - `wgpu-remote`: remoting layer for the cross-process boundary
@@ -101,7 +101,7 @@
   - Fixes
     - fixed resource destruction
 
-## v0.1 (24-01-2019)
+## v0.1 (2019-01-24)
   - Platforms: Linux/Vulkan, Windows/Vulkan, D3D12, macOS/Metal
   - Crates:
     - `wgpu-native`: C API implementation of WebGPU, based on gfx-hal
