@@ -20,6 +20,10 @@ use crate::{
 };
 
 use parking_lot::{Mutex, RwLock, RwLockReadGuard, RwLockWriteGuard};
+#[cfg(feature = "replay")]
+use serde::Deserialize;
+#[cfg(feature = "trace")]
+use serde::Serialize;
 use vec_map::VecMap;
 use wgt::Backend;
 
@@ -28,7 +32,9 @@ use std::cell::Cell;
 use std::{fmt::Debug, marker::PhantomData, ops, thread};
 
 /// A simple structure to manage identities of objects.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct IdentityManager {
     free: Vec<Index>,
     epochs: Vec<Epoch>,
