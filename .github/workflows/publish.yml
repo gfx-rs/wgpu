@@ -3,7 +3,7 @@ name: Publish
 on:
   push:
     branches:
-      - master
+      - master-TEMPORARILY-DISABLED
 
 env:
   RUSTFLAGS: --cfg=web_sys_unstable_apis
