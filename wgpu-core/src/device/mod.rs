@@ -462,11 +462,14 @@ impl<B: hal::Backend> Device<B> {
         }
     }
 
+    /// Wait for idle and remove resources that we can, before we die.
+    pub(crate) fn prepare_to_die(&mut self) {
+        let mut life_tracker = self.life_tracker.lock();
+        life_tracker.triage_submissions(&self.raw, true);
+        life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
+    }
+
     pub(crate) fn dispose(self) {
-        self.life_tracker.lock().triage_submissions(&self.raw, true);
-        self.life_tracker
-            .lock()
-            .cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
         self.com_allocator.destroy(&self.raw);
         let mut desc_alloc = self.desc_allocator.into_inner();
         let mut mem_alloc = self.mem_allocator.into_inner();
@@ -2143,8 +2146,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let device = {
-            let (device, mut token) = hub.devices.unregister(device_id, &mut token);
-            device.maintain(self, true, &mut token);
+            let (mut device, _) = hub.devices.unregister(device_id, &mut token);
+            device.prepare_to_die();
             device
         };
 

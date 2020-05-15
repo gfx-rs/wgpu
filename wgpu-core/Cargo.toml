@@ -34,7 +34,7 @@ gfx-memory = "0.1"
 parking_lot = "0.10"
 peek-poke = "0.2"
 smallvec = "1"
-vec_map = "0.8"
+vec_map = "0.8.1"
 
 [dependencies.serde_crate]
 package = "serde"
