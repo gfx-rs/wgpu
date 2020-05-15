@@ -936,14 +936,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
                         let mut is_compatible = true;
 
-                        for (index, (entry, &bgl_id)) in state
+                        for (index, (entry, bgl_id)) in state
                             .binder
                             .entries
                             .iter_mut()
                             .zip(&pipeline_layout.bind_group_layout_ids)
                             .enumerate()
                         {
-                            match entry.expect_layout(bgl_id) {
+                            match entry.expect_layout(bgl_id.value) {
                                 LayoutChange::Match(bg_id, offsets) if is_compatible => {
                                     let desc_set = bind_group_guard[bg_id].raw.raw();
                                     unsafe {

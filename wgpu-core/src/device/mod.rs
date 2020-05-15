@@ -953,6 +953,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
             },
+            life_guard: LifeGuard::new(),
             entries: entry_map,
             desc_counts: raw_bindings.iter().cloned().collect(),
             dynamic_count: entries.iter().filter(|b| b.has_dynamic_offset).count(),
@@ -968,15 +969,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
+        let (device_id, ref_count) = {
+            let (mut bind_group_layout_guard, _) = hub.bind_group_layouts.write(&mut token);
+            let layout = &mut bind_group_layout_guard[bind_group_layout_id];
+            (
+                layout.device_id.value,
+                layout.life_guard.ref_count.take().unwrap(),
+            )
+        };
+
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (bgl, _) = hub
+        device_guard[device_id]
+            .lock_life(&mut token)
+            .suspected_resources
             .bind_group_layouts
-            .unregister(bind_group_layout_id, &mut token);
-        unsafe {
-            device_guard[bgl.device_id.value]
-                .raw
-                .destroy_descriptor_set_layout(bgl.raw);
-        }
+            .push(Stored {
+                value: bind_group_layout_id,
+                ref_count,
+            });
     }
 
     pub fn device_create_pipeline_layout<B: GfxBackend>(
@@ -1022,7 +1032,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 ref_count: device.life_guard.add_ref(),
             },
             life_guard: LifeGuard::new(),
-            bind_group_layout_ids: bind_group_layout_ids.iter().cloned().collect(),
+            bind_group_layout_ids: {
+                let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
+                bind_group_layout_ids
+                    .iter()
+                    .map(|&id| Stored {
+                        value: id,
+                        ref_count: bind_group_layout_guard[id].life_guard.add_ref(),
+                    })
+                    .collect()
+            },
         };
         hub.pipeline_layouts
             .register_identity(id_in, layout, &mut token)
