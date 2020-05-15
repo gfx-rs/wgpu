@@ -39,7 +39,7 @@ ron = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 spirv_headers = { version = "1.4.2" }
-vec_map = "0.8"
+vec_map = "0.8.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
