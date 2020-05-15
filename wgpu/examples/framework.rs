@@ -70,6 +70,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
         .await
         .unwrap();
 
+    let trace_dir = std::env::var("WGPU_TRACE");
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
@@ -78,7 +79,14 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 },
                 limits: wgpu::Limits::default(),
             },
-            Some(std::path::Path::new("trace")),
+            match trace_dir {
+                Ok(ref value) if !cfg!(feature = "trace") => {
+                    log::error!("Unable to trace into {:?} without \"trace\" feature enabled!", value);
+                    None
+                }
+                Ok(ref value) => Some(std::path::Path::new(value)),
+                Err(_) => None,
+            },
         )
         .await
         .unwrap();
