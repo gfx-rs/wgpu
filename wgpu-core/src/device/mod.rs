@@ -281,12 +281,13 @@ impl<B: GfxBackend> Device<B> {
         let (kind, mem_usage) = {
             use wgt::BufferUsage as Bu;
 
+            //TODO: use linear allocation when we can ensure the freeing is linear
             if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
                 (Kind::General, MemoryUsage::Private)
             } else if (Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage) {
-                (Kind::Linear, MemoryUsage::Staging { read_back: false })
+                (Kind::General, MemoryUsage::Staging { read_back: false })
             } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
-                (Kind::Linear, MemoryUsage::Staging { read_back: true })
+                (Kind::General, MemoryUsage::Staging { read_back: true })
             } else {
                 (
                     Kind::General,
@@ -350,9 +351,12 @@ impl<B: GfxBackend> Device<B> {
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
-                assert!(!desc
-                    .usage
-                    .intersects(wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST));
+                assert!(
+                    !desc
+                        .usage
+                        .intersects(wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST),
+                    "D24Plus textures cannot be copied"
+                );
             }
             _ => {}
         }
@@ -362,7 +366,12 @@ impl<B: GfxBackend> Device<B> {
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
 
-        assert!((desc.mip_level_count as usize) < MAX_MIP_LEVELS);
+        assert!(
+            (desc.mip_level_count as usize) < MAX_MIP_LEVELS,
+            "Texture descriptor mip level count ({}) must be less than device max mip levels ({})",
+            desc.mip_level_count,
+            MAX_MIP_LEVELS
+        );
         let mut view_capabilities = hal::image::ViewCapabilities::empty();
 
         // 2D textures with array layer counts that are multiples of 6 could be cubemaps
@@ -568,7 +577,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(buffer.usage.contains(wgt::BufferUsage::MAP_WRITE));
+        assert!(
+            buffer.usage.contains(wgt::BufferUsage::MAP_WRITE),
+            "Buffer usage {:?} must contain usage flag MAP_WRITE",
+            buffer.usage
+        );
         //assert!(buffer isn't used by the GPU);
 
         match map_buffer(
@@ -606,7 +619,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(buffer.usage.contains(wgt::BufferUsage::MAP_READ));
+        assert!(
+            buffer.usage.contains(wgt::BufferUsage::MAP_READ),
+            "Buffer usage {:?} must contain usage flag MAP_READ",
+            buffer.usage
+        );
         //assert!(buffer isn't used by the GPU);
 
         match map_buffer(
@@ -974,8 +991,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
         };
 
-        assert!(desc.bind_group_layouts_length <= (device.features.max_bind_groups as usize),
-            "Cannot set a bind group which is beyond the `max_bind_groups` limit requested on device creation");
+        assert!(
+            desc.bind_group_layouts_length <= (device.features.max_bind_groups as usize),
+            "Cannot set more bind groups ({}) than the `max_bind_groups` limit requested on device creation ({})",
+            desc.bind_group_layouts_length,
+            device.features.max_bind_groups
+        );
 
         // TODO: push constants
         let pipeline_layout = {
@@ -1111,8 +1132,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         assert_eq!(
                             bb.offset % alignment,
                             0,
-                            "Misaligned buffer offset {}",
-                            bb.offset
+                            "Buffer offset {} must be a multiple of alignment {}",
+                            bb.offset,
+                            alignment
                         );
                         let buffer = used
                             .buffers
@@ -1120,7 +1142,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .unwrap();
                         assert!(
                             buffer.usage.contains(pub_usage),
-                            "Expected buffer usage {:?}",
+                            "Buffer usage {:?} must contain usage flag(s) {:?}",
+                            buffer.usage,
                             pub_usage
                         );
 
@@ -1194,7 +1217,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     .unwrap();
                                 assert!(
                                     texture.usage.contains(pub_usage),
-                                    "Expected buffer usage {:?}",
+                                    "Texture usage {:?} must contain usage flag(s) {:?}",
+                                    texture.usage,
                                     pub_usage
                                 );
 
@@ -1594,7 +1618,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let sc = desc.sample_count;
         assert!(
             sc == 1 || sc == 2 || sc == 4 || sc == 8 || sc == 16 || sc == 32,
-            "Invalid sample_count of {}",
+            "Invalid sample_count of {}; must be 1, 2, 4, 8, 16, or 32",
             sc
         );
         let sc = sc as u8;
@@ -1636,7 +1660,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let desc_atts =
                 unsafe { slice::from_raw_parts(vb_state.attributes, vb_state.attributes_length) };
             for attribute in desc_atts {
-                assert_eq!(0, attribute.offset >> 32);
+                assert_eq!(
+                    0,
+                    attribute.offset >> 32,
+                    "Offset for attribute {:?} must be < 2^32, but was {}",
+                    attribute,
+                    attribute.offset
+                );
                 attributes.alloc().init(hal::pso::AttributeDesc {
                     location: attribute.shader_location,
                     binding: i as u32,
@@ -2013,7 +2043,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (caps, formats) = {
             let suf = B::get_surface_mut(surface);
             let adapter = &adapter_guard[device.adapter_id.value];
-            assert!(suf.supports_queue_family(&adapter.raw.queue_families[0]));
+            assert!(
+                suf.supports_queue_family(&adapter.raw.queue_families[0]),
+                "Surface {:?} doesn't support queue family {:?}",
+                suf,
+                &adapter.raw.queue_families[0]
+            );
             let formats = suf.supported_formats(&adapter.raw.physical_device);
             let caps = suf.capabilities(&adapter.raw.physical_device);
             (caps, formats)
@@ -2144,7 +2179,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
-            assert!(buffer.usage.contains(pub_usage));
+            assert!(
+                buffer.usage.contains(pub_usage),
+                "Buffer usage {:?} must contain usage flag(s) {:?}",
+                buffer.usage,
+                pub_usage
+            );
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Active => panic!("Buffer already mapped"),
                 resource::BufferMapState::Waiting(_) => {

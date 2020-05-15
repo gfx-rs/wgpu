@@ -825,5 +825,52 @@ pub enum TextureComponentType {
     Uint,
 }
 
+impl From<TextureFormat> for TextureComponentType {
+    fn from(format: TextureFormat) -> Self {
+        match format {
+            TextureFormat::R8Uint
+            | TextureFormat::R16Uint
+            | TextureFormat::Rg8Uint
+            | TextureFormat::R32Uint
+            | TextureFormat::Rg16Uint
+            | TextureFormat::Rgba8Uint
+            | TextureFormat::Rg32Uint
+            | TextureFormat::Rgba16Uint
+            | TextureFormat::Rgba32Uint => Self::Uint,
+
+            TextureFormat::R8Sint
+            | TextureFormat::R16Sint
+            | TextureFormat::Rg8Sint
+            | TextureFormat::R32Sint
+            | TextureFormat::Rg16Sint
+            | TextureFormat::Rgba8Sint
+            | TextureFormat::Rg32Sint
+            | TextureFormat::Rgba16Sint
+            | TextureFormat::Rgba32Sint => Self::Sint,
+
+            TextureFormat::R8Unorm
+            | TextureFormat::R8Snorm
+            | TextureFormat::R16Float
+            | TextureFormat::R32Float
+            | TextureFormat::Rg8Unorm
+            | TextureFormat::Rg8Snorm
+            | TextureFormat::Rg16Float
+            | TextureFormat::Rg11b10Float
+            | TextureFormat::Rg32Float
+            | TextureFormat::Rgba8Snorm
+            | TextureFormat::Rgba16Float
+            | TextureFormat::Rgba32Float
+            | TextureFormat::Rgba8Unorm
+            | TextureFormat::Rgba8UnormSrgb
+            | TextureFormat::Bgra8Unorm
+            | TextureFormat::Bgra8UnormSrgb
+            | TextureFormat::Rgb10a2Unorm
+            | TextureFormat::Depth32Float
+            | TextureFormat::Depth24Plus
+            | TextureFormat::Depth24PlusStencil8 => Self::Float,
+        }
+    }
+}
+
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: u64 = 256;

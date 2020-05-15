@@ -94,14 +94,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             cmb.trackers
                 .buffers
                 .use_replace(&*buffer_guard, source, (), BufferUse::COPY_SRC);
-        assert!(src_buffer.usage.contains(BufferUsage::COPY_SRC));
+        assert!(
+            src_buffer.usage.contains(BufferUsage::COPY_SRC),
+            "Source buffer usage {:?} must contain usage flag COPY_SRC",
+            src_buffer.usage
+        );
         barriers.extend(src_pending.map(|pending| pending.into_hal(src_buffer)));
 
         let (dst_buffer, dst_pending) =
             cmb.trackers
                 .buffers
                 .use_replace(&*buffer_guard, destination, (), BufferUse::COPY_DST);
-        assert!(dst_buffer.usage.contains(BufferUsage::COPY_DST));
+        assert!(
+            dst_buffer.usage.contains(BufferUsage::COPY_DST),
+            "Destination buffer usage {:?} must contain usage flag COPY_DST",
+            dst_buffer.usage
+        );
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_buffer)));
 
         let region = hal::command::BufferCopy {
@@ -158,7 +166,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .bits as u32
             / BITS_PER_BYTE;
         let buffer_width = source.bytes_per_row / bytes_per_texel;
-        assert_eq!(source.bytes_per_row % bytes_per_texel, 0);
+        assert_eq!(
+            source.bytes_per_row % bytes_per_texel,
+            0,
+            "Source bytes per row ({}) must be a multiple of bytes per texel ({})",
+            source.bytes_per_row,
+            bytes_per_texel
+        );
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.offset,
             buffer_width,
@@ -205,7 +219,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             source.to_selector(aspects),
             TextureUse::COPY_SRC,
         );
-        assert!(src_texture.usage.contains(TextureUsage::COPY_SRC));
+        assert!(
+            src_texture.usage.contains(TextureUsage::COPY_SRC),
+            "Source texture usage ({:?}) must contain usage flag COPY_SRC",
+            src_texture.usage
+        );
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_texture));
 
         let (dst_buffer, dst_barriers) = cmb.trackers.buffers.use_replace(
@@ -214,7 +232,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (),
             BufferUse::COPY_DST,
         );
-        assert!(dst_buffer.usage.contains(BufferUsage::COPY_DST));
+        assert!(
+            dst_buffer.usage.contains(BufferUsage::COPY_DST),
+            "Destination buffer usage {:?} must contain usage flag COPY_DST",
+            dst_buffer.usage
+        );
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
 
         let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.features)
@@ -222,7 +244,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .bits as u32
             / BITS_PER_BYTE;
         let buffer_width = destination.bytes_per_row / bytes_per_texel;
-        assert_eq!(destination.bytes_per_row % bytes_per_texel, 0);
+        assert_eq!(
+            destination.bytes_per_row % bytes_per_texel,
+            0,
+            "Destination bytes per row ({}) must be a multiple of bytes per texel ({})",
+            destination.bytes_per_row,
+            bytes_per_texel
+        );
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.offset,
             buffer_width,
@@ -274,7 +302,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             source.to_selector(aspects),
             TextureUse::COPY_SRC,
         );
-        assert!(src_texture.usage.contains(TextureUsage::COPY_SRC));
+        assert!(
+            src_texture.usage.contains(TextureUsage::COPY_SRC),
+            "Source texture usage {:?} must contain usage flag COPY_SRC",
+            src_texture.usage
+        );
         barriers.extend(src_pending.map(|pending| pending.into_hal(src_texture)));
 
         let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
@@ -283,7 +315,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             destination.to_selector(aspects),
             TextureUse::COPY_DST,
         );
-        assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
+        assert!(
+            dst_texture.usage.contains(TextureUsage::COPY_DST),
+            "Destination texture usage {:?} must contain usage flag COPY_DST",
+            dst_texture.usage
+        );
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
         let region = hal::command::ImageCopy {

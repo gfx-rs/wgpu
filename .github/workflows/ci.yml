@@ -34,7 +34,7 @@ jobs:
           - os: macos-10.15
             name: MacOS Nightly
             channel: nightly
-            build_command: cargo check
+            build_command: cargo test
           - os: ubuntu-18.04
             name: Ubuntu Stable
             channel: stable
@@ -42,7 +42,7 @@ jobs:
           - os: ubuntu-18.04
             name: Ubuntu Nightly
             channel: nightly
-            build_command: cargo check
+            build_command: cargo test
           - os: windows-2019
             name: Windows Stable
             channel: stable
@@ -50,7 +50,7 @@ jobs:
           - os: windows-2019
             name: Windows Nightly
             channel: nightly
-            build_command: rustup default nightly-msvc; cargo clippy
+            build_command: rustup default nightly-msvc; cargo test
     steps:
     - uses: actions/checkout@v2
     - if: matrix.channel == 'nightly'
@@ -59,6 +59,7 @@ jobs:
       with:
         toolchain: nightly
         override: true
-    - uses: actions/checkout@v2
-    - name: cargo check
+    - if: contains(matrix.build_command, 'clippy')
+      run: rustup component add clippy
+    - name: cargo clippy/test
       run: ${{ matrix.build_command }}

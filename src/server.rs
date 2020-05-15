@@ -24,8 +24,7 @@ pub extern "C" fn wgpu_server_new(factory: IdentityRecyclerFactory) -> *mut Glob
 #[no_mangle]
 pub unsafe extern "C" fn wgpu_server_delete(global: *mut Global) {
     log::info!("Terminating WGPU server");
-    Box::from_raw(global).delete();
-    log::info!("\t...done");
+    let _ = Box::from_raw(global);
 }
 
 #[no_mangle]

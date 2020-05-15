@@ -46,7 +46,12 @@ impl<T> PhantomSlice<T> {
         let aligned = pointer.add(align_offset);
         let size = count * mem::size_of::<T>();
         let end = aligned.add(size);
-        assert!(end <= bound);
+        assert!(
+            end <= bound,
+            "End of phantom slice ({:?}) exceeds bound ({:?})",
+            end,
+            bound
+        );
         (end, slice::from_raw_parts(aligned as *const T, count))
     }
 }
@@ -90,7 +95,12 @@ impl RawPass {
 
     pub unsafe fn into_vec(self) -> (Vec<u8>, id::CommandEncoderId) {
         let size = self.size();
-        assert!(size <= self.capacity);
+        assert!(
+            size <= self.capacity,
+            "Size of RawPass ({}) exceeds capacity ({})",
+            size,
+            self.capacity
+        );
         let vec = Vec::from_raw_parts(self.base, size, self.capacity);
         (vec, self.parent)
     }
@@ -235,7 +245,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: actually close the last recorded command buffer
         let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
         let comb = &mut comb_guard[encoder_id];
-        assert!(comb.is_recording);
+        assert!(comb.is_recording, "Command buffer must be recording");
         comb.is_recording = false;
         // stop tracking the swapchain image, if used
         if let Some((ref sc_id, _)) = comb.used_swap_chain {
