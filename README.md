@@ -6,20 +6,16 @@ This is an active GitHub mirror of the WebGPU implementation in Rust, which now 
 
 [![Matrix](https://img.shields.io/badge/Matrix-%23wgpu%3Amatrix.org-blueviolet.svg)](https://matrix.to/#/#wgpu:matrix.org)
 [![Build Status](https://github.com/gfx-rs/wgpu/workflows/CI/badge.svg)](https://github.com/gfx-rs/wgpu/actions)
-[![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core)
-[![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/)
-[![Crates.io](https://img.shields.io/crates/v/wgpu-native.svg?label=wgpu-native)](https://crates.io/crates/wgpu-native)
-[![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/)
 
 This is the core logic of an experimental [WebGPU](https://www.w3.org/community/gpu/) implementation. It's written in Rust and is based on [gfx-hal](https://github.com/gfx-rs/gfx) with help of [gfx-extras](https://github.com/gfx-rs/gfx-extras). See the upstream [WebGPU specification](https://gpuweb.github.io/gpuweb/) (work in progress).
 
 The implementation consists of the following parts:
 
-  - `wgpu-core` - internal Rust API for WebGPU implementations to use
-  - `wgpu-types` - Rust types shared between `wgpu-core`, `wgpu-native`, and `wgpu-rs`
-  - `player` - application for replaying the API traces, uses `winit`
+  - [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - internal Rust API for WebGPU implementations to use
+  - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between `wgpu-core`, `wgpu-native`, and `wgpu-rs`
+  - `player` - standalone application for replaying the API traces, uses `winit`
 
-This repository is not meant for direct use by applications.
+This repository contains the core of `wgpu`, and is not usable directly by applications.
 If you are looking for the user-facing Rust API, you need [wgpu-rs](https://github.com/gfx-rs/wgpu-rs).
 If you are looking for the native implementation or bindings to the API in other languages, you need [wgpu-native](https://github.com/gfx-rs/wgpu-native).
 
