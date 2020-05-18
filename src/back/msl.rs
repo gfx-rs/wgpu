@@ -76,6 +76,7 @@ pub enum Error {
     InvalidImageFlags(crate::ImageFlags),
     MutabilityViolation(crate::Handle<crate::GlobalVariable>),
     BadName(String),
+    UnexpectedGlobalType(crate::Handle<crate::Type>),
 }
 
 impl From<FmtError> for Error {
@@ -227,8 +228,9 @@ struct TypedGlobalVariable<'a> {
     handle: crate::Handle<crate::GlobalVariable>,
     usage: crate::GlobalUse,
 }
-impl Display for TypedGlobalVariable<'_> {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
+
+impl<'a> TypedGlobalVariable<'a> {
+    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
         let var = &self.module.global_variables[self.handle];
         let name = var.name.or_index(self.handle);
         let (space_qualifier, reference) = match var.class {
@@ -256,13 +258,13 @@ impl Display for TypedGlobalVariable<'_> {
                         _ => var.ty
                     };
                     let ty_name = self.module.types[ty_handle].name.or_index(ty_handle);
-                    write!(formatter, "{} {}", ty_name, name)
+                    Ok(write!(formatter, "{} {}", ty_name, name)?)
                 }
-                _ => panic!("Unexpected global type {:?} = {:?}", var.ty, ty),
+                _ => Err(Error::UnexpectedGlobalType(var.ty)),
             }
         } else {
             let ty_name = self.module.types[var.ty].name.or_index(var.ty);
-            write!(formatter, "{}{}{} {}", space_qualifier, ty_name, reference, name)
+            Ok(write!(formatter, "{}{}{} {}", space_qualifier, ty_name, reference, name)?)
         }
     }
 }
@@ -855,7 +857,10 @@ impl<W: Write> Writer<W> {
                             if let Some(ref binding@crate::Binding::Location(_)) = var.binding {
                                 let tyvar = TypedGlobalVariable { module, handle, usage: crate::GlobalUse::empty() };
                                 let resolved = options.resolve_binding(binding, in_mode)?;
-                                writeln!(self.out, "\t{} [[{}]];", tyvar, resolved)?;
+
+                                write!(self.out, "\t")?;
+                                tyvar.try_fmt(&mut self.out)?;
+                                writeln!(self.out, " [[{}]];", resolved)?;
                             }
                         }
                     }
@@ -884,7 +889,8 @@ impl<W: Write> Writer<W> {
                             }
                         } else {
                             let tyvar = TypedGlobalVariable { module, handle, usage: crate::GlobalUse::empty() };
-                            write!(self.out, "\t{}", tyvar)?;
+                            write!(self.out, "\t")?;
+                            tyvar.try_fmt(&mut self.out)?;
                             if let Some(ref binding) = var.binding {
                                 let resolved = options.resolve_binding(binding, out_mode)?;
                                 write!(self.out, " [[{}]]", resolved)?;
@@ -921,7 +927,9 @@ impl<W: Write> Writer<W> {
                     let resolved = options.resolve_binding(var.binding.as_ref().unwrap(), loc_mode)?;
                     let tyvar = TypedGlobalVariable { module, handle, usage };
                     let separator = separate(last_used_global == Some(handle));
-                    writeln!(self.out, "\t{} [[{}]]{}", tyvar, resolved, separator)?;
+                    write!(self.out, "\t")?;
+                    tyvar.try_fmt(&mut self.out)?;
+                    writeln!(self.out, " [[{}]]{}", resolved, separator)?;
                 }
             } else {
                 let result_type_name = match fun.return_type {
