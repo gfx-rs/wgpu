@@ -27,12 +27,12 @@ impl<B: hal::Backend> CommandPool<B> {
     fn maintain(&mut self, lowest_active_index: SubmissionIndex) {
         for i in (0..self.pending.len()).rev() {
             if self.pending[i].1 < lowest_active_index {
-                let cmd_buf = self.pending.swap_remove(i).0;
                 log::trace!(
                     "recycling comb submitted in {} when {} is lowest active",
                     self.pending[i].1,
                     lowest_active_index,
                 );
+                let cmd_buf = self.pending.swap_remove(i).0;
                 self.recycle(cmd_buf);
             }
         }
