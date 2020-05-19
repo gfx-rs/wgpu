@@ -77,6 +77,22 @@ pub enum Error {
     MutabilityViolation(crate::Handle<crate::GlobalVariable>),
     BadName(String),
     UnexpectedGlobalType(crate::Handle<crate::Type>),
+    UnimplementedBuiltIn(spirv::BuiltIn),
+    UnimplementedBindTarget(BindTarget),
+    UnexpectedIndexing(crate::TypeInner),
+    UnsupportedCompose(crate::Handle<crate::Type>),
+    UnexpectedLoadPointer(crate::TypeInner),
+    UnsupportedBinaryOp(crate::BinaryOperator),
+    UnableToInferBinaryOpOutput(crate::TypeInner, crate::BinaryOperator, crate::TypeInner),
+    UnexpectedImageType(crate::TypeInner),
+    UnexpectedDistanceArgument(crate::TypeInner),
+    UnsupportedCall(String),
+    UnsupportedExpression(crate::Expression),
+    UnableToReturnValue(crate::Handle<crate::Expression>),
+    UnsupportedStatement(crate::Statement),
+    UnsupportedDim(spirv::Dim),
+    ExecutionModelReturnType(spirv::ExecutionModel, crate::Handle<crate::Type>),
+    AccessIndexExceedsStaticLength(u32, u32),
 }
 
 impl From<FmtError> for Error {
@@ -269,8 +285,8 @@ impl<'a> TypedGlobalVariable<'a> {
     }
 }
 
-impl Display for ResolvedBinding {
-    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), FmtError> {
+impl ResolvedBinding {
+    fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
         match *self {
             ResolvedBinding::BuiltIn(built_in) => {
                 let name = match built_in {
@@ -278,31 +294,39 @@ impl Display for ResolvedBinding {
                     spirv::BuiltIn::GlobalInvocationId => "thread_position_in_grid",
                     spirv::BuiltIn::PointSize => "point_size",
                     spirv::BuiltIn::Position => "position",
-                    _ => panic!("Built in {:?} is not implemented", built_in),
+                    _ => return Err(Error::UnimplementedBuiltIn(built_in)),
                 };
-                formatter.write_str(name)
+                Ok(formatter.write_str(name)?)
             }
             ResolvedBinding::Attribute(index) => {
-                write!(formatter, "attribute({})", index)
+                Ok(write!(formatter, "attribute({})", index)?)
             }
             ResolvedBinding::Color(index) => {
-                write!(formatter, "color({})", index)
+                Ok(write!(formatter, "color({})", index)?)
             }
             ResolvedBinding::User { prefix, index } => {
-                write!(formatter, "user({}{})", prefix, index)
+                Ok(write!(formatter, "user({}{})", prefix, index)?)
             }
             ResolvedBinding::Resource(ref target) => {
                 if let Some(id) = target.buffer {
-                    write!(formatter, "buffer({})", id)
+                    Ok(write!(formatter, "buffer({})", id)?)
                 } else if let Some(id) = target.texture {
-                    write!(formatter, "texture({})", id)
+                    Ok(write!(formatter, "texture({})", id)?)
                 } else if let Some(id) = target.sampler {
-                    write!(formatter, "sampler({})", id)
+                    Ok(write!(formatter, "sampler({})", id)?)
                 } else {
-                    unimplemented!()
+                    Err(Error::UnimplementedBindTarget(target.clone()))
                 }
             }
         }
+    }
+
+    fn try_fmt_decorated<W: Write>(&self, formatter: &mut W, terminator: &str) -> Result<(), Error> {
+        formatter.write_str(" [[")?;
+        self.try_fmt(formatter)?;
+        formatter.write_str("]]")?;
+        formatter.write_str(terminator)?;
+        Ok(())
     }
 }
 
@@ -375,7 +399,7 @@ impl<W: Write> Writer<W> {
                         self.out.write_str("]")?;
                         Ok(module.borrow_type(base))
                     }
-                    ref other => panic!("Unexpected indexing of {:?}", other),
+                    ref other => Err(Error::UnexpectedIndexing(other.clone())),
                 }
             }
             crate::Expression::AccessIndex { base, index } => {
@@ -396,12 +420,12 @@ impl<W: Write> Writer<W> {
                     }
                     crate::TypeInner::Array { base, size } => {
                         if let crate::ArraySize::Static(length) = size {
-                            assert!(index < length);
+                            return Err(Error::AccessIndexExceedsStaticLength(index, length));
                         }
                         write!(self.out, "[{}]", index)?;
                         Ok(module.borrow_type(base))
                     }
-                    ref other => panic!("Unexpected indexing of {:?}", other),
+                    ref other => Err(Error::UnexpectedIndexing(other.clone())),
                 }
             }
             crate::Expression::Constant(handle) => {
@@ -420,7 +444,7 @@ impl<W: Write> Writer<W> {
                         }
                         write!(self.out, ")")?;
                     }
-                    _ => panic!("Unsupported compose {:?}", ty),
+                    _ => return Err(Error::UnsupportedCompose(ty)),
                 }
                 Ok(MaybeOwned::Borrowed(inner))
             }
@@ -467,7 +491,7 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::Pointer { base, .. } => {
                         Ok(module.borrow_type(base))
                     }
-                    ref other => panic!("Unexpected load pointer {:?}", other),
+                    ref other => Err(Error::UnexpectedLoadPointer(other.clone())),
                 }
             }
             crate::Expression::Unary { op, expr } => {
@@ -491,7 +515,7 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::LessEqual => "<=",
                     crate::BinaryOperator::Greater => "==",
                     crate::BinaryOperator::GreaterEqual => ">=",
-                    _ => panic!("Unsupported binary op {:?}", op),
+                    other => return Err(Error::UnsupportedBinaryOp(other)),
                 };
                 //write!(self.out, "(")?;
                 let ty_left = self.put_expression(left, function, module)?;
@@ -507,7 +531,8 @@ impl<W: Write> Writer<W> {
                         (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Scalar { .. }) |
                         (&crate::TypeInner::Vector { size, kind, width }, &crate::TypeInner::Vector { .. }) =>
                             MaybeOwned::Owned(crate::TypeInner::Vector { size, kind, width }),
-                        other => panic!("Unable to infer {:?} for {:?}", op, other),
+                        (other_left, other_right) =>
+                            return Err(Error::UnableToInferBinaryOpOutput(other_left.clone(), op, other_right.clone())),
                     }
                 } else {
                     MaybeOwned::Owned(crate::TypeInner::Scalar { kind: crate::ScalarKind::Bool, width: 1 })
@@ -522,7 +547,7 @@ impl<W: Write> Writer<W> {
                 write!(self.out, ")")?;
                 match *ty_image.borrow() {
                     crate::TypeInner::Image { base, .. } => Ok(module.borrow_type(base)),
-                    ref other => panic!("Unexpected image type {:?}", other),
+                    ref other => Err(Error::UnexpectedImageType(other.clone())),
                 }
             }
             crate::Expression::Call { ref name, ref arguments } => {
@@ -557,7 +582,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "distance(")?;
                         let result = match *self.put_expression(arguments[0], function, module)?.borrow() {
                             crate::TypeInner::Vector { kind, width, .. } => crate::TypeInner::Scalar { kind, width },
-                            ref other => panic!("Unexpected distance argument {:?}", other),
+                            ref other => return Err(Error::UnexpectedDistanceArgument(other.clone())),
                         };
                         write!(self.out, ", ")?;
                         self.put_expression(arguments[1], function, module)?;
@@ -568,16 +593,16 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "length(")?;
                         let result = match *self.put_expression(arguments[0], function, module)?.borrow() {
                             crate::TypeInner::Vector { kind, width, .. } => crate::TypeInner::Scalar { kind, width },
-                            ref other => panic!("Unexpected distance argument {:?}", other),
+                            ref other => return Err(Error::UnexpectedDistanceArgument(other.clone())),
                         };
                         write!(self.out, ")")?;
                         Ok(MaybeOwned::Owned(result))
                     }
 
-                    _ => panic!("Unsupported call to '{}'", name),
+                    other => Err(Error::UnsupportedCall(other.to_owned())),
                 }
             }
-            ref other => panic!("Unsupported {:?}", other),
+            ref other => Err(Error::UnsupportedExpression(other.clone())),
         }
     }
 
@@ -677,7 +702,7 @@ impl<W: Write> Writer<W> {
                     None if has_output => self.out.write_str(OUTPUT_STRUCT_NAME)?,
                     None => {}
                     Some(expr_handle) if has_output => {
-                        panic!("Unable to return value {:?} from an entry point!", expr_handle)
+                        return Err(Error::UnableToReturnValue(expr_handle));
                     }
                     Some(expr_handle) => {
                         self.put_expression(expr_handle, function, module)?;
@@ -685,7 +710,7 @@ impl<W: Write> Writer<W> {
                 }
                 writeln!(self.out, ";")?;
             }
-            _ => panic!("Unsupported {:?}", statement),
+            ref other => return Err(Error::UnsupportedStatement(other.clone())),
         };
         Ok(())
     }
@@ -747,7 +772,7 @@ impl<W: Write> Writer<W> {
                         write!(self.out, "\t{} {}", base_name, name)?;
                         if let Some(ref binding) = member.binding {
                             let resolved = options.resolve_binding(binding, LocationMode::Intermediate)?;
-                            write!(self.out, " [[{}]]", resolved)?;
+                            resolved.try_fmt_decorated(&mut self.out, "")?;
                         }
                         writeln!(self.out, ";")?;
                     }
@@ -760,7 +785,7 @@ impl<W: Write> Writer<W> {
                         spirv::Dim::Dim2D => "2d",
                         spirv::Dim::Dim3D => "3d",
                         spirv::Dim::DimCube => "Cube",
-                        _ => panic!("Unsupported dim {:?}", dim),
+                        other => return Err(Error::UnsupportedDim(other)),
                     };
                     let access = if flags.contains(crate::ImageFlags::SAMPLED) {
                         if flags.intersects(crate::ImageFlags::CAN_STORE) {
@@ -822,7 +847,9 @@ impl<W: Write> Writer<W> {
 
             // make dedicated input/output structs
             if let Some(em) = exec_model {
-                assert_eq!(fun.return_type, None);
+                if let Some(return_type) = fun.return_type {
+                    return Err(Error::ExecutionModelReturnType(em, return_type))
+                }
                 let (em_str, in_mode, out_mode) = match em {
                     spirv::ExecutionModel::Vertex => ("vertex", LocationMode::VertexInput, LocationMode::Intermediate),
                     spirv::ExecutionModel::Fragment => ("fragment", LocationMode::Intermediate, LocationMode::FragmentOutput),
@@ -850,7 +877,8 @@ impl<W: Write> Writer<W> {
                                     let name = member.name.or_index(MemberIndex(index));
                                     let ty_name = module.types[member.ty].name.or_index(member.ty);
                                     let resolved = options.resolve_binding(binding, in_mode)?;
-                                    writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
+                                    write!(self.out, "\t{} {}", ty_name, name)?;
+                                    resolved.try_fmt_decorated(&mut self.out, ";\n")?;
                                 }
                             }
                         } else {
@@ -860,7 +888,7 @@ impl<W: Write> Writer<W> {
 
                                 write!(self.out, "\t")?;
                                 tyvar.try_fmt(&mut self.out)?;
-                                writeln!(self.out, " [[{}]];", resolved)?;
+                                resolved.try_fmt_decorated(&mut self.out, ";\n")?;
                             }
                         }
                     }
@@ -885,7 +913,8 @@ impl<W: Write> Writer<W> {
                                     .as_ref()
                                     .ok_or(Error::MissingBinding(handle))?;
                                 let resolved = options.resolve_binding(binding, out_mode)?;
-                                writeln!(self.out, "\t{} {} [[{}]];", ty_name, name, resolved)?;
+                                write!(self.out, "\t{} {}", ty_name, name)?;
+                                resolved.try_fmt_decorated(&mut self.out, ";\n")?;
                             }
                         } else {
                             let tyvar = TypedGlobalVariable { module, handle, usage: crate::GlobalUse::empty() };
@@ -893,7 +922,7 @@ impl<W: Write> Writer<W> {
                             tyvar.try_fmt(&mut self.out)?;
                             if let Some(ref binding) = var.binding {
                                 let resolved = options.resolve_binding(binding, out_mode)?;
-                                write!(self.out, " [[{}]]", resolved)?;
+                                resolved.try_fmt_decorated(&mut self.out, "")?;
                             }
                             writeln!(self.out, ";")?;
                         }
@@ -929,7 +958,8 @@ impl<W: Write> Writer<W> {
                     let separator = separate(last_used_global == Some(handle));
                     write!(self.out, "\t")?;
                     tyvar.try_fmt(&mut self.out)?;
-                    writeln!(self.out, " [[{}]]{}", resolved, separator)?;
+                    resolved.try_fmt_decorated(&mut self.out, separator)?;
+                    writeln!(self.out)?;
                 }
             } else {
                 let result_type_name = match fun.return_type {
