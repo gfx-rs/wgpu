@@ -1,5 +1,11 @@
 # Change Log
 
+## v0.5.5 (2020-05-20)
+  - fix destruction of adapters, swap chains, and bind group layouts
+  - fix command pool leak with temporary threads
+  - improve assertion messages
+  - implement `From<TextureFormat>` for `TextureComponentType`
+
 ## v0.5.4 (2020-04-24)
   - fix memory management of staging buffers
 
