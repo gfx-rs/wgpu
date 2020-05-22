@@ -142,6 +142,7 @@ mod lex {
 #[derive(Debug)]
 pub enum Error<'a> {
     Unexpected(Token<'a>),
+    UnexpectedConstantType(crate::proc::UnexpectedConstantTypeError),
     BadInteger(&'a str, std::num::ParseIntError),
     BadFloat(&'a str, std::num::ParseFloatError),
     BadAccessor(&'a str),
@@ -156,6 +157,12 @@ pub enum Error<'a> {
     UnknownFunction(&'a str),
     MutabilityViolation(&'a str),
     Other,
+}
+
+impl<'a> From<crate::proc::UnexpectedConstantTypeError> for Error<'a> {
+    fn from(error: crate::proc::UnexpectedConstantTypeError) -> Self {
+        Error::UnexpectedConstantType(error)
+    }
 }
 
 #[derive(Clone)]
@@ -1300,6 +1307,7 @@ impl Parser {
                 lexer.expect(Token::Operation('='))?;
                 let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 lexer.expect(Token::Separator(';'))?;
+                crate::proc::check_constant_types(&inner, &module.types[ty].inner)?;
                 let const_handle = module.constants.append(crate::Constant {
                     name: Some(name.to_owned()),
                     specialization: None,
@@ -1399,4 +1407,19 @@ impl Parser {
 
 pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
     Parser::new().parse(source)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn check_constant_type_scalar_ok() {
+        let wgsl = "const a : i32 = 2;";
+        assert!(super::parse_str(wgsl).is_ok());
+    }
+
+    #[test]
+    fn check_constant_type_scalar_err() {
+        let wgsl = "const a : i32 = 2.0;";
+        assert!(super::parse_str(wgsl).is_err());
+    }
 }

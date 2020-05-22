@@ -93,7 +93,8 @@ pub struct Constant {
     pub ty: Handle<Type>,
 }
 
-#[derive(Debug, PartialEq)]
+// Clone is used only for error reporting and is not intended for end users
+#[derive(Clone, Debug, PartialEq)]
 pub enum ConstantInner {
     Sint(i64),
     Uint(u64),
