@@ -1028,7 +1028,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
-                    let end = if size != 0 {
+                    let end = if size != crate::WHOLE_SIZE {
                         offset + size
                     } else {
                         buffer.size
@@ -1065,7 +1065,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .vertex
                         .inputs
                         .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
-                    state.vertex.inputs[slot as usize].total_size = if size != 0 {
+                    state.vertex.inputs[slot as usize].total_size = if size != crate::WHOLE_SIZE {
                         size
                     } else {
                         buffer.size - offset
@@ -1073,7 +1073,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let range = hal::buffer::SubRange {
                         offset,
-                        size: if size != 0 { Some(size) } else { None },
+                        size: if size != crate::WHOLE_SIZE {
+                            Some(size)
+                        } else {
+                            None
+                        },
                     };
                     unsafe {
                         raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
@@ -1311,6 +1315,7 @@ pub mod render_ffi {
         pass.encode(&RenderCommand::SetPipeline(pipeline_id));
     }
 
+    /// Set size to `WHOLE_SIZE` to use the whole buffer
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_index_buffer(
         pass: &mut RawPass,
@@ -1325,6 +1330,7 @@ pub mod render_ffi {
         });
     }
 
+    /// Set size to `WHOLE_SIZE` to use the whole buffer
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffer(
         pass: &mut RawPass,

@@ -1338,7 +1338,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         let sub_range = hal::buffer::SubRange {
                             offset: bb.offset,
-                            size: if bb.size == 0 {
+                            size: if bb.size == crate::WHOLE_SIZE {
                                 None
                             } else {
                                 let end = bb.offset + bb.size;
