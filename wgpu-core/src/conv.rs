@@ -515,6 +515,9 @@ pub(crate) fn map_buffer_state(usage: resource::BufferUse) -> hal::buffer::State
     if usage.contains(W::STORAGE_STORE) {
         access |= A::SHADER_WRITE;
     }
+    if usage.contains(W::INDIRECT) {
+        access |= A::INDIRECT_COMMAND_READ;
+    }
 
     access
 }
