@@ -17,7 +17,19 @@ use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureUsage};
 
 use std::iter;
 
-const BITS_PER_BYTE: u32 = 8;
+pub(crate) const BITS_PER_BYTE: u32 = 8;
+
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct TextureDataLayout {
+    pub offset: BufferAddress,
+    pub bytes_per_row: u32,
+    pub rows_per_image: u32,
+}
+
+//TODO: use `TextureDataLayout` internally
 
 #[repr(C)]
 #[derive(Clone, Debug)]
@@ -44,7 +56,10 @@ pub struct TextureCopyView {
 impl TextureCopyView {
     //TODO: we currently access each texture twice for a transfer,
     // once only to get the aspect flags, which is unfortunate.
-    fn to_selector(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceRange {
+    pub(crate) fn to_selector(
+        &self,
+        aspects: hal::format::Aspects,
+    ) -> hal::image::SubresourceRange {
         let level = self.mip_level as hal::image::Level;
         let layer = self.array_layer as hal::image::Layer;
 
@@ -60,7 +75,10 @@ impl TextureCopyView {
         }
     }
 
-    fn to_sub_layers(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceLayers {
+    pub(crate) fn to_sub_layers(
+        &self,
+        aspects: hal::format::Aspects,
+    ) -> hal::image::SubresourceLayers {
         let layer = self.array_layer as hal::image::Layer;
         // TODO: Can't satisfy clippy here unless we modify
         // `hal::image::SubresourceLayers` in gfx to use
@@ -138,7 +156,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb_raw = cmb.raw.last_mut().unwrap();
         unsafe {
             cmb_raw.pipeline_barrier(
-                all_buffer_stages()..all_buffer_stages(),
+                all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 barriers,
             );
@@ -210,10 +228,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             image_extent: conv::map_extent(copy_size),
         };
         let cmb_raw = cmb.raw.last_mut().unwrap();
-        let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             cmb_raw.pipeline_barrier(
-                stages..stages,
+                all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barriers),
             );
@@ -298,10 +315,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             image_extent: conv::map_extent(copy_size),
         };
         let cmb_raw = cmb.raw.last_mut().unwrap();
-        let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             cmb_raw.pipeline_barrier(
-                stages..stages,
+                all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barrier),
             );
@@ -380,7 +396,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb_raw = cmb.raw.last_mut().unwrap();
         unsafe {
             cmb_raw.pipeline_barrier(
-                all_image_stages()..all_image_stages(),
+                all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 barriers,
             );
