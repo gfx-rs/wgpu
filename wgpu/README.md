@@ -78,7 +78,7 @@ Shout out to the following projects that work best with wgpu-rs:
 - [rgx](https://github.com/cloudhead/rgx) - a 2D graphics library
 - [imgui-wgpu](https://github.com/Yatekii/imgui-wgpu-rs) - Dear ImGui interfacing
 - [pixels](https://github.com/parasyte/pixels) - the easiest way to create a hardware-accelerated pixel frame buffer
-- [kas](https://github.com/dhardy/kas) - tooKit Abstraction System
+- [kas](https://github.com/dhardy/kas) - toolKit Abstraction System
 - [oxidator](https://github.com/Ruddle/oxidator) - RTS game engine
 - [nannou](https://github.com/nannou-org/nannou) - a creative coding framework
 - [harmony](https://github.com/StarArawn/harmony) - a modern 2D/3D engine
