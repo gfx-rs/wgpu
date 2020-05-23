@@ -17,6 +17,12 @@ use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue 
 use smallvec::SmallVec;
 use std::{iter, sync::atomic::Ordering};
 
+struct StagingData<B: hal::Backend> {
+    buffer: B::Buffer,
+    memory: MemoryBlock<B>,
+    comb: B::CommandBuffer,
+}
+
 #[derive(Debug, Default)]
 pub(crate) struct PendingWrites<B: hal::Backend> {
     pub command_buffer: Option<B::CommandBuffer>,
@@ -45,6 +51,67 @@ impl<B: hal::Backend> PendingWrites<B> {
             unsafe {
                 device.destroy_buffer(buffer);
             }
+        }
+    }
+
+    fn consume(&mut self, stage: StagingData<B>) {
+        self.temp_buffers.push((stage.buffer, stage.memory));
+        self.command_buffer = Some(stage.comb);
+    }
+}
+
+impl<B: hal::Backend> super::Device<B> {
+    fn stage_data(&mut self, data: &[u8]) -> StagingData<B> {
+        let mut buffer = unsafe {
+            self.raw
+                .create_buffer(
+                    data.len() as wgt::BufferAddress,
+                    hal::buffer::Usage::TRANSFER_SRC,
+                )
+                .unwrap()
+        };
+        //TODO: do we need to transition into HOST_WRITE access first?
+        let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
+
+        let mut memory = self
+            .mem_allocator
+            .lock()
+            .allocate(
+                &self.raw,
+                requirements.type_mask as u32,
+                gfx_memory::MemoryUsage::Staging { read_back: false },
+                gfx_memory::Kind::Linear,
+                requirements.size,
+                requirements.alignment,
+            )
+            .unwrap();
+        unsafe {
+            self.raw.set_buffer_name(&mut buffer, "<write_buffer_temp>");
+            self.raw
+                .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
+                .unwrap();
+        }
+
+        let mut mapped = memory.map(&self.raw, hal::memory::Segment::ALL).unwrap();
+        unsafe { mapped.write(&self.raw, hal::memory::Segment::ALL) }
+            .unwrap()
+            .slice[..data.len()]
+            .copy_from_slice(data);
+
+        let comb = match self.pending_writes.command_buffer.take() {
+            Some(comb) => comb,
+            None => {
+                let mut comb = self.com_allocator.allocate_internal();
+                unsafe {
+                    comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                }
+                comb
+            }
+        };
+        StagingData {
+            buffer,
+            memory,
+            comb,
         }
     }
 }
@@ -80,6 +147,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
+        let mut stage = device.stage_data(data);
+
         let mut trackers = device.trackers.lock();
         let (dst, transition) =
             trackers
@@ -87,84 +156,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST);
         assert!(
             dst.usage.contains(wgt::BufferUsage::COPY_DST),
-            "Write buffer usage {:?} must contain usage flag DST_SRC",
+            "Write buffer usage {:?} must contain flag COPY_DST",
             dst.usage
         );
-
         let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
         dst.life_guard.use_at(last_submit_index + 1);
 
-        let mut src_raw = unsafe {
-            device
-                .raw
-                .create_buffer(
-                    data.len() as wgt::BufferAddress,
-                    hal::buffer::Usage::TRANSFER_SRC,
-                )
-                .unwrap()
-        };
-        //TODO: do we need to transition into HOST_WRITE access first?
-        let requirements = unsafe { device.raw.get_buffer_requirements(&src_raw) };
-
-        let mut memory = device
-            .mem_allocator
-            .lock()
-            .allocate(
-                &device.raw,
-                requirements.type_mask as u32,
-                gfx_memory::MemoryUsage::Staging { read_back: false },
-                gfx_memory::Kind::Linear,
-                requirements.size,
-                requirements.alignment,
-            )
-            .unwrap();
-        unsafe {
-            device
-                .raw
-                .set_buffer_name(&mut src_raw, "<write_buffer_temp>");
-            device
-                .raw
-                .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut src_raw)
-                .unwrap();
-        }
-
-        let mut mapped = memory.map(&device.raw, hal::memory::Segment::ALL).unwrap();
-        unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
-            .unwrap()
-            .slice[..data.len()]
-            .copy_from_slice(data);
-
-        let mut comb = match device.pending_writes.command_buffer.take() {
-            Some(comb) => comb,
-            None => {
-                let mut comb = device.com_allocator.allocate_internal();
-                unsafe {
-                    comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-                }
-                comb
-            }
-        };
         let region = hal::command::BufferCopy {
             src: 0,
             dst: buffer_offset,
             size: data.len() as _,
         };
         unsafe {
-            comb.pipeline_barrier(
+            stage.comb.pipeline_barrier(
                 super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 iter::once(hal::memory::Barrier::Buffer {
                     states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
-                    target: &src_raw,
+                    target: &stage.buffer,
                     range: hal::buffer::SubRange::WHOLE,
                     families: None,
                 })
                 .chain(transition.map(|pending| pending.into_hal(dst))),
             );
-            comb.copy_buffer(&src_raw, &dst.raw, iter::once(region));
+            stage
+                .comb
+                .copy_buffer(&stage.buffer, &dst.raw, iter::once(region));
         }
-        device.pending_writes.temp_buffers.push((src_raw, memory));
-        device.pending_writes.command_buffer = Some(comb);
+
+        device.pending_writes.consume(stage);
     }
 
     pub fn queue_write_texture<B: GfxBackend>(
@@ -197,6 +217,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
+        let mut stage = device.stage_data(data);
+
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers.textures.use_replace(
             &*texture_guard,
@@ -206,63 +228,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         assert!(
             dst.usage.contains(wgt::TextureUsage::COPY_DST),
-            "Write texture usage {:?} must contain usage flag DST_SRC",
+            "Write texture usage {:?} must contain flag COPY_DST",
             dst.usage
         );
 
         let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
         dst.life_guard.use_at(last_submit_index + 1);
-
-        let mut src_raw = unsafe {
-            device
-                .raw
-                .create_buffer(
-                    data.len() as wgt::BufferAddress,
-                    hal::buffer::Usage::TRANSFER_SRC,
-                )
-                .unwrap()
-        };
-        //TODO: do we need to transition into HOST_WRITE access first?
-        let requirements = unsafe { device.raw.get_buffer_requirements(&src_raw) };
-
-        let mut memory = device
-            .mem_allocator
-            .lock()
-            .allocate(
-                &device.raw,
-                requirements.type_mask as u32,
-                gfx_memory::MemoryUsage::Staging { read_back: false },
-                gfx_memory::Kind::Linear,
-                requirements.size,
-                requirements.alignment,
-            )
-            .unwrap();
-        unsafe {
-            device
-                .raw
-                .set_buffer_name(&mut src_raw, "<write_buffer_temp>");
-            device
-                .raw
-                .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut src_raw)
-                .unwrap();
-        }
-
-        let mut mapped = memory.map(&device.raw, hal::memory::Segment::ALL).unwrap();
-        unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
-            .unwrap()
-            .slice[..data.len()]
-            .copy_from_slice(data);
-
-        let mut comb = match device.pending_writes.command_buffer.take() {
-            Some(comb) => comb,
-            None => {
-                let mut comb = device.com_allocator.allocate_internal();
-                unsafe {
-                    comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
-                }
-                comb
-            }
-        };
 
         let bytes_per_texel = conv::map_texture_format(dst.format, device.private_features)
             .surface_desc()
@@ -285,27 +256,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             image_extent: conv::map_extent(size),
         };
         unsafe {
-            comb.pipeline_barrier(
+            stage.comb.pipeline_barrier(
                 super::all_image_stages() | hal::pso::PipelineStage::HOST
                     ..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 iter::once(hal::memory::Barrier::Buffer {
                     states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
-                    target: &src_raw,
+                    target: &stage.buffer,
                     range: hal::buffer::SubRange::WHOLE,
                     families: None,
                 })
                 .chain(transition.map(|pending| pending.into_hal(dst))),
             );
-            comb.copy_buffer_to_image(
-                &src_raw,
+            stage.comb.copy_buffer_to_image(
+                &stage.buffer,
                 &dst.raw,
                 hal::image::Layout::TransferDstOptimal,
                 iter::once(region),
             );
         }
-        device.pending_writes.temp_buffers.push((src_raw, memory));
-        device.pending_writes.command_buffer = Some(comb);
+
+        device.pending_writes.consume(stage);
     }
 
     pub fn queue_submit<B: GfxBackend>(
