@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    command::{BufferCopyView, TextureCopyView},
+    command::{BufferCopyView, TextureCopyView, TextureDataLayout},
     id,
 };
 #[cfg(feature = "trace")]
@@ -167,6 +167,12 @@ pub enum Action {
         data: FileName,
         range: Range<wgt::BufferAddress>,
         queued: bool,
+    },
+    WriteTexture {
+        to: TextureCopyView,
+        data: FileName,
+        layout: TextureDataLayout,
+        size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command>),
 }

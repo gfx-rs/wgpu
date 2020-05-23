@@ -5,10 +5,11 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
-    command::{CommandAllocator, CommandBuffer},
+    command::{CommandAllocator, CommandBuffer, TextureCopyView, TextureDataLayout, BITS_PER_BYTE},
+    conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
-    resource::{BufferMapState, BufferUse},
+    resource::{BufferMapState, BufferUse, TextureUse},
 };
 
 use gfx_memory::{Block, Heaps, MemoryBlock};
@@ -48,13 +49,15 @@ impl<B: hal::Backend> PendingWrites<B> {
     }
 }
 
+//TODO: move out common parts of write_xxx.
+
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn queue_write_buffer<B: GfxBackend>(
         &self,
         queue_id: id::QueueId,
-        data: &[u8],
         buffer_id: id::BufferId,
         buffer_offset: wgt::BufferAddress,
+        data: &[u8],
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -159,6 +162,147 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .chain(transition.map(|pending| pending.into_hal(dst))),
             );
             comb.copy_buffer(&src_raw, &dst.raw, iter::once(region));
+        }
+        device.pending_writes.temp_buffers.push((src_raw, memory));
+        device.pending_writes.command_buffer = Some(comb);
+    }
+
+    pub fn queue_write_texture<B: GfxBackend>(
+        &self,
+        queue_id: id::QueueId,
+        destination: &TextureCopyView,
+        data: &[u8],
+        data_layout: &TextureDataLayout,
+        size: wgt::Extent3d,
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let device = &mut device_guard[queue_id];
+        let (texture_guard, _) = hub.textures.read(&mut token);
+        let aspects = texture_guard[destination.texture].full_range.aspects;
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => {
+                let mut trace = trace.lock();
+                let data_path = trace.make_binary("bin", data);
+                trace.add(Action::WriteTexture {
+                    to: destination.clone(),
+                    data: data_path,
+                    layout: data_layout.clone(),
+                    size,
+                });
+            }
+            None => {}
+        }
+
+        let mut trackers = device.trackers.lock();
+        let (dst, transition) = trackers.textures.use_replace(
+            &*texture_guard,
+            destination.texture,
+            destination.to_selector(aspects),
+            TextureUse::COPY_DST,
+        );
+        assert!(
+            dst.usage.contains(wgt::TextureUsage::COPY_DST),
+            "Write texture usage {:?} must contain usage flag DST_SRC",
+            dst.usage
+        );
+
+        let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
+        dst.life_guard.use_at(last_submit_index + 1);
+
+        let mut src_raw = unsafe {
+            device
+                .raw
+                .create_buffer(
+                    data.len() as wgt::BufferAddress,
+                    hal::buffer::Usage::TRANSFER_SRC,
+                )
+                .unwrap()
+        };
+        //TODO: do we need to transition into HOST_WRITE access first?
+        let requirements = unsafe { device.raw.get_buffer_requirements(&src_raw) };
+
+        let mut memory = device
+            .mem_allocator
+            .lock()
+            .allocate(
+                &device.raw,
+                requirements.type_mask as u32,
+                gfx_memory::MemoryUsage::Staging { read_back: false },
+                gfx_memory::Kind::Linear,
+                requirements.size,
+                requirements.alignment,
+            )
+            .unwrap();
+        unsafe {
+            device
+                .raw
+                .set_buffer_name(&mut src_raw, "<write_buffer_temp>");
+            device
+                .raw
+                .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut src_raw)
+                .unwrap();
+        }
+
+        let mut mapped = memory.map(&device.raw, hal::memory::Segment::ALL).unwrap();
+        unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
+            .unwrap()
+            .slice[..data.len()]
+            .copy_from_slice(data);
+
+        let mut comb = match device.pending_writes.command_buffer.take() {
+            Some(comb) => comb,
+            None => {
+                let mut comb = device.com_allocator.allocate_internal();
+                unsafe {
+                    comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                }
+                comb
+            }
+        };
+
+        let bytes_per_texel = conv::map_texture_format(dst.format, device.private_features)
+            .surface_desc()
+            .bits as u32
+            / BITS_PER_BYTE;
+        let buffer_width = data_layout.bytes_per_row / bytes_per_texel;
+        assert_eq!(
+            data_layout.bytes_per_row % bytes_per_texel,
+            0,
+            "Source bytes per row ({}) must be a multiple of bytes per texel ({})",
+            data_layout.bytes_per_row,
+            bytes_per_texel
+        );
+        let region = hal::command::BufferImageCopy {
+            buffer_offset: 0,
+            buffer_width,
+            buffer_height: data_layout.rows_per_image,
+            image_layers: destination.to_sub_layers(aspects),
+            image_offset: conv::map_origin(destination.origin),
+            image_extent: conv::map_extent(size),
+        };
+        unsafe {
+            comb.pipeline_barrier(
+                super::all_image_stages() | hal::pso::PipelineStage::HOST
+                    ..hal::pso::PipelineStage::TRANSFER,
+                hal::memory::Dependencies::empty(),
+                iter::once(hal::memory::Barrier::Buffer {
+                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
+                    target: &src_raw,
+                    range: hal::buffer::SubRange::WHOLE,
+                    families: None,
+                })
+                .chain(transition.map(|pending| pending.into_hal(dst))),
+            );
+            comb.copy_buffer_to_image(
+                &src_raw,
+                &dst.raw,
+                hal::image::Layout::TransferDstOptimal,
+                iter::once(region),
+            );
         }
         device.pending_writes.temp_buffers.push((src_raw, memory));
         device.pending_writes.command_buffer = Some(comb);

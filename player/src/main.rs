@@ -411,11 +411,20 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
                 if queued {
-                    self.queue_write_buffer::<B>(device, &bin, id, range.start);
+                    self.queue_write_buffer::<B>(device, id, range.start, &bin);
                 } else {
                     self.device_wait_for_buffer::<B>(device, id);
                     self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
                 }
+            }
+            A::WriteTexture {
+                to,
+                data,
+                layout,
+                size,
+            } => {
+                let bin = std::fs::read(dir.join(data)).unwrap();
+                self.queue_write_texture::<B>(device, &to, &bin, &layout, size);
             }
             A::Submit(_index, commands) => {
                 let encoder = self.device_create_command_encoder::<B>(
