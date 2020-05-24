@@ -10,6 +10,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::{io, ptr, slice};
 
+/// Bound uniform/storage buffer offsets must be aligned to this number.
+pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -981,5 +984,12 @@ impl From<TextureFormat> for TextureComponentType {
     }
 }
 
-/// Bound uniform/storage buffer offsets must be aligned to this number.
-pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct TextureDataLayout {
+    pub offset: BufferAddress,
+    pub bytes_per_row: u32,
+    pub rows_per_image: u32,
+}

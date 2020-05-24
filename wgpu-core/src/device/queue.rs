@@ -5,7 +5,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
-    command::{CommandAllocator, CommandBuffer, TextureCopyView, TextureDataLayout, BITS_PER_BYTE},
+    command::{CommandAllocator, CommandBuffer, TextureCopyView, BITS_PER_BYTE},
     conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
@@ -192,7 +192,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         destination: &TextureCopyView,
         data: &[u8],
-        data_layout: &TextureDataLayout,
+        data_layout: &wgt::TextureDataLayout,
         size: wgt::Extent3d,
     ) {
         let hub = B::hub(self);

@@ -13,21 +13,11 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
-use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureUsage};
+use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureDataLayout, TextureUsage};
 
 use std::iter;
 
 pub(crate) const BITS_PER_BYTE: u32 = 8;
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct TextureDataLayout {
-    pub offset: BufferAddress,
-    pub bytes_per_row: u32,
-    pub rows_per_image: u32,
-}
 
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
