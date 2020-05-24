@@ -477,6 +477,7 @@ impl<B: GfxBackend> Device<B> {
                 ref_count: self.life_guard.add_ref(),
             },
             usage: desc.usage,
+            dimension: desc.dimension,
             kind,
             format: desc.format,
             full_range: hal::image::SubresourceRange {
