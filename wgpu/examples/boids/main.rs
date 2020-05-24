@@ -32,6 +32,7 @@ impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
+        _queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
         // load (and compile) shaders and create shader modules
 
