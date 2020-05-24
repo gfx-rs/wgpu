@@ -200,7 +200,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let device = &mut device_guard[queue_id];
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let aspects = texture_guard[destination.texture].full_range.aspects;
+        let (image_layers, image_range, image_offset) = destination.to_hal(&*texture_guard);
 
         #[cfg(feature = "trace")]
         match device.trace {
@@ -223,7 +223,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst, transition) = trackers.textures.use_replace(
             &*texture_guard,
             destination.texture,
-            destination.to_selector(aspects),
+            image_range,
             TextureUse::COPY_DST,
         );
         assert!(
@@ -251,9 +251,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             buffer_offset: 0,
             buffer_width,
             buffer_height: data_layout.rows_per_image,
-            image_layers: destination.to_sub_layers(aspects),
-            image_offset: conv::map_origin(destination.origin),
-            image_extent: conv::map_extent(size),
+            image_layers,
+            image_offset,
+            image_extent: conv::map_extent(size, dst.dimension),
         };
         unsafe {
             stage.comb.pipeline_barrier(

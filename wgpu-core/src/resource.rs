@@ -170,6 +170,7 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) raw: B::Image,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: TextureUsage,
+    pub(crate) dimension: wgt::TextureDimension,
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: TextureFormat,
     pub(crate) full_range: hal::image::SubresourceRange,
