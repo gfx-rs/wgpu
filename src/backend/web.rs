@@ -496,16 +496,15 @@ fn map_texture_view_dimension(
     }
 }
 
-fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> web_sys::GpuBufferCopyView {
-    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id.0, view.bytes_per_row);
-    mapped.rows_per_image(view.rows_per_image);
-    mapped.offset(view.offset as f64);
+fn map_buffer_copy_view(view: crate::BufferCopyView) -> web_sys::GpuBufferCopyView {
+    let mut mapped = web_sys::GpuBufferCopyView::new(&view.buffer.id.0, view.layout.bytes_per_row);
+    mapped.rows_per_image(view.layout.rows_per_image);
+    mapped.offset(view.layout.offset as f64);
     mapped
 }
 
-fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> web_sys::GpuTextureCopyView {
+fn map_texture_copy_view(view: crate::TextureCopyView) -> web_sys::GpuTextureCopyView {
     let mut mapped = web_sys::GpuTextureCopyView::new(&view.texture.id.0);
-    mapped.array_layer(view.array_layer);
     mapped.mip_level(view.mip_level);
     mapped.origin(&map_origin_3d(view.origin));
     mapped
@@ -1323,9 +1322,20 @@ impl crate::Context for Context {
     fn queue_write_buffer(
         &self,
         _queue: &Self::QueueId,
-        _data: &[u8],
         _buffer: &Self::BufferId,
         _offset: wgt::BufferAddress,
+        _data: &[u8],
+    ) {
+        unimplemented!()
+    }
+
+    fn queue_write_texture(
+        &self,
+        _queue: &Self::QueueId,
+        _texture: crate::TextureCopyView,
+        _data: &[u8],
+        _data_layout: wgt::TextureDataLayout,
+        _size: wgt::Extent3d,
     ) {
         unimplemented!()
     }
