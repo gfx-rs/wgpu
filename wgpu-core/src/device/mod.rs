@@ -238,7 +238,7 @@ impl<B: GfxBackend> Device<B> {
         };
         #[cfg(not(feature = "trace"))]
         match trace_path {
-            Some(_) => log::warn!("Tracing feature is not enabled"),
+            Some(_) => log::error!("Feature 'trace' is not enabled"),
             None => (),
         }
 
@@ -265,7 +265,7 @@ impl<B: GfxBackend> Device<B> {
                     Some(Mutex::new(trace))
                 }
                 Err(e) => {
-                    log::warn!("Unable to start a trace in '{:?}': {:?}", path, e);
+                    log::error!("Unable to start a trace in '{:?}': {:?}", path, e);
                     None
                 }
             }),
