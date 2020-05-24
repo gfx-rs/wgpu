@@ -130,12 +130,30 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 } => self.command_encoder_copy_buffer_to_buffer::<B>(
                     encoder, src, src_offset, dst, dst_offset, size,
                 ),
-                trace::Command::CopyBufferToTexture { src, dst, size } => {
-                    self.command_encoder_copy_buffer_to_texture::<B>(encoder, &src, &dst, size)
-                }
-                trace::Command::CopyTextureToBuffer { src, dst, size } => {
-                    self.command_encoder_copy_texture_to_buffer::<B>(encoder, &src, &dst, size)
-                }
+                trace::Command::CopyBufferToTexture {
+                    src,
+                    src_layout,
+                    dst,
+                    size,
+                } => self.command_encoder_copy_buffer_to_texture::<B>(
+                    encoder,
+                    src,
+                    &src_layout,
+                    &dst,
+                    size,
+                ),
+                trace::Command::CopyTextureToBuffer {
+                    src,
+                    dst,
+                    dst_layout,
+                    size,
+                } => self.command_encoder_copy_texture_to_buffer::<B>(
+                    encoder,
+                    &src,
+                    dst,
+                    &dst_layout,
+                    size,
+                ),
                 trace::Command::CopyTextureToTexture { src, dst, size } => {
                     self.command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, size)
                 }

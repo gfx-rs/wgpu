@@ -29,20 +29,6 @@ pub struct TextureDataLayout {
     pub rows_per_image: u32,
 }
 
-//TODO: use `TextureDataLayout` internally
-
-#[repr(C)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct BufferCopyView {
-    pub buffer: BufferId,
-    pub offset: BufferAddress,
-    pub bytes_per_row: u32,
-    pub rows_per_image: u32,
-}
-
-#[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -167,7 +153,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
         &self,
         command_encoder_id: CommandEncoderId,
-        source: &BufferCopyView,
+        source: BufferId,
+        source_layout: &TextureDataLayout,
         destination: &TextureCopyView,
         copy_size: Extent3d,
     ) {
@@ -182,19 +169,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         match cmb.commands {
             Some(ref mut list) => list.push(TraceCommand::CopyBufferToTexture {
-                src: source.clone(),
+                src: source,
+                src_layout: source_layout.clone(),
                 dst: destination.clone(),
                 size: copy_size,
             }),
             None => (),
         }
 
-        let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
-            &*buffer_guard,
-            source.buffer,
-            (),
-            BufferUse::COPY_SRC,
-        );
+        let (src_buffer, src_pending) =
+            cmb.trackers
+                .buffers
+                .use_replace(&*buffer_guard, source, (), BufferUse::COPY_SRC);
         assert!(src_buffer.usage.contains(BufferUsage::COPY_SRC));
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 
@@ -211,18 +197,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = source.bytes_per_row / bytes_per_texel;
+        let buffer_width = source_layout.bytes_per_row / bytes_per_texel;
         assert_eq!(
-            source.bytes_per_row % bytes_per_texel,
+            source_layout.bytes_per_row % bytes_per_texel,
             0,
             "Source bytes per row ({}) must be a multiple of bytes per texel ({})",
-            source.bytes_per_row,
+            source_layout.bytes_per_row,
             bytes_per_texel
         );
         let region = hal::command::BufferImageCopy {
-            buffer_offset: source.offset,
+            buffer_offset: source_layout.offset,
             buffer_width,
-            buffer_height: source.rows_per_image,
+            buffer_height: source_layout.rows_per_image,
             image_layers: destination.to_sub_layers(aspects),
             image_offset: conv::map_origin(destination.origin),
             image_extent: conv::map_extent(copy_size),
@@ -247,7 +233,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         command_encoder_id: CommandEncoderId,
         source: &TextureCopyView,
-        destination: &BufferCopyView,
+        destination: BufferId,
+        destination_layout: &TextureDataLayout,
         copy_size: Extent3d,
     ) {
         let hub = B::hub(self);
@@ -262,7 +249,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match cmb.commands {
             Some(ref mut list) => list.push(TraceCommand::CopyTextureToBuffer {
                 src: source.clone(),
-                dst: destination.clone(),
+                dst: destination,
+                dst_layout: destination_layout.clone(),
                 size: copy_size,
             }),
             None => (),
@@ -281,12 +269,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_texture));
 
-        let (dst_buffer, dst_barriers) = cmb.trackers.buffers.use_replace(
-            &*buffer_guard,
-            destination.buffer,
-            (),
-            BufferUse::COPY_DST,
-        );
+        let (dst_buffer, dst_barriers) =
+            cmb.trackers
+                .buffers
+                .use_replace(&*buffer_guard, destination, (), BufferUse::COPY_DST);
         assert!(
             dst_buffer.usage.contains(BufferUsage::COPY_DST),
             "Destination buffer usage {:?} must contain usage flag COPY_DST",
@@ -298,18 +284,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = destination.bytes_per_row / bytes_per_texel;
+        let buffer_width = destination_layout.bytes_per_row / bytes_per_texel;
         assert_eq!(
-            destination.bytes_per_row % bytes_per_texel,
+            destination_layout.bytes_per_row % bytes_per_texel,
             0,
             "Destination bytes per row ({}) must be a multiple of bytes per texel ({})",
-            destination.bytes_per_row,
+            destination_layout.bytes_per_row,
             bytes_per_texel
         );
         let region = hal::command::BufferImageCopy {
-            buffer_offset: destination.offset,
+            buffer_offset: destination_layout.offset,
             buffer_width,
-            buffer_height: destination.rows_per_image,
+            buffer_height: destination_layout.rows_per_image,
             image_layers: source.to_sub_layers(aspects),
             image_offset: conv::map_origin(source.origin),
             image_extent: conv::map_extent(copy_size),

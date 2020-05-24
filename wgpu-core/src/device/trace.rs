@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    command::{BufferCopyView, TextureCopyView, TextureDataLayout},
+    command::{TextureCopyView, TextureDataLayout},
     id,
 };
 #[cfg(feature = "trace")]
@@ -189,13 +189,15 @@ pub enum Command {
         size: wgt::BufferAddress,
     },
     CopyBufferToTexture {
-        src: BufferCopyView,
+        src: id::BufferId,
+        src_layout: TextureDataLayout,
         dst: TextureCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
         src: TextureCopyView,
-        dst: BufferCopyView,
+        dst: id::BufferId,
+        dst_layout: TextureDataLayout,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
