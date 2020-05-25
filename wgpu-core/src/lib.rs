@@ -55,6 +55,7 @@ type Epoch = u32;
 pub type RawString = *const c_char;
 
 pub const WHOLE_SIZE: wgt::BufferAddress = !0;
+pub type BufferSize = u64;
 
 //TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]

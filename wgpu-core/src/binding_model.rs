@@ -5,7 +5,7 @@
 use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     track::{TrackerSet, DUMMY_SELECTOR},
-    FastHashMap, LifeGuard, RefCount, Stored,
+    BufferSize, FastHashMap, LifeGuard, RefCount, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -81,7 +81,6 @@ pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) bind_group_layout_ids: ArrayVec<[Stored<BindGroupLayoutId>; wgt::MAX_BIND_GROUPS]>,
 }
 
-/// Set size to `crate::WHOLE_SIZE` to use the whole buffer
 #[repr(C)]
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -89,7 +88,7 @@ pub struct PipelineLayout<B: hal::Backend> {
 pub struct BufferBinding {
     pub buffer: BufferId,
     pub offset: BufferAddress,
-    pub size: BufferAddress,
+    pub size: BufferSize,
 }
 
 #[repr(C)]

@@ -17,6 +17,7 @@ use crate::{
     pipeline::PipelineFlags,
     resource::{BufferUse, TextureUse, TextureViewInner},
     track::TrackerSet,
+    BufferSize,
     Stored,
 };
 
@@ -70,13 +71,13 @@ pub enum RenderCommand {
     SetIndexBuffer {
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     },
     SetVertexBuffer {
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     },
     SetBlendColor(Color),
     SetStencilReference(u32),
@@ -1280,7 +1281,7 @@ pub mod render_ffi {
         super::{PhantomSlice, RawPass, Rect},
         RenderCommand,
     };
-    use crate::{id, RawString};
+    use crate::{id, BufferSize, RawString};
     use std::{convert::TryInto, slice};
     use wgt::{BufferAddress, Color, DynamicOffset};
 
@@ -1315,13 +1316,12 @@ pub mod render_ffi {
         pass.encode(&RenderCommand::SetPipeline(pipeline_id));
     }
 
-    /// Set size to `WHOLE_SIZE` to use the whole buffer
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_index_buffer(
         pass: &mut RawPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) {
         pass.encode(&RenderCommand::SetIndexBuffer {
             buffer_id,
@@ -1330,14 +1330,13 @@ pub mod render_ffi {
         });
     }
 
-    /// Set size to `WHOLE_SIZE` to use the whole buffer
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_pass_set_vertex_buffer(
         pass: &mut RawPass,
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) {
         pass.encode(&RenderCommand::SetVertexBuffer {
             slot,
