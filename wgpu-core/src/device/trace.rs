@@ -23,7 +23,7 @@ pub enum BindingResource {
     Buffer {
         id: id::BufferId,
         offset: wgt::BufferAddress,
-        size: wgt::BufferAddress,
+        size: crate::BufferSize,
     },
     Sampler(id::SamplerId),
     TextureView(id::TextureViewId),

@@ -17,8 +17,7 @@ use crate::{
     pipeline::PipelineFlags,
     resource::{BufferUse, TextureUse, TextureViewInner},
     track::TrackerSet,
-    BufferSize,
-    Stored,
+    BufferSize, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -1029,8 +1028,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
-                    let end = if size != crate::WHOLE_SIZE {
-                        offset + size
+                    let end = if size != BufferSize::WHOLE {
+                        offset + size.0
                     } else {
                         buffer.size
                     };
@@ -1066,16 +1065,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .vertex
                         .inputs
                         .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
-                    state.vertex.inputs[slot as usize].total_size = if size != crate::WHOLE_SIZE {
-                        size
+                    state.vertex.inputs[slot as usize].total_size = if size != BufferSize::WHOLE {
+                        size.0
                     } else {
                         buffer.size - offset
                     };
 
                     let range = hal::buffer::SubRange {
                         offset,
-                        size: if size != crate::WHOLE_SIZE {
-                            Some(size)
+                        size: if size != BufferSize::WHOLE {
+                            Some(size.0)
                         } else {
                             None
                         },

@@ -7,7 +7,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    FastHashMap, LifeGuard, PrivateFeatures, Stored,
+    BufferSize, FastHashMap, LifeGuard, PrivateFeatures, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -1338,17 +1338,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         let sub_range = hal::buffer::SubRange {
                             offset: bb.offset,
-                            size: if bb.size == crate::WHOLE_SIZE {
+                            size: if bb.size == BufferSize::WHOLE {
                                 None
                             } else {
-                                let end = bb.offset + bb.size;
+                                let end = bb.offset + bb.size.0;
                                 assert!(
                                     end <= buffer.size,
                                     "Bound buffer range {:?} does not fit in buffer size {}",
                                     bb.offset..end,
                                     buffer.size
                                 );
-                                Some(bb.size)
+                                Some(bb.size.0)
                             },
                         };
                         hal::pso::Descriptor::Buffer(&buffer.raw, sub_range)
