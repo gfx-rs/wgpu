@@ -130,32 +130,14 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 } => self.command_encoder_copy_buffer_to_buffer::<B>(
                     encoder, src, src_offset, dst, dst_offset, size,
                 ),
-                trace::Command::CopyBufferToTexture {
-                    src,
-                    src_layout,
-                    dst,
-                    size,
-                } => self.command_encoder_copy_buffer_to_texture::<B>(
-                    encoder,
-                    src,
-                    &src_layout,
-                    &dst,
-                    size,
-                ),
-                trace::Command::CopyTextureToBuffer {
-                    src,
-                    dst,
-                    dst_layout,
-                    size,
-                } => self.command_encoder_copy_texture_to_buffer::<B>(
-                    encoder,
-                    &src,
-                    dst,
-                    &dst_layout,
-                    size,
-                ),
+                trace::Command::CopyBufferToTexture { src, dst, size } => {
+                    self.command_encoder_copy_buffer_to_texture::<B>(encoder, &src, &dst, &size)
+                }
+                trace::Command::CopyTextureToBuffer { src, dst, size } => {
+                    self.command_encoder_copy_texture_to_buffer::<B>(encoder, &src, &dst, &size)
+                }
                 trace::Command::CopyTextureToTexture { src, dst, size } => {
-                    self.command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, size)
+                    self.command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
                 }
                 trace::Command::RunComputePass {
                     commands,
@@ -442,7 +424,7 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 size,
             } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
-                self.queue_write_texture::<B>(device, &to, &bin, &layout, size);
+                self.queue_write_texture::<B>(device, &to, &bin, &layout, &size);
             }
             A::Submit(_index, commands) => {
                 let encoder = self.device_create_command_encoder::<B>(

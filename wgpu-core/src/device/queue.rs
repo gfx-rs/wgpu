@@ -193,7 +193,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &TextureCopyView,
         data: &[u8],
         data_layout: &wgt::TextureDataLayout,
-        size: wgt::Extent3d,
+        size: &wgt::Extent3d,
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -211,7 +211,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     to: destination.clone(),
                     data: data_path,
                     layout: data_layout.clone(),
-                    size,
+                    size: *size,
                 });
             }
             None => {}
