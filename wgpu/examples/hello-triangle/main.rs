@@ -110,8 +110,9 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
             }
             Event::RedrawRequested(_) => {
                 let frame = swap_chain
-                    .get_next_texture()
-                    .expect("Timeout when acquiring next swap chain texture");
+                    .get_next_frame()
+                    .expect("Failed to acquire next swap chain texture")
+                    .output;
                 let mut encoder =
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
                 {

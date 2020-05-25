@@ -261,7 +261,7 @@ impl framework::Example for Skybox {
 
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainOutput,
+        frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {

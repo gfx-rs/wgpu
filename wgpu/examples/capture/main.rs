@@ -95,7 +95,7 @@ async fn run() {
     queue.submit(Some(command_buffer));
 
     // Note that we're not calling `.await` here.
-    let buffer_future = output_buffer.map_read(0, (size * size) as u64 * size_of::<u32>() as u64);
+    let buffer_future = output_buffer.map_read(0, wgt::BufferSize::WHOLE);
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
