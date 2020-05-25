@@ -247,8 +247,11 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.sampler_destroy::<B>(id);
             }
             A::GetSwapChainTexture { id, parent_id } => {
-                self.swap_chain_get_next_texture::<B>(parent_id, id)
-                    .unwrap();
+                if let Some(id) = id {
+                    self.swap_chain_get_next_texture::<B>(parent_id, id)
+                        .view_id
+                        .unwrap();
+                }
             }
             A::CreateBindGroupLayout { id, label, entries } => {
                 let label = Label::new(&label);
