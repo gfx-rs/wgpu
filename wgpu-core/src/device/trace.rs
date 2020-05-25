@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{command::TextureCopyView, id};
+use crate::{
+    command::{BufferCopyView, TextureCopyView},
+    id,
+};
 #[cfg(feature = "trace")]
 use std::io::Write as _;
 use std::ops::Range;
@@ -186,15 +189,13 @@ pub enum Command {
         size: wgt::BufferAddress,
     },
     CopyBufferToTexture {
-        src: id::BufferId,
-        src_layout: wgt::TextureDataLayout,
+        src: BufferCopyView,
         dst: TextureCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
         src: TextureCopyView,
-        dst: id::BufferId,
-        dst_layout: wgt::TextureDataLayout,
+        dst: BufferCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {

@@ -129,7 +129,7 @@ pub fn map_shader_stage_flags(shader_stage_flags: wgt::ShaderStage) -> hal::pso:
     value
 }
 
-pub fn map_extent(extent: wgt::Extent3d, dim: wgt::TextureDimension) -> hal::image::Extent {
+pub fn map_extent(extent: &wgt::Extent3d, dim: wgt::TextureDimension) -> hal::image::Extent {
     hal::image::Extent {
         width: extent.width,
         height: extent.height,
