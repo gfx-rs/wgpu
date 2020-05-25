@@ -44,7 +44,7 @@ pub trait Example: 'static + Sized {
     fn update(&mut self, event: WindowEvent);
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainOutput,
+        frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer;
@@ -143,7 +143,6 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 log::info!("Resizing to {:?}", size);
                 sc_desc.width = size.width;
                 sc_desc.height = size.height;
-                swap_chain = device.create_swap_chain(&surface, &sc_desc);
                 example.resize(&sc_desc, &device, &queue);
             }
             event::Event::WindowEvent { event, .. } => match event {
@@ -164,10 +163,17 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 }
             },
             event::Event::RedrawRequested(_) => {
-                let frame = swap_chain
-                    .get_next_texture()
-                    .expect("Timeout when acquiring next swap chain texture");
-                let command_buf = example.render(&frame, &device, &queue);
+                let frame = match swap_chain.get_next_frame() {
+                    Ok(frame) => frame,
+                    Err(_) => {
+                        swap_chain = device.create_swap_chain(&surface, &sc_desc);
+                        swap_chain
+                            .get_next_frame()
+                            .expect("Failed to acquire next swap chain texture!")
+                    }
+                };
+
+                let command_buf = example.render(&frame.output, &device, &queue);
                 queue.submit(Some(command_buf));
             }
             _ => {}

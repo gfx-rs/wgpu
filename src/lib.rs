@@ -18,14 +18,14 @@ use std::{
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
     read_spirv, AddressMode, Backend, BackendBit, BlendDescriptor, BlendFactor, BlendOperation,
-    BufferAddress, BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
-    CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
-    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
-    Origin3d, PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
-    ShaderLocation, ShaderStage, StencilOperation, StencilStateFaceDescriptor, StoreOp,
-    SwapChainDescriptor, TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension,
-    TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
+    BufferAddress, BufferSize, BufferUsage, Color, ColorStateDescriptor, ColorWrite,
+    CommandBufferDescriptor, CompareFunction, CullMode, DepthStencilStateDescriptor,
+    DeviceDescriptor, DynamicOffset, Extensions, Extent3d, FilterMode, FrontFace, IndexFormat,
+    InputStepMode, Limits, LoadOp, Origin3d, PowerPreference, PresentMode, PrimitiveTopology,
+    RasterizationStateDescriptor, ShaderLocation, ShaderStage, StencilOperation,
+    StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect, 
+    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage, 
+    TextureViewDimension, VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -54,18 +54,13 @@ trait RenderPassInner<Ctx: Context> {
         bind_group: &Ctx::BindGroupId,
         offsets: &[DynamicOffset],
     );
-    fn set_index_buffer(
-        &mut self,
-        buffer: &Ctx::BufferId,
-        offset: BufferAddress,
-        size: BufferAddress,
-    );
+    fn set_index_buffer(&mut self, buffer: &Ctx::BufferId, offset: BufferAddress, size: BufferSize);
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: &Ctx::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     );
     fn set_blend_color(&mut self, color: wgt::Color);
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
@@ -207,20 +202,18 @@ trait Context: Sized {
     fn buffer_map_read(
         &self,
         buffer: &Self::BufferId,
-        start: BufferAddress,
-        size: BufferAddress,
+        range: Range<BufferAddress>,
     ) -> Self::MapReadFuture;
     fn buffer_map_write(
         &self,
         buffer: &Self::BufferId,
-        start: BufferAddress,
-        size: BufferAddress,
+        range: Range<BufferAddress>,
     ) -> Self::MapWriteFuture;
     fn buffer_unmap(&self, buffer: &Self::BufferId);
     fn swap_chain_get_next_texture(
         &self,
         swap_chain: &Self::SwapChainId,
-    ) -> Result<(Self::TextureViewId, Self::SwapChainOutputDetail), TimeOut>;
+    ) -> (Option<Self::TextureViewId>, SwapChainStatus, Self::SwapChainOutputDetail);
     fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail);
     fn texture_create_view(
         &self,
@@ -357,22 +350,14 @@ pub enum Maintain {
 pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
-    //detail: <C as Context>::BufferDetail,
+    size: BufferAddress,
 }
 
 /// A description of what portion of a buffer to use
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
     offset: BufferAddress,
-    size: Option<BufferAddress>,
-}
-
-impl<'a> BufferSlice<'a> {
-    /// This fn can be used for calling lower-level APIs where `0` denotes that the slice should
-    /// extend to the end of the buffer.
-    fn size_or_0(&self) -> BufferAddress {
-        self.size.unwrap_or(0)
-    }
+    size: BufferSize,
 }
 
 /// A handle to a texture on the GPU.
@@ -835,9 +820,24 @@ pub type TextureViewDescriptor<'a> = wgt::TextureViewDescriptor<Option<&'a str>>
 pub type SamplerDescriptor<'a> = wgt::SamplerDescriptor<Option<&'a str>>;
 
 /// A swap chain image that can be rendered to.
-pub struct SwapChainOutput {
+pub struct SwapChainTexture {
     pub view: TextureView,
     detail: <C as Context>::SwapChainOutputDetail,
+}
+
+/// The result of a successful call to `SwapChain::get_next_frame`.
+pub struct SwapChainFrame {
+    pub output: SwapChainTexture,
+    pub suboptimal: bool,
+}
+
+/// The result of an unsuccessful call to `SwapChain::get_next_frame`.
+#[derive(Debug)]
+pub enum SwapChainError {
+    Timeout,
+    Outdated,
+    Lost,
+    OutOfMemory,
 }
 
 /// A view of a buffer which can be used to copy to or from a texture.
@@ -887,7 +887,7 @@ impl CreateBufferMapped<'_> {
         Buffer {
             context: self.context,
             id: self.id,
-            //detail: self.detail,
+            size: self.mapped_data.len() as BufferAddress,
         }
     }
 }
@@ -1074,6 +1074,7 @@ impl Device {
         Buffer {
             context: Arc::clone(&self.context),
             id: Context::device_create_buffer(&*self.context, &self.id, desc),
+            size: desc.size,
         }
     }
 
@@ -1197,9 +1198,9 @@ impl Buffer {
             Bound::Unbounded => 0,
         };
         let size = match bounds.end_bound() {
-            Bound::Included(&bound) => Some(bound + 1 - offset),
-            Bound::Excluded(&bound) => Some(bound - offset),
-            Bound::Unbounded => None,
+            Bound::Included(&bound) => BufferSize(bound + 1 - offset),
+            Bound::Excluded(&bound) => BufferSize(bound - offset),
+            Bound::Unbounded => BufferSize::WHOLE,
         };
         BufferSlice {
             buffer: self,
@@ -1219,11 +1220,16 @@ impl Buffer {
     pub fn map_read(
         &self,
         start: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncError>> + Send {
         let context = Arc::clone(&self.context);
+        let end = if size == BufferSize::WHOLE {
+            self.size
+        } else {
+            start + size.0
+        };
         self.context
-            .buffer_map_read(&self.id, start, size)
+            .buffer_map_read(&self.id, start..end)
             .map(|result| result.map(|detail| BufferReadMapping { context, detail }))
     }
 
@@ -1234,11 +1240,16 @@ impl Buffer {
     pub fn map_write(
         &self,
         start: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncError>> + Send {
         let context = Arc::clone(&self.context);
+        let end = if size == BufferSize::WHOLE {
+            self.size
+        } else {
+            start + size.0
+        };
         self.context
-            .buffer_map_write(&self.id, start, size)
+            .buffer_map_write(&self.id, start..end)
             .map(|result| result.map(|detail| BufferWriteMapping { context, detail }))
     }
 
@@ -1422,7 +1433,7 @@ impl<'a> RenderPass<'a> {
             &mut self.id,
             &buffer_slice.buffer.id,
             buffer_slice.offset,
-            buffer_slice.size_or_0(),
+            buffer_slice.size,
         )
     }
 
@@ -1444,7 +1455,7 @@ impl<'a> RenderPass<'a> {
             slot,
             &buffer_slice.buffer.id,
             buffer_slice.offset,
-            buffer_slice.size_or_0(),
+            buffer_slice.size,
         )
     }
 
@@ -1613,7 +1624,7 @@ impl Queue {
     }
 }
 
-impl Drop for SwapChainOutput {
+impl Drop for SwapChainTexture {
     fn drop(&mut self) {
         if !thread::panicking() {
             Context::swap_chain_present(&*self.view.context, &self.view.id, &self.detail);
@@ -1621,26 +1632,36 @@ impl Drop for SwapChainOutput {
     }
 }
 
-/// The GPU timed out when attempting to acquire the next texture or if a
-/// previous output is still alive.
-#[derive(Clone, Debug)]
-pub struct TimeOut;
-
 impl SwapChain {
     /// Returns the next texture to be presented by the swapchain for drawing.
     ///
     /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
-    pub fn get_next_texture(&mut self) -> Result<SwapChainOutput, TimeOut> {
-        Context::swap_chain_get_next_texture(&*self.context, &self.id).map(|(id, detail)| {
-            SwapChainOutput {
-                view: TextureView {
-                    context: Arc::clone(&self.context),
-                    id,
-                    owned: false,
-                },
-                detail,
-            }
-        })
+    pub fn get_next_frame(&mut self) -> Result<SwapChainFrame, SwapChainError> {
+        let (view_id, status, detail) =
+            Context::swap_chain_get_next_texture(&*self.context, &self.id);
+        let output = view_id.map(|id| SwapChainTexture {
+            view: TextureView {
+                context: Arc::clone(&self.context),
+                id: id,
+                owned: false,
+            },
+            detail,
+        });
+
+        match status {
+            SwapChainStatus::Good => Ok(SwapChainFrame {
+                output: output.unwrap(),
+                suboptimal: false,
+            }),
+            SwapChainStatus::Suboptimal => Ok(SwapChainFrame {
+                output: output.unwrap(),
+                suboptimal: true,
+            }),
+            SwapChainStatus::Timeout => Err(SwapChainError::Timeout),
+            SwapChainStatus::Outdated => Err(SwapChainError::Outdated),
+            SwapChainStatus::Lost => Err(SwapChainError::Lost),
+            SwapChainStatus::OutOfMemory => Err(SwapChainError::OutOfMemory),
+        }
     }
 }
