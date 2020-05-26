@@ -63,47 +63,17 @@ pub const WHOLE_SIZE: wgt::BufferAddress = !0;
 #[cfg_attr(
     feature = "trace",
     derive(serde::Serialize),
-    serde(into = "SerBufferSize")
+    serde(into = "crate::device::trace::SerBufferSize")
 )]
 #[cfg_attr(
     feature = "replay",
     derive(serde::Deserialize),
-    serde(from = "SerBufferSize")
+    serde(from = "crate::device::trace::SerBufferSize")
 )]
 pub struct BufferSize(pub u64);
 
 impl BufferSize {
     const WHOLE: BufferSize = BufferSize(!0u64);
-}
-
-/// This type allows us to make the serialized representation of a BufferSize more readable
-#[allow(dead_code)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-enum SerBufferSize {
-    Size(u64),
-    Whole,
-}
-
-#[cfg(feature = "trace")]
-impl From<BufferSize> for SerBufferSize {
-    fn from(buffer_size: BufferSize) -> Self {
-        if buffer_size == BufferSize::WHOLE {
-            Self::Whole
-        } else {
-            Self::Size(buffer_size.0)
-        }
-    }
-}
-
-#[cfg(feature = "replay")]
-impl From<SerBufferSize> for BufferSize {
-    fn from(ser_buffer_size: SerBufferSize) -> Self {
-        match ser_buffer_size {
-            SerBufferSize::Size(size) => BufferSize(size),
-            SerBufferSize::Whole => BufferSize::WHOLE,
-        }
-    }
 }
 
 //TODO: make it private. Currently used for swapchain creation impl.
