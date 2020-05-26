@@ -19,6 +19,7 @@ use std::iter;
 
 pub(crate) const BITS_PER_BYTE: u32 = 8;
 
+#[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
@@ -27,6 +28,7 @@ pub struct BufferCopyView {
     pub layout: TextureDataLayout,
 }
 
+#[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
