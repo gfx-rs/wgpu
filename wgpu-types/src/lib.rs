@@ -642,6 +642,17 @@ pub struct SwapChainDescriptor {
 }
 
 #[repr(C)]
+#[derive(Debug)]
+pub enum SwapChainStatus {
+    Good,
+    Suboptimal,
+    Timeout,
+    Outdated,
+    Lost,
+    OutOfMemory,
+}
+
+#[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]

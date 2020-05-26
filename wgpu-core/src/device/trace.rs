@@ -155,7 +155,7 @@ pub enum Action {
         desc: wgt::SwapChainDescriptor,
     },
     GetSwapChainTexture {
-        id: id::TextureViewId,
+        id: Option<id::TextureViewId>,
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
