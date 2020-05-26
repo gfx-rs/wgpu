@@ -1319,6 +1319,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 panic!("Mismatched buffer binding type for {:?}. Expected a type of UniformBuffer, StorageBuffer or ReadonlyStorageBuffer", decl)
                             }
                         };
+
                         assert_eq!(
                             bb.offset % alignment,
                             0,
@@ -1326,6 +1327,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             bb.offset,
                             alignment
                         );
+
                         let buffer = used
                             .buffers
                             .use_extend(&*buffer_guard, bb.buffer, (), internal_use)
@@ -1360,6 +1362,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             | binding_model::BindingType::ComparisonSampler => {}
                             _ => panic!("Mismatched sampler binding type in {:?}. Expected a type of Sampler or ComparisonSampler", decl.ty),
                         }
+
                         let sampler = used
                             .samplers
                             .use_extend(&*sampler_guard, id, (), ())
