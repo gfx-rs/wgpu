@@ -23,8 +23,8 @@ pub use wgt::{
     Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
     Origin3d, PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
     ShaderLocation, ShaderStage, StencilOperation, StencilStateFaceDescriptor, StoreOp,
-    SwapChainDescriptor, TextureAspect, TextureComponentType, TextureDimension, TextureFormat,
-    TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
+    SwapChainDescriptor, TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension,
+    TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
     BIND_BUFFER_ALIGNMENT, MAX_BIND_GROUPS,
 };
 
@@ -291,9 +291,17 @@ trait Context: Sized {
     fn queue_write_buffer(
         &self,
         queue: &Self::QueueId,
-        data: &[u8],
         buffer: &Self::BufferId,
         offset: BufferAddress,
+        data: &[u8],
+    );
+    fn queue_write_texture(
+        &self,
+        queue: &Self::QueueId,
+        texture: TextureCopyView,
+        data: &[u8],
+        data_layout: wgt::TextureDataLayout,
+        size: wgt::Extent3d,
     );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
@@ -838,17 +846,8 @@ pub struct BufferCopyView<'a> {
     /// The buffer to be copied to or from.
     pub buffer: &'a Buffer,
 
-    /// The offset in bytes from the start of the buffer.
-    /// In the future this must be aligned to 512 bytes, however the requirement is currently unimplemented.
-    pub offset: BufferAddress,
-
-    /// The size in bytes of a single row of the texture.
-    /// In the future this must be a multiple of 256 bytes, however the requirement is currently unimplemented.
-    pub bytes_per_row: u32,
-
-    /// The height in texels of the imaginary texture view overlaid on the buffer.
-    /// Must be zero for copies where `copy_size.depth == 1`.
-    pub rows_per_image: u32,
+    /// The layout of the texture data in this buffer.
+    pub layout: wgt::TextureDataLayout,
 }
 
 /// A view of a texture which can be used to copy to or from a buffer or another texture.
@@ -859,9 +858,6 @@ pub struct TextureCopyView<'a> {
 
     /// The target mip level of the texture.
     pub mip_level: u32,
-
-    /// The target layer of the texture.
-    pub array_layer: u32,
 
     /// The base texel of the texture in the selected `mip_level`.
     pub origin: Origin3d,
@@ -1590,8 +1586,19 @@ impl<'a> Drop for ComputePass<'a> {
 
 impl Queue {
     /// Schedule a data write into `buffer` starting at `offset`.
-    pub fn write_buffer(&self, data: &[u8], buffer: &Buffer, offset: BufferAddress) {
-        Context::queue_write_buffer(&*self.context, &self.id, data, &buffer.id, offset)
+    pub fn write_buffer(&self, buffer: &Buffer, offset: BufferAddress, data: &[u8]) {
+        Context::queue_write_buffer(&*self.context, &self.id, &buffer.id, offset, data)
+    }
+
+    /// Schedule a data write into `texture`.
+    pub fn write_texture(
+        &self,
+        texture: TextureCopyView,
+        data: &[u8],
+        data_layout: wgt::TextureDataLayout,
+        size: wgt::Extent3d,
+    ) {
+        Context::queue_write_texture(&*self.context, &self.id, texture, data, data_layout, size)
     }
 
     /// Submits a series of finished command buffers for execution.

@@ -33,6 +33,7 @@ pub trait Example: 'static + Sized {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>);
     fn resize(
         &mut self,
@@ -79,14 +80,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 },
                 limits: wgpu::Limits::default(),
             },
-            match trace_dir {
-                Ok(ref value) if !cfg!(feature = "trace") => {
-                    log::error!("Unable to trace into {:?} without \"trace\" feature enabled!", value);
-                    None
-                }
-                Ok(ref value) => Some(std::path::Path::new(value)),
-                Err(_) => None,
-            },
+            trace_dir.ok().as_ref().map(std::path::Path::new),
         )
         .await
         .unwrap();
@@ -106,7 +100,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     log::info!("Initializing the example...");
-    let (mut example, init_command_buf) = E::init(&sc_desc, &device);
+    let (mut example, init_command_buf) = E::init(&sc_desc, &device, &queue);
     if init_command_buf.is_some() {
         queue.submit(init_command_buf);
     }

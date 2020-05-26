@@ -38,10 +38,8 @@ impl framework::Example for Skybox {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
+        queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
-        let mut init_encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             bindings: &[
                 wgpu::BindGroupLayoutEntry {
@@ -180,20 +178,21 @@ impl framework::Example for Skybox {
                 image_width,
                 image_height,
             );
-            let image_buf = device.create_buffer_with_data(image, wgpu::BufferUsage::COPY_SRC);
-
-            init_encoder.copy_buffer_to_texture(
-                wgpu::BufferCopyView {
-                    buffer: &image_buf,
-                    offset: 0,
-                    bytes_per_row: 4 * image_width,
-                    rows_per_image: 0,
-                },
+            queue.write_texture(
                 wgpu::TextureCopyView {
                     texture: &texture,
                     mip_level: 0,
-                    array_layer: i as u32,
-                    origin: wgpu::Origin3d::ZERO,
+                    origin: wgpu::Origin3d {
+                        x: 0,
+                        y: 0,
+                        z: i as u32,
+                    },
+                },
+                &image,
+                wgpu::TextureDataLayout {
+                    offset: 0,
+                    bytes_per_row: 4 * image_width,
+                    rows_per_image: 0,
                 },
                 wgpu::Extent3d {
                     width: image_width,
@@ -239,7 +238,7 @@ impl framework::Example for Skybox {
                 aspect,
                 uniforms,
             },
-            Some(init_encoder.finish()),
+            None,
         )
     }
 
@@ -257,7 +256,7 @@ impl framework::Example for Skybox {
         let uniforms = Skybox::generate_uniforms(self.aspect);
         let mx_total = uniforms[0] * uniforms[1];
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(bytemuck::cast_slice(mx_ref), &self.uniform_buf, 0);
+        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
     }
 
     fn render(
@@ -270,9 +269,9 @@ impl framework::Example for Skybox {
         let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
         self.uniforms[1] = self.uniforms[1] * rotation;
         queue.write_buffer(
-            bytemuck::cast_slice(&raw_uniforms(&self.uniforms)),
             &self.uniform_buf,
             0,
+            bytemuck::cast_slice(&raw_uniforms(&self.uniforms)),
         );
 
         let mut encoder =
