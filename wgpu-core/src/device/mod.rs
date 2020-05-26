@@ -1717,10 +1717,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             unsafe { slice::from_raw_parts(desc.color_states, desc.color_states_length) };
         let depth_stencil_state = unsafe { desc.depth_stencil_state.as_ref() };
 
+        let rasterization_state = unsafe { desc.rasterization_state.as_ref() }.cloned();
         let rasterizer = conv::map_rasterization_state_descriptor(
-            &unsafe { desc.rasterization_state.as_ref() }
-                .cloned()
-                .unwrap_or_default(),
+            &rasterization_state.clone().unwrap_or_default(),
         );
 
         let desc_vbs = unsafe {
@@ -2015,7 +2014,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     fragment_stage: unsafe { desc.fragment_stage.as_ref() }
                         .map(trace::ProgrammableStageDescriptor::new),
                     primitive_topology: desc.primitive_topology,
-                    rasterization_state: unsafe { desc.rasterization_state.as_ref() }.cloned(),
+                    rasterization_state,
                     color_states: color_states.to_vec(),
                     depth_stencil_state: depth_stencil_state.cloned(),
                     vertex_state: trace::VertexStateDescriptor {
