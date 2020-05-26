@@ -211,6 +211,7 @@ impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
+        _queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
         use std::mem;
 
@@ -275,19 +276,22 @@ impl framework::Example for Example {
             label: None,
         });
         let texture_view = texture.create_default_view();
+        //Note: we could use queue.write_texture instead, and this is what other
+        // examples do, but here we want to show another way to do this.
         let temp_buf =
             device.create_buffer_with_data(texels.as_slice(), wgpu::BufferUsage::COPY_SRC);
         init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
-                offset: 0,
-                bytes_per_row: 4 * size,
-                rows_per_image: 0,
+                layout: wgpu::TextureDataLayout {
+                    offset: 0,
+                    bytes_per_row: 4 * size,
+                    rows_per_image: 0,
+                },
             },
             wgpu::TextureCopyView {
                 texture: &texture,
                 mip_level: 0,
-                array_layer: 0,
                 origin: wgpu::Origin3d::ZERO,
             },
             texture_extent,
@@ -403,7 +407,7 @@ impl framework::Example for Example {
     ) {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        queue.write_buffer(bytemuck::cast_slice(mx_ref), &self.uniform_buf, 0);
+        queue.write_buffer(&self.uniform_buf, 0, bytemuck::cast_slice(mx_ref));
     }
 
     fn render(

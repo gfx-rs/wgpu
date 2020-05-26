@@ -208,6 +208,7 @@ impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
+        _queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
@@ -674,9 +675,9 @@ impl framework::Example for Example {
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
         queue.write_buffer(
-            bytemuck::cast_slice(mx_ref),
             &self.forward_pass.uniform_buf,
             0,
+            bytemuck::cast_slice(mx_ref),
         );
 
         let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
@@ -716,16 +717,16 @@ impl framework::Example for Example {
                     entity.color.a as f32,
                 ],
             };
-            queue.write_buffer(bytemuck::bytes_of(&data), &entity.uniform_buf, 0);
+            queue.write_buffer(&entity.uniform_buf, 0, bytemuck::bytes_of(&data));
         }
 
         if self.lights_are_dirty {
             self.lights_are_dirty = false;
             for (i, light) in self.lights.iter().enumerate() {
                 queue.write_buffer(
-                    bytemuck::bytes_of(&light.to_raw()),
                     &self.light_uniform_buf,
                     (i * mem::size_of::<LightRaw>()) as wgpu::BufferAddress,
+                    bytemuck::bytes_of(&light.to_raw()),
                 );
             }
         }

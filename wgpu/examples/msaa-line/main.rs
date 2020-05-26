@@ -116,6 +116,7 @@ impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
+        _queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
         log::info!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;

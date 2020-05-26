@@ -166,20 +166,17 @@ mod pass_impl {
     }
 }
 
-fn map_buffer_copy_view(view: crate::BufferCopyView<'_>) -> wgc::command::BufferCopyView {
+fn map_buffer_copy_view(view: crate::BufferCopyView) -> wgc::command::BufferCopyView {
     wgc::command::BufferCopyView {
         buffer: view.buffer.id,
-        offset: view.offset,
-        bytes_per_row: view.bytes_per_row,
-        rows_per_image: view.rows_per_image,
+        layout: view.layout,
     }
 }
 
-fn map_texture_copy_view<'a>(view: crate::TextureCopyView<'a>) -> wgc::command::TextureCopyView {
+fn map_texture_copy_view(view: crate::TextureCopyView) -> wgc::command::TextureCopyView {
     wgc::command::TextureCopyView {
         texture: view.texture.id,
         mip_level: view.mip_level,
-        array_layer: view.array_layer,
         origin: view.origin,
     }
 }
@@ -764,7 +761,7 @@ impl crate::Context for Context {
             *encoder,
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
-            copy_size
+            &copy_size
         ))
     }
 
@@ -779,7 +776,7 @@ impl crate::Context for Context {
             *encoder,
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
-            copy_size
+            &copy_size
         ))
     }
 
@@ -794,7 +791,7 @@ impl crate::Context for Context {
             *encoder,
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
-            copy_size
+            &copy_size
         ))
     }
 
@@ -879,11 +876,28 @@ impl crate::Context for Context {
     fn queue_write_buffer(
         &self,
         queue: &Self::QueueId,
-        data: &[u8],
         buffer: &Self::BufferId,
         offset: wgt::BufferAddress,
+        data: &[u8],
     ) {
-        gfx_select!(*queue => self.queue_write_buffer(*queue, data, *buffer, offset))
+        gfx_select!(*queue => self.queue_write_buffer(*queue, *buffer, offset, data))
+    }
+
+    fn queue_write_texture(
+        &self,
+        queue: &Self::QueueId,
+        texture: crate::TextureCopyView,
+        data: &[u8],
+        data_layout: wgt::TextureDataLayout,
+        size: wgt::Extent3d,
+    ) {
+        gfx_select!(*queue => self.queue_write_texture(
+            *queue,
+            &map_texture_copy_view(texture),
+            data,
+            &data_layout,
+            &size
+        ))
     }
 
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
