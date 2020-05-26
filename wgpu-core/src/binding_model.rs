@@ -5,7 +5,7 @@
 use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     track::{TrackerSet, DUMMY_SELECTOR},
-    FastHashMap, LifeGuard, RefCount, Stored,
+    BufferSize, FastHashMap, LifeGuard, RefCount, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -88,7 +88,7 @@ pub struct PipelineLayout<B: hal::Backend> {
 pub struct BufferBinding {
     pub buffer: BufferId,
     pub offset: BufferAddress,
-    pub size: BufferAddress,
+    pub size: BufferSize,
 }
 
 #[repr(C)]

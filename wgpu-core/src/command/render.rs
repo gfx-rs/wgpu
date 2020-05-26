@@ -17,7 +17,7 @@ use crate::{
     pipeline::PipelineFlags,
     resource::{BufferUse, TextureUse, TextureViewInner},
     track::TrackerSet,
-    Stored,
+    BufferSize, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -70,13 +70,13 @@ pub enum RenderCommand {
     SetIndexBuffer {
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     },
     SetVertexBuffer {
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     },
     SetBlendColor(Color),
     SetStencilReference(u32),
@@ -1028,8 +1028,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
-                    let end = if size != 0 {
-                        offset + size
+                    let end = if size != BufferSize::WHOLE {
+                        offset + size.0
                     } else {
                         buffer.size
                     };
@@ -1065,15 +1065,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .vertex
                         .inputs
                         .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
-                    state.vertex.inputs[slot as usize].total_size = if size != 0 {
-                        size
+                    state.vertex.inputs[slot as usize].total_size = if size != BufferSize::WHOLE {
+                        size.0
                     } else {
                         buffer.size - offset
                     };
 
                     let range = hal::buffer::SubRange {
                         offset,
-                        size: if size != 0 { Some(size) } else { None },
+                        size: if size != BufferSize::WHOLE {
+                            Some(size.0)
+                        } else {
+                            None
+                        },
                     };
                     unsafe {
                         raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
@@ -1276,7 +1280,7 @@ pub mod render_ffi {
         super::{PhantomSlice, RawPass, Rect},
         RenderCommand,
     };
-    use crate::{id, RawString};
+    use crate::{id, BufferSize, RawString};
     use std::{convert::TryInto, slice};
     use wgt::{BufferAddress, Color, DynamicOffset};
 
@@ -1316,7 +1320,7 @@ pub mod render_ffi {
         pass: &mut RawPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) {
         pass.encode(&RenderCommand::SetIndexBuffer {
             buffer_id,
@@ -1331,7 +1335,7 @@ pub mod render_ffi {
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) {
         pass.encode(&RenderCommand::SetVertexBuffer {
             slot,

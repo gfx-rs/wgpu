@@ -46,6 +46,8 @@ use std::sync::atomic;
 
 use atomic::{AtomicUsize, Ordering};
 
+use peek_poke::PeekPoke;
+
 use std::{os::raw::c_char, ptr};
 
 type SubmissionIndex = usize;
@@ -53,6 +55,26 @@ type Index = u32;
 type Epoch = u32;
 
 pub type RawString = *const c_char;
+
+pub const WHOLE_SIZE: wgt::BufferAddress = !0;
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, PeekPoke)]
+#[cfg_attr(
+    feature = "trace",
+    derive(serde::Serialize),
+    serde(into = "crate::device::trace::SerBufferSize")
+)]
+#[cfg_attr(
+    feature = "replay",
+    derive(serde::Deserialize),
+    serde(from = "crate::device::trace::SerBufferSize")
+)]
+pub struct BufferSize(pub u64);
+
+impl BufferSize {
+    const WHOLE: BufferSize = BufferSize(!0u64);
+}
 
 //TODO: make it private. Currently used for swapchain creation impl.
 #[derive(Debug)]
