@@ -593,6 +593,7 @@ pub struct BufferDescriptor<L> {
     pub label: L,
     pub size: BufferAddress,
     pub usage: BufferUsage,
+    pub mapped_at_creation: bool,
 }
 
 impl<L> BufferDescriptor<L> {
@@ -601,6 +602,7 @@ impl<L> BufferDescriptor<L> {
             label: fun(&self.label),
             size: self.size,
             usage: self.usage,
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 }

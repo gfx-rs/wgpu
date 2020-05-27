@@ -54,6 +54,10 @@ impl<B: hal::Backend> PendingWrites<B> {
         }
     }
 
+    pub fn consume_temp(&mut self, buffer: B::Buffer, memory: MemoryBlock<B>) {
+        self.temp_buffers.push((buffer, memory));
+    }
+
     fn consume(&mut self, stage: StagingData<B>) {
         self.temp_buffers.push((stage.buffer, stage.memory));
         self.command_buffer = Some(stage.comb);
@@ -61,6 +65,17 @@ impl<B: hal::Backend> PendingWrites<B> {
 }
 
 impl<B: hal::Backend> super::Device<B> {
+    pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
+        if self.pending_writes.command_buffer.is_none() {
+            let mut comb = self.com_allocator.allocate_internal();
+            unsafe {
+                comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+            }
+            self.pending_writes.command_buffer = Some(comb);
+        }
+        self.pending_writes.command_buffer.as_mut().unwrap()
+    }
+
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> StagingData<B> {
         let mut buffer = unsafe {
             self.raw
