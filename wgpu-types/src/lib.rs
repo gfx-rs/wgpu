@@ -4,16 +4,13 @@
 
 #[cfg(feature = "peek-poke")]
 use peek_poke::PeekPoke;
-#[cfg(feature = "replay")]
-use serde::Deserialize;
-#[cfg(feature = "trace")]
-use serde::Serialize;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::{io, ptr, slice};
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Backend {
     Empty = 0,
     Vulkan = 1,
@@ -26,8 +23,7 @@ pub enum Backend {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
@@ -36,8 +32,7 @@ pub enum PowerPreference {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "trace", derive(Serialize))]
-    #[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BackendBit: u32 {
         const VULKAN = 1 << Backend::Vulkan as u32;
         const GL = 1 << Backend::Gl as u32;
@@ -63,16 +58,14 @@ impl From<Backend> for BackendBit {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extensions {
     pub anisotropic_filtering: bool,
 }
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
 }
@@ -89,8 +82,7 @@ impl Default for Limits {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
     pub limits: Limits,
@@ -121,13 +113,13 @@ pub fn read_spirv<R: io::Read + io::Seek>(mut x: R) -> io::Result<Vec<u32>> {
         ))?;
         result.set_len(words);
     }
-    const MAGIC_NUMBER: u32 = 0x0723_0203;
-    if !result.is_empty() && result[0] == MAGIC_NUMBER.swap_bytes() {
+    const MAGIC_NUMBER: u32 = 0x07230203;
+    if result.len() > 0 && result[0] == MAGIC_NUMBER.swap_bytes() {
         for word in &mut result {
             *word = word.swap_bytes();
         }
     }
-    if result.is_empty() || result[0] != MAGIC_NUMBER {
+    if result.len() == 0 || result[0] != MAGIC_NUMBER {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             "input missing SPIR-V magic number",
@@ -138,8 +130,7 @@ pub fn read_spirv<R: io::Read + io::Seek>(mut x: R) -> io::Result<Vec<u32>> {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ShaderStage: u32 {
         const NONE = 0;
         const VERTEX = 1;
@@ -150,8 +141,7 @@ bitflags::bitflags! {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureViewDimension {
     D1,
     D2,
@@ -165,8 +155,7 @@ pub type BufferAddress = u64;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendFactor {
     Zero = 0,
     One = 1,
@@ -185,8 +174,7 @@ pub enum BlendFactor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendOperation {
     Add = 0,
     Subtract = 1,
@@ -203,8 +191,7 @@ impl Default for BlendOperation {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BlendDescriptor {
     pub src_factor: BlendFactor,
     pub dst_factor: BlendFactor,
@@ -237,8 +224,7 @@ impl Default for BlendDescriptor {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ColorStateDescriptor {
     pub format: TextureFormat,
     pub alpha_blend: BlendDescriptor,
@@ -248,8 +234,7 @@ pub struct ColorStateDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PrimitiveTopology {
     PointList = 0,
     LineList = 1,
@@ -260,8 +245,7 @@ pub enum PrimitiveTopology {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FrontFace {
     Ccw = 0,
     Cw = 1,
@@ -275,8 +259,7 @@ impl Default for FrontFace {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CullMode {
     None = 0,
     Front = 1,
@@ -291,8 +274,7 @@ impl Default for CullMode {
 
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
@@ -303,8 +285,7 @@ pub struct RasterizationStateDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureFormat {
     // Normal 8 bit formats
     R8Unorm = 0,
@@ -361,8 +342,7 @@ pub enum TextureFormat {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ColorWrite: u32 {
         const RED = 1;
         const GREEN = 2;
@@ -381,8 +361,7 @@ impl Default for ColorWrite {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilStateDescriptor {
     pub format: TextureFormat,
     pub depth_write_enabled: bool,
@@ -401,8 +380,7 @@ impl DepthStencilStateDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum IndexFormat {
     Uint16 = 0,
     Uint32 = 1,
@@ -410,8 +388,7 @@ pub enum IndexFormat {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilOperation {
     Keep = 0,
     Zero = 1,
@@ -431,8 +408,7 @@ impl Default for StencilOperation {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StencilStateFaceDescriptor {
     pub compare: CompareFunction,
     pub fail_op: StencilOperation,
@@ -457,8 +433,7 @@ impl Default for StencilStateFaceDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum CompareFunction {
     Undefined = 0,
     Never = 1,
@@ -484,8 +459,7 @@ pub type ShaderLocation = u32;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum InputStepMode {
     Vertex = 0,
     Instance = 1,
@@ -493,8 +467,7 @@ pub enum InputStepMode {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct VertexAttributeDescriptor {
     pub offset: BufferAddress,
     pub format: VertexFormat,
@@ -503,8 +476,7 @@ pub struct VertexAttributeDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum VertexFormat {
     Uchar2 = 0,
     Uchar4 = 1,
@@ -540,8 +512,7 @@ pub enum VertexFormat {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "trace", derive(Serialize))]
-    #[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct BufferUsage: u32 {
         const MAP_READ = 1;
         const MAP_WRITE = 2;
@@ -557,22 +528,10 @@ bitflags::bitflags! {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BufferDescriptor<L> {
-    pub label: L,
+pub struct BufferDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub size: BufferAddress,
     pub usage: BufferUsage,
-}
-
-impl<L> BufferDescriptor<L> {
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> BufferDescriptor<K> {
-        BufferDescriptor {
-            label: fun(&self.label),
-            size: self.size,
-            usage: self.usage,
-        }
-    }
 }
 
 #[repr(C)]
@@ -594,8 +553,7 @@ pub type DynamicOffset = u32;
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum PresentMode {
     /// The presentation engine does **not** wait for a vertical blanking period and
     /// the request is presented immediately. This is a low-latency presentation mode,
@@ -615,8 +573,7 @@ pub enum PresentMode {
 
 bitflags::bitflags! {
     #[repr(transparent)]
-    #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct TextureUsage: u32 {
         const COPY_SRC = 1;
         const COPY_DST = 2;
@@ -628,8 +585,7 @@ bitflags::bitflags! {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SwapChainDescriptor {
     pub usage: TextureUsage,
     pub format: TextureFormat,
@@ -640,8 +596,7 @@ pub struct SwapChainDescriptor {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum LoadOp {
     Clear = 0,
@@ -650,8 +605,7 @@ pub enum LoadOp {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum StoreOp {
     Clear = 0,
@@ -660,8 +614,7 @@ pub enum StoreOp {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct RenderPassColorAttachmentDescriptorBase<T> {
     pub attachment: T,
@@ -673,8 +626,7 @@ pub struct RenderPassColorAttachmentDescriptorBase<T> {
 
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     pub attachment: T,
@@ -688,8 +640,7 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct Color {
     pub r: f64,
@@ -739,8 +690,7 @@ impl Color {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureDimension {
     D1,
     D2,
@@ -749,8 +699,7 @@ pub enum TextureDimension {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Origin3d {
     pub x: u32,
     pub y: u32,
@@ -769,8 +718,7 @@ impl Default for Origin3d {
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent3d {
     pub width: u32,
     pub height: u32,
@@ -779,10 +727,8 @@ pub struct Extent3d {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureDescriptor<L> {
-    pub label: L,
+pub struct TextureDescriptor {
+    pub label: *const std::os::raw::c_char,
     pub size: Extent3d,
     pub mip_level_count: u32,
     pub sample_count: u32,
@@ -791,24 +737,9 @@ pub struct TextureDescriptor<L> {
     pub usage: TextureUsage,
 }
 
-impl<L> TextureDescriptor<L> {
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureDescriptor<K> {
-        TextureDescriptor {
-            label: fun(&self.label),
-            size: self.size,
-            mip_level_count: self.mip_level_count,
-            sample_count: self.sample_count,
-            dimension: self.dimension,
-            format: self.format,
-            usage: self.usage,
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureAspect {
     All,
     StencilOnly,
@@ -823,10 +754,8 @@ impl Default for TextureAspect {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureViewDescriptor<L> {
-    pub label: L,
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct TextureViewDescriptor {
     pub format: TextureFormat,
     pub dimension: TextureViewDimension,
     pub aspect: TextureAspect,
@@ -836,25 +765,9 @@ pub struct TextureViewDescriptor<L> {
     pub array_layer_count: u32,
 }
 
-impl<L> TextureViewDescriptor<L> {
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureViewDescriptor<K> {
-        TextureViewDescriptor {
-            label: fun(&self.label),
-            format: self.format,
-            dimension: self.dimension,
-            aspect: self.aspect,
-            base_mip_level: self.base_mip_level,
-            level_count: self.level_count,
-            base_array_layer: self.base_array_layer,
-            array_layer_count: self.array_layer_count,
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum AddressMode {
     ClampToEdge = 0,
     Repeat = 1,
@@ -869,8 +782,7 @@ impl Default for AddressMode {
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum FilterMode {
     Nearest = 0,
     Linear = 1,
@@ -884,10 +796,8 @@ impl Default for FilterMode {
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct SamplerDescriptor<L> {
-    pub label: L,
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SamplerDescriptor {
     pub address_mode_u: AddressMode,
     pub address_mode_v: AddressMode,
     pub address_mode_w: AddressMode,
@@ -899,35 +809,16 @@ pub struct SamplerDescriptor<L> {
     pub compare: CompareFunction,
 }
 
-impl<L> SamplerDescriptor<L> {
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> SamplerDescriptor<K> {
-        SamplerDescriptor {
-            label: fun(&self.label),
-            address_mode_u: self.address_mode_u,
-            address_mode_v: self.address_mode_v,
-            address_mode_w: self.address_mode_w,
-            mag_filter: self.mag_filter,
-            min_filter: self.min_filter,
-            mipmap_filter: self.mipmap_filter,
-            lod_min_clamp: self.lod_min_clamp,
-            lod_max_clamp: self.lod_max_clamp,
-            compare: self.compare,
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct CommandBufferDescriptor {
     pub todo: u32,
 }
 
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum TextureComponentType {
     Float,
     Sint,

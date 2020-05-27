@@ -17,7 +17,6 @@ The implementation consists of the following parts:
 
   - `wgpu-core` - internal Rust API for WebGPU implementations to use
   - `wgpu-types` - Rust types shared between `wgpu-core`, `wgpu-native`, and `wgpu-rs`
-  - `player` - application for replaying the API traces, uses `winit`
 
 This repository is not meant for direct use by applications.
 If you are looking for the user-facing Rust API, you need [wgpu-rs](https://github.com/gfx-rs/wgpu-rs).
@@ -25,7 +24,7 @@ If you are looking for the native implementation or bindings to the API in other
 
 ## Supported Platforms
 
-   API   |    Windows 7/10    |  Linux & Android   |    macOS & iOS     |
+   API   |       Windows      |       Linux        |    macOS & iOS     |
   -----  | ------------------ | ------------------ | ------------------ |
   DX11   | :white_check_mark: |                    |                    |
   DX12   | :heavy_check_mark: |                    |                    |

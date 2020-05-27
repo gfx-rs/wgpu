@@ -19,7 +19,7 @@ use crate::{
     id,
     resource::{Buffer, Texture},
     track::TrackerSet,
-    LifeGuard, PrivateFeatures, Stored,
+    Features, LifeGuard, Stored,
 };
 
 use peek_poke::PeekPoke;
@@ -27,7 +27,7 @@ use peek_poke::PeekPoke;
 use std::{marker::PhantomData, mem, ptr, slice, thread::ThreadId};
 
 #[derive(Clone, Copy, Debug, PeekPoke)]
-pub struct PhantomSlice<T>(PhantomData<T>);
+struct PhantomSlice<T>(PhantomData<T>);
 
 impl<T> Default for PhantomSlice<T> {
     fn default() -> Self {
@@ -119,13 +119,13 @@ impl RawPass {
     }
 
     #[inline]
-    pub unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
+    unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
         self.ensure_extra_size(C::max_size());
         self.data = command.poke_into(self.data);
     }
 
     #[inline]
-    pub unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
+    unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
         let align_offset = self.data.align_offset(mem::align_of::<T>());
         let extra = align_offset + mem::size_of::<T>() * data.len();
         self.ensure_extra_size(extra);
@@ -148,10 +148,7 @@ pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: TrackerSet,
     pub(crate) used_swap_chain: Option<(Stored<id::SwapChainId>, B::Framebuffer)>,
-    limits: wgt::Limits,
-    private_features: PrivateFeatures,
-    #[cfg(feature = "trace")]
-    pub(crate) commands: Option<Vec<crate::device::trace::Command>>,
+    pub(crate) features: Features,
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {

@@ -122,7 +122,8 @@ pub struct U32Array {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct PrivateFeatures {
+pub(crate) struct Features {
+    pub max_bind_groups: u32,
     pub supports_texture_d24_s8: bool,
 }
 

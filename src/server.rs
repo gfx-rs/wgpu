@@ -9,7 +9,6 @@ use wgc::{gfx_select, id};
 use std::slice;
 
 pub type Global = wgc::hub::Global<IdentityRecyclerFactory>;
-pub type RawString = *const std::os::raw::c_char;
 
 #[no_mangle]
 pub extern "C" fn wgpu_server_new(factory: IdentityRecyclerFactory) -> *mut Global {
@@ -60,17 +59,13 @@ pub unsafe extern "C" fn wgpu_server_instance_request_adapter(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_server_adapter_request_device(
+pub extern "C" fn wgpu_server_adapter_request_device(
     global: &Global,
     self_id: id::AdapterId,
     desc: &wgt::DeviceDescriptor,
     new_id: id::DeviceId,
 ) {
-    let trace_string = std::env::var("WGPU_TRACE").ok();
-    let trace_path = trace_string
-        .as_ref()
-        .map(|string| std::path::Path::new(string.as_str()));
-    gfx_select!(self_id => global.adapter_request_device(self_id, desc, trace_path, new_id));
+    gfx_select!(self_id => global.adapter_request_device(self_id, desc, new_id));
 }
 
 #[no_mangle]
@@ -87,7 +82,7 @@ pub extern "C" fn wgpu_server_device_destroy(global: &Global, self_id: id::Devic
 pub extern "C" fn wgpu_server_device_create_buffer(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &wgt::BufferDescriptor<RawString>,
+    desc: &wgt::BufferDescriptor,
     new_id: id::BufferId,
 ) {
     gfx_select!(self_id => global.device_create_buffer(self_id, desc, new_id));
@@ -377,7 +372,7 @@ pub extern "C" fn wgpu_server_render_pipeline_destroy(
 pub extern "C" fn wgpu_server_device_create_texture(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &wgt::TextureDescriptor<RawString>,
+    desc: &wgt::TextureDescriptor,
     new_id: id::TextureId,
 ) {
     gfx_select!(self_id => global.device_create_texture(self_id, desc, new_id));
@@ -387,7 +382,7 @@ pub extern "C" fn wgpu_server_device_create_texture(
 pub extern "C" fn wgpu_server_texture_create_view(
     global: &Global,
     self_id: id::TextureId,
-    desc: Option<&wgt::TextureViewDescriptor<RawString>>,
+    desc: Option<&wgt::TextureViewDescriptor>,
     new_id: id::TextureViewId,
 ) {
     gfx_select!(self_id => global.texture_create_view(self_id, desc, new_id));
@@ -407,7 +402,7 @@ pub extern "C" fn wgpu_server_texture_view_destroy(global: &Global, self_id: id:
 pub extern "C" fn wgpu_server_device_create_sampler(
     global: &Global,
     self_id: id::DeviceId,
-    desc: &wgt::SamplerDescriptor<RawString>,
+    desc: &wgt::SamplerDescriptor,
     new_id: id::SamplerId,
 ) {
     gfx_select!(self_id => global.device_create_sampler(self_id, desc, new_id));
