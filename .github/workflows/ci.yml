@@ -2,64 +2,107 @@ name: CI
 
 on:
   push:
-    branches-ignore: [ staging.tmp ]
+    branches-ignore: [staging.tmp]
   pull_request:
-    branches-ignore: [ staging.tmp ]
+    branches-ignore: [staging.tmp]
 
 jobs:
+  ios_build:
+    name: iOS Stable
+    runs-on: macos-10.15
+    env:
+      TARGET: aarch64-apple-ios
+    steps:
+      - uses: actions/checkout@v2
+      - run: rustup component add clippy
+      - run: rustup target add ${{ env.TARGET }}
+      - run: cargo clippy --target ${{ env.TARGET }}
+
+  android_build:
+    name: Android Stable
+    runs-on: ubuntu-18.04
+    env:
+      TARGET: aarch64-linux-android
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install NDK
+        run: |
+          curl -LO https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
+          unzip -qq android-ndk-r21b-linux-x86_64.zip -d $GITHUB_WORKSPACE
+          export NDK_HOME_BIN=$GITHUB_WORKSPACE/android-ndk-r21b/toolchains/llvm/prebuilt/linux-x86_64/bin
+          ln -s $NDK_HOME_BIN/aarch64-linux-android21-clang $NDK_HOME_BIN/aarch64-linux-android-clang
+          echo "::add-path::$NDK_HOME_BIN"
+      - run: rustup component add clippy
+      - run: rustup target add ${{ env.TARGET }}
+      - run: cargo clippy --target ${{ env.TARGET }}
+      - name: Additional core features
+        run: cargo check --manifest-path wgpu-core/Cargo.toml --features trace --target ${{ env.TARGET }}
+
   build:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        name: [
-          iOS Stable,
-          MacOS Stable,
-          MacOS Nightly,
-          Ubuntu Stable,
-          Ubuntu Nightly,
-          Windows Stable,
-          Windows Nightly,
-        ]
+        name:
+          [
+            MacOS Stable,
+            MacOS Nightly,
+            Ubuntu Stable,
+            Ubuntu Nightly,
+            Windows Stable,
+            Windows Nightly,
+          ]
         include:
-          - os: macos-10.15
-            name: iOS Stable
-            channel: stable
-            build_command: rustup target add aarch64-apple-ios; cargo clippy --target aarch64-apple-ios
           - os: macos-10.15
             name: MacOS Stable
             channel: stable
             build_command: cargo clippy
+            additional_core_features: trace
+            additional_player_features: winit
           - os: macos-10.15
             name: MacOS Nightly
             channel: nightly
             build_command: cargo test
+            additional_core_features:
+            additional_player_features:
           - os: ubuntu-18.04
             name: Ubuntu Stable
             channel: stable
             build_command: cargo clippy
+            additional_core_features: trace,replay
+            additional_player_features:
           - os: ubuntu-18.04
             name: Ubuntu Nightly
             channel: nightly
             build_command: cargo test
+            additional_core_features:
+            additional_player_features: winit
           - os: windows-2019
             name: Windows Stable
             channel: stable
             build_command: rustup default stable-msvc; cargo clippy
+            additional_core_features: trace
+            additional_player_features: renderdoc
           - os: windows-2019
             name: Windows Nightly
             channel: nightly
             build_command: rustup default nightly-msvc; cargo test
+            additional_core_features:
+            additional_player_features:
     steps:
-    - uses: actions/checkout@v2
-    - if: matrix.channel == 'nightly'
-      name: Install latest nightly
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: nightly
-        override: true
-    - if: contains(matrix.build_command, 'clippy')
-      run: rustup component add clippy
-    - name: cargo clippy/test
-      run: ${{ matrix.build_command }}
+      - uses: actions/checkout@v2
+      - if: matrix.channel == 'nightly'
+        name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+      - if: matrix.channel == 'stable'
+        run: rustup component add clippy
+      - name: cargo clippy/test
+        run: ${{ matrix.build_command }}
+      - if: matrix.additional_core_features != ''
+        run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}
+      - if: matrix.additional_player_features != ''
+        run: cargo check --manifest-path player/Cargo.toml --features ${{ matrix.additional_player_features }}

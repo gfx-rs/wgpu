@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model, resource, Features};
+use crate::{binding_model, resource, PrivateFeatures};
 
 pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
@@ -321,7 +321,7 @@ fn map_stencil_operation(stencil_operation: wgt::StencilOperation) -> hal::pso::
 
 pub(crate) fn map_texture_format(
     texture_format: wgt::TextureFormat,
-    features: Features,
+    private_features: PrivateFeatures,
 ) -> hal::format::Format {
     use hal::format::Format as H;
     use wgt::TextureFormat as Tf;
@@ -376,14 +376,14 @@ pub(crate) fn map_texture_format(
         // Depth and stencil formats
         Tf::Depth32Float => H::D32Sfloat,
         Tf::Depth24Plus => {
-            if features.supports_texture_d24_s8 {
+            if private_features.supports_texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32Sfloat
             }
         }
         Tf::Depth24PlusStencil8 => {
-            if features.supports_texture_d24_s8 {
+            if private_features.supports_texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32SfloatS8Uint

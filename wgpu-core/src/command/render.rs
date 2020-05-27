@@ -46,6 +46,8 @@ pub struct RenderPassDescriptor<'a> {
 }
 
 #[derive(Clone, Copy, Debug, Default, PeekPoke)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct Rect<T> {
     pub x: T,
     pub y: T,
@@ -54,11 +56,14 @@ pub struct Rect<T> {
 }
 
 #[derive(Clone, Copy, Debug, PeekPoke)]
-enum RenderCommand {
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum RenderCommand {
     SetBindGroup {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
         phantom_offsets: PhantomSlice<DynamicOffset>,
     },
     SetPipeline(id::RenderPipelineId),
@@ -334,6 +339,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw_data.len()
         );
         peeker = unsafe { RawRenderTargets::peek_from(peeker, &mut targets) };
+        #[cfg(feature = "trace")]
+        let command_peeker_base = peeker;
 
         let color_attachments = targets
             .colors
@@ -436,7 +443,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
 
                         Some(hal::pass::Attachment {
-                            format: Some(conv::map_texture_format(view.format, device.features)),
+                            format: Some(conv::map_texture_format(
+                                view.format,
+                                device.private_features,
+                            )),
                             samples: view.samples,
                             ops: conv::map_load_store_ops(at.depth_load_op, at.depth_store_op),
                             stencil_ops: conv::map_load_store_ops(
@@ -503,7 +513,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     colors.push(hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(view.format, device.features)),
+                        format: Some(conv::map_texture_format(
+                            view.format,
+                            device.private_features,
+                        )),
                         samples: view.samples,
                         ops: conv::map_load_store_ops(at.load_op, at.store_op),
                         stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
@@ -556,7 +569,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     resolves.push(hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(view.format, device.features)),
+                        format: Some(conv::map_texture_format(
+                            view.format,
+                            device.private_features,
+                        )),
                         samples: view.samples,
                         ops: hal::pass::AttachmentOps::new(
                             hal::pass::AttachmentLoadOp::DontCare,
@@ -810,7 +826,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut state = State {
-            binder: Binder::new(cmb.features.max_bind_groups),
+            binder: Binder::new(cmb.limits.max_bind_groups),
             blend_color: OptionalState::Unused,
             stencil_reference: OptionalState::Unused,
             pipeline: OptionalState::Required,
@@ -1197,6 +1213,45 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 RenderCommand::End => break,
             }
+        }
+
+        #[cfg(feature = "trace")]
+        match cmb.commands {
+            Some(ref mut list) => {
+                let mut pass_commands = Vec::new();
+                let mut pass_dynamic_offsets = Vec::new();
+                peeker = command_peeker_base;
+                loop {
+                    peeker = unsafe { RenderCommand::peek_from(peeker, &mut command) };
+                    match command {
+                        RenderCommand::SetBindGroup {
+                            num_dynamic_offsets,
+                            phantom_offsets,
+                            ..
+                        } => {
+                            let (new_peeker, offsets) = unsafe {
+                                phantom_offsets.decode_unaligned(
+                                    peeker,
+                                    num_dynamic_offsets as usize,
+                                    raw_data_end,
+                                )
+                            };
+                            peeker = new_peeker;
+                            pass_dynamic_offsets.extend_from_slice(offsets);
+                        }
+                        RenderCommand::End => break,
+                        _ => {}
+                    }
+                    pass_commands.push(command);
+                }
+                list.push(crate::device::trace::Command::RunRenderPass {
+                    target_colors: color_attachments.into_iter().collect(),
+                    target_depth_stencil: depth_stencil_attachment.cloned(),
+                    commands: pass_commands,
+                    dynamic_offsets: pass_dynamic_offsets,
+                });
+            }
+            None => {}
         }
 
         log::trace!("Merging {:?} with the render pass", encoder_id);
