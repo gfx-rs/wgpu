@@ -18,7 +18,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use hal::{
-    self,
     adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
     queue::QueueFamily as _,
     window::Surface as _,
@@ -652,7 +651,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
-                limits.non_coherent_atom_size as u64,
+                limits,
                 supports_texture_d24_s8,
                 desc,
                 trace_path,

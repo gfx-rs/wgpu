@@ -101,6 +101,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
         let sc = &mut swap_chain_guard[swap_chain_id];
+        #[cfg_attr(not(feature = "trace"), allow(unused_variables))]
         let device = &device_guard[sc.device_id.value];
 
         let suf = B::get_surface_mut(surface);
