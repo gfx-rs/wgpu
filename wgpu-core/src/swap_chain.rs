@@ -32,11 +32,13 @@
     In `present()` we return the swap chain image back and wait on the semaphore.
 !*/
 
+#[cfg(feature = "trace")]
+use crate::device::trace::Action;
 use crate::{
     conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId},
-    resource, Features, LifeGuard, Stored,
+    resource, LifeGuard, PrivateFeatures, Stored,
 };
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
@@ -59,12 +61,12 @@ pub struct SwapChain<B: hal::Backend> {
 pub(crate) fn swap_chain_descriptor_to_hal(
     desc: &SwapChainDescriptor,
     num_frames: u32,
-    features: Features,
+    private_features: PrivateFeatures,
 ) -> hal::window::SwapchainConfig {
     let mut config = hal::window::SwapchainConfig::new(
         desc.width,
         desc.height,
-        conv::map_texture_format(desc.format, features),
+        conv::map_texture_format(desc.format, private_features),
         num_frames,
     );
     //TODO: check for supported
@@ -114,8 +116,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 Err(e) => {
                     log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
-                    let desc =
-                        swap_chain_descriptor_to_hal(&sc.desc, sc.num_frames, device.features);
+                    let desc = swap_chain_descriptor_to_hal(
+                        &sc.desc,
+                        sc.num_frames,
+                        device.private_features,
+                    );
                     unsafe {
                         suf.configure_swapchain(&device.raw, desc).unwrap();
                         suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000).unwrap()
@@ -151,6 +156,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .texture_views
             .register_identity(view_id_in, view, &mut token);
 
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(Action::GetSwapChainTexture {
+                id,
+                parent_id: swap_chain_id,
+            }),
+            None => (),
+        };
+
         assert!(
             sc.acquired_view_id.is_none(),
             "Swap chain image is already acquired"
@@ -173,6 +187,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
         let sc = &mut swap_chain_guard[swap_chain_id];
         let device = &mut device_guard[sc.device_id.value];
+
+        #[cfg(feature = "trace")]
+        match device.trace {
+            Some(ref trace) => trace.lock().add(Action::PresentSwapChain(swap_chain_id)),
+            None => (),
+        };
 
         let view_id = sc
             .acquired_view_id

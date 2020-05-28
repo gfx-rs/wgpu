@@ -2,6 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+#[cfg(feature = "trace")]
+use crate::device::trace::Command as TraceCommand;
 use crate::{
     conv,
     device::{all_buffer_stages, all_image_stages},
@@ -18,7 +20,9 @@ use std::iter;
 const BITS_PER_BYTE: u32 = 8;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct BufferCopyView {
     pub buffer: BufferId,
     pub offset: BufferAddress,
@@ -27,7 +31,9 @@ pub struct BufferCopyView {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct TextureCopyView {
     pub texture: TextureId,
     pub mip_level: u32,
@@ -90,6 +96,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // borrow the buffer tracker mutably...
         let mut barriers = Vec::new();
 
+        #[cfg(feature = "trace")]
+        match cmb.commands {
+            Some(ref mut list) => list.push(TraceCommand::CopyBufferToBuffer {
+                src: source,
+                src_offset: source_offset,
+                dst: destination,
+                dst_offset: destination_offset,
+                size,
+            }),
+            None => (),
+        }
+
         let (src_buffer, src_pending) =
             cmb.trackers
                 .buffers
@@ -143,6 +161,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
         let aspects = texture_guard[destination.texture].full_range.aspects;
 
+        #[cfg(feature = "trace")]
+        match cmb.commands {
+            Some(ref mut list) => list.push(TraceCommand::CopyBufferToTexture {
+                src: source.clone(),
+                dst: destination.clone(),
+                size: copy_size,
+            }),
+            None => (),
+        }
+
         let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
             &*buffer_guard,
             source.buffer,
@@ -161,7 +189,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
-        let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.features)
+        let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
@@ -213,6 +241,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
         let aspects = texture_guard[source.texture].full_range.aspects;
 
+        #[cfg(feature = "trace")]
+        match cmb.commands {
+            Some(ref mut list) => list.push(TraceCommand::CopyTextureToBuffer {
+                src: source.clone(),
+                dst: destination.clone(),
+                size: copy_size,
+            }),
+            None => (),
+        }
+
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,
             source.texture,
@@ -239,7 +277,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
 
-        let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.features)
+        let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
@@ -295,6 +333,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut barriers = Vec::new();
         let aspects = texture_guard[source.texture].full_range.aspects
             & texture_guard[destination.texture].full_range.aspects;
+
+        #[cfg(feature = "trace")]
+        match cmb.commands {
+            Some(ref mut list) => list.push(TraceCommand::CopyTextureToTexture {
+                src: source.clone(),
+                dst: destination.clone(),
+                size: copy_size,
+            }),
+            None => (),
+        }
 
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,

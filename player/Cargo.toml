@@ -1,0 +1,35 @@
+[package]
+name = "player"
+version = "0.1.0"
+authors = [
+	"Dzmitry Malyshau <kvark@mozilla.com>",
+]
+edition = "2018"
+description = "WebGPU trace player"
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MPL-2.0"
+publish = false
+
+[features]
+
+[dependencies]
+env_logger = "0.7"
+log = "0.4"
+raw-window-handle = "0.3"
+renderdoc = { version = "0.8", optional = true, default_features = false }
+ron = "0.5"
+winit = { version = "0.22", optional = true }
+
+[dependencies.wgt]
+path = "../wgpu-types"
+package = "wgpu-types"
+version = "0.5"
+features = ["replay"]
+
+[dependencies.wgc]
+path = "../wgpu-core"
+package = "wgpu-core"
+version = "0.5"
+features = ["replay", "raw-window-handle"]
