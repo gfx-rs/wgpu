@@ -211,6 +211,7 @@ struct PassComponent<T> {
     load_op: wgt::LoadOp,
     store_op: wgt::StoreOp,
     clear_value: T,
+    read_only: bool,
 }
 
 // required for PeekPoke
@@ -220,6 +221,7 @@ impl<T: Default> Default for PassComponent<T> {
             load_op: wgt::LoadOp::Clear,
             store_op: wgt::StoreOp::Clear,
             clear_value: T::default(),
+            read_only: false,
         }
     }
 }

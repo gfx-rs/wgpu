@@ -107,7 +107,7 @@ impl RenderPassContext {
     }
 }
 
-pub(crate) type RenderPassKey = AttachmentData<hal::pass::Attachment>;
+pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
 pub(crate) type FramebufferKey = AttachmentData<id::TextureViewId>;
 pub(crate) type RenderPassContext = AttachmentData<TextureFormat>;
 
@@ -492,6 +492,39 @@ impl<B: GfxBackend> Device<B> {
             },
             memory,
             life_guard: LifeGuard::new(),
+        }
+    }
+
+    /// Create a compatible render pass with a given key.
+    ///
+    /// This functions doesn't consider the following aspects for compatibility:
+    ///  - image layouts
+    ///  - resolve attachments
+    fn create_compatible_render_pass(&self, key: &RenderPassKey) -> B::RenderPass {
+        let mut color_ids = [(0, hal::image::Layout::ColorAttachmentOptimal); MAX_COLOR_TARGETS];
+        for i in 0..key.colors.len() {
+            color_ids[i].0 = i;
+        }
+        let depth_id = key.depth_stencil.as_ref().map(|_| {
+            (
+                key.colors.len(),
+                hal::image::Layout::DepthStencilAttachmentOptimal,
+            )
+        });
+
+        let subpass = hal::pass::SubpassDesc {
+            colors: &color_ids[..key.colors.len()],
+            depth_stencil: depth_id.as_ref(),
+            inputs: &[],
+            resolves: &[],
+            preserves: &[],
+        };
+        let all = key.all().map(|(at, _)| at);
+
+        unsafe {
+            self.raw
+                .create_render_pass(all, iter::once(subpass), &[])
+                .unwrap()
         }
     }
 }
@@ -1857,12 +1890,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let rp_key = RenderPassKey {
                 colors: color_states
                     .iter()
-                    .map(|at| hal::pass::Attachment {
-                        format: Some(conv::map_texture_format(at.format, device.private_features)),
-                        samples: sc,
-                        ops: hal::pass::AttachmentOps::PRESERVE,
-                        stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
-                        layouts: hal::image::Layout::General..hal::image::Layout::General,
+                    .map(|state| {
+                        let at = hal::pass::Attachment {
+                            format: Some(conv::map_texture_format(
+                                state.format,
+                                device.private_features,
+                            )),
+                            samples: sc,
+                            ops: hal::pass::AttachmentOps::PRESERVE,
+                            stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
+                            layouts: hal::image::Layout::General..hal::image::Layout::General,
+                        };
+                        (at, hal::image::Layout::ColorAttachmentOptimal)
                     })
                     .collect(),
                 // We can ignore the resolves as the vulkan specs says:
@@ -1870,47 +1909,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 // they are compatible even if they have different resolve attachment references
                 // or depth/stencil resolve modes but satisfy the other compatibility conditions.
                 resolves: ArrayVec::new(),
-                depth_stencil: depth_stencil_state.map(|at| hal::pass::Attachment {
-                    format: Some(conv::map_texture_format(at.format, device.private_features)),
-                    samples: sc,
-                    ops: hal::pass::AttachmentOps::PRESERVE,
-                    stencil_ops: hal::pass::AttachmentOps::PRESERVE,
-                    layouts: hal::image::Layout::General..hal::image::Layout::General,
-                }),
-            };
-
-            let mut render_pass_cache = device.render_passes.lock();
-            let main_pass = match render_pass_cache.entry(rp_key) {
-                Entry::Occupied(e) => e.into_mut(),
-                Entry::Vacant(e) => {
-                    let color_ids = [
-                        (0, hal::image::Layout::ColorAttachmentOptimal),
-                        (1, hal::image::Layout::ColorAttachmentOptimal),
-                        (2, hal::image::Layout::ColorAttachmentOptimal),
-                        (3, hal::image::Layout::ColorAttachmentOptimal),
-                    ];
-
-                    let depth_id = (
-                        desc.color_states_length,
-                        hal::image::Layout::DepthStencilAttachmentOptimal,
-                    );
-
-                    let subpass = hal::pass::SubpassDesc {
-                        colors: &color_ids[..desc.color_states_length],
-                        depth_stencil: depth_stencil_state.map(|_| &depth_id),
-                        inputs: &[],
-                        resolves: &[],
-                        preserves: &[],
+                depth_stencil: depth_stencil_state.map(|state| {
+                    let at = hal::pass::Attachment {
+                        format: Some(conv::map_texture_format(
+                            state.format,
+                            device.private_features,
+                        )),
+                        samples: sc,
+                        ops: hal::pass::AttachmentOps::PRESERVE,
+                        stencil_ops: hal::pass::AttachmentOps::PRESERVE,
+                        layouts: hal::image::Layout::General..hal::image::Layout::General,
                     };
-
-                    let pass = unsafe {
-                        device
-                            .raw
-                            .create_render_pass(e.key().all(), &[subpass], &[])
-                    }
-                    .unwrap();
-                    e.insert(pass)
-                }
+                    (at, hal::image::Layout::DepthStencilAttachmentOptimal)
+                }),
             };
 
             let vertex = {
@@ -1956,7 +1967,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     hal::pso::EntryPoint::<B> {
-                        entry: entry_point_name, // TODO
+                        entry: entry_point_name,
                         module: &shader_module.raw,
                         specialization: hal::pso::Specialization::EMPTY,
                     }
@@ -1971,16 +1982,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 fragment,
             };
 
-            let subpass = hal::pass::Subpass {
-                index: 0,
-                main_pass,
-            };
-
             // TODO
             let flags = hal::pso::PipelineCreationFlags::empty();
-            // TODO
-            let parent = hal::pso::BasePipeline::None;
 
+            let mut render_pass_cache = device.render_passes.lock();
             let pipeline_desc = hal::pso::GraphicsPipelineDesc {
                 shaders,
                 rasterizer,
@@ -1992,11 +1997,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 multisampling,
                 baked_states,
                 layout: &layout.raw,
-                subpass,
+                subpass: hal::pass::Subpass {
+                    index: 0,
+                    main_pass: match render_pass_cache.entry(rp_key) {
+                        Entry::Occupied(e) => e.into_mut(),
+                        Entry::Vacant(e) => {
+                            let pass = device.create_compatible_render_pass(e.key());
+                            e.insert(pass)
+                        }
+                    },
+                },
                 flags,
-                parent,
+                parent: hal::pso::BasePipeline::None,
             };
-
             // TODO: cache
             let pipeline = unsafe {
                 device
@@ -2004,6 +2017,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .create_graphics_pipeline(&pipeline_desc, None)
                     .unwrap()
             };
+
             (pipeline, layout.life_guard.add_ref())
         };
 
@@ -2022,6 +2036,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Some(ds) = depth_stencil_state {
             if ds.needs_stencil_reference() {
                 flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
+            }
+            if ds.is_read_only() {
+                flags |= pipeline::PipelineFlags::DEPTH_STENCIL_READ_ONLY;
             }
         }
 

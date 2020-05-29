@@ -530,8 +530,9 @@ pub(crate) fn map_texture_state(
         W::COPY_SRC => L::TransferSrcOptimal,
         W::COPY_DST => L::TransferDstOptimal,
         W::SAMPLED => L::ShaderReadOnlyOptimal,
-        W::OUTPUT_ATTACHMENT if is_color => L::ColorAttachmentOptimal,
-        W::OUTPUT_ATTACHMENT => L::DepthStencilAttachmentOptimal, //TODO: read-only depth/stencil
+        W::ATTACHMENT_READ | W::ATTACHMENT_WRITE if is_color => L::ColorAttachmentOptimal,
+        W::ATTACHMENT_READ => L::DepthStencilReadOnlyOptimal,
+        W::ATTACHMENT_WRITE => L::DepthStencilAttachmentOptimal,
         _ => L::General,
     };
 
@@ -545,8 +546,14 @@ pub(crate) fn map_texture_state(
     if usage.contains(W::SAMPLED) {
         access |= A::SHADER_READ;
     }
-    if usage.contains(W::OUTPUT_ATTACHMENT) {
-        //TODO: read-only attachments
+    if usage.contains(W::ATTACHMENT_READ) {
+        access |= if is_color {
+            A::COLOR_ATTACHMENT_READ
+        } else {
+            A::DEPTH_STENCIL_ATTACHMENT_READ
+        };
+    }
+    if usage.contains(W::ATTACHMENT_WRITE) {
         access |= if is_color {
             A::COLOR_ATTACHMENT_WRITE
         } else {
