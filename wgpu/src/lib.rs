@@ -677,7 +677,7 @@ pub enum BindingType {
 }
 
 /// A description of a single binding inside a bind group.
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq, Eq)]
 pub struct BindGroupLayoutEntry {
     pub binding: u32,
     pub visibility: ShaderStage,
