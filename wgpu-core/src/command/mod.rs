@@ -93,7 +93,16 @@ impl RawPass {
         self.data as usize - self.base as usize
     }
 
-    pub unsafe fn into_vec(self) -> (Vec<u8>, id::CommandEncoderId) {
+    /// Recover the data vector of the pass, consuming `self`.
+    unsafe fn into_vec(mut self) -> (Vec<u8>, id::CommandEncoderId) {
+        (self.invalidate(), self.parent)
+    }
+
+    /// Make pass contents invalid, return the contained data.
+    ///
+    /// Any following access to the pass will result in a crash
+    /// for accessing address 0.
+    pub unsafe fn invalidate(&mut self) -> Vec<u8> {
         let size = self.size();
         assert!(
             size <= self.capacity,
@@ -102,7 +111,10 @@ impl RawPass {
             self.capacity
         );
         let vec = Vec::from_raw_parts(self.base, size, self.capacity);
-        (vec, self.parent)
+        self.data = ptr::null_mut();
+        self.base = ptr::null_mut();
+        self.capacity = 0;
+        vec
     }
 
     unsafe fn ensure_extra_size(&mut self, extra_size: usize) {

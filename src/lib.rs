@@ -281,8 +281,8 @@ pub unsafe extern "C" fn wgpu_command_encoder_begin_compute_pass(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: wgc::command::RawPass) {
-    let _ = pass.into_vec();
+pub unsafe extern "C" fn wgpu_compute_pass_destroy(mut pass: wgc::command::RawPass) {
+    let _ = pass.invalidate();
 }
 
 #[no_mangle]
@@ -294,8 +294,8 @@ pub unsafe extern "C" fn wgpu_command_encoder_begin_render_pass(
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn wgpu_render_pass_destroy(pass: wgc::command::RawPass) {
-    let _ = pass.into_vec();
+pub unsafe extern "C" fn wgpu_render_pass_destroy(mut pass: wgc::command::RawPass) {
+    let _ = pass.invalidate();
 }
 
 #[no_mangle]

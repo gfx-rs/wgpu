@@ -160,8 +160,7 @@ impl super::RawPass {
 
     pub unsafe fn finish_render(mut self) -> (Vec<u8>, id::CommandEncoderId) {
         self.finish(RenderCommand::End);
-        let (vec, parent_id) = self.into_vec();
-        (vec, parent_id)
+        self.into_vec()
     }
 }
 
