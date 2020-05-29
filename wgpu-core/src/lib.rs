@@ -39,11 +39,14 @@ mod track;
 
 pub use hal::pso::read_spirv;
 
-use std::{
-    os::raw::c_char,
-    ptr,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+#[cfg(test)]
+use loom::sync::atomic;
+#[cfg(not(test))]
+use std::sync::atomic;
+
+use atomic::{AtomicUsize, Ordering};
+
+use std::{os::raw::c_char, ptr};
 
 type SubmissionIndex = usize;
 type Index = u32;
@@ -64,6 +67,27 @@ impl RefCount {
     fn load(&self) -> usize {
         unsafe { self.0.as_ref() }.load(Ordering::Acquire)
     }
+
+    /// This works like `std::mem::drop`, except that it returns a boolean which is true if and only
+    /// if we deallocated the underlying memory, i.e. if this was the last clone of this `RefCount`
+    /// to be dropped. This is useful for loom testing because it allows us to verify that we
+    /// deallocated the underlying memory exactly once.
+    #[cfg(test)]
+    fn rich_drop_outer(self) -> bool {
+        unsafe { std::mem::ManuallyDrop::new(self).rich_drop_inner() }
+    }
+
+    /// This function exists to allow `Self::rich_drop_outer` and `Drop::drop` to share the same
+    /// logic. To use this safely from outside of `Drop::drop`, the calling function must move
+    /// `Self` into a `ManuallyDrop`.
+    unsafe fn rich_drop_inner(&mut self) -> bool {
+        if self.0.as_ref().fetch_sub(1, Ordering::Relaxed) == 1 {
+            let _ = Box::from_raw(self.0.as_ptr());
+            true
+        } else {
+            false
+        }
+    }
 }
 
 impl Clone for RefCount {
@@ -76,10 +100,32 @@ impl Clone for RefCount {
 
 impl Drop for RefCount {
     fn drop(&mut self) {
-        if unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::Relaxed) == 1 {
-            let _ = unsafe { Box::from_raw(self.0.as_ptr()) };
+        unsafe {
+            self.rich_drop_inner();
         }
     }
+}
+
+#[cfg(test)]
+#[test]
+fn loom() {
+    loom::model(move || {
+        let bx = Box::new(AtomicUsize::new(1));
+        let ref_count_main = ptr::NonNull::new(Box::into_raw(bx)).map(RefCount).unwrap();
+        let ref_count_spawned = ref_count_main.clone();
+
+        let join_handle = loom::thread::spawn(move || {
+            let _ = ref_count_spawned.clone();
+            ref_count_spawned.rich_drop_outer()
+        });
+
+        let dropped_in_main = ref_count_main.rich_drop_outer();
+        let dropped_in_spawned = join_handle.join().unwrap();
+        assert_ne!(
+            dropped_in_main, dropped_in_spawned,
+            "must drop exactly once"
+        );
+    });
 }
 
 #[derive(Debug)]
