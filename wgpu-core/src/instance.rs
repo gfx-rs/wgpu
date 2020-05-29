@@ -223,72 +223,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        use raw_window_handle::RawWindowHandle as Rwh;
-
-        let surface = match handle.raw_window_handle() {
-            #[cfg(target_os = "ios")]
-            Rwh::IOS(h) => Surface {
-                #[cfg(feature = "gfx-backend-vulkan")]
-                vulkan: None,
-                metal: self
-                    .instance
-                    .metal
-                    .create_surface_from_uiview(h.ui_view, cfg!(debug_assertions)),
-            },
-            #[cfg(target_os = "macos")]
-            Rwh::MacOS(h) => {
-                //TODO: figure out when this is needed, and how to get that without `objc`
-                //use objc::{msg_send, runtime::Object, sel, sel_impl};
-                //let ns_view = if h.ns_view.is_null() {
-                //    let ns_window = h.ns_window as *mut Object;
-                //    unsafe { msg_send![ns_window, contentView] }
-                //} else {
-                //    h.ns_view
-                //};
-                Surface {
-                    #[cfg(feature = "gfx-backend-vulkan")]
-                    vulkan: self
-                        .instance
-                        .vulkan
-                        .as_ref()
-                        .map(|inst| inst.create_surface_from_ns_view(h.ns_view)),
-                    metal: self
-                        .instance
-                        .metal
-                        .create_surface_from_nsview(h.ns_view, cfg!(debug_assertions)),
-                }
-            }
-            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
-            Rwh::Xlib(h) => Surface {
+        let surface = unsafe {
+            Surface {
+                #[cfg(any(
+                    windows,
+                    all(unix, not(any(target_os = "ios", target_os = "macos"))),
+                    feature = "gfx-backend-vulkan",
+                ))]
                 vulkan: self
                     .instance
                     .vulkan
                     .as_ref()
-                    .map(|inst| inst.create_surface_from_xlib(h.display as _, h.window)),
-            },
-            #[cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))]
-            Rwh::Wayland(h) => Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface_from_wayland(h.display, h.surface)),
-            },
-            #[cfg(windows)]
-            Rwh::Windows(h) => Surface {
-                vulkan: self
-                    .instance
-                    .vulkan
-                    .as_ref()
-                    .map(|inst| inst.create_surface_from_hwnd(std::ptr::null_mut(), h.hwnd)),
+                    .and_then(|inst| inst.create_surface(handle).ok()),
+                #[cfg(any(target_os = "ios", target_os = "macos"))]
+                metal: self.instance.metal.create_surface(handle).unwrap(),
+                #[cfg(windows)]
                 dx12: self
                     .instance
                     .dx12
                     .as_ref()
-                    .map(|inst| inst.create_surface_from_hwnd(h.hwnd)),
-                dx11: self.instance.dx11.create_surface_from_hwnd(h.hwnd),
-            },
-            _ => panic!("Unsupported window handle"),
+                    .and_then(|inst| inst.create_surface(handle).ok()),
+                #[cfg(windows)]
+                dx11: self.instance.dx11.create_surface(handle).unwrap(),
+            }
         };
 
         let mut token = Token::root();

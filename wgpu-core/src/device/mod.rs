@@ -1118,15 +1118,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace
-                .lock()
-                .add(trace::Action::DestroyBindGroupLayout(bind_group_layout_id)),
-            None => (),
-        };
-        device
+        device_guard[device_id]
             .lock_life(&mut token)
             .suspected_resources
             .bind_group_layouts
