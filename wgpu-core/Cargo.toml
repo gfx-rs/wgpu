@@ -18,8 +18,6 @@ license = "MPL-2.0"
 default = []
 trace = ["ron", "serde", "wgt/trace"]
 replay = ["serde", "wgt/replay"]
-metal-auto-capture = ["gfx-backend-metal/auto-capture"]
-x11 = ["gfx-backend-vulkan/x11"]
 #NOTE: glutin feature is not stable, use at your own risk
 #glutin = ["gfx-backend-gl/glutin"]
 
