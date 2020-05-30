@@ -7,7 +7,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    BufferSize, FastHashMap, LifeGuard, PrivateFeatures, Stored,
+    FastHashMap, LifeGuard, PrivateFeatures, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -20,7 +20,10 @@ use hal::{
     window::{PresentationSurface as _, Surface as _},
 };
 use parking_lot::{Mutex, MutexGuard};
-use wgt::{BufferAddress, InputStepMode, TextureDimension, TextureFormat, BIND_BUFFER_ALIGNMENT};
+use wgt::{
+    BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat,
+    BIND_BUFFER_ALIGNMENT,
+};
 
 use std::{
     collections::hash_map::Entry, ffi, iter, marker::PhantomData, ptr, slice,

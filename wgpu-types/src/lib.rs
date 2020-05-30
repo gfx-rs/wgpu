@@ -13,6 +13,25 @@ use std::{io, ptr, slice};
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
 
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
+#[cfg_attr(
+    feature = "trace",
+    derive(serde::Serialize),
+    serde(into = "SerBufferSize")
+)]
+#[cfg_attr(
+    feature = "replay",
+    derive(serde::Deserialize),
+    serde(from = "SerBufferSize")
+)]
+pub struct BufferSize(pub u64);
+
+impl BufferSize {
+    pub const WHOLE: BufferSize = BufferSize(!0u64);
+}
+
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -80,13 +99,9 @@ pub struct Limits {
     pub max_bind_groups: u32,
 }
 
-pub const MAX_BIND_GROUPS: usize = 4;
-
 impl Default for Limits {
     fn default() -> Self {
-        Limits {
-            max_bind_groups: MAX_BIND_GROUPS as u32,
-        }
+        Limits { max_bind_groups: 4 }
     }
 }
 
@@ -1003,4 +1018,34 @@ pub struct TextureDataLayout {
     pub offset: BufferAddress,
     pub bytes_per_row: u32,
     pub rows_per_image: u32,
+}
+
+/// This type allows us to make the serialized representation of a BufferSize more human-readable
+#[allow(dead_code)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+enum SerBufferSize {
+    Size(u64),
+    Whole,
+}
+
+#[cfg(feature = "trace")]
+impl From<BufferSize> for SerBufferSize {
+    fn from(buffer_size: BufferSize) -> Self {
+        if buffer_size == BufferSize::WHOLE {
+            Self::Whole
+        } else {
+            Self::Size(buffer_size.0)
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl From<SerBufferSize> for BufferSize {
+    fn from(ser_buffer_size: SerBufferSize) -> Self {
+        match ser_buffer_size {
+            SerBufferSize::Size(size) => BufferSize(size),
+            SerBufferSize::Whole => BufferSize::WHOLE,
+        }
+    }
 }

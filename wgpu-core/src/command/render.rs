@@ -17,7 +17,7 @@ use crate::{
     pipeline::PipelineFlags,
     resource::{BufferUse, TextureUse, TextureViewInner},
     track::TrackerSet,
-    BufferSize, Stored,
+    Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -25,9 +25,9 @@ use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekPoke, Poke};
 use smallvec::SmallVec;
 use wgt::{
-    BufferAddress, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode, LoadOp,
-    RenderPassColorAttachmentDescriptorBase, RenderPassDepthStencilAttachmentDescriptorBase,
-    TextureUsage, BIND_BUFFER_ALIGNMENT,
+    BufferAddress, BufferSize, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode,
+    LoadOp, RenderPassColorAttachmentDescriptorBase,
+    RenderPassDepthStencilAttachmentDescriptorBase, TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
 use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, mem, ops::Range, slice};
@@ -1280,9 +1280,9 @@ pub mod render_ffi {
         super::{PhantomSlice, RawPass, Rect},
         RenderCommand,
     };
-    use crate::{id, BufferSize, RawString};
+    use crate::{id, RawString};
     use std::{convert::TryInto, slice};
-    use wgt::{BufferAddress, Color, DynamicOffset};
+    use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
 
     /// # Safety
     ///
