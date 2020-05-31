@@ -259,7 +259,7 @@ impl framework::Example for Example {
     ///   a TriangleList draw call for all NUM_PARTICLES at 3 vertices each
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainOutput,
+        frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
