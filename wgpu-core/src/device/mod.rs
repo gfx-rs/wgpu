@@ -55,6 +55,7 @@ fn own_label(label: &Label) -> String {
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
+pub const MAX_ANISOTROPY: u8 = 16;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -541,6 +542,24 @@ impl<B: hal::Backend> Device<B> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
+    pub fn device_extensions<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Extensions {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+
+        device.extensions.clone()
+    }
+
+    pub fn device_limits<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Limits {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+
+        device.limits.clone()
+    }
+
     pub fn device_create_buffer<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
@@ -977,6 +996,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
 
+        if desc.anisotropy_clamp > 1 {
+            assert!(
+                device.extensions.anisotropic_filtering,
+                "Anisotropic clamp may only be used when the anisotropic filtering extension is enabled"
+            );
+            let valid_clamp = desc.anisotropy_clamp <= MAX_ANISOTROPY
+                && conv::is_power_of_two(desc.anisotropy_clamp as u32);
+            assert!(
+                valid_clamp,
+                "Anisotropic clamp must be one of the values: 0, 1, 2, 4, 8, or 16"
+            );
+        }
+
         let info = hal::image::SamplerDesc {
             min_filter: conv::map_filter(desc.min_filter),
             mag_filter: conv::map_filter(desc.mag_filter),
@@ -991,7 +1023,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             comparison: conv::map_compare_function(desc.compare),
             border: hal::image::PackedColor(0),
             normalized: true,
-            anisotropy_clamp: None, //TODO
+            anisotropy_clamp: if desc.anisotropy_clamp > 1 {
+                Some(desc.anisotropy_clamp)
+            } else {
+                None
+            },
         };
 
         let sampler = resource::Sampler {

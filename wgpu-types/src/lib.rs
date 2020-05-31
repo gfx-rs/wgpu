@@ -88,6 +88,10 @@ impl From<Backend> for BackendBit {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Extensions {
+    /// This is a native only extension. Support is planned to be added to webgpu,
+    /// but it is not yet implemented.
+    ///
+    /// https://github.com/gpuweb/gpuweb/issues/696
     pub anisotropic_filtering: bool,
 }
 
@@ -926,6 +930,11 @@ pub struct SamplerDescriptor<L> {
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
     pub compare: CompareFunction,
+    /// Anisotropic filtering extension must be enabled if this value is
+    /// anything other than 0 and 1.
+    ///
+    /// Valid values are 0, 1, 2, 4, 8, and 16.
+    pub anisotropy_clamp: u8,
 }
 
 impl<L> SamplerDescriptor<L> {
@@ -941,6 +950,7 @@ impl<L> SamplerDescriptor<L> {
             lod_min_clamp: self.lod_min_clamp,
             lod_max_clamp: self.lod_max_clamp,
             compare: self.compare,
+            anisotropy_clamp: self.anisotropy_clamp,
         }
     }
 }

@@ -429,7 +429,7 @@ fn checked_u32_as_u16(value: u32) -> u16 {
     value as u16
 }
 
-fn is_power_of_two(val: u32) -> bool {
+pub fn is_power_of_two(val: u32) -> bool {
     val != 0 && (val & (val - 1)) == 0
 }
 
