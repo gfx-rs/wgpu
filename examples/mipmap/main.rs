@@ -412,7 +412,7 @@ impl framework::Example for Example {
 
     fn render(
         &mut self,
-        frame: &wgpu::SwapChainOutput,
+        frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
