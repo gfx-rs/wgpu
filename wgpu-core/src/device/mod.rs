@@ -312,12 +312,11 @@ impl<B: GfxBackend> Device<B> {
         );
         life_tracker.triage_mapped(global, token);
         life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
-        let _last_done = life_tracker.triage_submissions(&self.raw, force_wait);
+        let last_done = life_tracker.triage_submissions(&self.raw, force_wait);
         let callbacks = life_tracker.handle_mapping(global, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
 
-        self.com_allocator
-            .maintain(&self.raw, life_tracker.lowest_active_submission());
+        self.com_allocator.maintain(&self.raw, last_done);
         callbacks
     }
 
