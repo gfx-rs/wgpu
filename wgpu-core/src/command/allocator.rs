@@ -13,9 +13,12 @@ use parking_lot::Mutex;
 
 use std::{collections::HashMap, sync::atomic::Ordering, thread};
 
+const GROW_AMOUNT: usize = 20;
+
 #[derive(Debug)]
 struct CommandPool<B: hal::Backend> {
     raw: B::CommandPool,
+    total: usize,
     available: Vec<B::CommandBuffer>,
     pending: Vec<CommandBuffer<B>>,
 }
@@ -50,9 +53,13 @@ impl<B: hal::Backend> CommandPool<B> {
 
     fn allocate(&mut self) -> B::CommandBuffer {
         if self.available.is_empty() {
+            self.total += GROW_AMOUNT;
             unsafe {
-                self.raw
-                    .allocate(20, hal::command::Level::Primary, &mut self.available)
+                self.raw.allocate(
+                    GROW_AMOUNT,
+                    hal::command::Level::Primary,
+                    &mut self.available,
+                )
             };
         }
         self.available.pop().unwrap()
@@ -61,8 +68,6 @@ impl<B: hal::Backend> CommandPool<B> {
 
 #[derive(Debug)]
 struct Inner<B: hal::Backend> {
-    // TODO: Currently pools from threads that are stopped or no longer call into wgpu will never be
-    // cleaned up.
     pools: HashMap<thread::ThreadId, CommandPool<B>>,
 }
 
@@ -79,29 +84,29 @@ impl<B: GfxBackend> CommandAllocator<B> {
         device: &B::Device,
         limits: wgt::Limits,
         private_features: PrivateFeatures,
-        lowest_active_index: SubmissionIndex,
         #[cfg(feature = "trace")] enable_tracing: bool,
     ) -> CommandBuffer<B> {
         //debug_assert_eq!(device_id.backend(), B::VARIANT);
         let thread_id = thread::current().id();
         let mut inner = self.inner.lock();
 
-        let pool = inner.pools.entry(thread_id).or_insert_with(|| CommandPool {
-            raw: unsafe {
-                device.create_command_pool(
-                    self.queue_family,
-                    hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
-                )
-            }
-            .unwrap(),
-            available: Vec::new(),
-            pending: Vec::new(),
-        });
-
-        // Recycle completed command buffers
-        pool.maintain(lowest_active_index);
-
-        let init = pool.allocate();
+        let init = inner
+            .pools
+            .entry(thread_id)
+            .or_insert_with(|| CommandPool {
+                raw: unsafe {
+                    log::info!("Starting on thread {:?}", thread_id);
+                    device.create_command_pool(
+                        self.queue_family,
+                        hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
+                    )
+                }
+                .unwrap(),
+                total: 0,
+                available: Vec::new(),
+                pending: Vec::new(),
+            })
+            .allocate();
 
         CommandBuffer {
             raw: vec![init],
@@ -135,22 +140,17 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
     pub fn extend(&self, cmd_buf: &CommandBuffer<B>) -> B::CommandBuffer {
         let mut inner = self.inner.lock();
-        let pool = inner.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
-
-        if pool.available.is_empty() {
-            unsafe {
-                pool.raw
-                    .allocate(20, hal::command::Level::Primary, &mut pool.available)
-            };
-        }
-
-        pool.available.pop().unwrap()
+        inner
+            .pools
+            .get_mut(&cmd_buf.recorded_thread_id)
+            .unwrap()
+            .allocate()
     }
 
     pub fn discard(&self, mut cmd_buf: CommandBuffer<B>) {
         cmd_buf.trackers.clear();
-        self.inner
-            .lock()
+        let mut inner = self.inner.lock();
+        inner
             .pools
             .get_mut(&cmd_buf.recorded_thread_id)
             .unwrap()
@@ -166,8 +166,32 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
         // Record this command buffer as pending
         let mut inner = self.inner.lock();
-        let pool = inner.pools.get_mut(&cmd_buf.recorded_thread_id).unwrap();
-        pool.pending.push(cmd_buf);
+        inner
+            .pools
+            .get_mut(&cmd_buf.recorded_thread_id)
+            .unwrap()
+            .pending
+            .push(cmd_buf);
+    }
+
+    pub fn maintain(&self, device: &B::Device, lowest_active_index: SubmissionIndex) {
+        let mut inner = self.inner.lock();
+        let mut remove_threads = Vec::new();
+        for (thread_id, pool) in inner.pools.iter_mut() {
+            pool.maintain(lowest_active_index);
+            if pool.total == pool.available.len() {
+                assert!(pool.pending.is_empty());
+                remove_threads.push(*thread_id);
+            }
+        }
+        for thread_id in remove_threads {
+            log::info!("Removing from thread {:?}", thread_id);
+            let mut pool = inner.pools.remove(&thread_id).unwrap();
+            unsafe {
+                pool.raw.free(pool.available);
+                device.destroy_command_pool(pool.raw);
+            }
+        }
     }
 
     pub fn destroy(self, device: &B::Device) {
@@ -175,6 +199,13 @@ impl<B: hal::Backend> CommandAllocator<B> {
         for (_, mut pool) in inner.pools.drain() {
             while let Some(cmd_buf) = pool.pending.pop() {
                 pool.recycle(cmd_buf);
+            }
+            if pool.total != pool.available.len() {
+                log::error!(
+                    "Some command buffers are still recorded, only tracking {} / {}",
+                    pool.available.len(),
+                    pool.total
+                );
             }
             unsafe {
                 pool.raw.free(pool.available);
