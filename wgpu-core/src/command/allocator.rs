@@ -24,14 +24,14 @@ struct CommandPool<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> CommandPool<B> {
-    fn maintain(&mut self, lowest_active_index: SubmissionIndex) {
+    fn maintain(&mut self, last_done_index: SubmissionIndex) {
         for i in (0..self.pending.len()).rev() {
-            if self.pending[i].1 < lowest_active_index {
+            if self.pending[i].1 <= last_done_index {
                 let (cmd_buf, index) = self.pending.swap_remove(i);
                 log::trace!(
-                    "recycling comb submitted in {} when {} is lowest active",
+                    "recycling comb submitted in {} when {} is last done",
                     index,
-                    lowest_active_index,
+                    last_done_index,
                 );
                 self.recycle(cmd_buf);
             }
@@ -185,7 +185,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
         let mut inner = self.inner.lock();
         inner
             .pools
-            .get_mut(&thread::current().id())
+            .get_mut(&self.internal_thread_id)
             .unwrap()
             .pending
             .push((raw, submit_index));
@@ -202,11 +202,11 @@ impl<B: hal::Backend> CommandAllocator<B> {
             .extend(cmd_buf.raw.into_iter().map(|raw| (raw, submit_index)));
     }
 
-    pub fn maintain(&self, device: &B::Device, lowest_active_index: SubmissionIndex) {
+    pub fn maintain(&self, device: &B::Device, last_done_index: SubmissionIndex) {
         let mut inner = self.inner.lock();
         let mut remove_threads = Vec::new();
         for (thread_id, pool) in inner.pools.iter_mut() {
-            pool.maintain(lowest_active_index);
+            pool.maintain(last_done_index);
             if pool.total == pool.available.len() {
                 assert!(pool.pending.is_empty());
                 remove_threads.push(*thread_id);

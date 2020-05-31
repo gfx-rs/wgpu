@@ -234,6 +234,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 
     /// Find the pending entry with the lowest active index. If none can be found that means
     /// everything in the allocator can be cleaned up, so std::usize::MAX is correct.
+    #[cfg(feature = "replay")]
     pub fn lowest_active_submission(&self) -> SubmissionIndex {
         self.active
             .iter()
