@@ -202,6 +202,7 @@ pub struct Device<B: hal::Backend> {
     // Life tracker should be locked right after the device and before anything else.
     life_tracker: Mutex<life::LifetimeTracker<B>>,
     temp_suspected: life::SuspectedResources,
+    pub(crate) hal_limits: hal::Limits,
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     extensions: wgt::Extensions,
@@ -216,7 +217,7 @@ impl<B: GfxBackend> Device<B> {
         adapter_id: Stored<id::AdapterId>,
         queue_group: hal::queue::QueueGroup<B>,
         mem_props: hal::adapter::MemoryProperties,
-        non_coherent_atom_size: u64,
+        hal_limits: hal::Limits,
         supports_texture_d24_s8: bool,
         desc: &wgt::DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
@@ -237,7 +238,7 @@ impl<B: GfxBackend> Device<B> {
                 gfx_memory::LinearConfig {
                     linear_size: 0x100_0000,
                 },
-                non_coherent_atom_size,
+                hal_limits.non_coherent_atom_size as u64,
             )
         };
         #[cfg(not(feature = "trace"))]
@@ -273,6 +274,7 @@ impl<B: GfxBackend> Device<B> {
                     None
                 }
             }),
+            hal_limits,
             private_features: PrivateFeatures {
                 supports_texture_d24_s8,
             },

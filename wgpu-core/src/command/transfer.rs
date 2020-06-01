@@ -199,14 +199,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = source.layout.bytes_per_row / bytes_per_texel;
+        assert_eq!(wgt::COPY_BYTES_PER_ROW_ALIGNMENT % bytes_per_texel, 0);
         assert_eq!(
-            source.layout.bytes_per_row % bytes_per_texel,
+            source.layout.bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
             0,
-            "Source bytes per row ({}) must be a multiple of bytes per texel ({})",
+            "Source bytes per row ({}) must be a multiple of {}",
             source.layout.bytes_per_row,
-            bytes_per_texel
+            wgt::COPY_BYTES_PER_ROW_ALIGNMENT
         );
+        let buffer_width = source.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.layout.offset,
             buffer_width,
@@ -286,14 +287,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = destination.layout.bytes_per_row / bytes_per_texel;
+        assert_eq!(wgt::COPY_BYTES_PER_ROW_ALIGNMENT % bytes_per_texel, 0);
         assert_eq!(
-            destination.layout.bytes_per_row % bytes_per_texel,
+            destination.layout.bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
             0,
-            "Destination bytes per row ({}) must be a multiple of bytes per texel ({})",
+            "Destination bytes per row ({}) must be a multiple of {}",
             destination.layout.bytes_per_row,
-            bytes_per_texel
+            wgt::COPY_BYTES_PER_ROW_ALIGNMENT
         );
+        let buffer_width = destination.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.layout.offset,
             buffer_width,

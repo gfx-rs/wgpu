@@ -10,6 +10,11 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::{io, ptr, slice};
 
+/// Buffer-Texture copies on command encoders have to have the `bytes_per_row`
+/// aligned to this number.
+///
+/// This doesn't apply to `Queue::write_texture`.
+pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
 

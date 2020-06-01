@@ -61,19 +61,16 @@ impl<B: hal::Backend> PendingWrites<B> {
 }
 
 impl<B: hal::Backend> super::Device<B> {
-    fn stage_data(&mut self, data: &[u8]) -> StagingData<B> {
+    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> StagingData<B> {
         let mut buffer = unsafe {
             self.raw
-                .create_buffer(
-                    data.len() as wgt::BufferAddress,
-                    hal::buffer::Usage::TRANSFER_SRC,
-                )
+                .create_buffer(size, hal::buffer::Usage::TRANSFER_SRC)
                 .unwrap()
         };
         //TODO: do we need to transition into HOST_WRITE access first?
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
 
-        let mut memory = self
+        let memory = self
             .mem_allocator
             .lock()
             .allocate(
@@ -91,12 +88,6 @@ impl<B: hal::Backend> super::Device<B> {
                 .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
                 .unwrap();
         }
-
-        let mut mapped = memory.map(&self.raw, hal::memory::Segment::ALL).unwrap();
-        unsafe { mapped.write(&self.raw, hal::memory::Segment::ALL) }
-            .unwrap()
-            .slice[..data.len()]
-            .copy_from_slice(data);
 
         let comb = match self.pending_writes.command_buffer.take() {
             Some(comb) => comb,
@@ -147,7 +138,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
-        let mut stage = device.stage_data(data);
+        let mut stage = device.prepare_stage(data.len() as wgt::BufferAddress);
+        {
+            let mut mapped = stage
+                .memory
+                .map(&device.raw, hal::memory::Segment::ALL)
+                .unwrap();
+            unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
+                .unwrap()
+                .slice[..data.len()]
+                .copy_from_slice(data);
+        }
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) =
@@ -217,7 +218,45 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
-        let mut stage = device.stage_data(data);
+        let texture_format = texture_guard[destination.texture].format;
+        let bytes_per_texel = conv::map_texture_format(texture_format, device.private_features)
+            .surface_desc()
+            .bits as u32
+            / BITS_PER_BYTE;
+
+        let stage_bytes_per_row = get_lowest_common_denom(
+            device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
+            bytes_per_texel,
+        );
+        let stage_size = stage_bytes_per_row as u64
+            * ((size.depth - 1) * data_layout.rows_per_image + size.height) as u64;
+        let mut stage = device.prepare_stage(stage_size);
+        {
+            let mut mapped = stage
+                .memory
+                .map(&device.raw, hal::memory::Segment::ALL)
+                .unwrap();
+            let mapping = unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }.unwrap();
+            if stage_bytes_per_row == data_layout.bytes_per_row {
+                // Unlikely case of the data already being aligned optimally.
+                mapping.slice[..stage_size as usize].copy_from_slice(data);
+            } else {
+                // Copy row by row into the optimal alignment.
+                let copy_bytes_per_row =
+                    stage_bytes_per_row.min(data_layout.bytes_per_row) as usize;
+                for layer in 0..size.depth {
+                    let rows_offset = layer * data_layout.rows_per_image;
+                    for row in 0..size.height {
+                        let data_offset =
+                            (rows_offset + row) as usize * data_layout.bytes_per_row as usize;
+                        let stage_offset =
+                            (rows_offset + row) as usize * stage_bytes_per_row as usize;
+                        mapping.slice[stage_offset..stage_offset + copy_bytes_per_row]
+                            .copy_from_slice(&data[data_offset..data_offset + copy_bytes_per_row]);
+                    }
+                }
+            }
+        }
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers.textures.use_replace(
@@ -235,21 +274,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
         dst.life_guard.use_at(last_submit_index + 1);
 
-        let bytes_per_texel = conv::map_texture_format(dst.format, device.private_features)
-            .surface_desc()
-            .bits as u32
-            / BITS_PER_BYTE;
-        let buffer_width = data_layout.bytes_per_row / bytes_per_texel;
-        assert_eq!(
-            data_layout.bytes_per_row % bytes_per_texel,
-            0,
-            "Source bytes per row ({}) must be a multiple of bytes per texel ({})",
-            data_layout.bytes_per_row,
-            bytes_per_texel
-        );
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
-            buffer_width,
+            buffer_width: stage_bytes_per_row / bytes_per_texel,
             buffer_height: data_layout.rows_per_image,
             image_layers,
             image_offset,
@@ -466,4 +493,41 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         super::fire_map_callbacks(callbacks);
     }
+}
+
+fn get_lowest_common_denom(a: u32, b: u32) -> u32 {
+    let gcd = if a >= b {
+        get_greatest_common_divisor(a, b)
+    } else {
+        get_greatest_common_divisor(b, a)
+    };
+    a * b / gcd
+}
+
+fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
+    assert!(a >= b);
+    loop {
+        let c = a % b;
+        if c == 0 {
+            return b;
+        } else {
+            a = b;
+            b = c;
+        }
+    }
+}
+
+#[test]
+fn test_lcd() {
+    assert_eq!(get_lowest_common_denom(2, 2), 2);
+    assert_eq!(get_lowest_common_denom(2, 3), 6);
+    assert_eq!(get_lowest_common_denom(6, 4), 12);
+}
+
+#[test]
+fn test_gcd() {
+    assert_eq!(get_greatest_common_divisor(5, 1), 1);
+    assert_eq!(get_greatest_common_divisor(4, 2), 2);
+    assert_eq!(get_greatest_common_divisor(6, 4), 2);
+    assert_eq!(get_greatest_common_divisor(7, 7), 7);
 }

@@ -307,7 +307,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
@@ -371,13 +370,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (context, sample_count) = {
-            use hal::{adapter::PhysicalDevice as _, device::Device as _};
+            use hal::device::Device as _;
 
-            let limits = adapter_guard[device.adapter_id.value]
-                .raw
-                .physical_device
-                .limits();
-            let samples_count_limit = limits.framebuffer_color_sample_counts;
+            let samples_count_limit = device.hal_limits.framebuffer_color_sample_counts;
             let base_trackers = &cmb.trackers;
 
             let mut extent = None;
