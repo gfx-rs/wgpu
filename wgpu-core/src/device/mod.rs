@@ -1003,16 +1003,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
 
-        if desc.anisotropy_clamp > 1 {
+        if let Some(clamp) = desc.anisotropy_clamp {
             assert!(
-                device.extensions.anisotropic_filtering,
+                device.extensions.contains(wgt::Extensions::ANISOTROPIC_FILTERING),
                 "Anisotropic clamp may only be used when the anisotropic filtering extension is enabled"
             );
-            let valid_clamp = desc.anisotropy_clamp <= MAX_ANISOTROPY
-                && conv::is_power_of_two(desc.anisotropy_clamp as u32);
+            let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
             assert!(
                 valid_clamp,
-                "Anisotropic clamp must be one of the values: 0, 1, 2, 4, 8, or 16"
+                "Anisotropic clamp must be one of the values: 1, 2, 4, 8, or 16"
             );
         }
 
@@ -1027,14 +1026,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ),
             lod_bias: hal::image::Lod(0.0),
             lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
-            comparison: conv::map_compare_function(desc.compare),
+            comparison: desc.compare.and_then(conv::map_compare_function),
             border: hal::image::PackedColor(0),
             normalized: true,
-            anisotropy_clamp: if desc.anisotropy_clamp > 1 {
-                Some(desc.anisotropy_clamp)
-            } else {
-                None
-            },
+            anisotropy_clamp: desc.anisotropy_clamp,
         };
 
         let sampler = resource::Sampler {

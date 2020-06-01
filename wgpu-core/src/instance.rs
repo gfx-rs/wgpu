@@ -534,9 +534,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let features = adapter.raw.physical_device.features();
 
-        wgt::Extensions {
-            anisotropic_filtering: features.contains(hal::Features::SAMPLER_ANISOTROPY),
-        }
+        let mut extensions = wgt::Extensions::default();
+        extensions.set(
+            wgt::Extensions::ANISOTROPIC_FILTERING,
+            features.contains(hal::Features::SAMPLER_ANISOTROPY),
+        );
+        extensions
     }
 
     pub fn adapter_limits<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Limits {
@@ -601,7 +604,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             // Check features needed by extensions
-            if desc.extensions.anisotropic_filtering {
+            if desc
+                .extensions
+                .contains(wgt::Extensions::ANISOTROPIC_FILTERING)
+            {
                 assert!(
                     available_features.contains(hal::Features::SAMPLER_ANISOTROPY),
                     "Missing feature SAMPLER_ANISOTROPY for anisotropic filtering extension"

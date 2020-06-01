@@ -100,16 +100,18 @@ impl From<Backend> for BackendBit {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct Extensions {
-    /// This is a native only extension. Support is planned to be added to webgpu,
-    /// but it is not yet implemented.
-    ///
-    /// https://github.com/gpuweb/gpuweb/issues/696
-    pub anisotropic_filtering: bool,
+bitflags::bitflags! {
+    #[repr(transparent)]
+    #[derive(Default)]
+    #[cfg_attr(feature = "trace", derive(Serialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
+    pub struct Extensions: u64 {
+        /// This is a native only extension. Support is planned to be added to webgpu,
+        /// but it is not yet implemented.
+        ///
+        /// https://github.com/gpuweb/gpuweb/issues/696
+        const ANISOTROPIC_FILTERING = 0x01;
+    }
 }
 
 #[repr(C)]
@@ -178,7 +180,7 @@ pub fn read_spirv<R: io::Read + io::Seek>(mut x: R) -> io::Result<Vec<u32>> {
 bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct ShaderStage: u32 {
         const NONE = 0;
         const VERTEX = 1;
@@ -401,7 +403,7 @@ pub enum TextureFormat {
 bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct ColorWrite: u32 {
         const RED = 1;
         const GREEN = 2;
@@ -939,7 +941,6 @@ impl Default for FilterMode {
     }
 }
 
-#[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -953,12 +954,12 @@ pub struct SamplerDescriptor<L> {
     pub mipmap_filter: FilterMode,
     pub lod_min_clamp: f32,
     pub lod_max_clamp: f32,
-    pub compare: CompareFunction,
+    pub compare: Option<CompareFunction>,
     /// Anisotropic filtering extension must be enabled if this value is
-    /// anything other than 0 and 1.
+    /// anything other than 0 or 1.
     ///
-    /// Valid values are 0, 1, 2, 4, 8, and 16.
-    pub anisotropy_clamp: u8,
+    /// Valid values: 1, 2, 4, 8, and 16.
+    pub anisotropy_clamp: Option<u8>,
 }
 
 impl<L> SamplerDescriptor<L> {
