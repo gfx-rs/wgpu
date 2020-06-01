@@ -1,7 +1,7 @@
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
-    BindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor,
-    PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, SwapChainStatus,
+    BindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor, Extensions,
+    Limits, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, SwapChainStatus,
     TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
 };
 
@@ -249,6 +249,22 @@ impl crate::Context for Context {
     ) -> Self::RequestDeviceFuture {
         let device_id = gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, trace_dir, PhantomData));
         ready(Ok((device_id, device_id)))
+    }
+
+    fn adapter_extensions(&self, adapter: &Self::AdapterId) -> Extensions {
+        gfx_select!(*adapter => self.adapter_extensions(*adapter))
+    }
+
+    fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits {
+        gfx_select!(*adapter => self.adapter_limits(*adapter))
+    }
+
+    fn device_extensions(&self, device: &Self::DeviceId) -> Extensions {
+        gfx_select!(*device => self.device_extensions(*device))
+    }
+
+    fn device_limits(&self, device: &Self::DeviceId) -> Limits {
+        gfx_select!(*device => self.device_limits(*device))
     }
 
     fn device_create_swap_chain(

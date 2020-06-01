@@ -720,6 +720,30 @@ impl crate::Context for Context {
         )
     }
 
+    fn adapter_extensions(&self, adapter: &Self::AdapterId) -> wgt::Extensions {
+        // TODO: web-sys has no way of getting extensions on adapters
+        wgt::Extensions {
+            anisotropic_filtering: false,
+        }
+    }
+
+    fn adapter_limits(&self, adapter: &Self::AdapterId) -> wgt::Limits {
+        // TODO: web-sys has no way of getting limits on adapters
+        wgt::Limits::default()
+    }
+
+    fn device_extensions(&self, device: &Self::DeviceId) -> wgt::Extensions {
+        // TODO: web-sys has no way of getting extensions on devices
+        wgt::Extensions {
+            anisotropic_filtering: false,
+        }
+    }
+
+    fn device_limits(&self, device: &Self::DeviceId) -> wgt::Limits {
+        // TODO: web-sys has a method for getting limits on devices, but it returns Object not GpuLimit
+        wgt::Limits::default()
+    }
+
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
