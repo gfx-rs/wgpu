@@ -134,7 +134,11 @@ trait Context: Sized {
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
+    fn adapter_extensions(&self, adapter: &Self::AdapterId) -> Extensions;
+    fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
 
+    fn device_extensions(&self, device: &Self::DeviceId) -> Extensions;
+    fn device_limits(&self, device: &Self::DeviceId) -> Limits;
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
@@ -999,6 +1003,14 @@ impl Adapter {
         })
     }
 
+    pub fn extensions(&self) -> Extensions {
+        Context::adapter_extensions(&*self.context, &self.id)
+    }
+
+    pub fn limits(&self) -> Limits {
+        Context::adapter_limits(&*self.context, &self.id)
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_info(&self) -> AdapterInfo {
         //wgn::adapter_get_info(self.id)
@@ -1010,6 +1022,14 @@ impl Device {
     /// Check for resource cleanups and mapping callbacks.
     pub fn poll(&self, maintain: Maintain) {
         Context::device_poll(&*self.context, &self.id, maintain);
+    }
+
+    pub fn extensions(&self) -> Extensions {
+        Context::device_extensions(&*self.context, &self.id)
+    }
+
+    pub fn limits(&self) -> Limits {
+        Context::device_limits(&*self.context, &self.id)
     }
 
     /// Creates a shader module from SPIR-V source code.
