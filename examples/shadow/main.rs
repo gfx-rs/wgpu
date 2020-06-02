@@ -752,10 +752,12 @@ impl framework::Example for Example {
                     attachment: &light.target_view,
                     depth_load_op: wgpu::LoadOp::Clear,
                     depth_store_op: wgpu::StoreOp::Store,
+                    depth_read_only: false,
                     stencil_load_op: wgpu::LoadOp::Clear,
                     stencil_store_op: wgpu::StoreOp::Store,
                     clear_depth: 1.0,
                     clear_stencil: 0,
+                    stencil_read_only: false,
                 }),
             });
             pass.set_pipeline(&self.shadow_pass.pipeline);
@@ -788,10 +790,12 @@ impl framework::Example for Example {
                     attachment: &self.forward_depth,
                     depth_load_op: wgpu::LoadOp::Clear,
                     depth_store_op: wgpu::StoreOp::Store,
+                    depth_read_only: false,
                     stencil_load_op: wgpu::LoadOp::Clear,
                     stencil_store_op: wgpu::StoreOp::Store,
                     clear_depth: 1.0,
                     clear_stencil: 0,
+                    stencil_read_only: false,
                 }),
             });
             pass.set_pipeline(&self.forward_pass.pipeline);

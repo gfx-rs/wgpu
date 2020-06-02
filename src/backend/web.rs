@@ -1102,10 +1102,18 @@ impl crate::Context for Context {
     fn swap_chain_get_next_texture(
         &self,
         swap_chain: &Self::SwapChainId,
-    ) -> (Option<Self::TextureViewId>, SwapChainStatus, Self::SwapChainOutputDetail) {
+    ) -> (
+        Option<Self::TextureViewId>,
+        SwapChainStatus,
+        Self::SwapChainOutputDetail,
+    ) {
         // TODO: Should we pass a descriptor here?
         // Or is the default view always correct?
-        (Some(Sendable(swap_chain.0.get_current_texture().create_view())), SwapChainStatus::Good, ())
+        (
+            Some(Sendable(swap_chain.0.get_current_texture().create_view())),
+            SwapChainStatus::Good,
+            (),
+        )
     }
 
     fn swap_chain_present(

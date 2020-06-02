@@ -23,8 +23,8 @@ pub use wgt::{
     DeviceDescriptor, DynamicOffset, Extensions, Extent3d, FilterMode, FrontFace, IndexFormat,
     InputStepMode, Limits, LoadOp, Origin3d, PowerPreference, PresentMode, PrimitiveTopology,
     RasterizationStateDescriptor, ShaderLocation, ShaderStage, StencilOperation,
-    StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect, 
-    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage, 
+    StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect,
+    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
     TextureViewDimension, VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT,
 };
 
@@ -217,7 +217,11 @@ trait Context: Sized {
     fn swap_chain_get_next_texture(
         &self,
         swap_chain: &Self::SwapChainId,
-    ) -> (Option<Self::TextureViewId>, SwapChainStatus, Self::SwapChainOutputDetail);
+    ) -> (
+        Option<Self::TextureViewId>,
+        SwapChainStatus,
+        Self::SwapChainOutputDetail,
+    );
     fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail);
     fn texture_create_view(
         &self,

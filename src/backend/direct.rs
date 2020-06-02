@@ -684,11 +684,21 @@ impl crate::Context for Context {
     fn swap_chain_get_next_texture(
         &self,
         swap_chain: &Self::SwapChainId,
-    ) -> (Option<Self::TextureViewId>, SwapChainStatus, Self::SwapChainOutputDetail) {
-        let wgc::swap_chain::SwapChainOutput { status, view_id } = 
+    ) -> (
+        Option<Self::TextureViewId>,
+        SwapChainStatus,
+        Self::SwapChainOutputDetail,
+    ) {
+        let wgc::swap_chain::SwapChainOutput { status, view_id } =
             gfx_select!(*swap_chain => self.swap_chain_get_next_texture(*swap_chain, PhantomData));
 
-        (view_id, status, SwapChainOutputDetail { swap_chain_id: *swap_chain })
+        (
+            view_id,
+            status,
+            SwapChainOutputDetail {
+                swap_chain_id: *swap_chain,
+            },
+        )
     }
 
     fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail) {
@@ -845,10 +855,12 @@ impl crate::Context for Context {
                 attachment: dsa.attachment.id,
                 depth_load_op: dsa.depth_load_op,
                 depth_store_op: dsa.depth_store_op,
+                depth_read_only: dsa.depth_read_only,
                 clear_depth: dsa.clear_depth,
                 stencil_load_op: dsa.stencil_load_op,
                 stencil_store_op: dsa.stencil_store_op,
                 clear_stencil: dsa.clear_stencil,
+                stencil_read_only: dsa.depth_read_only,
             }
         });
 
