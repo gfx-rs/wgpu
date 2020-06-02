@@ -648,10 +648,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         log::info!("Created buffer {:?} with {:?}", id, desc);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateBuffer {
-                id,
-                desc: desc.map_label(own_label),
-            }),
+            Some(ref trace) => {
+                let mut desc = desc.map_label(own_label);
+                let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
+                if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+                    desc.usage |= wgt::BufferUsage::COPY_DST;
+                }
+                trace.lock().add(trace::Action::CreateBuffer { id, desc })
+            }
             None => (),
         };
 
@@ -2504,7 +2508,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             id: buffer_id,
                             data,
                             range: 0..buffer.size,
-                            queued: false,
+                            queued: true,
                         });
                     }
                     None => (),
