@@ -236,9 +236,10 @@ impl framework::Example for Example {
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
         let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
             size: entity_uniform_size,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            label: None,
+            mapped_at_creation: false,
         });
 
         let local_bind_group_layout =
@@ -316,9 +317,10 @@ impl framework::Example for Example {
                 scale: cube.scale,
             };
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
                 size: entity_uniform_size,
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-                label: None,
+                mapped_at_creation: false,
             });
             entities.push(Entity {
                 mx_world: cgmath::Matrix4::from(transform),
@@ -408,11 +410,12 @@ impl framework::Example for Example {
         let light_uniform_size =
             (Self::MAX_LIGHTS * mem::size_of::<LightRaw>()) as wgpu::BufferAddress;
         let light_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
             size: light_uniform_size,
             usage: wgpu::BufferUsage::UNIFORM
                 | wgpu::BufferUsage::COPY_SRC
                 | wgpu::BufferUsage::COPY_DST,
-            label: None,
+            mapped_at_creation: false,
         });
 
         let vb_desc = wgpu::VertexBufferDescriptor {
@@ -438,9 +441,10 @@ impl framework::Example for Example {
 
             let uniform_size = mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress;
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+                label: None,
                 size: uniform_size,
                 usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-                label: None,
+                mapped_at_creation: false,
             });
 
             // Create bind group
