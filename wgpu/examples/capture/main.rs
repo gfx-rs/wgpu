@@ -34,9 +34,10 @@ async fn run() {
 
     // The output buffer lets us retrieve the data as an array
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: None,
         size: (size * size) as u64 * size_of::<u32>() as u64,
         usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
-        label: None,
+        mapped_at_creation: false,
     });
 
     let texture_extent = wgpu::Extent3d {
@@ -95,7 +96,7 @@ async fn run() {
     queue.submit(Some(command_buffer));
 
     // Note that we're not calling `.await` here.
-    let buffer_future = output_buffer.map_read(0, wgt::BufferSize::WHOLE);
+    let buffer_future = output_buffer.map_async(wgpu::MapMode::Read, 0, wgt::BufferSize::WHOLE);
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
@@ -108,15 +109,17 @@ async fn run() {
         return;
     }
 
-    if let Ok(mapping) = buffer_future.await {
+    if let Ok(()) = buffer_future.await {
+        let data = output_buffer.get_mapped_range(0, wgt::BufferSize::WHOLE);
         let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), size, size);
         png_encoder.set_depth(png::BitDepth::Eight);
         png_encoder.set_color(png::ColorType::RGBA);
         png_encoder
             .write_header()
             .unwrap()
-            .write_image_data(mapping.as_slice())
+            .write_image_data(data)
             .unwrap();
+        output_buffer.unmap();
     }
 }
 
