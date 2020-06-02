@@ -5,7 +5,6 @@ mod backend;
 #[macro_use]
 mod macros;
 
-use futures::FutureExt as _;
 use std::{
     future::Future,
     marker::PhantomData,
@@ -13,6 +12,9 @@ use std::{
     sync::Arc,
     thread,
 };
+
+use futures::FutureExt as _;
+use parking_lot::Mutex;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
@@ -105,18 +107,12 @@ trait Context: Sized {
     type SwapChainId: Send + Sync;
     type RenderPassId: RenderPassInner<Self>;
 
-    type CreateBufferMappedDetail: Send;
-    type BufferReadMappingDetail: Send;
-    type BufferWriteMappingDetail: Send;
     type SwapChainOutputDetail: Send;
 
     type RequestAdapterFuture: Future<Output = Option<Self::AdapterId>> + Send;
     type RequestDeviceFuture: Future<Output = Result<(Self::DeviceId, Self::QueueId), RequestDeviceError>>
         + Send;
-    type MapReadFuture: Future<Output = Result<Self::BufferReadMappingDetail, BufferAsyncError>>
-        + Send;
-    type MapWriteFuture: Future<Output = Result<Self::BufferWriteMappingDetail, BufferAsyncError>>
-        + Send;
+    type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
 
     fn init() -> Self;
     fn instance_create_surface(
@@ -175,11 +171,6 @@ trait Context: Sized {
         device: &Self::DeviceId,
         desc: &ComputePipelineDescriptor,
     ) -> Self::ComputePipelineId;
-    fn device_create_buffer_mapped<'a>(
-        &self,
-        device: &Self::DeviceId,
-        desc: &BufferDescriptor,
-    ) -> (Self::BufferId, &'a mut [u8], Self::CreateBufferMappedDetail);
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -203,16 +194,24 @@ trait Context: Sized {
     fn device_drop(&self, device: &Self::DeviceId);
     fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
 
-    fn buffer_map_read(
+    fn buffer_map_async(
         &self,
         buffer: &Self::BufferId,
+        mode: MapMode,
         range: Range<BufferAddress>,
-    ) -> Self::MapReadFuture;
-    fn buffer_map_write(
+    ) -> Self::MapAsyncFuture;
+    //TODO: we might be able to merge these, depending on how Web backend
+    // turns out to be implemented.
+    fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
-        range: Range<BufferAddress>,
-    ) -> Self::MapWriteFuture;
+        sub_range: Range<BufferAddress>,
+    ) -> &[u8];
+    fn buffer_get_mapped_range_mut(
+        &self,
+        buffer: &Self::BufferId,
+        sub_range: Range<BufferAddress>,
+    ) -> &mut [u8];
     fn buffer_unmap(&self, buffer: &Self::BufferId);
     fn swap_chain_get_next_texture(
         &self,
@@ -271,7 +270,6 @@ trait Context: Sized {
         copy_size: Extent3d,
     );
 
-    fn flush_mapped_data(data: &mut [u8], detail: Self::CreateBufferMappedDetail);
     fn encoder_begin_compute_pass(&self, encoder: &Self::CommandEncoderId) -> Self::ComputePassId;
     fn encoder_end_compute_pass(
         &self,
@@ -354,11 +352,54 @@ pub enum Maintain {
     Poll,
 }
 
+/// The main purpose of this struct is to resolve mapped ranges
+/// (convert sizes to end points), and to ensure that the sub-ranges
+/// don't intersect.
+#[derive(Debug)]
+struct MapContext {
+    total_size: BufferAddress,
+    initial_range: Range<BufferAddress>,
+    sub_ranges: Vec<Range<BufferAddress>>,
+}
+
+impl MapContext {
+    fn new(total_size: BufferAddress) -> Self {
+        MapContext {
+            total_size,
+            initial_range: 0..0,
+            sub_ranges: Vec::new(),
+        }
+    }
+
+    fn reset(&mut self) {
+        self.initial_range = 0..0;
+        self.sub_ranges.clear();
+    }
+
+    fn add(&mut self, offset: BufferAddress, size: BufferSize) -> BufferAddress {
+        let end = if size == BufferSize::WHOLE {
+            self.initial_range.end
+        } else {
+            offset + size.0
+        };
+        assert!(self.initial_range.start <= offset && end <= self.initial_range.end);
+        for sub in self.sub_ranges.iter() {
+            assert!(
+                end <= sub.start || offset >= sub.end,
+                "Intersecting map range with {:?}",
+                sub
+            );
+        }
+        self.sub_ranges.push(offset..end);
+        end
+    }
+}
+
 /// A handle to a GPU-accessible buffer.
 pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
-    size: BufferAddress,
+    map_context: Mutex<MapContext>,
 }
 
 /// A description of what portion of a buffer to use
@@ -871,35 +912,6 @@ pub struct TextureCopyView<'a> {
     pub origin: Origin3d,
 }
 
-/// A buffer being created, mapped in host memory.
-pub struct CreateBufferMapped<'a> {
-    context: Arc<C>,
-    id: <C as Context>::BufferId,
-    /// The backing field for `data()`. This isn't `pub` because users shouldn't
-    /// be able to replace it to point somewhere else. We rely on it pointing to
-    /// to the correct memory later during `unmap()`.
-    mapped_data: &'a mut [u8],
-    detail: <C as Context>::CreateBufferMappedDetail,
-}
-
-impl CreateBufferMapped<'_> {
-    /// The mapped data.
-    pub fn data(&mut self) -> &mut [u8] {
-        self.mapped_data
-    }
-
-    /// Unmaps the buffer from host memory and returns a [`Buffer`].
-    pub fn finish(self) -> Buffer {
-        <C as Context>::flush_mapped_data(self.mapped_data, self.detail);
-        Context::buffer_unmap(&*self.context, &self.id);
-        Buffer {
-            context: self.context,
-            id: self.id,
-            size: self.mapped_data.len() as BufferAddress,
-        }
-    }
-}
-
 impl Instance {
     /// Create an new instance.
     pub fn new() -> Self {
@@ -1098,36 +1110,24 @@ impl Device {
         Buffer {
             context: Arc::clone(&self.context),
             id: Context::device_create_buffer(&*self.context, &self.id, desc),
-            size: desc.size,
-        }
-    }
-
-    /// Creates a new buffer and maps it into host-visible memory.
-    ///
-    /// This returns a [`CreateBufferMapped`], which exposes a `&mut [u8]`. The actual [`Buffer`]
-    /// will not be created until calling [`CreateBufferMapped::finish`].
-    pub fn create_buffer_mapped(&self, desc: &BufferDescriptor) -> CreateBufferMapped<'_> {
-        assert_ne!(desc.size, 0);
-        let (id, mapped_data, detail) =
-            Context::device_create_buffer_mapped(&*self.context, &self.id, desc);
-        CreateBufferMapped {
-            context: Arc::clone(&self.context),
-            id,
-            mapped_data,
-            detail,
+            map_context: Mutex::new(MapContext::new(desc.size)),
         }
     }
 
     /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
     /// and finally unmaps it, returning a [`Buffer`].
     pub fn create_buffer_with_data(&self, data: &[u8], usage: BufferUsage) -> Buffer {
-        let mut mapped = self.create_buffer_mapped(&BufferDescriptor {
-            size: data.len() as u64,
-            usage,
+        let size = data.len() as u64;
+        let buffer = self.create_buffer(&BufferDescriptor {
             label: None,
+            size,
+            usage,
+            mapped_at_creation: true,
         });
-        mapped.data().copy_from_slice(data);
-        mapped.finish()
+        Context::buffer_get_mapped_range_mut(&*self.context, &buffer.id, 0..size)
+            .copy_from_slice(data);
+        buffer.unmap();
+        buffer
     }
 
     /// Creates a new [`Texture`].
@@ -1172,44 +1172,10 @@ pub struct RequestDeviceError;
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BufferAsyncError;
 
-pub struct BufferReadMapping {
-    context: Arc<C>,
-    detail: <C as Context>::BufferReadMappingDetail,
-}
-
-unsafe impl Send for BufferReadMapping {}
-unsafe impl Sync for BufferReadMapping {}
-
-impl BufferReadMapping {
-    pub fn as_slice(&self) -> &[u8] {
-        self.detail.as_slice()
-    }
-}
-
-impl Drop for BufferReadMapping {
-    fn drop(&mut self) {
-        Context::buffer_unmap(&*self.context, &self.detail.buffer_id);
-    }
-}
-
-pub struct BufferWriteMapping {
-    context: Arc<C>,
-    detail: <C as Context>::BufferWriteMappingDetail,
-}
-
-unsafe impl Send for BufferWriteMapping {}
-unsafe impl Sync for BufferWriteMapping {}
-
-impl BufferWriteMapping {
-    pub fn as_slice(&mut self) -> &mut [u8] {
-        self.detail.as_slice()
-    }
-}
-
-impl Drop for BufferWriteMapping {
-    fn drop(&mut self) {
-        Context::buffer_unmap(&*self.context, &self.detail.buffer_id);
-    }
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum MapMode {
+    Read,
+    Write,
 }
 
 impl Buffer {
@@ -1233,7 +1199,7 @@ impl Buffer {
         }
     }
 
-    /// Map the buffer for reading. The result is returned in a future.
+    /// Map the buffer. Buffer is ready to map once the future is resolved.
     ///
     /// For the future to complete, `device.poll(...)` must be called elsewhere in the runtime, possibly integrated
     /// into an event loop, run on a separate thread, or continually polled in the same task runtime that this
@@ -1241,44 +1207,44 @@ impl Buffer {
     ///
     /// It's expected that wgpu will eventually supply its own event loop infrastructure that will be easy to integrate
     /// into other event loops, like winit's.
-    pub fn map_read(
+    pub fn map_async(
         &self,
-        start: BufferAddress,
+        mode: MapMode,
+        offset: BufferAddress,
         size: BufferSize,
-    ) -> impl Future<Output = Result<BufferReadMapping, BufferAsyncError>> + Send {
-        let context = Arc::clone(&self.context);
-        let end = if size == BufferSize::WHOLE {
-            self.size
-        } else {
-            start + size.0
+    ) -> impl Future<Output = Result<(), BufferAsyncError>> + Send {
+        let end = {
+            let mut mc = self.map_context.lock();
+            assert_eq!(
+                mc.initial_range,
+                0..0,
+                "Buffer {:?} is already mapped",
+                self.id
+            );
+            let end = if size == BufferSize::WHOLE {
+                mc.total_size
+            } else {
+                offset + size.0
+            };
+            mc.initial_range = offset..end;
+            end
         };
-        self.context
-            .buffer_map_read(&self.id, start..end)
-            .map(|result| result.map(|detail| BufferReadMapping { context, detail }))
+        Context::buffer_map_async(&*self.context, &self.id, mode, offset..end)
     }
 
-    /// Map the buffer for writing. The result is returned in a future.
-    ///
-    /// See the documentation of (map_read)[#method.map_read] for more information about
-    /// how to run this future.
-    pub fn map_write(
-        &self,
-        start: BufferAddress,
-        size: BufferSize,
-    ) -> impl Future<Output = Result<BufferWriteMapping, BufferAsyncError>> + Send {
-        let context = Arc::clone(&self.context);
-        let end = if size == BufferSize::WHOLE {
-            self.size
-        } else {
-            start + size.0
-        };
-        self.context
-            .buffer_map_write(&self.id, start..end)
-            .map(|result| result.map(|detail| BufferWriteMapping { context, detail }))
+    pub fn get_mapped_range(&self, offset: BufferAddress, size: BufferSize) -> &[u8] {
+        let end = self.map_context.lock().add(offset, size);
+        Context::buffer_get_mapped_range(&*self.context, &self.id, offset..end)
+    }
+
+    pub fn get_mapped_range_mut(&self, offset: BufferAddress, size: BufferSize) -> &mut [u8] {
+        let end = self.map_context.lock().add(offset, size);
+        Context::buffer_get_mapped_range_mut(&*self.context, &self.id, offset..end)
     }
 
     /// Flushes any pending write operations and unmaps the buffer from host memory.
     pub fn unmap(&self) {
+        self.map_context.lock().reset();
         Context::buffer_unmap(&*self.context, &self.id);
     }
 }
