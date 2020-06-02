@@ -47,17 +47,18 @@ bitflags::bitflags! {
         const COPY_SRC = 1;
         const COPY_DST = 2;
         const SAMPLED = 4;
-        const OUTPUT_ATTACHMENT = 8;
-        const STORAGE_LOAD = 16;
-        const STORAGE_STORE = 32;
+        const ATTACHMENT_READ = 8;
+        const ATTACHMENT_WRITE = 16;
+        const STORAGE_LOAD = 32;
+        const STORAGE_STORE = 48;
         /// The combination of all read-only usages.
-        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::STORAGE_LOAD.bits;
+        const READ_ALL = Self::COPY_SRC.bits | Self::SAMPLED.bits | Self::ATTACHMENT_READ.bits | Self::STORAGE_LOAD.bits;
         /// The combination of all write-only and read-write usages.
-        const WRITE_ALL = Self::COPY_DST.bits | Self::OUTPUT_ATTACHMENT.bits | Self::STORAGE_STORE.bits;
+        const WRITE_ALL = Self::COPY_DST.bits | Self::ATTACHMENT_WRITE.bits | Self::STORAGE_STORE.bits;
         /// The combination of all usages that the are guaranteed to be be ordered by the hardware.
         /// If a usage is not ordered, then even if it doesn't change between draw calls, there
         /// still need to be pipeline barriers inserted for synchronization.
-        const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::OUTPUT_ATTACHMENT.bits;
+        const ORDERED = Self::READ_ALL.bits | Self::COPY_DST.bits | Self::ATTACHMENT_WRITE.bits;
         const UNINITIALIZED = 0xFFFF;
     }
 }

@@ -424,6 +424,9 @@ impl DepthStencilStateDescriptor {
     pub fn needs_stencil_reference(&self) -> bool {
         !self.stencil_front.compare.is_trivial() || !self.stencil_back.compare.is_trivial()
     }
+    pub fn is_read_only(&self) -> bool {
+        !self.depth_write_enabled && self.stencil_write_mask == 0
+    }
 }
 
 #[repr(C)]
@@ -719,9 +722,11 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     pub depth_load_op: LoadOp,
     pub depth_store_op: StoreOp,
     pub clear_depth: f32,
+    pub depth_read_only: bool,
     pub stencil_load_op: LoadOp,
     pub stencil_store_op: StoreOp,
     pub clear_stencil: u32,
+    pub stencil_read_only: bool,
 }
 
 #[repr(C)]
