@@ -54,6 +54,10 @@ impl<B: hal::Backend> PendingWrites<B> {
         }
     }
 
+    pub fn consume_temp(&mut self, buffer: B::Buffer, memory: MemoryBlock<B>) {
+        self.temp_buffers.push((buffer, memory));
+    }
+
     fn consume(&mut self, stage: StagingData<B>) {
         self.temp_buffers.push((stage.buffer, stage.memory));
         self.command_buffer = Some(stage.comb);
@@ -61,6 +65,17 @@ impl<B: hal::Backend> PendingWrites<B> {
 }
 
 impl<B: hal::Backend> super::Device<B> {
+    pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
+        if self.pending_writes.command_buffer.is_none() {
+            let mut comb = self.com_allocator.allocate_internal();
+            unsafe {
+                comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+            }
+            self.pending_writes.command_buffer = Some(comb);
+        }
+        self.pending_writes.command_buffer.as_mut().unwrap()
+    }
+
     fn prepare_stage(&mut self, size: wgt::BufferAddress) -> StagingData<B> {
         let mut buffer = unsafe {
             self.raw
@@ -224,10 +239,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .bits as u32
             / BITS_PER_BYTE;
 
-        let stage_bytes_per_row = get_lowest_common_denom(
+        let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
             bytes_per_texel,
         );
+        let stage_bytes_per_row = align_to(bytes_per_texel * size.width, bytes_per_row_alignment);
         let stage_size = stage_bytes_per_row as u64
             * ((size.depth - 1) * data_layout.rows_per_image + size.height) as u64;
         let mut stage = device.prepare_stage(stage_size);
@@ -514,6 +530,13 @@ fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
             a = b;
             b = c;
         }
+    }
+}
+
+fn align_to(value: u32, alignment: u32) -> u32 {
+    match value % alignment {
+        0 => value,
+        other => value - other + alignment,
     }
 }
 

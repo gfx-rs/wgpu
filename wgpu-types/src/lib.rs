@@ -19,7 +19,7 @@ pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 #[cfg_attr(
     feature = "trace",
@@ -34,7 +34,13 @@ pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
 pub struct BufferSize(pub u64);
 
 impl BufferSize {
-    pub const WHOLE: BufferSize = BufferSize(!0u64);
+    pub const WHOLE: BufferSize = BufferSize(!0);
+}
+
+impl Default for BufferSize {
+    fn default() -> Self {
+        BufferSize::WHOLE
+    }
 }
 
 #[repr(u8)]
@@ -59,6 +65,12 @@ pub enum PowerPreference {
     Default = 0,
     LowPower = 1,
     HighPerformance = 2,
+}
+
+impl Default for PowerPreference {
+    fn default() -> PowerPreference {
+        PowerPreference::Default
+    }
 }
 
 bitflags::bitflags! {
@@ -593,6 +605,7 @@ pub struct BufferDescriptor<L> {
     pub label: L,
     pub size: BufferAddress,
     pub usage: BufferUsage,
+    pub mapped_at_creation: bool,
 }
 
 impl<L> BufferDescriptor<L> {
@@ -601,6 +614,7 @@ impl<L> BufferDescriptor<L> {
             label: fun(&self.label),
             size: self.size,
             usage: self.usage,
+            mapped_at_creation: self.mapped_at_creation,
         }
     }
 }

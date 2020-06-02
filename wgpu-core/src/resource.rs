@@ -11,7 +11,7 @@ use crate::{
 use gfx_memory::MemoryBlock;
 use wgt::{BufferAddress, BufferUsage, TextureFormat, TextureUsage};
 
-use std::{borrow::Borrow, fmt};
+use std::{borrow::Borrow, ptr::NonNull};
 
 bitflags::bitflags! {
     /// The internal enum mirrored from `BufferUsage`. The values don't have to match!
@@ -73,12 +73,18 @@ pub enum BufferMapAsyncStatus {
 }
 
 #[derive(Debug)]
-pub enum BufferMapState {
+pub enum BufferMapState<B: hal::Backend> {
+    /// Mapped at creation.
+    Init {
+        ptr: NonNull<u8>,
+        stage_buffer: B::Buffer,
+        stage_memory: MemoryBlock<B>,
+    },
     /// Waiting for GPU to be done before mapping
     Waiting(BufferPendingMapping),
     /// Mapped
     Active {
-        ptr: *mut u8,
+        ptr: NonNull<u8>,
         sub_range: hal::buffer::SubRange,
         host: crate::device::HostMap,
     },
@@ -86,49 +92,27 @@ pub enum BufferMapState {
     Idle,
 }
 
-unsafe impl Send for BufferMapState {}
-unsafe impl Sync for BufferMapState {}
+unsafe impl<B: hal::Backend> Send for BufferMapState<B> {}
+unsafe impl<B: hal::Backend> Sync for BufferMapState<B> {}
 
-pub enum BufferMapOperation {
-    Read {
-        callback: crate::device::BufferMapReadCallback,
-        userdata: *mut u8,
-    },
-    Write {
-        callback: crate::device::BufferMapWriteCallback,
-        userdata: *mut u8,
-    },
+pub type BufferMapCallback = unsafe extern "C" fn(status: BufferMapAsyncStatus, userdata: *mut u8);
+
+#[derive(Debug)]
+pub struct BufferMapOperation {
+    pub host: crate::device::HostMap,
+    pub callback: BufferMapCallback,
+    pub user_data: *mut u8,
 }
 
 //TODO: clarify if/why this is needed here
 unsafe impl Send for BufferMapOperation {}
 unsafe impl Sync for BufferMapOperation {}
 
-impl fmt::Debug for BufferMapOperation {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        let op = match *self {
-            BufferMapOperation::Read { .. } => "read",
-            BufferMapOperation::Write { .. } => "write",
-        };
-        write!(fmt, "BufferMapOperation <{}>", op)
-    }
-}
-
 impl BufferMapOperation {
     pub(crate) fn call_error(self) {
-        match self {
-            BufferMapOperation::Read { callback, userdata } => {
-                log::error!("wgpu_buffer_map_read_async failed: buffer mapping is pending");
-                unsafe {
-                    callback(BufferMapAsyncStatus::Error, std::ptr::null(), userdata);
-                }
-            }
-            BufferMapOperation::Write { callback, userdata } => {
-                log::error!("wgpu_buffer_map_write_async failed: buffer mapping is pending");
-                unsafe {
-                    callback(BufferMapAsyncStatus::Error, std::ptr::null_mut(), userdata);
-                }
-            }
+        log::error!("wgpu_buffer_map_async failed: buffer mapping is pending");
+        unsafe {
+            (self.callback)(BufferMapAsyncStatus::Error, self.user_data);
         }
     }
 }
@@ -151,7 +135,7 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) full_range: (),
     pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) map_state: BufferMapState,
+    pub(crate) map_state: BufferMapState<B>,
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {

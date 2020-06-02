@@ -26,7 +26,7 @@ use wgt::{
 };
 
 use std::{
-    collections::hash_map::Entry, ffi, iter, marker::PhantomData, ptr, slice,
+    collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ptr, slice,
     sync::atomic::Ordering,
 };
 
@@ -111,18 +111,8 @@ pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::imag
 pub(crate) type FramebufferKey = AttachmentData<id::TextureViewId>;
 pub(crate) type RenderPassContext = AttachmentData<TextureFormat>;
 
-// This typedef is needed to work around cbindgen limitations.
-type RawBufferMut = *mut u8;
-type BufferMapResult = Result<RawBufferMut, hal::device::MapError>;
-type BufferMapPendingCallback = (resource::BufferMapOperation, BufferMapResult);
-
-pub type BufferMapReadCallback = unsafe extern "C" fn(
-    status: resource::BufferMapAsyncStatus,
-    data: *const u8,
-    userdata: *mut u8,
-);
-pub type BufferMapWriteCallback =
-    unsafe extern "C" fn(status: resource::BufferMapAsyncStatus, data: *mut u8, userdata: *mut u8);
+type BufferMapResult = Result<ptr::NonNull<u8>, hal::device::MapError>;
+type BufferMapPendingCallback = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
 
 fn map_buffer<B: hal::Backend>(
     raw: &B::Device,
@@ -153,7 +143,7 @@ fn map_buffer<B: hal::Backend>(
         HostMap::Write if needs_sync => Some(segment),
         _ => None,
     };
-    Ok(ptr.as_ptr())
+    Ok(ptr)
 }
 
 fn unmap_buffer<B: hal::Backend>(raw: &B::Device, buffer: &mut resource::Buffer<B>) {
@@ -168,22 +158,8 @@ fn unmap_buffer<B: hal::Backend>(raw: &B::Device, buffer: &mut resource::Buffer<
 //Note: this logic is specifically moved out of `handle_mapping()` in order to
 // have nothing locked by the time we execute users callback code.
 fn fire_map_callbacks<I: IntoIterator<Item = BufferMapPendingCallback>>(callbacks: I) {
-    for (operation, result) in callbacks {
-        let (status, ptr) = match result {
-            Ok(ptr) => (resource::BufferMapAsyncStatus::Success, ptr),
-            Err(e) => {
-                log::error!("failed to map buffer: {:?}", e);
-                (resource::BufferMapAsyncStatus::Error, ptr::null_mut())
-            }
-        };
-        match operation {
-            resource::BufferMapOperation::Read { callback, userdata } => unsafe {
-                callback(status, ptr, userdata)
-            },
-            resource::BufferMapOperation::Write { callback, userdata } => unsafe {
-                callback(status, ptr, userdata)
-            },
-        }
+    for (operation, status) in callbacks {
+        unsafe { (operation.callback)(status, operation.user_data) }
     }
 }
 
@@ -206,6 +182,8 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     extensions: wgt::Extensions,
+    //TODO: move this behind another mutex. This would allow several methods to switch
+    // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<B>,
     #[cfg(feature = "trace")]
     pub(crate) trace: Option<Mutex<Trace>>,
@@ -327,28 +305,36 @@ impl<B: GfxBackend> Device<B> {
         &self,
         self_id: id::DeviceId,
         desc: &wgt::BufferDescriptor<Label>,
+        memory_kind: gfx_memory::Kind,
     ) -> resource::Buffer<B> {
-        use gfx_memory::{Kind, MemoryUsage};
-
         debug_assert_eq!(self_id.backend(), B::VARIANT);
-        let (usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
-        let (kind, mem_usage) = {
+        let (mut usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
+        if desc.mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+            // we are going to be copying into it, internally
+            usage |= hal::buffer::Usage::TRANSFER_DST;
+        }
+
+        let mem_usage = {
+            use gfx_memory::MemoryUsage;
             use wgt::BufferUsage as Bu;
 
             //TODO: use linear allocation when we can ensure the freeing is linear
             if !desc.usage.intersects(Bu::MAP_READ | Bu::MAP_WRITE) {
-                (Kind::General, MemoryUsage::Private)
+                MemoryUsage::Private
             } else if (Bu::MAP_WRITE | Bu::COPY_SRC).contains(desc.usage) {
-                (Kind::General, MemoryUsage::Staging { read_back: false })
+                MemoryUsage::Staging { read_back: false }
             } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
-                (Kind::General, MemoryUsage::Staging { read_back: true })
+                MemoryUsage::Staging { read_back: true }
             } else {
-                (
-                    Kind::General,
-                    MemoryUsage::Dynamic {
-                        sparse_updates: false,
-                    },
-                )
+                let is_native_only = false;
+                assert!(
+                    is_native_only,
+                    "MAP usage can only be combined with the opposite COPY, requested {:?}",
+                    desc.usage
+                );
+                MemoryUsage::Dynamic {
+                    sparse_updates: false,
+                }
             }
         };
 
@@ -367,7 +353,7 @@ impl<B: GfxBackend> Device<B> {
                 &self.raw,
                 requirements.type_mask as u32,
                 mem_usage,
-                kind,
+                memory_kind,
                 requirements.size,
                 requirements.alignment,
             )
@@ -608,8 +594,55 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let buffer = device.create_buffer(device_id, desc);
+        let mut buffer = device.create_buffer(device_id, desc, gfx_memory::Kind::General);
         let ref_count = buffer.life_guard.add_ref();
+
+        let buffer_use = if !desc.mapped_at_creation {
+            resource::BufferUse::EMPTY
+        } else if desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
+            // buffer is mappable, so we are just doing that at start
+            match map_buffer(
+                &device.raw,
+                &mut buffer,
+                hal::buffer::SubRange::WHOLE,
+                HostMap::Write,
+            ) {
+                Ok(ptr) => {
+                    buffer.map_state = resource::BufferMapState::Active {
+                        ptr,
+                        sub_range: hal::buffer::SubRange::WHOLE,
+                        host: HostMap::Write,
+                    };
+                }
+                Err(e) => {
+                    log::error!("failed to create buffer in a mapped state: {:?}", e);
+                }
+            };
+            resource::BufferUse::MAP_WRITE
+        } else {
+            // buffer needs staging area for initialization only
+            let mut stage = device.create_buffer(
+                device_id,
+                &wgt::BufferDescriptor {
+                    label: b"<init_buffer>\0".as_ptr() as *const _,
+                    size: desc.size,
+                    usage: wgt::BufferUsage::MAP_WRITE | wgt::BufferUsage::COPY_SRC,
+                    mapped_at_creation: false,
+                },
+                gfx_memory::Kind::Linear,
+            );
+            let ptr = stage
+                .memory
+                .map(&device.raw, hal::memory::Segment::ALL)
+                .unwrap()
+                .ptr();
+            buffer.map_state = resource::BufferMapState::Init {
+                ptr,
+                stage_buffer: stage.raw,
+                stage_memory: stage.memory,
+            };
+            resource::BufferUse::COPY_DST
+        };
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
         log::info!("Created buffer {:?} with {:?}", id, desc);
@@ -626,74 +659,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .lock()
             .buffers
-            .init(
-                id,
-                ref_count,
-                BufferState::with_usage(resource::BufferUse::EMPTY),
-            )
+            .init(id, ref_count, BufferState::with_usage(buffer_use))
             .unwrap();
         id
-    }
-
-    pub fn device_create_buffer_mapped<B: GfxBackend>(
-        &self,
-        device_id: id::DeviceId,
-        desc: &wgt::BufferDescriptor<Label>,
-        id_in: Input<G, id::BufferId>,
-    ) -> (id::BufferId, *mut u8) {
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let mut desc = desc.clone();
-        desc.usage |= wgt::BufferUsage::MAP_WRITE;
-
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-        let mut buffer = device.create_buffer(device_id, &desc);
-        let ref_count = buffer.life_guard.add_ref();
-
-        let pointer = match map_buffer(
-            &device.raw,
-            &mut buffer,
-            hal::buffer::SubRange::WHOLE,
-            HostMap::Write,
-        ) {
-            Ok(ptr) => {
-                buffer.map_state = resource::BufferMapState::Active {
-                    ptr,
-                    sub_range: hal::buffer::SubRange::WHOLE,
-                    host: HostMap::Write,
-                };
-                ptr
-            }
-            Err(e) => {
-                log::error!("failed to create buffer in a mapped state: {:?}", e);
-                ptr::null_mut()
-            }
-        };
-
-        let id = hub.buffers.register_identity(id_in, buffer, &mut token);
-        log::info!("Created mapped buffer {:?} with {:?}", id, desc);
-        #[cfg(feature = "trace")]
-        match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateBuffer {
-                id,
-                desc: desc.map_label(own_label),
-            }),
-            None => (),
-        };
-
-        device
-            .trackers
-            .lock()
-            .buffers
-            .init(
-                id,
-                ref_count,
-                BufferState::with_usage(resource::BufferUse::MAP_WRITE),
-            )
-            .unwrap();
-
-        (id, pointer)
     }
 
     #[cfg(feature = "replay")]
@@ -771,7 +739,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write,
         ) {
             Ok(ptr) => unsafe {
-                ptr::copy_nonoverlapping(data.as_ptr(), ptr, data.len());
+                ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
             },
             Err(e) => {
                 log::error!("failed to map a buffer: {:?}", e);
@@ -813,7 +781,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Read,
         ) {
             Ok(ptr) => unsafe {
-                ptr::copy_nonoverlapping(ptr, data.as_mut_ptr(), data.len());
+                ptr::copy_nonoverlapping(ptr.as_ptr(), data.as_mut_ptr(), data.len());
             },
             Err(e) => {
                 log::error!("failed to map a buffer: {:?}", e);
@@ -2432,18 +2400,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
         range: std::ops::Range<BufferAddress>,
-        operation: resource::BufferMapOperation,
+        op: resource::BufferMapOperation,
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        let (pub_usage, internal_use) = match operation {
-            resource::BufferMapOperation::Read { .. } => {
-                (wgt::BufferUsage::MAP_READ, resource::BufferUse::MAP_READ)
-            }
-            resource::BufferMapOperation::Write { .. } => {
-                (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE)
-            }
+        let (pub_usage, internal_use) = match op.host {
+            HostMap::Read => (wgt::BufferUsage::MAP_READ, resource::BufferUse::MAP_READ),
+            HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
         let (device_id, ref_count) = {
@@ -2457,9 +2421,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 pub_usage
             );
             buffer.map_state = match buffer.map_state {
-                resource::BufferMapState::Active { .. } => panic!("Buffer already mapped"),
+                resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
+                    panic!("Buffer already mapped")
+                }
                 resource::BufferMapState::Waiting(_) => {
-                    operation.call_error();
+                    op.call_error();
                     return;
                 }
                 resource::BufferMapState::Idle => {
@@ -2468,7 +2434,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             offset: range.start,
                             size: Some(range.end - range.start),
                         },
-                        op: operation,
+                        op,
                         parent_ref_count: buffer.life_guard.add_ref(),
                     })
                 }
@@ -2479,7 +2445,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &device_guard[device_id];
-
         device
             .trackers
             .lock()
@@ -2489,26 +2454,104 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device.lock_life(&mut token).map(buffer_id, ref_count);
     }
 
+    pub fn buffer_get_mapped_range<B: GfxBackend>(
+        &self,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        _size: BufferSize,
+    ) -> *mut u8 {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (buffer_guard, _) = hub.buffers.read(&mut token);
+        let buffer = &buffer_guard[buffer_id];
+
+        match buffer.map_state {
+            resource::BufferMapState::Init { ptr, .. }
+            | resource::BufferMapState::Active { ptr, .. } => unsafe {
+                ptr.as_ptr().offset(offset as isize)
+            },
+            resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
+                log::error!("Buffer is not mapped");
+                ptr::null_mut()
+            }
+        }
+    }
+
     pub fn buffer_unmap<B: GfxBackend>(&self, buffer_id: id::BufferId) {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let buffer = &mut buffer_guard[buffer_id];
+        let device = &mut device_guard[buffer.device_id.value];
 
         log::debug!("Buffer {:?} map state -> Idle", buffer_id);
-        match buffer.map_state {
+        match mem::replace(&mut buffer.map_state, resource::BufferMapState::Idle) {
+            resource::BufferMapState::Init {
+                ptr,
+                stage_buffer,
+                stage_memory,
+            } => {
+                #[cfg(feature = "trace")]
+                match device.trace {
+                    Some(ref trace) => {
+                        let mut trace = trace.lock();
+                        let data = trace.make_binary("bin", unsafe {
+                            slice::from_raw_parts(ptr.as_ptr(), buffer.size as usize)
+                        });
+                        trace.add(trace::Action::WriteBuffer {
+                            id: buffer_id,
+                            data,
+                            range: 0..buffer.size,
+                            queued: false,
+                        });
+                    }
+                    None => (),
+                };
+                let _ = ptr;
+
+                let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
+                buffer.life_guard.use_at(last_submit_index + 1);
+                let region = hal::command::BufferCopy {
+                    src: 0,
+                    dst: 0,
+                    size: buffer.size,
+                };
+                let transition_src = hal::memory::Barrier::Buffer {
+                    states: hal::buffer::Access::HOST_WRITE..hal::buffer::Access::TRANSFER_READ,
+                    target: &stage_buffer,
+                    range: hal::buffer::SubRange::WHOLE,
+                    families: None,
+                };
+                let transition_dst = hal::memory::Barrier::Buffer {
+                    states: hal::buffer::Access::empty()..hal::buffer::Access::TRANSFER_WRITE,
+                    target: &buffer.raw,
+                    range: hal::buffer::SubRange::WHOLE,
+                    families: None,
+                };
+                unsafe {
+                    let comb = device.borrow_pending_writes();
+                    comb.pipeline_barrier(
+                        hal::pso::PipelineStage::HOST..hal::pso::PipelineStage::TRANSFER,
+                        hal::memory::Dependencies::empty(),
+                        iter::once(transition_src).chain(iter::once(transition_dst)),
+                    );
+                    comb.copy_buffer(&stage_buffer, &buffer.raw, iter::once(region));
+                }
+                device
+                    .pending_writes
+                    .consume_temp(stage_buffer, stage_memory);
+            }
             resource::BufferMapState::Idle => {
-                log::error!("Buffer already unmapped");
+                log::error!("Buffer is not mapped");
             }
             resource::BufferMapState::Waiting(_) => {}
             resource::BufferMapState::Active {
                 ptr,
-                ref sub_range,
+                sub_range,
                 host,
             } => {
-                let device = &device_guard[buffer.device_id.value];
                 if host == HostMap::Write {
                     #[cfg(feature = "trace")]
                     match device.trace {
@@ -2516,7 +2559,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let mut trace = trace.lock();
                             let size = sub_range.size_to(buffer.size);
                             let data = trace.make_binary("bin", unsafe {
-                                slice::from_raw_parts(ptr, size as usize)
+                                slice::from_raw_parts(ptr.as_ptr(), size as usize)
                             });
                             trace.add(trace::Action::WriteBuffer {
                                 id: buffer_id,
@@ -2532,7 +2575,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unmap_buffer(&device.raw, buffer);
             }
         }
-        buffer.map_state = resource::BufferMapState::Idle;
     }
 }
 
