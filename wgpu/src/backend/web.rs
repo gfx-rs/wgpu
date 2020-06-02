@@ -574,25 +574,10 @@ pub(crate) struct MapFuture<T> {
     marker: PhantomData<T>,
 }
 impl<T> Unpin for MapFuture<T> {}
-type MapData = (web_sys::GpuBuffer, Vec<u8>);
-impl From<MapData> for BufferReadMappingDetail {
-    fn from((buffer_id, mapped): MapData) -> Self {
-        BufferReadMappingDetail {
-            buffer_id: Sendable(buffer_id),
-            mapped,
-        }
-    }
-}
-impl From<MapData> for BufferWriteMappingDetail {
-    fn from((buffer_id, mapped): MapData) -> Self {
-        BufferWriteMappingDetail {
-            buffer_id: Sendable(buffer_id),
-            mapped,
-        }
-    }
-}
-impl<T: From<MapData>> std::future::Future for MapFuture<T> {
-    type Output = Result<T, crate::BufferAsyncError>;
+//type MapData = (web_sys::GpuBuffer, Vec<u8>);
+
+impl std::future::Future for MapFuture<()> {
+    type Output = Result<(), crate::BufferAsyncError>;
     fn poll(
         mut self: std::pin::Pin<&mut Self>,
         context: &mut std::task::Context,
@@ -602,12 +587,12 @@ impl<T: From<MapData>> std::future::Future for MapFuture<T> {
             context,
         )
         .map(|result| {
-            let buffer = self.buffer.take().unwrap();
+            let _buffer = self.buffer.take().unwrap();
             result
                 .map(|js_value| {
                     let array_buffer = js_sys::ArrayBuffer::from(js_value);
-                    let view = js_sys::Uint8Array::new(&array_buffer);
-                    T::from((buffer, view.to_vec()))
+                    let _view = js_sys::Uint8Array::new(&array_buffer);
+                    () //TODO
                 })
                 .map_err(|_| crate::BufferAsyncError)
         })
@@ -635,17 +620,13 @@ impl crate::Context for Context {
     type SwapChainId = Sendable<web_sys::GpuSwapChain>;
     type RenderPassId = RenderPass;
 
-    type CreateBufferMappedDetail = CreateBufferMappedDetail;
-    type BufferReadMappingDetail = BufferReadMappingDetail;
-    type BufferWriteMappingDetail = BufferWriteMappingDetail;
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
     type RequestAdapterFuture = MakeSendFuture<FutureMap<Option<Self::AdapterId>>>;
     type RequestDeviceFuture = MakeSendFuture<
         FutureMap<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>,
     >;
-    type MapReadFuture = MakeSendFuture<MapFuture<BufferReadMappingDetail>>;
-    type MapWriteFuture = MakeSendFuture<MapFuture<BufferWriteMappingDetail>>;
+    type MapAsyncFuture = MakeSendFuture<MapFuture<()>>;
 
     fn init() -> Self {
         Sendable(web_sys::window().unwrap().navigator().gpu())
@@ -720,26 +701,26 @@ impl crate::Context for Context {
         )
     }
 
-    fn adapter_extensions(&self, adapter: &Self::AdapterId) -> wgt::Extensions {
+    fn adapter_extensions(&self, _adapter: &Self::AdapterId) -> wgt::Extensions {
         // TODO: web-sys has no way of getting extensions on adapters
         wgt::Extensions {
             anisotropic_filtering: false,
         }
     }
 
-    fn adapter_limits(&self, adapter: &Self::AdapterId) -> wgt::Limits {
+    fn adapter_limits(&self, _adapter: &Self::AdapterId) -> wgt::Limits {
         // TODO: web-sys has no way of getting limits on adapters
         wgt::Limits::default()
     }
 
-    fn device_extensions(&self, device: &Self::DeviceId) -> wgt::Extensions {
+    fn device_extensions(&self, _device: &Self::DeviceId) -> wgt::Extensions {
         // TODO: web-sys has no way of getting extensions on devices
         wgt::Extensions {
             anisotropic_filtering: false,
         }
     }
 
-    fn device_limits(&self, device: &Self::DeviceId) -> wgt::Limits {
+    fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
         // TODO: web-sys has a method for getting limits on devices, but it returns Object not GpuLimit
         wgt::Limits::default()
     }
@@ -968,34 +949,6 @@ impl crate::Context for Context {
         Sendable(device.0.create_compute_pipeline(&mapped_desc))
     }
 
-    fn device_create_buffer_mapped<'a>(
-        &self,
-        device: &Self::DeviceId,
-        desc: &BufferDescriptor,
-    ) -> (Self::BufferId, &'a mut [u8], Self::CreateBufferMappedDetail) {
-        let mut mapped_desc =
-            web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
-        if let Some(label) = desc.label {
-            mapped_desc.label(label);
-        }
-        unsafe {
-            let pair = device.0.create_buffer_mapped(&mapped_desc);
-            let id = pair.get(0).into();
-            let array_buffer = pair.get(1).into();
-            // TODO: Use `Vec::from_raw_parts` once it's stable
-            let memory = vec![0; desc.size as usize].into_boxed_slice();
-            let mapped_data = std::slice::from_raw_parts_mut(
-                Box::into_raw(memory) as *mut u8,
-                desc.size as usize,
-            );
-            (
-                Sendable(id),
-                mapped_data,
-                CreateBufferMappedDetail { array_buffer },
-            )
-        }
-    }
-
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -1071,28 +1024,34 @@ impl crate::Context for Context {
         // Device is polled automatically
     }
 
-    fn buffer_map_read(
+    fn buffer_map_async(
         &self,
-        buffer: &Self::BufferId,
+        _buffer: &Self::BufferId,
+        _mode: crate::MapMode,
         _range: Range<wgt::BufferAddress>,
-    ) -> Self::MapReadFuture {
-        MakeSendFuture(MapFuture {
-            child: wasm_bindgen_futures::JsFuture::from(buffer.0.map_read_async()),
-            buffer: Some(buffer.0.clone()),
-            marker: PhantomData,
-        })
+    ) -> Self::MapAsyncFuture {
+        unimplemented!()
+        //MakeSendFuture(MapFuture {
+        //    child: wasm_bindgen_futures::JsFuture::from(buffer.0.map_async()),
+        //    buffer: Some(buffer.0.clone()),
+        //    marker: PhantomData,
+        //})
     }
 
-    fn buffer_map_write(
+    fn buffer_get_mapped_range(
         &self,
-        buffer: &Self::BufferId,
-        _range: Range<wgt::BufferAddress>,
-    ) -> Self::MapWriteFuture {
-        MakeSendFuture(MapFuture {
-            child: wasm_bindgen_futures::JsFuture::from(buffer.0.map_write_async()),
-            buffer: Some(buffer.0.clone()),
-            marker: PhantomData,
-        })
+        _buffer: &Self::BufferId,
+        _sub_range: Range<wgt::BufferAddress>,
+    ) -> &[u8] {
+        unimplemented!()
+    }
+
+    fn buffer_get_mapped_range_mut(
+        &self,
+        _buffer: &Self::BufferId,
+        _sub_range: Range<wgt::BufferAddress>,
+    ) -> &mut [u8] {
+        unimplemented!()
     }
 
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
@@ -1178,26 +1137,6 @@ impl crate::Context for Context {
     }
     fn render_pipeline_drop(&self, _pipeline: &Self::RenderPipelineId) {
         // Buffer is dropped automatically
-    }
-
-    fn flush_mapped_data(data: &mut [u8], detail: CreateBufferMappedDetail) {
-        unsafe {
-            // Convert the `mapped_data` slice back into a `Vec`. This should be
-            // safe because `mapped_data` is no longer accessible beyond this
-            // function.
-            let memory: Vec<u8> = Box::<[u8]>::from_raw(data).into();
-
-            // Create a view into the mapped `ArrayBuffer` that was provided by the
-            // browser
-            let mapped = js_sys::Uint8Array::new(&detail.array_buffer);
-
-            // Convert `memory` into a temporary `Uint8Array` view. This should be
-            // safe as long as the backing wasm memory is not resized.
-            let memory_view = js_sys::Uint8Array::view(&memory[..]);
-
-            // Finally copy into `mapped` and let `memory` drop
-            mapped.set(&memory_view, 0);
-        }
     }
 
     fn encoder_copy_buffer_to_buffer(
@@ -1379,41 +1318,6 @@ impl crate::Context for Context {
         let temp_command_buffers = command_buffers.map(|i| i.0).collect::<js_sys::Array>();
 
         queue.0.submit(&temp_command_buffers);
-    }
-}
-
-pub(crate) struct CreateBufferMappedDetail {
-    /// On wasm we need to allocate our own temporary storage for `data`. Later
-    /// we copy this temporary storage into the `Uint8Array` which was returned
-    /// by the browser originally.
-    array_buffer: js_sys::ArrayBuffer,
-}
-
-// `CreateBufferMappedDetail` must be `Send` to match native.
-//
-// SAFETY: This is safe on wasm32 *for now*, but similarly to the unsafe Send impls for the handle
-// type wrappers, the full story for threading on wasm32 is still unfolding.
-unsafe impl Send for CreateBufferMappedDetail {}
-
-pub(crate) struct BufferReadMappingDetail {
-    pub(crate) buffer_id: Sendable<web_sys::GpuBuffer>,
-    mapped: Vec<u8>,
-}
-
-impl BufferReadMappingDetail {
-    pub(crate) fn as_slice(&self) -> &[u8] {
-        &self.mapped[..]
-    }
-}
-
-pub(crate) struct BufferWriteMappingDetail {
-    pub(crate) buffer_id: Sendable<web_sys::GpuBuffer>,
-    mapped: Vec<u8>,
-}
-
-impl BufferWriteMappingDetail {
-    pub(crate) fn as_slice(&mut self) -> &mut [u8] {
-        &mut self.mapped[..]
     }
 }
 

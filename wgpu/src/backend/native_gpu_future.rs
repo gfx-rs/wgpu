@@ -1,4 +1,3 @@
-use crate::BufferAddress;
 use parking_lot::Mutex;
 use std::future::Future;
 use std::pin::Pin;
@@ -10,29 +9,26 @@ enum WakerOrResult<T> {
     Result(T),
 }
 
+type GpuFutureData<T> = Mutex<Option<WakerOrResult<T>>>;
+
 /// A Future that can poll the wgpu::Device
 pub struct GpuFuture<T> {
-    data: Arc<Data<T>>,
+    data: Arc<GpuFutureData<T>>,
 }
 
 pub enum OpaqueData {}
 
-struct Data<T> {
-    buffer_id: wgc::id::BufferId,
-    size: BufferAddress,
-    waker_or_result: Mutex<Option<WakerOrResult<T>>>,
-}
-
+//TODO: merge this with `GpuFuture` and avoid `Arc` on the data.
 /// A completion handle to set the result on a GpuFuture
 pub struct GpuFutureCompletion<T> {
-    data: Arc<Data<T>>,
+    data: Arc<GpuFutureData<T>>,
 }
 
 impl<T> Future for GpuFuture<T> {
     type Output = T;
 
     fn poll(self: Pin<&mut Self>, context: &mut Context) -> Poll<Self::Output> {
-        let mut waker_or_result = self.into_ref().get_ref().data.waker_or_result.lock();
+        let mut waker_or_result = self.into_ref().get_ref().data.lock();
 
         match waker_or_result.take() {
             Some(WakerOrResult::Result(res)) => Poll::Ready(res),
@@ -46,7 +42,7 @@ impl<T> Future for GpuFuture<T> {
 
 impl<T> GpuFutureCompletion<T> {
     pub fn complete(self, value: T) {
-        let mut waker_or_result = self.data.waker_or_result.lock();
+        let mut waker_or_result = self.data.lock();
 
         match waker_or_result.replace(WakerOrResult::Result(value)) {
             Some(WakerOrResult::Waker(waker)) => waker.wake(),
@@ -68,22 +64,10 @@ impl<T> GpuFutureCompletion<T> {
             data: Arc::from_raw(this as _),
         }
     }
-
-    pub(crate) fn get_buffer_info(&self) -> (wgc::id::BufferId, BufferAddress) {
-        (self.data.buffer_id, self.data.size)
-    }
 }
 
-pub(crate) fn new_gpu_future<T>(
-    buffer_id: wgc::id::BufferId,
-    size: BufferAddress,
-) -> (GpuFuture<T>, GpuFutureCompletion<T>) {
-    let data = Arc::new(Data {
-        buffer_id,
-        size,
-        waker_or_result: Mutex::new(None),
-    });
-
+pub(crate) fn new_gpu_future<T>() -> (GpuFuture<T>, GpuFutureCompletion<T>) {
+    let data = Arc::new(Mutex::new(None));
     (
         GpuFuture {
             data: Arc::clone(&data),

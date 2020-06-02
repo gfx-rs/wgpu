@@ -51,20 +51,20 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let cs_module =
         device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
 
-    let staging_buffer = device.create_buffer_with_data(
-        bytemuck::cast_slice(&numbers),
-        wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
-    );
-
-    let storage_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-        size,
-        usage: wgpu::BufferUsage::STORAGE
-            | wgpu::BufferUsage::COPY_DST
-            | wgpu::BufferUsage::COPY_SRC,
+    let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
+        size,
+        usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
+        mapped_at_creation: false,
     });
 
+    let storage_buffer = device.create_buffer_with_data(
+        bytemuck::cast_slice(&numbers),
+        wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+    );
+
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        label: None,
         bindings: &[wgpu::BindGroupLayoutEntry {
             binding: 0,
             visibility: wgpu::ShaderStage::COMPUTE,
@@ -73,16 +73,15 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 readonly: false,
             },
         }],
-        label: None,
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: None,
         layout: &bind_group_layout,
         bindings: &[wgpu::Binding {
             binding: 0,
             resource: wgpu::BindingResource::Buffer(storage_buffer.slice(..)),
         }],
-        label: None,
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -99,7 +98,6 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     let mut encoder =
         device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
-    encoder.copy_buffer_to_buffer(&staging_buffer, 0, &storage_buffer, 0, size);
     {
         let mut cpass = encoder.begin_compute_pass();
         cpass.set_pipeline(&compute_pipeline);
@@ -111,19 +109,21 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     queue.submit(Some(encoder.finish()));
 
     // Note that we're not calling `.await` here.
-    let buffer_future = staging_buffer.map_read(0, wgt::BufferSize::WHOLE);
+    let buffer_future = staging_buffer.map_async(wgpu::MapMode::Read, 0, wgt::BufferSize::WHOLE);
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
     // be called in an event loop or on another thread.
     device.poll(wgpu::Maintain::Wait);
 
-    if let Ok(mapping) = buffer_future.await {
-        mapping
-            .as_slice()
+    if let Ok(()) = buffer_future.await {
+        let data = staging_buffer.get_mapped_range(0, wgt::BufferSize::WHOLE);
+        let result = data
             .chunks_exact(4)
             .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
-            .collect()
+            .collect();
+        staging_buffer.unmap();
+        result
     } else {
         panic!("failed to run compute on gpu!")
     }

@@ -1,8 +1,8 @@
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
     BindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor, Extensions,
-    Limits, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor, SwapChainStatus,
-    TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
+    Limits, MapMode, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
+    SwapChainStatus, TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
 };
 
 use arrayvec::ArrayVec;
@@ -202,18 +202,12 @@ impl crate::Context for Context {
     type SwapChainId = wgc::id::SwapChainId;
     type RenderPassId = wgc::command::RawPass;
 
-    type CreateBufferMappedDetail = CreateBufferMappedDetail;
-    type BufferReadMappingDetail = BufferReadMappingDetail;
-    type BufferWriteMappingDetail = BufferWriteMappingDetail;
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
     type RequestAdapterFuture = Ready<Option<Self::AdapterId>>;
     type RequestDeviceFuture =
         Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
-    type MapReadFuture =
-        native_gpu_future::GpuFuture<Result<BufferReadMappingDetail, crate::BufferAsyncError>>;
-    type MapWriteFuture =
-        native_gpu_future::GpuFuture<Result<BufferWriteMappingDetail, crate::BufferAsyncError>>;
+    type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
 
     fn init() -> Self {
         wgc::hub::Global::new("wgpu", wgc::hub::IdentityManagerFactory)
@@ -513,23 +507,6 @@ impl crate::Context for Context {
         ))
     }
 
-    fn device_create_buffer_mapped<'a>(
-        &self,
-        device: &Self::DeviceId,
-        desc: &BufferDescriptor,
-    ) -> (Self::BufferId, &'a mut [u8], Self::CreateBufferMappedDetail) {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-        unsafe {
-            let (id, ptr) = gfx_select!(*device => self.device_create_buffer_mapped(
-                *device,
-                &desc.map_label(|_| owned_label.as_ptr()),
-                PhantomData
-            ));
-            let mapped_data = std::slice::from_raw_parts_mut(ptr, desc.size as usize);
-            (id, mapped_data, CreateBufferMappedDetail)
-        }
-    }
-
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
@@ -603,78 +580,65 @@ impl crate::Context for Context {
         ));
     }
 
-    fn buffer_map_read(
+    fn buffer_map_async(
         &self,
         buffer: &Self::BufferId,
+        mode: MapMode,
         range: Range<wgt::BufferAddress>,
-    ) -> Self::MapReadFuture {
-        let (future, completion) =
-            native_gpu_future::new_gpu_future(*buffer, range.end - range.start);
+    ) -> Self::MapAsyncFuture {
+        let (future, completion) = native_gpu_future::new_gpu_future();
 
-        extern "C" fn buffer_map_read_future_wrapper(
+        extern "C" fn buffer_map_future_wrapper(
             status: wgc::resource::BufferMapAsyncStatus,
-            data: *const u8,
             user_data: *mut u8,
         ) {
             let completion =
                 unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-            let (buffer_id, size) = completion.get_buffer_info();
-
-            if let wgc::resource::BufferMapAsyncStatus::Success = status {
-                completion.complete(Ok(BufferReadMappingDetail {
-                    data,
-                    size: size as usize,
-                    buffer_id,
-                }));
-            } else {
-                completion.complete(Err(crate::BufferAsyncError));
-            }
+            completion.complete(match status {
+                wgc::resource::BufferMapAsyncStatus::Success => Ok(()),
+                _ => Err(crate::BufferAsyncError),
+            })
         }
 
-        let operation = wgc::resource::BufferMapOperation::Read {
-            callback: buffer_map_read_future_wrapper,
-            userdata: completion.to_raw() as _,
+        let operation = wgc::resource::BufferMapOperation {
+            host: match mode {
+                MapMode::Read => wgc::device::HostMap::Read,
+                MapMode::Write => wgc::device::HostMap::Write,
+            },
+            callback: buffer_map_future_wrapper,
+            user_data: completion.to_raw() as _,
         };
         gfx_select!(*buffer => self.buffer_map_async(*buffer, range, operation));
 
         future
     }
 
-    fn buffer_map_write(
+    fn buffer_get_mapped_range(
         &self,
         buffer: &Self::BufferId,
-        range: Range<wgt::BufferAddress>,
-    ) -> Self::MapWriteFuture {
-        let (future, completion) =
-            native_gpu_future::new_gpu_future(*buffer, range.end - range.start);
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> &[u8] {
+        let size = sub_range.end - sub_range.start;
+        let ptr = gfx_select!(*buffer => self.buffer_get_mapped_range(
+            *buffer,
+            sub_range.start,
+            wgt::BufferSize(size)
+        ));
+        unsafe { slice::from_raw_parts(ptr, size as usize) }
+    }
 
-        extern "C" fn buffer_map_write_future_wrapper(
-            status: wgc::resource::BufferMapAsyncStatus,
-            data: *mut u8,
-            user_data: *mut u8,
-        ) {
-            let completion =
-                unsafe { native_gpu_future::GpuFutureCompletion::from_raw(user_data as _) };
-            let (buffer_id, size) = completion.get_buffer_info();
-
-            if let wgc::resource::BufferMapAsyncStatus::Success = status {
-                completion.complete(Ok(BufferWriteMappingDetail {
-                    data,
-                    size: size as usize,
-                    buffer_id,
-                }));
-            } else {
-                completion.complete(Err(crate::BufferAsyncError));
-            }
-        }
-
-        let operation = wgc::resource::BufferMapOperation::Write {
-            callback: buffer_map_write_future_wrapper,
-            userdata: completion.to_raw() as _,
-        };
-        gfx_select!(*buffer => self.buffer_map_async(*buffer, range, operation));
-
-        future
+    fn buffer_get_mapped_range_mut(
+        &self,
+        buffer: &Self::BufferId,
+        sub_range: Range<wgt::BufferAddress>,
+    ) -> &mut [u8] {
+        let size = sub_range.end - sub_range.start;
+        let ptr = gfx_select!(*buffer => self.buffer_get_mapped_range(
+            *buffer,
+            sub_range.start,
+            wgt::BufferSize(size)
+        ));
+        unsafe { slice::from_raw_parts_mut(ptr, size as usize) }
     }
 
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
@@ -748,8 +712,6 @@ impl crate::Context for Context {
     fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId) {
         gfx_select!(*pipeline => self.render_pipeline_destroy(*pipeline))
     }
-
-    fn flush_mapped_data(_data: &mut [u8], _detail: CreateBufferMappedDetail) {}
 
     fn encoder_copy_buffer_to_buffer(
         &self,
@@ -930,38 +892,6 @@ impl crate::Context for Context {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
 
         gfx_select!(*queue => self.queue_submit(*queue, &temp_command_buffers))
-    }
-}
-
-pub(crate) struct CreateBufferMappedDetail;
-
-pub(crate) struct BufferReadMappingDetail {
-    pub(crate) buffer_id: wgc::id::BufferId,
-    data: *const u8,
-    size: usize,
-}
-
-impl BufferReadMappingDetail {
-    pub(crate) fn as_slice(&self) -> &[u8] {
-        unsafe { slice::from_raw_parts(self.data as *const u8, self.size) }
-    }
-}
-
-pub(crate) struct BufferWriteMappingDetail {
-    pub(crate) buffer_id: wgc::id::BufferId,
-    data: *mut u8,
-    size: usize,
-}
-
-// SAFETY: It is safe to implement Send for `BufferReadMappingDetail` and `BufferWriteMappingDetail`
-// because the only !Send field is `data`, and it is used similarly to `&[u8]` or `&mut [u8]`.
-
-unsafe impl Send for BufferReadMappingDetail {}
-unsafe impl Send for BufferWriteMappingDetail {}
-
-impl BufferWriteMappingDetail {
-    pub(crate) fn as_slice(&mut self) -> &mut [u8] {
-        unsafe { slice::from_raw_parts_mut(self.data as *mut u8, self.size) }
     }
 }
 
