@@ -68,6 +68,13 @@ Create an `index.html` file into `target/generated` directory and add the follow
 Now run a web server locally inside the `target/generated` directory to see the `hello-triangle` in the browser.
 e.g. `python -m http.server`
 
+### How to compile the shaders in the examples
+
+Currently, shaders in the examples are written in GLSL 4.50 and compiled to SPIR-V manually.
+In the future [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) will be the shader language for WebGPU, but support is not implemented yet.
+
+For now, the shaders can be compiled to SPIR-V by running `make`, which requires you to have `glslang`s `glslangValidator` binary.
+
 ## Friends
 
 Shout out to the following projects that work best with wgpu-rs:
