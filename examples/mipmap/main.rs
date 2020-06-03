@@ -156,8 +156,8 @@ impl Example {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
-            compare: wgpu::CompareFunction::Undefined,
-            anisotropy_clamp: 1,
+            compare: None,
+            anisotropy_clamp: None,
         });
 
         let views = (0..mip_count)
@@ -309,8 +309,8 @@ impl framework::Example for Example {
             mipmap_filter: wgpu::FilterMode::Linear,
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
-            compare: wgpu::CompareFunction::Undefined,
-            anisotropy_clamp: 1,
+            compare: None,
+            anisotropy_clamp: None,
         });
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();

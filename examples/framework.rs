@@ -75,9 +75,7 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions {
-                    anisotropic_filtering: false,
-                },
+                extensions: wgpu::Extensions::empty(),
                 limits: wgpu::Limits::default(),
             },
             trace_dir.ok().as_ref().map(std::path::Path::new),
