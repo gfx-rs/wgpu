@@ -37,9 +37,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions {
-                    anisotropic_filtering: false,
-                },
+                extensions: wgpu::Extensions::empty(),
                 limits: wgpu::Limits::default(),
             },
             None,
