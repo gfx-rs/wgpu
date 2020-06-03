@@ -703,9 +703,7 @@ impl crate::Context for Context {
 
     fn adapter_extensions(&self, _adapter: &Self::AdapterId) -> wgt::Extensions {
         // TODO: web-sys has no way of getting extensions on adapters
-        wgt::Extensions {
-            anisotropic_filtering: false,
-        }
+        wgt::Extensions::empty()
     }
 
     fn adapter_limits(&self, _adapter: &Self::AdapterId) -> wgt::Limits {
@@ -715,9 +713,7 @@ impl crate::Context for Context {
 
     fn device_extensions(&self, _device: &Self::DeviceId) -> wgt::Extensions {
         // TODO: web-sys has no way of getting extensions on devices
-        wgt::Extensions {
-            anisotropic_filtering: false,
-        }
+        wgt::Extensions::empty()
     }
 
     fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
@@ -991,7 +987,7 @@ impl crate::Context for Context {
         mapped_desc.address_mode_u(map_address_mode(desc.address_mode_u));
         mapped_desc.address_mode_v(map_address_mode(desc.address_mode_v));
         mapped_desc.address_mode_w(map_address_mode(desc.address_mode_w));
-        if let Some(compare) = map_compare_function(desc.compare) {
+        if let Some(compare) = desc.compare.and_then(map_compare_function) {
             mapped_desc.compare(compare);
         }
         mapped_desc.lod_max_clamp(desc.lod_max_clamp);

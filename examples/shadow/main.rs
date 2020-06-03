@@ -352,8 +352,8 @@ impl framework::Example for Example {
             mipmap_filter: wgpu::FilterMode::Nearest,
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
-            compare: wgpu::CompareFunction::LessEqual,
-            anisotropy_clamp: 1,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            anisotropy_clamp: None,
         });
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
