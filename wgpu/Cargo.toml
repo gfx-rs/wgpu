@@ -52,7 +52,7 @@ gfx-backend-vulkan = { version = "0.5", features = ["x11"] }
 [dev-dependencies]
 cgmath = "0.17"
 log = "0.4"
-png = "0.15"
+png = "0.16"
 winit = { version = "0.22.1", features = ["web-sys"] }
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = "1"

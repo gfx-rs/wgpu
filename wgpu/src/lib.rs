@@ -28,6 +28,7 @@ pub use wgt::{
     StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect,
     TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
     TextureViewDimension, VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
