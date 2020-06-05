@@ -351,6 +351,7 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .unwrap()
     }
 
     fn device_create_bind_group(
@@ -416,6 +417,7 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .unwrap()
     }
 
     fn device_create_render_pipeline(
@@ -485,6 +487,7 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .unwrap()
     }
 
     fn device_create_compute_pipeline(
@@ -507,6 +510,7 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .unwrap()
     }
 
     fn device_create_buffer(
