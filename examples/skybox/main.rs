@@ -130,7 +130,7 @@ impl framework::Example for Skybox {
             lod_min_clamp: 0.0,
             lod_max_clamp: 100.0,
             compare: None,
-            anisotropy_clamp: None,
+            ..Default::default()
         });
 
         let paths: [&'static [u8]; 6] = [
