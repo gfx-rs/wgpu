@@ -2288,6 +2288,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
         if let Some(sc) = swap_chain_guard.remove(sc_id) {
+            assert!(
+                sc.acquired_view_id.is_none(),
+                "SwapChainOutput must be dropped before a new SwapChain is made."
+            );
             unsafe {
                 device.raw.destroy_semaphore(sc.semaphore);
             }
