@@ -355,7 +355,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         compute_stage: cs_stage.desc,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_destroy::<B>(id);

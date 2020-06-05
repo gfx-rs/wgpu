@@ -7,7 +7,7 @@ use crate::{
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId},
-    power, LifeGuard, Stored, MAX_BIND_GROUPS,
+    power, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -644,10 +644,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mem_props = phd.memory_properties();
-            let supports_texture_d24_s8 = phd
-                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
-                .optimal_tiling
-                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
+            let private_features = PrivateFeatures {
+                shader_validation: match std::env::var("WGPU_SHADER_VALIDATION") {
+                    Ok(var) => match var.as_str() {
+                        "0" => {
+                            log::info!("Shader validation is disabled");
+                            false
+                        }
+                        "1" => {
+                            log::info!("Shader validation is enabled");
+                            true
+                        }
+                        _ => {
+                            log::warn!("Unknown shader validation setting: {:?}", var);
+                            true
+                        }
+                    },
+                    _ => true,
+                },
+                texture_d24_s8: phd
+                    .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+                    .optimal_tiling
+                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+            };
 
             Device::new(
                 gpu.device,
@@ -658,7 +677,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
                 limits,
-                supports_texture_d24_s8,
+                private_features,
                 desc,
                 trace_path,
             )

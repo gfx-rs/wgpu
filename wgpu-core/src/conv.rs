@@ -371,14 +371,14 @@ pub(crate) fn map_texture_format(
         // Depth and stencil formats
         Tf::Depth32Float => H::D32Sfloat,
         Tf::Depth24Plus => {
-            if private_features.supports_texture_d24_s8 {
+            if private_features.texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32Sfloat
             }
         }
         Tf::Depth24PlusStencil8 => {
-            if private_features.supports_texture_d24_s8 {
+            if private_features.texture_d24_s8 {
                 H::D24UnormS8Uint
             } else {
                 H::D32SfloatS8Uint

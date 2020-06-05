@@ -93,12 +93,14 @@ pub enum BindGroupLayoutError {
     Entry(u32, BindGroupLayoutEntryError),
 }
 
+pub(crate) type BindEntryMap = FastHashMap<u32, BindGroupLayoutEntry>;
+
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) entries: FastHashMap<u32, BindGroupLayoutEntry>,
+    pub(crate) entries: BindEntryMap,
     pub(crate) desc_counts: DescriptorCounts,
     pub(crate) dynamic_count: usize,
 }
