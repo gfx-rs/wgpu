@@ -24,6 +24,7 @@ async fn run() {
             &wgpu::DeviceDescriptor {
                 extensions: wgpu::Extensions::empty(),
                 limits: wgpu::Limits::default(),
+                shader_validation: true,
             },
             None,
         )

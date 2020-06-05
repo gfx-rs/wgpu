@@ -25,6 +25,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
             &wgpu::DeviceDescriptor {
                 extensions: wgpu::Extensions::empty(),
                 limits: wgpu::Limits::default(),
+                shader_validation: true,
             },
             None,
         )
