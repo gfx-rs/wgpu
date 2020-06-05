@@ -263,7 +263,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         entries_length: entries.len(),
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_destroy::<B>(id);

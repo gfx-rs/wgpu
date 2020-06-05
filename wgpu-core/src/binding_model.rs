@@ -47,12 +47,50 @@ pub struct BindGroupLayoutEntry {
     pub storage_texture_format: wgt::TextureFormat,
 }
 
+#[derive(Clone, Debug)]
+pub enum BindGroupLayoutEntryError {
+    NoVisibility,
+    UnexpectedHasDynamicOffset,
+    UnexpectedMultisampled,
+}
+
+impl BindGroupLayoutEntry {
+    pub(crate) fn validate(&self) -> Result<(), BindGroupLayoutEntryError> {
+        if self.visibility.is_empty() {
+            return Err(BindGroupLayoutEntryError::NoVisibility);
+        }
+        match self.ty {
+            BindingType::UniformBuffer | BindingType::StorageBuffer => {}
+            _ => {
+                if self.has_dynamic_offset {
+                    return Err(BindGroupLayoutEntryError::UnexpectedHasDynamicOffset);
+                }
+            }
+        }
+        match self.ty {
+            BindingType::SampledTexture => {}
+            _ => {
+                if self.multisampled {
+                    return Err(BindGroupLayoutEntryError::UnexpectedMultisampled);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
 #[repr(C)]
 #[derive(Debug)]
 pub struct BindGroupLayoutDescriptor {
     pub label: *const std::os::raw::c_char,
     pub entries: *const BindGroupLayoutEntry,
     pub entries_length: usize,
+}
+
+#[derive(Clone, Debug)]
+pub enum BindGroupLayoutError {
+    ConflictBinding(u32),
+    Entry(u32, BindGroupLayoutEntryError),
 }
 
 #[derive(Debug)]

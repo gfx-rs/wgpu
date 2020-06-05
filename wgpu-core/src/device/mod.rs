@@ -1085,12 +1085,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> id::BindGroupLayoutId {
+    ) -> Result<id::BindGroupLayoutId, binding_model::BindGroupLayoutError> {
         let mut token = Token::root();
         let hub = B::hub(self);
         let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
-        let entry_map: FastHashMap<_, _> =
-            entries.iter().cloned().map(|b| (b.binding, b)).collect();
+        let mut entry_map = FastHashMap::default();
+        for entry in entries {
+            if let Err(e) = entry.validate() {
+                return Err(binding_model::BindGroupLayoutError::Entry(entry.binding, e));
+            }
+            if entry_map.insert(entry.binding, entry.clone()).is_some() {
+                return Err(binding_model::BindGroupLayoutError::ConflictBinding(
+                    entry.binding,
+                ));
+            }
+        }
 
         // TODO: deduplicate the bind group layouts at some level.
         // We can't do it right here, because in the remote scenario
@@ -1102,7 +1111,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .find(|(_, bgl)| bgl.entries == entry_map);
 
             if let Some((id, _)) = bind_group_layout_id {
-                return id;
+                return Ok(id);
             }
         }
 
@@ -1157,7 +1166,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }),
             None => (),
         };
-        id
+        Ok(id)
     }
 
     pub fn bind_group_layout_destroy<B: GfxBackend>(
