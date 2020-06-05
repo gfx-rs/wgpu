@@ -1200,7 +1200,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
         id_in: Input<G, id::PipelineLayoutId>,
-    ) -> id::PipelineLayoutId {
+    ) -> Result<id::PipelineLayoutId, binding_model::PipelineLayoutError> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -1210,12 +1210,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
         };
 
-        assert!(
-            desc.bind_group_layouts_length <= (device.limits.max_bind_groups as usize),
-            "Cannot set more bind groups ({}) than the `max_bind_groups` limit requested on device creation ({})",
-            desc.bind_group_layouts_length,
-            device.limits.max_bind_groups
-        );
+        if desc.bind_group_layouts_length > (device.limits.max_bind_groups as usize) {
+            return Err(binding_model::PipelineLayoutError::TooManyGroups(
+                desc.bind_group_layouts_length,
+            ));
+        }
 
         // TODO: push constants
         let pipeline_layout = {
@@ -1261,7 +1260,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }),
             None => (),
         };
-        id
+        Ok(id)
     }
 
     pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {

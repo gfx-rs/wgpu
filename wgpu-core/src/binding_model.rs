@@ -110,6 +110,11 @@ pub struct PipelineLayoutDescriptor {
     pub bind_group_layouts_length: usize,
 }
 
+#[derive(Clone, Debug)]
+pub enum PipelineLayoutError {
+    TooManyGroups(usize),
+}
+
 #[derive(Debug)]
 pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,

@@ -281,7 +281,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         bind_group_layouts_length: bind_group_layouts.len(),
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_destroy::<B>(id);
