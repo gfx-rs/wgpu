@@ -7,7 +7,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    FastHashMap, LifeGuard, PrivateFeatures, Stored,
+    FastHashMap, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -196,7 +196,7 @@ impl<B: GfxBackend> Device<B> {
         queue_group: hal::queue::QueueGroup<B>,
         mem_props: hal::adapter::MemoryProperties,
         hal_limits: hal::Limits,
-        supports_texture_d24_s8: bool,
+        private_features: PrivateFeatures,
         desc: &wgt::DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Self {
@@ -253,9 +253,7 @@ impl<B: GfxBackend> Device<B> {
                 }
             }),
             hal_limits,
-            private_features: PrivateFeatures {
-                supports_texture_d24_s8,
-            },
+            private_features,
             limits: desc.limits.clone(),
             extensions: desc.extensions.clone(),
             pending_writes: queue::PendingWrites::new(),
@@ -1085,12 +1083,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> id::BindGroupLayoutId {
+    ) -> Result<id::BindGroupLayoutId, binding_model::BindGroupLayoutError> {
         let mut token = Token::root();
         let hub = B::hub(self);
         let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
-        let entry_map: FastHashMap<_, _> =
-            entries.iter().cloned().map(|b| (b.binding, b)).collect();
+        let mut entry_map = FastHashMap::default();
+        for entry in entries {
+            if let Err(e) = entry.validate() {
+                return Err(binding_model::BindGroupLayoutError::Entry(entry.binding, e));
+            }
+            if entry_map.insert(entry.binding, entry.clone()).is_some() {
+                return Err(binding_model::BindGroupLayoutError::ConflictBinding(
+                    entry.binding,
+                ));
+            }
+        }
 
         // TODO: deduplicate the bind group layouts at some level.
         // We can't do it right here, because in the remote scenario
@@ -1102,7 +1109,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .find(|(_, bgl)| bgl.entries == entry_map);
 
             if let Some((id, _)) = bind_group_layout_id {
-                return id;
+                return Ok(id);
             }
         }
 
@@ -1157,7 +1164,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }),
             None => (),
         };
-        id
+        Ok(id)
     }
 
     pub fn bind_group_layout_destroy<B: GfxBackend>(
@@ -1191,7 +1198,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::PipelineLayoutDescriptor,
         id_in: Input<G, id::PipelineLayoutId>,
-    ) -> id::PipelineLayoutId {
+    ) -> Result<id::PipelineLayoutId, binding_model::PipelineLayoutError> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -1201,12 +1208,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
         };
 
-        assert!(
-            desc.bind_group_layouts_length <= (device.limits.max_bind_groups as usize),
-            "Cannot set more bind groups ({}) than the `max_bind_groups` limit requested on device creation ({})",
-            desc.bind_group_layouts_length,
-            device.limits.max_bind_groups
-        );
+        if desc.bind_group_layouts_length > (device.limits.max_bind_groups as usize) {
+            return Err(binding_model::PipelineLayoutError::TooManyGroups(
+                desc.bind_group_layouts_length,
+            ));
+        }
 
         // TODO: push constants
         let pipeline_layout = {
@@ -1252,7 +1258,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }),
             None => (),
         };
-        id
+        Ok(id)
     }
 
     pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
@@ -1570,7 +1576,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let spv = unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) };
         let raw = unsafe { device.raw.create_shader_module(spv).unwrap() };
 
-        let module = {
+        let module = if device.private_features.shader_validation {
             // Parse the given shader code and store its representation.
             let spv_iter = spv.into_iter().cloned();
             let mut parser = naga::front::spirv::Parser::new(spv_iter);
@@ -1581,6 +1587,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     log::warn!("Shader module will not be validated");
                 })
                 .ok()
+        } else {
+            None
         };
         let shader = pipeline::ShaderModule {
             raw,
@@ -1851,7 +1859,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
         let (raw_pipeline, layout_ref_count) = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
             let layout = &pipeline_layout_guard[desc.layout];
+            let group_layouts = layout
+                .bind_group_layout_ids
+                .iter()
+                .map(|id| &bgl_guard[id.value].entries)
+                .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
+
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
             let rp_key = RenderPassKey {
@@ -1901,9 +1916,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let shader_module = &shader_module_guard[desc.vertex_stage.module];
 
                 if let Some(ref module) = shader_module.module {
-                    if let Err(e) =
-                        validate_shader(module, entry_point_name, ExecutionModel::Vertex)
-                    {
+                    if let Err(e) = pipeline::validate_stage(
+                        module,
+                        &group_layouts,
+                        entry_point_name,
+                        ExecutionModel::Vertex,
+                    ) {
                         log::error!("Failed validating vertex shader module: {:?}", e);
                     }
                 }
@@ -1926,9 +1944,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let shader_module = &shader_module_guard[stage.module];
 
                     if let Some(ref module) = shader_module.module {
-                        if let Err(e) =
-                            validate_shader(module, entry_point_name, ExecutionModel::Fragment)
-                        {
+                        if let Err(e) = pipeline::validate_stage(
+                            module,
+                            &group_layouts,
+                            entry_point_name,
+                            ExecutionModel::Fragment,
+                        ) {
                             log::error!("Failed validating fragment shader module: {:?}", e);
                         }
                     }
@@ -2098,7 +2119,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &pipeline::ComputePipelineDescriptor,
         id_in: Input<G, id::ComputePipelineId>,
-    ) -> id::ComputePipelineId {
+    ) -> Result<id::ComputePipelineId, pipeline::ComputePipelineError> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -2106,7 +2127,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
         let (raw_pipeline, layout_ref_count) = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
             let layout = &pipeline_layout_guard[desc.layout];
+            let group_layouts = layout
+                .bind_group_layout_ids
+                .iter()
+                .map(|id| &bgl_guard[id.value].entries)
+                .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
+
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
@@ -2118,9 +2146,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let shader_module = &shader_module_guard[pipeline_stage.module];
 
             if let Some(ref module) = shader_module.module {
-                if let Err(e) = validate_shader(module, entry_point_name, ExecutionModel::GLCompute)
-                {
-                    log::error!("Failed validating compute shader module: {:?}", e);
+                if let Err(e) = pipeline::validate_stage(
+                    module,
+                    &group_layouts,
+                    entry_point_name,
+                    ExecutionModel::GLCompute,
+                ) {
+                    return Err(pipeline::ComputePipelineError::Stage(e));
                 }
             }
 
@@ -2178,7 +2210,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }),
             None => (),
         };
-        id
+        Ok(id)
     }
 
     pub fn compute_pipeline_destroy<B: GfxBackend>(
@@ -2578,29 +2610,5 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unmap_buffer(&device.raw, buffer);
             }
         }
-    }
-}
-
-/// Errors produced when validating the shader modules of a pipeline.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
-enum ShaderValidationError {
-    /// Unable to find an entry point matching the specified execution model.
-    MissingEntryPoint(ExecutionModel),
-}
-
-fn validate_shader(
-    module: &naga::Module,
-    entry_point_name: &str,
-    execution_model: ExecutionModel,
-) -> Result<(), ShaderValidationError> {
-    // Since a shader module can have multiple entry points with the same name,
-    // we need to look for one with the right execution model.
-    let entry_point = module.entry_points.iter().find(|entry_point| {
-        entry_point.name == entry_point_name && entry_point.exec_model == execution_model
-    });
-
-    match entry_point {
-        Some(_) => Ok(()),
-        None => Err(ShaderValidationError::MissingEntryPoint(execution_model)),
     }
 }

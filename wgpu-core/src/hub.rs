@@ -177,6 +177,7 @@ impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
+impl<B: hal::Backend> Access<BindGroupLayout<B>> for PipelineLayout<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Device<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for BindGroupLayout<B> {}
@@ -191,7 +192,7 @@ impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
-impl<B: hal::Backend> Access<ShaderModule<B>> for PipelineLayout<B> {}
+impl<B: hal::Backend> Access<ShaderModule<B>> for BindGroupLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}
 impl<B: hal::Backend> Access<Buffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for BindGroupLayout<B> {}

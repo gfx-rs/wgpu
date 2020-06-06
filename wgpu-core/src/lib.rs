@@ -171,7 +171,8 @@ pub struct U32Array {
 
 #[derive(Clone, Copy, Debug)]
 struct PrivateFeatures {
-    pub supports_texture_d24_s8: bool,
+    shader_validation: bool,
+    texture_d24_s8: bool,
 }
 
 #[macro_export]
