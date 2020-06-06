@@ -100,6 +100,30 @@ impl From<Backend> for BackendBit {
     }
 }
 
+/// This type is not to be constructed by any users of wgpu. If you construct this type, any semver
+/// guarantees made by wgpu are invalidated and a non-breaking change may break your code.
+///
+/// If you are here trying to construct it, the solution is to use partial construction with the
+/// default:
+///
+/// ```ignore
+/// let limits = Limits {
+///     max_bind_groups: 2,
+///     ..Limits::default()
+/// }
+/// ```
+#[doc(hidden)]
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct NonExhaustive(());
+
+impl NonExhaustive {
+    pub unsafe fn new() -> Self {
+        Self(())
+    }
+}
+
 bitflags::bitflags! {
     #[repr(transparent)]
     #[derive(Default)]
@@ -110,7 +134,33 @@ bitflags::bitflags! {
         /// but it is not yet implemented.
         ///
         /// https://github.com/gpuweb/gpuweb/issues/696
-        const ANISOTROPIC_FILTERING = 0x01;
+        const ANISOTROPIC_FILTERING = 0x0000_0000_0001_0000;
+        /// Extensions which are part of the upstream webgpu standard
+        const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
+        /// Extensions that require activating the unsafe extension flag
+        const ALL_UNSAFE = 0xFFFF_0000_0000_0000;
+        /// Extensions that are only available when targeting native (not web)
+        const ALL_NATIVE = 0xFFFF_FFFF_FFFF_0000;
+    }
+}
+
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct UnsafeExtensions {
+    allow_unsafe: bool,
+}
+impl UnsafeExtensions {
+    pub unsafe fn allow() -> Self {
+        Self { allow_unsafe: true }
+    }
+    pub fn disallow() -> Self {
+        Self {
+            allow_unsafe: false,
+        }
+    }
+    pub fn allowed(self) -> bool {
+        self.allow_unsafe
     }
 }
 
@@ -120,11 +170,15 @@ bitflags::bitflags! {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Limits {
     pub max_bind_groups: u32,
+    pub _non_exhaustive: NonExhaustive,
 }
 
 impl Default for Limits {
     fn default() -> Self {
-        Limits { max_bind_groups: 4 }
+        Limits {
+            max_bind_groups: 4,
+            _non_exhaustive: unsafe { NonExhaustive::new() },
+        }
     }
 }
 
@@ -941,7 +995,7 @@ impl Default for FilterMode {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Default, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct SamplerDescriptor<L> {
@@ -960,6 +1014,7 @@ pub struct SamplerDescriptor<L> {
     ///
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<u8>,
+    pub _non_exhaustive: NonExhaustive,
 }
 
 impl<L> SamplerDescriptor<L> {
@@ -976,6 +1031,7 @@ impl<L> SamplerDescriptor<L> {
             lod_max_clamp: self.lod_max_clamp,
             compare: self.compare,
             anisotropy_clamp: self.anisotropy_clamp,
+            _non_exhaustive: self._non_exhaustive,
         }
     }
 }
