@@ -1108,10 +1108,14 @@ impl Device {
 
     /// Creates a new buffer.
     pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
+        let mut map_context = MapContext::new(desc.size);
+        if desc.mapped_at_creation {
+            map_context.initial_range = 0..desc.size;
+        }
         Buffer {
             context: Arc::clone(&self.context),
             id: Context::device_create_buffer(&*self.context, &self.id, desc),
-            map_context: Mutex::new(MapContext::new(desc.size)),
+            map_context: Mutex::new(map_context),
         }
     }
 
