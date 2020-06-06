@@ -3,6 +3,8 @@
 /// the added benefit that this method doesn't require a window to be created.
 use std::fs::File;
 use std::mem::size_of;
+use std::env;
+use std::io::Write;
 
 async fn run() {
     let adapter = wgpu::Instance::new()
@@ -27,20 +29,40 @@ async fn run() {
         .await
         .unwrap();
 
-    // Rendered image is 256×256 with 32-bit RGBA color
-    let size = 256u32;
+    let args: Vec<_> = env::args().collect();
+    let (width, height) = match args.len() {
+        // 0 on wasm, 1 on desktop
+        0 | 1 => (100usize, 200usize),
+        3 => (args[1].parse().unwrap(), args[2].parse().unwrap()),
+        _ => {
+            println!("Incorrect number of arguments, possible usages:");
+            println!("*   0 arguments - uses default width and height of (100, 200)");
+            println!("*   2 arguments - uses specified width and height values");
+            return;
+        }
+    };
+
+    // It is a webgpu requirement that BufferCopyView.layout.bytes_per_row % wgpu::COPY_BYTES_PER_ROW_ALIGNMENT == 0
+    // So we calculate padded_bytes_per_row by rounding unpadded_bytes_per_row
+    // up to the next multiple of wgpu::COPY_BYTES_PER_ROW_ALIGNMENT.
+    // https://en.wikipedia.org/wiki/Data_structure_alignment#Computing_padding
+    let bytes_per_pixel = size_of::<u32>();
+    let unpadded_bytes_per_row = width * bytes_per_pixel;
+    let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
+    let padded_bytes_per_row_padding = (align - unpadded_bytes_per_row % align) % align;
+    let padded_bytes_per_row = unpadded_bytes_per_row + padded_bytes_per_row_padding;
 
     // The output buffer lets us retrieve the data as an array
     let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
-        size: (size * size) as u64 * size_of::<u32>() as u64,
+        size: (padded_bytes_per_row * height) as u64,
         usage: wgpu::BufferUsage::MAP_READ | wgpu::BufferUsage::COPY_DST,
         mapped_at_creation: false,
     });
 
     let texture_extent = wgpu::Extent3d {
-        width: size,
-        height: size,
+        width: width as u32,
+        height: height as u32,
         depth: 1,
     };
 
@@ -81,7 +103,7 @@ async fn run() {
                 buffer: &output_buffer,
                 layout: wgpu::TextureDataLayout {
                     offset: 0,
-                    bytes_per_row: size_of::<u32>() as u32 * size,
+                    bytes_per_row: padded_bytes_per_row as u32,
                     rows_per_image: 0,
                 },
             },
@@ -108,15 +130,22 @@ async fn run() {
     }
 
     if let Ok(()) = buffer_future.await {
-        let data = output_buffer.get_mapped_range(0, wgt::BufferSize::WHOLE);
-        let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), size, size);
+        let padded_buffer = output_buffer.get_mapped_range(0, wgt::BufferSize::WHOLE);
+
+        let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), width as u32, height as u32);
         png_encoder.set_depth(png::BitDepth::Eight);
         png_encoder.set_color(png::ColorType::RGBA);
-        png_encoder
+        let mut png_writer = png_encoder
             .write_header()
             .unwrap()
-            .write_image_data(data)
-            .unwrap();
+            .into_stream_writer_with_size(unpadded_bytes_per_row);
+
+        // from the padded_buffer we write just the unpadded bytes into the image
+        for chunk in padded_buffer.chunks(padded_bytes_per_row) {
+            png_writer.write(&chunk[..unpadded_bytes_per_row]).unwrap();
+        }
+        png_writer.finish().unwrap();
+
         output_buffer.unmap();
     }
 }
