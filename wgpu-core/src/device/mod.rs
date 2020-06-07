@@ -7,7 +7,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    FastHashMap, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    validation, FastHashMap, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -1773,7 +1773,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &rasterization_state.clone().unwrap_or_default(),
         );
 
-        let mut interface = pipeline::StageInterface::default();
+        let mut interface = validation::StageInterface::default();
         let mut validated_stages = wgt::ShaderStage::empty();
 
         let desc_vbs = unsafe {
@@ -1820,7 +1820,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 });
                 interface.insert(
                     attribute.shader_location,
-                    pipeline::construct_vertex_format(attribute.format),
+                    validation::MaybeOwned::Owned(validation::map_vertex_format(attribute.format)),
                 );
             }
         }
@@ -1923,7 +1923,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let shader_module = &shader_module_guard[desc.vertex_stage.module];
 
                 if let Some(ref module) = shader_module.module {
-                    interface = pipeline::validate_stage(
+                    interface = validation::check_stage(
                         module,
                         &group_layouts,
                         entry_point_name,
@@ -1952,7 +1952,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     if validated_stages == wgt::ShaderStage::VERTEX {
                         if let Some(ref module) = shader_module.module {
-                            interface = pipeline::validate_stage(
+                            interface = validation::check_stage(
                                 module,
                                 &group_layouts,
                                 entry_point_name,
@@ -1976,10 +1976,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
                 for (i, state) in color_states.iter().enumerate() {
                     let output = &interface[&(i as wgt::ShaderLocation)];
-                    if !pipeline::check_texture_format(state.format, output) {
-                        panic!(
+                    if !validation::check_texture_format(state.format, output) {
+                        log::error!(
                             "Incompatible fragment output[{}]. Shader: {:?}. Expected: {:?}",
-                            i, state.format, &**output
+                            i,
+                            state.format,
+                            &**output
                         );
                     }
                 }
@@ -2158,7 +2160,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map(|id| &bgl_guard[id.value].entries)
                 .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
 
-            let interface = pipeline::StageInterface::default();
+            let interface = validation::StageInterface::default();
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
@@ -2170,7 +2172,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let shader_module = &shader_module_guard[pipeline_stage.module];
 
             if let Some(ref module) = shader_module.module {
-                let _ = pipeline::validate_stage(
+                let _ = validation::check_stage(
                     module,
                     &group_layouts,
                     entry_point_name,

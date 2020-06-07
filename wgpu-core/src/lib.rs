@@ -36,6 +36,7 @@ pub mod power;
 pub mod resource;
 pub mod swap_chain;
 mod track;
+mod validation;
 
 pub use hal::pso::read_spirv;
 
