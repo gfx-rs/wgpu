@@ -17,6 +17,8 @@ use std::{io, ptr, slice};
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
+/// Buffer to buffer copy offsets and sizes must be aligned to this number
+pub const COPY_BUFFER_ALIGNMENT: u64 = 4;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq)]
