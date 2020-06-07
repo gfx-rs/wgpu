@@ -677,24 +677,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mem_props = phd.memory_properties();
+            if !desc.shader_validation {
+                log::warn!("Shader validation is disabled");
+            }
             let private_features = PrivateFeatures {
-                shader_validation: match std::env::var("WGPU_SHADER_VALIDATION") {
-                    Ok(var) => match var.as_str() {
-                        "0" => {
-                            log::info!("Shader validation is disabled");
-                            false
-                        }
-                        "1" => {
-                            log::info!("Shader validation is enabled");
-                            true
-                        }
-                        _ => {
-                            log::warn!("Unknown shader validation setting: {:?}", var);
-                            true
-                        }
-                    },
-                    _ => true,
-                },
+                shader_validation: desc.shader_validation,
                 texture_d24_s8: phd
                     .format_properties(Some(hal::format::Format::D24UnormS8Uint))
                     .optimal_tiling

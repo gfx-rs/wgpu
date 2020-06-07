@@ -189,6 +189,9 @@ impl Default for Limits {
 pub struct DeviceDescriptor {
     pub extensions: Extensions,
     pub limits: Limits,
+    /// Switch shader validation on/off. This is a temporary field
+    /// that will be removed once our validation logic is complete.
+    pub shader_validation: bool,
 }
 
 // TODO: This is copy/pasted from gfx-hal, so we need to find a new place to put

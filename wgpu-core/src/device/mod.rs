@@ -7,7 +7,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    FastHashMap, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    validation, FastHashMap, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -1773,6 +1773,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             &rasterization_state.clone().unwrap_or_default(),
         );
 
+        let mut interface = validation::StageInterface::default();
+        let mut validated_stages = wgt::ShaderStage::empty();
+
         let desc_vbs = unsafe {
             slice::from_raw_parts(
                 desc.vertex_state.vertex_buffers,
@@ -1815,6 +1818,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         offset: attribute.offset as u32,
                     },
                 });
+                interface.insert(
+                    attribute.shader_location,
+                    validation::MaybeOwned::Owned(validation::map_vertex_format(attribute.format)),
+                );
             }
         }
 
@@ -1916,14 +1923,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let shader_module = &shader_module_guard[desc.vertex_stage.module];
 
                 if let Some(ref module) = shader_module.module {
-                    if let Err(e) = pipeline::validate_stage(
+                    interface = validation::check_stage(
                         module,
                         &group_layouts,
                         entry_point_name,
                         ExecutionModel::Vertex,
-                    ) {
-                        log::error!("Failed validating vertex shader module: {:?}", e);
-                    }
+                        interface,
+                    )
+                    .unwrap();
+                    validated_stages |= wgt::ShaderStage::VERTEX;
                 }
 
                 hal::pso::EntryPoint::<B> {
@@ -1933,9 +1941,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            let fragment = {
-                let fragment_stage = unsafe { desc.fragment_stage.as_ref() };
-                fragment_stage.map(|stage| {
+            let fragment = match unsafe { desc.fragment_stage.as_ref() } {
+                Some(stage) => {
                     let entry_point_name = unsafe { ffi::CStr::from_ptr(stage.entry_point) }
                         .to_str()
                         .to_owned()
@@ -1943,24 +1950,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let shader_module = &shader_module_guard[stage.module];
 
-                    if let Some(ref module) = shader_module.module {
-                        if let Err(e) = pipeline::validate_stage(
-                            module,
-                            &group_layouts,
-                            entry_point_name,
-                            ExecutionModel::Fragment,
-                        ) {
-                            log::error!("Failed validating fragment shader module: {:?}", e);
+                    if validated_stages == wgt::ShaderStage::VERTEX {
+                        if let Some(ref module) = shader_module.module {
+                            interface = validation::check_stage(
+                                module,
+                                &group_layouts,
+                                entry_point_name,
+                                ExecutionModel::Fragment,
+                                interface,
+                            )
+                            .unwrap();
+                            validated_stages |= wgt::ShaderStage::FRAGMENT;
                         }
                     }
 
-                    hal::pso::EntryPoint::<B> {
+                    Some(hal::pso::EntryPoint::<B> {
                         entry: entry_point_name,
                         module: &shader_module.raw,
                         specialization: hal::pso::Specialization::EMPTY,
-                    }
-                })
+                    })
+                }
+                None => None,
             };
+
+            if validated_stages.contains(wgt::ShaderStage::FRAGMENT) {
+                for (i, state) in color_states.iter().enumerate() {
+                    let output = &interface[&(i as wgt::ShaderLocation)];
+                    if !validation::check_texture_format(state.format, output) {
+                        log::error!(
+                            "Incompatible fragment output[{}]. Shader: {:?}. Expected: {:?}",
+                            i,
+                            state.format,
+                            &**output
+                        );
+                    }
+                }
+            }
 
             let shaders = hal::pso::GraphicsShaderSet {
                 vertex,
@@ -2135,6 +2160,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .map(|id| &bgl_guard[id.value].entries)
                 .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
 
+            let interface = validation::StageInterface::default();
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
@@ -2146,14 +2172,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let shader_module = &shader_module_guard[pipeline_stage.module];
 
             if let Some(ref module) = shader_module.module {
-                if let Err(e) = pipeline::validate_stage(
+                let _ = validation::check_stage(
                     module,
                     &group_layouts,
                     entry_point_name,
                     ExecutionModel::GLCompute,
-                ) {
-                    return Err(pipeline::ComputePipelineError::Stage(e));
-                }
+                    interface,
+                )
+                .map_err(pipeline::ComputePipelineError::Stage)?;
             }
 
             let shader = hal::pso::EntryPoint::<B> {
