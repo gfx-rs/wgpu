@@ -94,6 +94,22 @@ pub struct RenderPipelineDescriptor {
     pub alpha_to_coverage_enabled: bool,
 }
 
+#[derive(Clone, Debug)]
+pub enum RenderPipelineError {
+    InvalidVertexAttributeOffset {
+        location: wgt::ShaderLocation,
+        offset: BufferAddress,
+    },
+    Stage {
+        flag: wgt::ShaderStage,
+        error: StageError,
+    },
+    IncompatibleOutputFormat {
+        index: u8,
+    },
+    InvalidSampleCount(u32),
+}
+
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
