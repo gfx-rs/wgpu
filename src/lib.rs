@@ -27,8 +27,8 @@ pub use wgt::{
     RasterizationStateDescriptor, ShaderLocation, ShaderStage, StencilOperation,
     StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect,
     TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
-    TextureViewDimension, VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT,
+    TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
+    BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -123,6 +123,7 @@ trait Context: Sized {
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
+        unsafe_extensions: wgt::UnsafeExtensions,
         backends: wgt::BackendBit,
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
@@ -923,12 +924,17 @@ impl Instance {
 
     /// Retrieves all available [`Adapter`]s that match the given backends.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> impl Iterator<Item = Adapter> {
+    pub fn enumerate_adapters(
+        &self,
+        unsafe_extensions: wgt::UnsafeExtensions,
+        backends: wgt::BackendBit,
+    ) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
-                PhantomData
-            }))
+            .enumerate_adapters(
+                unsafe_extensions,
+                wgc::instance::AdapterInputs::Mask(backends, |_| PhantomData),
+            )
             .into_iter()
             .map(move |id| crate::Adapter {
                 id,
@@ -982,11 +988,12 @@ impl Instance {
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
+        unsafe_extensions: wgt::UnsafeExtensions,
         backends: BackendBit,
     ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
         self.context
-            .instance_request_adapter(options, backends)
+            .instance_request_adapter(options, unsafe_extensions, backends)
             .map(|option| option.map(|id| Adapter { context, id }))
     }
 }

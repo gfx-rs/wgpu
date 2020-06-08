@@ -660,6 +660,7 @@ impl crate::Context for Context {
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions<'_>,
+        _unsafe_extensions: wgt::UnsafeExtensions,
         _backends: wgt::BackendBit,
     ) -> Self::RequestAdapterFuture {
         //TODO: support this check, return `None` if the flag is not set.
@@ -689,6 +690,11 @@ impl crate::Context for Context {
         if trace_dir.is_some() {
             //Error: Tracing isn't supported on the Web target
         }
+        assert!(
+            !desc.extensions.intersects(crate::Extensions::ALL_NATIVE),
+            "The web backend doesn't support any native extensions. Enabled native extensions: {:?}",
+            desc.extensions & crate::Extensions::ALL_NATIVE
+        );
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
         // TODO: label, extensions
         let mut mapped_limits = web_sys::GpuLimits::new();

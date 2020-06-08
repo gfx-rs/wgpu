@@ -1,10 +1,10 @@
+use std::env;
 /// This example shows how to capture an image by rendering it to a texture, copying the texture to
 /// a buffer, and retrieving it from the buffer. This could be used for "taking a screenshot," with
 /// the added benefit that this method doesn't require a window to be created.
 use std::fs::File;
-use std::mem::size_of;
-use std::env;
 use std::io::Write;
+use std::mem::size_of;
 
 async fn run() {
     let adapter = wgpu::Instance::new()
@@ -13,6 +13,7 @@ async fn run() {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
             },
+            wgpu::UnsafeExtensions::disallow(),
             wgpu::BackendBit::PRIMARY,
         )
         .await
@@ -132,7 +133,11 @@ async fn run() {
     if let Ok(()) = buffer_future.await {
         let padded_buffer = output_buffer.get_mapped_range(0, wgt::BufferSize::WHOLE);
 
-        let mut png_encoder = png::Encoder::new(File::create("red.png").unwrap(), width as u32, height as u32);
+        let mut png_encoder = png::Encoder::new(
+            File::create("red.png").unwrap(),
+            width as u32,
+            height as u32,
+        );
         png_encoder.set_depth(png::BitDepth::Eight);
         png_encoder.set_color(png::ColorType::RGBA);
         let mut png_writer = png_encoder
