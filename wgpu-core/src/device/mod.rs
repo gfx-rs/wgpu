@@ -1752,17 +1752,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &pipeline::RenderPipelineDescriptor,
         id_in: Input<G, id::RenderPipelineId>,
-    ) -> id::RenderPipelineId {
+    ) -> Result<id::RenderPipelineId, pipeline::RenderPipelineError> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let sc = desc.sample_count;
-        assert!(
-            sc == 1 || sc == 2 || sc == 4 || sc == 8 || sc == 16 || sc == 32,
-            "Invalid sample_count of {}; must be 1, 2, 4, 8, 16, or 32",
-            sc
-        );
-        let sc = sc as u8;
+        let samples = {
+            let sc = desc.sample_count;
+            if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
+                return Err(pipeline::RenderPipelineError::InvalidSampleCount(sc));
+            }
+            sc as u8
+        };
 
         let color_states =
             unsafe { slice::from_raw_parts(desc.color_states, desc.color_states_length) };
@@ -1803,13 +1803,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let desc_atts =
                 unsafe { slice::from_raw_parts(vb_state.attributes, vb_state.attributes_length) };
             for attribute in desc_atts {
-                assert_eq!(
-                    0,
-                    attribute.offset >> 32,
-                    "Offset for attribute {:?} must be < 2^32, but was {}",
-                    attribute,
-                    attribute.offset
-                );
+                if attribute.offset >= 0x10000000 {
+                    return Err(
+                        pipeline::RenderPipelineError::InvalidVertexAttributeOffset {
+                            location: attribute.shader_location,
+                            offset: attribute.offset,
+                        },
+                    );
+                }
                 attributes.alloc().init(hal::pso::AttributeDesc {
                     location: attribute.shader_location,
                     binding: i as u32,
@@ -1842,11 +1843,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map(conv::map_depth_stencil_state_descriptor)
             .unwrap_or_default();
 
-        let multisampling: Option<hal::pso::Multisampling> = if sc == 1 {
+        let multisampling: Option<hal::pso::Multisampling> = if samples == 1 {
             None
         } else {
             Some(hal::pso::Multisampling {
-                rasterization_samples: sc,
+                rasterization_samples: samples,
                 sample_shading: None,
                 sample_mask: desc.sample_mask as u64,
                 alpha_coverage: desc.alpha_to_coverage_enabled,
@@ -1885,7 +1886,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 state.format,
                                 device.private_features,
                             )),
-                            samples: sc,
+                            samples,
                             ops: hal::pass::AttachmentOps::PRESERVE,
                             stencil_ops: hal::pass::AttachmentOps::DONT_CARE,
                             layouts: hal::image::Layout::General..hal::image::Layout::General,
@@ -1904,7 +1905,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             state.format,
                             device.private_features,
                         )),
-                        samples: sc,
+                        samples,
                         ops: hal::pass::AttachmentOps::PRESERVE,
                         stencil_ops: hal::pass::AttachmentOps::PRESERVE,
                         layouts: hal::image::Layout::General..hal::image::Layout::General,
@@ -1923,6 +1924,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let shader_module = &shader_module_guard[desc.vertex_stage.module];
 
                 if let Some(ref module) = shader_module.module {
+                    let flag = wgt::ShaderStage::VERTEX;
                     interface = validation::check_stage(
                         module,
                         &group_layouts,
@@ -1930,8 +1932,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         ExecutionModel::Vertex,
                         interface,
                     )
-                    .unwrap();
-                    validated_stages |= wgt::ShaderStage::VERTEX;
+                    .map_err(|error| pipeline::RenderPipelineError::Stage { flag, error })?;
+                    validated_stages |= flag;
                 }
 
                 hal::pso::EntryPoint::<B> {
@@ -1952,6 +1954,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     if validated_stages == wgt::ShaderStage::VERTEX {
                         if let Some(ref module) = shader_module.module {
+                            let flag = wgt::ShaderStage::FRAGMENT;
                             interface = validation::check_stage(
                                 module,
                                 &group_layouts,
@@ -1959,8 +1962,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 ExecutionModel::Fragment,
                                 interface,
                             )
-                            .unwrap();
-                            validated_stages |= wgt::ShaderStage::FRAGMENT;
+                            .map_err(|error| {
+                                pipeline::RenderPipelineError::Stage { flag, error }
+                            })?;
+                            validated_stages |= flag;
                         }
                     }
 
@@ -1977,12 +1982,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 for (i, state) in color_states.iter().enumerate() {
                     let output = &interface[&(i as wgt::ShaderLocation)];
                     if !validation::check_texture_format(state.format, output) {
-                        log::error!(
+                        log::warn!(
                             "Incompatible fragment output[{}]. Shader: {:?}. Expected: {:?}",
                             i,
                             state.format,
                             &**output
                         );
+                        return Err(pipeline::RenderPipelineError::IncompatibleOutputFormat {
+                            index: i as u8,
+                        });
                     }
                 }
             }
@@ -2069,7 +2077,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             flags,
             index_format: desc.vertex_state.index_format,
             vertex_strides,
-            sample_count: sc,
+            sample_count: samples,
             life_guard: LifeGuard::new(),
         };
 
@@ -2113,7 +2121,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }),
             None => (),
         };
-        id
+        Ok(id)
     }
 
     pub fn render_pipeline_destroy<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {

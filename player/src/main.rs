@@ -403,7 +403,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
