@@ -128,7 +128,7 @@ impl<B: hal::Backend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>, unsafe_extensions: wgt::UnsafeExtensions) -> Self {
         let adapter_features = raw.physical_device.features();
 
-        let mut extensions = wgt::Extensions::default();
+        let mut extensions = wgt::Extensions::default() | wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS;
         extensions.set(
             wgt::Extensions::ANISOTROPIC_FILTERING,
             adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
@@ -646,6 +646,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     "Missing feature SAMPLER_ANISOTROPY for anisotropic filtering extension"
                 );
                 enabled_features |= hal::Features::SAMPLER_ANISOTROPY;
+            }
+            if desc
+                .extensions
+                .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS)
+                && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
+            {
+                log::warn!("Extension MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
             }
 
             let family = adapter
