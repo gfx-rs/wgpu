@@ -4,7 +4,7 @@
 
 use crate::{
     binding_model, command, conv,
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
     validation, FastHashMap, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
@@ -172,7 +172,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) com_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<Heaps<B>>,
     desc_allocator: Mutex<DescriptorAllocator<B>>,
-    life_guard: LifeGuard,
+    pub(crate) life_guard: LifeGuard,
     pub(crate) trackers: Mutex<TrackerSet>,
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
@@ -277,27 +277,87 @@ impl<B: GfxBackend> Device<B> {
 
     fn maintain<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
         &'this self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         force_wait: bool,
         token: &mut Token<'token, Self>,
     ) -> Vec<BufferMapPendingCallback> {
         let mut life_tracker = self.lock_life(token);
 
         life_tracker.triage_suspected(
-            global,
+            hub,
             &self.trackers,
             #[cfg(feature = "trace")]
             self.trace.as_ref(),
             token,
         );
-        life_tracker.triage_mapped(global, token);
-        life_tracker.triage_framebuffers(global, &mut *self.framebuffers.lock(), token);
+        life_tracker.triage_mapped(hub, token);
+        life_tracker.triage_framebuffers(hub, &mut *self.framebuffers.lock(), token);
         let last_done = life_tracker.triage_submissions(&self.raw, force_wait);
-        let callbacks = life_tracker.handle_mapping(global, &self.raw, &self.trackers, token);
+        let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
 
         self.com_allocator.maintain(&self.raw, last_done);
         callbacks
+    }
+
+    fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
+        &'this mut self,
+        hub: &Hub<B, G>,
+        trackers: &TrackerSet,
+        mut token: &mut Token<'token, Self>,
+    ) {
+        self.temp_suspected.clear();
+        // As the tracker is cleared/dropped, we need to consider all the resources
+        // that it references for destruction in the next GC pass.
+        {
+            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
+            let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
+            let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
+            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
+            let (texture_guard, mut token) = hub.textures.read(&mut token);
+            let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
+            let (sampler_guard, _) = hub.samplers.read(&mut token);
+
+            for id in trackers.buffers.used() {
+                if buffer_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.buffers.push(id);
+                }
+            }
+            for id in trackers.textures.used() {
+                if texture_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.textures.push(id);
+                }
+            }
+            for id in trackers.views.used() {
+                if texture_view_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.texture_views.push(id);
+                }
+            }
+            for id in trackers.bind_groups.used() {
+                if bind_group_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.bind_groups.push(id);
+                }
+            }
+            for id in trackers.samplers.used() {
+                if sampler_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.samplers.push(id);
+                }
+            }
+            for id in trackers.compute_pipes.used() {
+                if compute_pipe_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.compute_pipelines.push(id);
+                }
+            }
+            for id in trackers.render_pipes.used() {
+                if render_pipe_guard[id].life_guard.ref_count.is_none() {
+                    self.temp_suspected.render_pipelines.push(id);
+                }
+            }
+        }
+
+        self.lock_life(&mut token)
+            .suspected_resources
+            .extend(&self.temp_suspected);
     }
 
     fn create_buffer(
@@ -1776,71 +1836,49 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let comb = {
             let (mut command_buffer_guard, _) = hub.command_buffers.write(&mut token);
             command_buffer_guard.remove(command_encoder_id).unwrap()
         };
 
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let device = &mut device_guard[comb.device_id.value];
-        device.temp_suspected.clear();
-        // As the tracker is cleared/dropped, we need to consider all the resources
-        // that it references for destruction in the next GC pass.
-        {
-            let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
-            let (compute_pipe_guard, mut token) = hub.compute_pipelines.read(&mut token);
-            let (render_pipe_guard, mut token) = hub.render_pipelines.read(&mut token);
-            let (buffer_guard, mut token) = hub.buffers.read(&mut token);
-            let (texture_guard, mut token) = hub.textures.read(&mut token);
-            let (texture_view_guard, mut token) = hub.texture_views.read(&mut token);
-            let (sampler_guard, _) = hub.samplers.read(&mut token);
-
-            for id in comb.trackers.buffers.used() {
-                if buffer_guard[id].life_guard.ref_count.is_none() {
-                    device.temp_suspected.buffers.push(id);
-                }
-            }
-            for id in comb.trackers.textures.used() {
-                if texture_guard[id].life_guard.ref_count.is_none() {
-                    device.temp_suspected.textures.push(id);
-                }
-            }
-            for id in comb.trackers.views.used() {
-                if texture_view_guard[id].life_guard.ref_count.is_none() {
-                    device.temp_suspected.texture_views.push(id);
-                }
-            }
-            for id in comb.trackers.bind_groups.used() {
-                if bind_group_guard[id].life_guard.ref_count.is_none() {
-                    device.temp_suspected.bind_groups.push(id);
-                }
-            }
-            for id in comb.trackers.samplers.used() {
-                if sampler_guard[id].life_guard.ref_count.is_none() {
-                    device.temp_suspected.samplers.push(id);
-                }
-            }
-            for id in comb.trackers.compute_pipes.used() {
-                if compute_pipe_guard[id].life_guard.ref_count.is_none() {
-                    device.temp_suspected.compute_pipelines.push(id);
-                }
-            }
-            for id in comb.trackers.render_pipes.used() {
-                if render_pipe_guard[id].life_guard.ref_count.is_none() {
-                    device.temp_suspected.render_pipelines.push(id);
-                }
-            }
-        }
-
-        device
-            .lock_life(&mut token)
-            .suspected_resources
-            .extend(&device.temp_suspected);
+        device.untrack::<G>(&hub, &comb.trackers, &mut token);
         device.com_allocator.discard(comb);
     }
 
     pub fn command_buffer_destroy<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
         self.command_encoder_destroy::<B>(command_buffer_id)
+    }
+
+    pub fn device_create_render_bundle_encoder<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+        desc: &command::RenderBundleEncoderDescriptor,
+    ) -> id::RenderBundleEncoderId {
+        let encoder = command::RenderBundleEncoder::new(desc, device_id, B::VARIANT);
+        Box::into_raw(Box::new(encoder))
+    }
+
+    pub fn render_bundle_encoder_destroy<B: GfxBackend>(
+        &self,
+        render_bundle_encoder: command::RenderBundleEncoder,
+    ) {
+        render_bundle_encoder.destroy();
+    }
+
+    pub fn render_bundle_destroy<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut device_guard, mut token) = hub.devices.write(&mut token);
+        let mut bundle = {
+            let (mut render_bundle_guard, _) = hub.render_bundles.write(&mut token);
+            render_bundle_guard.remove(render_bundle_id).unwrap()
+        };
+
+        let (_, device_id) = unsafe { bundle.raw.invalidate() };
+        device_guard[device_id].untrack(&hub, &bundle.trackers, &mut token);
     }
 
     pub fn device_create_render_pipeline<B: GfxBackend>(
@@ -2492,7 +2530,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
         device.lock_life(&mut token).triage_suspected(
-            self,
+            &hub,
             &device.trackers,
             #[cfg(feature = "trace")]
             None,
@@ -2505,7 +2543,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let callbacks = {
             let (device_guard, mut token) = hub.devices.read(&mut token);
-            device_guard[device_id].maintain(self, force_wait, &mut token)
+            device_guard[device_id].maintain(&hub, force_wait, &mut token)
         };
         fire_map_callbacks(callbacks);
     }
@@ -2519,7 +2557,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         for (_, device) in device_guard.iter(B::VARIANT) {
-            let cbs = device.maintain(self, force_wait, &mut token);
+            let cbs = device.maintain(&hub, force_wait, &mut token);
             callbacks.extend(cbs);
         }
     }

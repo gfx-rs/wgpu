@@ -51,7 +51,7 @@ impl Default for ComputeCommand {
     }
 }
 
-impl super::RawPass {
+impl super::RawPass<id::CommandEncoderId> {
     pub unsafe fn new_compute(parent: id::CommandEncoderId) -> Self {
         Self::from_vec(Vec::<ComputeCommand>::with_capacity(1), parent)
     }
@@ -291,13 +291,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub mod compute_ffi {
-    use super::{
-        super::{PhantomSlice, RawPass},
-        ComputeCommand,
-    };
+    use super::{super::PhantomSlice, ComputeCommand};
     use crate::{id, RawString};
     use std::{convert::TryInto, slice};
     use wgt::{BufferAddress, DynamicOffset};
+
+    type RawPass = super::super::RawPass<id::CommandEncoderId>;
 
     /// # Safety
     ///

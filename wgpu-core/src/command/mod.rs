@@ -4,11 +4,13 @@
 
 mod allocator;
 mod bind;
+mod bundle;
 mod compute;
 mod render;
 mod transfer;
 
 pub(crate) use self::allocator::CommandAllocator;
+pub use self::bundle::*;
 pub use self::compute::*;
 pub use self::render::*;
 pub use self::transfer::*;
@@ -57,23 +59,25 @@ impl<T> PhantomSlice<T> {
 }
 
 #[repr(C)]
-pub struct RawPass {
+#[derive(Debug)]
+pub struct RawPass<P> {
     data: *mut u8,
     base: *mut u8,
     capacity: usize,
-    parent: id::CommandEncoderId,
+    parent: P,
 }
 
-impl RawPass {
-    fn from_vec<T>(mut vec: Vec<T>, encoder_id: id::CommandEncoderId) -> Self {
+impl<P: Copy> RawPass<P> {
+    fn from_vec<T>(mut vec: Vec<T>, parent: P) -> Self {
         let ptr = vec.as_mut_ptr() as *mut u8;
         let capacity = vec.capacity() * mem::size_of::<T>();
+        assert_ne!(capacity, 0);
         mem::forget(vec);
         RawPass {
             data: ptr,
             base: ptr,
             capacity,
-            parent: encoder_id,
+            parent,
         }
     }
 
@@ -94,15 +98,15 @@ impl RawPass {
     }
 
     /// Recover the data vector of the pass, consuming `self`.
-    unsafe fn into_vec(mut self) -> (Vec<u8>, id::CommandEncoderId) {
-        (self.invalidate(), self.parent)
+    unsafe fn into_vec(mut self) -> (Vec<u8>, P) {
+        self.invalidate()
     }
 
     /// Make pass contents invalid, return the contained data.
     ///
     /// Any following access to the pass will result in a crash
     /// for accessing address 0.
-    pub unsafe fn invalidate(&mut self) -> Vec<u8> {
+    pub unsafe fn invalidate(&mut self) -> (Vec<u8>, P) {
         let size = self.size();
         assert!(
             size <= self.capacity,
@@ -114,7 +118,7 @@ impl RawPass {
         self.data = ptr::null_mut();
         self.base = ptr::null_mut();
         self.capacity = 0;
-        vec
+        (vec, self.parent)
     }
 
     unsafe fn ensure_extra_size(&mut self, extra_size: usize) {
@@ -145,10 +149,6 @@ impl RawPass {
             .copy_from_slice(data);
         self.data = self.data.add(extra);
     }
-}
-
-pub struct RenderBundle<B: hal::Backend> {
-    _raw: B::CommandBuffer,
 }
 
 #[derive(Debug)]

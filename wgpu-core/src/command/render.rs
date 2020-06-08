@@ -5,7 +5,7 @@
 use crate::{
     command::{
         bind::{Binder, LayoutChange},
-        PassComponent, PhantomSlice, RawRenderPassColorAttachmentDescriptor,
+        PassComponent, PhantomSlice, RawPass, RawRenderPassColorAttachmentDescriptor,
         RawRenderPassDepthStencilAttachmentDescriptor, RawRenderTargets,
     },
     conv,
@@ -126,7 +126,7 @@ impl Default for RenderCommand {
     }
 }
 
-impl super::RawPass {
+impl RawPass<id::CommandEncoderId> {
     pub unsafe fn new_render(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
         let mut pass = Self::from_vec(Vec::<RenderCommand>::with_capacity(1), parent_id);
 
@@ -1321,16 +1321,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         cmb.raw.push(raw);
     }
+
+    pub fn wgpu_render_pass_execute_bundles<B: GfxBackend>(
+        &mut self,
+        pass: &mut RawPass<id::CommandEncoderId>,
+        render_bundle_ids: &[id::RenderBundleId],
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (_, mut token) = hub.devices.read(&mut token);
+        let (bundle_guard, _) = hub.render_bundles.read(&mut token);
+        for &bundle_id in render_bundle_ids {
+            let bundle = &bundle_guard[bundle_id];
+            //TODO: check the `bundle.context`
+            let size = bundle.raw.size();
+            unsafe {
+                pass.ensure_extra_size(size);
+                std::ptr::copy_nonoverlapping(bundle.raw.base, pass.data, size);
+            }
+        }
+    }
 }
 
 pub mod render_ffi {
     use super::{
-        super::{PhantomSlice, RawPass, Rect},
+        super::{PhantomSlice, Rect},
         RenderCommand,
     };
     use crate::{id, RawString};
     use std::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
+
+    type RawPass = super::super::RawPass<id::CommandEncoderId>;
 
     /// # Safety
     ///
@@ -1484,15 +1507,6 @@ pub mod render_ffi {
         offset: BufferAddress,
     ) {
         pass.encode(&RenderCommand::DrawIndexedIndirect { buffer_id, offset });
-    }
-
-    #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_execute_bundles(
-        _pass: &mut RawPass,
-        _bundles: *const id::RenderBundleId,
-        _bundles_length: usize,
-    ) {
-        unimplemented!()
     }
 
     #[no_mangle]
