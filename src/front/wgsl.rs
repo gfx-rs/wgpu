@@ -521,7 +521,7 @@ impl Parser {
                     self.scopes.pop();
                     return Ok(*handle);
                 }
-                if self.std_namespace.as_ref().map(|s| s.as_str()) == Some(word) {
+                if self.std_namespace.as_deref() == Some(word) {
                     lexer.expect(Token::DoubleColon)?;
                     let name = lexer.next_ident()?;
                     let mut arguments = Vec::new();
@@ -575,7 +575,7 @@ impl Parser {
                         crate::TypeInner::Struct { ref members } => {
                             let index = members
                                 .iter()
-                                .position(|m| m.name.as_ref().map(|s| s.as_str()) == Some(name))
+                                .position(|m| m.name.as_deref() == Some(name))
                                 .ok_or(Error::BadAccessor(name))? as u32;
                             crate::Expression::AccessIndex {
                                 base: handle,
@@ -1354,7 +1354,7 @@ impl Parser {
                 lexer.expect(Token::Separator(';'))?;
                 let (fun_handle, _) = module.functions
                     .iter()
-                    .find(|(_, fun)| fun.name.as_ref().map(|s| s.as_str()) == Some(fun_ident))
+                    .find(|(_, fun)| fun.name.as_deref() == Some(fun_ident))
                     .ok_or(Error::UnknownFunction(fun_ident))?;
                 module.entry_points.push(crate::EntryPoint {
                     exec_model,

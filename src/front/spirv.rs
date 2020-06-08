@@ -763,7 +763,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             return Err(Error::InvalidOperand);
         }
         if !SUPPORTED_EXTENSIONS.contains(&name.as_str()) {
-            return Err(Error::UnsupportedExtension(name.to_owned()));
+            return Err(Error::UnsupportedExtension(name));
         }
         Ok(())
     }
@@ -777,7 +777,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             return Err(Error::InvalidOperand);
         }
         if !SUPPORTED_EXT_SETS.contains(&name.as_str()) {
-            return Err(Error::UnsupportedExtSet(name.to_owned()));
+            return Err(Error::UnsupportedExtSet(name));
         }
         Ok(())
     }
@@ -804,7 +804,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let (name, left) = self.next_string(inst.wc - 3)?;
         let ep = EntryPoint {
             exec_model,
-            name: name.to_owned(),
+            name,
             function_id,
             variable_ids: self.data
                 .by_ref()
@@ -852,7 +852,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.future_decor
             .entry(id)
             .or_default()
-            .name = Some(name.to_owned());
+            .name = Some(name);
         Ok(())
     }
 
@@ -868,7 +868,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.future_member_decor
             .entry((id, member))
             .or_default()
-            .name = Some(name.to_owned());
+            .name = Some(name);
         Ok(())
     }
 
@@ -1266,14 +1266,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 crate::ConstantInner::Uint((u64::from(high) << 32) | u64::from(low))
             }
             crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, width } => {
+                use std::cmp::Ordering;
                 let low = self.next()?;
-                let high = if width < 32 {
-                    return Err(Error::InvalidTypeWidth(u32::from(width)));
-                } else if width > 32 {
-                    inst.expect(4)?;
-                    self.next()?
-                } else {
-                    !0
+                let high = match width.cmp(&32) {
+                    Ordering::Less => return Err(Error::InvalidTypeWidth(u32::from(width))),
+                    Ordering::Greater => {
+                        inst.expect(4)?;
+                        self.next()?
+                    },
+                    Ordering::Equal => !0
                 };
                 crate::ConstantInner::Sint(((u64::from(high) << 32) | u64::from(low)) as i64)
             }
