@@ -223,6 +223,7 @@ impl crate::Context for Context {
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions<'_>,
+        unsafe_extensions: wgt::UnsafeExtensions,
         backends: wgt::BackendBit,
     ) -> Self::RequestAdapterFuture {
         let id = self.pick_adapter(
@@ -230,6 +231,7 @@ impl crate::Context for Context {
                 power_preference: options.power_preference,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
             },
+            unsafe_extensions,
             wgc::instance::AdapterInputs::Mask(backends, |_| PhantomData),
         );
         ready(id)

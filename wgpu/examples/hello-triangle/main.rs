@@ -14,6 +14,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: Some(&surface),
             },
+            wgpu::UnsafeExtensions::disallow(),
             wgpu::BackendBit::PRIMARY,
         )
         .await

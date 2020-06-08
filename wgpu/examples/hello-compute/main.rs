@@ -29,6 +29,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
             },
+            wgpu::UnsafeExtensions::disallow(),
             wgpu::BackendBit::PRIMARY,
         )
         .await

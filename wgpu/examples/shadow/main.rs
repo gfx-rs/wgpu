@@ -353,7 +353,7 @@ impl framework::Example for Example {
             lod_min_clamp: -100.0,
             lod_max_clamp: 100.0,
             compare: Some(wgpu::CompareFunction::LessEqual),
-            anisotropy_clamp: None,
+            ..Default::default()
         });
 
         let shadow_texture = device.create_texture(&wgpu::TextureDescriptor {
