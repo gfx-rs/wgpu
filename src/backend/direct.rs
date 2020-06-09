@@ -1,14 +1,15 @@
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
-    BindingType, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor, Extensions,
-    Limits, MapMode, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
-    SwapChainStatus, TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor, Extensions, Limits,
+    MapMode, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
+    SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
 use futures::future::{ready, Ready};
 use smallvec::SmallVec;
 use std::{ffi::CString, marker::PhantomData, ops::Range, ptr, slice};
+use typed_arena::Arena;
 
 macro_rules! gfx_select {
     ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
@@ -291,64 +292,9 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &BindGroupLayoutDescriptor,
     ) -> Self::BindGroupLayoutId {
-        use wgc::binding_model as bm;
-
-        let temp_layouts = desc
-            .bindings
-            .iter()
-            .map(|bind| bm::BindGroupLayoutEntry {
-                binding: bind.binding,
-                visibility: bind.visibility,
-                ty: match bind.ty {
-                    BindingType::UniformBuffer { .. } => bm::BindingType::UniformBuffer,
-                    BindingType::StorageBuffer {
-                        readonly: false, ..
-                    } => bm::BindingType::StorageBuffer,
-                    BindingType::StorageBuffer { readonly: true, .. } => {
-                        bm::BindingType::ReadonlyStorageBuffer
-                    }
-                    BindingType::Sampler { comparison: false } => bm::BindingType::Sampler,
-                    BindingType::Sampler { .. } => bm::BindingType::ComparisonSampler,
-                    BindingType::SampledTexture { .. } => bm::BindingType::SampledTexture,
-                    BindingType::StorageTexture { readonly: true, .. } => {
-                        bm::BindingType::ReadonlyStorageTexture
-                    }
-                    BindingType::StorageTexture { .. } => bm::BindingType::WriteonlyStorageTexture,
-                },
-                has_dynamic_offset: match bind.ty {
-                    BindingType::UniformBuffer { dynamic }
-                    | BindingType::StorageBuffer { dynamic, .. } => dynamic,
-                    _ => false,
-                },
-                multisampled: match bind.ty {
-                    BindingType::SampledTexture { multisampled, .. } => multisampled,
-                    _ => false,
-                },
-                view_dimension: match bind.ty {
-                    BindingType::SampledTexture { dimension, .. }
-                    | BindingType::StorageTexture { dimension, .. } => dimension,
-                    _ => TextureViewDimension::D2,
-                },
-                texture_component_type: match bind.ty {
-                    BindingType::SampledTexture { component_type, .. }
-                    | BindingType::StorageTexture { component_type, .. } => component_type,
-                    _ => wgt::TextureComponentType::Float,
-                },
-                storage_texture_format: match bind.ty {
-                    BindingType::StorageTexture { format, .. } => format,
-                    _ => wgt::TextureFormat::Rgb10a2Unorm, // doesn't matter
-                },
-            })
-            .collect::<Vec<_>>();
-
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
         gfx_select!(*device => self.device_create_bind_group_layout(
             *device,
-            &bm::BindGroupLayoutDescriptor {
-                entries: temp_layouts.as_ptr(),
-                entries_length: temp_layouts.len(),
-                label: owned_label.as_ptr(),
-            },
+            desc,
             PhantomData
         ))
         .unwrap()
@@ -361,13 +307,14 @@ impl crate::Context for Context {
     ) -> Self::BindGroupId {
         use wgc::binding_model as bm;
 
+        let texture_view_arena: Arena<wgc::id::TextureViewId> = Arena::new();
         let bindings = desc
             .bindings
             .iter()
             .map(|binding| bm::BindGroupEntry {
                 binding: binding.binding,
-                resource: match &binding.resource {
-                    BindingResource::Buffer(buffer_slice) => {
+                resource: match binding.resource {
+                    BindingResource::Buffer(ref buffer_slice) => {
                         bm::BindingResource::Buffer(bm::BufferBinding {
                             buffer: buffer_slice.buffer.id,
                             offset: buffer_slice.offset,
@@ -380,18 +327,22 @@ impl crate::Context for Context {
                     BindingResource::TextureView(ref texture_view) => {
                         bm::BindingResource::TextureView(texture_view.id)
                     }
+                    BindingResource::TextureViewArray(texture_view_array) => {
+                        bm::BindingResource::TextureViewArray(
+                            texture_view_arena
+                                .alloc_extend(texture_view_array.iter().map(|view| view.id)),
+                        )
+                    }
                 },
             })
             .collect::<Vec<_>>();
 
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
         gfx_select!(*device => self.device_create_bind_group(
             *device,
             &bm::BindGroupDescriptor {
+                label: desc.label,
                 layout: desc.layout.id,
-                entries: bindings.as_ptr(),
-                entries_length: bindings.len(),
-                label: owned_label.as_ptr(),
+                bindings: &bindings,
             },
             PhantomData
         ))
