@@ -10,6 +10,8 @@
 #[path = "../framework.rs"]
 mod framework;
 
+use std::iter;
+
 use bytemuck::{Pod, Zeroable};
 
 use wgpu::vertex_attr_array;
@@ -25,29 +27,31 @@ unsafe impl Pod for Vertex {}
 unsafe impl Zeroable for Vertex {}
 
 struct Example {
+    bundle: wgpu::RenderBundle,
     vs_module: wgpu::ShaderModule,
     fs_module: wgpu::ShaderModule,
     pipeline_layout: wgpu::PipelineLayout,
-    pipeline: wgpu::RenderPipeline,
     multisampled_framebuffer: wgpu::TextureView,
     vertex_buffer: wgpu::Buffer,
     vertex_count: u32,
-    rebuild_pipeline: bool,
     sample_count: u32,
+    rebuild_bundle: bool,
     sc_desc: wgpu::SwapChainDescriptor,
 }
 
 impl Example {
-    fn create_pipeline(
+    fn create_bundle(
         device: &wgpu::Device,
         sc_desc: &wgpu::SwapChainDescriptor,
         vs_module: &wgpu::ShaderModule,
         fs_module: &wgpu::ShaderModule,
         pipeline_layout: &wgpu::PipelineLayout,
         sample_count: u32,
-    ) -> wgpu::RenderPipeline {
+        vertex_buffer: &wgpu::Buffer,
+        vertex_count: u32,
+    ) -> wgpu::RenderBundle {
         log::info!("sample_count: {}", sample_count);
-        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: vs_module,
@@ -83,6 +87,19 @@ impl Example {
             sample_count,
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
+        });
+        let mut encoder =
+            device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
+                label: None,
+                color_formats: &[sc_desc.format],
+                depth_stencil_format: None,
+                sample_count,
+            });
+        encoder.set_pipeline(&pipeline);
+        encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
+        encoder.draw(0..vertex_count, 0..1);
+        encoder.finish(&wgpu::RenderBundleDescriptor {
+            label: Some("main"),
         })
     }
 
@@ -132,14 +149,6 @@ impl framework::Example for Example {
             bind_group_layouts: &[],
         });
 
-        let pipeline = Example::create_pipeline(
-            device,
-            &sc_desc,
-            &vs_module,
-            &fs_module,
-            &pipeline_layout,
-            sample_count,
-        );
         let multisampled_framebuffer =
             Example::create_multisampled_framebuffer(device, sc_desc, sample_count);
 
@@ -165,16 +174,27 @@ impl framework::Example for Example {
         );
         let vertex_count = vertex_data.len() as u32;
 
+        let bundle = Example::create_bundle(
+            device,
+            &sc_desc,
+            &vs_module,
+            &fs_module,
+            &pipeline_layout,
+            sample_count,
+            &vertex_buffer,
+            vertex_count,
+        );
+
         let this = Example {
+            bundle,
             vs_module,
             fs_module,
             pipeline_layout,
-            pipeline,
             multisampled_framebuffer,
             vertex_buffer,
             vertex_count,
-            rebuild_pipeline: false,
             sample_count,
+            rebuild_bundle: false,
             sc_desc: sc_desc.clone(),
         };
         (this, None)
@@ -188,13 +208,13 @@ impl framework::Example for Example {
                         Some(winit::event::VirtualKeyCode::Left) => {
                             if self.sample_count >= 2 {
                                 self.sample_count = self.sample_count >> 1;
-                                self.rebuild_pipeline = true;
+                                self.rebuild_bundle = true;
                             }
                         }
                         Some(winit::event::VirtualKeyCode::Right) => {
                             if self.sample_count <= 16 {
                                 self.sample_count = self.sample_count << 1;
-                                self.rebuild_pipeline = true;
+                                self.rebuild_bundle = true;
                             }
                         }
                         _ => {}
@@ -222,18 +242,20 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
     ) -> wgpu::CommandBuffer {
-        if self.rebuild_pipeline {
-            self.pipeline = Example::create_pipeline(
+        if self.rebuild_bundle {
+            self.bundle = Example::create_bundle(
                 device,
                 &self.sc_desc,
                 &self.vs_module,
                 &self.fs_module,
                 &self.pipeline_layout,
                 self.sample_count,
+                &self.vertex_buffer,
+                self.vertex_count,
             );
             self.multisampled_framebuffer =
                 Example::create_multisampled_framebuffer(device, &self.sc_desc, self.sample_count);
-            self.rebuild_pipeline = false;
+            self.rebuild_bundle = false;
         }
 
         let mut encoder =
@@ -257,13 +279,12 @@ impl framework::Example for Example {
                 }
             };
 
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[rpass_color_attachment],
-                depth_stencil_attachment: None,
-            });
-            rpass.set_pipeline(&self.pipeline);
-            rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-            rpass.draw(0..self.vertex_count, 0..1);
+            encoder
+                .begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments: &[rpass_color_attachment],
+                    depth_stencil_attachment: None,
+                })
+                .execute_bundles(iter::once(&self.bundle));
         }
 
         encoder.finish()
