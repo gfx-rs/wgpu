@@ -1,9 +1,8 @@
 use crate::{
     arena::{Arena, Handle},
-    proc::{Typifier, ResolveError},
+    proc::{ResolveError, Typifier},
     FastHashMap,
 };
-
 
 #[derive(Debug, PartialEq)]
 pub enum Token<'a> {
@@ -29,7 +28,7 @@ mod lex {
 
     fn _consume_str<'a>(input: &'a str, what: &str) -> Option<&'a str> {
         if input.starts_with(what) {
-            Some(&input[what.len() ..])
+            Some(&input[what.len()..])
         } else {
             None
         }
@@ -56,12 +55,8 @@ mod lex {
                     (Token::Separator(cur), input)
                 }
             }
-            ';' | ',' | '.' => {
-                (Token::Separator(cur), chars.as_str())
-            }
-            '(' | ')' | '{' | '}' => {
-                (Token::Paren(cur), chars.as_str())
-            }
+            ';' | ',' | '.' => (Token::Separator(cur), chars.as_str()),
+            '(' | ')' | '{' | '}' => (Token::Paren(cur), chars.as_str()),
             '<' | '>' => {
                 input = chars.as_str();
                 let next = chars.next();
@@ -86,19 +81,19 @@ mod lex {
                     (Token::Paren(cur), input)
                 }
             }
-            '0' ..= '9' => {
-                let (number, rest) = consume_any(input, |c| (c>='0' && c<='9' || c=='.'));
+            '0'..='9' => {
+                let (number, rest) = consume_any(input, |c| (c >= '0' && c <= '9' || c == '.'));
                 (Token::Number(number), rest)
             }
             'a'..='z' | 'A'..='Z' | '_' => {
-                let (word, rest) = consume_any(input, |c| c.is_alphanumeric() || c=='_');
+                let (word, rest) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
                 (Token::Word(word), rest)
             }
             '"' => {
                 let base = chars.as_str();
                 let len = match chars.position(|c| c == '"') {
                     Some(pos) => pos,
-                    None => return (Token::UnterminatedString, chars.as_str())
+                    None => return (Token::UnterminatedString, chars.as_str()),
                 };
                 (Token::String(&base[..len]), chars.as_str())
             }
@@ -110,9 +105,7 @@ mod lex {
                     (Token::Operation(cur), input)
                 }
             }
-            '+' | '*' | '/' | '%' | '^' => {
-                (Token::Operation(cur), chars.as_str())
-            }
+            '+' | '*' | '/' | '%' | '^' => (Token::Operation(cur), chars.as_str()),
             '!' => {
                 if chars.next() == Some('=') {
                     (Token::LogicalOperation(cur), chars.as_str())
@@ -120,7 +113,7 @@ mod lex {
                     (Token::Operation(cur), input)
                 }
             }
-            '=' | '&' | '|'  => {
+            '=' | '&' | '|' => {
                 input = chars.as_str();
                 if chars.next() == Some(cur) {
                     (Token::LogicalOperation(cur), chars.as_str())
@@ -128,13 +121,11 @@ mod lex {
                     (Token::Operation(cur), input)
                 }
             }
-            '#' => {
-                match chars.position(|c| c == '\n' || c == '\r') {
-                    Some(_) => consume_token(chars.as_str()),
-                    None => (Token::End, chars.as_str())
-                }
-            }
-            _ => (Token::Unknown(cur), chars.as_str())
+            '#' => match chars.position(|c| c == '\n' || c == '\r') {
+                Some(_) => consume_token(chars.as_str()),
+                None => (Token::End, chars.as_str()),
+            },
+            _ => (Token::Unknown(cur), chars.as_str()),
         }
     }
 }
@@ -254,9 +245,7 @@ trait StringValueLookup<'a> {
 impl<'a> StringValueLookup<'a> for FastHashMap<&'a str, Handle<crate::Expression>> {
     type Value = Handle<crate::Expression>;
     fn lookup(&self, key: &'a str) -> Result<Self::Value, Error<'a>> {
-        self.get(key)
-            .cloned()
-            .ok_or(Error::UnknownIdent(key))
+        self.get(key).cloned().ok_or(Error::UnknownIdent(key))
     }
 }
 
@@ -319,9 +308,21 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         }
     }
 
-    fn resolve_type(&mut self, handle: Handle<crate::Expression>) -> Result<Handle<crate::Type>, Error<'a>> {
+    fn resolve_type(
+        &mut self,
+        handle: Handle<crate::Expression>,
+    ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.typifier
-            .resolve(handle, self.expressions, self.types, self.constants, self.global_vars, self.local_vars,&Arena::new(),&FastHashMap::default())
+            .resolve(
+                handle,
+                self.expressions,
+                self.types,
+                self.constants,
+                self.global_vars,
+                self.local_vars,
+                &Arena::new(),
+                &FastHashMap::default(),
+            )
             .map_err(Error::InvalidResolve)
     }
 
@@ -329,7 +330,10 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         &mut self,
         lexer: &mut Lexer<'a>,
         classifier: impl Fn(Token<'a>) -> Option<crate::BinaryOperator>,
-        mut parser: impl FnMut(&mut Lexer<'a>, ExpressionContext<'a, '_, '_>) -> Result<Handle<crate::Expression>, Error<'a>>,
+        mut parser: impl FnMut(
+            &mut Lexer<'a>,
+            ExpressionContext<'a, '_, '_>,
+        ) -> Result<Handle<crate::Expression>, Error<'a>>,
     ) -> Result<Handle<crate::Expression>, Error<'a>> {
         let mut left = parser(lexer, self.reborrow())?;
         while let Some(op) = classifier(lexer.peek()) {
@@ -344,7 +348,6 @@ impl<'a> ExpressionContext<'a, '_, '_> {
         Ok(left)
     }
 }
-
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Scope {
@@ -411,16 +414,16 @@ impl Parser {
         }
     }
 
-    fn get_constant_inner(word: &str) -> Result<(crate::ConstantInner, crate::ScalarKind), Error<'_>> {
+    fn get_constant_inner(
+        word: &str,
+    ) -> Result<(crate::ConstantInner, crate::ScalarKind), Error<'_>> {
         if word.contains('.') {
-            word
-                .parse()
-                .map(|f|(crate::ConstantInner::Float(f), crate::ScalarKind::Float))
+            word.parse()
+                .map(|f| (crate::ConstantInner::Float(f), crate::ScalarKind::Float))
                 .map_err(|err| Error::BadFloat(word, err))
         } else {
-            word
-                .parse()
-                .map(|i|(crate::ConstantInner::Sint(i), crate::ScalarKind::Sint))
+            word.parse()
+                .map(|i| (crate::ConstantInner::Sint(i), crate::ScalarKind::Sint))
                 .map_err(|err| Error::BadInteger(word, err))
         }
     }
@@ -484,7 +487,7 @@ impl Parser {
                             width: 1,
                         },
                         ctx.types,
-                    )
+                    ),
                 });
                 crate::Expression::Constant(handle)
             }
@@ -499,7 +502,7 @@ impl Parser {
                             width: 1,
                         },
                         ctx.types,
-                    )
+                    ),
                 });
                 crate::Expression::Constant(handle)
             }
@@ -512,7 +515,7 @@ impl Parser {
                     ty: Typifier::deduce_type_handle(
                         crate::TypeInner::Scalar { kind, width: 32 },
                         ctx.types,
-                    )
+                    ),
                 });
                 crate::Expression::Constant(handle)
             }
@@ -576,24 +579,31 @@ impl Parser {
                             let index = members
                                 .iter()
                                 .position(|m| m.name.as_deref() == Some(name))
-                                .ok_or(Error::BadAccessor(name))? as u32;
+                                .ok_or(Error::BadAccessor(name))?
+                                as u32;
                             crate::Expression::AccessIndex {
                                 base: handle,
                                 index,
                             }
                         }
-                        crate::TypeInner::Vector { size, kind, width } |
-                        crate::TypeInner::Matrix { columns: size, kind, width, .. } => {
+                        crate::TypeInner::Vector { size, kind, width }
+                        | crate::TypeInner::Matrix {
+                            columns: size,
+                            kind,
+                            width,
+                            ..
+                        } => {
                             const MEMBERS: [char; 4] = ['x', 'y', 'z', 'w'];
                             if name.len() > 1 {
                                 let mut components = Vec::with_capacity(name.len());
                                 for ch in name.chars() {
                                     let expr = crate::Expression::AccessIndex {
                                         base: handle,
-                                        index: MEMBERS[.. size as usize]
+                                        index: MEMBERS[..size as usize]
                                             .iter()
                                             .position(|&m| m == ch)
-                                            .ok_or(Error::BadAccessor(name))? as u32,
+                                            .ok_or(Error::BadAccessor(name))?
+                                            as u32,
                                     };
                                     components.push(ctx.expressions.append(expr));
                                 }
@@ -603,8 +613,15 @@ impl Parser {
                                     4 => crate::VectorSize::Quad,
                                     _ => return Err(Error::BadAccessor(name)),
                                 };
-                                let inner = if let crate::TypeInner::Matrix { rows, .. } = base_type.inner {
-                                    crate::TypeInner::Matrix { columns: size, rows, kind, width }
+                                let inner = if let crate::TypeInner::Matrix { rows, .. } =
+                                    base_type.inner
+                                {
+                                    crate::TypeInner::Matrix {
+                                        columns: size,
+                                        rows,
+                                        kind,
+                                        width,
+                                    }
                                 } else {
                                     crate::TypeInner::Vector { size, kind, width }
                                 };
@@ -614,10 +631,11 @@ impl Parser {
                                 }
                             } else {
                                 let ch = name.chars().next().unwrap();
-                                let index = MEMBERS[.. size as usize]
+                                let index = MEMBERS[..size as usize]
                                     .iter()
                                     .position(|&m| m == ch)
-                                    .ok_or(Error::BadAccessor(name))? as u32;
+                                    .ok_or(Error::BadAccessor(name))?
+                                    as u32;
                                 crate::Expression::AccessIndex {
                                     base: handle,
                                     index,
@@ -670,35 +688,25 @@ impl Parser {
         self.scopes.push(Scope::SingularExpr);
         let backup = lexer.clone();
         let expression = match lexer.next() {
-            Token::Operation('-') => {
-                Some(crate::Expression::Unary {
-                    op: crate::UnaryOperator::Negate,
-                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
-                })
-            }
-            Token::Operation('!') => {
-                Some(crate::Expression::Unary {
-                    op: crate::UnaryOperator::Not,
-                    expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
-                })
-            }
+            Token::Operation('-') => Some(crate::Expression::Unary {
+                op: crate::UnaryOperator::Negate,
+                expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
+            }),
+            Token::Operation('!') => Some(crate::Expression::Unary {
+                op: crate::UnaryOperator::Not,
+                expr: self.parse_singular_expression(lexer, ctx.reborrow())?,
+            }),
             Token::Word(word) => {
                 if let Some(fun) = get_intrinsic(word) {
                     lexer.expect(Token::Paren('('))?;
                     let argument = self.parse_primary_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::Intrinsic {
-                        fun,
-                        argument,
-                    })
+                    Some(crate::Expression::Intrinsic { fun, argument })
                 } else if let Some(axis) = get_derivative(word) {
                     lexer.expect(Token::Paren('('))?;
                     let expr = self.parse_primary_expression(lexer, ctx.reborrow())?;
                     lexer.expect(Token::Paren(')'))?;
-                    Some(crate::Expression::Derivative {
-                        axis,
-                        expr,
-                    })
+                    Some(crate::Expression::Derivative { axis, expr })
                 } else if word == "dot" {
                     lexer.expect(Token::Paren('('))?;
                     let a = self.parse_primary_expression(lexer, ctx.reborrow())?;
@@ -743,49 +751,73 @@ impl Parser {
             |token| match token {
                 Token::LogicalOperation('=') => Some(crate::BinaryOperator::Equal),
                 Token::LogicalOperation('!') => Some(crate::BinaryOperator::NotEqual),
-                _ => None
+                _ => None,
             },
             // relational_expression
-            |lexer, mut context| context.parse_binary_op(
-                lexer,
-                |token| match token {
-                    Token::Paren('<') => Some(crate::BinaryOperator::Less),
-                    Token::Paren('>') => Some(crate::BinaryOperator::Greater),
-                    Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
-                    Token::LogicalOperation('>') => Some(crate::BinaryOperator::GreaterEqual),
-                    _ => None,
-                },
-                // shift_expression
-                |lexer, mut context| context.parse_binary_op(
+            |lexer, mut context| {
+                context.parse_binary_op(
                     lexer,
                     |token| match token {
-                        Token::ShiftOperation('<') => Some(crate::BinaryOperator::ShiftLeftLogical),
-                        Token::ShiftOperation('>') => Some(crate::BinaryOperator::ShiftRightLogical),
-                        Token::ArithmeticShiftOperation('>') => Some(crate::BinaryOperator::ShiftRightArithmetic),
+                        Token::Paren('<') => Some(crate::BinaryOperator::Less),
+                        Token::Paren('>') => Some(crate::BinaryOperator::Greater),
+                        Token::LogicalOperation('<') => Some(crate::BinaryOperator::LessEqual),
+                        Token::LogicalOperation('>') => Some(crate::BinaryOperator::GreaterEqual),
                         _ => None,
                     },
-                    // additive_expression
-                    |lexer, mut context| context.parse_binary_op(
-                        lexer,
-                        |token| match token {
-                            Token::Operation('+') => Some(crate::BinaryOperator::Add),
-                            Token::Operation('-') => Some(crate::BinaryOperator::Subtract),
-                            _ => None,
-                        },
-                        // multiplicative_expression
-                        |lexer, mut context| context.parse_binary_op(
+                    // shift_expression
+                    |lexer, mut context| {
+                        context.parse_binary_op(
                             lexer,
                             |token| match token {
-                                Token::Operation('*') => Some(crate::BinaryOperator::Multiply),
-                                Token::Operation('/') => Some(crate::BinaryOperator::Divide),
-                                Token::Operation('%') => Some(crate::BinaryOperator::Modulo),
+                                Token::ShiftOperation('<') => {
+                                    Some(crate::BinaryOperator::ShiftLeftLogical)
+                                }
+                                Token::ShiftOperation('>') => {
+                                    Some(crate::BinaryOperator::ShiftRightLogical)
+                                }
+                                Token::ArithmeticShiftOperation('>') => {
+                                    Some(crate::BinaryOperator::ShiftRightArithmetic)
+                                }
                                 _ => None,
                             },
-                            |lexer, context| self.parse_singular_expression(lexer, context),
-                        ),
-                    ),
-                ),
-            ),
+                            // additive_expression
+                            |lexer, mut context| {
+                                context.parse_binary_op(
+                                    lexer,
+                                    |token| match token {
+                                        Token::Operation('+') => Some(crate::BinaryOperator::Add),
+                                        Token::Operation('-') => {
+                                            Some(crate::BinaryOperator::Subtract)
+                                        }
+                                        _ => None,
+                                    },
+                                    // multiplicative_expression
+                                    |lexer, mut context| {
+                                        context.parse_binary_op(
+                                            lexer,
+                                            |token| match token {
+                                                Token::Operation('*') => {
+                                                    Some(crate::BinaryOperator::Multiply)
+                                                }
+                                                Token::Operation('/') => {
+                                                    Some(crate::BinaryOperator::Divide)
+                                                }
+                                                Token::Operation('%') => {
+                                                    Some(crate::BinaryOperator::Modulo)
+                                                }
+                                                _ => None,
+                                            },
+                                            |lexer, context| {
+                                                self.parse_singular_expression(lexer, context)
+                                            },
+                                        )
+                                    },
+                                )
+                            },
+                        )
+                    },
+                )
+            },
         )
     }
 
@@ -803,38 +835,52 @@ impl Parser {
                 _ => None,
             },
             // logical_and_expression
-            |lexer, mut context| context.parse_binary_op(
-                lexer,
-                |token| match token {
-                    Token::LogicalOperation('&') => Some(crate::BinaryOperator::LogicalAnd),
-                    _ => None,
-                },
-                // inclusive_or_expression
-                |lexer, mut context| context.parse_binary_op(
+            |lexer, mut context| {
+                context.parse_binary_op(
                     lexer,
                     |token| match token {
-                        Token::Operation('|') => Some(crate::BinaryOperator::InclusiveOr),
+                        Token::LogicalOperation('&') => Some(crate::BinaryOperator::LogicalAnd),
                         _ => None,
                     },
-                    // exclusive_or_expression
-                    |lexer, mut context| context.parse_binary_op(
-                        lexer,
-                        |token| match token {
-                            Token::Operation('^') => Some(crate::BinaryOperator::ExclusiveOr),
-                            _ => None,
-                        },
-                        // and_expression
-                        |lexer, mut context| context.parse_binary_op(
+                    // inclusive_or_expression
+                    |lexer, mut context| {
+                        context.parse_binary_op(
                             lexer,
                             |token| match token {
-                                Token::Operation('&') => Some(crate::BinaryOperator::And),
+                                Token::Operation('|') => Some(crate::BinaryOperator::InclusiveOr),
                                 _ => None,
                             },
-                            |lexer, context| self.parse_equality_expression(lexer, context),
-                        ),
-                    ),
-                ),
-            ),
+                            // exclusive_or_expression
+                            |lexer, mut context| {
+                                context.parse_binary_op(
+                                    lexer,
+                                    |token| match token {
+                                        Token::Operation('^') => {
+                                            Some(crate::BinaryOperator::ExclusiveOr)
+                                        }
+                                        _ => None,
+                                    },
+                                    // and_expression
+                                    |lexer, mut context| {
+                                        context.parse_binary_op(
+                                            lexer,
+                                            |token| match token {
+                                                Token::Operation('&') => {
+                                                    Some(crate::BinaryOperator::And)
+                                                }
+                                                _ => None,
+                                            },
+                                            |lexer, context| {
+                                                self.parse_equality_expression(lexer, context)
+                                            },
+                                        )
+                                    },
+                                )
+                            },
+                        )
+                    },
+                )
+            },
         )?;
         self.scopes.pop();
         Ok(handle)
@@ -927,24 +973,18 @@ impl Parser {
     ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.scopes.push(Scope::TypeDecl);
         let inner = match lexer.next() {
-            Token::Word("f32") => {
-                crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Float,
-                    width: 32,
-                }
-            }
-            Token::Word("i32") => {
-                crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Sint,
-                    width: 32,
-                }
-            }
-            Token::Word("u32") => {
-                crate::TypeInner::Scalar {
-                    kind: crate::ScalarKind::Uint,
-                    width: 32,
-                }
-            }
+            Token::Word("f32") => crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Float,
+                width: 32,
+            },
+            Token::Word("i32") => crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Sint,
+                width: 32,
+            },
+            Token::Word("u32") => crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Uint,
+                width: 32,
+            },
             Token::Word("vec2") => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Vector {
@@ -1024,7 +1064,8 @@ impl Parser {
             }
             Token::Word(name) => {
                 self.scopes.pop();
-                return self.lookup_type
+                return self
+                    .lookup_type
                     .get(name)
                     .cloned()
                     .ok_or(Error::UnknownType(name));
@@ -1054,7 +1095,8 @@ impl Parser {
                         }
                         let (name, ty) = self.parse_variable_ident_decl(lexer, context.types)?;
                         let init = if lexer.skip(Token::Operation('=')) {
-                            let value = self.parse_general_expression(lexer, context.as_expression())?;
+                            let value =
+                                self.parse_general_expression(lexer, context.as_expression())?;
                             if let crate::Expression::Constant(_) = context.expressions[value] {
                                 Init::Uniform(value)
                             } else {
@@ -1070,12 +1112,17 @@ impl Parser {
                             init: match init {
                                 Init::Uniform(value) => Some(value),
                                 _ => None,
-                            }
+                            },
                         });
-                        let expr_id = context.expressions.append(crate::Expression::LocalVariable(var_id));
+                        let expr_id = context
+                            .expressions
+                            .append(crate::Expression::LocalVariable(var_id));
                         context.lookup_ident.insert(name, expr_id);
                         match init {
-                            Init::Variable(value) => crate::Statement::Store { pointer: expr_id, value },
+                            Init::Variable(value) => crate::Statement::Store {
+                                pointer: expr_id,
+                                value,
+                            },
                             _ => crate::Statement::Empty,
                         }
                     }
@@ -1086,13 +1133,12 @@ impl Parser {
                             None
                         };
                         lexer.expect(Token::Separator(';'))?;
-                        crate::Statement::Return {
-                            value
-                        }
+                        crate::Statement::Return { value }
                     }
                     "if" => {
                         lexer.expect(Token::Paren('('))?;
-                        let condition = self.parse_general_expression(lexer, context.as_expression())?;
+                        let condition =
+                            self.parse_general_expression(lexer, context.as_expression())?;
                         lexer.expect(Token::Paren(')'))?;
                         let accept = self.parse_block(lexer, context.reborrow())?;
                         let reject = if lexer.skip(Token::Word("else")) {
@@ -1121,10 +1167,7 @@ impl Parser {
                                 None => break,
                             }
                         }
-                        crate::Statement::Loop {
-                            body,
-                            continuing
-                        }
+                        crate::Statement::Loop { body, continuing }
                     }
                     "break" => crate::Statement::Break,
                     "continue" => crate::Statement::Continue,
@@ -1133,7 +1176,8 @@ impl Parser {
                         let var_expr = context.lookup_ident.lookup(ident)?;
                         let left = self.parse_postfix(lexer, context.as_expression(), var_expr)?;
                         lexer.expect(Token::Operation('='))?;
-                        let value = self.parse_general_expression(lexer, context.as_expression())?;
+                        let value =
+                            self.parse_general_expression(lexer, context.as_expression())?;
                         lexer.expect(Token::Separator(';'))?;
                         crate::Statement::Store {
                             pointer: left,
@@ -1186,9 +1230,11 @@ impl Parser {
             if !parameter_types.is_empty() {
                 lexer.expect(Token::Separator(','))?;
             }
-            let (param_name, param_type) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
+            let (param_name, param_type) =
+                self.parse_variable_ident_decl(lexer, &mut module.types)?;
             let param_index = parameter_types.len() as u32;
-            let expression_token = expressions.append(crate::Expression::FunctionParameter(param_index));
+            let expression_token =
+                expressions.append(crate::Expression::FunctionParameter(param_index));
             lookup_ident.insert(param_name, expression_token);
             parameter_types.push(param_type);
         }
@@ -1202,15 +1248,18 @@ impl Parser {
         // read body
         let mut local_variables = Arena::new();
         let mut typifier = Typifier::new();
-        let body = self.parse_block(lexer, StatementContext {
-            lookup_ident: &mut lookup_ident,
-            typifier: &mut typifier,
-            variables: &mut local_variables,
-            expressions: &mut expressions,
-            types: &mut module.types,
-            constants: &mut module.constants,
-            global_vars: &module.global_variables,
-        })?;
+        let body = self.parse_block(
+            lexer,
+            StatementContext {
+                lookup_ident: &mut lookup_ident,
+                typifier: &mut typifier,
+                variables: &mut local_variables,
+                expressions: &mut expressions,
+                types: &mut module.types,
+                constants: &mut module.constants,
+                global_vars: &module.global_variables,
+            },
+        )?;
         // done
         let global_usage = crate::GlobalUse::scan(&expressions, &body, &module.global_variables);
         self.scopes.pop();
@@ -1261,14 +1310,16 @@ impl Parser {
                     Token::DoubleParen(']') => {
                         break;
                     }
-                    Token::Separator(',') => {
-                    }
+                    Token::Separator(',') => {}
                     other => return Err(Error::Unexpected(other)),
                 }
             }
             match (bind_set, bind_index) {
                 (Some(set), Some(index)) if binding.is_none() => {
-                    binding = Some(crate::Binding::Descriptor { set, binding: index });
+                    binding = Some(crate::Binding::Descriptor {
+                        set,
+                        binding: index,
+                    });
                 }
                 _ if binding.is_none() => return Err(Error::Other),
                 _ => {}
@@ -1277,7 +1328,7 @@ impl Parser {
         }
         // read items
         match lexer.next() {
-            Token::Separator(';') => {},
+            Token::Separator(';') => {}
             Token::Word("import") => {
                 self.scopes.push(Scope::ImportDecl);
                 let path = match lexer.next() {
@@ -1288,9 +1339,7 @@ impl Parser {
                 let namespace = lexer.next_ident()?;
                 lexer.expect(Token::Separator(';'))?;
                 match path {
-                    "GLSL.std.450" => {
-                        self.std_namespace = Some(namespace.to_owned())
-                    }
+                    "GLSL.std.450" => self.std_namespace = Some(namespace.to_owned()),
                     _ => return Err(Error::UnknownImport(path)),
                 }
                 self.scopes.pop();
@@ -1305,7 +1354,8 @@ impl Parser {
             Token::Word("const") => {
                 let (name, ty) = self.parse_variable_ident_decl(lexer, &mut module.types)?;
                 lexer.expect(Token::Operation('='))?;
-                let inner = self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
+                let inner =
+                    self.parse_const_expression(lexer, &mut module.types, &mut module.constants)?;
                 lexer.expect(Token::Separator(';'))?;
                 crate::proc::check_constant_types(&inner, &module.types[ty].inner)?;
                 let const_handle = module.constants.append(crate::Constant {
@@ -1317,7 +1367,8 @@ impl Parser {
                 lookup_global_expression.insert(name, crate::Expression::Constant(const_handle));
             }
             Token::Word("var") => {
-                let (name, class, ty) = self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
+                let (name, class, ty) =
+                    self.parse_variable_decl(lexer, &mut module.types, &mut module.constants)?;
                 let var_handle = module.global_variables.append(crate::GlobalVariable {
                     name: Some(name.to_owned()),
                     class: match class {
@@ -1334,7 +1385,8 @@ impl Parser {
                     binding: binding.take(),
                     ty,
                 });
-                lookup_global_expression.insert(name, crate::Expression::GlobalVariable(var_handle));
+                lookup_global_expression
+                    .insert(name, crate::Expression::GlobalVariable(var_handle));
             }
             Token::Word("fn") => {
                 self.parse_function_decl(lexer, module, &lookup_global_expression)?;
@@ -1344,7 +1396,7 @@ impl Parser {
                 let export_name = if lexer.skip(Token::Word("as")) {
                     match lexer.next() {
                         Token::String(name) => Some(name),
-                        other => return Err(Error::Unexpected(other))
+                        other => return Err(Error::Unexpected(other)),
                     }
                 } else {
                     None
@@ -1352,7 +1404,8 @@ impl Parser {
                 lexer.expect(Token::Operation('='))?;
                 let fun_ident = lexer.next_ident()?;
                 lexer.expect(Token::Separator(';'))?;
-                let (fun_handle, _) = module.functions
+                let (fun_handle, _) = module
+                    .functions
                     .iter()
                     .find(|(_, fun)| fun.name.as_deref() == Some(fun_ident))
                     .ok_or(Error::UnknownFunction(fun_ident))?;

@@ -1,6 +1,4 @@
-use crate::{
-    arena::{Arena, Handle},
-};
+use crate::arena::{Arena, Handle};
 
 struct Interface<'a> {
     expressions: &'a Arena<crate::Expression>,
@@ -24,7 +22,7 @@ impl<'a> Interface<'a> {
                     self.add_inputs(comp);
                 }
             }
-            E::FunctionParameter(_) => {},
+            E::FunctionParameter(_) => {}
             E::GlobalVariable(handle) => {
                 self.uses[handle.index()] |= crate::GlobalUse::LOAD;
             }
@@ -32,7 +30,11 @@ impl<'a> Interface<'a> {
             E::Load { pointer } => {
                 self.add_inputs(pointer);
             }
-            E::ImageSample { image, sampler, coordinate } => {
+            E::ImageSample {
+                image,
+                sampler,
+                coordinate,
+            } => {
                 self.add_inputs(image);
                 self.add_inputs(sampler);
                 self.add_inputs(coordinate);
@@ -70,26 +72,34 @@ impl<'a> Interface<'a> {
         for statement in block {
             use crate::Statement as S;
             match *statement {
-                S::Empty |
-                S::Break |
-                S::Continue |
-                S::Kill => (),
+                S::Empty | S::Break | S::Continue | S::Kill => (),
                 S::Block(ref b) => {
                     self.collect(b);
                 }
-                S::If { condition, ref accept, ref reject } => {
+                S::If {
+                    condition,
+                    ref accept,
+                    ref reject,
+                } => {
                     self.add_inputs(condition);
                     self.collect(accept);
                     self.collect(reject);
                 }
-                S::Switch { selector, ref cases, ref default } => {
+                S::Switch {
+                    selector,
+                    ref cases,
+                    ref default,
+                } => {
                     self.add_inputs(selector);
                     for &(ref case, _) in cases.values() {
                         self.collect(case);
                     }
                     self.collect(default);
                 }
-                S::Loop { ref body, ref continuing } => {
+                S::Loop {
+                    ref body,
+                    ref continuing,
+                } => {
                     self.collect(body);
                     self.collect(continuing);
                 }

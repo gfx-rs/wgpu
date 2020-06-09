@@ -207,29 +207,38 @@ pub struct UnexpectedConstantTypeError(crate::ConstantInner, crate::TypeInner);
 
 pub fn check_constant_types(
     inner: &crate::ConstantInner,
-    type_inner: &crate::TypeInner
+    type_inner: &crate::TypeInner,
 ) -> Result<(), UnexpectedConstantTypeError> {
     match (inner, type_inner) {
         (
             crate::ConstantInner::Sint(_),
-            crate::TypeInner::Scalar { kind: crate::ScalarKind::Sint, width: _ },
+            crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Sint,
+                width: _,
+            },
         ) => Ok(()),
         (
             crate::ConstantInner::Uint(_),
-            crate::TypeInner::Scalar { kind: crate::ScalarKind::Uint, width: _ },
+            crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Uint,
+                width: _,
+            },
         ) => Ok(()),
         (
             crate::ConstantInner::Float(_),
-            crate::TypeInner::Scalar { kind: crate::ScalarKind::Float, width: _ },
+            crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Float,
+                width: _,
+            },
         ) => Ok(()),
         (
             crate::ConstantInner::Bool(_),
-            crate::TypeInner::Scalar { kind: crate::ScalarKind::Bool, width: _ },
+            crate::TypeInner::Scalar {
+                kind: crate::ScalarKind::Bool,
+                width: _,
+            },
         ) => Ok(()),
-        (
-            crate::ConstantInner::Composite(_inner),
-            _
-        ) => Ok(()), // TODO recursively check composite types
+        (crate::ConstantInner::Composite(_inner), _) => Ok(()), // TODO recursively check composite types
         (other_inner, other_type_inner) => Err(UnexpectedConstantTypeError(
             other_inner.clone(),
             other_type_inner.clone(),

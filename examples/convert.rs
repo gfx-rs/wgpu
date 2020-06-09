@@ -1,4 +1,4 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 use std::{env, fs};
 
 #[derive(Hash, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +27,7 @@ fn main() {
 
     let module = if args.len() <= 1 {
         println!("Call with <input> <output>");
-        return
+        return;
     } else if args[1].ends_with(".spv") {
         let input = fs::read(&args[1]).unwrap();
         naga::front::spirv::parse_u8_slice(&input).unwrap()
@@ -43,8 +43,7 @@ fn main() {
         return;
     }
 
-    let param_path = std::path::PathBuf::from(&args[1])
-        .with_extension("ron");
+    let param_path = std::path::PathBuf::from(&args[1]).with_extension("ron");
     let params = match fs::read_to_string(param_path) {
         Ok(string) => ron::de::from_str(&string).unwrap(),
         Err(_) => Parameters::default(),

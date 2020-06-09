@@ -12,11 +12,21 @@ fn convert_quad() {
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
             msl::BindSource { set: 0, binding: 0 },
-            msl::BindTarget { buffer: None, texture: Some(1), sampler: None, mutable: false },
+            msl::BindTarget {
+                buffer: None,
+                texture: Some(1),
+                sampler: None,
+                mutable: false,
+            },
         );
         binding_map.insert(
             msl::BindSource { set: 0, binding: 1 },
-            msl::BindTarget { buffer: None, texture: None, sampler: Some(1), mutable: false },
+            msl::BindTarget {
+                buffer: None,
+                texture: None,
+                sampler: Some(1),
+                mutable: false,
+            },
         );
         let options = msl::Options {
             binding_map: &binding_map,
@@ -33,15 +43,30 @@ fn convert_boids() {
         let mut binding_map = msl::BindingMap::default();
         binding_map.insert(
             msl::BindSource { set: 0, binding: 0 },
-            msl::BindTarget { buffer: Some(0), texture: None, sampler: None, mutable: false },
+            msl::BindTarget {
+                buffer: Some(0),
+                texture: None,
+                sampler: None,
+                mutable: false,
+            },
         );
         binding_map.insert(
             msl::BindSource { set: 0, binding: 1 },
-            msl::BindTarget { buffer: Some(1), texture: None, sampler: Some(1), mutable: false },
+            msl::BindTarget {
+                buffer: Some(1),
+                texture: None,
+                sampler: Some(1),
+                mutable: false,
+            },
         );
         binding_map.insert(
             msl::BindSource { set: 0, binding: 2 },
-            msl::BindTarget { buffer: Some(2), texture: None, sampler: Some(1), mutable: false },
+            msl::BindTarget {
+                buffer: Some(2),
+                texture: None,
+                sampler: Some(1),
+                mutable: false,
+            },
         );
         let options = msl::Options {
             binding_map: &binding_map,
