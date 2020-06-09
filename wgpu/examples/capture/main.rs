@@ -117,7 +117,8 @@ async fn run() {
     queue.submit(Some(command_buffer));
 
     // Note that we're not calling `.await` here.
-    let buffer_future = output_buffer.map_async(wgpu::MapMode::Read, 0, wgt::BufferSize::WHOLE);
+    let buffer_slice = output_buffer.slice(..);
+    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
@@ -131,7 +132,7 @@ async fn run() {
     }
 
     if let Ok(()) = buffer_future.await {
-        let padded_buffer = output_buffer.get_mapped_range(0, wgt::BufferSize::WHOLE);
+        let padded_buffer = buffer_slice.get_mapped_range();
 
         let mut png_encoder = png::Encoder::new(
             File::create("red.png").unwrap(),

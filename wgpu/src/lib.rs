@@ -375,7 +375,11 @@ impl MapContext {
 
     fn reset(&mut self) {
         self.initial_range = 0..0;
-        self.sub_ranges.clear();
+
+        assert!(
+            self.sub_ranges.is_empty(),
+            "You cannot unmap a buffer that still has accessible mapped views"
+        );
     }
 
     fn add(&mut self, offset: BufferAddress, size: BufferSize) -> BufferAddress {
@@ -395,6 +399,22 @@ impl MapContext {
         self.sub_ranges.push(offset..end);
         end
     }
+
+    fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
+        let end = if size == BufferSize::WHOLE {
+            self.initial_range.end
+        } else {
+            offset + size.0
+        };
+
+        // Switch this out with `Vec::remove_item` once that stabilizes.
+        let index = self
+            .sub_ranges
+            .iter()
+            .position(|r| *r == (offset..end))
+            .expect("unable to remove range from map context");
+        self.sub_ranges.swap_remove(index);
+    }
 }
 
 /// A handle to a GPU-accessible buffer.
@@ -402,9 +422,11 @@ pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
     map_context: Mutex<MapContext>,
+    usage: BufferUsage,
 }
 
 /// A description of what portion of a buffer to use
+#[derive(Copy, Clone)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
     offset: BufferAddress,
@@ -1123,6 +1145,7 @@ impl Device {
             context: Arc::clone(&self.context),
             id: Context::device_create_buffer(&*self.context, &self.id, desc),
             map_context: Mutex::new(map_context),
+            usage: desc.usage,
         }
     }
 
@@ -1190,24 +1213,120 @@ pub enum MapMode {
     Write,
 }
 
+fn range_to_offset_size<S: RangeBounds<BufferAddress>>(bounds: S) -> (BufferAddress, BufferSize) {
+    let offset = match bounds.start_bound() {
+        Bound::Included(&bound) => bound,
+        Bound::Excluded(&bound) => bound + 1,
+        Bound::Unbounded => 0,
+    };
+    let size = match bounds.end_bound() {
+        Bound::Included(&bound) => BufferSize(bound + 1 - offset),
+        Bound::Excluded(&bound) => BufferSize(bound - offset),
+        Bound::Unbounded => BufferSize::WHOLE,
+    };
+
+    (offset, size)
+}
+
+pub struct BufferView<'a> {
+    slice: BufferSlice<'a>,
+    data: &'a [u8],
+}
+
+pub struct BufferViewMut<'a> {
+    slice: BufferSlice<'a>,
+    data: &'a mut [u8],
+    readable: bool,
+}
+
+impl std::ops::Deref for BufferView<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        self.data
+    }
+}
+
+impl std::ops::Deref for BufferViewMut<'_> {
+    type Target = [u8];
+
+    fn deref(&self) -> &[u8] {
+        assert!(
+            self.readable,
+            "Attempting to read a write-only mapping for buffer {:?}",
+            self.slice.buffer.id
+        );
+        self.data
+    }
+}
+
+impl std::ops::DerefMut for BufferViewMut<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.data
+    }
+}
+
+impl Drop for BufferView<'_> {
+    fn drop(&mut self) {
+        self.slice
+            .buffer
+            .map_context
+            .lock()
+            .remove(self.slice.offset, self.slice.size);
+    }
+}
+
+impl Drop for BufferViewMut<'_> {
+    fn drop(&mut self) {
+        self.slice
+            .buffer
+            .map_context
+            .lock()
+            .remove(self.slice.offset, self.slice.size);
+    }
+}
+
 impl Buffer {
     /// Use only a portion of this Buffer for a given operation. Choosing a range with 0 size will
     /// return a slice that extends to the end of the buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
-        let offset = match bounds.start_bound() {
-            Bound::Included(&bound) => bound,
-            Bound::Excluded(&bound) => bound + 1,
-            Bound::Unbounded => 0,
-        };
-        let size = match bounds.end_bound() {
-            Bound::Included(&bound) => BufferSize(bound + 1 - offset),
-            Bound::Excluded(&bound) => BufferSize(bound - offset),
-            Bound::Unbounded => BufferSize::WHOLE,
-        };
+        let (offset, size) = range_to_offset_size(bounds);
         BufferSlice {
             buffer: self,
             offset,
             size,
+        }
+    }
+
+    /// Flushes any pending write operations and unmaps the buffer from host memory.
+    pub fn unmap(&self) {
+        self.map_context.lock().reset();
+        Context::buffer_unmap(&*self.context, &self.id);
+    }
+}
+
+impl BufferSlice<'_> {
+    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> Self {
+        let (sub_offset, sub_size) = range_to_offset_size(bounds);
+        let new_offset = self.offset + sub_offset;
+        let new_size = if sub_size == BufferSize::WHOLE {
+            BufferSize(
+                self.size
+                    .0
+                    .checked_sub(sub_offset)
+                    .expect("underflow when slicing `BufferSlice`"),
+            )
+        } else {
+            assert!(
+                new_offset + sub_size.0 <= self.offset + self.size.0,
+                "offset and size must stay within the bounds of the parent slice"
+            );
+            sub_size
+        };
+        Self {
+            buffer: self.buffer,
+            offset: new_offset,
+            size: new_size,
         }
     }
 
@@ -1222,42 +1341,53 @@ impl Buffer {
     pub fn map_async(
         &self,
         mode: MapMode,
-        offset: BufferAddress,
-        size: BufferSize,
     ) -> impl Future<Output = Result<(), BufferAsyncError>> + Send {
         let end = {
-            let mut mc = self.map_context.lock();
+            let mut mc = self.buffer.map_context.lock();
             assert_eq!(
                 mc.initial_range,
                 0..0,
                 "Buffer {:?} is already mapped",
-                self.id
+                self.buffer.id
             );
-            let end = if size == BufferSize::WHOLE {
+            let end = if self.size == BufferSize::WHOLE {
                 mc.total_size
             } else {
-                offset + size.0
+                self.offset + self.size.0
             };
-            mc.initial_range = offset..end;
+            mc.initial_range = self.offset..end;
             end
         };
-        Context::buffer_map_async(&*self.context, &self.id, mode, offset..end)
+        Context::buffer_map_async(
+            &*self.buffer.context,
+            &self.buffer.id,
+            mode,
+            self.offset..end,
+        )
     }
 
-    pub fn get_mapped_range(&self, offset: BufferAddress, size: BufferSize) -> &[u8] {
-        let end = self.map_context.lock().add(offset, size);
-        Context::buffer_get_mapped_range(&*self.context, &self.id, offset..end)
+    pub fn get_mapped_range(&self) -> BufferView {
+        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+        let data = Context::buffer_get_mapped_range(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.offset..end,
+        );
+        BufferView { slice: *self, data }
     }
 
-    pub fn get_mapped_range_mut(&self, offset: BufferAddress, size: BufferSize) -> &mut [u8] {
-        let end = self.map_context.lock().add(offset, size);
-        Context::buffer_get_mapped_range_mut(&*self.context, &self.id, offset..end)
-    }
-
-    /// Flushes any pending write operations and unmaps the buffer from host memory.
-    pub fn unmap(&self) {
-        self.map_context.lock().reset();
-        Context::buffer_unmap(&*self.context, &self.id);
+    pub fn get_mapped_range_mut(&self) -> BufferViewMut {
+        let end = self.buffer.map_context.lock().add(self.offset, self.size);
+        let data = Context::buffer_get_mapped_range_mut(
+            &*self.buffer.context,
+            &self.buffer.id,
+            self.offset..end,
+        );
+        BufferViewMut {
+            slice: *self,
+            data,
+            readable: self.buffer.usage.contains(BufferUsage::MAP_READ),
+        }
     }
 }
 
