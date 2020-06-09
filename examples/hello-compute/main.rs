@@ -108,7 +108,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     queue.submit(Some(encoder.finish()));
 
     // Note that we're not calling `.await` here.
-    let buffer_future = staging_buffer.map_async(wgpu::MapMode::Read, 0, wgt::BufferSize::WHOLE);
+    let buffer_slice = staging_buffer.slice(..);
+    let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
 
     // Poll the device in a blocking manner so that our future resolves.
     // In an actual application, `device.poll(...)` should
@@ -116,7 +117,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     device.poll(wgpu::Maintain::Wait);
 
     if let Ok(()) = buffer_future.await {
-        let data = staging_buffer.get_mapped_range(0, wgt::BufferSize::WHOLE);
+        let data = buffer_slice.get_mapped_range();
         let result = data
             .chunks_exact(4)
             .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
