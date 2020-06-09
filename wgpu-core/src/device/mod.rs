@@ -37,6 +37,7 @@ mod queue;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
 
+use smallvec::SmallVec;
 #[cfg(feature = "trace")]
 use trace::{Action, Trace};
 
@@ -1083,17 +1084,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_bind_group_layout<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &binding_model::BindGroupLayoutDescriptor,
+        desc: &wgt::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
     ) -> Result<id::BindGroupLayoutId, binding_model::BindGroupLayoutError> {
         let mut token = Token::root();
         let hub = B::hub(self);
-        let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
         let mut entry_map = FastHashMap::default();
-        for entry in entries {
-            if let Err(e) = entry.validate() {
-                return Err(binding_model::BindGroupLayoutError::Entry(entry.binding, e));
-            }
+        for entry in desc.bindings {
             if entry_map.insert(entry.binding, entry.clone()).is_some() {
                 return Err(binding_model::BindGroupLayoutError::ConflictBinding(
                     entry.binding,
@@ -1115,29 +1112,60 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let raw_bindings = entries
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+
+        // Validate the count parameter
+        for binding in desc
+            .bindings
+            .iter()
+            .filter(|binding| binding.count.is_some())
+        {
+            if let Some(count) = binding.count {
+                if count == 0 {
+                    return Err(binding_model::BindGroupLayoutError::ZeroCount);
+                }
+                match binding.ty {
+                    wgt::BindingType::SampledTexture { .. } => {
+                        if !device
+                            .extensions
+                            .contains(wgt::Extensions::TEXTURE_BINDING_ARRAY)
+                        {
+                            return Err(binding_model::BindGroupLayoutError::MissingExtension(
+                                wgt::Extensions::TEXTURE_BINDING_ARRAY,
+                            ));
+                        }
+                    }
+                    _ => return Err(binding_model::BindGroupLayoutError::ArrayUnsupported),
+                }
+            } else {
+                unreachable!() // programming bug
+            }
+        }
+
+        let raw_bindings = desc
+            .bindings
             .iter()
             .map(|binding| hal::pso::DescriptorSetLayoutBinding {
                 binding: binding.binding,
                 ty: conv::map_binding_type(binding),
-                count: 1, //TODO: consolidate
+                count: binding
+                    .count
+                    .map_or(1, |v| v as hal::pso::DescriptorArrayIndex), //TODO: consolidate
                 stage_flags: conv::map_shader_stage_flags(binding.visibility),
                 immutable_samplers: false, // TODO
             })
             .collect::<Vec<_>>(); //TODO: avoid heap allocation
 
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
         let raw = unsafe {
             let mut raw_layout = device
                 .raw
                 .create_descriptor_set_layout(&raw_bindings, &[])
                 .unwrap();
-            if !desc.label.is_null() {
-                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+            if let Some(label) = desc.label {
                 device
                     .raw
-                    .set_descriptor_set_layout_name(&mut raw_layout, &label);
+                    .set_descriptor_set_layout_name(&mut raw_layout, label);
             }
             raw_layout
         };
@@ -1151,7 +1179,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             life_guard: LifeGuard::new(),
             entries: entry_map,
             desc_counts: raw_bindings.iter().cloned().collect(),
-            dynamic_count: entries.iter().filter(|b| b.has_dynamic_offset).count(),
+            dynamic_count: desc
+                .bindings
+                .iter()
+                .filter(|b| b.has_dynamic_offset())
+                .count(),
         };
 
         let id = hub
@@ -1161,8 +1193,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroupLayout {
                 id,
-                label: own_label(&desc.label),
-                entries: entries.to_owned(),
+                label: desc.label.map_or_else(String::new, str::to_string),
+                entries: desc.bindings.to_owned(),
             }),
             None => (),
         };
@@ -1299,8 +1331,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
         let (bind_group_layout_guard, mut token) = hub.bind_group_layouts.read(&mut token);
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
-        let entries = unsafe { slice::from_raw_parts(desc.entries, desc.entries_length) };
-        assert_eq!(entries.len(), bind_group_layout.entries.len(), "Bind group has {} entries and bind group layout has {} entries, they should be the same.", entries.len(), bind_group_layout.entries.len());
+        assert_eq!(desc.bindings.len(), bind_group_layout.entries.len(), "Bind group has {} entries and bind group layout has {} entries, they should be the same.", desc.bindings.len(), bind_group_layout.entries.len());
 
         let desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
@@ -1318,7 +1349,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             desc_sets.pop().unwrap()
         };
 
-        if !desc.label.is_null() {
+        if let Some(..) = desc.label {
             //TODO: https://github.com/gfx-rs/gfx-extras/pull/5
             //unsafe {
             //    let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
@@ -1336,34 +1367,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             //TODO: group writes into contiguous sections
             let mut writes = Vec::new();
-            for b in entries.iter() {
+            for b in desc.bindings {
                 let decl = bind_group_layout
                     .entries
                     .get(&b.binding)
                     .expect("Failed to find binding declaration for binding");
-                let descriptor = match b.resource {
+                let descriptors: SmallVec<[_; 1]> = match b.resource {
                     binding_model::BindingResource::Buffer(ref bb) => {
                         let (alignment, pub_usage, internal_use) = match decl.ty {
-                            binding_model::BindingType::UniformBuffer => (
+                            wgt::BindingType::UniformBuffer { .. } => (
                                 BIND_BUFFER_ALIGNMENT,
                                 wgt::BufferUsage::UNIFORM,
                                 resource::BufferUse::UNIFORM,
                             ),
-                            binding_model::BindingType::StorageBuffer => (
+                            wgt::BindingType::StorageBuffer { readonly, .. } => (
                                 BIND_BUFFER_ALIGNMENT,
                                 wgt::BufferUsage::STORAGE,
-                                resource::BufferUse::STORAGE_STORE,
+                                if readonly {
+                                    resource::BufferUse::STORAGE_STORE
+                                } else {
+                                    resource::BufferUse::STORAGE_LOAD
+                                },
                             ),
-                            binding_model::BindingType::ReadonlyStorageBuffer => (
-                                BIND_BUFFER_ALIGNMENT,
-                                wgt::BufferUsage::STORAGE,
-                                resource::BufferUse::STORAGE_LOAD,
-                            ),
-                            binding_model::BindingType::Sampler
-                            | binding_model::BindingType::ComparisonSampler
-                            | binding_model::BindingType::SampledTexture
-                            | binding_model::BindingType::ReadonlyStorageTexture
-                            | binding_model::BindingType::WriteonlyStorageTexture => {
+                            wgt::BindingType::Sampler { .. }
+                            | wgt::BindingType::StorageTexture { .. }
+                            | wgt::BindingType::SampledTexture { .. } | _ => {
                                 panic!("Mismatched buffer binding type for {:?}. Expected a type of UniformBuffer, StorageBuffer or ReadonlyStorageBuffer", decl)
                             }
                         };
@@ -1402,36 +1430,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 Some(bb.size.0)
                             },
                         };
-                        hal::pso::Descriptor::Buffer(&buffer.raw, sub_range)
+                        SmallVec::from([hal::pso::Descriptor::Buffer(&buffer.raw, sub_range)])
                     }
                     binding_model::BindingResource::Sampler(id) => {
                         match decl.ty {
-                            binding_model::BindingType::Sampler
-                            | binding_model::BindingType::ComparisonSampler => {}
-                            _ => panic!("Mismatched sampler binding type in {:?}. Expected a type of Sampler or ComparisonSampler", decl.ty),
+                            wgt::BindingType::Sampler{ .. } => {}
+                            _ => panic!("Mismatched sampler binding type in {:?}. Expected a type of Sampler", decl.ty),
                         }
 
                         let sampler = used
                             .samplers
                             .use_extend(&*sampler_guard, id, (), ())
                             .unwrap();
-                        hal::pso::Descriptor::Sampler(&sampler.raw)
+                        SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
                     }
                     binding_model::BindingResource::TextureView(id) => {
                         let (pub_usage, internal_use, image_layout) = match decl.ty {
-                            binding_model::BindingType::SampledTexture => (
+                            wgt::BindingType::SampledTexture { .. } => (
                                 wgt::TextureUsage::SAMPLED,
                                 resource::TextureUse::SAMPLED,
                                 hal::image::Layout::ShaderReadOnlyOptimal,
                             ),
-                            binding_model::BindingType::ReadonlyStorageTexture => (
+                            wgt::BindingType::StorageTexture { readonly, .. } => (
                                 wgt::TextureUsage::STORAGE,
-                                resource::TextureUse::STORAGE_LOAD,
-                                hal::image::Layout::General,
-                            ),
-                            binding_model::BindingType::WriteonlyStorageTexture => (
-                                wgt::TextureUsage::STORAGE,
-                                resource::TextureUse::STORAGE_STORE,
+                                if readonly {
+                                    resource::TextureUse::STORAGE_LOAD
+                                } else {
+                                    resource::TextureUse::STORAGE_STORE
+                                },
                                 hal::image::Layout::General,
                             ),
                             _ => panic!("Mismatched texture binding type in {:?}. Expected a type of SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture", decl),
@@ -1463,19 +1489,83 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     pub_usage
                                 );
 
-                                hal::pso::Descriptor::Image(raw, image_layout)
+                                SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
                             }
                             resource::TextureViewInner::SwapChain { .. } => {
                                 panic!("Unable to create a bind group with a swap chain image")
                             }
                         }
                     }
+                    binding_model::BindingResource::TextureViewArray(ref bindings_array) => {
+                        assert!(device.extensions.contains(wgt::Extensions::TEXTURE_BINDING_ARRAY), "Extension TEXTURE_BINDING_ARRAY must be enabled to use TextureViewArrays in a bind group");
+
+                        if let Some(count) = decl.count {
+                            assert_eq!(
+                                count as usize,
+                                bindings_array.len(),
+                                "Binding count declared with {} items, but {} items were provided",
+                                count,
+                                bindings_array.len()
+                            );
+                        } else {
+                            panic!(
+                                "Binding declared as a single item, but bind group is using it as an array",
+                            );
+                        }
+
+                        let (pub_usage, internal_use, image_layout) = match decl.ty {
+                            wgt::BindingType::SampledTexture { .. } => (
+                                wgt::TextureUsage::SAMPLED,
+                                resource::TextureUse::SAMPLED,
+                                hal::image::Layout::ShaderReadOnlyOptimal,
+                            ),
+                            _ => panic!("Mismatched texture binding type in {:?}. Expected a type of SampledTextureArray", decl),
+                        };
+                        bindings_array
+                            .iter()
+                            .map(|id| {
+                                let view = used
+                                    .views
+                                    .use_extend(&*texture_view_guard, *id, (), ())
+                                    .unwrap();
+                                match view.inner {
+                                    resource::TextureViewInner::Native {
+                                        ref raw,
+                                        ref source_id,
+                                    } => {
+                                        // Careful here: the texture may no longer have its own ref count,
+                                        // if it was deleted by the user.
+                                        let texture = &texture_guard[source_id.value];
+                                        used.textures
+                                            .change_extend(
+                                                source_id.value,
+                                                &source_id.ref_count,
+                                                view.range.clone(),
+                                                internal_use,
+                                            )
+                                            .unwrap();
+                                        assert!(
+                                            texture.usage.contains(pub_usage),
+                                            "Texture usage {:?} must contain usage flag(s) {:?}",
+                                            texture.usage,
+                                            pub_usage
+                                        );
+
+                                        hal::pso::Descriptor::Image(raw, image_layout)
+                                    }
+                                    resource::TextureViewInner::SwapChain { .. } => panic!(
+                                        "Unable to create a bind group with a swap chain image"
+                                    ),
+                                }
+                            })
+                            .collect()
+                    }
                 };
                 writes.alloc().init(hal::pso::DescriptorSetWrite {
                     set: desc_set.raw(),
                     binding: b.binding,
                     array_offset: 0, //TODO
-                    descriptors: iter::once(descriptor),
+                    descriptors,
                 });
             }
 
@@ -1509,9 +1599,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroup {
                 id,
-                label: own_label(&desc.label),
+                label: desc.label.map_or_else(String::new, str::to_string),
                 layout_id: desc.layout,
-                entries: entries
+                entries: desc
+                    .bindings
                     .iter()
                     .map(|entry| {
                         let res = match entry.resource {
@@ -1527,6 +1618,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                             binding_model::BindingResource::Sampler(id) => {
                                 trace::BindingResource::Sampler(id)
+                            }
+                            binding_model::BindingResource::TextureViewArray(ref id_array) => {
+                                trace::BindingResource::TextureViewArray(id_array.to_vec())
                             }
                         };
                         (entry.binding, res)

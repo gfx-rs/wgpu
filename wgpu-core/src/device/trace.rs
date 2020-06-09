@@ -27,6 +27,7 @@ pub enum BindingResource {
     },
     Sampler(id::SamplerId),
     TextureView(id::TextureViewId),
+    TextureViewArray(Vec<id::TextureViewId>),
 }
 
 #[derive(Debug)]
@@ -132,7 +133,7 @@ pub enum Action {
     CreateBindGroupLayout {
         id: id::BindGroupLayoutId,
         label: String,
-        entries: Vec<crate::binding_model::BindGroupLayoutEntry>,
+        entries: Vec<wgt::BindGroupLayoutEntry>,
     },
     DestroyBindGroupLayout(id::BindGroupLayoutId),
     CreatePipelineLayout {

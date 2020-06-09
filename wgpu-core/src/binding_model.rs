@@ -17,83 +17,17 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::borrow::Borrow;
 
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub enum BindingType {
-    UniformBuffer = 0,
-    StorageBuffer = 1,
-    ReadonlyStorageBuffer = 2,
-    Sampler = 3,
-    ComparisonSampler = 4,
-    SampledTexture = 5,
-    ReadonlyStorageTexture = 6,
-    WriteonlyStorageTexture = 7,
-}
-
-#[repr(C)]
-#[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupLayoutEntry {
-    pub binding: u32,
-    pub visibility: wgt::ShaderStage,
-    pub ty: BindingType,
-    pub multisampled: bool,
-    pub has_dynamic_offset: bool,
-    pub view_dimension: wgt::TextureViewDimension,
-    pub texture_component_type: wgt::TextureComponentType,
-    pub storage_texture_format: wgt::TextureFormat,
-}
-
-#[derive(Clone, Debug)]
-pub enum BindGroupLayoutEntryError {
-    NoVisibility,
-    UnexpectedHasDynamicOffset,
-    UnexpectedMultisampled,
-}
-
-impl BindGroupLayoutEntry {
-    pub(crate) fn validate(&self) -> Result<(), BindGroupLayoutEntryError> {
-        if self.visibility.is_empty() {
-            return Err(BindGroupLayoutEntryError::NoVisibility);
-        }
-        match self.ty {
-            BindingType::UniformBuffer | BindingType::StorageBuffer => {}
-            _ => {
-                if self.has_dynamic_offset {
-                    return Err(BindGroupLayoutEntryError::UnexpectedHasDynamicOffset);
-                }
-            }
-        }
-        match self.ty {
-            BindingType::SampledTexture => {}
-            _ => {
-                if self.multisampled {
-                    return Err(BindGroupLayoutEntryError::UnexpectedMultisampled);
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct BindGroupLayoutDescriptor {
-    pub label: *const std::os::raw::c_char,
-    pub entries: *const BindGroupLayoutEntry,
-    pub entries_length: usize,
-}
-
 #[derive(Clone, Debug)]
 pub enum BindGroupLayoutError {
     ConflictBinding(u32),
-    Entry(u32, BindGroupLayoutEntryError),
+    MissingExtension(wgt::Extensions),
+    /// Arrays of bindings can't be 0 elements long
+    ZeroCount,
+    /// Arrays of bindings unsupported for this type of binding
+    ArrayUnsupported,
 }
 
-pub(crate) type BindEntryMap = FastHashMap<u32, BindGroupLayoutEntry>;
+pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
 #[derive(Debug)]
 pub struct BindGroupLayout<B: hal::Backend> {
@@ -135,32 +69,28 @@ pub struct BufferBinding {
     pub size: wgt::BufferSize,
 }
 
-#[repr(C)]
+// Note: Duplicated in wgpu-rs as BindingResource
 #[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub enum BindingResource {
+pub enum BindingResource<'a> {
     Buffer(BufferBinding),
     Sampler(SamplerId),
     TextureView(TextureViewId),
+    TextureViewArray(&'a [TextureViewId]),
 }
 
-#[repr(C)]
+// Note: Duplicated in wgpu-rs as Binding
 #[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupEntry {
+pub struct BindGroupEntry<'a> {
     pub binding: u32,
-    pub resource: BindingResource,
+    pub resource: BindingResource<'a>,
 }
 
-#[repr(C)]
+// Note: Duplicated in wgpu-rs as BindGroupDescriptor
 #[derive(Debug)]
-pub struct BindGroupDescriptor {
-    pub label: *const std::os::raw::c_char,
+pub struct BindGroupDescriptor<'a> {
+    pub label: Option<&'a str>,
     pub layout: BindGroupLayoutId,
-    pub entries: *const BindGroupEntry,
-    pub entries_length: usize,
+    pub bindings: &'a [BindGroupEntry<'a>],
 }
 
 #[derive(Debug)]

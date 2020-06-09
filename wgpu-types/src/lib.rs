@@ -134,6 +134,12 @@ bitflags::bitflags! {
     pub struct Extensions: u64 {
         /// Allow anisotropic filtering in samplers.
         ///
+        /// Supported platforms:
+        /// - OpenGL 4.6+ (or 1.2+ with widespread GL_EXT_texture_filter_anisotropic)
+        /// - DX11/12
+        /// - Metal
+        /// - Vulkan
+        ///
         /// This is a native only extension. Support is planned to be added to webgpu,
         /// but it is not yet implemented.
         ///
@@ -146,8 +152,25 @@ bitflags::bitflags! {
         /// on a system that doesn't, this can severely hinder performance. Only use if you understand
         /// the consequences.
         ///
+        /// Supported platforms:
+        /// - All
+        ///
         /// This is a native only extension.
         const MAPPABLE_PRIMARY_BUFFERS = 0x0000_0000_0002_0000;
+        /// Allows the user to create uniform arrays of textures in shaders:
+        ///
+        /// eg. `uniform texture2D textures[10]`.
+        ///
+        /// This extension only allows them to exist and to be indexed by compile time constant
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan
+        ///
+        /// This is a native only extension.
+        const TEXTURE_BINDING_ARRAY = 0x0000_0000_0004_0000;
         /// Extensions which are part of the upstream webgpu standard
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Extensions that require activating the unsafe extension flag
@@ -1125,6 +1148,155 @@ pub struct TextureDataLayout {
     pub offset: BufferAddress,
     pub bytes_per_row: u32,
     pub rows_per_image: u32,
+}
+
+/// Specific type of a binding.
+/// WebGPU spec: https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry
+#[non_exhaustive]
+#[derive(Clone, Debug, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub enum BindingType {
+    /// A buffer for uniform values.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(std140, binding = 0)
+    /// uniform Globals {
+    ///     vec2 aUniform;
+    ///     vec2 anotherUniform;
+    /// };
+    /// ```
+    UniformBuffer {
+        /// Indicates that the binding has a dynamic offset.
+        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
+        dynamic: bool,
+    },
+    /// A storage buffer.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout (set=0, binding=0) buffer myStorageBuffer {
+    ///     vec4 myElement[];
+    /// };
+    /// ```
+    StorageBuffer {
+        /// Indicates that the binding has a dynamic offset.
+        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
+        dynamic: bool,
+        /// The buffer can only be read in the shader and it must be annotated with `readonly`.
+        ///
+        /// Example GLSL syntax:
+        /// ```cpp,ignore
+        /// layout (set=0, binding=0) readonly buffer myStorageBuffer {
+        ///     vec4 myElement[];
+        /// };
+        /// ```
+        readonly: bool,
+    },
+    /// A sampler that can be used to sample a texture.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform sampler s;
+    /// ```
+    Sampler {
+        /// Use as a comparison sampler instead of a normal sampler.
+        /// For more info take a look at the analogous functionality in OpenGL: https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode.
+        comparison: bool,
+    },
+    /// A texture.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(binding = 0)
+    /// uniform texture2D t;
+    /// ```
+    SampledTexture {
+        /// Dimension of the texture view that is going to be sampled.
+        dimension: TextureViewDimension,
+        /// Component type of the texture.
+        /// This must be compatible with the format of the texture.
+        component_type: TextureComponentType,
+        /// True if the texture has a sample count greater than 1.
+        multisampled: bool,
+    },
+    /// A storage texture.
+    ///
+    /// Example GLSL syntax:
+    /// ```cpp,ignore
+    /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
+    /// ```
+    /// Note that the texture format must be specified in the shader as well.
+    /// A list of valid formats can be found in the specification here: https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers
+    StorageTexture {
+        /// Dimension of the texture view that is going to be sampled.
+        dimension: TextureViewDimension,
+        /// Component type of the texture.
+        /// This must be compatible with the format of the texture.
+        component_type: TextureComponentType,
+        /// Format of the texture.
+        format: TextureFormat,
+        /// The texture can only be read in the shader and it must be annotated with `readonly`.
+        ///
+        /// Example GLSL syntax:
+        /// ```cpp,ignore
+        /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
+        /// ```
+        readonly: bool,
+    },
+}
+
+/// A description of a single binding inside a bind group.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BindGroupLayoutEntry {
+    pub binding: u32,
+    pub visibility: ShaderStage,
+    pub ty: BindingType,
+    /// If this value is Some, indicates this entry is an array. Array size must be 1 or greater.
+    ///
+    /// If this value is Some and `ty` is `BindingType::SampledTexture`, the TEXTURE_BINDING_ARRAY extension must be enabled.
+    ///
+    /// If this value is Some and `ty` is any other variant, bind group creation will fail.
+    pub count: Option<u32>,
+    /// This struct should be partially initalized using the default method, but binding, visibility,
+    /// and ty should be set.
+    pub _non_exhaustive: NonExhaustive,
+}
+
+impl Default for BindGroupLayoutEntry {
+    fn default() -> Self {
+        Self {
+            binding: 0,
+            visibility: ShaderStage::NONE,
+            ty: BindingType::UniformBuffer { dynamic: false },
+            count: None,
+            _non_exhaustive: unsafe { NonExhaustive::new() },
+        }
+    }
+}
+
+impl BindGroupLayoutEntry {
+    pub fn has_dynamic_offset(&self) -> bool {
+        match self.ty {
+            BindingType::UniformBuffer { dynamic, .. }
+            | BindingType::StorageBuffer { dynamic, .. } => dynamic,
+            _ => false,
+        }
+    }
+}
+
+/// A description of a bind group layout.
+#[derive(Clone, Debug)]
+pub struct BindGroupLayoutDescriptor<'a> {
+    /// An optional label to apply to the bind group layout.
+    /// This can be useful for debugging and performance analysis.
+    pub label: Option<&'a str>,
+
+    pub bindings: &'a [BindGroupLayoutEntry],
 }
 
 /// This type allows us to make the serialized representation of a BufferSize more human-readable

@@ -2,11 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{
-    binding_model::{BindEntryMap, BindGroupLayoutEntry, BindingType},
-    FastHashMap,
-};
+use crate::{binding_model::BindEntryMap, FastHashMap};
 use spirv_headers as spirv;
+use wgt::{BindGroupLayoutEntry, BindingType};
 
 #[derive(Clone, Debug)]
 pub enum BindingError {
@@ -67,21 +65,41 @@ fn check_binding(
     }
     let allowed_usage = match *ty_inner {
         naga::TypeInner::Struct { .. } => match entry.ty {
-            BindingType::UniformBuffer => naga::GlobalUse::LOAD,
-            BindingType::StorageBuffer => naga::GlobalUse::all(),
-            BindingType::ReadonlyStorageBuffer => naga::GlobalUse::LOAD,
+            BindingType::UniformBuffer { .. } => naga::GlobalUse::LOAD,
+            BindingType::StorageBuffer { readonly, .. } => {
+                if readonly {
+                    naga::GlobalUse::LOAD
+                } else {
+                    naga::GlobalUse::all()
+                }
+            }
             _ => return Err(BindingError::WrongType),
         },
         naga::TypeInner::Sampler => match entry.ty {
-            BindingType::Sampler | BindingType::ComparisonSampler => naga::GlobalUse::empty(),
+            BindingType::Sampler { .. } => naga::GlobalUse::empty(),
             _ => return Err(BindingError::WrongType),
         },
         naga::TypeInner::Image { base, dim, flags } => {
-            if entry.multisampled != flags.contains(naga::ImageFlags::MULTISAMPLED) {
-                return Err(BindingError::WrongTextureMultisampled);
+            if flags.contains(naga::ImageFlags::MULTISAMPLED) {
+                match entry.ty {
+                    BindingType::SampledTexture {
+                        multisampled: true, ..
+                    } => {}
+                    _ => return Err(BindingError::WrongTextureMultisampled),
+                }
             }
+            let view_dimension = match entry.ty {
+                BindingType::SampledTexture { dimension, .. }
+                | BindingType::StorageTexture { dimension, .. } => dimension,
+                _ => {
+                    return Err(BindingError::WrongTextureViewDimension {
+                        dim,
+                        is_array: true,
+                    })
+                }
+            };
             if flags.contains(naga::ImageFlags::ARRAYED) {
-                match (dim, entry.view_dimension) {
+                match (dim, view_dimension) {
                     (spirv::Dim::Dim2D, wgt::TextureViewDimension::D2Array) => (),
                     (spirv::Dim::DimCube, wgt::TextureViewDimension::CubeArray) => (),
                     _ => {
@@ -92,7 +110,7 @@ fn check_binding(
                     }
                 }
             } else {
-                match (dim, entry.view_dimension) {
+                match (dim, view_dimension) {
                     (spirv::Dim::Dim1D, wgt::TextureViewDimension::D1) => (),
                     (spirv::Dim::Dim2D, wgt::TextureViewDimension::D2) => (),
                     (spirv::Dim::Dim3D, wgt::TextureViewDimension::D3) => (),
@@ -106,8 +124,8 @@ fn check_binding(
                 }
             }
             let (allowed_usage, is_sampled) = match entry.ty {
-                BindingType::SampledTexture => {
-                    let expected_scalar_kind = match entry.texture_component_type {
+                BindingType::SampledTexture { component_type, .. } => {
+                    let expected_scalar_kind = match component_type {
                         wgt::TextureComponentType::Float => naga::ScalarKind::Float,
                         wgt::TextureComponentType::Sint => naga::ScalarKind::Sint,
                         wgt::TextureComponentType::Uint => naga::ScalarKind::Uint,
@@ -124,11 +142,14 @@ fn check_binding(
                     };
                     (naga::GlobalUse::LOAD, true)
                 }
-                BindingType::ReadonlyStorageTexture => {
-                    //TODO: check entry.storage_texture_format
-                    (naga::GlobalUse::LOAD, false)
+                BindingType::StorageTexture { readonly, .. } => {
+                    if readonly {
+                        //TODO: check entry.storage_texture_format
+                        (naga::GlobalUse::LOAD, false)
+                    } else {
+                        (naga::GlobalUse::STORE, false)
+                    }
                 }
-                BindingType::WriteonlyStorageTexture => (naga::GlobalUse::STORE, false),
                 _ => return Err(BindingError::WrongType),
             };
             if is_sampled != flags.contains(naga::ImageFlags::SAMPLED) {
