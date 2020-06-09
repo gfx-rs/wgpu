@@ -324,7 +324,9 @@ impl<B: GfxBackend> Device<B> {
             } else if (Bu::MAP_READ | Bu::COPY_DST).contains(desc.usage) {
                 MemoryUsage::Staging { read_back: true }
             } else {
-                let is_native_only = false;
+                let is_native_only = self
+                    .extensions
+                    .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS);
                 assert!(
                     is_native_only,
                     "MAP usage can only be combined with the opposite COPY, requested {:?}",

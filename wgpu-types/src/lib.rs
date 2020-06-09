@@ -132,11 +132,22 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct Extensions: u64 {
+        /// Allow anisotropic filtering in samplers.
+        ///
         /// This is a native only extension. Support is planned to be added to webgpu,
         /// but it is not yet implemented.
         ///
         /// https://github.com/gpuweb/gpuweb/issues/696
         const ANISOTROPIC_FILTERING = 0x0000_0000_0001_0000;
+        /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
+        /// COPY_DST and COPY_SRC respectively. This removes this requirement.
+        ///
+        /// This is only beneficial on systems that share memory between CPU and GPU. If enabled
+        /// on a system that doesn't, this can severely hinder performance. Only use if you understand
+        /// the consequences.
+        ///
+        /// This is a native only extension.
+        const MAPPABLE_PRIMARY_BUFFERS = 0x0000_0000_0002_0000;
         /// Extensions which are part of the upstream webgpu standard
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Extensions that require activating the unsafe extension flag
