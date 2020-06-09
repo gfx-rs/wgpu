@@ -1794,7 +1794,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_command_encoder<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::CommandEncoderDescriptor,
+        desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
     ) -> id::CommandEncoderId {
         let hub = B::hub(self);
@@ -1851,12 +1851,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.command_encoder_destroy::<B>(command_buffer_id)
     }
 
-    pub fn device_create_render_bundle_encoder<B: GfxBackend>(
+    pub fn device_create_render_bundle_encoder(
         &self,
         device_id: id::DeviceId,
-        desc: &command::RenderBundleEncoderDescriptor,
+        desc: &wgt::RenderBundleEncoderDescriptor,
     ) -> id::RenderBundleEncoderId {
-        let encoder = command::RenderBundleEncoder::new(desc, device_id, B::VARIANT);
+        let encoder = command::RenderBundleEncoder::new(desc, device_id);
         Box::into_raw(Box::new(encoder))
     }
 

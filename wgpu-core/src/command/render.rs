@@ -116,6 +116,9 @@ pub enum RenderCommand {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     },
+    /// Resets all the state that can be set by a render bundle.
+    /// Also has to be the last command in a render bundle.
+    ResetBundleState,
     End,
 }
 
@@ -233,6 +236,11 @@ impl IndexState {
             None => 0,
         }
     }
+
+    fn reset(&mut self) {
+        self.bound_buffer_view = None;
+        self.limit = 0;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -272,6 +280,12 @@ impl VertexState {
             }
         }
     }
+
+    fn reset(&mut self) {
+        self.inputs.clear();
+        self.vertex_limit = 0;
+        self.instance_limit = 0;
+    }
 }
 
 #[derive(Debug)]
@@ -304,6 +318,14 @@ impl State {
             return Err(DrawError::MissingStencilReference);
         }
         Ok(())
+    }
+
+    /// Reset the `RenderBundle`-related states.
+    fn reset_bundle(&mut self) {
+        self.binder.reset();
+        self.pipeline = OptionalState::Required;
+        self.index.reset();
+        self.vertex.reset();
     }
 }
 
@@ -1262,6 +1284,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                     }
                 }
+                RenderCommand::ResetBundleState => {
+                    state.reset_bundle();
+                }
                 RenderCommand::End => break,
             }
         }
@@ -1323,22 +1348,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn wgpu_render_pass_execute_bundles<B: GfxBackend>(
-        &mut self,
+        &self,
         pass: &mut RawPass<id::CommandEncoderId>,
         render_bundle_ids: &[id::RenderBundleId],
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
 
+        unsafe { pass.encode(&RenderCommand::ResetBundleState) };
+
         let (_, mut token) = hub.devices.read(&mut token);
         let (bundle_guard, _) = hub.render_bundles.read(&mut token);
         for &bundle_id in render_bundle_ids {
             let bundle = &bundle_guard[bundle_id];
-            //TODO: check the `bundle.context`
+            //TODO: check the `bundle.context`? It will be checked
+            // when the render pass finishes.
             let size = bundle.raw.size();
             unsafe {
                 pass.ensure_extra_size(size);
                 std::ptr::copy_nonoverlapping(bundle.raw.base, pass.data, size);
+                pass.data = pass.data.offset(size as isize);
             }
         }
     }

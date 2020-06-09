@@ -661,3 +661,9 @@ impl GfxBackend for backend::Dx11 {
         &mut surface.dx11
     }
 }
+
+#[cfg(test)]
+fn _test_send_sync(global: &Global<IdentityManagerFactory>) {
+    fn test_internal<T: Send + Sync>(_: T) {}
+    test_internal(global)
+}

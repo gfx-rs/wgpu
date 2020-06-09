@@ -145,6 +145,11 @@ impl Binder {
         }
     }
 
+    pub(crate) fn reset(&mut self) {
+        self.pipeline_layout_id = None;
+        self.entries.clear();
+    }
+
     pub(crate) fn reset_expectations(&mut self, length: usize) {
         for entry in self.entries[length..].iter_mut() {
             entry.expected_layout_id = None;

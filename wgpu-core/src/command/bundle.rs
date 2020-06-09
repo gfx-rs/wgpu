@@ -5,7 +5,7 @@
 use crate::{
     command::{RawPass, RenderCommand},
     conv,
-    device::RenderPassContext,
+    device::{Label, RenderPassContext},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id,
     resource::BufferUse,
@@ -13,29 +13,17 @@ use crate::{
     LifeGuard, RefCount,
 };
 use arrayvec::ArrayVec;
-use peek_poke::Peek;
-
-#[derive(Debug)]
-pub struct RenderBundleEncoderDescriptor<'a> {
-    pub color_formats: &'a [wgt::TextureFormat],
-    pub depth_stencil_format: Option<wgt::TextureFormat>,
-    pub sample_count: u32,
-}
+use peek_poke::{Peek, Poke};
 
 #[derive(Debug)]
 pub struct RenderBundleEncoder {
     pub(crate) raw: RawPass<id::DeviceId>,
     pub(crate) context: RenderPassContext,
     pub(crate) sample_count: u8,
-    pub(crate) backend: wgt::Backend,
 }
 
 impl RenderBundleEncoder {
-    pub fn new(
-        desc: &RenderBundleEncoderDescriptor,
-        device_id: id::DeviceId,
-        backend: wgt::Backend,
-    ) -> Self {
+    pub fn new(desc: &wgt::RenderBundleEncoderDescriptor, device_id: id::DeviceId) -> Self {
         RenderBundleEncoder {
             raw: RawPass::from_vec::<RenderCommand>(Vec::with_capacity(1), device_id),
             context: RenderPassContext {
@@ -45,11 +33,14 @@ impl RenderBundleEncoder {
             },
             sample_count: {
                 let sc = desc.sample_count;
-                assert!(sc == 0 || sc > 32 || !conv::is_power_of_two(sc));
+                assert!(sc != 0 && sc <= 32 && conv::is_power_of_two(sc));
                 sc as u8
             },
-            backend,
         }
+    }
+
+    pub fn parent(&self) -> id::DeviceId {
+        self.raw.parent
     }
 
     pub fn destroy(mut self) {
@@ -72,23 +63,28 @@ pub struct RenderBundle {
     pub(crate) life_guard: LifeGuard,
 }
 
+unsafe impl Send for RenderBundle {}
+unsafe impl Sync for RenderBundle {}
+
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn render_bundle_encoder_finish<B: GfxBackend>(
         &self,
-        bundle_encoder: RenderBundleEncoder,
-        _desc: &wgt::RenderBundleDescriptor,
+        mut bundle_encoder: RenderBundleEncoder,
+        _desc: &wgt::RenderBundleDescriptor<Label>, //TODO
         id_in: Input<G, id::RenderBundleId>,
     ) -> id::RenderBundleId {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
+        unsafe { bundle_encoder.raw.finish(&RenderCommand::ResetBundleState) };
+
         let render_bundle = {
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
             let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
             let (buffer_guard, _) = hub.buffers.read(&mut token);
 
-            let mut trackers = TrackerSet::new(bundle_encoder.backend);
+            let mut trackers = TrackerSet::new(bundle_encoder.parent().backend());
 
             // populate the trackers and validate the commands
             #[allow(trivial_casts)] // erroneous warning!
@@ -101,10 +97,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 first_vertex: 0,
                 first_instance: 0,
             };
-            while peeker != raw_data_end {
+            loop {
+                assert!(
+                    unsafe { peeker.add(RenderCommand::max_size()) <= raw_data_end },
+                    "RenderCommand (size {}) is too big to fit within raw_data",
+                    RenderCommand::max_size(),
+                );
                 peeker = unsafe { RenderCommand::peek_from(peeker, &mut command) };
-                //TODO: find a safer way to enforce this without the `End` command
-                assert!(peeker <= raw_data_end);
+
                 match command {
                     RenderCommand::SetBindGroup {
                         index: _,
@@ -186,6 +186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .unwrap();
                         assert!(buffer.usage.contains(wgt::BufferUsage::INDIRECT), "An invalid draw(Indexed)Indirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
                     }
+                    RenderCommand::ResetBundleState => break,
                     RenderCommand::SetBlendColor(_)
                     | RenderCommand::SetStencilReference(_)
                     | RenderCommand::SetViewport { .. }

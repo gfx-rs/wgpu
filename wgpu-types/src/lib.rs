@@ -8,7 +8,7 @@ use peek_poke::PeekPoke;
 use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
-use std::{io, ptr, slice};
+use std::{io, slice};
 
 /// Buffer-Texture copies on command encoders have to have the `bytes_per_row`
 /// aligned to this number.
@@ -715,17 +715,16 @@ impl<L> BufferDescriptor<L> {
 }
 
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct CommandEncoderDescriptor {
-    // MSVC doesn't allow zero-sized structs
-    // We can remove this when we actually have a field
-    // pub todo: u32,
-    pub label: *const std::os::raw::c_char,
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct CommandEncoderDescriptor<L> {
+    pub label: L,
 }
 
-impl Default for CommandEncoderDescriptor {
-    fn default() -> CommandEncoderDescriptor {
-        CommandEncoderDescriptor { label: ptr::null() }
+impl<L> CommandEncoderDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandEncoderDescriptor<K> {
+        CommandEncoderDescriptor {
+            label: fun(&self.label),
+        }
     }
 }
 
@@ -1083,12 +1082,28 @@ pub struct CommandBufferDescriptor {
     pub todo: u32,
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct RenderBundleEncoderDescriptor<'a> {
+    pub label: Option<&'a str>,
+    pub color_formats: &'a [TextureFormat],
+    pub depth_stencil_format: Option<TextureFormat>,
+    pub sample_count: u32,
+}
+
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct RenderBundleDescriptor {
-    pub todo: u32,
+pub struct RenderBundleDescriptor<L> {
+    pub label: L,
+}
+
+impl<L> RenderBundleDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> RenderBundleDescriptor<K> {
+        RenderBundleDescriptor {
+            label: fun(&self.label),
+        }
+    }
 }
 
 #[repr(C)]
