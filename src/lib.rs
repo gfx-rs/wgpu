@@ -12,7 +12,6 @@ use std::{
     hash::BuildHasherDefault,
 };
 
-
 pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
 pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
@@ -66,7 +65,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Type {
     pub name: Option<String>,
     pub inner: TypeInner,
@@ -117,7 +116,7 @@ bitflags::bitflags! {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GlobalVariable {
     pub name: Option<String>,
     pub class: spirv::StorageClass,

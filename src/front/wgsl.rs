@@ -321,7 +321,7 @@ impl<'a> ExpressionContext<'a, '_, '_> {
 
     fn resolve_type(&mut self, handle: Handle<crate::Expression>) -> Result<Handle<crate::Type>, Error<'a>> {
         self.typifier
-            .resolve(handle, self.expressions, self.types, self.constants, self.global_vars, self.local_vars)
+            .resolve(handle, self.expressions, self.types, self.constants, self.global_vars, self.local_vars,&Arena::new(),&FastHashMap::default())
             .map_err(Error::InvalidResolve)
     }
 
