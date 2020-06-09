@@ -338,7 +338,7 @@ impl<B: GfxBackend> Device<B> {
             }
         };
 
-        let mut buffer = unsafe { self.raw.create_buffer(desc.size, usage).unwrap() };
+        let mut buffer = unsafe { self.raw.create_buffer(desc.size.max(1), usage).unwrap() };
         if !desc.label.is_null() {
             unsafe {
                 let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
