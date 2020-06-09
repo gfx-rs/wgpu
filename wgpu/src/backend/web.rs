@@ -84,7 +84,7 @@ impl crate::ComputePassInner<Context> for ComputePass {
     }
 }
 
-impl crate::RenderPassInner<Context> for RenderPass {
+impl crate::RenderInner<Context> for RenderPass {
     fn set_pipeline(&mut self, pipeline: &Sendable<web_sys::GpuRenderPipeline>) {
         self.0.set_pipeline(&pipeline.0);
     }
@@ -124,28 +124,6 @@ impl crate::RenderPassInner<Context> for RenderPass {
         self.0
             .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, size.0 as f64);
     }
-    fn set_blend_color(&mut self, color: wgt::Color) {
-        self.0
-            .set_blend_color_with_gpu_color_dict(&map_color(color));
-    }
-    fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
-        self.0.set_scissor_rect(x, y, width, height);
-    }
-    fn set_viewport(
-        &mut self,
-        x: f32,
-        y: f32,
-        width: f32,
-        height: f32,
-        min_depth: f32,
-        max_depth: f32,
-    ) {
-        self.0
-            .set_viewport(x, y, width, height, min_depth, max_depth);
-    }
-    fn set_stencil_reference(&mut self, reference: u32) {
-        self.0.set_stencil_reference(reference);
-    }
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         self.0
             .draw_with_instance_count_and_first_vertex_and_first_instance(
@@ -180,6 +158,34 @@ impl crate::RenderPassInner<Context> for RenderPass {
     ) {
         self.0
             .draw_indexed_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
+    }
+}
+
+impl crate::RenderPassInner<Context> for RenderPass {
+    fn set_blend_color(&mut self, color: wgt::Color) {
+        self.0
+            .set_blend_color_with_gpu_color_dict(&map_color(color));
+    }
+    fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
+        self.0.set_scissor_rect(x, y, width, height);
+    }
+    fn set_viewport(
+        &mut self,
+        x: f32,
+        y: f32,
+        width: f32,
+        height: f32,
+        min_depth: f32,
+        max_depth: f32,
+    ) {
+        self.0
+            .set_viewport(x, y, width, height, min_depth, max_depth);
+    }
+    fn set_stencil_reference(&mut self, reference: u32) {
+        self.0.set_stencil_reference(reference);
+    }
+    fn execute_bundles<'a, I: Iterator<Item = &'a ()>>(&mut self, render_bundles: I) {
+        unimplemented!()
     }
 }
 
@@ -615,10 +621,12 @@ impl crate::Context for Context {
     type ComputePipelineId = Sendable<web_sys::GpuComputePipeline>;
     type CommandEncoderId = web_sys::GpuCommandEncoder;
     type ComputePassId = ComputePass;
+    type RenderPassId = RenderPass;
     type CommandBufferId = Sendable<web_sys::GpuCommandBuffer>;
+    type RenderBundleEncoderId = RenderPass; //web_sys::GpuRenderBundleEncoder;
+    type RenderBundleId = (); //web_sys::GpuRenderBundle;
     type SurfaceId = Sendable<web_sys::GpuCanvasContext>;
     type SwapChainId = Sendable<web_sys::GpuSwapChain>;
-    type RenderPassId = RenderPass;
 
     type SwapChainOutputDetail = SwapChainOutputDetail;
 
@@ -1027,6 +1035,14 @@ impl crate::Context for Context {
             .create_command_encoder_with_descriptor(&mapped_desc)
     }
 
+    fn device_create_render_bundle_encoder(
+        &self,
+        _device: &Self::DeviceId,
+        _desc: &wgt::RenderBundleEncoderDescriptor,
+    ) -> Self::RenderBundleEncoderId {
+        unimplemented!()
+    }
+
     fn device_drop(&self, _device: &Self::DeviceId) {
         // Device is dropped automatically
     }
@@ -1117,40 +1133,43 @@ impl crate::Context for Context {
     }
 
     fn texture_drop(&self, _texture: &Self::TextureId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn texture_view_drop(&self, _texture_view: &Self::TextureViewId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn sampler_drop(&self, _sampler: &Self::SamplerId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn buffer_drop(&self, _buffer: &Self::BufferId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn bind_group_drop(&self, _bind_group: &Self::BindGroupId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn bind_group_layout_drop(&self, _bind_group_layout: &Self::BindGroupLayoutId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn pipeline_layout_drop(&self, _pipeline_layout: &Self::PipelineLayoutId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn shader_module_drop(&self, _shader_module: &Self::ShaderModuleId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn command_buffer_drop(&self, _command_buffer: &Self::CommandBufferId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
+    }
+    fn render_bundle_drop(&self, _render_bundle: &Self::RenderBundleId) {
+        // Dropped automatically
     }
     fn compute_pipeline_drop(&self, _pipeline: &Self::ComputePipelineId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
     fn render_pipeline_drop(&self, _pipeline: &Self::RenderPipelineId) {
-        // Buffer is dropped automatically
+        // Dropped automatically
     }
 
-    fn encoder_copy_buffer_to_buffer(
+    fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         source: &Self::BufferId,
@@ -1168,7 +1187,7 @@ impl crate::Context for Context {
         )
     }
 
-    fn encoder_copy_buffer_to_texture(
+    fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
         source: crate::BufferCopyView,
@@ -1182,7 +1201,7 @@ impl crate::Context for Context {
         )
     }
 
-    fn encoder_copy_texture_to_buffer(
+    fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         source: crate::TextureCopyView,
@@ -1196,7 +1215,7 @@ impl crate::Context for Context {
         )
     }
 
-    fn encoder_copy_texture_to_texture(
+    fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
         source: crate::TextureCopyView,
@@ -1210,7 +1229,10 @@ impl crate::Context for Context {
         )
     }
 
-    fn encoder_begin_compute_pass(&self, encoder: &Self::CommandEncoderId) -> Self::ComputePassId {
+    fn command_encoder_begin_compute_pass(
+        &self,
+        encoder: &Self::CommandEncoderId,
+    ) -> Self::ComputePassId {
         let mut mapped_desc = web_sys::GpuComputePassDescriptor::new();
         if let Some(ref label) = encoder.label() {
             mapped_desc.label(label);
@@ -1218,7 +1240,7 @@ impl crate::Context for Context {
         ComputePass(encoder.begin_compute_pass_with_descriptor(&mapped_desc))
     }
 
-    fn encoder_end_compute_pass(
+    fn command_encoder_end_compute_pass(
         &self,
         _encoder: &Self::CommandEncoderId,
         pass: &mut Self::ComputePassId,
@@ -1226,7 +1248,7 @@ impl crate::Context for Context {
         pass.0.end_pass();
     }
 
-    fn encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass<'a>(
         &self,
         encoder: &Self::CommandEncoderId,
         desc: &crate::RenderPassDescriptor<'a, '_>,
@@ -1284,7 +1306,7 @@ impl crate::Context for Context {
         RenderPass(encoder.begin_render_pass(&mapped_desc))
     }
 
-    fn encoder_end_render_pass(
+    fn command_encoder_end_render_pass(
         &self,
         _encoder: &Self::CommandEncoderId,
         pass: &mut Self::RenderPassId,
@@ -1292,12 +1314,20 @@ impl crate::Context for Context {
         pass.0.end_pass();
     }
 
-    fn encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
+    fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
         let mut mapped_desc = web_sys::GpuCommandBufferDescriptor::new();
         if let Some(ref label) = encoder.label() {
             mapped_desc.label(label);
         }
         Sendable(encoder.finish_with_descriptor(&mapped_desc))
+    }
+
+    fn render_bundle_encoder_finish(
+        &self,
+        _encoder: Self::RenderBundleEncoderId,
+        _desc: &crate::RenderBundleDescriptor,
+    ) -> Self::RenderBundleId {
+        unimplemented!()
     }
 
     fn queue_write_buffer(

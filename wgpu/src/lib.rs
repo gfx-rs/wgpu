@@ -24,11 +24,11 @@ pub use wgt::{
     BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction,
     CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extensions, Extent3d,
     FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp, Origin3d, PowerPreference,
-    PresentMode, PrimitiveTopology, RasterizationStateDescriptor, ShaderLocation, ShaderStage,
-    StencilOperation, StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus,
-    TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat,
-    TextureUsage, TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    PresentMode, PrimitiveTopology, RasterizationStateDescriptor, RenderBundleEncoderDescriptor,
+    ShaderLocation, ShaderStage, StencilOperation, StencilStateFaceDescriptor, StoreOp,
+    SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout,
+    TextureDimension, TextureFormat, TextureUsage, TextureViewDimension, UnsafeExtensions,
+    VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -49,7 +49,7 @@ trait ComputePassInner<Ctx: Context> {
     );
 }
 
-trait RenderPassInner<Ctx: Context> {
+trait RenderInner<Ctx: Context> {
     fn set_pipeline(&mut self, pipeline: &Ctx::RenderPipelineId);
     fn set_bind_group(
         &mut self,
@@ -65,7 +65,18 @@ trait RenderPassInner<Ctx: Context> {
         offset: BufferAddress,
         size: BufferSize,
     );
-    fn set_blend_color(&mut self, color: wgt::Color);
+    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
+    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
+    fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
+    fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &Ctx::BufferId,
+        indirect_offset: BufferAddress,
+    );
+}
+
+trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
+    fn set_blend_color(&mut self, color: Color);
     fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32);
     fn set_viewport(
         &mut self,
@@ -77,36 +88,34 @@ trait RenderPassInner<Ctx: Context> {
         max_depth: f32,
     );
     fn set_stencil_reference(&mut self, reference: u32);
-    fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
-    fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
-    fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
-    fn draw_indexed_indirect(
+    fn execute_bundles<'a, I: Iterator<Item = &'a Ctx::RenderBundleId>>(
         &mut self,
-        indirect_buffer: &Ctx::BufferId,
-        indirect_offset: BufferAddress,
+        render_bundles: I,
     );
 }
 
 trait Context: Sized {
-    type AdapterId: Send + Sync;
-    type DeviceId: Send + Sync;
-    type QueueId: Send + Sync;
-    type ShaderModuleId: Send + Sync;
-    type BindGroupLayoutId: Send + Sync;
-    type BindGroupId: Send + Sync;
-    type TextureViewId: Send + Sync;
-    type SamplerId: Send + Sync;
-    type BufferId: Send + Sync;
-    type TextureId: Send + Sync;
-    type PipelineLayoutId: Send + Sync;
-    type RenderPipelineId: Send + Sync;
-    type ComputePipelineId: Send + Sync;
+    type AdapterId: Send + Sync + 'static;
+    type DeviceId: Send + Sync + 'static;
+    type QueueId: Send + Sync + 'static;
+    type ShaderModuleId: Send + Sync + 'static;
+    type BindGroupLayoutId: Send + Sync + 'static;
+    type BindGroupId: Send + Sync + 'static;
+    type TextureViewId: Send + Sync + 'static;
+    type SamplerId: Send + Sync + 'static;
+    type BufferId: Send + Sync + 'static;
+    type TextureId: Send + Sync + 'static;
+    type PipelineLayoutId: Send + Sync + 'static;
+    type RenderPipelineId: Send + Sync + 'static;
+    type ComputePipelineId: Send + Sync + 'static;
     type CommandEncoderId;
     type ComputePassId: ComputePassInner<Self>;
-    type CommandBufferId: Send + Sync;
-    type SurfaceId: Send + Sync;
-    type SwapChainId: Send + Sync;
     type RenderPassId: RenderPassInner<Self>;
+    type CommandBufferId: Send + Sync;
+    type RenderBundleEncoderId: RenderInner<Self>;
+    type RenderBundleId: Send + Sync + 'static;
+    type SurfaceId: Send + Sync + 'static;
+    type SwapChainId: Send + Sync + 'static;
 
     type SwapChainOutputDetail: Send;
 
@@ -123,8 +132,8 @@ trait Context: Sized {
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-        unsafe_extensions: wgt::UnsafeExtensions,
-        backends: wgt::BackendBit,
+        unsafe_extensions: UnsafeExtensions,
+        backends: BackendBit,
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
         &self,
@@ -193,6 +202,11 @@ trait Context: Sized {
         device: &Self::DeviceId,
         desc: &CommandEncoderDescriptor,
     ) -> Self::CommandEncoderId;
+    fn device_create_render_bundle_encoder(
+        &self,
+        device: &Self::DeviceId,
+        desc: &RenderBundleEncoderDescriptor,
+    ) -> Self::RenderBundleEncoderId;
     fn device_drop(&self, device: &Self::DeviceId);
     fn device_poll(&self, device: &Self::DeviceId, maintain: Maintain);
 
@@ -238,10 +252,11 @@ trait Context: Sized {
     fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId);
     fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId);
     fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId);
+    fn render_bundle_drop(&self, render_bundle: &Self::RenderBundleId);
     fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId);
     fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId);
 
-    fn encoder_copy_buffer_to_buffer(
+    fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         source: &Self::BufferId,
@@ -250,21 +265,21 @@ trait Context: Sized {
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
     );
-    fn encoder_copy_buffer_to_texture(
+    fn command_encoder_copy_buffer_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
         source: BufferCopyView,
         destination: TextureCopyView,
         copy_size: Extent3d,
     );
-    fn encoder_copy_texture_to_buffer(
+    fn command_encoder_copy_texture_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
         source: TextureCopyView,
         destination: BufferCopyView,
         copy_size: Extent3d,
     );
-    fn encoder_copy_texture_to_texture(
+    fn command_encoder_copy_texture_to_texture(
         &self,
         encoder: &Self::CommandEncoderId,
         source: TextureCopyView,
@@ -272,23 +287,31 @@ trait Context: Sized {
         copy_size: Extent3d,
     );
 
-    fn encoder_begin_compute_pass(&self, encoder: &Self::CommandEncoderId) -> Self::ComputePassId;
-    fn encoder_end_compute_pass(
+    fn command_encoder_begin_compute_pass(
+        &self,
+        encoder: &Self::CommandEncoderId,
+    ) -> Self::ComputePassId;
+    fn command_encoder_end_compute_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::ComputePassId,
     );
-    fn encoder_begin_render_pass<'a>(
+    fn command_encoder_begin_render_pass<'a>(
         &self,
         encoder: &Self::CommandEncoderId,
         desc: &RenderPassDescriptor<'a, '_>,
     ) -> Self::RenderPassId;
-    fn encoder_end_render_pass(
+    fn command_encoder_end_render_pass(
         &self,
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::RenderPassId,
     );
-    fn encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId;
+    fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId;
+    fn render_bundle_encoder_finish(
+        &self,
+        encoder: Self::RenderBundleEncoderId,
+        desc: &RenderBundleDescriptor,
+    ) -> Self::RenderBundleId;
     fn queue_write_buffer(
         &self,
         queue: &Self::QueueId,
@@ -301,8 +324,8 @@ trait Context: Sized {
         queue: &Self::QueueId,
         texture: TextureCopyView,
         data: &[u8],
-        data_layout: wgt::TextureDataLayout,
-        size: wgt::Extent3d,
+        data_layout: TextureDataLayout,
+        size: Extent3d,
     );
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
         &self,
@@ -462,7 +485,9 @@ pub struct Sampler {
 
 impl Drop for Sampler {
     fn drop(&mut self) {
-        self.context.sampler_drop(&self.id);
+        if !thread::panicking() {
+            self.context.sampler_drop(&self.id);
+        }
     }
 }
 
@@ -496,7 +521,9 @@ pub struct BindGroupLayout {
 
 impl Drop for BindGroupLayout {
     fn drop(&mut self) {
-        self.context.bind_group_layout_drop(&self.id);
+        if !thread::panicking() {
+            self.context.bind_group_layout_drop(&self.id);
+        }
     }
 }
 
@@ -513,7 +540,9 @@ pub struct BindGroup {
 
 impl Drop for BindGroup {
     fn drop(&mut self) {
-        self.context.bind_group_drop(&self.id);
+        if !thread::panicking() {
+            self.context.bind_group_drop(&self.id);
+        }
     }
 }
 
@@ -529,7 +558,9 @@ pub struct ShaderModule {
 
 impl Drop for ShaderModule {
     fn drop(&mut self) {
-        self.context.shader_module_drop(&self.id);
+        if !thread::panicking() {
+            self.context.shader_module_drop(&self.id);
+        }
     }
 }
 
@@ -543,7 +574,9 @@ pub struct PipelineLayout {
 
 impl Drop for PipelineLayout {
     fn drop(&mut self) {
-        self.context.pipeline_layout_drop(&self.id);
+        if !thread::panicking() {
+            self.context.pipeline_layout_drop(&self.id);
+        }
     }
 }
 
@@ -558,7 +591,9 @@ pub struct RenderPipeline {
 
 impl Drop for RenderPipeline {
     fn drop(&mut self) {
-        self.context.render_pipeline_drop(&self.id);
+        if !thread::panicking() {
+            self.context.render_pipeline_drop(&self.id);
+        }
     }
 }
 
@@ -570,7 +605,9 @@ pub struct ComputePipeline {
 
 impl Drop for ComputePipeline {
     fn drop(&mut self) {
-        self.context.compute_pipeline_drop(&self.id);
+        if !thread::panicking() {
+            self.context.compute_pipeline_drop(&self.id);
+        }
     }
 }
 
@@ -586,8 +623,10 @@ pub struct CommandBuffer {
 
 impl Drop for CommandBuffer {
     fn drop(&mut self) {
-        if let Some(ref id) = self.id {
-            self.context.command_buffer_drop(id);
+        if !thread::panicking() {
+            if let Some(ref id) = self.id {
+                self.context.command_buffer_drop(id);
+            }
         }
     }
 }
@@ -617,6 +656,32 @@ pub struct RenderPass<'a> {
 pub struct ComputePass<'a> {
     id: <C as Context>::ComputePassId,
     parent: &'a mut CommandEncoder,
+}
+
+/// An object that encodes GPU operations into a render bundle.
+///
+/// It only supports a handful of render commands, but it makes them re-usable.
+pub struct RenderBundleEncoder<'a> {
+    context: Arc<C>,
+    id: <C as Context>::RenderBundleEncoderId,
+    _parent: &'a Device,
+    /// This type should be !Send !Sync, because it represents an allocation on this thread's
+    /// command buffer.
+    _p: PhantomData<*const u8>,
+}
+
+/// A finished render bundle.
+pub struct RenderBundle {
+    context: Arc<C>,
+    id: <C as Context>::RenderBundleId,
+}
+
+impl Drop for RenderBundle {
+    fn drop(&mut self) {
+        if !thread::panicking() {
+            self.context.render_bundle_drop(&self.id);
+        }
+    }
 }
 
 /// A handle to a command queue on a device.
@@ -766,12 +831,10 @@ pub struct RenderPassDescriptor<'a, 'b> {
 pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Option<&'a str>>;
 
 /// A description of a command encoder.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-pub struct CommandEncoderDescriptor<'a> {
-    /// An optional label to apply to the command encoder.
-    /// This can be useful for debugging and performance analysis.
-    pub label: Option<&'a str>,
-}
+pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Option<&'a str>>;
+
+/// A description of a render bundle.
+pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Option<&'a str>>;
 
 /// A description of a texture.
 pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Option<&'a str>>;
@@ -810,7 +873,7 @@ pub struct BufferCopyView<'a> {
     pub buffer: &'a Buffer,
 
     /// The layout of the texture data in this buffer.
-    pub layout: wgt::TextureDataLayout,
+    pub layout: TextureDataLayout,
 }
 
 /// A view of a texture which can be used to copy to or from a buffer or another texture.
@@ -838,8 +901,8 @@ impl Instance {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enumerate_adapters(
         &self,
-        unsafe_extensions: wgt::UnsafeExtensions,
-        backends: wgt::BackendBit,
+        unsafe_extensions: UnsafeExtensions,
+        backends: BackendBit,
     ) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
@@ -900,7 +963,7 @@ impl Instance {
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-        unsafe_extensions: wgt::UnsafeExtensions,
+        unsafe_extensions: UnsafeExtensions,
         backends: BackendBit,
     ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
@@ -981,6 +1044,19 @@ impl Device {
         CommandEncoder {
             context: Arc::clone(&self.context),
             id: Context::device_create_command_encoder(&*self.context, &self.id, desc),
+            _p: Default::default(),
+        }
+    }
+
+    /// Creates an empty [`RenderBundleEncoder`].
+    pub fn create_render_bundle_encoder(
+        &self,
+        desc: &RenderBundleEncoderDescriptor,
+    ) -> RenderBundleEncoder {
+        RenderBundleEncoder {
+            context: Arc::clone(&self.context),
+            id: Context::device_create_render_bundle_encoder(&*self.context, &self.id, desc),
+            _parent: self,
             _p: Default::default(),
         }
     }
@@ -1087,7 +1163,9 @@ impl Device {
 
 impl Drop for Device {
     fn drop(&mut self) {
-        self.context.device_drop(&self.id);
+        if !thread::panicking() {
+            self.context.device_drop(&self.id);
+        }
     }
 }
 
@@ -1283,7 +1361,9 @@ impl BufferSlice<'_> {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
-        self.context.buffer_drop(&self.id);
+        if !thread::panicking() {
+            self.context.buffer_drop(&self.id);
+        }
     }
 }
 
@@ -1309,7 +1389,7 @@ impl Texture {
 
 impl Drop for Texture {
     fn drop(&mut self) {
-        if self.owned {
+        if self.owned && !thread::panicking() {
             self.context.texture_drop(&self.id);
         }
     }
@@ -1317,7 +1397,7 @@ impl Drop for Texture {
 
 impl Drop for TextureView {
     fn drop(&mut self) {
-        if self.owned {
+        if self.owned && !thread::panicking() {
             self.context.texture_view_drop(&self.id);
         }
     }
@@ -1328,7 +1408,7 @@ impl CommandEncoder {
     pub fn finish(self) -> CommandBuffer {
         CommandBuffer {
             context: Arc::clone(&self.context),
-            id: Some(Context::encoder_finish(&*self.context, &self.id)),
+            id: Some(Context::command_encoder_finish(&*self.context, &self.id)),
         }
     }
 
@@ -1340,7 +1420,7 @@ impl CommandEncoder {
         desc: &RenderPassDescriptor<'a, '_>,
     ) -> RenderPass<'a> {
         RenderPass {
-            id: Context::encoder_begin_render_pass(&*self.context, &self.id, desc),
+            id: Context::command_encoder_begin_render_pass(&*self.context, &self.id, desc),
             parent: self,
         }
     }
@@ -1350,7 +1430,7 @@ impl CommandEncoder {
     /// This function returns a [`ComputePass`] object which records a single compute pass.
     pub fn begin_compute_pass(&mut self) -> ComputePass {
         ComputePass {
-            id: Context::encoder_begin_compute_pass(&*self.context, &self.id),
+            id: Context::command_encoder_begin_compute_pass(&*self.context, &self.id),
             parent: self,
         }
     }
@@ -1364,7 +1444,7 @@ impl CommandEncoder {
         destination_offset: BufferAddress,
         copy_size: BufferAddress,
     ) {
-        Context::encoder_copy_buffer_to_buffer(
+        Context::command_encoder_copy_buffer_to_buffer(
             &*self.context,
             &self.id,
             &source.id,
@@ -1382,7 +1462,7 @@ impl CommandEncoder {
         destination: TextureCopyView,
         copy_size: Extent3d,
     ) {
-        Context::encoder_copy_buffer_to_texture(
+        Context::command_encoder_copy_buffer_to_texture(
             &*self.context,
             &self.id,
             source,
@@ -1398,7 +1478,7 @@ impl CommandEncoder {
         destination: BufferCopyView,
         copy_size: Extent3d,
     ) {
-        Context::encoder_copy_texture_to_buffer(
+        Context::command_encoder_copy_texture_to_buffer(
             &*self.context,
             &self.id,
             source,
@@ -1414,7 +1494,7 @@ impl CommandEncoder {
         destination: TextureCopyView,
         copy_size: Extent3d,
     ) {
-        Context::encoder_copy_texture_to_texture(
+        Context::command_encoder_copy_texture_to_texture(
             &*self.context,
             &self.id,
             source,
@@ -1432,14 +1512,14 @@ impl<'a> RenderPass<'a> {
         bind_group: &'a BindGroup,
         offsets: &[DynamicOffset],
     ) {
-        RenderPassInner::set_bind_group(&mut self.id, index, &bind_group.id, offsets)
+        RenderInner::set_bind_group(&mut self.id, index, &bind_group.id, offsets)
     }
 
     /// Sets the active render pipeline.
     ///
     /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
     pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
-        RenderPassInner::set_pipeline(&mut self.id, &pipeline.id)
+        RenderInner::set_pipeline(&mut self.id, &pipeline.id)
     }
 
     pub fn set_blend_color(&mut self, color: Color) {
@@ -1451,7 +1531,7 @@ impl<'a> RenderPass<'a> {
     /// Subsequent calls to [`draw_indexed`](RenderPass::draw_indexed) on this [`RenderPass`] will
     /// use `buffer` as the source index buffer.
     pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>) {
-        RenderPassInner::set_index_buffer(
+        RenderInner::set_index_buffer(
             &mut self.id,
             &buffer_slice.buffer.id,
             buffer_slice.offset,
@@ -1472,7 +1552,7 @@ impl<'a> RenderPass<'a> {
     /// [`RenderPass`]: struct.RenderPass.html
     /// [`RenderPipelineDescriptor::vertex_buffers`]: struct.RenderPipelineDescriptor.html#structfield.vertex_buffers
     pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
-        RenderPassInner::set_vertex_buffer(
+        RenderInner::set_vertex_buffer(
             &mut self.id,
             slot,
             &buffer_slice.buffer.id,
@@ -1506,7 +1586,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-        RenderPassInner::draw(&mut self.id, vertices, instances)
+        RenderInner::draw(&mut self.id, vertices, instances)
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
@@ -1514,7 +1594,7 @@ impl<'a> RenderPass<'a> {
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
     /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-        RenderPassInner::draw_indexed(&mut self.id, indices, base_vertex, instances);
+        RenderInner::draw_indexed(&mut self.id, indices, base_vertex, instances);
     }
 
     /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
@@ -1562,6 +1642,11 @@ impl<'a> RenderPass<'a> {
         self.id
             .draw_indexed_indirect(&indirect_buffer.id, indirect_offset);
     }
+
+    pub fn execute_bundles<I: Iterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
+        self.id
+            .execute_bundles(render_bundles.into_iter().map(|rb| &rb.id))
+    }
 }
 
 impl<'a> Drop for RenderPass<'a> {
@@ -1569,7 +1654,7 @@ impl<'a> Drop for RenderPass<'a> {
         if !thread::panicking() {
             self.parent
                 .context
-                .encoder_end_render_pass(&self.parent.id, &mut self.id);
+                .command_encoder_end_render_pass(&self.parent.id, &mut self.id);
         }
     }
 }
@@ -1612,8 +1697,131 @@ impl<'a> Drop for ComputePass<'a> {
         if !thread::panicking() {
             self.parent
                 .context
-                .encoder_end_compute_pass(&self.parent.id, &mut self.id);
+                .command_encoder_end_compute_pass(&self.parent.id, &mut self.id);
         }
+    }
+}
+
+impl<'a> RenderBundleEncoder<'a> {
+    /// Finishes recording and returns a [`RenderBundle`] that can be executed in other render passes.
+    pub fn finish(self, desc: &RenderBundleDescriptor) -> RenderBundle {
+        RenderBundle {
+            context: Arc::clone(&self.context),
+            id: Context::render_bundle_encoder_finish(&*self.context, self.id, desc),
+        }
+    }
+
+    /// Sets the active bind group for a given bind group index.
+    pub fn set_bind_group(
+        &mut self,
+        index: u32,
+        bind_group: &'a BindGroup,
+        offsets: &[DynamicOffset],
+    ) {
+        RenderInner::set_bind_group(&mut self.id, index, &bind_group.id, offsets)
+    }
+
+    /// Sets the active render pipeline.
+    ///
+    /// Subsequent draw calls will exhibit the behavior defined by `pipeline`.
+    pub fn set_pipeline(&mut self, pipeline: &'a RenderPipeline) {
+        RenderInner::set_pipeline(&mut self.id, &pipeline.id)
+    }
+
+    /// Sets the active index buffer.
+    ///
+    /// Subsequent calls to [`draw_indexed`](RenderBundleEncoder::draw_indexed) on this [`RenderBundleEncoder`] will
+    /// use `buffer` as the source index buffer.
+    pub fn set_index_buffer(&mut self, buffer_slice: BufferSlice<'a>) {
+        RenderInner::set_index_buffer(
+            &mut self.id,
+            &buffer_slice.buffer.id,
+            buffer_slice.offset,
+            buffer_slice.size,
+        )
+    }
+
+    /// Assign a vertex buffer to a slot.
+    ///
+    /// Subsequent calls to [`draw`] and [`draw_indexed`] on this
+    /// [`RenderBundleEncoder`] will use `buffer` as one of the source vertex buffers.
+    ///
+    /// The `slot` refers to the index of the matching descriptor in
+    /// [`RenderPipelineDescriptor::vertex_buffers`].
+    ///
+    /// [`draw`]: #method.draw
+    /// [`draw_indexed`]: #method.draw_indexed
+    /// [`RenderBundleEncoder`]: struct.RenderBundleEncoder.html
+    /// [`RenderPipelineDescriptor::vertex_buffers`]: struct.RenderPipelineDescriptor.html#structfield.vertex_buffers
+    pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
+        RenderInner::set_vertex_buffer(
+            &mut self.id,
+            slot,
+            &buffer_slice.buffer.id,
+            buffer_slice.offset,
+            buffer_slice.size,
+        )
+    }
+
+    /// Draws primitives from the active vertex buffer(s).
+    ///
+    /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
+        RenderInner::draw(&mut self.id, vertices, instances)
+    }
+
+    /// Draws indexed primitives using the active index buffer and the active vertex buffers.
+    ///
+    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
+    /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    pub fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
+        RenderInner::draw_indexed(&mut self.id, indices, base_vertex, instances);
+    }
+
+    /// Draws primitives from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
+    ///
+    /// The active vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndirect {
+    ///     vertex_count: u32, // The number of vertices to draw.
+    ///     instance_count: u32, // The number of instances to draw.
+    ///     base_vertex: u32, // The Index of the first vertex to draw.
+    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    /// }
+    /// ```
+    pub fn draw_indirect(&mut self, indirect_buffer: &'a Buffer, indirect_offset: BufferAddress) {
+        self.id.draw_indirect(&indirect_buffer.id, indirect_offset);
+    }
+
+    /// Draws indexed primitives using the active index buffer and the active vertex buffers,
+    /// based on the contents of the `indirect_buffer`.
+    ///
+    /// The active index buffer can be set with [`RenderBundleEncoder::set_index_buffer`], while the active
+    /// vertex buffers can be set with [`RenderBundleEncoder::set_vertex_buffer`].
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndexedIndirect {
+    ///     vertex_count: u32, // The number of vertices to draw.
+    ///     instance_count: u32, // The number of instances to draw.
+    ///     base_index: u32, // The base index within the index buffer.
+    ///     vertex_offset: i32, // The value added to the vertex index before indexing into the vertex buffer.
+    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    /// }
+    /// ```
+    pub fn draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &'a Buffer,
+        indirect_offset: BufferAddress,
+    ) {
+        self.id
+            .draw_indexed_indirect(&indirect_buffer.id, indirect_offset);
     }
 }
 
@@ -1628,8 +1836,8 @@ impl Queue {
         &self,
         texture: TextureCopyView,
         data: &[u8],
-        data_layout: wgt::TextureDataLayout,
-        size: wgt::Extent3d,
+        data_layout: TextureDataLayout,
+        size: Extent3d,
     ) {
         Context::queue_write_texture(&*self.context, &self.id, texture, data, data_layout, size)
     }
