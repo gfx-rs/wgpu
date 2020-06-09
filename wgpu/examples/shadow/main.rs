@@ -248,6 +248,7 @@ impl framework::Example for Example {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                    ..Default::default()
                 }],
                 label: None,
             });
@@ -430,6 +431,7 @@ impl framework::Example for Example {
                         binding: 0, // global
                         visibility: wgpu::ShaderStage::VERTEX,
                         ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                        ..Default::default()
                     }],
                     label: None,
                 });
@@ -518,11 +520,13 @@ impl framework::Example for Example {
                             binding: 0, // global
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                            ..Default::default()
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 1, // lights
                             visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                            ..Default::default()
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 2,
@@ -532,11 +536,13 @@ impl framework::Example for Example {
                                 component_type: wgpu::TextureComponentType::Float,
                                 dimension: wgpu::TextureViewDimension::D2Array,
                             },
+                            ..Default::default()
                         },
                         wgpu::BindGroupLayoutEntry {
                             binding: 3,
                             visibility: wgpu::ShaderStage::FRAGMENT,
                             ty: wgpu::BindingType::Sampler { comparison: true },
+                            ..Default::default()
                         },
                     ],
                     label: None,

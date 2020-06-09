@@ -19,15 +19,15 @@ use parking_lot::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
-    read_spirv, AddressMode, Backend, BackendBit, BlendDescriptor, BlendFactor, BlendOperation,
-    BufferAddress, BufferSize, BufferUsage, Color, ColorStateDescriptor, ColorWrite,
-    CommandBufferDescriptor, CompareFunction, CullMode, DepthStencilStateDescriptor,
-    DeviceDescriptor, DynamicOffset, Extensions, Extent3d, FilterMode, FrontFace, IndexFormat,
-    InputStepMode, Limits, LoadOp, Origin3d, PowerPreference, PresentMode, PrimitiveTopology,
-    RasterizationStateDescriptor, ShaderLocation, ShaderStage, StencilOperation,
-    StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect,
-    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
-    TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
+    read_spirv, AddressMode, Backend, BackendBit, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    BindingType, BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize,
+    BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction,
+    CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extensions, Extent3d,
+    FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp, Origin3d, PowerPreference,
+    PresentMode, PrimitiveTopology, RasterizationStateDescriptor, ShaderLocation, ShaderStage,
+    StencilOperation, StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus,
+    TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat,
+    TextureUsage, TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
     BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
@@ -606,128 +606,18 @@ pub struct Queue {
 }
 
 /// A resource that can be bound to a pipeline.
+#[non_exhaustive]
 pub enum BindingResource<'a> {
     Buffer(BufferSlice<'a>),
     Sampler(&'a Sampler),
     TextureView(&'a TextureView),
+    TextureViewArray(&'a [TextureView]),
 }
 
 /// A bindable resource and the slot to bind it to.
 pub struct Binding<'a> {
     pub binding: u32,
     pub resource: BindingResource<'a>,
-}
-
-/// Specific type of a binding.
-/// WebGPU spec: https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum BindingType {
-    /// A buffer for uniform values.
-    ///
-    /// Example GLSL syntax:
-    /// ```cpp,ignore
-    /// layout(std140, binding = 0)
-    /// uniform Globals {
-    ///     vec2 aUniform;
-    ///     vec2 anotherUniform;
-    /// };
-    /// ```
-    UniformBuffer {
-        /// Indicates that the binding has a dynamic offset.
-        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
-        dynamic: bool,
-    },
-    /// A storage buffer.
-    ///
-    /// Example GLSL syntax:
-    /// ```cpp,ignore
-    /// layout (set=0, binding=0) buffer myStorageBuffer {
-    ///     vec4 myElement[];
-    /// };
-    /// ```
-    StorageBuffer {
-        /// Indicates that the binding has a dynamic offset.
-        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
-        dynamic: bool,
-        /// The buffer can only be read in the shader and it must be annotated with `readonly`.
-        ///
-        /// Example GLSL syntax:
-        /// ```cpp,ignore
-        /// layout (set=0, binding=0) readonly buffer myStorageBuffer {
-        ///     vec4 myElement[];
-        /// };
-        /// ```
-        readonly: bool,
-    },
-    /// A sampler that can be used to sample a texture.
-    ///
-    /// Example GLSL syntax:
-    /// ```cpp,ignore
-    /// layout(binding = 0)
-    /// uniform sampler s;
-    /// ```
-    Sampler {
-        /// Use as a comparison sampler instead of a normal sampler.
-        /// For more info take a look at the analogous functionality in OpenGL: https://www.khronos.org/opengl/wiki/Sampler_Object#Comparison_mode.
-        comparison: bool,
-    },
-    /// A texture.
-    ///
-    /// Example GLSL syntax:
-    /// ```cpp,ignore
-    /// layout(binding = 0)
-    /// uniform texture2D t;
-    /// ```
-    SampledTexture {
-        /// Dimension of the texture view that is going to be sampled.
-        dimension: TextureViewDimension,
-        /// Component type of the texture.
-        /// This must be compatible with the format of the texture.
-        component_type: TextureComponentType,
-        /// True if the texture has a sample count greater than 1.
-        multisampled: bool,
-    },
-    /// A storage texture.
-    /// Example GLSL syntax:
-    /// ```cpp,ignore
-    /// layout(set=0, binding=0, r32f) uniform image2D myStorageImage;
-    /// ```
-    /// Note that the texture format must be specified in the shader as well.
-    /// A list of valid formats can be found in the specification here: https://www.khronos.org/registry/OpenGL/specs/gl/GLSLangSpec.4.60.html#layout-qualifiers
-    StorageTexture {
-        /// Dimension of the texture view that is going to be sampled.
-        dimension: TextureViewDimension,
-        /// Component type of the texture.
-        /// This must be compatible with the format of the texture.
-        component_type: TextureComponentType,
-        /// Format of the texture.
-        format: TextureFormat,
-        /// The texture can only be read in the shader and it must be annotated with `readonly`.
-        ///
-        /// Example GLSL syntax:
-        /// ```cpp,ignore
-        /// layout(set=0, binding=0, r32f) readonly uniform image2D myStorageImage;
-        /// ```
-        readonly: bool,
-    },
-}
-
-/// A description of a single binding inside a bind group.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
-pub struct BindGroupLayoutEntry {
-    pub binding: u32,
-    pub visibility: ShaderStage,
-    pub ty: BindingType,
-}
-
-/// A description of a bind group layout.
-#[derive(Clone, Debug)]
-pub struct BindGroupLayoutDescriptor<'a> {
-    pub bindings: &'a [BindGroupLayoutEntry],
-
-    /// An optional label to apply to the bind group layout.
-    /// This can be useful for debugging and performance analysis.
-    pub label: Option<&'a str>,
 }
 
 /// A description of a group of bindings and the resources to be bound.

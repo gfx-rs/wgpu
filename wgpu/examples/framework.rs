@@ -30,6 +30,9 @@ pub enum ShaderStage {
 }
 
 pub trait Example: 'static + Sized {
+    fn needed_extensions() -> (wgt::Extensions, wgt::UnsafeExtensions) {
+        (wgpu::Extensions::empty(), wgt::UnsafeExtensions::disallow())
+    }
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
@@ -60,23 +63,27 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
         (size, surface)
     };
 
+    let (needed_extensions, unsafe_extensions) = E::needed_extensions();
+
     let adapter = instance
         .request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: Some(&surface),
             },
-            wgpu::UnsafeExtensions::disallow(),
+            unsafe_extensions,
             wgpu::BackendBit::PRIMARY,
         )
         .await
         .unwrap();
 
+    let adapter_extensions = adapter.extensions();
+
     let trace_dir = std::env::var("WGPU_TRACE");
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions::empty(),
+                extensions: adapter_extensions & needed_extensions,
                 limits: wgpu::Limits::default(),
                 shader_validation: true,
             },

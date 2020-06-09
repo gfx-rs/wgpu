@@ -72,6 +72,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 dynamic: false,
                 readonly: false,
             },
+            ..Default::default()
         }],
     });
 
