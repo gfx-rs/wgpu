@@ -174,7 +174,7 @@ impl<B: hal::Backend> Access<SwapChain<B>> for Root {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
-impl<B: hal::Backend> Access<PipelineLayout<B>> for CommandBuffer<B> {}
+impl<B: hal::Backend> Access<PipelineLayout<B>> for RenderBundle {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for PipelineLayout<B> {}
@@ -187,6 +187,7 @@ impl<B: hal::Backend> Access<CommandBuffer<B>> for Root {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for SwapChain<B> {}
 impl<B: hal::Backend> Access<RenderBundle> for Device<B> {}
+impl<B: hal::Backend> Access<RenderBundle> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}

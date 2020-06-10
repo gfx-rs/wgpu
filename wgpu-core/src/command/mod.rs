@@ -68,9 +68,10 @@ pub struct RawPass<P> {
 }
 
 impl<P: Copy> RawPass<P> {
-    fn from_vec<T>(mut vec: Vec<T>, parent: P) -> Self {
+    fn new<T>(parent: P) -> Self {
+        let mut vec = Vec::<T>::with_capacity(1);
         let ptr = vec.as_mut_ptr() as *mut u8;
-        let capacity = vec.capacity() * mem::size_of::<T>();
+        let capacity = mem::size_of::<T>();
         assert_ne!(capacity, 0);
         mem::forget(vec);
         RawPass {
@@ -135,13 +136,13 @@ impl<P: Copy> RawPass<P> {
     }
 
     #[inline]
-    pub unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
+    pub(crate) unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
         self.ensure_extra_size(C::max_size());
         self.data = command.poke_into(self.data);
     }
 
     #[inline]
-    pub unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
+    pub(crate) unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
         let align_offset = self.data.align_offset(mem::align_of::<T>());
         let extra = align_offset + mem::size_of::<T>() * data.len();
         self.ensure_extra_size(extra);
@@ -193,6 +194,7 @@ impl<B: GfxBackend> CommandBuffer<B> {
             .merge_extend(&head.compute_pipes)
             .unwrap();
         base.render_pipes.merge_extend(&head.render_pipes).unwrap();
+        base.bundles.merge_extend(&head.bundles).unwrap();
 
         let stages = all_buffer_stages() | all_image_stages();
         unsafe {

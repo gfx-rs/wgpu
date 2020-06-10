@@ -10,15 +10,17 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::{io, slice};
 
+pub type BufferAddress = u64;
+
 /// Buffer-Texture copies on command encoders have to have the `bytes_per_row`
 /// aligned to this number.
 ///
 /// This doesn't apply to `Queue::write_texture`.
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
-pub const BIND_BUFFER_ALIGNMENT: u64 = 256;
+pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// Buffer to buffer copy offsets and sizes must be aligned to this number
-pub const COPY_BUFFER_ALIGNMENT: u64 = 4;
+pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -33,7 +35,7 @@ pub const COPY_BUFFER_ALIGNMENT: u64 = 4;
     derive(serde::Deserialize),
     serde(from = "SerBufferSize")
 )]
-pub struct BufferSize(pub u64);
+pub struct BufferSize(pub BufferAddress);
 
 impl BufferSize {
     pub const WHOLE: BufferSize = BufferSize(!0);
@@ -295,8 +297,6 @@ pub enum TextureViewDimension {
     D3,
 }
 
-pub type BufferAddress = u64;
-
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -543,6 +543,12 @@ impl DepthStencilStateDescriptor {
 pub enum IndexFormat {
     Uint16 = 0,
     Uint32 = 1,
+}
+
+impl Default for IndexFormat {
+    fn default() -> Self {
+        IndexFormat::Uint32
+    }
 }
 
 #[repr(C)]

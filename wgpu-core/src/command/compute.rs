@@ -53,7 +53,25 @@ impl Default for ComputeCommand {
 
 impl super::RawPass<id::CommandEncoderId> {
     pub unsafe fn new_compute(parent: id::CommandEncoderId) -> Self {
-        Self::from_vec(Vec::<ComputeCommand>::with_capacity(1), parent)
+        Self::new::<ComputeCommand>(parent)
+    }
+
+    pub unsafe fn fill_compute_commands(
+        &mut self,
+        commands: &[ComputeCommand],
+        mut offsets: &[DynamicOffset],
+    ) {
+        for com in commands {
+            self.encode(com);
+            if let ComputeCommand::SetBindGroup {
+                num_dynamic_offsets,
+                ..
+            } = *com
+            {
+                self.encode_slice(&offsets[..num_dynamic_offsets as usize]);
+                offsets = &offsets[num_dynamic_offsets as usize..];
+            }
+        }
     }
 
     pub unsafe fn finish_compute(mut self) -> (Vec<u8>, id::CommandEncoderId) {
@@ -84,6 +102,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let raw = cmb.raw.last_mut().unwrap();
         let mut binder = Binder::new(cmb.limits.max_bind_groups);
 
+        let (_, mut token) = hub.render_bundles.read(&mut token);
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.compute_pipelines.read(&mut token);

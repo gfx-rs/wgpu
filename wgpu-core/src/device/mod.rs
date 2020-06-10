@@ -101,16 +101,23 @@ impl<T> AttachmentData<T> {
     }
 }
 
+pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
+pub(crate) type FramebufferKey = AttachmentData<id::TextureViewId>;
+
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub(crate) struct RenderPassContext {
+    pub attachments: AttachmentData<TextureFormat>,
+    pub sample_count: u8,
+}
+
 impl RenderPassContext {
     // Assumed the renderpass only contains one subpass
     pub(crate) fn compatible(&self, other: &RenderPassContext) -> bool {
-        self.colors == other.colors && self.depth_stencil == other.depth_stencil
+        self.attachments.colors == other.attachments.colors
+            && self.attachments.depth_stencil == other.attachments.depth_stencil
+            && self.sample_count == other.sample_count
     }
 }
-
-pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
-pub(crate) type FramebufferKey = AttachmentData<id::TextureViewId>;
-pub(crate) type RenderPassContext = AttachmentData<TextureFormat>;
 
 type BufferMapResult = Result<ptr::NonNull<u8>, hal::device::MapError>;
 type BufferMapPendingCallback = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
@@ -1860,7 +1867,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Box::into_raw(Box::new(encoder))
     }
 
-    pub fn render_bundle_encoder_destroy<B: GfxBackend>(
+    pub fn render_bundle_encoder_destroy(
         &self,
         render_bundle_encoder: command::RenderBundleEncoder,
     ) {
@@ -1871,14 +1878,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let mut bundle = {
-            let (mut render_bundle_guard, _) = hub.render_bundles.write(&mut token);
-            render_bundle_guard.remove(render_bundle_id).unwrap()
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device_id = {
+            let (mut bundle_guard, _) = hub.render_bundles.write(&mut token);
+            let bundle = &mut bundle_guard[render_bundle_id];
+            bundle.life_guard.ref_count.take();
+            bundle.device_id.value
         };
 
-        let (_, device_id) = unsafe { bundle.raw.invalidate() };
-        device_guard[device_id].untrack(&hub, &bundle.trackers, &mut token);
+        device_guard[device_id]
+            .lock_life(&mut token)
+            .suspected_resources
+            .render_bundles
+            .push(render_bundle_id);
     }
 
     pub fn device_create_render_pipeline<B: GfxBackend>(
@@ -2177,9 +2189,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let pass_context = RenderPassContext {
-            colors: color_states.iter().map(|state| state.format).collect(),
-            resolves: ArrayVec::new(),
-            depth_stencil: depth_stencil_state.map(|state| state.format),
+            attachments: AttachmentData {
+                colors: color_states.iter().map(|state| state.format).collect(),
+                resolves: ArrayVec::new(),
+                depth_stencil: depth_stencil_state.map(|state| state.format),
+            },
+            sample_count: samples,
         };
 
         let mut flags = pipeline::PipelineFlags::empty();
@@ -2211,7 +2226,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             flags,
             index_format: desc.vertex_state.index_format,
             vertex_strides,
-            sample_count: samples,
             life_guard: LifeGuard::new(),
         };
 
