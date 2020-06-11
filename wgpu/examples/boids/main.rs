@@ -57,6 +57,7 @@ impl framework::Example for Example {
                         binding: 0,
                         visibility: wgpu::ShaderStage::COMPUTE,
                         ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                        ..Default::default()
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
@@ -65,6 +66,7 @@ impl framework::Example for Example {
                             dynamic: false,
                             readonly: false,
                         },
+                        ..Default::default()
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
@@ -73,6 +75,7 @@ impl framework::Example for Example {
                             dynamic: false,
                             readonly: false,
                         },
+                        ..Default::default()
                     },
                 ],
                 label: None,

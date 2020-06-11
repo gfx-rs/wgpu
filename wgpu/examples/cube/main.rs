@@ -139,6 +139,7 @@ impl framework::Example for Example {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                    ..Default::default()
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
@@ -148,11 +149,13 @@ impl framework::Example for Example {
                         component_type: wgpu::TextureComponentType::Float,
                         dimension: wgpu::TextureViewDimension::D2,
                     },
+                    ..Default::default()
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::Sampler { comparison: false },
+                    ..Default::default()
                 },
             ],
         });

@@ -46,6 +46,7 @@ impl framework::Example for Skybox {
                     binding: 0,
                     visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                    ..Default::default()
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
@@ -55,11 +56,13 @@ impl framework::Example for Skybox {
                         multisampled: false,
                         dimension: wgpu::TextureViewDimension::Cube,
                     },
+                    ..Default::default()
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStage::FRAGMENT,
                     ty: wgpu::BindingType::Sampler { comparison: false },
+                    ..Default::default()
                 },
             ],
             label: None,
