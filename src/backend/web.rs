@@ -773,7 +773,13 @@ impl crate::Context for Context {
                         bt::ReadonlyStorageTexture
                     }
                     BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
+                    _ => unreachable!(),
                 };
+
+                assert!(
+                    bind.count.is_none(),
+                    "The web backend doesn't support arrays of bindings"
+                );
 
                 let mut mapped_entry = web_sys::GpuBindGroupLayoutEntry::new(
                     bind.binding,
@@ -847,6 +853,9 @@ impl crate::Context for Context {
                     BindingResource::Sampler(ref sampler) => JsValue::from(sampler.id.0.clone()),
                     BindingResource::TextureView(ref texture_view) => {
                         JsValue::from(texture_view.id.0.clone())
+                    }
+                    BindingResource::TextureViewArray(..) => {
+                        panic!("Web backend does not support TEXTURE_BINDING_ARRAY extension")
                     }
                 };
 
