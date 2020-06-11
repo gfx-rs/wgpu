@@ -133,6 +133,10 @@ impl<B: hal::Backend> Adapter<B> {
             wgt::Extensions::ANISOTROPIC_FILTERING,
             adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
         );
+        extensions.set(
+            wgt::Extensions::TEXTURE_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
+        );
         if unsafe_extensions.allowed() {
             // Unsafe extensions go here
         }
@@ -653,6 +657,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
             {
                 log::warn!("Extension MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+            }
+            if desc
+                .extensions
+                .contains(wgt::Extensions::TEXTURE_BINDING_ARRAY)
+            {
+                assert!(
+                    available_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
+                    "Missing feature TEXTURE_DESCRIPTOR_ARRAY for texture binding array extension"
+                );
+                enabled_features |= hal::Features::TEXTURE_DESCRIPTOR_ARRAY;
             }
 
             let family = adapter
