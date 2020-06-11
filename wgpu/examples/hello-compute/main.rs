@@ -123,7 +123,12 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
             .chunks_exact(4)
             .map(|b| u32::from_ne_bytes(b.try_into().unwrap()))
             .collect();
+
+        // With the current interface, we have to make sure all mapped views are
+        // dropped before we unmap the buffer.
+        drop(data);
         staging_buffer.unmap();
+
         result
     } else {
         panic!("failed to run compute on gpu!")
