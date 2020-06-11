@@ -237,11 +237,6 @@ impl<S: ResourceState> ResourceTracker<S> {
         self.map.clear();
     }
 
-    /// Returns true if the tracker is empty.
-    pub fn is_empty(&self) -> bool {
-        self.map.is_empty()
-    }
-
     /// Initialize a resource to be used.
     ///
     /// Returns false if the resource is already registered.
@@ -444,6 +439,7 @@ pub(crate) struct TrackerSet {
     pub samplers: ResourceTracker<PhantomData<id::SamplerId>>,
     pub compute_pipes: ResourceTracker<PhantomData<id::ComputePipelineId>>,
     pub render_pipes: ResourceTracker<PhantomData<id::RenderPipelineId>>,
+    pub bundles: ResourceTracker<PhantomData<id::RenderBundleId>>,
 }
 
 impl TrackerSet {
@@ -457,6 +453,7 @@ impl TrackerSet {
             samplers: ResourceTracker::new(backend),
             compute_pipes: ResourceTracker::new(backend),
             render_pipes: ResourceTracker::new(backend),
+            bundles: ResourceTracker::new(backend),
         }
     }
 
@@ -469,6 +466,7 @@ impl TrackerSet {
         self.samplers.clear();
         self.compute_pipes.clear();
         self.render_pipes.clear();
+        self.bundles.clear();
     }
 
     /// Try to optimize the tracking representation.
@@ -480,6 +478,7 @@ impl TrackerSet {
         self.samplers.optimize();
         self.compute_pipes.optimize();
         self.render_pipes.optimize();
+        self.bundles.optimize();
     }
 
     /// Merge all the trackers of another instance by extending
@@ -494,6 +493,7 @@ impl TrackerSet {
             .merge_extend(&other.compute_pipes)
             .unwrap();
         self.render_pipes.merge_extend(&other.render_pipes).unwrap();
+        self.bundles.merge_extend(&other.bundles).unwrap();
     }
 
     pub fn backend(&self) -> wgt::Backend {

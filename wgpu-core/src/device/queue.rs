@@ -532,7 +532,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .after_submit_internal(comb_raw, submit_index);
             }
 
-            let callbacks = device.maintain(self, false, &mut token);
+            let callbacks = device.maintain(&hub, false, &mut token);
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,

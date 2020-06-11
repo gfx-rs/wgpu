@@ -164,11 +164,12 @@ pub type ShaderModuleId = Id<crate::pipeline::ShaderModule<Dummy>>;
 pub type RenderPipelineId = Id<crate::pipeline::RenderPipeline<Dummy>>;
 pub type ComputePipelineId = Id<crate::pipeline::ComputePipeline<Dummy>>;
 // Command
-pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
 pub type CommandEncoderId = CommandBufferId;
-pub type RenderPassId = *mut crate::command::RawPass;
-pub type ComputePassId = *mut crate::command::RawPass;
-pub type RenderBundleId = Id<crate::command::RenderBundle<Dummy>>;
+pub type CommandBufferId = Id<crate::command::CommandBuffer<Dummy>>;
+pub type RenderPassId = *mut crate::command::RawPass<CommandEncoderId>;
+pub type ComputePassId = *mut crate::command::RawPass<CommandEncoderId>;
+pub type RenderBundleEncoderId = *mut crate::command::RenderBundleEncoder;
+pub type RenderBundleId = Id<crate::command::RenderBundle>;
 // Swap chain
 pub type SwapChainId = Id<crate::swap_chain::SwapChain<Dummy>>;
 

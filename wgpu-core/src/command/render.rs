@@ -5,12 +5,13 @@
 use crate::{
     command::{
         bind::{Binder, LayoutChange},
-        PassComponent, PhantomSlice, RawRenderPassColorAttachmentDescriptor,
+        PassComponent, PhantomSlice, RawPass, RawRenderPassColorAttachmentDescriptor,
         RawRenderPassDepthStencilAttachmentDescriptor, RawRenderTargets,
     },
     conv,
     device::{
-        FramebufferKey, RenderPassContext, RenderPassKey, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
+        AttachmentData, FramebufferKey, RenderPassContext, RenderPassKey, MAX_COLOR_TARGETS,
+        MAX_VERTEX_BUFFERS,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
@@ -23,7 +24,6 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekPoke, Poke};
-use smallvec::SmallVec;
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode,
     LoadOp, RenderPassColorAttachmentDescriptorBase,
@@ -116,6 +116,7 @@ pub enum RenderCommand {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     },
+    ExecuteBundle(id::RenderBundleId),
     End,
 }
 
@@ -126,9 +127,9 @@ impl Default for RenderCommand {
     }
 }
 
-impl super::RawPass {
+impl RawPass<id::CommandEncoderId> {
     pub unsafe fn new_render(parent_id: id::CommandEncoderId, desc: &RenderPassDescriptor) -> Self {
-        let mut pass = Self::from_vec(Vec::<RenderCommand>::with_capacity(1), parent_id);
+        let mut pass = Self::new::<RenderCommand>(parent_id);
 
         let mut targets: RawRenderTargets = mem::zeroed();
         if let Some(ds) = desc.depth_stencil_attachment {
@@ -168,8 +169,28 @@ impl super::RawPass {
         pass.encode(&targets);
         pass
     }
+}
 
-    pub unsafe fn finish_render(mut self) -> (Vec<u8>, id::CommandEncoderId) {
+impl<P: Copy> RawPass<P> {
+    pub unsafe fn fill_render_commands(
+        &mut self,
+        commands: &[RenderCommand],
+        mut offsets: &[DynamicOffset],
+    ) {
+        for com in commands {
+            self.encode(com);
+            if let RenderCommand::SetBindGroup {
+                num_dynamic_offsets,
+                ..
+            } = *com
+            {
+                self.encode_slice(&offsets[..num_dynamic_offsets as usize]);
+                offsets = &offsets[num_dynamic_offsets as usize..];
+            }
+        }
+    }
+
+    pub unsafe fn finish_render(mut self) -> (Vec<u8>, P) {
         self.finish(RenderCommand::End);
         self.into_vec()
     }
@@ -213,8 +234,8 @@ impl fmt::Debug for DrawError {
     }
 }
 
-#[derive(Debug)]
-pub struct IndexState {
+#[derive(Debug, Default)]
+struct IndexState {
     bound_buffer_view: Option<(id::BufferId, Range<BufferAddress>)>,
     format: IndexFormat,
     limit: u32,
@@ -233,10 +254,15 @@ impl IndexState {
             None => 0,
         }
     }
+
+    fn reset(&mut self) {
+        self.bound_buffer_view = None;
+        self.limit = 0;
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct VertexBufferState {
+struct VertexBufferState {
     total_size: BufferAddress,
     stride: BufferAddress,
     rate: InputStepMode,
@@ -250,9 +276,9 @@ impl VertexBufferState {
     };
 }
 
-#[derive(Debug)]
-pub struct VertexState {
-    inputs: SmallVec<[VertexBufferState; MAX_VERTEX_BUFFERS]>,
+#[derive(Debug, Default)]
+struct VertexState {
+    inputs: ArrayVec<[VertexBufferState; MAX_VERTEX_BUFFERS]>,
     vertex_limit: u32,
     instance_limit: u32,
 }
@@ -271,6 +297,12 @@ impl VertexState {
                 InputStepMode::Instance => self.instance_limit = self.instance_limit.min(limit),
             }
         }
+    }
+
+    fn reset(&mut self) {
+        self.inputs.clear();
+        self.vertex_limit = 0;
+        self.instance_limit = 0;
     }
 }
 
@@ -305,6 +337,14 @@ impl State {
         }
         Ok(())
     }
+
+    /// Reset the `RenderBundle`-related states.
+    fn reset_bundle(&mut self) {
+        self.binder.reset();
+        self.pipeline = OptionalState::Required;
+        self.index.reset();
+        self.vertex.reset();
+    }
 }
 
 // Common routines between render/compute
@@ -330,6 +370,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
         }
 
+        let (bundle_guard, mut token) = hub.render_bundles.read(&mut token);
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, mut token) = hub.render_pipelines.read(&mut token);
@@ -386,7 +427,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // instead of the special read-only one, which would be `None`.
         let mut is_ds_read_only = false;
 
-        let (context, sample_count) = {
+        let context = {
             use hal::device::Device as _;
 
             let samples_count_limit = device.hal_limits.framebuffer_color_sample_counts;
@@ -852,19 +893,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
 
-            let context = RenderPassContext {
-                colors: color_attachments
-                    .iter()
-                    .map(|at| view_guard[at.attachment].format)
-                    .collect(),
-                resolves: color_attachments
-                    .iter()
-                    .filter_map(|at| at.resolve_target)
-                    .map(|resolve| view_guard[resolve].format)
-                    .collect(),
-                depth_stencil: depth_stencil_attachment.map(|at| view_guard[at.attachment].format),
-            };
-            (context, sample_count)
+            RenderPassContext {
+                attachments: AttachmentData {
+                    colors: color_attachments
+                        .iter()
+                        .map(|at| view_guard[at.attachment].format)
+                        .collect(),
+                    resolves: color_attachments
+                        .iter()
+                        .filter_map(|at| at.resolve_target)
+                        .map(|resolve| view_guard[resolve].format)
+                        .collect(),
+                    depth_stencil: depth_stencil_attachment
+                        .map(|at| view_guard[at.attachment].format),
+                },
+                sample_count,
+            }
         };
 
         let mut state = State {
@@ -872,16 +916,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             blend_color: OptionalState::Unused,
             stencil_reference: OptionalState::Unused,
             pipeline: OptionalState::Required,
-            index: IndexState {
-                bound_buffer_view: None,
-                format: IndexFormat::Uint16,
-                limit: 0,
-            },
-            vertex: VertexState {
-                inputs: SmallVec::new(),
-                vertex_limit: 0,
-                instance_limit: 0,
-            },
+            index: IndexState::default(),
+            vertex: VertexState::default(),
         };
 
         let mut command = RenderCommand::Draw {
@@ -947,7 +983,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                         unsafe {
                             raw.bind_graphics_descriptor_sets(
-                                &&pipeline_layout_guard[pipeline_layout_id].raw,
+                                &pipeline_layout_guard[pipeline_layout_id].raw,
                                 index as usize,
                                 bind_groups,
                                 offsets
@@ -967,11 +1003,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     assert!(
                         context.compatible(&pipeline.pass_context),
-                        "The render pipeline output formats do not match render pass attachment formats!"
-                    );
-                    assert_eq!(
-                        pipeline.sample_count, sample_count,
-                        "The render pipeline and renderpass have mismatching sample_count"
+                        "The render pipeline output formats and sample count do not match render pass attachment formats!"
                     );
                     assert!(
                         !is_ds_read_only || pipeline.flags.contains(PipelineFlags::DEPTH_STENCIL_READ_ONLY),
@@ -1262,6 +1294,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                     }
                 }
+                RenderCommand::ExecuteBundle(bundle_id) => {
+                    let bundle = trackers
+                        .bundles
+                        .use_extend(&*bundle_guard, bundle_id, (), ())
+                        .unwrap();
+
+                    assert!(
+                        context.compatible(&bundle.context),
+                        "The render bundle output formats do not match render pass attachment formats!"
+                    );
+
+                    unsafe {
+                        bundle.execute(
+                            &mut raw,
+                            &*pipeline_layout_guard,
+                            &*bind_group_guard,
+                            &*pipeline_guard,
+                            &*buffer_guard,
+                        )
+                    };
+
+                    trackers.merge_extend(&bundle.used);
+                    state.reset_bundle();
+                }
                 RenderCommand::End => break,
             }
         }
@@ -1325,12 +1381,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod render_ffi {
     use super::{
-        super::{PhantomSlice, RawPass, Rect},
+        super::{PhantomSlice, Rect},
         RenderCommand,
     };
     use crate::{id, RawString};
     use std::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
+
+    type RawPass = super::super::RawPass<id::CommandEncoderId>;
 
     /// # Safety
     ///
@@ -1487,15 +1545,6 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_execute_bundles(
-        _pass: &mut RawPass,
-        _bundles: *const id::RenderBundleId,
-        _bundles_length: usize,
-    ) {
-        unimplemented!()
-    }
-
-    #[no_mangle]
     pub extern "C" fn wgpu_render_pass_push_debug_group(_pass: &mut RawPass, _label: RawString) {
         //TODO
     }
@@ -1508,6 +1557,17 @@ pub mod render_ffi {
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_insert_debug_marker(_pass: &mut RawPass, _label: RawString) {
         //TODO
+    }
+
+    #[no_mangle]
+    pub unsafe fn wgpu_render_pass_execute_bundles(
+        pass: &mut RawPass,
+        render_bundle_ids: *const id::RenderBundleId,
+        render_bundle_ids_length: usize,
+    ) {
+        for &bundle_id in slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) {
+            pass.encode(&RenderCommand::ExecuteBundle(bundle_id));
+        }
     }
 
     #[no_mangle]

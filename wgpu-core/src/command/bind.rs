@@ -6,14 +6,13 @@ use crate::{
     binding_model::BindGroup,
     hub::GfxBackend,
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId},
-    Stored,
+    Stored, MAX_BIND_GROUPS,
 };
 
-use smallvec::{smallvec, SmallVec};
+use arrayvec::ArrayVec;
 use std::slice;
 use wgt::DynamicOffset;
 
-pub const DEFAULT_BIND_GROUPS: usize = 4;
 type BindGroupMask = u8;
 
 #[derive(Clone, Debug)]
@@ -134,15 +133,22 @@ impl BindGroupEntry {
 #[derive(Debug)]
 pub struct Binder {
     pub(crate) pipeline_layout_id: Option<PipelineLayoutId>, //TODO: strongly `Stored`
-    pub(crate) entries: SmallVec<[BindGroupEntry; DEFAULT_BIND_GROUPS]>,
+    pub(crate) entries: ArrayVec<[BindGroupEntry; MAX_BIND_GROUPS]>,
 }
 
 impl Binder {
     pub(crate) fn new(max_bind_groups: u32) -> Self {
         Self {
             pipeline_layout_id: None,
-            entries: smallvec![Default::default(); max_bind_groups as usize],
+            entries: (0..max_bind_groups)
+                .map(|_| BindGroupEntry::default())
+                .collect(),
         }
+    }
+
+    pub(crate) fn reset(&mut self) {
+        self.pipeline_layout_id = None;
+        self.entries.clear();
     }
 
     pub(crate) fn reset_expectations(&mut self, length: usize) {

@@ -5,7 +5,7 @@
 #[cfg(feature = "trace")]
 use crate::device::trace;
 use crate::{
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
+    hub::{GfxBackend, GlobalIdentityHandlerFactory, Hub, Token},
     id, resource,
     track::TrackerSet,
     FastHashMap, RefCount, Stored, SubmissionIndex,
@@ -33,10 +33,11 @@ pub struct SuspectedResources {
     pub(crate) render_pipelines: Vec<id::RenderPipelineId>,
     pub(crate) bind_group_layouts: Vec<Stored<id::BindGroupLayoutId>>,
     pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
+    pub(crate) render_bundles: Vec<id::RenderBundleId>,
 }
 
 impl SuspectedResources {
-    pub fn clear(&mut self) {
+    pub(crate) fn clear(&mut self) {
         self.buffers.clear();
         self.textures.clear();
         self.texture_views.clear();
@@ -46,9 +47,10 @@ impl SuspectedResources {
         self.render_pipelines.clear();
         self.bind_group_layouts.clear();
         self.pipeline_layouts.clear();
+        self.render_bundles.clear();
     }
 
-    pub fn extend(&mut self, other: &Self) {
+    pub(crate) fn extend(&mut self, other: &Self) {
         self.buffers.extend_from_slice(&other.buffers);
         self.textures.extend_from_slice(&other.textures);
         self.texture_views.extend_from_slice(&other.texture_views);
@@ -62,6 +64,18 @@ impl SuspectedResources {
             .extend_from_slice(&other.bind_group_layouts);
         self.pipeline_layouts
             .extend_from_slice(&other.pipeline_layouts);
+        self.render_bundles.extend_from_slice(&other.render_bundles);
+    }
+
+    pub(crate) fn add_trackers(&mut self, trackers: &TrackerSet) {
+        self.buffers.extend(trackers.buffers.used());
+        self.textures.extend(trackers.textures.used());
+        self.texture_views.extend(trackers.views.used());
+        self.samplers.extend(trackers.samplers.used());
+        self.bind_groups.extend(trackers.bind_groups.used());
+        self.compute_pipelines.extend(trackers.compute_pipes.used());
+        self.render_pipelines.extend(trackers.render_pipes.used());
+        self.render_bundles.extend(trackers.bundles.used());
     }
 }
 
@@ -303,37 +317,38 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 impl<B: GfxBackend> LifetimeTracker<B> {
     pub(crate) fn triage_suspected<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         trackers: &Mutex<TrackerSet>,
         #[cfg(feature = "trace")] trace: Option<&Mutex<trace::Trace>>,
         token: &mut Token<super::Device<B>>,
     ) {
-        let hub = B::hub(global);
+        if !self.suspected_resources.render_bundles.is_empty() {
+            let mut trackers = trackers.lock();
+            let (mut guard, _) = hub.render_bundles.write(token);
+
+            while let Some(id) = self.suspected_resources.render_bundles.pop() {
+                if trackers.bundles.remove_abandoned(id) {
+                    #[cfg(feature = "trace")]
+                    trace.map(|t| t.lock().add(trace::Action::DestroyRenderBundle(id)));
+                    hub.render_bundles.free_id(id);
+                    let res = guard.remove(id).unwrap();
+                    self.suspected_resources.add_trackers(&res.used);
+                }
+            }
+        }
 
         if !self.suspected_resources.bind_groups.is_empty() {
             let mut trackers = trackers.lock();
             let (mut guard, _) = hub.bind_groups.write(token);
 
-            for id in self.suspected_resources.bind_groups.drain(..) {
+            while let Some(id) = self.suspected_resources.bind_groups.pop() {
                 if trackers.bind_groups.remove_abandoned(id) {
                     #[cfg(feature = "trace")]
                     trace.map(|t| t.lock().add(trace::Action::DestroyBindGroup(id)));
                     hub.bind_groups.free_id(id);
                     let res = guard.remove(id).unwrap();
 
-                    assert!(res.used.bind_groups.is_empty());
-                    self.suspected_resources
-                        .buffers
-                        .extend(res.used.buffers.used());
-                    self.suspected_resources
-                        .textures
-                        .extend(res.used.textures.used());
-                    self.suspected_resources
-                        .texture_views
-                        .extend(res.used.views.used());
-                    self.suspected_resources
-                        .samplers
-                        .extend(res.used.samplers.used());
+                    self.suspected_resources.add_trackers(&res.used);
 
                     let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
                     self.active
@@ -528,13 +543,13 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
     pub(crate) fn triage_mapped<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         token: &mut Token<super::Device<B>>,
     ) {
         if self.mapped.is_empty() {
             return;
         }
-        let (buffer_guard, _) = B::hub(global).buffers.read(token);
+        let (buffer_guard, _) = hub.buffers.read(token);
 
         for stored in self.mapped.drain(..) {
             let resource_id = stored.value;
@@ -558,11 +573,11 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
     pub(crate) fn triage_framebuffers<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         framebuffers: &mut FastHashMap<super::FramebufferKey, B::Framebuffer>,
         token: &mut Token<super::Device<B>>,
     ) {
-        let (texture_view_guard, _) = B::hub(global).texture_views.read(token);
+        let (texture_view_guard, _) = hub.texture_views.read(token);
         let remove_list = framebuffers
             .keys()
             .filter_map(|key| {
@@ -624,7 +639,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
 
     pub(crate) fn handle_mapping<G: GlobalIdentityHandlerFactory>(
         &mut self,
-        global: &Global<G>,
+        hub: &Hub<B, G>,
         raw: &B::Device,
         trackers: &Mutex<TrackerSet>,
         token: &mut Token<super::Device<B>>,
@@ -632,8 +647,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         if self.ready_to_map.is_empty() {
             return Vec::new();
         }
-        let hub = B::hub(global);
-        let (mut buffer_guard, _) = B::hub(global).buffers.write(token);
+        let (mut buffer_guard, _) = hub.buffers.write(token);
         let mut pending_callbacks: Vec<super::BufferMapPendingCallback> =
             Vec::with_capacity(self.ready_to_map.len());
         let mut trackers = trackers.lock();

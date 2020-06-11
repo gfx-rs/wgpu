@@ -143,19 +143,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     commands,
                     dynamic_offsets,
                 } => unsafe {
-                    let mut offsets = &dynamic_offsets[..];
                     let mut pass = wgc::command::RawPass::new_compute(encoder);
-                    for com in commands {
-                        pass.encode(&com);
-                        if let wgc::command::ComputeCommand::SetBindGroup {
-                            num_dynamic_offsets,
-                            ..
-                        } = com
-                        {
-                            pass.encode_slice(&offsets[..num_dynamic_offsets as usize]);
-                            offsets = &offsets[num_dynamic_offsets as usize..];
-                        }
-                    }
+                    pass.fill_compute_commands(&commands, &dynamic_offsets);
                     let (data, _) = pass.finish_compute();
                     self.command_encoder_run_compute_pass::<B>(encoder, &data);
                 },
@@ -165,7 +154,6 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     commands,
                     dynamic_offsets,
                 } => unsafe {
-                    let mut offsets = &dynamic_offsets[..];
                     let mut pass = wgc::command::RawPass::new_render(
                         encoder,
                         &wgc::command::RenderPassDescriptor {
@@ -174,17 +162,7 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                             depth_stencil_attachment: target_depth_stencil.as_ref(),
                         },
                     );
-                    for com in commands {
-                        pass.encode(&com);
-                        if let wgc::command::RenderCommand::SetBindGroup {
-                            num_dynamic_offsets,
-                            ..
-                        } = com
-                        {
-                            pass.encode_slice(&offsets[..num_dynamic_offsets as usize]);
-                            offsets = &offsets[num_dynamic_offsets as usize..];
-                        }
-                    }
+                    pass.fill_render_commands(&commands, &dynamic_offsets);
                     let (data, _) = pass.finish_render();
                     self.command_encoder_run_render_pass::<B>(encoder, &data);
                 },
@@ -407,6 +385,34 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
+            }
+            A::CreateRenderBundle {
+                id,
+                desc,
+                commands,
+                dynamic_offsets,
+            } => {
+                let label = Label::new(&desc.label);
+                let mut bundle_encoder = wgc::command::RenderBundleEncoder::new(
+                    &wgt::RenderBundleEncoderDescriptor {
+                        label: None,
+                        color_formats: &desc.color_formats,
+                        depth_stencil_format: desc.depth_stencil_format,
+                        sample_count: desc.sample_count,
+                    },
+                    device,
+                );
+                bundle_encoder.fill_commands(&commands, &dynamic_offsets);
+                self.render_bundle_encoder_finish::<B>(
+                    bundle_encoder,
+                    &wgt::RenderBundleDescriptor {
+                        label: label.as_ptr(),
+                    },
+                    id,
+                );
+            }
+            A::DestroyRenderBundle(id) => {
+                self.render_bundle_destroy::<B>(id);
             }
             A::WriteBuffer {
                 id,
