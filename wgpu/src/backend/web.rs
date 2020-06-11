@@ -725,6 +725,11 @@ impl crate::Context for Context {
         wgt::Limits::default()
     }
 
+    fn adapter_capabilities(&self, _adapter: &Self::AdapterId) -> wgt::Capabilities {
+        // TODO: webgpu doesn't support capabilities, so return an empty set of capabilities
+        wgt::Capabilities::default()
+    }
+
     fn device_extensions(&self, _device: &Self::DeviceId) -> wgt::Extensions {
         // TODO: web-sys has no way of getting extensions on devices
         wgt::Extensions::empty()
@@ -733,6 +738,11 @@ impl crate::Context for Context {
     fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
         // TODO: web-sys has a method for getting limits on devices, but it returns Object not GpuLimit
         wgt::Limits::default()
+    }
+
+    fn device_capabilities(&self, _device: &Self::DeviceId) -> wgt::Capabilities {
+        // TODO: webgpu doesn't support capabilities, so return an empty set of capabilities
+        wgt::Capabilities::default()
     }
 
     fn device_create_swap_chain(
@@ -863,9 +873,9 @@ impl crate::Context for Context {
                         view: ref texture_view,
                         read_only_depth_stencil: _,
                     } => JsValue::from(texture_view.id.0.clone()),
-                    BindingResource::TextureViewArray(..) => {
-                        panic!("Web backend does not support TEXTURE_BINDING_ARRAY extension")
-                    }
+                    BindingResource::TextureViewArray(..) => panic!(
+                        "Web backend does not support SAMPLED_TEXTURE_BINDING_ARRAY extension"
+                    ),
                 };
 
                 web_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)

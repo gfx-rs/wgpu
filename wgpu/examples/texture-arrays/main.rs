@@ -14,6 +14,21 @@ struct Vertex {
 unsafe impl Pod for Vertex {}
 unsafe impl Zeroable for Vertex {}
 
+#[repr(C)]
+#[derive(Clone, Copy)]
+struct Uniform {
+    index: u32,
+}
+
+unsafe impl Pod for Uniform {}
+unsafe impl Zeroable for Uniform {}
+
+struct UniformWorkaroundData {
+    bind_group_layout: wgpu::BindGroupLayout,
+    bind_group0: wgpu::BindGroup,
+    bind_group1: wgpu::BindGroup,
+}
+
 fn vertex(pos: [i8; 2], tc: [i8; 2], index: i8) -> Vertex {
     Vertex {
         _pos: [pos[0] as f32, pos[1] as f32],
@@ -66,12 +81,13 @@ struct Example {
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
+    uniform_workaround_data: Option<UniformWorkaroundData>,
 }
 
 impl framework::Example for Example {
     fn needed_extensions() -> (wgpu::Extensions, wgpu::UnsafeExtensions) {
         (
-            wgpu::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY,
+            wgpu::Extensions::BINDING_INDEXING,
             wgpu::UnsafeExtensions::disallow(),
         )
     }
@@ -80,12 +96,30 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
-        let device_extensions = device.extensions();
-
-        assert!(
-            device_extensions.contains(wgpu::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY),
-            "Graphics Device does not support SAMPLED_TEXTURE_BINDING_ARRAY extension"
-        );
+        let mut uniform_workaround = false;
+        let vs_bytes: &[u8] = include_bytes!("shader.vert.spv");
+        let fs_bytes: &[u8] = match device.capabilities() {
+            c if c.contains(wgpu::Capabilities::UNSIZED_BINDING_ARRAY) => {
+                include_bytes!("unsized-non-uniform.frag.spv")
+            }
+            c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
+                include_bytes!("non-uniform.frag.spv")
+            }
+            c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
+                uniform_workaround = true;
+                include_bytes!("uniform.frag.spv")
+            }
+            c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY) => {
+                include_bytes!("constant.frag.spv")
+            }
+            _ => {
+                panic!("Graphics adapter does not support any of the capabilities needed for this example");
+            }
+        };
+        let vs_module =
+            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(vs_bytes)).unwrap());
+        let fs_module =
+            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(fs_bytes)).unwrap());
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
@@ -97,6 +131,54 @@ impl framework::Example for Example {
         let index_data = create_indices();
         let index_buffer = device
             .create_buffer_with_data(bytemuck::cast_slice(&index_data), wgpu::BufferUsage::INDEX);
+
+        let uniform_workaround_data = if uniform_workaround {
+            let buffer0 = device.create_buffer_with_data(
+                &bytemuck::cast_slice(&[Uniform { index: 0 }]),
+                wgpu::BufferUsage::UNIFORM,
+            );
+            let buffer1 = device.create_buffer_with_data(
+                &bytemuck::cast_slice(&[Uniform { index: 1 }]),
+                wgpu::BufferUsage::UNIFORM,
+            );
+
+            let bind_group_layout =
+                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                    bindings: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
+                        ..wgpu::BindGroupLayoutEntry::default()
+                    }],
+                    label: Some("uniform workaround bind group layout"),
+                });
+
+            let bind_group0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                bindings: &[wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(buffer0.slice(..)),
+                }],
+                label: Some("uniform workaround bind group 0"),
+            });
+
+            let bind_group1 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                layout: &bind_group_layout,
+                bindings: &[wgpu::Binding {
+                    binding: 0,
+                    resource: wgpu::BindingResource::Buffer(buffer1.slice(..)),
+                }],
+                label: Some("uniform workaround bind group 1"),
+            });
+
+            Some(UniformWorkaroundData {
+                bind_group_layout,
+                bind_group0,
+                bind_group1,
+            })
+        } else {
+            None
+        };
 
         let red_texture_data = create_texture_data(Color::RED);
         let green_texture_data = create_texture_data(Color::GREEN);
@@ -206,16 +288,15 @@ impl framework::Example for Example {
             label: Some("bind group"),
         });
 
-        let vs_bytes = include_bytes!("shader.vert.spv");
-        let fs_bytes = include_bytes!("shader.frag.spv");
-        let vs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
-        let fs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
-
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&bind_group_layout],
-        });
+        let pipeline_layout = if let Some(ref workaround) = uniform_workaround_data {
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[&bind_group_layout, &workaround.bind_group_layout],
+            })
+        } else {
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[&bind_group_layout],
+            })
+        };
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
@@ -261,6 +342,7 @@ impl framework::Example for Example {
                 index_buffer,
                 bind_group,
                 pipeline,
+                uniform_workaround_data,
             },
             None,
         )
@@ -305,7 +387,14 @@ impl framework::Example for Example {
         rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..));
-        rpass.draw_indexed(0..12, 0, 0..1);
+        if let Some(ref workaround) = self.uniform_workaround_data {
+            rpass.set_bind_group(1, &workaround.bind_group0, &[]);
+            rpass.draw_indexed(0..6, 0, 0..1);
+            rpass.set_bind_group(1, &workaround.bind_group1, &[]);
+            rpass.draw_indexed(6..12, 0, 0..1);
+        } else {
+            rpass.draw_indexed(0..12, 0, 0..1);
+        }
 
         drop(rpass);
 
