@@ -60,13 +60,22 @@ pub struct PipelineLayout<B: hal::Backend> {
 }
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BufferBinding {
-    pub buffer: BufferId,
+    pub buffer_id: BufferId,
     pub offset: wgt::BufferAddress,
     pub size: wgt::BufferSize,
+}
+
+#[repr(C)]
+#[derive(Clone, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct TextureBinding {
+    pub view_id: TextureViewId,
+    pub read_only_depth_stencil: bool,
 }
 
 // Note: Duplicated in wgpu-rs as BindingResource
@@ -74,8 +83,8 @@ pub struct BufferBinding {
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
     Sampler(SamplerId),
-    TextureView(TextureViewId),
-    TextureViewArray(&'a [TextureViewId]),
+    TextureView(TextureBinding),
+    TextureViewArray(&'a [TextureBinding]),
 }
 
 // Note: Duplicated in wgpu-rs as Binding

@@ -1471,7 +1471,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         let buffer = used
                             .buffers
-                            .use_extend(&*buffer_guard, bb.buffer, (), internal_use)
+                            .use_extend(&*buffer_guard, bb.buffer_id, (), internal_use)
                             .unwrap();
                         assert!(
                             buffer.usage.contains(pub_usage),
@@ -1509,12 +1509,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .unwrap();
                         SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
                     }
-                    binding_model::BindingResource::TextureView(id) => {
+                    binding_model::BindingResource::TextureView(ref tb) => {
                         let (pub_usage, internal_use, image_layout) = match decl.ty {
                             wgt::BindingType::SampledTexture { .. } => (
                                 wgt::TextureUsage::SAMPLED,
                                 resource::TextureUse::SAMPLED,
-                                hal::image::Layout::ShaderReadOnlyOptimal,
+                                if tb.read_only_depth_stencil {
+                                    hal::image::Layout::DepthStencilReadOnlyOptimal
+                                } else {
+                                    hal::image::Layout::ShaderReadOnlyOptimal
+                                },
                             ),
                             wgt::BindingType::StorageTexture { readonly, .. } => (
                                 wgt::TextureUsage::STORAGE,
@@ -1529,7 +1533,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         let view = used
                             .views
-                            .use_extend(&*texture_view_guard, id, (), ())
+                            .use_extend(&*texture_view_guard, tb.view_id, (), ())
                             .unwrap();
                         match view.inner {
                             resource::TextureViewInner::Native {
@@ -1552,6 +1556,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     "Texture usage {:?} must contain usage flag(s) {:?}",
                                     texture.usage,
                                     pub_usage
+                                );
+                                assert!(
+                                    !tb.read_only_depth_stencil
+                                        || !texture
+                                            .full_range
+                                            .aspects
+                                            .contains(hal::format::Aspects::COLOR)
                                 );
 
                                 SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
@@ -1578,20 +1589,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             );
                         }
 
-                        let (pub_usage, internal_use, image_layout) = match decl.ty {
+                        let (pub_usage, internal_use) = match decl.ty {
                             wgt::BindingType::SampledTexture { .. } => (
                                 wgt::TextureUsage::SAMPLED,
                                 resource::TextureUse::SAMPLED,
-                                hal::image::Layout::ShaderReadOnlyOptimal,
                             ),
                             _ => panic!("Mismatched texture binding type in {:?}. Expected a type of SampledTextureArray", decl),
                         };
                         bindings_array
                             .iter()
-                            .map(|id| {
+                            .map(|tb| {
                                 let view = used
                                     .views
-                                    .use_extend(&*texture_view_guard, *id, (), ())
+                                    .use_extend(&*texture_view_guard, tb.view_id, (), ())
                                     .unwrap();
                                 match view.inner {
                                     resource::TextureViewInner::Native {
@@ -1616,6 +1626,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             pub_usage
                                         );
 
+                                        let image_layout = if tb.read_only_depth_stencil {
+                                            assert!(!texture
+                                                .full_range
+                                                .aspects
+                                                .contains(hal::format::Aspects::COLOR));
+                                            hal::image::Layout::DepthStencilReadOnlyOptimal
+                                        } else {
+                                            hal::image::Layout::ShaderReadOnlyOptimal
+                                        };
                                         hal::pso::Descriptor::Image(raw, image_layout)
                                     }
                                     resource::TextureViewInner::SwapChain { .. } => panic!(
@@ -1671,21 +1690,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .iter()
                     .map(|entry| {
                         let res = match entry.resource {
-                            binding_model::BindingResource::Buffer(ref b) => {
-                                trace::BindingResource::Buffer {
-                                    id: b.buffer,
-                                    offset: b.offset,
-                                    size: b.size,
-                                }
+                            binding_model::BindingResource::Buffer(ref binding) => {
+                                trace::BindingResource::Buffer(binding.clone())
                             }
-                            binding_model::BindingResource::TextureView(id) => {
-                                trace::BindingResource::TextureView(id)
+                            binding_model::BindingResource::TextureView(ref binding) => {
+                                trace::BindingResource::TextureView(binding.clone())
                             }
                             binding_model::BindingResource::Sampler(id) => {
                                 trace::BindingResource::Sampler(id)
                             }
-                            binding_model::BindingResource::TextureViewArray(ref id_array) => {
-                                trace::BindingResource::TextureViewArray(id_array.to_vec())
+                            binding_model::BindingResource::TextureViewArray(ref binding_array) => {
+                                trace::BindingResource::TextureViewArray(binding_array.to_vec())
                             }
                         };
                         (entry.binding, res)

@@ -23,7 +23,7 @@ pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 
 #[repr(transparent)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 #[cfg_attr(
     feature = "trace",
