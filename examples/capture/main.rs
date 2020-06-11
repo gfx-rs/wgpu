@@ -153,6 +153,10 @@ async fn run() {
         }
         png_writer.finish().unwrap();
 
+        // With the current interface, we have to make sure all mapped views are
+        // dropped before we unmap the buffer.
+        drop(padded_buffer);
+
         output_buffer.unmap();
     }
 }
