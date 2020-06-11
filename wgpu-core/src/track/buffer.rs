@@ -79,6 +79,25 @@ impl ResourceState for BufferState {
         Ok(())
     }
 
+    fn prepend(
+        &mut self,
+        id: Self::Id,
+        _selector: Self::Selector,
+        usage: Self::Usage,
+    ) -> Result<(), PendingTransition<Self>> {
+        match self.first {
+            Some(old) if old != usage => Err(PendingTransition {
+                id,
+                selector: (),
+                usage: old..usage,
+            }),
+            _ => {
+                self.first = Some(usage);
+                Ok(())
+            }
+        }
+    }
+
     fn merge(
         &mut self,
         id: Self::Id,
@@ -187,6 +206,32 @@ mod test {
             Unit {
                 first: Some(BufferUse::STORAGE_STORE),
                 last: BufferUse::STORAGE_STORE,
+            }
+        );
+    }
+
+    #[test]
+    fn prepend() {
+        let mut bs = Unit {
+            first: None,
+            last: BufferUse::VERTEX,
+        };
+        let id = Id::default();
+        bs.prepend(id, (), BufferUse::INDEX).unwrap();
+        bs.prepend(id, (), BufferUse::INDEX).unwrap();
+        assert_eq!(
+            bs.prepend(id, (), BufferUse::STORAGE_LOAD),
+            Err(PendingTransition {
+                id,
+                selector: (),
+                usage: BufferUse::INDEX..BufferUse::STORAGE_LOAD,
+            })
+        );
+        assert_eq!(
+            bs,
+            Unit {
+                first: Some(BufferUse::INDEX),
+                last: BufferUse::VERTEX,
             }
         );
     }
