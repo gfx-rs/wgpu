@@ -21,14 +21,15 @@ pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
     read_spirv, AddressMode, Backend, BackendBit, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
     BindingType, BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize,
-    BufferUsage, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction,
-    CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extensions, Extent3d,
-    FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp, Origin3d, PowerPreference,
-    PresentMode, PrimitiveTopology, RasterizationStateDescriptor, RenderBundleEncoderDescriptor,
-    ShaderLocation, ShaderStage, StencilOperation, StencilStateFaceDescriptor, StoreOp,
-    SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout,
-    TextureDimension, TextureFormat, TextureUsage, TextureViewDimension, UnsafeExtensions,
-    VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    BufferUsage, Capabilities, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
+    CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
+    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
+    Origin3d, PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
+    RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage, StencilOperation,
+    StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect,
+    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
+    TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
+    BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -143,9 +144,11 @@ trait Context: Sized {
     ) -> Self::RequestDeviceFuture;
     fn adapter_extensions(&self, adapter: &Self::AdapterId) -> Extensions;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
+    fn adapter_capabilities(&self, adapter: &Self::AdapterId) -> Capabilities;
 
     fn device_extensions(&self, device: &Self::DeviceId) -> Extensions;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
+    fn device_capabilities(&self, device: &Self::DeviceId) -> Capabilities;
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
@@ -1013,10 +1016,14 @@ impl Adapter {
         Context::adapter_limits(&*self.context, &self.id)
     }
 
+    pub fn capabilities(&self) -> Capabilities {
+        Context::adapter_capabilities(&*self.context, &self.id)
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_info(&self) -> AdapterInfo {
-        //wgn::adapter_get_info(self.id)
-        unimplemented!()
+        let context = &self.context;
+        wgc::gfx_select!(self.id => context.adapter_get_info(self.id))
     }
 }
 
@@ -1032,6 +1039,10 @@ impl Device {
 
     pub fn limits(&self) -> Limits {
         Context::device_limits(&*self.context, &self.id)
+    }
+
+    pub fn capabilities(&self) -> Capabilities {
+        Context::device_capabilities(&*self.context, &self.id)
     }
 
     /// Creates a shader module from SPIR-V source code.

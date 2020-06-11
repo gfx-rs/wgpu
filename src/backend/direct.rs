@@ -1,8 +1,8 @@
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
-    BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor, Extensions, Limits,
-    MapMode, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
-    SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
+    BufferDescriptor, Capabilities, CommandEncoderDescriptor, ComputePipelineDescriptor,
+    Extensions, Limits, MapMode, PipelineLayoutDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -354,12 +354,20 @@ impl crate::Context for Context {
         gfx_select!(*adapter => self.adapter_limits(*adapter))
     }
 
+    fn adapter_capabilities(&self, adapter: &Self::AdapterId) -> Capabilities {
+        gfx_select!(*adapter => self.adapter_capabilities(*adapter))
+    }
+
     fn device_extensions(&self, device: &Self::DeviceId) -> Extensions {
         gfx_select!(*device => self.device_extensions(*device))
     }
 
     fn device_limits(&self, device: &Self::DeviceId) -> Limits {
         gfx_select!(*device => self.device_limits(*device))
+    }
+
+    fn device_capabilities(&self, device: &Self::DeviceId) -> Capabilities {
+        gfx_select!(*device => self.device_capabilities(*device))
     }
 
     fn device_create_swap_chain(
