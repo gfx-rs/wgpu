@@ -71,7 +71,7 @@ struct Example {
 impl framework::Example for Example {
     fn needed_extensions() -> (wgpu::Extensions, wgpu::UnsafeExtensions) {
         (
-            wgpu::Extensions::TEXTURE_BINDING_ARRAY,
+            wgpu::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY,
             wgpu::UnsafeExtensions::disallow(),
         )
     }
@@ -83,8 +83,8 @@ impl framework::Example for Example {
         let device_extensions = device.extensions();
 
         assert!(
-            device_extensions.contains(wgpu::Extensions::TEXTURE_BINDING_ARRAY),
-            "Graphics Device does not support TEXTURE_BINDING_ARRAY extension"
+            device_extensions.contains(wgpu::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY),
+            "Graphics Device does not support SAMPLED_TEXTURE_BINDING_ARRAY extension"
         );
 
         let vertex_size = std::mem::size_of::<Vertex>();
