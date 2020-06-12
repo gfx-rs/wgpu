@@ -41,8 +41,27 @@ fn is_depth_stencil_read_only(
     desc: &RenderPassDepthStencilAttachmentDescriptor,
     aspects: hal::format::Aspects,
 ) -> bool {
-    (desc.depth_read_only || !aspects.contains(hal::format::Aspects::DEPTH))
-        && (desc.stencil_read_only || !aspects.contains(hal::format::Aspects::STENCIL))
+    if aspects.contains(hal::format::Aspects::DEPTH) {
+        if !desc.depth_read_only {
+            return false;
+        }
+        assert_eq!(
+            (desc.depth_load_op, desc.depth_store_op),
+            (wgt::LoadOp::Load, wgt::StoreOp::Store),
+            "Unable to clear read-only depth"
+        );
+    }
+    if aspects.contains(hal::format::Aspects::STENCIL) {
+        if !desc.stencil_read_only {
+            return false;
+        }
+        assert_eq!(
+            (desc.stencil_load_op, desc.stencil_store_op),
+            (wgt::LoadOp::Load, wgt::StoreOp::Store),
+            "Unable to clear read-only stencil"
+        );
+    }
+    true
 }
 
 #[repr(C)]
@@ -427,6 +446,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // instead of the special read-only one, which would be `None`.
         let mut is_ds_read_only = false;
 
+        struct OutputAttachment<'a> {
+            texture_id: &'a Stored<id::TextureId>,
+            range: &'a hal::image::SubresourceRange,
+            previous_use: Option<TextureUse>,
+            new_use: TextureUse,
+        }
+        const MAX_TOTAL_ATTACHMENTS: usize = 2 * MAX_COLOR_TARGETS + 1;
+        let mut output_attachments = ArrayVec::<[OutputAttachment; MAX_TOTAL_ATTACHMENTS]>::new();
+
         let context = {
             use hal::device::Device as _;
 
@@ -444,16 +472,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 sample_count & samples_count_limit != 0,
                 "Attachment sample_count must be supported by physical device limits"
             );
-
-            const MAX_TOTAL_ATTACHMENTS: usize = 10;
-            struct OutputAttachment<'a> {
-                texture_id: &'a Stored<id::TextureId>,
-                range: &'a hal::image::SubresourceRange,
-                previous_use: Option<TextureUse>,
-                new_use: TextureUse,
-            }
-            let mut output_attachments =
-                ArrayVec::<[OutputAttachment; MAX_TOTAL_ATTACHMENTS]>::new();
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -668,33 +686,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            for ot in output_attachments {
-                let texture = &texture_guard[ot.texture_id.value];
-                assert!(
-                    texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT),
-                    "Texture usage {:?} must contain the usage flag OUTPUT_ATTACHMENT",
-                    texture.usage
-                );
-
-                // this is important to record the `first` state.
-                let _ = trackers.textures.change_replace(
-                    ot.texture_id.value,
-                    &ot.texture_id.ref_count,
-                    ot.range.clone(),
-                    ot.previous_use.unwrap_or(ot.new_use),
-                );
-                if ot.previous_use.is_some() {
-                    // If we expect the texture to be transited to a new state by the
-                    // render pass configuration, make the tracker aware of that.
-                    let _ = trackers.textures.change_replace(
-                        ot.texture_id.value,
-                        &ot.texture_id.ref_count,
-                        ot.range.clone(),
-                        ot.new_use,
-                    );
-                };
-            }
-
             let mut render_pass_cache = device.render_passes.lock();
             let render_pass = match render_pass_cache.entry(rp_key.clone()) {
                 Entry::Occupied(e) => e.into_mut(),
@@ -740,7 +731,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let depth_id = depth_stencil_attachment.map(|at| {
                         let aspects = view_guard[at.attachment].range.aspects;
-                        let usage = if is_depth_stencil_read_only(at, aspects) {
+                        let usage = if is_ds_read_only {
                             TextureUse::ATTACHMENT_READ
                         } else {
                             TextureUse::ATTACHMENT_WRITE
@@ -1365,6 +1356,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             raw.end_render_pass();
         }
+
+        for ot in output_attachments {
+            let texture = &texture_guard[ot.texture_id.value];
+            assert!(
+                texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT),
+                "Texture usage {:?} must contain the usage flag OUTPUT_ATTACHMENT",
+                texture.usage
+            );
+
+            // the tracker set of the pass is always in "extend" mode
+            trackers
+                .textures
+                .change_extend(
+                    ot.texture_id.value,
+                    &ot.texture_id.ref_count,
+                    ot.range.clone(),
+                    ot.new_use,
+                )
+                .unwrap();
+
+            if let Some(usage) = ot.previous_use {
+                // Make the attachment tracks to be aware of the internal
+                // transition done by the render pass, by registering the
+                // previous usage as the initial state.
+                trackers
+                    .textures
+                    .prepend(
+                        ot.texture_id.value,
+                        &ot.texture_id.ref_count,
+                        ot.range.clone(),
+                        usage,
+                    )
+                    .unwrap();
+            }
+        }
+
         super::CommandBuffer::insert_barriers(
             cmb.raw.last_mut().unwrap(),
             &mut cmb.trackers,

@@ -80,6 +80,14 @@ pub trait ResourceState: Clone + Default {
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>>;
 
+    /// Sets up the first usage of the selected sub-resources.
+    fn prepend(
+        &mut self,
+        id: Self::Id,
+        selector: Self::Selector,
+        usage: Self::Usage,
+    ) -> Result<(), PendingTransition<Self>>;
+
     /// Merge the state of this resource tracked by a different instance
     /// with the current one.
     ///
@@ -321,6 +329,21 @@ impl<S: ResourceState> ResourceTracker<S> {
         self.temp.drain(..)
     }
 
+    /// Turn the tracking from the "expand" mode into the "replace" one,
+    /// installing the selected usage as the "first".
+    /// This is a special operation only used by the render pass attachments.
+    pub fn prepend(
+        &mut self,
+        id: S::Id,
+        ref_count: &RefCount,
+        selector: S::Selector,
+        usage: S::Usage,
+    ) -> Result<(), PendingTransition<S>> {
+        Self::get_or_insert(self.backend, &mut self.map, id, ref_count)
+            .state
+            .prepend(id, selector, usage)
+    }
+
     /// Merge another tracker into `self` by extending the current states
     /// without any transitions.
     pub fn merge_extend(&mut self, other: &Self) -> Result<(), PendingTransition<S>> {
@@ -411,6 +434,15 @@ impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
         _selector: Self::Selector,
         _usage: Self::Usage,
         _output: Option<&mut Vec<PendingTransition<Self>>>,
+    ) -> Result<(), PendingTransition<Self>> {
+        Ok(())
+    }
+
+    fn prepend(
+        &mut self,
+        _id: Self::Id,
+        _selector: Self::Selector,
+        _usage: Self::Usage,
     ) -> Result<(), PendingTransition<Self>> {
         Ok(())
     }
