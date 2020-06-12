@@ -405,7 +405,7 @@ impl crate::Context for Context {
     ) -> Self::BindGroupId {
         use wgc::binding_model as bm;
 
-        let texture_view_arena: Arena<wgc::id::TextureViewId> = Arena::new();
+        let texture_view_arena: Arena<bm::TextureBinding> = Arena::new();
         let bindings = desc
             .bindings
             .iter()
@@ -414,22 +414,26 @@ impl crate::Context for Context {
                 resource: match binding.resource {
                     BindingResource::Buffer(ref buffer_slice) => {
                         bm::BindingResource::Buffer(bm::BufferBinding {
-                            buffer: buffer_slice.buffer.id,
+                            buffer_id: buffer_slice.buffer.id,
                             offset: buffer_slice.offset,
                             size: buffer_slice.size,
                         })
                     }
-                    BindingResource::Sampler(ref sampler) => {
-                        bm::BindingResource::Sampler(sampler.id)
-                    }
-                    BindingResource::TextureView(ref texture_view) => {
-                        bm::BindingResource::TextureView(texture_view.id)
-                    }
+                    BindingResource::Sampler(sampler) => bm::BindingResource::Sampler(sampler.id),
+                    BindingResource::TextureView {
+                        view,
+                        read_only_depth_stencil,
+                    } => bm::BindingResource::TextureView(bm::TextureBinding {
+                        view_id: view.id,
+                        read_only_depth_stencil,
+                    }),
                     BindingResource::TextureViewArray(texture_view_array) => {
-                        bm::BindingResource::TextureViewArray(
-                            texture_view_arena
-                                .alloc_extend(texture_view_array.iter().map(|view| view.id)),
-                        )
+                        bm::BindingResource::TextureViewArray(texture_view_arena.alloc_extend(
+                            texture_view_array.iter().map(|view| bm::TextureBinding {
+                                view_id: view.id,
+                                read_only_depth_stencil: false, //TODO
+                            }),
+                        ))
                     }
                 },
             })

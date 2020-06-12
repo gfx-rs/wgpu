@@ -222,7 +222,10 @@ impl framework::Example for Skybox {
                 },
                 wgpu::Binding {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                    resource: wgpu::BindingResource::TextureView {
+                        view: &texture_view,
+                        read_only_depth_stencil: false,
+                    },
                 },
                 wgpu::Binding {
                     binding: 2,
