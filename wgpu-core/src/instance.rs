@@ -134,8 +134,20 @@ impl<B: hal::Backend> Adapter<B> {
             adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
         );
         extensions.set(
-            wgt::Extensions::TEXTURE_BINDING_ARRAY,
+            wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY,
             adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
+        );
+        extensions.set(
+            wgt::Extensions::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
+            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
+        );
+        extensions.set(
+            wgt::Extensions::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
+        );
+        extensions.set(
+            wgt::Extensions::UNSIZED_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
         );
         if unsafe_extensions.allowed() {
             // Unsafe extensions go here
@@ -641,16 +653,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
 
             // Check features needed by extensions
-            if desc
-                .extensions
-                .contains(wgt::Extensions::ANISOTROPIC_FILTERING)
-            {
-                assert!(
-                    available_features.contains(hal::Features::SAMPLER_ANISOTROPY),
-                    "Missing feature SAMPLER_ANISOTROPY for anisotropic filtering extension"
-                );
-                enabled_features |= hal::Features::SAMPLER_ANISOTROPY;
-            }
+            enabled_features.set(
+                hal::Features::SAMPLER_ANISOTROPY,
+                desc.extensions
+                    .contains(wgt::Extensions::ANISOTROPIC_FILTERING),
+            );
             if desc
                 .extensions
                 .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS)
@@ -658,16 +665,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             {
                 log::warn!("Extension MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
             }
-            if desc
-                .extensions
-                .contains(wgt::Extensions::TEXTURE_BINDING_ARRAY)
-            {
-                assert!(
-                    available_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
-                    "Missing feature TEXTURE_DESCRIPTOR_ARRAY for texture binding array extension"
-                );
-                enabled_features |= hal::Features::TEXTURE_DESCRIPTOR_ARRAY;
-            }
+            enabled_features.set(
+                hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
+                desc.extensions
+                    .contains(wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY),
+            );
+            enabled_features.set(
+                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
+                desc.extensions
+                    .contains(wgt::Extensions::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
+            );
+            enabled_features.set(
+                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+                desc.extensions
+                    .contains(wgt::Extensions::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+            );
+            enabled_features.set(
+                hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+                desc.extensions
+                    .contains(wgt::Extensions::UNSIZED_BINDING_ARRAY),
+            );
 
             let family = adapter
                 .raw

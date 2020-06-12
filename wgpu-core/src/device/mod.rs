@@ -1129,10 +1129,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     wgt::BindingType::SampledTexture { .. } => {
                         if !device
                             .extensions
-                            .contains(wgt::Extensions::TEXTURE_BINDING_ARRAY)
+                            .contains(wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY)
                         {
                             return Err(binding_model::BindGroupLayoutError::MissingExtension(
-                                wgt::Extensions::TEXTURE_BINDING_ARRAY,
+                                wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY,
                             ));
                         }
                     }
@@ -1497,7 +1497,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     binding_model::BindingResource::TextureViewArray(ref bindings_array) => {
-                        assert!(device.extensions.contains(wgt::Extensions::TEXTURE_BINDING_ARRAY), "Extension TEXTURE_BINDING_ARRAY must be enabled to use TextureViewArrays in a bind group");
+                        assert!(device.extensions.contains(wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY), "Extension SAMPLED_TEXTURE_BINDING_ARRAY must be enabled to use TextureViewArrays in a bind group");
 
                         if let Some(count) = decl.count {
                             assert_eq!(

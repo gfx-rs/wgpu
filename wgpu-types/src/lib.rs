@@ -157,7 +157,7 @@ bitflags::bitflags! {
         ///
         /// This is a native only extension.
         const MAPPABLE_PRIMARY_BUFFERS = 0x0000_0000_0002_0000;
-        /// Allows the user to create uniform arrays of textures in shaders:
+        /// Allows the user to create uniform arrays of sampled textures in shaders:
         ///
         /// eg. `uniform texture2D textures[10]`.
         ///
@@ -170,7 +170,55 @@ bitflags::bitflags! {
         /// - Vulkan
         ///
         /// This is a native only extension.
-        const TEXTURE_BINDING_ARRAY = 0x0000_0000_0004_0000;
+        const SAMPLED_TEXTURE_BINDING_ARRAY = 0x0000_0000_0004_0000;
+        /// Allows shaders to index sampled texture arrays with dynamically uniform values:
+        ///
+        /// eg. `texture_array[uniform_value]`
+        ///
+        /// This extension means the hardware will also support SAMPLED_TEXTURE_BINDING_ARRAY,
+        /// but it still must be requested to use it.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan (via feature shaderSampledImageArrayDynamicIndexing)
+        ///
+        /// This is a native only extension.
+        const SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING = 0x0000_0000_0008_0000;
+        /// Allows shaders to index sampled texture arrays with dynamically non-uniform values:
+        ///
+        /// eg. `texture_array[vertex_data]`
+        ///
+        /// In order to use this extension, the corresponding GLSL extension must be enabled like so:
+        ///
+        /// `#extension GL_EXT_nonuniform_qualifier : require`
+        ///
+        /// HLSL does not need any extension.
+        ///
+        /// This extension means the hardware will also support SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+        /// and SAMPLED_TEXTURE_BINDING_ARRAY, but they still must be requested to use them.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan 1.2+ (or via VK_EXT_descriptor_indexing)
+        ///
+        /// This is a native only extension.
+        const SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0010_0000;
+        /// Allows the user to create unsized uniform arrays of bindings:
+        ///
+        /// eg. `uniform texture2D textures[]`.
+        ///
+        /// This extension only allows them to exist and to be indexed by compile time constant
+        /// values. However if this extension exists, SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING is
+        /// _very_ likely to exist.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or via VK_EXT_descriptor_indexing)
+        ///
+        /// This is a native only extension.
+        const UNSIZED_BINDING_ARRAY = 0x0000_0000_0020_0000;
         /// Extensions which are part of the upstream webgpu standard
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Extensions that require activating the unsafe extension flag
@@ -1258,7 +1306,7 @@ pub struct BindGroupLayoutEntry {
     pub ty: BindingType,
     /// If this value is Some, indicates this entry is an array. Array size must be 1 or greater.
     ///
-    /// If this value is Some and `ty` is `BindingType::SampledTexture`, the TEXTURE_BINDING_ARRAY extension must be enabled.
+    /// If this value is Some and `ty` is `BindingType::SampledTexture`, the SAMPLED_TEXTURE_BINDING_ARRAY extension must be enabled.
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
     pub count: Option<u32>,
