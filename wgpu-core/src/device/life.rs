@@ -198,6 +198,11 @@ struct ActiveSubmission<B: hal::Backend> {
 pub struct LifetimeTracker<B: hal::Backend> {
     /// Resources that the user has requested be mapped, but are still in use.
     mapped: Vec<Stored<id::BufferId>>,
+    /// Buffers can be used in a submission that is yet to be made, by the
+    /// means of `write_buffer()`, so we have a special place for them.
+    pub future_suspected_buffers: Vec<id::BufferId>,
+    /// Textures can be used in the upcoming submission by `write_texture`.
+    pub future_suspected_textures: Vec<id::TextureId>,
     /// Resources that are suspected for destruction.
     pub suspected_resources: SuspectedResources,
     /// Resources that are not referenced any more but still used by GPU.
@@ -214,6 +219,8 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     pub fn new() -> Self {
         LifetimeTracker {
             mapped: Vec::new(),
+            future_suspected_buffers: Vec::new(),
+            future_suspected_textures: Vec::new(),
             suspected_resources: SuspectedResources::default(),
             active: Vec::new(),
             free_resources: NonReferencedResources::new(),
@@ -230,6 +237,12 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     ) {
         let mut last_resources = NonReferencedResources::new();
         last_resources.buffers.extend(temp_buffers);
+        self.suspected_resources
+            .buffers
+            .extend(self.future_suspected_buffers.drain(..));
+        self.suspected_resources
+            .textures
+            .extend(self.future_suspected_textures.drain(..));
         self.suspected_resources.extend(new_suspects);
         self.active.alloc().init(ActiveSubmission {
             index,

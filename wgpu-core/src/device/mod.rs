@@ -879,8 +879,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources
-            .buffers
+            .future_suspected_buffers
             .push(buffer_id);
     }
 
@@ -932,8 +931,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
-            .suspected_resources
-            .textures
+            .future_suspected_textures
             .push(texture_id);
     }
 
