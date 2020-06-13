@@ -18,7 +18,7 @@ entry_point vertex as "main" = main_vert;
 [[location 0]] var<out> o_color : vec4<f32>;
 
 fn main_frag() -> void {
-  o_color = vec4<f32>(1, 0, 0, 1); #TODO: sample
+  o_color = vec4<f32>(1.0, 0.0, 0.0, 1.0); #TODO: sample
   return;
 }
 entry_point fragment as "main" = main_frag;
