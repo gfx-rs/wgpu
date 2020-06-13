@@ -190,6 +190,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
     extensions: wgt::Extensions,
+    capabilities: wgt::Capabilities,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<B>,
@@ -206,6 +207,7 @@ impl<B: GfxBackend> Device<B> {
         hal_limits: hal::Limits,
         private_features: PrivateFeatures,
         desc: &wgt::DeviceDescriptor,
+        capabilities: wgt::Capabilities,
         trace_path: Option<&std::path::Path>,
     ) -> Self {
         // don't start submission index at zero
@@ -264,6 +266,7 @@ impl<B: GfxBackend> Device<B> {
             private_features,
             limits: desc.limits.clone(),
             extensions: desc.extensions.clone(),
+            capabilities: capabilities.clone(),
             pending_writes: queue::PendingWrites::new(),
         }
     }
@@ -637,7 +640,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
 
-        device.extensions.clone()
+        device.extensions
     }
 
     pub fn device_limits<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Limits {
@@ -647,6 +650,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
 
         device.limits.clone()
+    }
+
+    pub fn device_capabilities<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Capabilities {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (device_guard, _) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+
+        device.capabilities
     }
 
     pub fn device_create_buffer<B: GfxBackend>(
@@ -1193,11 +1205,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 match binding.ty {
                     wgt::BindingType::SampledTexture { .. } => {
                         if !device
-                            .extensions
-                            .contains(wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY)
+                            .capabilities
+                            .contains(wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY)
                         {
-                            return Err(binding_model::BindGroupLayoutError::MissingExtension(
-                                wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY,
+                            return Err(binding_model::BindGroupLayoutError::MissingCapability(
+                                wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY,
                             ));
                         }
                     }
@@ -1573,7 +1585,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     }
                     binding_model::BindingResource::TextureViewArray(ref bindings_array) => {
-                        assert!(device.extensions.contains(wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY), "Extension SAMPLED_TEXTURE_BINDING_ARRAY must be enabled to use TextureViewArrays in a bind group");
+                        assert!(
+                            device.capabilities.contains(wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY),
+                            "Capability SAMPLED_TEXTURE_BINDING_ARRAY must be supported to use TextureViewArrays in a bind group"
+                        );
 
                         if let Some(count) = decl.count {
                             assert_eq!(
