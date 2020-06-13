@@ -27,7 +27,7 @@ use peek_poke::{Peek, PeekPoke, Poke};
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode,
     LoadOp, RenderPassColorAttachmentDescriptorBase,
-    RenderPassDepthStencilAttachmentDescriptorBase, TextureUsage, BIND_BUFFER_ALIGNMENT,
+    RenderPassDepthStencilAttachmentDescriptorBase, StoreOp, TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
 use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, mem, ops::Range, slice};
@@ -41,26 +41,22 @@ fn is_depth_stencil_read_only(
     desc: &RenderPassDepthStencilAttachmentDescriptor,
     aspects: hal::format::Aspects,
 ) -> bool {
-    if aspects.contains(hal::format::Aspects::DEPTH) {
-        if !desc.depth_read_only {
-            return false;
-        }
-        assert_eq!(
-            (desc.depth_load_op, desc.depth_store_op),
-            (wgt::LoadOp::Load, wgt::StoreOp::Store),
-            "Unable to clear read-only depth"
-        );
+    if aspects.contains(hal::format::Aspects::DEPTH) && !desc.depth_read_only {
+        return false;
     }
-    if aspects.contains(hal::format::Aspects::STENCIL) {
-        if !desc.stencil_read_only {
-            return false;
-        }
-        assert_eq!(
-            (desc.stencil_load_op, desc.stencil_store_op),
-            (wgt::LoadOp::Load, wgt::StoreOp::Store),
-            "Unable to clear read-only stencil"
-        );
+    assert_eq!(
+        (desc.depth_load_op, desc.depth_store_op),
+        (LoadOp::Load, StoreOp::Store),
+        "Unable to clear non-present/read-only depth"
+    );
+    if aspects.contains(hal::format::Aspects::STENCIL) && !desc.stencil_read_only {
+        return false;
     }
+    assert_eq!(
+        (desc.stencil_load_op, desc.stencil_store_op),
+        (LoadOp::Load, StoreOp::Store),
+        "Unable to clear non-present/read-only stencil"
+    );
     true
 }
 
