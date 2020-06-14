@@ -184,6 +184,19 @@ impl crate::RenderPassInner<Context> for RenderPass {
     fn set_stencil_reference(&mut self, reference: u32) {
         self.0.set_stencil_reference(reference);
     }
+
+    fn insert_debug_marker(&mut self, label: &str) {
+        unimplemented!()
+    }
+
+    fn push_debug_group(&mut self, group_label: &str) {
+        unimplemented!()
+    }
+
+    fn pop_debug_group(&mut self) {
+        unimplemented!()
+    }
+
     fn execute_bundles<'a, I: Iterator<Item = &'a ()>>(&mut self, render_bundles: I) {
         unimplemented!()
     }
