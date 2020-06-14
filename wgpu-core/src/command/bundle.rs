@@ -222,6 +222,17 @@ impl RenderBundle {
                     let buffer = &buffer_guard[buffer_id];
                     comb.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                 }
+                RenderCommand::PushDebugGroup {
+                    color: _,
+                    len: _,
+                    phantom_marker: _,
+                } => unimplemented!(),
+                RenderCommand::InsertDebugMarker {
+                    color: _,
+                    len: _,
+                    phantom_marker: _,
+                } => unimplemented!(),
+                RenderCommand::PopDebugGroup => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendColor(_)
                 | RenderCommand::SetStencilReference(_)
@@ -724,6 +735,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         commands.push(command);
                     }
                     RenderCommand::End => break,
+                    RenderCommand::PushDebugGroup {
+                        color: _,
+                        len: _,
+                        phantom_marker: _,
+                    } => unimplemented!(),
+                    RenderCommand::InsertDebugMarker {
+                        color: _,
+                        len: _,
+                        phantom_marker: _,
+                    } => unimplemented!(),
+                    RenderCommand::PopDebugGroup => unimplemented!(),
                     RenderCommand::ExecuteBundle(_)
                     | RenderCommand::SetBlendColor(_)
                     | RenderCommand::SetStencilReference(_)
