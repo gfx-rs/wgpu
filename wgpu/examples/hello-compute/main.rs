@@ -22,8 +22,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let slice_size = numbers.len() * std::mem::size_of::<u32>();
     let size = slice_size as wgpu::BufferAddress;
 
-    let instace = wgpu::Instance::new();
-    let adapter = instace
+    let instance = wgpu::Instance::new();
+    let adapter = instance
         .request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
@@ -153,6 +153,12 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_compute_0() {
+        let input = vec![];
+        futures::executor::block_on(assert_execute_gpu(input, vec![]));
+    }
 
     #[test]
     fn test_compute_1() {
