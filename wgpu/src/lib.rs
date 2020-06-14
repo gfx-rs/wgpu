@@ -88,6 +88,9 @@ trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
         max_depth: f32,
     );
     fn set_stencil_reference(&mut self, reference: u32);
+    fn insert_debug_marker(&mut self, label: &str);
+    fn push_debug_group(&mut self, group_label: &str);
+    fn pop_debug_group(&mut self);
     fn execute_bundles<'a, I: Iterator<Item = &'a Ctx::RenderBundleId>>(
         &mut self,
         render_bundles: I,
@@ -1590,6 +1593,21 @@ impl<'a> RenderPass<'a> {
     /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
     pub fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         RenderInner::draw(&mut self.id, vertices, instances)
+    }
+
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        self.id.insert_debug_marker(label);
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        self.id.push_debug_group(label);
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        self.id.pop_debug_group();
     }
 
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.

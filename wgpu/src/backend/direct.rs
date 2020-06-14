@@ -169,6 +169,26 @@ mod pass_impl {
             unsafe { wgpu_render_pass_set_stencil_reference(self, reference) }
         }
 
+        fn insert_debug_marker(&mut self, label: &str) {
+            unsafe {
+                let label = std::ffi::CString::new(label).unwrap();
+                wgpu_render_pass_insert_debug_marker(self, label.as_ptr().into(), 0);
+            }
+        }
+
+        fn push_debug_group(&mut self, group_label: &str) {
+            unsafe {
+                let label = std::ffi::CString::new(group_label).unwrap();
+                wgpu_render_pass_push_debug_group(self, label.as_ptr().into(), 0);
+            }
+        }
+
+        fn pop_debug_group(&mut self) {
+            unsafe {
+                wgpu_render_pass_pop_debug_group(self);
+            }
+        }
+
         fn execute_bundles<'a, I: Iterator<Item = &'a wgc::id::RenderBundleId>>(
             &mut self,
             render_bundles: I,
