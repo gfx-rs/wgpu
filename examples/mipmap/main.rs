@@ -180,7 +180,10 @@ impl Example {
                 bindings: &[
                     wgpu::Binding {
                         binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&views[target_mip - 1]),
+                        resource: wgpu::BindingResource::TextureView {
+                            view: &views[target_mip - 1],
+                            read_only_depth_stencil: false,
+                        },
                     },
                     wgpu::Binding {
                         binding: 1,
@@ -328,7 +331,10 @@ impl framework::Example for Example {
                 },
                 wgpu::Binding {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&texture_view),
+                    resource: wgpu::BindingResource::TextureView {
+                        view: &texture_view,
+                        read_only_depth_stencil: false,
+                    },
                 },
                 wgpu::Binding {
                     binding: 2,
