@@ -683,21 +683,25 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     resource::BufferMapState::Waiting(pending_mapping) => pending_mapping,
                     _ => panic!("No pending mapping."),
                 };
-                log::debug!("Buffer {:?} map state -> Active", buffer_id);
-                let host = mapping.op.host;
-                let status = match super::map_buffer(raw, buffer, mapping.sub_range.clone(), host) {
-                    Ok(ptr) => {
-                        buffer.map_state = resource::BufferMapState::Active {
-                            ptr,
-                            sub_range: mapping.sub_range,
-                            host,
-                        };
-                        resource::BufferMapAsyncStatus::Success
+                let status = if mapping.sub_range.size.map_or(true, |x| x != 0) {
+                    log::debug!("Buffer {:?} map state -> Active", buffer_id);
+                    let host = mapping.op.host;
+                    match super::map_buffer(raw, buffer, mapping.sub_range.clone(), host) {
+                        Ok(ptr) => {
+                            buffer.map_state = resource::BufferMapState::Active {
+                                ptr,
+                                sub_range: mapping.sub_range,
+                                host,
+                            };
+                            resource::BufferMapAsyncStatus::Success
+                        }
+                        Err(e) => {
+                            log::error!("Mapping failed {:?}", e);
+                            resource::BufferMapAsyncStatus::Error
+                        }
                     }
-                    Err(e) => {
-                        log::error!("Mapping failed {:?}", e);
-                        resource::BufferMapAsyncStatus::Error
-                    }
+                } else {
+                    resource::BufferMapAsyncStatus::Success
                 };
                 pending_callbacks.push((mapping.op, status));
             }
