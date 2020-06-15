@@ -120,6 +120,7 @@ pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
     extensions: wgt::Extensions,
     limits: wgt::Limits,
+    capabilities: wgt::Capabilities,
     unsafe_extensions: wgt::UnsafeExtensions,
     life_guard: LifeGuard,
 }
@@ -134,20 +135,11 @@ impl<B: hal::Backend> Adapter<B> {
             adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
         );
         extensions.set(
-            wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
-        );
-        extensions.set(
-            wgt::Extensions::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
-            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
-        );
-        extensions.set(
-            wgt::Extensions::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
-        );
-        extensions.set(
-            wgt::Extensions::UNSIZED_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
+            wgt::Extensions::BINDING_INDEXING,
+            adapter_features.intersects(
+                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
+                    | hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+            ),
         );
         if unsafe_extensions.allowed() {
             // Unsafe extensions go here
@@ -161,10 +153,30 @@ impl<B: hal::Backend> Adapter<B> {
             _non_exhaustive: unsafe { wgt::NonExhaustive::new() },
         };
 
+        let mut capabilities = wgt::Capabilities::empty();
+
+        capabilities.set(
+            wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
+        );
+        capabilities.set(
+            wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
+            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
+        );
+        capabilities.set(
+            wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
+        );
+        capabilities.set(
+            wgt::Capabilities::UNSIZED_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
+        );
+
         Adapter {
             raw,
             extensions,
             limits,
+            capabilities,
             unsafe_extensions,
             life_guard: LifeGuard::new(),
         }
@@ -590,6 +602,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapter.limits.clone()
     }
 
+    pub fn adapter_capabilities<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Capabilities {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = &adapter_guard[adapter_id];
+
+        adapter.capabilities
+    }
+
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -624,20 +645,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let adapter = &adapter_guard[adapter_id];
             let phd = &adapter.raw.physical_device;
 
-            let available_features = adapter.raw.physical_device.features();
-
-            // Check features that are always needed
-            let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
-                | hal::Features::FRAGMENT_STORES_AND_ATOMICS
-                | hal::Features::NDC_Y_UP;
-            let mut enabled_features = available_features & wishful_features;
-            if enabled_features != wishful_features {
-                log::warn!(
-                    "Missing features: {:?}",
-                    wishful_features - enabled_features
-                );
-            }
-
             // Verify all extensions were exposed by the adapter
             if !adapter.unsafe_extensions.allowed() {
                 assert!(
@@ -652,12 +659,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 desc.extensions - adapter.extensions
             );
 
-            // Check features needed by extensions
-            enabled_features.set(
-                hal::Features::SAMPLER_ANISOTROPY,
-                desc.extensions
-                    .contains(wgt::Extensions::ANISOTROPIC_FILTERING),
-            );
+            // Verify extension preconditions
             if desc
                 .extensions
                 .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS)
@@ -665,26 +667,61 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             {
                 log::warn!("Extension MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
             }
+
+            let available_features = adapter.raw.physical_device.features();
+
+            // Check features that are always needed
+            let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
+                | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+                | hal::Features::NDC_Y_UP;
+            let mut enabled_features = available_features & wishful_features;
+            if enabled_features != wishful_features {
+                log::warn!(
+                    "Missing features: {:?}",
+                    wishful_features - enabled_features
+                );
+            }
+
+            // Extensions
+            enabled_features.set(
+                hal::Features::SAMPLER_ANISOTROPY,
+                desc.extensions
+                    .contains(wgt::Extensions::ANISOTROPIC_FILTERING),
+            );
+
+            let mut enabled_capabilities = adapter.capabilities & wgt::Capabilities::ALL_BUILT_IN;
+
+            // Capabilities without extension gates
             enabled_features.set(
                 hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
-                desc.extensions
-                    .contains(wgt::Extensions::SAMPLED_TEXTURE_BINDING_ARRAY),
+                adapter
+                    .capabilities
+                    .contains(wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY),
             );
             enabled_features.set(
                 hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
-                desc.extensions
-                    .contains(wgt::Extensions::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
+                adapter
+                    .capabilities
+                    .contains(wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
             );
-            enabled_features.set(
-                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
-                desc.extensions
-                    .contains(wgt::Extensions::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
-            );
-            enabled_features.set(
-                hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-                desc.extensions
-                    .contains(wgt::Extensions::UNSIZED_BINDING_ARRAY),
-            );
+
+            // Capabilities behind BINDING_INDEXING
+            if desc.extensions.contains(wgt::Extensions::BINDING_INDEXING) {
+                enabled_capabilities
+                    .insert(adapter.capabilities & wgt::Capabilities::ALL_BINDING_INDEXING);
+                enabled_features.set(
+                    hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+                    adapter
+                        .capabilities
+                        .contains(wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+                );
+                enabled_features.set(
+                    hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+                    adapter
+                        .capabilities
+                        .contains(wgt::Capabilities::UNSIZED_BINDING_ARRAY),
+                );
+            }
 
             let family = adapter
                 .raw
@@ -737,6 +774,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 limits,
                 private_features,
                 desc,
+                enabled_capabilities,
                 trace_path,
             )
         };
