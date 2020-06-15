@@ -2767,7 +2767,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         hal::memory::Dependencies::empty(),
                         iter::once(transition_src).chain(iter::once(transition_dst)),
                     );
-                    comb.copy_buffer(&stage_buffer, &buffer.raw, iter::once(region));
+                    if buffer.size > 0 {
+                        comb.copy_buffer(&stage_buffer, &buffer.raw, iter::once(region));
+                    }
                 }
                 device
                     .pending_writes
