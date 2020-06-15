@@ -275,12 +275,16 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     .map(|(binding, res)| wgc::binding_model::BindGroupEntry {
                         binding: *binding,
                         resource: match *res {
-                            trace::BindingResource::Buffer(ref binding) => {
-                                bm::BindingResource::Buffer(binding.clone())
+                            trace::BindingResource::Buffer { id, offset, size } => {
+                                bm::BindingResource::Buffer(bm::BufferBinding {
+                                    buffer_id: id,
+                                    offset,
+                                    size,
+                                })
                             }
                             trace::BindingResource::Sampler(id) => bm::BindingResource::Sampler(id),
-                            trace::BindingResource::TextureView(ref binding) => {
-                                bm::BindingResource::TextureView(binding.clone())
+                            trace::BindingResource::TextureView(id) => {
+                                bm::BindingResource::TextureView(id)
                             }
                             trace::BindingResource::TextureViewArray(ref binding_array) => {
                                 bm::BindingResource::TextureViewArray(binding_array)
