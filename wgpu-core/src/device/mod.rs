@@ -7,7 +7,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    validation, FastHashMap, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    validation, FastHashMap, LifeGuard, PrivateFeatures, Stored, SubmissionIndex, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -26,7 +26,7 @@ use wgt::{
 };
 
 use std::{
-    collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ptr, slice,
+    collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr, slice,
     sync::atomic::Ordering,
 };
 
@@ -179,7 +179,9 @@ pub struct Device<B: hal::Backend> {
     pub(crate) com_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<Heaps<B>>,
     desc_allocator: Mutex<DescriptorAllocator<B>>,
+    //Note: The submission index here corresponds to the last submission that is done.
     pub(crate) life_guard: LifeGuard,
+    pub(crate) active_submission_index: SubmissionIndex,
     pub(crate) trackers: Mutex<TrackerSet>,
     pub(crate) render_passes: Mutex<FastHashMap<RenderPassKey, B::RenderPass>>,
     pub(crate) framebuffers: Mutex<FastHashMap<FramebufferKey, B::Framebuffer>>,
@@ -210,10 +212,6 @@ impl<B: GfxBackend> Device<B> {
         capabilities: wgt::Capabilities,
         trace_path: Option<&std::path::Path>,
     ) -> Self {
-        // don't start submission index at zero
-        let life_guard = LifeGuard::new();
-        life_guard.submission_index.fetch_add(1, Ordering::Relaxed);
-
         let com_allocator = command::CommandAllocator::new(queue_group.family, &raw);
         let heaps = unsafe {
             Heaps::new(
@@ -242,7 +240,8 @@ impl<B: GfxBackend> Device<B> {
             mem_allocator: Mutex::new(heaps),
             desc_allocator: Mutex::new(DescriptorAllocator::new()),
             queue_group,
-            life_guard,
+            life_guard: LifeGuard::new(),
+            active_submission_index: 0,
             trackers: Mutex::new(TrackerSet::new(B::VARIANT)),
             render_passes: Mutex::new(FastHashMap::default()),
             framebuffers: Mutex::new(FastHashMap::default()),
@@ -271,6 +270,10 @@ impl<B: GfxBackend> Device<B> {
         }
     }
 
+    pub(crate) fn last_completed_submission_index(&self) -> SubmissionIndex {
+        self.life_guard.submission_index.load(Ordering::Acquire)
+    }
+
     fn lock_life_internal<'this, 'token: 'this>(
         tracker: &'this Mutex<life::LifetimeTracker<B>>,
         _token: &mut Token<'token, Self>,
@@ -278,7 +281,7 @@ impl<B: GfxBackend> Device<B> {
         tracker.lock()
     }
 
-    fn lock_life<'this, 'token: 'this>(
+    pub(crate) fn lock_life<'this, 'token: 'this>(
         &'this self,
         token: &mut Token<'token, Self>,
     ) -> MutexGuard<'this, life::LifetimeTracker<B>> {
@@ -306,6 +309,9 @@ impl<B: GfxBackend> Device<B> {
         let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
 
+        self.life_guard
+            .submission_index
+            .store(last_done, Ordering::Release);
         self.com_allocator.maintain(&self.raw, last_done);
         callbacks
     }
@@ -766,14 +772,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let device = &device_guard[device_id];
-        let mut life_lock = device.lock_life(&mut token);
-        if life_lock.lowest_active_submission() <= last_submission {
+        if device.last_completed_submission_index() <= last_submission {
             log::info!(
                 "Waiting for submission {:?} before accessing buffer {:?}",
                 last_submission,
                 buffer_id
             );
-            life_lock.triage_submissions(&device.raw, true);
+            device
+                .lock_life(&mut token)
+                .triage_submissions(&device.raw, true);
         }
     }
 
@@ -2558,6 +2565,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             semaphore: device.raw.create_semaphore().unwrap(),
             acquired_view_id: None,
             acquired_framebuffers: Vec::new(),
+            active_submission_index: 0,
         };
         swap_chain_guard.insert(sc_id, swap_chain);
         sc_id
@@ -2644,7 +2652,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn buffer_map_async<B: GfxBackend>(
         &self,
         buffer_id: id::BufferId,
-        range: std::ops::Range<BufferAddress>,
+        range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
     ) {
         let hub = B::hub(self);
@@ -2756,8 +2764,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 };
                 let _ = ptr;
 
-                let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
-                buffer.life_guard.use_at(last_submit_index + 1);
+                buffer.life_guard.use_at(device.active_submission_index + 1);
                 let region = hal::command::BufferCopy {
                     src: 0,
                     dst: 0,

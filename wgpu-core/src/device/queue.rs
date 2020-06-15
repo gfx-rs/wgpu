@@ -15,7 +15,7 @@ use crate::{
 use gfx_memory::{Block, Heaps, MemoryBlock};
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
-use std::{iter, sync::atomic::Ordering};
+use std::iter;
 
 struct StagingData<B: hal::Backend> {
     buffer: B::Buffer,
@@ -181,8 +181,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "Write buffer usage {:?} must contain flag COPY_DST",
             dst.usage
         );
-        let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
-        dst.life_guard.use_at(last_submit_index + 1);
+        dst.life_guard.use_at(device.active_submission_index + 1);
 
         assert_eq!(
             data_size % wgt::COPY_BUFFER_ALIGNMENT,
@@ -329,8 +328,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         crate::command::validate_texture_copy_range(destination, dst.kind, size);
 
-        let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
-        dst.life_guard.use_at(last_submit_index + 1);
+        dst.life_guard.use_at(device.active_submission_index + 1);
 
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
@@ -385,11 +383,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         comb_raw
                     });
             device.temp_suspected.clear();
-
-            let submit_index = 1 + device
-                .life_guard
-                .submission_index
-                .fetch_add(1, Ordering::Relaxed);
+            device.active_submission_index += 1;
+            let submit_index = device.active_submission_index;
 
             let fence = {
                 let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
@@ -425,6 +420,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
                             let sc = &mut swap_chain_guard[sc_id.value];
+                            sc.active_submission_index = submit_index;
                             assert!(sc.acquired_view_id.is_some(),
                                 "SwapChainOutput for {:?} was dropped before the respective command buffer {:?} got submitted!",
                                 sc_id.value, cmb_id);
