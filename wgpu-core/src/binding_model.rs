@@ -70,22 +70,13 @@ pub struct BufferBinding {
     pub size: wgt::BufferSize,
 }
 
-#[repr(C)]
-#[derive(Clone, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureBinding {
-    pub view_id: TextureViewId,
-    pub read_only_depth_stencil: bool,
-}
-
 // Note: Duplicated in wgpu-rs as BindingResource
 #[derive(Debug)]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
     Sampler(SamplerId),
-    TextureView(TextureBinding),
-    TextureViewArray(&'a [TextureBinding]),
+    TextureView(TextureViewId),
+    TextureViewArray(&'a [TextureViewId]),
 }
 
 // Note: Duplicated in wgpu-rs as Binding

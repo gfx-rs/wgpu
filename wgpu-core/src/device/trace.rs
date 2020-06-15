@@ -17,10 +17,14 @@ pub const FILE_NAME: &str = "trace.ron";
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum BindingResource {
-    Buffer(crate::binding_model::BufferBinding),
+    Buffer {
+        id: id::BufferId,
+        offset: wgt::BufferAddress,
+        size: wgt::BufferSize,
+    },
     Sampler(id::SamplerId),
-    TextureView(crate::binding_model::TextureBinding),
-    TextureViewArray(Vec<crate::binding_model::TextureBinding>),
+    TextureView(id::TextureViewId),
+    TextureViewArray(Vec<id::TextureViewId>),
 }
 
 #[derive(Debug)]
