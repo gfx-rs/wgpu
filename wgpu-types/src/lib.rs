@@ -9,19 +9,22 @@ use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
 
+/// Integral type used for buffer sizes/offsets.
 pub type BufferAddress = u64;
 pub type NonZeroBufferAddress = std::num::NonZeroU64;
 
-/// Buffer-Texture copies on command encoders have to have the `bytes_per_row`
-/// aligned to this number.
+/// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
 ///
-/// This doesn't apply to `Queue::write_texture`.
+/// This doesn't apply to [`Queue::write_texture`].
+///
+/// [`bytes_per_row`]: TextureDataLayout::bytes_per_row
 pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 /// Bound uniform/storage buffer offsets must be aligned to this number.
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
-/// Buffer to buffer copy offsets and sizes must be aligned to this number
+/// Buffer to buffer copy offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
 
+/// Integral newtype for buffer sizes.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
@@ -47,6 +50,7 @@ impl Default for BufferSize {
     }
 }
 
+/// Backends supported by wgpu.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -61,13 +65,17 @@ pub enum Backend {
     BrowserWebGpu = 6,
 }
 
+/// Power Preference when choosing a physical adapter.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PowerPreference {
+    /// Prefer low power when on battery, high performance when on mains.
     Default = 0,
+    /// Adapter that uses the least possible power. This is often an integerated GPU.
     LowPower = 1,
+    /// Adapter that has the highest performance. This is often a discrete GPU.
     HighPerformance = 2,
 }
 
@@ -78,21 +86,33 @@ impl Default for PowerPreference {
 }
 
 bitflags::bitflags! {
+    /// Represents the backends that wgpu will use.
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct BackendBit: u32 {
+        /// Supported on Windows, Linux/Android, and macOS/iOS via Vulkan Portability (with the Vulkan feature enabled)
         const VULKAN = 1 << Backend::Vulkan as u32;
+        /// Currently unsupported
         const GL = 1 << Backend::Gl as u32;
+        /// Supported on macOS/iOS
         const METAL = 1 << Backend::Metal as u32;
+        /// Supported on Windows 10
         const DX12 = 1 << Backend::Dx12 as u32;
+        /// Supported on Windows 7+
         const DX11 = 1 << Backend::Dx11 as u32;
+        /// Supported when targeting the web through webassembly
         const BROWSER_WEBGPU = 1 << Backend::BrowserWebGpu as u32;
+        /// All the apis that wgpu offers first tier of support for.
+        ///
         /// Vulkan + Metal + DX12 + Browser WebGPU
         const PRIMARY = Self::VULKAN.bits
             | Self::METAL.bits
             | Self::DX12.bits
             | Self::BROWSER_WEBGPU.bits;
+        /// All the apis that wgpu offers second tier of support for. These may
+        /// be unsupported/still experimental.
+        ///
         /// OpenGL + DX11
         const SECONDARY = Self::GL.bits | Self::DX11.bits;
     }
@@ -129,6 +149,11 @@ impl NonExhaustive {
 }
 
 bitflags::bitflags! {
+    /// Extensions to the webgpu standard that are supported by wgpu.
+    ///
+    /// If you want to use an extension, you need to first verify that the adapter supports
+    /// the extension. If the adapter does not support the extension, requesting a device with it enabled
+    /// will panic.
     #[repr(transparent)]
     #[derive(Default)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -147,8 +172,6 @@ bitflags::bitflags! {
         ///
         /// This is a native only extension. Support is planned to be added to webgpu,
         /// but it is not yet implemented.
-        ///
-        /// https://github.com/gpuweb/gpuweb/issues/696
         const ANISOTROPIC_FILTERING = 0x0000_0000_0001_0000;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
@@ -181,10 +204,13 @@ bitflags::bitflags! {
         /// - Vulkan 1.2+ (or via VK_EXT_descriptor_indexing)
         ///
         /// Provided Capabilities:
-        /// - SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-        /// - UNSIZED_BINDING_ARRAY
+        /// - [`SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING`]
+        /// - [`UNSIZED_BINDING_ARRAY`]
         ///
         /// This is a native only extension.
+        ///
+        /// [`SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING`]: struct.Capabilities.html#associatedconstant.SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+        /// [`UNSIZED_BINDING_ARRAY`]: struct.Capabilities.html#associatedconstant.UNSIZED_BINDING_ARRAY
         const BINDING_INDEXING = 0x0000_0000_0004_0000;
         /// Extensions which are part of the upstream webgpu standard
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
@@ -195,6 +221,14 @@ bitflags::bitflags! {
     }
 }
 
+/// Marker type signalling if unsafe extensions are allowed to be enabled.
+///
+/// This doesn't enable any unsafe extensions, but must be set to `allow` if
+/// an unsafe extension is enabled.
+///
+/// The safety contract of safe Rust is that it is impossible to cause Undefined Behavior (UB)
+/// from safe Rust. If an extension would allow UB to happen, it must preset an unsafe interface.
+/// Enabling unsafe extensions is therefore an inherently unsafe operation.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
@@ -202,25 +236,44 @@ pub struct UnsafeExtensions {
     allow_unsafe: bool,
 }
 impl UnsafeExtensions {
+    /// Allow unsafe extensions to be enabled. This is an unsafe function and by calling this
+    /// function, you assert that even with these extensions on, it is impossible to cause UB
+    /// from within safe Rust.
     pub unsafe fn allow() -> Self {
         Self { allow_unsafe: true }
     }
+    /// Disallow unsafe extensions.
     pub fn disallow() -> Self {
         Self {
             allow_unsafe: false,
         }
     }
+    /// Does this marker allow unsafe extensions.
     pub fn allowed(self) -> bool {
         self.allow_unsafe
     }
 }
 
+/// Represents the sets of limits an adapter/device supports.
+///
+/// Limits "better" than the default must be supported by the adapter and requested when requesting
+/// a device. If limits "better" than the adapter supports are requested, requesting a device will panic.
+/// Once a device is requested, you may only use resources up to the limits requested _even_ if the
+/// adapter supports "better" limits.
+///
+/// Requesting limits that are "better" than you need may cause performance to decrease because the
+/// implementation needs to support more than is needed. You should ideally only request exactly what
+/// you need.
+///
+/// See also: https://gpuweb.github.io/gpuweb/#dictdef-gpulimits
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Limits {
+    /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
+    /// This struct must be partially constructed from its default.
     pub _non_exhaustive: NonExhaustive,
 }
 
@@ -234,6 +287,10 @@ impl Default for Limits {
 }
 
 bitflags::bitflags! {
+    /// Capabilities of devices/adapters.
+    ///
+    /// These can be used if they are enabled and will be enabled either automatically, or by the extension
+    /// that provides them.
     #[repr(transparent)]
     #[derive(Default)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -280,8 +337,10 @@ bitflags::bitflags! {
         /// - Metal (with MSL 2.0+ on macOS 10.13+)
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
         ///
-        /// Provided by the BINDING_INDEXING extension. This extension must be enabled for this capability
+        /// Provided by the [`BINDING_INDEXING`] extension. This extension must be enabled for this capability
         /// to be anything but false.
+        ///
+        /// [`BINDING_INDEXING`]: struct.Extensions.html#associatedconstant.BINDING_INDEXING
         const SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0000_0004;
         /// Allows the user to create unsized uniform arrays of bindings:
         ///
@@ -294,8 +353,10 @@ bitflags::bitflags! {
         /// - DX12
         /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s runtimeDescriptorArray feature
         ///
-        /// Provided by the BINDING_INDEXING extension. This extension must be enabled for this capability
+        /// Provided by the [`BINDING_INDEXING`] extension. This extension must be enabled for this capability
         /// to be anything but false.
+        ///
+        /// [`BINDING_INDEXING`]: struct.Extensions.html#associatedconstant.BINDING_INDEXING
         const UNSIZED_BINDING_ARRAY = 0x0000_0000_0000_0008;
         /// All capabilities that are not provided by an extension
         const ALL_BUILT_IN =
@@ -308,12 +369,17 @@ bitflags::bitflags! {
     }
 }
 
+/// Describes a [`Device`].
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DeviceDescriptor {
+    /// Extensions that the device should support. If any extension is not supported by
+    /// the adapter, creating a device will panic.
     pub extensions: Extensions,
+    /// Limits that the device should support. If any limit is "better" than the limit exposed by
+    /// the adapter, creating a device will panic.
     pub limits: Limits,
     /// Switch shader validation on/off. This is a temporary field
     /// that will be removed once our validation logic is complete.
@@ -321,30 +387,49 @@ pub struct DeviceDescriptor {
 }
 
 bitflags::bitflags! {
+    /// Describes the shader stages that a binding will be visible from.
+    ///
+    /// These can be combined so something that is visible from both vertex and fragment shaders can be defined as:
+    ///
+    /// `ShaderStage::VERTEX | ShaderStage::FRAGMENT`
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct ShaderStage: u32 {
+        /// Binding is not visible from any shader stage
         const NONE = 0;
+        /// Binding is visible from the vertex shader of a render pipeline
         const VERTEX = 1;
+        /// Binding is visible from the fragment shader of a render pipeline
         const FRAGMENT = 2;
+        /// Binding is visible from the compute shader of a compute pipeline
         const COMPUTE = 4;
     }
 }
 
+/// Dimensions of a particular texture view.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureViewDimension {
+    /// A one dimensional texture. `texture1D` in glsl shaders.
     D1,
+    /// A two dimensional texture. `texture2D` in glsl shaders.
     D2,
+    /// A two dimensional array texture. `texture2DArray` in glsl shaders.
     D2Array,
+    /// A cubemap texture. `textureCube` in glsl shaders.
     Cube,
+    /// A cubemap array texture. `textureCubeArray` in glsl shaders.
     CubeArray,
+    /// A three dimensional texture. `texture3D` in glsl shaders.
     D3,
 }
 
+/// Alpha blend factor.
+///
+/// Alpha blending is very complicated: see the OpenGL or Vulkan spec for more information.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -365,6 +450,9 @@ pub enum BlendFactor {
     OneMinusBlendColor = 12,
 }
 
+/// Alpha blend operation.
+///
+/// Alpha blending is very complicated: see the OpenGL or Vulkan spec for more information.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -383,6 +471,9 @@ impl Default for BlendOperation {
     }
 }
 
+/// Describes the blend state of a pipeline.
+///
+/// Alpha blending is very complicated: see the OpenGL or Vulkan spec for more information.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -417,35 +508,62 @@ impl Default for BlendDescriptor {
     }
 }
 
+/// Describes the color state of a render pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct ColorStateDescriptor {
+    /// The [`TextureFormat`] of the image that this pipeline will render to. Must match the the format
+    /// of the corresponding color attachment in [`CommandEncoder::begin_render_pass`].
     pub format: TextureFormat,
+    /// The alpha blending that is used for this pipeline.
     pub alpha_blend: BlendDescriptor,
+    /// The color blending that is used for this pipeline.
     pub color_blend: BlendDescriptor,
+    /// Mask which enables/disables writes to different color/alpha channel.
     pub write_mask: ColorWrite,
 }
 
+/// Primitive type the input mesh is composed of.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum PrimitiveTopology {
+    /// Vertex data is a list of points. Each vertex is a new point.
     PointList = 0,
+    /// Vertex data is a list of lines. Each pair of vertices composes a new line.
+    ///
+    /// Vertices `0 1 2 3` create two lines `0 1` and `2 3`
     LineList = 1,
+    /// Vertex data is a strip of lines. Each set of two adjacent vertices form a line.
+    ///
+    /// Vertices `0 1 2 3` create three lines `0 1`, `1 2`, and `2 3`.
     LineStrip = 2,
+    /// Vertex data is a list of triangles. Each set of 3 vertices composes a new triangle.
+    ///
+    /// Vertices `0 1 2 3 4 5` create two triangles `0 1 2` and `3 4 5`
     TriangleList = 3,
+    /// Vertex data is a triangle strip. Each set of three adjacent vertices form a triangle.
+    ///
+    /// Vertices `0 1 2 3 4 5` creates four triangles `0 1 2`, `2 1 3`, `3 2 4`, and `4 3 5`
     TriangleStrip = 4,
 }
 
+/// Winding order which classifies the "front" face.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum FrontFace {
+    /// Triangles with vertices in counter clockwise order are considered the front face.
+    ///
+    /// This is the default with right handed coordinate spaces.
     Ccw = 0,
+    /// Triangles with vertices in clockwise order are considered the front face.
+    ///
+    /// This is the default with left handed coordinate spaces.
     Cw = 1,
 }
 
@@ -455,13 +573,17 @@ impl Default for FrontFace {
     }
 }
 
+/// Type of faces to be culled.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum CullMode {
+    /// No faces should be culled
     None = 0,
+    /// Front faces should be culled
     Front = 1,
+    /// Back faces should be culled
     Back = 2,
 }
 
@@ -471,6 +593,7 @@ impl Default for CullMode {
     }
 }
 
+/// Describes the state of the rasterizer in a render pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -483,74 +606,123 @@ pub struct RasterizationStateDescriptor {
     pub depth_bias_clamp: f32,
 }
 
+/// Underlying texture data format.
+///
+/// If there is a conversion in the format (such as srgb -> linear), The conversion listed is for
+/// loading from texture in a shader. When writing to the texture, the opposite conversion takes place.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureFormat {
     // Normal 8 bit formats
+    /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     R8Unorm = 0,
+    /// Red channel only. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
     R8Snorm = 1,
+    /// Red channel only. 8 bit integer per channel. Unsigned in shader.
     R8Uint = 2,
+    /// Red channel only. 8 bit integer per channel. Signed in shader.
     R8Sint = 3,
 
     // Normal 16 bit formats
+    /// Red channel only. 16 bit integer per channel. Unsigned in shader.
     R16Uint = 4,
+    /// Red channel only. 16 bit integer per channel. Signed in shader.
     R16Sint = 5,
+    /// Red channel only. 16 bit float per channel. Float in shader.
     R16Float = 6,
+    /// Red and green channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     Rg8Unorm = 7,
+    /// Red and green channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
     Rg8Snorm = 8,
+    /// Red and green channels. 8 bit integer per channel. Unsigned in shader.
     Rg8Uint = 9,
+    /// Red and green channel s. 8 bit integer per channel. Signed in shader.
     Rg8Sint = 10,
 
     // Normal 32 bit formats
+    /// Red channel only. 32 bit integer per channel. Unsigned in shader.
     R32Uint = 11,
+    /// Red channel only. 32 bit integer per channel. Signed in shader.
     R32Sint = 12,
+    /// Red channel only. 32 bit float per channel. Float in shader.
     R32Float = 13,
+    /// Red and green channels. 16 bit integer per channel. Unsigned in shader.
     Rg16Uint = 14,
+    /// Red and green channels. 16 bit integer per channel. Signed in shader.
     Rg16Sint = 15,
+    /// Red and green channels. 16 bit float per channel. Float in shader.
     Rg16Float = 16,
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     Rgba8Unorm = 17,
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     Rgba8UnormSrgb = 18,
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. [-127, 127] converted to/from float [-1, 1] in shader.
     Rgba8Snorm = 19,
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. Unsigned in shader.
     Rgba8Uint = 20,
+    /// Red, green, blue, and alpha channels. 8 bit integer per channel. Signed in shader.
     Rgba8Sint = 21,
+    /// Blue, green, red, and alpha channels. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
     Bgra8Unorm = 22,
+    /// Blue, green, red, and alpha channels. 8 bit integer per channel. Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
     Bgra8UnormSrgb = 23,
 
     // Packed 32 bit formats
+    /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
     Rgb10a2Unorm = 24,
+    /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bti for blue channel. Float in shader.
     Rg11b10Float = 25,
 
     // Normal 64 bit formats
+    /// Red and green channels. 32 bit integer per channel. Unsigned in shader.
     Rg32Uint = 26,
+    /// Red and green channels. 32 bit integer per channel. Signed in shader.
     Rg32Sint = 27,
+    /// Red and green channels. 32 bit float per channel. Float in shader.
     Rg32Float = 28,
+    /// Red, green, blue, and alpha channels. 16 bit integer per channel. Unsigned in shader.
     Rgba16Uint = 29,
+    /// Red, green, blue, and alpha channels. 16 bit integer per channel. Signed in shader.
     Rgba16Sint = 30,
+    /// Red, green, blue, and alpha channels. 16 bit float per channel. Float in shader.
     Rgba16Float = 31,
 
     // Normal 128 bit formats
+    /// Red, green, blue, and alpha channels. 32 bit integer per channel. Unsigned in shader.
     Rgba32Uint = 32,
+    /// Red, green, blue, and alpha channels. 32 bit integer per channel. Signed in shader.
     Rgba32Sint = 33,
+    /// Red, green, blue, and alpha channels. 32 bit float per channel. Float in shader.
     Rgba32Float = 34,
 
     // Depth and stencil formats
+    /// Special depth format with 32 bit floating point depth.
     Depth32Float = 35,
+    /// Special depth format with at least 24 bit integer depth.
     Depth24Plus = 36,
+    /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
     Depth24PlusStencil8 = 37,
 }
 
 bitflags::bitflags! {
+    /// Color write mask. Disabled color channels will not be written to.
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct ColorWrite: u32 {
+        /// Enable red channel writes
         const RED = 1;
+        /// Enable green channel writes
         const GREEN = 2;
+        /// Enable blue channel writes
         const BLUE = 4;
+        /// Enable alpha channel writes
         const ALPHA = 8;
+        /// Enable red, green, and blue channel writes
         const COLOR = 7;
+        /// Enable writes to all channels.
         const ALL = 15;
     }
 }
@@ -561,17 +733,26 @@ impl Default for ColorWrite {
     }
 }
 
+/// Describes the depth/stencil state in a render pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DepthStencilStateDescriptor {
+    /// Format of the depth/stencil buffer, must be special depth format. Must match the the format
+    /// of the depth/stencil attachment in [`CommandEncoder::begin_render_pass`].
     pub format: TextureFormat,
+    /// If disabled, depth will not be written to.
     pub depth_write_enabled: bool,
+    /// Comparison function used to compare depth values in the depth test.
     pub depth_compare: CompareFunction,
+    /// Stencil state used for front faces.
     pub stencil_front: StencilStateFaceDescriptor,
+    /// Stencil state used for back faces.
     pub stencil_back: StencilStateFaceDescriptor,
+    /// Stencil values are AND'd with this mask when reading and writing from the stencil buffer. Only low 8 bits are used.
     pub stencil_read_mask: u32,
+    /// Stencil values are AND'd with this mask when writing to the stencil buffer. Only low 8 bits are used.
     pub stencil_write_mask: u32,
 }
 
@@ -584,12 +765,15 @@ impl DepthStencilStateDescriptor {
     }
 }
 
+/// Format of indices used with pipeline.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum IndexFormat {
+    /// Indices are 16 bit unsigned integers.
     Uint16 = 0,
+    /// Indices are 32 bit unsigned integers.
     Uint32 = 1,
 }
 
@@ -599,18 +783,27 @@ impl Default for IndexFormat {
     }
 }
 
+/// Operation to perform on the stencil value.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum StencilOperation {
+    /// Keep stencil value unchanged.
     Keep = 0,
+    /// Set stencil value to zero.
     Zero = 1,
+    /// Replace stencil value with value provided in most recent call to [`RenderPass::set_stencil_reference`].
     Replace = 2,
+    /// Bitwise inverts stencil value.
     Invert = 3,
+    /// Increments stencil value by one, clamping on overflow.
     IncrementClamp = 4,
+    /// Decrements stencil value by one, clamping on underflow.
     DecrementClamp = 5,
+    /// Increments stencil value by one, wrapping on overflow.
     IncrementWrap = 6,
+    /// Decrements stencil value by one, wrapping on underflow.
     DecrementWrap = 7,
 }
 
@@ -620,14 +813,21 @@ impl Default for StencilOperation {
     }
 }
 
+/// Describes stencil state in a render pipeline.
+///
+/// If you are not using stencil state, set this to [`StencilStateFaceDescriptor::IGNORE`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct StencilStateFaceDescriptor {
+    /// Comparison function that determines if the fail_op or pass_op is used on the stencil buffer.
     pub compare: CompareFunction,
+    /// Operation that is preformed when stencil test fails.
     pub fail_op: StencilOperation,
+    /// Operation that is performed when depth test fails but stencil test succeeds.
     pub depth_fail_op: StencilOperation,
+    /// Operation that is performed when stencil test success.
     pub pass_op: StencilOperation,
 }
 
@@ -646,19 +846,29 @@ impl Default for StencilStateFaceDescriptor {
     }
 }
 
+/// Comparison function used for depth and stencil operations.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum CompareFunction {
+    /// Invalid value, do not use
     Undefined = 0,
+    /// Function never passes
     Never = 1,
+    /// Function passes if new value less than existing value
     Less = 2,
+    /// Function passes if new value is equal to existing value
     Equal = 3,
+    /// Function passes if new value is less than or equal to existing value
     LessEqual = 4,
+    /// Function passes if new value is greater than existing value
     Greater = 5,
+    /// Function passes if new value is not equal to existing value
     NotEqual = 6,
+    /// Function passes if new value is greater than or equal to existing value
     GreaterEqual = 7,
+    /// Function always passes
     Always = 8,
 }
 
@@ -671,89 +881,160 @@ impl CompareFunction {
     }
 }
 
+/// Integral type used for binding locations in shaders.
 pub type ShaderLocation = u32;
 
+/// Rate that determines when vertex data is advanced.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum InputStepMode {
+    /// Input data is advanced every vertex. This is the standard value for vertex data.
     Vertex = 0,
+    /// Input data is advanced every instance.
     Instance = 1,
 }
 
+/// Vertex inputs (attributes) to shaders.
+///
+/// Arrays of these can be made with the [`vertex_attr_array`] macro. Vertex attributes are assumed to be tightly packed.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct VertexAttributeDescriptor {
+    /// Byte offset of the start of the input
     pub offset: BufferAddress,
+    /// Format of the input
     pub format: VertexFormat,
+    /// Location for this input. Must match the location in the shader.
     pub shader_location: ShaderLocation,
 }
 
+/// Vertex Format for a Vertex Attribute (input).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum VertexFormat {
+    /// Two unsigned bytes (u8). `uvec2` in shaders.
     Uchar2 = 0,
+    /// Four unsigned bytes (u8). `uvec4` in shaders.
     Uchar4 = 1,
+    /// Two signed bytes (i8). `ivec2` in shaders.
     Char2 = 2,
+    /// Four signed bytes (i8). `ivec4` in shaders.
     Char4 = 3,
+    /// Two unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec2` in shaders.
     Uchar2Norm = 4,
+    /// Four unsigned bytes (u8). [0, 255] converted to float [0, 1] `vec4` in shaders.
     Uchar4Norm = 5,
+    /// Two signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec2` in shaders.
     Char2Norm = 6,
+    /// Four signed bytes (i8). [-127, 127] converted to float [-1, 1] `vec4` in shaders.
     Char4Norm = 7,
+    /// Two unsigned shorts (u16). `uvec2` in shaders.
     Ushort2 = 8,
+    /// Four unsigned shorts (u16). `uvec4` in shaders.
     Ushort4 = 9,
+    /// Two unsigned shorts (i16). `ivec2` in shaders.
     Short2 = 10,
+    /// Four unsigned shorts (i16). `ivec4` in shaders.
     Short4 = 11,
+    /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2` in shaders.
     Ushort2Norm = 12,
+    /// Four unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec4` in shaders.
     Ushort4Norm = 13,
+    /// Two signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec2` in shaders.
     Short2Norm = 14,
+    /// Four signed shorts (i16). [-32767, 32767] converted to float [-1, 1] `vec4` in shaders.
     Short4Norm = 15,
+    /// Two half-precision floats (no Rust equiv). `vec2` in shaders.
     Half2 = 16,
+    /// Four half-precision floats (no Rust equiv). `vec4` in shaders.
     Half4 = 17,
+    /// One single-precision float (f32). `float` in shaders.
     Float = 18,
+    /// Two single-precision floats (f32). `vec2` in shaders.
     Float2 = 19,
+    /// Three single-precision floats (f32). `vec3` in shaders.
     Float3 = 20,
+    /// Four single-precision floats (f32). `vec4` in shaders.
     Float4 = 21,
+    /// One unsigned int (u32). `uint` in shaders.
     Uint = 22,
+    /// Two unsigned ints (u32). `uvec2` in shaders.
     Uint2 = 23,
+    /// Three unsigned ints (u32). `uvec3` in shaders.
     Uint3 = 24,
+    /// Four unsigned ints (u32). `uvec4` in shaders.
     Uint4 = 25,
+    /// One signed int (i32). `int` in shaders.
     Int = 26,
+    /// Two signed ints (i32). `ivec2` in shaders.
     Int2 = 27,
+    /// Three signed ints (i32). `ivec3` in shaders.
     Int3 = 28,
+    /// Four signed ints (i32). `ivec4` in shaders.
     Int4 = 29,
 }
 
 bitflags::bitflags! {
+    /// Different ways that you can use a buffer.
+    ///
+    /// The usages determine what kind of memory the buffer is allocated from and what
+    /// actions the buffer can partake in.
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct BufferUsage: u32 {
+        /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
+        /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
+        ///
+        /// If [`Extensions::MAPPABLE_PRIMARY_BUFFERS`] isn't enabled, the only other usage a buffer
+        /// may have is COPY_DST.
         const MAP_READ = 1;
+        /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
+        /// This does not include creating a buffer with `mapped_at_creation` set.
+        ///
+        /// If [`Extensions::MAPPABLE_PRIMARY_BUFFERS`] extension isn't enabled, the only other usage a buffer
+        /// may have is COPY_SRC.
         const MAP_WRITE = 2;
+        /// Allow a buffer to be the source buffer for a [`CommandEncoder::copy_buffer_to_buffer`] or [`CommandEncoder::copy_buffer_to_texture`]
+        /// operation.
         const COPY_SRC = 4;
+        /// Allow a buffer to be the source buffer for a [`CommandEncoder::copy_buffer_to_buffer`], [`CommandEncoder::copy_buffer_to_texture`],
+        /// or [`Queue::write_buffer`] operation.
         const COPY_DST = 8;
+        /// Allow a buffer to be the index buffer in a draw operation.
         const INDEX = 16;
+        /// Allow a buffer to be the vertex buffer in a draw operation.
         const VERTEX = 32;
+        /// Allow a buffer to be a [`BindingType::UniformBuffer`] inside a bind group.
         const UNIFORM = 64;
+        /// Allow a buffer to be a [`BindingType::StorageBuffer`] inside a bind group.
         const STORAGE = 128;
+        /// Allow a buffer to be the indirect buffer in an indirect draw call.
         const INDIRECT = 256;
     }
 }
 
+/// Describes a [`Buffer`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BufferDescriptor<L> {
+    /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
     pub label: L,
+    /// Size of a buffer.
     pub size: BufferAddress,
+    /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
+    /// will panic.
     pub usage: BufferUsage,
+    /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsage::MAP_READ`] or
+    /// [`BufferUsage::MAP_WRITE`], all buffers are allowed to be mapped at creation.
     pub mapped_at_creation: bool,
 }
 
@@ -768,9 +1049,11 @@ impl<L> BufferDescriptor<L> {
     }
 }
 
+/// Describes a [`CommandEncoder`].
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor<L> {
+    /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.
     pub label: L,
 }
 
@@ -782,8 +1065,10 @@ impl<L> CommandEncoderDescriptor<L> {
     }
 }
 
+/// Integral type used for dynamic bind group offsets.
 pub type DynamicOffset = u32;
 
+/// Behavior of the presentation engine based on frame rate.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -806,30 +1091,50 @@ pub enum PresentMode {
 }
 
 bitflags::bitflags! {
+    /// Different ways that you can use a texture.
+    ///
+    /// The usages determine what kind of memory the texture is allocated from and what
+    /// actions the texture can partake in.
     #[repr(transparent)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct TextureUsage: u32 {
+        /// Allows a texture to be the source in a [`CommandEncoder::copy_texture_to_buffer`] or
+        /// [`CommandEncoder::copy_texture_to_texture`] operation.
         const COPY_SRC = 1;
+        /// Allows a texture to be the destination in a  [`CommandEncoder::copy_texture_to_buffer`],
+        /// [`CommandEncoder::copy_texture_to_texture`], or [`Queue::write_texture`] operation.
         const COPY_DST = 2;
+        /// Allows a texture to be a [`BindingType::SampledTexture`] in a bind group.
         const SAMPLED = 4;
+        /// Allows a texture to be a [`BindingType::StorageTexture`] in a bind group.
         const STORAGE = 8;
+        /// Allows a texture to be a output attachment of a renderpass.
         const OUTPUT_ATTACHMENT = 16;
     }
 }
 
+/// Describes a [`SwapChain`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct SwapChainDescriptor {
+    /// The usage of the swap chain. The only supported usage is OUTPUT_ATTACHMENT
     pub usage: TextureUsage,
+    /// The texture format of the swap chain. The only formats that are guaranteed are
+    /// `Bgra8Unorm` and `Bgra8UnormSrgb`
     pub format: TextureFormat,
+    /// Width of the swap chain. Must be the same size as the surface.
     pub width: u32,
+    /// Height of the swap chain. Must be the same size as the surface.
     pub height: u32,
+    /// Presentation mode of the swap chain. FIFO is the only guaranteed to be supported, though
+    /// other formats will automatically fall back to FIFO.
     pub present_mode: PresentMode,
 }
 
+/// Status of the recieved swapchain image.
 #[repr(C)]
 #[derive(Debug)]
 pub enum SwapChainStatus {
@@ -841,56 +1146,88 @@ pub enum SwapChainStatus {
     OutOfMemory,
 }
 
+/// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum LoadOp {
+    /// Clear the output attachment with the clear color. Clearing is faster than loading.
     Clear = 0,
+    /// Do not clear output attachment.
     Load = 1,
 }
 
+/// Operation to perform to the output attachment at the end of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub enum StoreOp {
+    /// Clear the render target. If you don't care about the contents of the target, this can be faster.
     Clear = 0,
+    /// Store the result of the renderpass.
     Store = 1,
 }
 
+/// Describes a color attachment to a [`RenderPass`].
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct RenderPassColorAttachmentDescriptorBase<T> {
+    /// Texture attachment to render to. Must contain [`TextureUsage::OUTPUT_ATTACHMENT`].
     pub attachment: T,
+    /// MSAA resolve target. Must contain [`TextureUsage::OUTPUT_ATTACHMENT`]. Must be `None` if
+    /// attachment has 1 sample (does not have MSAA). This is not mandatory for rendering with multisampling,
+    /// you can choose to resolve later or manually.
     pub resolve_target: Option<T>,
+    /// Operation to perform to the output attachment at the start of a renderpass. This must be clear if it
+    /// is the first renderpass rendering to a swap chain image.
     pub load_op: LoadOp,
+    /// Operation to perform to the output attachment at the end of a renderpass.
     pub store_op: StoreOp,
+    /// If load_op is [`LoadOp::Clear`], the attachement will be cleared to this color.
     pub clear_color: Color,
 }
 
+/// Describes a depth/stencil attachment to a [`RenderPass`].
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 #[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
 pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
+    /// Texture attachment to render to. Must contain [`TextureUsage::OUTPUT_ATTACHMENT`] and be a valid
+    /// texture type for a depth/stencil attachment.
     pub attachment: T,
+    /// Operation to perform to the depth component of the output attachment at the start of a renderpass.
     pub depth_load_op: LoadOp,
+    /// Operation to perform to the depth component of the output attachment at the end of a renderpass.
     pub depth_store_op: StoreOp,
+    /// If depth_load_op is [`LoadOp::Clear`], the depth component will be cleared to this depth.
     pub clear_depth: f32,
+    /// Enabling read only depth means that depth cannot be cleared or written to, but it can be used
+    /// as the input to some part of this render pass.
     pub depth_read_only: bool,
+    /// Operation to perform to the stencil component of the output attachment at the start of a renderpass.
     pub stencil_load_op: LoadOp,
+    /// Operation to perform to the stencil component of the output attachment at the end of a renderpass.
     pub stencil_store_op: StoreOp,
+    /// If stencil_load_op is [`LoadOp::Clear`], the stencil component will be cleared to this stencil value.
+    /// Only the low 8 bits are used.
     pub clear_stencil: u32,
+    /// Enabling read only stencil means that stencil cannot be cleared or written to, but it can be used
+    /// as the input to some part of this render pass.
     pub stencil_read_only: bool,
 }
 
+/// RGBA double precision color.
+///
+/// This is not to be used as a generic color type, only for specific wgpu interfaces.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -942,16 +1279,21 @@ impl Color {
     };
 }
 
+/// Dimensionality of a texture.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureDimension {
+    /// 1D texture
     D1,
+    /// 2D texture
     D2,
+    /// 3D texture
     D3,
 }
 
+/// Origin of a copy to/from a texture.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -972,6 +1314,7 @@ impl Default for Origin3d {
     }
 }
 
+/// Extent of a texture related operation.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -982,17 +1325,26 @@ pub struct Extent3d {
     pub depth: u32,
 }
 
+/// Describes a [`Texture`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct TextureDescriptor<L> {
+    /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
     pub label: L,
+    /// Size of the texture. For a regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures, Z is the
+    /// number of 2D textures in that array.
     pub size: Extent3d,
+    /// Mip count of texture. For a texture with no extra mips, this must be 1.
     pub mip_level_count: u32,
+    /// Sample count of texture. If this is not 1, texture must have [`BindingType::SampledTexture::multisampled`] set to true.
     pub sample_count: u32,
+    /// Dimensions of the texture.
     pub dimension: TextureDimension,
+    /// Format of the texture.
     pub format: TextureFormat,
+    /// Allowed usages of the texture. If used in other ways, the operation will panic.
     pub usage: TextureUsage,
 }
 
@@ -1010,13 +1362,17 @@ impl<L> TextureDescriptor<L> {
     }
 }
 
+/// Kind of data the texture holds.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureAspect {
+    /// Depth, Stencil, and Color.
     All,
+    /// Stencil.
     StencilOnly,
+    /// Depth.
     DepthOnly,
 }
 
@@ -1026,18 +1382,28 @@ impl Default for TextureAspect {
     }
 }
 
+/// Describes a [`TextureView`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct TextureViewDescriptor<L> {
+    /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: L,
+    /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
     pub format: TextureFormat,
+    /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
+    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
     pub dimension: TextureViewDimension,
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
     pub aspect: TextureAspect,
+    /// Base mip level.
     pub base_mip_level: u32,
+    /// Mip level count. Must be at least one. base_mip_level + level_count must be less or equal to underlying texture mip count.
     pub level_count: u32,
+    /// Base array layer.
     pub base_array_layer: u32,
+    /// Layer count. Must be at least one. base_array_layer + array_layer_count must be less or equal to the underlying array count.
     pub array_layer_count: u32,
 }
 
@@ -1056,13 +1422,26 @@ impl<L> TextureViewDescriptor<L> {
     }
 }
 
+/// How edges should be handled in texture addressing.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum AddressMode {
+    /// Clamp the value to the edge of the texture
+    ///
+    /// -0.25 -> 0.0
+    /// 1.25  -> 1.0
     ClampToEdge = 0,
+    /// Repeat the texture in a tiling fashion
+    ///
+    /// -0.25 -> 0.75
+    /// 1.25 -> 0.25
     Repeat = 1,
+    /// Repeat the texture, mirroring it every repeat
+    ///
+    /// -0.25 -> 0.25
+    /// 1.25 -> 0.75
     MirrorRepeat = 2,
 }
 
@@ -1072,12 +1451,19 @@ impl Default for AddressMode {
     }
 }
 
+/// Texel mixing mode when sampling between texels.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum FilterMode {
+    /// Nearest neighbor sampling.
+    ///
+    /// This creates a pixelated effect when used as a mag filter
     Nearest = 0,
+    /// Linear Interpolation
+    ///
+    /// This makes textures smooth but blurry when used as a mag filter.
     Linear = 1,
 }
 
@@ -1087,25 +1473,37 @@ impl Default for FilterMode {
     }
 }
 
+/// Describes a [`Sampler`]
 #[derive(Default, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct SamplerDescriptor<L> {
+    /// Debug label of the sampler. This will show up in graphics debuggers for easy identification.
     pub label: L,
+    /// How to deal with out of bounds accesses in the u (i.e. x) direction
     pub address_mode_u: AddressMode,
+    /// How to deal with out of bounds accesses in the v (i.e. y) direction
     pub address_mode_v: AddressMode,
+    /// How to deal with out of bounds accesses in the w (i.e. z) direction
     pub address_mode_w: AddressMode,
+    /// How to filter the texture when it needs to be magnified (made larger)
     pub mag_filter: FilterMode,
+    /// How to filter the texture when it needs to be minified (made smaller)
     pub min_filter: FilterMode,
+    /// How to filter between mip map levels
     pub mipmap_filter: FilterMode,
+    /// Minimum level of detail (i.e. mip level) to use
     pub lod_min_clamp: f32,
+    /// Maximum level of detail (i.e. mip level) to use
     pub lod_max_clamp: f32,
+    /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<CompareFunction>,
     /// Anisotropic filtering extension must be enabled if this value is
     /// anything other than 0 or 1.
     ///
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<u8>,
+    /// This struct must be partially constructed from its default
     pub _non_exhaustive: NonExhaustive,
 }
 
@@ -1128,27 +1526,39 @@ impl<L> SamplerDescriptor<L> {
     }
 }
 
+/// Describes a [`CommandBuffer`].
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct CommandBufferDescriptor {
+    /// Set this member to zero
     pub todo: u32,
 }
 
+/// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RenderBundleEncoderDescriptor<'a> {
+    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
     pub label: Option<&'a str>,
+    /// The formats of the color attachments that this render bundle is capable to rendering to. This
+    /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
     pub color_formats: &'a [TextureFormat],
+    /// The formats of the depth attachment that this render bundle is capable to rendering to. This
+    /// must match the formats of the depth attachments in the renderpass this render bundle is executed in.
     pub depth_stencil_format: Option<TextureFormat>,
+    /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
+    /// the renderpasses it is used in.
     pub sample_count: u32,
 }
 
+/// Describes a [`RenderBundle`].
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct RenderBundleDescriptor<L> {
+    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
     pub label: L,
 }
 
@@ -1160,13 +1570,19 @@ impl<L> RenderBundleDescriptor<L> {
     }
 }
 
+/// Type of data shaders will read from a texture.
+///
+/// Only relevant for [`BindingType::SampledTexture`] bindings. See [`TextureFormat`] for more information.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum TextureComponentType {
+    /// They see it as a floating point number `texture1D`, `texture2D` etc
     Float,
+    /// They see it as a signed integer `itexture1D`, `itexture2D` etc
     Sint,
+    /// They see it as a unsigned integer `utexture1D`, `utexture2D` etc
     Uint,
 }
 
@@ -1217,17 +1633,32 @@ impl From<TextureFormat> for TextureComponentType {
     }
 }
 
+/// Layout of a texture in a buffer's memory.
 #[repr(C)]
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct TextureDataLayout {
+    /// Offset into the buffer that is the start of the texture. Must be a multiple of texture block size.
+    /// For non-compressed textures, this is 1.
     pub offset: BufferAddress,
+    /// Bytes per "row" of the image. This represents one row of pixels in the x direction. Compressed
+    /// textures include multiple rows of pixels in each "row". May be 0 for 1D texture copies.
+    ///
+    /// Must be a multiple of 256 for [`CommandEncoder::copy_buffer_to_texture`] and [`CommandEncoder::copy_texture_to_buffer`].
+    /// [`Queue::write_texture`] does not have this requirement.
+    ///
+    /// Must be a multiple of the texture block size. For non-compressed textures, this is 1.
     pub bytes_per_row: u32,
+    /// Rows that make up a single "image". Each "image" is one layer in the z direction of a 3D image. May be larger
+    /// than `copy_size.y`.
+    ///
+    /// May be 0 for 2D texture copies.
     pub rows_per_image: u32,
 }
 
 /// Specific type of a binding.
+///
 /// WebGPU spec: https://gpuweb.github.io/gpuweb/#dictdef-gpubindgrouplayoutentry
 #[non_exhaustive]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -1246,7 +1677,7 @@ pub enum BindingType {
     /// ```
     UniformBuffer {
         /// Indicates that the binding has a dynamic offset.
-        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
+        /// One offset must be passed to [`RenderPass::set_bind_group`] for each dynamic binding in increasing order of binding number.
         dynamic: bool,
         /// Minimum size of the corresponding `BufferBinding` required to match this entry.
         /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
@@ -1264,7 +1695,7 @@ pub enum BindingType {
     /// ```
     StorageBuffer {
         /// Indicates that the binding has a dynamic offset.
-        /// One offset must be passed to [RenderPass::set_bind_group] for each dynamic binding in increasing order of binding number.
+        /// One offset must be passed to [`RenderPass::set_bind_group`] for each dynamic binding in increasing order of binding number.
         dynamic: bool,
         /// Minimum size of the corresponding `BufferBinding` required to match this entry.
         /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
@@ -1306,7 +1737,9 @@ pub enum BindingType {
         /// Component type of the texture.
         /// This must be compatible with the format of the texture.
         component_type: TextureComponentType,
-        /// True if the texture has a sample count greater than 1.
+        /// True if the texture has a sample count greater than 1. If this is true,
+        /// the texture must be read from shaders with `texture1DMS`, `texture2DMS`, or `texture3DMS`,
+        /// depending on `dimension`.
         multisampled: bool,
     },
     /// A storage texture.
@@ -1332,17 +1765,21 @@ pub enum BindingType {
     },
 }
 
-/// A description of a single binding inside a bind group.
+/// Describes a single binding inside a bind group.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupLayoutEntry {
+    /// Binding index. Must match shader index and be unique inside a BindGroupLayout. A binding
+    /// of index 1, would be described as `layout(set = 0, binding = 1) uniform` in shaders.
     pub binding: u32,
+    /// Which shader stages can see this binding.
     pub visibility: ShaderStage,
+    /// The type of the binding
     pub ty: BindingType,
     /// If this value is Some, indicates this entry is an array. Array size must be 1 or greater.
     ///
-    /// If this value is Some and `ty` is `BindingType::SampledTexture`, the SAMPLED_TEXTURE_BINDING_ARRAY extension must be enabled.
+    /// If this value is Some and `ty` is `BindingType::SampledTexture`, [`Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported.
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
     pub count: Option<u32>,
@@ -1371,13 +1808,13 @@ impl BindGroupLayoutEntry {
     }
 }
 
-/// A description of a bind group layout.
+/// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
-    /// An optional label to apply to the bind group layout.
-    /// This can be useful for debugging and performance analysis.
+    /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
     pub label: Option<&'a str>,
 
+    /// Array of bindings in this BindGroupLayout
     pub bindings: &'a [BindGroupLayoutEntry],
 }
 

@@ -219,20 +219,20 @@ impl AdapterInfo {
     }
 }
 
-/// Supported physical device types
+/// Supported physical device types.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum DeviceType {
-    /// Other
+    /// Other.
     Other,
-    /// Integrated
+    /// Integrated GPU with shared CPU/GPU memory.
     IntegratedGpu,
-    /// Discrete
+    /// Discrete GPU with separate CPU/GPU memory.
     DiscreteGpu,
-    /// Virtual / Hosted
+    /// Virtual / Hosted.
     VirtualGpu,
-    /// Cpu / Software Rendering
+    /// Cpu / Software Rendering.
     Cpu,
 }
 

@@ -484,8 +484,7 @@ dependencies = [
 [[package]]
 name = "gfx-memory"
 version = "0.1.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c2eed6cda674d9cd4d92229102dbd544292124533d236904f987e9afab456137"
+source = "git+https://github.com/gfx-rs/gfx-extras?rev=438353c3f75368c12024ad2fc03cbeb15f351fd9#438353c3f75368c12024ad2fc03cbeb15f351fd9"
 dependencies = [
  "fxhash",
  "gfx-hal",
