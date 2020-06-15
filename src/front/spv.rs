@@ -4,7 +4,7 @@
 
 Our IR links to everything with `Handle`, while SPIR-V uses IDs.
 In order to keep track of the associations, the parser has many lookup tables.
-There map `spirv::Word` into a specific IR handle, plus potentially a bit of
+There map `spv::Word` into a specific IR handle, plus potentially a bit of
 extra info, such as the related SPIR-V type ID.
 TODO: would be nice to find ways that avoid looking up as much
 

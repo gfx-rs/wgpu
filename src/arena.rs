@@ -2,7 +2,7 @@ use std::{fmt, hash, marker::PhantomData, num::NonZeroU32};
 
 /// An unique index in the arena array that a handle points to.
 ///
-/// This type is independent of `spirv::Word`. `spirv::Word` is used in data
+/// This type is independent of `spv::Word`. `spv::Word` is used in data
 /// representation. It holds a SPIR-V and refers to that instruction. In
 /// structured representation, we use Handle to refer to an SPIR-V instruction.
 /// `Index` is an implementation detail to `Handle`.

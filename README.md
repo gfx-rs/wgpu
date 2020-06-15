@@ -18,7 +18,7 @@ Rust            |                    |       |
 
 Back-end        |       Status       | Notes |
 --------------- | ------------------ | ----- |
-SPIR-V (binary) |                    |       |
+SPIR-V (binary) | :construction:     |       |
 WGSL            |                    |       |
 Metal           | :construction:     |       |
 HLSL            |                    |       |

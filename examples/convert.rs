@@ -30,7 +30,7 @@ fn main() {
         return;
     } else if args[1].ends_with(".spv") {
         let input = fs::read(&args[1]).unwrap();
-        naga::front::spirv::parse_u8_slice(&input).unwrap()
+        naga::front::spv::parse_u8_slice(&input).unwrap()
     } else if args[1].ends_with(".wgsl") {
         let input = fs::read_to_string(&args[1]).unwrap();
         naga::front::wgsl::parse_str(&input).unwrap()
@@ -71,6 +71,27 @@ fn main() {
         };
         let msl = msl::write_string(&module, options).unwrap();
         fs::write(&args[2], msl).unwrap();
+    } else if args[2].ends_with(".spv") {
+        use naga::back::spv;
+
+        let debug_flag = args.get(3).map_or(spv::WriterFlags::DEBUG, |arg| {
+            if arg.parse().unwrap() {
+                spv::WriterFlags::DEBUG
+            } else {
+                spv::WriterFlags::NONE
+            }
+        });
+
+        let spv = spv::writer::Writer::new(&module.header, debug_flag).write(&module);
+
+        let bytes = spv
+            .iter()
+            .fold(Vec::with_capacity(spv.len() * 4), |mut v, w| {
+                v.extend_from_slice(&w.to_le_bytes());
+                v
+            });
+
+        fs::write(&args[2], bytes.as_slice()).unwrap();
     } else {
         panic!("Unknown output: {:?}", args[2]);
     }
