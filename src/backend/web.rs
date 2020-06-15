@@ -869,13 +869,12 @@ impl crate::Context for Context {
                         JsValue::from(mapped_buffer_binding.clone())
                     }
                     BindingResource::Sampler(ref sampler) => JsValue::from(sampler.id.0.clone()),
-                    BindingResource::TextureView {
-                        view: ref texture_view,
-                        read_only_depth_stencil: _,
-                    } => JsValue::from(texture_view.id.0.clone()),
-                    BindingResource::TextureViewArray(..) => panic!(
-                        "Web backend does not support SAMPLED_TEXTURE_BINDING_ARRAY extension"
-                    ),
+                    BindingResource::TextureView(ref texture_view) => {
+                        JsValue::from(texture_view.id.0.clone())
+                    }
+                    BindingResource::TextureViewArray(..) => {
+                        panic!("Web backend does not support BINDING_INDEXING extension")
+                    }
                 };
 
                 web_sys::GpuBindGroupEntry::new(binding.binding, &mapped_resource)

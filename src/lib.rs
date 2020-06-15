@@ -700,10 +700,7 @@ pub struct Queue {
 pub enum BindingResource<'a> {
     Buffer(BufferSlice<'a>),
     Sampler(&'a Sampler),
-    TextureView {
-        view: &'a TextureView,
-        read_only_depth_stencil: bool,
-    },
+    TextureView(&'a TextureView),
     TextureViewArray(&'a [TextureView]),
 }
 
