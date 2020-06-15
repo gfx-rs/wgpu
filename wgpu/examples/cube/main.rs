@@ -224,10 +224,7 @@ impl framework::Example for Example {
                 },
                 wgpu::Binding {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView {
-                        view: &texture_view,
-                        read_only_depth_stencil: false,
-                    },
+                    resource: wgpu::BindingResource::TextureView(&texture_view),
                 },
                 wgpu::Binding {
                     binding: 2,
