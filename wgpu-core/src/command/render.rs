@@ -30,7 +30,7 @@ use wgt::{
     RenderPassDepthStencilAttachmentDescriptorBase, StoreOp, TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
-use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, mem, ops::Range, slice};
+use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, mem, ops::Range, slice, str};
 
 pub type RenderPassColorAttachmentDescriptor =
     RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
@@ -130,6 +130,19 @@ pub enum RenderCommand {
     DrawIndexedIndirect {
         buffer_id: id::BufferId,
         offset: BufferAddress,
+    },
+    PushDebugGroup {
+        color: u32,
+        len: usize,
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
+        phantom_marker: PhantomSlice<u8>,
+    },
+    PopDebugGroup,
+    InsertDebugMarker {
+        color: u32,
+        len: usize,
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
+        phantom_marker: PhantomSlice<u8>,
     },
     ExecuteBundle(id::RenderBundleId),
     End,
@@ -329,6 +342,7 @@ struct State {
     pipeline: OptionalState,
     index: IndexState,
     vertex: VertexState,
+    debug_scope_depth: u32,
 }
 
 impl State {
@@ -905,6 +919,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             pipeline: OptionalState::Required,
             index: IndexState::default(),
             vertex: VertexState::default(),
+            debug_scope_depth: 0,
         };
 
         let mut command = RenderCommand::Draw {
@@ -1281,6 +1296,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                     }
                 }
+                RenderCommand::PushDebugGroup {
+                    color,
+                    len,
+                    phantom_marker,
+                } => unsafe {
+                    state.debug_scope_depth += 1;
+
+                    let (new_peeker, label) =
+                        { phantom_marker.decode_unaligned(peeker, len, raw_data_end) };
+                    peeker = new_peeker;
+
+                    raw.begin_debug_marker(str::from_utf8(label).unwrap(), color)
+                },
+                RenderCommand::PopDebugGroup => unsafe {
+                    assert_ne!(
+                        state.debug_scope_depth, 0,
+                        "Can't pop debug group, because number of pushed debug groups is zero!"
+                    );
+                    state.debug_scope_depth -= 1;
+
+                    raw.end_debug_marker()
+                },
+                RenderCommand::InsertDebugMarker {
+                    color,
+                    len,
+                    phantom_marker,
+                } => unsafe {
+                    let (new_peeker, label) =
+                        { phantom_marker.decode_unaligned(peeker, len, raw_data_end) };
+                    peeker = new_peeker;
+
+                    raw.insert_debug_marker(str::from_utf8(label).unwrap(), color)
+                },
                 RenderCommand::ExecuteBundle(bundle_id) => {
                     let bundle = trackers
                         .bundles
@@ -1408,7 +1456,7 @@ pub mod render_ffi {
         RenderCommand,
     };
     use crate::{id, RawString};
-    use std::{convert::TryInto, slice};
+    use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
 
     type RawPass = super::super::RawPass<id::CommandEncoderId>;
@@ -1568,18 +1616,40 @@ pub mod render_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_push_debug_group(_pass: &mut RawPass, _label: RawString) {
-        //TODO
+    pub unsafe extern "C" fn wgpu_render_pass_push_debug_group(
+        pass: &mut RawPass,
+        label: RawString,
+        color: u32,
+    ) {
+        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+
+        pass.encode(&RenderCommand::PushDebugGroup {
+            color,
+            len: bytes.len(),
+            phantom_marker: PhantomSlice::default(),
+        });
+        pass.encode_slice(bytes);
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_pop_debug_group(_pass: &mut RawPass) {
-        //TODO
+    pub unsafe extern "C" fn wgpu_render_pass_pop_debug_group(pass: &mut RawPass) {
+        pass.encode(&RenderCommand::PopDebugGroup);
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_pass_insert_debug_marker(_pass: &mut RawPass, _label: RawString) {
-        //TODO
+    pub unsafe extern "C" fn wgpu_render_pass_insert_debug_marker(
+        pass: &mut RawPass,
+        label: RawString,
+        color: u32,
+    ) {
+        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+
+        pass.encode(&RenderCommand::InsertDebugMarker {
+            color,
+            len: bytes.len(),
+            phantom_marker: PhantomSlice::default(),
+        });
+        pass.encode_slice(bytes);
     }
 
     #[no_mangle]

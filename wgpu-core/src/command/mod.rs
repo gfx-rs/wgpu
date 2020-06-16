@@ -24,6 +24,8 @@ use crate::{
     PrivateFeatures, Stored,
 };
 
+use hal::command::CommandBuffer as _;
+
 use peek_poke::PeekPoke;
 
 use std::{marker::PhantomData, mem, ptr, slice, thread::ThreadId};
@@ -275,5 +277,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         log::debug!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
         encoder_id
+    }
+
+    pub fn command_encoder_push_debug_group<B: GfxBackend>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+        label: &str,
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
+        let cmb = &mut cmb_guard[encoder_id];
+        let cmb_raw = cmb.raw.last_mut().unwrap();
+
+        unsafe {
+            cmb_raw.begin_debug_marker(label, 0);
+        }
+    }
+
+    pub fn command_encoder_insert_debug_marker<B: GfxBackend>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+        label: &str,
+    ) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
+        let cmb = &mut cmb_guard[encoder_id];
+        let cmb_raw = cmb.raw.last_mut().unwrap();
+
+        unsafe {
+            cmb_raw.insert_debug_marker(label, 0);
+        }
+    }
+
+    pub fn command_encoder_pop_debug_group<B: GfxBackend>(&self, encoder_id: id::CommandEncoderId) {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+
+        let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
+        let cmb = &mut cmb_guard[encoder_id];
+        let cmb_raw = cmb.raw.last_mut().unwrap();
+
+        unsafe {
+            cmb_raw.end_debug_marker();
+        }
     }
 }
