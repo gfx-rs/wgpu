@@ -426,14 +426,7 @@ impl<B: GfxBackend> Device<B> {
         let memory = self
             .mem_allocator
             .lock()
-            .allocate(
-                &self.raw,
-                requirements.type_mask as u32,
-                mem_usage,
-                memory_kind,
-                requirements.size,
-                requirements.alignment,
-            )
+            .allocate(&self.raw, &requirements, mem_usage, memory_kind)
             .unwrap();
 
         unsafe {
@@ -524,11 +517,9 @@ impl<B: GfxBackend> Device<B> {
             .lock()
             .allocate(
                 &self.raw,
-                requirements.type_mask as u32,
+                &requirements,
                 gfx_memory::MemoryUsage::Private,
                 gfx_memory::Kind::General,
-                requirements.size,
-                requirements.alignment,
             )
             .unwrap();
 
