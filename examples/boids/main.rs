@@ -48,35 +48,60 @@ impl framework::Example for Example {
         let fs_module =
             device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
 
+        // buffer for simulation parameters uniform
+
+        let sim_param_data = [
+            0.04f32, // deltaT
+            0.1,     // rule1Distance
+            0.025,   // rule2Distance
+            0.025,   // rule3Distance
+            0.02,    // rule1Scale
+            0.05,    // rule2Scale
+            0.005,   // rule3Scale
+        ]
+        .to_vec();
+        let sim_param_buffer = device.create_buffer_with_data(
+            bytemuck::cast_slice(&sim_param_data),
+            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        );
+
         // create compute bind layout group and compute pipeline layout
 
         let compute_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 bindings: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                        ..Default::default()
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::StorageBuffer {
+                    wgpu::BindGroupLayoutEntry::new(
+                        0,
+                        wgpu::ShaderStage::COMPUTE,
+                        wgpu::BindingType::UniformBuffer {
                             dynamic: false,
+                            min_binding_size: wgpu::NonZeroBufferAddress::new(
+                                sim_param_data.len() as _
+                            ),
+                        },
+                    ),
+                    wgpu::BindGroupLayoutEntry::new(
+                        1,
+                        wgpu::ShaderStage::COMPUTE,
+                        wgpu::BindingType::StorageBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::NonZeroBufferAddress::new(
+                                (NUM_PARTICLES * 16) as _,
+                            ),
                             readonly: false,
                         },
-                        ..Default::default()
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 2,
-                        visibility: wgpu::ShaderStage::COMPUTE,
-                        ty: wgpu::BindingType::StorageBuffer {
+                    ),
+                    wgpu::BindGroupLayoutEntry::new(
+                        2,
+                        wgpu::ShaderStage::COMPUTE,
+                        wgpu::BindingType::StorageBuffer {
                             dynamic: false,
+                            min_binding_size: wgpu::NonZeroBufferAddress::new(
+                                (NUM_PARTICLES * 16) as _,
+                            ),
                             readonly: false,
                         },
-                        ..Default::default()
-                    },
+                    ),
                 ],
                 label: None,
             });
@@ -153,23 +178,6 @@ impl framework::Example for Example {
         let vertices_buffer = device.create_buffer_with_data(
             bytemuck::bytes_of(&vertex_buffer_data),
             wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
-        );
-
-        // buffer for simulation parameters uniform
-
-        let sim_param_data = [
-            0.04f32, // deltaT
-            0.1,     // rule1Distance
-            0.025,   // rule2Distance
-            0.025,   // rule3Distance
-            0.02,    // rule1Scale
-            0.05,    // rule2Scale
-            0.005,   // rule3Scale
-        ]
-        .to_vec();
-        let sim_param_buffer = device.create_buffer_with_data(
-            bytemuck::cast_slice(&sim_param_data),
-            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
         );
 
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
