@@ -244,12 +244,18 @@ impl framework::Example for Example {
 
         let local_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                    ..Default::default()
-                }],
+                bindings: &[wgpu::BindGroupLayoutEntry::new(
+                    0,
+                    wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                    wgpu::BindingType::UniformBuffer {
+                        dynamic: false,
+                        min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
+                            EntityUniforms,
+                        >(
+                        )
+                            as _),
+                    },
+                )],
                 label: None,
             });
 
@@ -424,22 +430,24 @@ impl framework::Example for Example {
         };
 
         let shadow_pass = {
+            let uniform_size = mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress;
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[wgpu::BindGroupLayoutEntry {
-                        binding: 0, // global
-                        visibility: wgpu::ShaderStage::VERTEX,
-                        ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                        ..Default::default()
-                    }],
+                    bindings: &[wgpu::BindGroupLayoutEntry::new(
+                        0, // global
+                        wgpu::ShaderStage::VERTEX,
+                        wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::NonZeroBufferAddress::new(uniform_size),
+                        },
+                    )],
                     label: None,
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
             });
 
-            let uniform_size = mem::size_of::<ShadowUniforms>() as wgpu::BufferAddress;
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
                 label: None,
                 size: uniform_size,
@@ -516,34 +524,42 @@ impl framework::Example for Example {
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     bindings: &[
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 0, // global
-                            visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                            ..Default::default()
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 1, // lights
-                            visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                            ..Default::default()
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 2,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::SampledTexture {
+                        wgpu::BindGroupLayoutEntry::new(
+                            0, // global
+                            wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                            wgpu::BindingType::UniformBuffer {
+                                dynamic: false,
+                                min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
+                                    ForwardUniforms,
+                                >(
+                                )
+                                    as _),
+                            },
+                        ),
+                        wgpu::BindGroupLayoutEntry::new(
+                            1, // lights
+                            wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                            wgpu::BindingType::UniformBuffer {
+                                dynamic: false,
+                                min_binding_size: wgpu::NonZeroBufferAddress::new(
+                                    light_uniform_size,
+                                ),
+                            },
+                        ),
+                        wgpu::BindGroupLayoutEntry::new(
+                            2,
+                            wgpu::ShaderStage::FRAGMENT,
+                            wgpu::BindingType::SampledTexture {
                                 multisampled: false,
                                 component_type: wgpu::TextureComponentType::Float,
                                 dimension: wgpu::TextureViewDimension::D2Array,
                             },
-                            ..Default::default()
-                        },
-                        wgpu::BindGroupLayoutEntry {
-                            binding: 3,
-                            visibility: wgpu::ShaderStage::FRAGMENT,
-                            ty: wgpu::BindingType::Sampler { comparison: true },
-                            ..Default::default()
-                        },
+                        ),
+                        wgpu::BindGroupLayoutEntry::new(
+                            3,
+                            wgpu::ShaderStage::FRAGMENT,
+                            wgpu::BindingType::Sampler { comparison: true },
+                        ),
                     ],
                     label: None,
                 });
