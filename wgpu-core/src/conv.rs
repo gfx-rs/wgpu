@@ -79,13 +79,20 @@ pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::Descri
     use hal::pso;
     use wgt::BindingType as Bt;
     match binding.ty {
-        Bt::UniformBuffer { dynamic } => pso::DescriptorType::Buffer {
+        Bt::UniformBuffer {
+            dynamic,
+            min_binding_size: _,
+        } => pso::DescriptorType::Buffer {
             ty: pso::BufferDescriptorType::Uniform,
             format: pso::BufferDescriptorFormat::Structured {
                 dynamic_offset: dynamic,
             },
         },
-        Bt::StorageBuffer { readonly, dynamic } => pso::DescriptorType::Buffer {
+        Bt::StorageBuffer {
+            readonly,
+            dynamic,
+            min_binding_size: _,
+        } => pso::DescriptorType::Buffer {
             ty: pso::BufferDescriptorType::Storage {
                 read_only: readonly,
             },
@@ -93,7 +100,7 @@ pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::Descri
                 dynamic_offset: dynamic,
             },
         },
-        Bt::Sampler { .. } => pso::DescriptorType::Sampler,
+        Bt::Sampler { comparison: _ } => pso::DescriptorType::Sampler,
         Bt::SampledTexture { .. } => pso::DescriptorType::Image {
             ty: pso::ImageDescriptorType::Sampled {
                 with_sampler: false,

@@ -15,7 +15,7 @@ use wgc::device::trace;
 use std::{
     ffi::CString,
     fmt::Debug,
-    fs::File,
+    fs,
     marker::PhantomData,
     path::{Path, PathBuf},
     ptr,
@@ -307,7 +307,11 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.bind_group_destroy::<B>(id);
             }
             A::CreateShaderModule { id, data } => {
-                let spv = wgt::read_spirv(File::open(dir.join(data)).unwrap()).unwrap();
+                let byte_vec = fs::read(dir.join(data)).unwrap();
+                let spv = byte_vec
+                    .chunks(4)
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect::<Vec<_>>();
                 self.device_create_shader_module::<B>(
                     device,
                     &wgc::pipeline::ShaderModuleDescriptor {
@@ -470,7 +474,7 @@ fn main() {
     };
 
     log::info!("Loading trace '{:?}'", dir);
-    let file = File::open(dir.join(trace::FILE_NAME)).unwrap();
+    let file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
     let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
     actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());

@@ -16,6 +16,9 @@ pub enum BindingError {
     WrongUsage(naga::GlobalUse),
     /// The type on the shader side does not match the pipeline binding.
     WrongType,
+    /// The size of a buffer structure, added to one element of an unbound array,
+    /// if it's the last field, ended up greater than the given `min_binding_size`.
+    WrongBufferSize(wgt::BufferAddress),
     /// The view dimension doesn't match the shader.
     WrongTextureViewDimension { dim: spirv::Dim, is_array: bool },
     /// The component type of a sampled texture doesn't match the shader.
@@ -52,6 +55,45 @@ pub enum StageError {
     },
 }
 
+fn get_aligned_type_size(
+    module: &naga::Module,
+    inner: &naga::TypeInner,
+    allow_unbound: bool,
+) -> wgt::BufferAddress {
+    use naga::TypeInner as Ti;
+    //TODO: take alignment into account!
+    match *inner {
+        Ti::Scalar { kind: _, width } => width as wgt::BufferAddress / 8,
+        Ti::Vector {
+            size,
+            kind: _,
+            width,
+        } => size as wgt::BufferAddress * width as wgt::BufferAddress / 8,
+        Ti::Matrix {
+            rows,
+            columns,
+            kind: _,
+            width,
+        } => {
+            rows as wgt::BufferAddress * columns as wgt::BufferAddress * width as wgt::BufferAddress
+                / 8
+        }
+        Ti::Pointer { .. } => 4,
+        Ti::Array {
+            base,
+            size: naga::ArraySize::Static(size),
+        } => {
+            size as wgt::BufferAddress
+                * get_aligned_type_size(module, &module.types[base].inner, false)
+        }
+        Ti::Array {
+            base,
+            size: naga::ArraySize::Dynamic,
+        } if allow_unbound => get_aligned_type_size(module, &module.types[base].inner, false),
+        _ => panic!("Unexpected struct field"),
+    }
+}
+
 fn check_binding(
     module: &naga::Module,
     var: &naga::GlobalVariable,
@@ -64,17 +106,42 @@ fn check_binding(
         ty_inner = &module.types[base].inner;
     }
     let allowed_usage = match *ty_inner {
-        naga::TypeInner::Struct { .. } => match entry.ty {
-            BindingType::UniformBuffer { .. } => naga::GlobalUse::LOAD,
-            BindingType::StorageBuffer { readonly, .. } => {
-                if readonly {
-                    naga::GlobalUse::LOAD
-                } else {
-                    naga::GlobalUse::all()
+        naga::TypeInner::Struct { ref members } => {
+            let (allowed_usage, min_size) = match entry.ty {
+                BindingType::UniformBuffer {
+                    dynamic: _,
+                    min_binding_size,
+                } => (naga::GlobalUse::LOAD, min_binding_size),
+                BindingType::StorageBuffer {
+                    dynamic: _,
+                    min_binding_size,
+                    readonly,
+                } => {
+                    let global_use = if readonly {
+                        naga::GlobalUse::LOAD
+                    } else {
+                        naga::GlobalUse::all()
+                    };
+                    (global_use, min_binding_size)
                 }
+                _ => return Err(BindingError::WrongType),
+            };
+            let mut actual_size = 0;
+            for (i, member) in members.iter().enumerate() {
+                actual_size += get_aligned_type_size(
+                    module,
+                    &module.types[member.ty].inner,
+                    i + 1 == members.len(),
+                );
             }
-            _ => return Err(BindingError::WrongType),
-        },
+            match min_size {
+                Some(non_zero) if non_zero.get() < actual_size => {
+                    return Err(BindingError::WrongBufferSize(actual_size))
+                }
+                _ => (),
+            }
+            allowed_usage
+        }
         naga::TypeInner::Sampler => match entry.ty {
             BindingType::Sampler { .. } => naga::GlobalUse::empty(),
             _ => return Err(BindingError::WrongType),

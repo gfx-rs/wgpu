@@ -1458,20 +1458,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .expect("Failed to find binding declaration for binding");
                 let descriptors: SmallVec<[_; 1]> = match b.resource {
                     binding_model::BindingResource::Buffer(ref bb) => {
-                        let (alignment, pub_usage, internal_use) = match decl.ty {
-                            wgt::BindingType::UniformBuffer { .. } => (
-                                BIND_BUFFER_ALIGNMENT,
+                        let (pub_usage, internal_use, min_size) = match decl.ty {
+                            wgt::BindingType::UniformBuffer { dynamic: _, min_binding_size } => (
                                 wgt::BufferUsage::UNIFORM,
                                 resource::BufferUse::UNIFORM,
+                                min_binding_size,
                             ),
-                            wgt::BindingType::StorageBuffer { readonly, .. } => (
-                                BIND_BUFFER_ALIGNMENT,
+                            wgt::BindingType::StorageBuffer { dynamic: _, min_binding_size, readonly } => (
                                 wgt::BufferUsage::STORAGE,
                                 if readonly {
                                     resource::BufferUse::STORAGE_STORE
                                 } else {
                                     resource::BufferUse::STORAGE_LOAD
                                 },
+                                min_binding_size,
                             ),
                             wgt::BindingType::Sampler { .. }
                             | wgt::BindingType::StorageTexture { .. }
@@ -1481,11 +1481,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
 
                         assert_eq!(
-                            bb.offset % alignment,
+                            bb.offset % BIND_BUFFER_ALIGNMENT,
                             0,
-                            "Buffer offset {} must be a multiple of alignment {}",
-                            bb.offset,
-                            alignment
+                            "Buffer offset {} must be a multiple of BIND_BUFFER_ALIGNMENT",
+                            bb.offset
                         );
 
                         let buffer = used
@@ -1498,21 +1497,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             buffer.usage,
                             pub_usage
                         );
+                        let bind_size = if bb.size == BufferSize::WHOLE {
+                            buffer.size - bb.offset
+                        } else {
+                            let end = bb.offset + bb.size.0;
+                            assert!(
+                                end <= buffer.size,
+                                "Bound buffer range {:?} does not fit in buffer size {}",
+                                bb.offset..end,
+                                buffer.size
+                            );
+                            bb.size.0
+                        };
+                        match min_size {
+                            Some(non_zero) if non_zero.get() > bind_size => panic!(
+                                "Minimum buffer binding size {} is not respected with size {}",
+                                non_zero.get(),
+                                bind_size
+                            ),
+                            _ => (),
+                        }
 
                         let sub_range = hal::buffer::SubRange {
                             offset: bb.offset,
-                            size: if bb.size == BufferSize::WHOLE {
-                                None
-                            } else {
-                                let end = bb.offset + bb.size.0;
-                                assert!(
-                                    end <= buffer.size,
-                                    "Bound buffer range {:?} does not fit in buffer size {}",
-                                    bb.offset..end,
-                                    buffer.size
-                                );
-                                Some(bb.size.0)
-                            },
+                            size: Some(bind_size),
                         };
                         SmallVec::from([hal::pso::Descriptor::Buffer(&buffer.raw, sub_range)])
                     }
