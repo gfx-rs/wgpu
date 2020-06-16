@@ -1,8 +1,16 @@
+/// Wrapper aligning contents to at least 4.
 #[repr(align(4))]
 pub struct WordAligned<Bytes: ?Sized>(pub Bytes);
 
 /// Treat the given by slice as a SPIR-V module.
-/// The pointer has to be aligned to 32-bit boundary and be a valid SPIR-V binary.
+///
+/// # Errors
+///
+/// Returns errors when:
+///
+/// - Input length is not divisible by 4
+/// - Input is longer than usize::max_value()
+/// - SPIR-V magic number is missing from beginning of stream
 pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderModuleSource<'a> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
 

@@ -1,6 +1,6 @@
 //! Convenience macros
 
-/// Macro to produce an array of [`VertexAttributeDescriptor`]
+/// Macro to produce an array of [`VertexAttributeDescriptor`].
 ///
 /// Output has type: `[VertexAttributeDescriptor; _]`. Usage is as follows:
 /// ```
@@ -30,7 +30,9 @@ macro_rules! vertex_attr_array {
     };
 }
 
-// For internal usage
+/// Helper macro which turns a vertex attribute type into a size.
+///
+/// Mainly used as a helper for [`vertex_attr_array`] but might be externally useful.
 #[macro_export]
 macro_rules! vertex_format_size {
     (Uchar2) => {
