@@ -902,7 +902,7 @@ impl<W: Write> Writer<W> {
                         dim, base_name, access, name
                     )?;
                 }
-                crate::TypeInner::Sampler => {
+                crate::TypeInner::Sampler { comparison: _ } => {
                     write!(self.out, "typedef sampler {}", name)?;
                 }
             }

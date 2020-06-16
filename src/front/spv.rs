@@ -1303,7 +1303,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(2)?;
         let id = self.next()?;
         let decor = self.future_decor.remove(&id).unwrap_or_default();
-        let inner = crate::TypeInner::Sampler;
+        let inner = crate::TypeInner::Sampler { comparison: false }; //TODO!
         self.lookup_type.insert(
             id,
             LookupType {

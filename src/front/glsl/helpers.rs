@@ -275,7 +275,7 @@ pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray, types: &mut Arena<Type>) ->
             }
 
             if ty_name.0 == "sampler" {
-                return Some(TypeInner::Sampler);
+                return Some(TypeInner::Sampler { comparison: false }); //TODO
             }
             unimplemented!()
         }

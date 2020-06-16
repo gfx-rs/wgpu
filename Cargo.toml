@@ -14,7 +14,7 @@ bitflags = "1"
 fxhash = "0.2"
 log = "0.4"
 num-traits = "0.2"
-spirv = { package = "spirv_headers", version = "1" }
+spirv = { package = "spirv_headers", version = "1.4.2" }
 glsl = { version = "4", optional = true }
 
 [features]

@@ -105,7 +105,9 @@ pub enum TypeInner {
         dim: spirv::Dim,
         flags: ImageFlags,
     },
-    Sampler,
+    Sampler {
+        comparison: bool,
+    },
 }
 
 #[derive(Debug, PartialEq)]

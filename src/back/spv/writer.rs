@@ -433,7 +433,7 @@ impl Writer {
 
                 self.lookup_type.insert(id, base);
             }
-            crate::TypeInner::Sampler => {
+            crate::TypeInner::Sampler { comparison: _ } => {
                 instruction = Instruction::new(Op::TypeSampler);
                 instruction.set_result(id);
                 self.lookup_type.insert(id, handle);
