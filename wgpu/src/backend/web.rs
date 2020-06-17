@@ -806,14 +806,20 @@ impl crate::Context for Context {
                 );
 
                 match bind.ty {
-                    BindingType::UniformBuffer { dynamic }
+                    BindingType::UniformBuffer { dynamic, .. }
                     | BindingType::StorageBuffer { dynamic, .. } => {
                         mapped_entry.has_dynamic_offset(dynamic);
                     }
                     _ => {}
                 }
 
-                if let BindingType::SampledTexture { multisampled, .. } = bind.ty {
+                if let BindingType::SampledTexture {
+                    component_type,
+                    multisampled,
+                    ..
+                } = bind.ty
+                {
+                    mapped_entry.texture_component_type(map_texture_component_type(component_type));
                     mapped_entry.multisampled(multisampled);
                 }
 
@@ -827,15 +833,6 @@ impl crate::Context for Context {
 
                 if let BindingType::StorageTexture { format, .. } = bind.ty {
                     mapped_entry.storage_texture_format(map_texture_format(format));
-                }
-
-                match bind.ty {
-                    BindingType::SampledTexture { component_type, .. }
-                    | BindingType::StorageTexture { component_type, .. } => {
-                        mapped_entry
-                            .texture_component_type(map_texture_component_type(component_type));
-                    }
-                    _ => {}
                 }
 
                 mapped_entry
