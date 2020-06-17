@@ -57,6 +57,7 @@ png = "0.16"
 winit = { version = "0.22.1", features = ["web-sys"] }
 rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = "1"
+noise = "0.6.0"
 
 [[example]]
 name="hello-compute"
