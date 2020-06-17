@@ -341,10 +341,13 @@ impl framework::Example for Example {
                 }],
                 depth_stencil_attachment: None,
             });
+            rpass.push_debug_group("Prepare data for draw.");
             rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
             rpass.set_index_buffer(self.index_buf.slice(..));
             rpass.set_vertex_buffer(0, self.vertex_buf.slice(..));
+            rpass.pop_debug_group();
+            rpass.insert_debug_marker("Draw!");
             rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
         }
 
