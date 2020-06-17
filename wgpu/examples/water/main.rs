@@ -4,8 +4,7 @@ mod framework;
 mod point_gen;
 
 use cgmath::Point3;
-use std::{io, mem};
-use wgpu::vertex_attr_array;
+use std::mem;
 
 ///
 /// Radius of the terrain.
@@ -477,23 +476,15 @@ impl framework::Example for Example {
             label: Some("Terrain Flipped Bind Group"),
         });
 
-        // Read shaders from file.
-        let water_vs_bytes = include_bytes!("water_shader.vert.spv");
-        let water_fs_bytes = include_bytes!("water_shader.frag.spv");
         // Upload/compile them to GPU code.
-        let water_vs_module = device
-            .create_shader_module(&wgpu::read_spirv(io::Cursor::new(&water_vs_bytes[..])).unwrap());
-        let water_fs_module = device
-            .create_shader_module(&wgpu::read_spirv(io::Cursor::new(&water_fs_bytes[..])).unwrap());
-
-        let terrain_vs_bytes = include_bytes!("terrain_shader.vert.spv");
-        let terrain_fs_bytes = include_bytes!("terrain_shader.frag.spv");
-        let terrain_vs_module = device.create_shader_module(
-            &wgpu::read_spirv(io::Cursor::new(&terrain_vs_bytes[..])).unwrap(),
-        );
-        let terrain_fs_module = device.create_shader_module(
-            &wgpu::read_spirv(io::Cursor::new(&terrain_fs_bytes[..])).unwrap(),
-        );
+        let water_vs_module =
+            device.create_shader_module(wgpu::include_spirv!("water_shader.vert.spv"));
+        let water_fs_module =
+            device.create_shader_module(wgpu::include_spirv!("water_shader.frag.spv"));
+        let terrain_vs_module =
+            device.create_shader_module(wgpu::include_spirv!("terrain_shader.vert.spv"));
+        let terrain_fs_module =
+            device.create_shader_module(wgpu::include_spirv!("terrain_shader.frag.spv"));
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
@@ -566,7 +557,7 @@ impl framework::Example for Example {
                 vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: water_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &vertex_attr_array![0 => Short2, 1 => Char4],
+                    attributes: &wgpu::vertex_attr_array![0 => Short2, 1 => Char4],
                 }],
             },
             sample_count: 1,
@@ -613,7 +604,7 @@ impl framework::Example for Example {
                 vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
+                    attributes: &wgpu::vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
                 }],
             },
             sample_count: 1,

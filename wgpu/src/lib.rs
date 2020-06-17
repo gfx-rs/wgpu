@@ -1,7 +1,7 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
 mod backend;
-mod util;
+pub mod util;
 #[macro_use]
 mod macros;
 
@@ -33,7 +33,6 @@ pub use wgt::{
 };
 
 use backend::Context as C;
-pub use util::read_spirv;
 
 trait ComputePassInner<Ctx: Context> {
     fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);
@@ -162,7 +161,7 @@ trait Context: Sized {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        spv: &[u32],
+        source: ShaderModuleSource,
     ) -> Self::ShaderModuleId;
     fn device_create_bind_group_layout(
         &self,
@@ -569,6 +568,20 @@ impl Drop for ShaderModule {
             self.context.shader_module_drop(&self.id);
         }
     }
+}
+
+/// Source of a shader module.
+pub enum ShaderModuleSource<'a> {
+    /// SPIR-V module represented as a slice of words.
+    /// wgpu-rs will try to reflect it and use for validation, but the
+    /// original data is passed to gfx-rs and spirv_cross for translation.
+    SpirV(&'a [u32]),
+    /// WGSL module as a string slice.
+    /// wgpu-rs will parse it and use for validation. It will attempt
+    /// to build a SPIR-V module internally and panic otherwise.
+    ///
+    /// Note: WGSL is not yet supported on the Web.
+    Wgsl(&'a str),
 }
 
 /// An opaque handle to a pipeline layout.
@@ -1046,11 +1059,11 @@ impl Device {
         Context::device_capabilities(&*self.context, &self.id)
     }
 
-    /// Creates a shader module from SPIR-V source code.
-    pub fn create_shader_module(&self, spv: &[u32]) -> ShaderModule {
+    /// Creates a shader module from either SPIR-V or WGSL source code.
+    pub fn create_shader_module(&self, source: ShaderModuleSource) -> ShaderModule {
         ShaderModule {
             context: Arc::clone(&self.context),
-            id: Context::device_create_shader_module(&*self.context, &self.id, spv),
+            id: Context::device_create_shader_module(&*self.context, &self.id, source),
         }
     }
 

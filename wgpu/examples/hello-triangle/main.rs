@@ -32,13 +32,8 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         .await
         .unwrap();
 
-    let vs = include_bytes!("shader.vert.spv");
-    let vs_module =
-        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
-
-    let fs = include_bytes!("shader.frag.spv");
-    let fs_module =
-        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
+    let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
+    let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[],
