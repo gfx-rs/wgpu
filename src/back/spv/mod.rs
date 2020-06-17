@@ -1,5 +1,7 @@
 mod layout;
-pub mod writer;
+mod writer;
+
+pub use writer::Writer;
 
 use spirv::*;
 

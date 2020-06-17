@@ -84,6 +84,10 @@ impl<T> Arena<T> {
         self.data.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.data.is_empty()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
         self.data.iter().enumerate().map(|(i, v)| {
             let position = i + 1;

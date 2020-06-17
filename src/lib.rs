@@ -5,7 +5,7 @@ pub mod back;
 pub mod front;
 pub mod proc;
 
-use crate::arena::{Arena, Handle};
+pub use crate::arena::{Arena, Handle};
 
 use std::{
     collections::{HashMap, HashSet},

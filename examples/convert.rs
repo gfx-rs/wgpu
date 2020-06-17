@@ -25,17 +25,23 @@ fn main() {
 
     let args = env::args().collect::<Vec<_>>();
 
-    let module = if args.len() <= 1 {
+    if args.len() <= 1 {
         println!("Call with <input> <output>");
         return;
-    } else if args[1].ends_with(".spv") {
-        let input = fs::read(&args[1]).unwrap();
-        naga::front::spv::parse_u8_slice(&input).unwrap()
-    } else if args[1].ends_with(".wgsl") {
-        let input = fs::read_to_string(&args[1]).unwrap();
-        naga::front::wgsl::parse_str(&input).unwrap()
-    } else {
-        panic!("Unknown input: {:?}", args[1]);
+    }
+    let in_ext_pos = args[1].rfind(".").expect("Input has no extension?");
+    let module = match &args[1][in_ext_pos..] {
+        "spv" => {
+            let input = fs::read(&args[1]).unwrap();
+            naga::front::spv::parse_u8_slice(&input).unwrap()
+        }
+        "wgsl" => {
+            let input = fs::read_to_string(&args[1]).unwrap();
+            naga::front::wgsl::parse_str(&input).unwrap()
+        }
+        //#[cfg(feature = "glsl")] //TODO
+        //"glsl" | "vert" | "frag" | "comp" => {}
+        other => panic!("Unknown input extension: {}", other),
     };
 
     if args.len() <= 2 {
@@ -82,7 +88,7 @@ fn main() {
             }
         });
 
-        let spv = spv::writer::Writer::new(&module.header, debug_flag).write(&module);
+        let spv = spv::Writer::new(&module.header, debug_flag).write(&module);
 
         let bytes = spv
             .iter()

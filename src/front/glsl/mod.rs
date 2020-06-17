@@ -1213,7 +1213,7 @@ mod tests {
 
     #[test]
     fn test_vertex() {
-        let data = include_str!("../../test-data/glsl_vertex_test_shader.vert");
+        let data = include_str!("../../../test-data/glsl_vertex_test_shader.vert");
 
         println!(
             "{:#?}",
@@ -1225,7 +1225,7 @@ mod tests {
     fn test_frag() {
         let _ = env_logger::try_init();
 
-        let data = include_str!("../../test-data/glsl_phong_lighting.frag");
+        let data = include_str!("../../../test-data/glsl_phong_lighting.frag");
 
         println!(
             "{:#?}",
@@ -1238,7 +1238,7 @@ mod tests {
     fn test_preprocess() {
         let _ = env_logger::try_init();
 
-        let data = include_str!("../../test-data/glsl_preprocessor_abuse.vert");
+        let data = include_str!("../../../test-data/glsl_preprocessor_abuse.vert");
 
         println!(
             "{:#?}",
@@ -1252,7 +1252,7 @@ mod tests {
     fn test_preprocess_ifs() {
         let _ = env_logger::try_init();
 
-        let data = include_str!("../../test-data/glsl_if_preprocessor.vert");
+        let data = include_str!("../../../test-data/glsl_if_preprocessor.vert");
 
         println!(
             "{:#?}",
