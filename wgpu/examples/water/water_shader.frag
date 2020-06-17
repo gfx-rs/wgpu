@@ -15,11 +15,9 @@ layout(set = 0, binding = 1) uniform texture2D reflection;
 layout(set = 0, binding = 2) uniform texture2D terrain_depth_tex;
 layout(set = 0, binding = 3) uniform sampler colour_sampler;
 
-layout(location = 0) in PerVertex {
-    vec2 f_WaterScreenPos;
-    float f_Fresnel;
-    vec3 f_Light;
-} f_In;
+layout(location = 0) in vec2 f_WaterScreenPos;
+layout(location = 1) in float f_Fresnel;
+layout(location = 2) in vec3 f_Light;
 
 layout(location = 0) out vec4 outColor;
 
@@ -30,17 +28,17 @@ float to_linear_depth(float depth) {
 }
 
 void main() {
-    vec3 reflection_colour = texture(sampler2D(reflection, colour_sampler), f_In.f_WaterScreenPos.xy).xyz;
+    vec3 reflection_colour = texture(sampler2D(reflection, colour_sampler), f_WaterScreenPos.xy).xyz;
 
     float pixel_depth = to_linear_depth(gl_FragCoord.z);
     float terrain_depth = to_linear_depth(texture(sampler2D(terrain_depth_tex, colour_sampler), gl_FragCoord.xy / vec2(time_size_width.w, viewport_height)).r);
 
     float dist = terrain_depth - pixel_depth;
-    float clamped = smoothstep(0.0, 1.0, dist);
+    float clamped = pow(smoothstep(0.0, 1.5, dist), 4.8);
 
-    outColor.a = clamped * (1.0 - f_In.f_Fresnel);
+    outColor.a = clamped * (1.0 - f_Fresnel);
 
-    vec3 final_colour = f_In.f_Light + reflection_colour;
+    vec3 final_colour = f_Light + reflection_colour;
 
     vec3 depth_colour = mix(final_colour, water_colour, smoothstep(1.0, 5.0, dist) * 0.2);
 

@@ -14,11 +14,9 @@ layout(location = 0) in vec3 position;
 layout(location = 1) in vec3 normal;
 layout(location = 2) in vec4 colour;
 
-layout(location = 0) out PerVertex {
-    vec4 v_Colour;
-    // Comment this out if using user-clipping planes:
-    float v_ClipDist;
-};
+layout(location = 0) out vec4 v_Colour;
+// Comment this out if using user-clipping planes:
+layout(location = 1) out float v_ClipDist;
 
 void main() {
     gl_Position = projection_view * vec4(position, 1.0);
