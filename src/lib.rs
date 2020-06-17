@@ -1,7 +1,7 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
 mod backend;
-
+mod util;
 #[macro_use]
 mod macros;
 
@@ -19,20 +19,21 @@ use parking_lot::Mutex;
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
-    read_spirv, AddressMode, Backend, BackendBit, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
-    BindingType, BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize,
-    BufferUsage, Capabilities, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
+    AddressMode, Backend, BackendBit, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
+    BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage,
+    Capabilities, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
     CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
     Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
-    Origin3d, PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
-    RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage, StencilOperation,
-    StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus, TextureAspect,
-    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
-    TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
+    NonZeroBufferAddress, Origin3d, PowerPreference, PresentMode, PrimitiveTopology,
+    RasterizationStateDescriptor, RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage,
+    StencilOperation, StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus,
+    TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat,
+    TextureUsage, TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
     BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
+pub use util::read_spirv;
 
 trait ComputePassInner<Ctx: Context> {
     fn set_pipeline(&mut self, pipeline: &Ctx::ComputePipelineId);

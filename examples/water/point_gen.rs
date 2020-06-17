@@ -2,8 +2,8 @@
 //! This module covers generating points in a hexagonal fashion.
 //!
 
+use cgmath::{InnerSpace, Point3, Vector3};
 use std::collections::HashMap;
-use cgmath::{Vector3, Point3, InnerSpace};
 
 // The following constants are used in calculations.
 // A and B are multiplication factors for x and y.
@@ -83,9 +83,16 @@ fn surrounding_hexagonal_points(x: isize, y: isize) -> [(isize, isize); 6] {
     ]
 }
 
-fn surrounding_point_values_iter<T>(hashmap: &HashMap<(isize, isize), T>, x: isize, y: isize, for_each: impl FnMut((&T, &T))) {
+fn surrounding_point_values_iter<T>(
+    hashmap: &HashMap<(isize, isize), T>,
+    x: isize,
+    y: isize,
+    for_each: impl FnMut((&T, &T)),
+) {
     let points = surrounding_hexagonal_points(x, y);
-    let points = [points[0], points[1], points[2], points[3], points[4], points[5], points[0]];
+    let points = [
+        points[0], points[1], points[2], points[3], points[4], points[5], points[0],
+    ];
     points
         .windows(2)
         .map(|x| (hashmap.get(&x[0]), hashmap.get(&x[1])))
@@ -160,9 +167,16 @@ impl HexTerrainMesh {
             }
         }
         fn half(p1: &TerrainVertex, p2: &TerrainVertex) -> Point3<f32> {
-            Point3 { x: (p1.position.x + p2.position.x) / 2.0, y: (p1.position.y + p2.position.y) / 2.0, z: (p1.position.z + p2.position.z) / 2.0 }
+            Point3 {
+                x: (p1.position.x + p2.position.x) / 2.0,
+                y: (p1.position.y + p2.position.y) / 2.0,
+                z: (p1.position.z + p2.position.z) / 2.0,
+            }
         }
-        let mut push_triangle = |p1: &TerrainVertex, p2: &TerrainVertex, p: &TerrainVertex, c: [u8; 4]| {
+        let mut push_triangle = |p1: &TerrainVertex,
+                                 p2: &TerrainVertex,
+                                 p: &TerrainVertex,
+                                 c: [u8; 4]| {
             let m = middle(p1, p2, p);
             let ap = half(p1, p);
             let bp = half(p2, p);
@@ -170,28 +184,27 @@ impl HexTerrainMesh {
             let n1 = calculate_normal(ap, m, p);
             let n2 = calculate_normal(m, bp, p);
 
-            vertices
-                .extend(
-                    [ap, m, p, m, bp, p]
-                        .iter()
-                        .zip(std::iter::repeat::<[f32; 3]>(n1.into()).chain(std::iter::repeat::<[f32; 3]>(n2.into())))
-                        .zip(std::iter::repeat(c))
-                        .map(|((pos, normal), colour)| TerrainVertexAttributes {
-                            position: *pos.as_ref(),
-                            normal,
-                            colour,
-                        })
-                );
+            vertices.extend(
+                [ap, m, p, m, bp, p]
+                    .iter()
+                    .zip(
+                        std::iter::repeat::<[f32; 3]>(n1.into())
+                            .chain(std::iter::repeat::<[f32; 3]>(n2.into())),
+                    )
+                    .zip(std::iter::repeat(c))
+                    .map(|((pos, normal), colour)| TerrainVertexAttributes {
+                        position: *pos.as_ref(),
+                        normal,
+                        colour,
+                    }),
+            );
         };
         for i in -self.half_size..=self.half_size {
             for j in -self.half_size..=self.half_size {
                 if let Some(p) = self.vertices.get(&(i, j)) {
-                    surrounding_point_values_iter(
-                        &self.vertices,
-                        i,
-                        j,
-                        |(a, b)| push_triangle(a, b, p, p.colour)
-                    );
+                    surrounding_point_values_iter(&self.vertices, i, j, |(a, b)| {
+                        push_triangle(a, b, p, p.colour)
+                    });
                 }
             }
         }
@@ -246,7 +259,7 @@ impl HexWaterMesh {
                 (b[0] - a[0]) as i8,
                 (b[1] - a[1]) as i8,
                 (c[0] - a[0]) as i8,
-                (c[1] - a[1]) as i8
+                (c[1] - a[1]) as i8,
             ]
         }
 
@@ -259,7 +272,7 @@ impl HexWaterMesh {
                 [a, b, c]
                     .iter()
                     .zip([bc, ca, ab].iter())
-                    .map(|(&position, &offsets)| WaterVertexAttributes { position, offsets })
+                    .map(|(&position, &offsets)| WaterVertexAttributes { position, offsets }),
             );
         };
 
@@ -267,12 +280,9 @@ impl HexWaterMesh {
             for j in -self.half_size..=self.half_size {
                 if (i - j) % 3 == 0 {
                     if let Some(&p) = self.vertices.get(&(i, j)) {
-                        surrounding_point_values_iter(
-                            &self.vertices,
-                            i,
-                            j,
-                            |(a, b)| push_triangle(*a, *b, p)
-                        );
+                        surrounding_point_values_iter(&self.vertices, i, j, |(a, b)| {
+                            push_triangle(*a, *b, p)
+                        });
                     }
                 }
             }

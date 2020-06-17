@@ -65,15 +65,15 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
-        bindings: &[wgpu::BindGroupLayoutEntry {
-            binding: 0,
-            visibility: wgpu::ShaderStage::COMPUTE,
-            ty: wgpu::BindingType::StorageBuffer {
+        bindings: &[wgpu::BindGroupLayoutEntry::new(
+            0,
+            wgpu::ShaderStage::COMPUTE,
+            wgpu::BindingType::StorageBuffer {
                 dynamic: false,
                 readonly: false,
+                min_binding_size: wgpu::NonZeroBufferAddress::new(4),
             },
-            ..Default::default()
-        }],
+        )],
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -153,12 +153,6 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_compute_0() {
-        let input = vec![];
-        futures::executor::block_on(assert_execute_gpu(input, vec![]));
-    }
 
     #[test]
     fn test_compute_1() {

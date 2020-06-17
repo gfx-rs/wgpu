@@ -4,7 +4,7 @@ mod framework;
 mod point_gen;
 
 use cgmath::Point3;
-
+use std::{io, mem};
 use wgpu::vertex_attr_array;
 
 ///
@@ -21,7 +21,11 @@ const SIZE: f32 = 10.0;
 /// Location of the camera.
 /// Location of light is in terrain/water shaders.
 ///
-const CAMERA: Point3<f32> = Point3 { x: -100.0, y: 50.0, z: 100.0 };
+const CAMERA: Point3<f32> = Point3 {
+    x: -100.0,
+    y: 50.0,
+    z: 100.0,
+};
 
 struct Matrices {
     view: cgmath::Matrix4<f32>,
@@ -45,7 +49,7 @@ struct WaterUniforms {
     view: [f32; 16],
     projection: [f32; 16],
     time_size_width: [f32; 4],
-    height: f32,
+    height: [f32; 4],
 }
 
 struct Uniforms {
@@ -103,7 +107,7 @@ impl Example {
         let reg_view = cgmath::Matrix4::look_at(
             CAMERA,
             cgmath::Point3::new(0f32, 0.0, 0.0),
-            cgmath::Vector3::unit_y(),  //Note that y is up. Differs from other examples.
+            cgmath::Vector3::unit_y(), //Note that y is up. Differs from other examples.
         );
 
         let scale = cgmath::Matrix4::from_nonuniform_scale(8.0, 1.5, 8.0);
@@ -115,7 +119,6 @@ impl Example {
             cgmath::Point3::new(0f32, 0.0, 0.0),
             cgmath::Vector3::unit_y(),
         );
-
 
         let correction = framework::OPENGL_TO_WGPU_MATRIX;
 
@@ -132,7 +135,7 @@ impl Example {
         let Matrices {
             view,
             flipped_view,
-            projection
+            projection,
         } = Self::generate_matrices(width as f32 / height as f32);
 
         Uniforms {
@@ -148,8 +151,8 @@ impl Example {
                 view: *view.as_ref(),
                 projection: *projection.as_ref(),
                 time_size_width: [0.0, 1.0, SIZE * 2.0, width as f32],
-                height: height as f32
-            }
+                height: [height as f32, 0.0, 0.0, 0.0],
+            },
         }
     }
 
@@ -174,8 +177,16 @@ impl Example {
         } = Self::generate_uniforms(sc_desc.width, sc_desc.height);
 
         // Put the uniforms into buffers on the GPU
-        queue.write_buffer(terrain_normal_uniforms, 0, bytemuck::cast_slice(&[terrain_normal]));
-        queue.write_buffer(terrain_flipped_uniforms, 0, bytemuck::cast_slice(&[terrain_flipped]));
+        queue.write_buffer(
+            terrain_normal_uniforms,
+            0,
+            bytemuck::cast_slice(&[terrain_normal]),
+        );
+        queue.write_buffer(
+            terrain_flipped_uniforms,
+            0,
+            bytemuck::cast_slice(&[terrain_flipped]),
+        );
         queue.write_buffer(water_uniforms, 0, bytemuck::cast_slice(&[water]));
 
         let texture_extent = wgpu::Extent3d {
@@ -191,7 +202,9 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: sc_desc.format,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST | wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::SAMPLED
+                | wgpu::TextureUsage::COPY_DST
+                | wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         });
 
         let draw_depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
@@ -201,7 +214,9 @@ impl Example {
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: wgpu::TextureFormat::Depth32Float,
-            usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST | wgpu::TextureUsage::OUTPUT_ATTACHMENT,
+            usage: wgpu::TextureUsage::SAMPLED
+                | wgpu::TextureUsage::COPY_DST
+                | wgpu::TextureUsage::OUTPUT_ATTACHMENT,
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -224,11 +239,15 @@ impl Example {
                 },
                 wgpu::Binding {
                     binding: 1,
-                    resource: wgpu::BindingResource::TextureView(&reflection_texture.create_default_view()),
+                    resource: wgpu::BindingResource::TextureView(
+                        &reflection_texture.create_default_view(),
+                    ),
                 },
                 wgpu::Binding {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(&draw_depth_buffer.create_default_view())
+                    resource: wgpu::BindingResource::TextureView(
+                        &draw_depth_buffer.create_default_view(),
+                    ),
                 },
                 wgpu::Binding {
                     binding: 3,
@@ -238,7 +257,11 @@ impl Example {
             label: Some("Water Bind Group"),
         });
 
-        (reflection_texture.create_default_view(), draw_depth_buffer.create_default_view(), water_bind_group)
+        (
+            reflection_texture.create_default_view(),
+            draw_depth_buffer.create_default_view(),
+            water_bind_group,
+        )
     }
 }
 
@@ -248,8 +271,6 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
-        use std::mem;
-
         // Size of one water vertex
         let water_vertex_size = mem::size_of::<point_gen::WaterVertexAttributes>();
 
@@ -265,48 +286,53 @@ impl framework::Example for Example {
         let mut terrain_random = rand::thread_rng();
 
         // Generate terrain. The closure determines what each hexagon will look like.
-        let terrain = point_gen::HexTerrainMesh::generate(SIZE, |point| -> point_gen::TerrainVertex {
-            use rand::Rng;
-            use noise::NoiseFn;
-            let noise = terrain_noise.get([point[0] as f64 / 5.0, point[1] as f64 / 5.0]) + 0.1;
+        let terrain =
+            point_gen::HexTerrainMesh::generate(SIZE, |point| -> point_gen::TerrainVertex {
+                use noise::NoiseFn;
+                use rand::Rng;
+                let noise = terrain_noise.get([point[0] as f64 / 5.0, point[1] as f64 / 5.0]) + 0.1;
 
-            let y = noise as f32 * 8.0;
+                let y = noise as f32 * 8.0;
 
-            // Multiplies a colour by some random amount.
-            fn mul_arr(mut arr: [u8; 4], by: f32) -> [u8; 4] {
-                arr[0] = (arr[0] as f32 * by).min(255.0) as u8;
-                arr[1] = (arr[1] as f32 * by).min(255.0) as u8;
-                arr[2] = (arr[2] as f32 * by).min(255.0) as u8;
-                arr
-            }
+                // Multiplies a colour by some random amount.
+                fn mul_arr(mut arr: [u8; 4], by: f32) -> [u8; 4] {
+                    arr[0] = (arr[0] as f32 * by).min(255.0) as u8;
+                    arr[1] = (arr[1] as f32 * by).min(255.0) as u8;
+                    arr[2] = (arr[2] as f32 * by).min(255.0) as u8;
+                    arr
+                }
 
-            // Under water
-            const DARK_SAND: [u8; 4] = [235, 175, 71, 255];
-            // Coast
-            const SAND: [u8; 4] = [217, 191, 76, 255];
-            // Normal
-            const GRASS: [u8; 4] = [122, 170, 19, 255];
-            // Mountain
-            const SNOW: [u8; 4] = [175, 224, 237, 255];
+                // Under water
+                const DARK_SAND: [u8; 4] = [235, 175, 71, 255];
+                // Coast
+                const SAND: [u8; 4] = [217, 191, 76, 255];
+                // Normal
+                const GRASS: [u8; 4] = [122, 170, 19, 255];
+                // Mountain
+                const SNOW: [u8; 4] = [175, 224, 237, 255];
 
-            // Random colouration.
-            let random = terrain_random.gen::<f32>() * 0.2 + 0.9;
+                // Random colouration.
+                let random = terrain_random.gen::<f32>() * 0.2 + 0.9;
 
-            // Choose colour.
-            let colour = if y <= 0.0 {
-                DARK_SAND
-            } else if y <= 0.8 {
-                SAND
-            } else if y <= 3.0 {
-                GRASS
-            } else {
-                SNOW
-            };
-            point_gen::TerrainVertex {
-                position: Point3 { x: point[0], y, z: point[1] },
-                colour: mul_arr(colour, random),
-            }
-        });
+                // Choose colour.
+                let colour = if y <= 0.0 {
+                    DARK_SAND
+                } else if y <= 0.8 {
+                    SAND
+                } else if y <= 3.0 {
+                    GRASS
+                } else {
+                    SNOW
+                };
+                point_gen::TerrainVertex {
+                    position: Point3 {
+                        x: point[0],
+                        y,
+                        z: point[1],
+                    },
+                    colour: mul_arr(colour, random),
+                }
+            });
 
         // Generate the buffer data.
         let terrain_vertices = terrain.make_buffer_data();
@@ -323,92 +349,100 @@ impl framework::Example for Example {
         );
 
         // Create the bind group layout. This is what our uniforms will look like.
-        let water_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Water Bind Group Layout"),
-            bindings: &[
-                // Uniform variables such as projection/view.
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                    count: None,
-                    ..Default::default()
-                },
-                // Reflection texture.
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::SampledTexture {
-                        multisampled: false,
-                        component_type: wgpu::TextureComponentType::Float,
-                        dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                    ..Default::default()
-                },
-                // Depth texture for terrain.
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::SampledTexture {
-                        multisampled: false,
-                        component_type: wgpu::TextureComponentType::Float,
-                        dimension: wgpu::TextureViewDimension::D2,
-                    },
-                    count: None,
-                    ..Default::default()
-                },
-                // Sampler to be able to sample the textures.
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler { comparison: false },
-                    count: None,
-                    ..Default::default()
-                },
-            ],
-        });
+        let water_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Water Bind Group Layout"),
+                bindings: &[
+                    // Uniform variables such as projection/view.
+                    wgpu::BindGroupLayoutEntry::new(
+                        0,
+                        wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                        wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
+                                WaterUniforms,
+                            >(
+                            )
+                                as _),
+                        },
+                    ),
+                    // Reflection texture.
+                    wgpu::BindGroupLayoutEntry::new(
+                        1,
+                        wgpu::ShaderStage::FRAGMENT,
+                        wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            component_type: wgpu::TextureComponentType::Float,
+                            dimension: wgpu::TextureViewDimension::D2,
+                        },
+                    ),
+                    // Depth texture for terrain.
+                    wgpu::BindGroupLayoutEntry::new(
+                        2,
+                        wgpu::ShaderStage::FRAGMENT,
+                        wgpu::BindingType::SampledTexture {
+                            multisampled: false,
+                            component_type: wgpu::TextureComponentType::Float,
+                            dimension: wgpu::TextureViewDimension::D2,
+                        },
+                    ),
+                    // Sampler to be able to sample the textures.
+                    wgpu::BindGroupLayoutEntry::new(
+                        3,
+                        wgpu::ShaderStage::FRAGMENT,
+                        wgpu::BindingType::Sampler { comparison: false },
+                    ),
+                ],
+            });
 
-        let terrain_bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Terrain Bind Group Layout"),
-            bindings: &[
-                // Regular uniform variables like view/projection.
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX,
-                    ty: wgpu::BindingType::UniformBuffer { dynamic: false },
-                    count: None,
-                    ..Default::default()
-                },
-            ],
-        });
+        let terrain_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Terrain Bind Group Layout"),
+                bindings: &[
+                    // Regular uniform variables like view/projection.
+                    wgpu::BindGroupLayoutEntry::new(
+                        0,
+                        wgpu::ShaderStage::VERTEX,
+                        wgpu::BindingType::UniformBuffer {
+                            dynamic: false,
+                            min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
+                                TerrainUniforms,
+                            >(
+                            )
+                                as _),
+                        },
+                    ),
+                ],
+            });
 
         // Create our pipeline layouts.
-        let water_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&water_bind_group_layout],
-        });
+        let water_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[&water_bind_group_layout],
+            });
 
-        let terrain_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&terrain_bind_group_layout],
-        });
+        let terrain_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                bind_group_layouts: &[&terrain_bind_group_layout],
+            });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Water Uniforms"),
-            size: std::mem::size_of::<WaterUniforms>() as _,
+            size: mem::size_of::<WaterUniforms>() as _,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_normal_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Normal Terrain Uniforms"),
-            size: std::mem::size_of::<TerrainUniforms>() as _,
+            size: mem::size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_flipped_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Flipped Terrain Uniforms"),
-            size: std::mem::size_of::<TerrainUniforms>() as _,
+            size: mem::size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
         });
@@ -423,27 +457,23 @@ impl framework::Example for Example {
             &water_uniform_buf,
             &terrain_normal_uniform_buf,
             &terrain_flipped_uniform_buf,
-            &water_bind_group_layout
+            &water_bind_group_layout,
         );
 
         let terrain_normal_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &terrain_bind_group_layout,
-            bindings: &[
-                wgpu::Binding {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(terrain_normal_uniform_buf.slice(..)),
-                },
-            ],
+            bindings: &[wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(terrain_normal_uniform_buf.slice(..)),
+            }],
             label: Some("Terrain Normal Bind Group"),
         });
         let terrain_flipped_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &terrain_bind_group_layout,
-            bindings: &[
-                wgpu::Binding {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(terrain_flipped_uniform_buf.slice(..))
-                }
-            ],
+            bindings: &[wgpu::Binding {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer(terrain_flipped_uniform_buf.slice(..)),
+            }],
             label: Some("Terrain Flipped Bind Group"),
         });
 
@@ -452,16 +482,18 @@ impl framework::Example for Example {
         let water_fs_bytes = include_bytes!("water_shader.frag.spv");
         // Upload/compile them to GPU code.
         let water_vs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&water_vs_bytes[..])).unwrap());
+            .create_shader_module(&wgpu::read_spirv(io::Cursor::new(&water_vs_bytes[..])).unwrap());
         let water_fs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&water_fs_bytes[..])).unwrap());
+            .create_shader_module(&wgpu::read_spirv(io::Cursor::new(&water_fs_bytes[..])).unwrap());
 
         let terrain_vs_bytes = include_bytes!("terrain_shader.vert.spv");
         let terrain_fs_bytes = include_bytes!("terrain_shader.frag.spv");
-        let terrain_vs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&terrain_vs_bytes[..])).unwrap());
-        let terrain_fs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&terrain_fs_bytes[..])).unwrap());
+        let terrain_vs_module = device.create_shader_module(
+            &wgpu::read_spirv(io::Cursor::new(&terrain_vs_bytes[..])).unwrap(),
+        );
+        let terrain_fs_module = device.create_shader_module(
+            &wgpu::read_spirv(io::Cursor::new(&terrain_fs_bytes[..])).unwrap(),
+        );
 
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
@@ -531,13 +563,11 @@ impl framework::Example for Example {
                 // because we duplicate all the data anyway. This is
                 // necessary to achieve the low-poly effect.
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[
-                    wgpu::VertexBufferDescriptor {
-                        stride: water_vertex_size as wgpu::BufferAddress,
-                        step_mode: wgpu::InputStepMode::Vertex,
-                        attributes: &vertex_attr_array![0 => Short2, 1 => Char4],
-                    },
-                ],
+                vertex_buffers: &[wgpu::VertexBufferDescriptor {
+                    stride: water_vertex_size as wgpu::BufferAddress,
+                    step_mode: wgpu::InputStepMode::Vertex,
+                    attributes: &vertex_attr_array![0 => Short2, 1 => Char4],
+                }],
             },
             sample_count: 1,
             sample_mask: !0,
@@ -580,13 +610,11 @@ impl framework::Example for Example {
             }),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[
-                    wgpu::VertexBufferDescriptor {
-                        stride: terrain_vertex_size as wgpu::BufferAddress,
-                        step_mode: wgpu::InputStepMode::Vertex,
-                        attributes: &vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
-                    },
-                ],
+                vertex_buffers: &[wgpu::VertexBufferDescriptor {
+                    stride: terrain_vertex_size as wgpu::BufferAddress,
+                    step_mode: wgpu::InputStepMode::Vertex,
+                    attributes: &vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
+                }],
             },
             sample_count: 1,
             sample_mask: !0,
@@ -652,7 +680,7 @@ impl framework::Example for Example {
             &self.water_uniform_buf,
             &self.terrain_normal_uniform_buf,
             &self.terrain_flipped_uniform_buf,
-            &self.water_bind_group_layout
+            &self.water_bind_group_layout,
         );
         self.water_bind_group = water_bind_group;
 
@@ -671,12 +699,17 @@ impl framework::Example for Example {
 
         // Write the sin/cos values to the uniform buffer for the water.
         let (water_sin, water_cos) = ((self.current_frame as f32) / 600.0).sin_cos();
-        queue.write_buffer(&self.water_uniform_buf, std::mem::size_of::<[f32; 16]>() as wgpu::BufferAddress * 2, bytemuck::cast_slice(&[water_sin, water_cos]));
+        queue.write_buffer(
+            &self.water_uniform_buf,
+            mem::size_of::<[f32; 16]>() as wgpu::BufferAddress * 2,
+            bytemuck::cast_slice(&[water_sin, water_cos]),
+        );
 
         // The encoder provides a way to turn our instructions here, into
         // a command buffer the GPU can understand.
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("Main Command Encoder") });
+        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+            label: Some("Main Command Encoder"),
+        });
 
         // Only render valid frames. See resize method.
         if let Some(active) = self.active {
@@ -690,20 +723,18 @@ impl framework::Example for Example {
         // First pass: render the reflection.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[
-                    wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment: &self.reflect_view,
-                        resolve_target: None,
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_color: wgpu::Color {
-                            r: 161.0 / 255.0,
-                            g: 246.0 / 255.0,
-                            b: 255.0 / 255.0,
-                            a: 1.0,
-                        },
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &self.reflect_view,
+                    resolve_target: None,
+                    load_op: wgpu::LoadOp::Clear,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color {
+                        r: 161.0 / 255.0,
+                        g: 246.0 / 255.0,
+                        b: 255.0 / 255.0,
+                        a: 1.0,
                     },
-                ],
+                }],
                 // We still need to use the depth buffer here
                 // since the pipeline requires it.
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
@@ -727,20 +758,18 @@ impl framework::Example for Example {
         // depth values, so we must use StoreOp::Store.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[
-                    wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment: &frame.view,
-                        resolve_target: None,
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_color: wgpu::Color {
-                            r: 161.0 / 255.0,
-                            g: 246.0 / 255.0,
-                            b: 255.0 / 255.0,
-                            a: 1.0,
-                        },
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
+                    resolve_target: None,
+                    load_op: wgpu::LoadOp::Clear,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color {
+                        r: 161.0 / 255.0,
+                        g: 246.0 / 255.0,
+                        b: 255.0 / 255.0,
+                        a: 1.0,
                     },
-                ],
+                }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.depth_buffer,
                     depth_load_op: wgpu::LoadOp::Clear,
@@ -762,20 +791,18 @@ impl framework::Example for Example {
         // to it, so it cannot be in the same render pass.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[
-                    wgpu::RenderPassColorAttachmentDescriptor {
-                        attachment: &frame.view,
-                        resolve_target: None,
-                        load_op: wgpu::LoadOp::Load,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_color: wgpu::Color {
-                            r: 161.0 / 255.0,
-                            g: 246.0 / 255.0,
-                            b: 255.0 / 255.0,
-                            a: 1.0,
-                        },
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                    attachment: &frame.view,
+                    resolve_target: None,
+                    load_op: wgpu::LoadOp::Load,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_color: wgpu::Color {
+                        r: 161.0 / 255.0,
+                        g: 246.0 / 255.0,
+                        b: 255.0 / 255.0,
+                        a: 1.0,
                     },
-                ],
+                }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.depth_buffer,
                     depth_load_op: wgpu::LoadOp::Load,
@@ -794,7 +821,6 @@ impl framework::Example for Example {
             rpass.set_vertex_buffer(0, self.water_vertex_buf.slice(..));
             rpass.draw(0..self.water_vertex_count as u32, 0..1);
         }
-
 
         encoder.finish()
     }
