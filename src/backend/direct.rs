@@ -329,8 +329,8 @@ impl crate::Context for Context {
         Ready<Result<(Self::DeviceId, Self::QueueId), crate::RequestDeviceError>>;
     type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
 
-    fn init() -> Self {
-        wgc::hub::Global::new("wgpu", wgc::hub::IdentityManagerFactory)
+    fn init(backends: wgt::BackendBit) -> Self {
+        wgc::hub::Global::new("wgpu", wgc::hub::IdentityManagerFactory, backends)
     }
 
     fn instance_create_surface(
@@ -344,7 +344,6 @@ impl crate::Context for Context {
         &self,
         options: &crate::RequestAdapterOptions<'_>,
         unsafe_extensions: wgt::UnsafeExtensions,
-        backends: wgt::BackendBit,
     ) -> Self::RequestAdapterFuture {
         let id = self.pick_adapter(
             &wgc::instance::RequestAdapterOptions {
@@ -352,7 +351,7 @@ impl crate::Context for Context {
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
             },
             unsafe_extensions,
-            wgc::instance::AdapterInputs::Mask(backends, |_| PhantomData),
+            wgc::instance::AdapterInputs::Mask(wgt::BackendBit::all(), |_| PhantomData),
         );
         ready(id)
     }

@@ -7,14 +7,13 @@ use std::io::Write;
 use std::mem::size_of;
 
 async fn run() {
-    let adapter = wgpu::Instance::new()
+    let adapter = wgpu::Instance::new(wgpu::BackendBit::PRIMARY)
         .request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
             },
             wgpu::UnsafeExtensions::disallow(),
-            wgpu::BackendBit::PRIMARY,
         )
         .await
         .unwrap();

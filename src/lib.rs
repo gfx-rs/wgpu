@@ -130,7 +130,7 @@ trait Context: Sized {
         + Send;
     type MapAsyncFuture: Future<Output = Result<(), BufferAsyncError>> + Send;
 
-    fn init() -> Self;
+    fn init(backends: BackendBit) -> Self;
     fn instance_create_surface(
         &self,
         handle: &impl raw_window_handle::HasRawWindowHandle,
@@ -139,7 +139,6 @@ trait Context: Sized {
         &self,
         options: &RequestAdapterOptions<'_>,
         unsafe_extensions: UnsafeExtensions,
-        backends: BackendBit,
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
         &self,
@@ -981,10 +980,11 @@ pub struct TextureCopyView<'a> {
 }
 
 impl Instance {
-    /// Create an new instance of wgpu.
-    pub fn new() -> Self {
+    /// Create an new instance of wgpu. The `backends` parameter controls
+    /// among which backends wgpu will decide during instantiation.
+    pub fn new(backends: BackendBit) -> Self {
         Instance {
-            context: Arc::new(C::init()),
+            context: Arc::new(C::init(backends)),
         }
     }
 
@@ -1029,16 +1029,12 @@ impl Instance {
     ) -> Surface {
         let surface = wgc::instance::Surface {
             #[cfg(feature = "vulkan-portability")]
-            vulkan: self
-                .context
-                .instance
-                .vulkan
-                .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
-            metal: self
-                .context
-                .instance
-                .metal
-                .create_surface_from_layer(layer as *mut _, cfg!(debug_assertions)),
+            vulkan: self.context.instance.vulkan.as_ref().map(|inst| {
+                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
+            }),
+            metal: self.context.instance.metal.as_ref().map(|inst| {
+                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
+            }),
         };
 
         crate::Surface {
@@ -1059,11 +1055,10 @@ impl Instance {
         &self,
         options: &RequestAdapterOptions<'_>,
         unsafe_extensions: UnsafeExtensions,
-        backends: BackendBit,
     ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
         self.context
-            .instance_request_adapter(options, unsafe_extensions, backends)
+            .instance_request_adapter(options, unsafe_extensions)
             .map(|option| option.map(|id| Adapter { context, id }))
     }
 }

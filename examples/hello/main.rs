@@ -1,13 +1,12 @@
 /// This example shows how to describe the adapter in use.
 async fn run() {
-    let adapter = wgpu::Instance::new()
+    let adapter = wgpu::Instance::new(wgpu::BackendBit::PRIMARY)
         .request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
             },
             unsafe { wgpu::UnsafeExtensions::allow() },
-            wgpu::BackendBit::PRIMARY,
         )
         .await
         .unwrap();
