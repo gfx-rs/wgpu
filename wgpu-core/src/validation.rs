@@ -23,10 +23,12 @@ pub enum BindingError {
     WrongTextureViewDimension { dim: spirv::Dim, is_array: bool },
     /// The component type of a sampled texture doesn't match the shader.
     WrongTextureComponentType(Option<naga::ScalarKind>),
-    /// Texture sampling capability doesn't match with the shader.
+    /// Texture sampling capability doesn't match the shader.
     WrongTextureSampled,
-    /// The multisampled flag doesn't match.
+    /// The multisampled flag doesn't match the shader.
     WrongTextureMultisampled,
+    /// The comparison flag doesn't match the shader.
+    WrongSamplerComparison,
 }
 
 #[derive(Clone, Debug)]
@@ -57,12 +59,12 @@ pub enum StageError {
 
 fn get_aligned_type_size(
     module: &naga::Module,
-    inner: &naga::TypeInner,
+    handle: naga::Handle<naga::Type>,
     allow_unbound: bool,
 ) -> wgt::BufferAddress {
     use naga::TypeInner as Ti;
     //TODO: take alignment into account!
-    match *inner {
+    match module.types[handle].inner {
         Ti::Scalar { kind: _, width } => width as wgt::BufferAddress / 8,
         Ti::Vector {
             size,
@@ -82,14 +84,15 @@ fn get_aligned_type_size(
         Ti::Array {
             base,
             size: naga::ArraySize::Static(size),
-        } => {
-            size as wgt::BufferAddress
-                * get_aligned_type_size(module, &module.types[base].inner, false)
-        }
+        } => size as wgt::BufferAddress * get_aligned_type_size(module, base, false),
         Ti::Array {
             base,
             size: naga::ArraySize::Dynamic,
-        } if allow_unbound => get_aligned_type_size(module, &module.types[base].inner, false),
+        } if allow_unbound => get_aligned_type_size(module, base, false),
+        Ti::Struct { ref members } => members
+            .iter()
+            .map(|member| get_aligned_type_size(module, member.ty, false))
+            .sum(),
         _ => panic!("Unexpected struct field"),
     }
 }
@@ -128,11 +131,7 @@ fn check_binding(
             };
             let mut actual_size = 0;
             for (i, member) in members.iter().enumerate() {
-                actual_size += get_aligned_type_size(
-                    module,
-                    &module.types[member.ty].inner,
-                    i + 1 == members.len(),
-                );
+                actual_size += get_aligned_type_size(module, member.ty, i + 1 == members.len());
             }
             match min_size {
                 Some(non_zero) if non_zero.get() < actual_size => {
@@ -142,8 +141,14 @@ fn check_binding(
             }
             allowed_usage
         }
-        naga::TypeInner::Sampler => match entry.ty {
-            BindingType::Sampler { .. } => naga::GlobalUse::empty(),
+        naga::TypeInner::Sampler { comparison } => match entry.ty {
+            BindingType::Sampler { comparison: cmp } => {
+                if cmp == comparison {
+                    naga::GlobalUse::empty()
+                } else {
+                    return Err(BindingError::WrongSamplerComparison);
+                }
+            }
             _ => return Err(BindingError::WrongType),
         },
         naga::TypeInner::Image { base, dim, flags } => {

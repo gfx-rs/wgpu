@@ -41,7 +41,7 @@ vec_map = "0.8.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
-rev = "bce6358eb1026c13d2f1c6d365af37afe8869a86"
+rev = "e3aea9619865b16a24164d46ab29cca36ad7daf2"
 
 [dependencies.gfx-memory]
 git = "https://github.com/gfx-rs/gfx-extras"

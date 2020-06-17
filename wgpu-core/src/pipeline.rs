@@ -6,7 +6,7 @@ use crate::{
     device::RenderPassContext,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
-    LifeGuard, RawString, RefCount, Stored, U32Array,
+    LifeGuard, RawString, RefCount, Stored,
 };
 use std::borrow::Borrow;
 use wgt::{
@@ -33,8 +33,10 @@ pub struct VertexStateDescriptor {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct ShaderModuleDescriptor {
-    pub code: U32Array,
+pub enum ShaderModuleSource<'a> {
+    SpirV(&'a [u32]),
+    Wgsl(&'a str),
+    Naga(naga::Module),
 }
 
 #[derive(Debug)]
