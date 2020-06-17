@@ -17,11 +17,9 @@ const float INV_1_CURVE_BIAS = 1.0 / (1.0 + CURVE_BIAS);
 layout(location = 0) in ivec2 position;
 layout(location = 1) in ivec4 offsets;
 
-layout(location = 0) out PerVertex {
-    vec2 f_WaterScreenPos;
-    float f_Fresnel;
-    vec3 f_Light;
-} f_In;
+layout(location = 0) out vec2 f_WaterScreenPos;
+layout(location = 1) out float f_Fresnel;
+layout(location = 2) out vec3 f_Light;
 
 //
 // The following code to calculate simplex 3D
@@ -201,13 +199,13 @@ void main() {
 
     vec4 transformed_light = vm * vec4(light_point, 1.0);
 
-    f_In.f_Light = light_colour * calc_specular(eye, normal, normalize(water_pos.xyz - (transformed_light.xyz / transformed_light.w)));
-    f_In.f_Fresnel = calc_fresnel(eye, normal);
+    f_Light = light_colour * calc_specular(eye, normal, normalize(water_pos.xyz - (transformed_light.xyz / transformed_light.w)));
+    f_Fresnel = calc_fresnel(eye, normal);
 
     vec4 projected_pos = projection * transformed_pos;
 
     gl_Position = projected_pos;
 
     vec4 gridpos = projection * vm * original_pos;
-    f_In.f_WaterScreenPos.xy = (0.5 * gridpos.xy / gridpos.w) + 0.5;
+    f_WaterScreenPos.xy = (0.5 * gridpos.xy / gridpos.w) + 0.5;
 }
