@@ -3,8 +3,6 @@ mod framework;
 
 use bytemuck::{Pod, Zeroable};
 
-use wgpu::vertex_attr_array;
-
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
 #[repr(C)]
@@ -105,12 +103,8 @@ impl Example {
             bind_group_layouts: &[&bind_group_layout],
         });
 
-        let vs_bytes = include_bytes!("blit.vert.spv");
-        let fs_bytes = include_bytes!("blit.frag.spv");
-        let vs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
-        let fs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
+        let vs_module = device.create_shader_module(wgpu::include_spirv!("blit.vert.spv"));
+        let fs_module = device.create_shader_module(wgpu::include_spirv!("blit.frag.spv"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
@@ -337,12 +331,8 @@ impl framework::Example for Example {
         });
 
         // Create the render pipeline
-        let vs_bytes = include_bytes!("draw.vert.spv");
-        let fs_bytes = include_bytes!("draw.frag.spv");
-        let vs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
-        let fs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
+        let vs_module = device.create_shader_module(wgpu::include_spirv!("draw.vert.spv"));
+        let fs_module = device.create_shader_module(wgpu::include_spirv!("draw.frag.spv"));
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &pipeline_layout,
@@ -374,7 +364,7 @@ impl framework::Example for Example {
                 vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &vertex_attr_array![0 => Float4],
+                    attributes: &wgpu::vertex_attr_array![0 => Float4],
                 }],
             },
             sample_count: 1,

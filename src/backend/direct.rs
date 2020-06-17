@@ -2,7 +2,8 @@ use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
     BufferDescriptor, Capabilities, CommandEncoderDescriptor, ComputePipelineDescriptor,
     Extensions, Limits, MapMode, PipelineLayoutDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
+    SamplerDescriptor, ShaderModuleSource, SwapChainStatus, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -402,15 +403,13 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        spv: &[u32],
+        source: ShaderModuleSource,
     ) -> Self::ShaderModuleId {
-        let desc = wgc::pipeline::ShaderModuleDescriptor {
-            code: wgc::U32Array {
-                bytes: spv.as_ptr(),
-                length: spv.len(),
-            },
+        let desc = match source {
+            ShaderModuleSource::SpirV(spv) => wgc::pipeline::ShaderModuleSource::SpirV(spv),
+            ShaderModuleSource::Wgsl(code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
         };
-        gfx_select!(*device => self.device_create_shader_module(*device, &desc, PhantomData))
+        gfx_select!(*device => self.device_create_shader_module(*device, desc, PhantomData))
     }
 
     fn device_create_bind_group_layout(

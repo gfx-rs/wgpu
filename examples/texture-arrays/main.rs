@@ -97,29 +97,26 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
     ) -> (Self, Option<wgpu::CommandBuffer>) {
         let mut uniform_workaround = false;
-        let vs_bytes: &[u8] = include_bytes!("shader.vert.spv");
-        let fs_bytes: &[u8] = match device.capabilities() {
+        let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
+        let fs_bytes: Vec<u8> = match device.capabilities() {
             c if c.contains(wgpu::Capabilities::UNSIZED_BINDING_ARRAY) => {
-                include_bytes!("unsized-non-uniform.frag.spv")
+                include_bytes!("unsized-non-uniform.frag.spv").to_vec()
             }
             c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
-                include_bytes!("non-uniform.frag.spv")
+                include_bytes!("non-uniform.frag.spv").to_vec()
             }
             c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
                 uniform_workaround = true;
-                include_bytes!("uniform.frag.spv")
+                include_bytes!("uniform.frag.spv").to_vec()
             }
             c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY) => {
-                include_bytes!("constant.frag.spv")
+                include_bytes!("constant.frag.spv").to_vec()
             }
             _ => {
                 panic!("Graphics adapter does not support any of the capabilities needed for this example");
             }
         };
-        let vs_module =
-            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(vs_bytes)).unwrap());
-        let fs_module =
-            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(fs_bytes)).unwrap());
+        let fs_module = device.create_shader_module(wgpu::util::make_spirv(&fs_bytes));
 
         let vertex_size = std::mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
