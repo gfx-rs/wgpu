@@ -13,7 +13,6 @@ use std::{
 pub mod lex;
 
 #[cfg(feature = "glsl_preprocessor")]
-#[path = "./preprocessor.rs"]
 pub mod preprocessor;
 
 type Tokens = Peekable<IntoIter<TokenMetadata>>;

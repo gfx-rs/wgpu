@@ -6,7 +6,7 @@ use crate::{BinaryOperator, FastHashMap};
 use std::{iter::Peekable, vec::IntoIter};
 
 #[derive(Debug)]
-pub enum PreprocessorIfNode {
+enum PreprocessorIfNode {
     Literal(Literal),
     Unary {
         op: UnaryOp,
