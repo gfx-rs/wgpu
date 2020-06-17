@@ -576,9 +576,9 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G) -> Self {
+    pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
         Global {
-            instance: Instance::new(name, 1),
+            instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
@@ -637,7 +637,7 @@ impl GfxBackend for backend::Metal {
         &global.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
-        &mut surface.metal
+        surface.metal.as_mut().unwrap()
     }
 }
 
@@ -659,7 +659,7 @@ impl GfxBackend for backend::Dx11 {
         &global.hubs.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
-        &mut surface.dx11
+        surface.dx11.as_mut().unwrap()
     }
 }
 
