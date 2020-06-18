@@ -143,7 +143,7 @@ fn test_vertex_attr_array() {
 /// It ensure the word alignment as well as the magic number.
 #[macro_export]
 macro_rules! include_spirv {
-    ($path:literal) => {
+    ($path:expr) => {
         $crate::util::make_spirv(&$crate::util::WordAligned(*include_bytes!($path)).0)
     };
 }
