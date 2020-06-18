@@ -96,14 +96,16 @@ jobs:
         name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          # temporary due to https://github.com/rust-lang/rust/issues/72467
+          # temporary due to https://github.com/Xudong-Huang/generator-rs/issues/21
           toolchain: nightly-2020-05-01
           override: true
       - if: matrix.channel == 'stable'
         run: rustup component add clippy
-      - name: cargo clippy/test
-        run: ${{ matrix.build_command }}
+        # build with no features first
+      - if: matrix.additional_core_features == ''
+        run: cargo check --manifest-path wgpu-core/Cargo.toml --no-default-features
       - if: matrix.additional_core_features != ''
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}
       - if: matrix.additional_player_features != ''
         run: cargo check --manifest-path player/Cargo.toml --features ${{ matrix.additional_player_features }}
+      - run: ${{ matrix.build_command }}
