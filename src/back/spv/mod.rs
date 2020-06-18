@@ -3,6 +3,9 @@ mod layout;
 mod writer;
 
 #[cfg(test)]
+mod test_framework;
+
+#[cfg(test)]
 mod layout_tests;
 
 pub use writer::Writer;
@@ -25,7 +28,7 @@ struct PhysicalLayout {
 }
 
 #[derive(Default)]
-pub(crate) struct LogicalLayout {
+struct LogicalLayout {
     capabilities: Vec<Word>,
     extensions: Vec<Word>,
     ext_inst_imports: Vec<Word>,
@@ -39,7 +42,7 @@ pub(crate) struct LogicalLayout {
     function_definitions: Vec<Word>,
 }
 
-struct Instruction {
+pub(self) struct Instruction {
     op: Op,
     wc: u32,
     type_id: Option<Word>,

@@ -646,11 +646,9 @@ impl Writer {
         self.physical_layout.bound = self.id_count + 1;
     }
 
-    fn instruction_source(&self) -> Instruction {
-        let version = 450u32;
-
+    fn instruction_source(&self, source_language: SourceLanguage, version: u32) -> Instruction {
         let mut instruction = Instruction::new(Op::Source);
-        instruction.add_operand(SourceLanguage::GLSL as u32);
+        instruction.add_operand(source_language as u32);
         instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
         instruction
     }
@@ -923,7 +921,8 @@ impl Writer {
             .to_words(&mut self.logical_layout.ext_inst_imports);
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
-            self.debugs.push(self.instruction_source());
+            self.debugs
+                .push(self.instruction_source(SourceLanguage::GLSL, 450));
         }
 
         for (handle, function) in ir_module.functions.iter() {
@@ -998,5 +997,168 @@ impl Writer {
         self.physical_layout.in_words(&mut words);
         self.logical_layout.in_words(&mut words);
         words
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::back::spv::test_framework::*;
+    use crate::back::spv::{Writer, WriterFlags};
+    use crate::Header;
+    use spirv::*;
+
+    #[test]
+    fn test_writer_generate_id() {
+        let mut writer = create_writer();
+
+        assert_eq!(writer.id_count, 0);
+        writer.generate_id();
+        assert_eq!(writer.id_count, 1);
+    }
+
+    #[test]
+    fn test_try_add_capabilities() {
+        let mut writer = create_writer();
+
+        assert_eq!(writer.capabilities.len(), 0);
+        writer.try_add_capabilities(&[Capability::Shader]);
+        assert_eq!(writer.capabilities.len(), 1);
+
+        writer.try_add_capabilities(&[Capability::Shader]);
+        assert_eq!(writer.capabilities.len(), 1);
+    }
+
+    #[test]
+    fn test_instruction_capability() {
+        let writer = create_writer();
+        let instruction = writer.instruction_capability(Capability::Shader);
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::Capability,
+            wc: 2,
+            type_id: false,
+            result_id: false,
+            operands: true,
+        };
+
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_ext_inst_import() {
+        let mut writer = create_writer();
+        let import_name = "GLSL.std.450";
+        let instruction = writer.instruction_ext_inst_import(import_name);
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::ExtInstImport,
+            wc: 2,
+            type_id: false,
+            result_id: true,
+            operands: true,
+        };
+
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_memory_model() {
+        let mut writer = create_writer();
+        let instruction = writer.instruction_memory_model();
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::MemoryModel,
+            wc: 3,
+            type_id: false,
+            result_id: false,
+            operands: true,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_source() {
+        let writer = create_writer();
+        let version = 450;
+        let instruction = writer.instruction_source(SourceLanguage::GLSL, version);
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::Source,
+            wc: 3,
+            type_id: false,
+            result_id: false,
+            operands: true,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_label() {
+        let mut writer = create_writer();
+        let instruction = writer.instruction_label();
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::Label,
+            wc: 2,
+            type_id: false,
+            result_id: true,
+            operands: false,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_function_end() {
+        let writer = create_writer();
+        let instruction = writer.instruction_function_end();
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::FunctionEnd,
+            wc: 1,
+            type_id: false,
+            result_id: false,
+            operands: false,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_write_physical_layout() {
+        let mut writer = create_writer();
+        assert_eq!(writer.physical_layout.bound, 0);
+        writer.write_physical_layout();
+        assert_eq!(writer.physical_layout.bound, 1);
+    }
+
+    fn create_writer() -> Writer {
+        let header = Header {
+            generator: 0,
+            version: (1, 0, 0),
+        };
+        Writer::new(&header, WriterFlags::NONE)
     }
 }
