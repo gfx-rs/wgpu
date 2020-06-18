@@ -1,11 +1,11 @@
-# describe
+# hello
 
 This example prints output describing the adapter in use.
 
 ## To Run
 
 ```
-cargo run --example describe
+cargo run --example hello
 ```
 
 ## Example output
