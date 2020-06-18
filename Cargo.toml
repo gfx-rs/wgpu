@@ -7,7 +7,7 @@ description = "Shader translation infrastructure"
 homepage = "https://github.com/gfx-rs/naga"
 repository = "https://github.com/gfx-rs/naga"
 keywords = ["shader", "SPIR-V"]
-license = "MPL-2.0"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 bitflags = "1"
