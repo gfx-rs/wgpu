@@ -1,8 +1,8 @@
 use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType, BufferDescriptor,
     CommandEncoderDescriptor, ComputePipelineDescriptor, PipelineLayoutDescriptor,
-    ProgrammableStageDescriptor, RenderPipelineDescriptor, SamplerDescriptor, SwapChainStatus,
-    TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
+    ProgrammableStageDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource,
+    SwapChainStatus, TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
 };
 
 use futures::FutureExt;
@@ -773,9 +773,16 @@ impl crate::Context for Context {
     fn device_create_shader_module(
         &self,
         device: &Self::DeviceId,
-        spv: &[u32],
+        source: ShaderModuleSource,
     ) -> Self::ShaderModuleId {
-        let desc = web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(spv));
+        let desc = match source {
+            ShaderModuleSource::SpirV(spv) => {
+                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(spv))
+            }
+            ShaderModuleSource::Wgsl(code) => {
+                panic!("WGSL is not yet supported by the Web backend")
+            }
+        };
         // TODO: label
         Sendable(device.0.create_shader_module(&desc))
     }

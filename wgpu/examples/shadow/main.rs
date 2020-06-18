@@ -5,8 +5,6 @@ mod framework;
 
 use bytemuck::{Pod, Zeroable};
 
-use wgpu::vertex_attr_array;
-
 #[repr(C)]
 #[derive(Clone, Copy)]
 
@@ -426,7 +424,7 @@ impl framework::Example for Example {
         let vb_desc = wgpu::VertexBufferDescriptor {
             stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
-            attributes: &vertex_attr_array![0 => Char4, 1 => Char4],
+            attributes: &wgpu::vertex_attr_array![0 => Char4, 1 => Char4],
         };
 
         let shadow_pass = {
@@ -466,14 +464,8 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_bytes = include_bytes!("bake.vert.spv");
-            let fs_bytes = include_bytes!("bake.frag.spv");
-            let vs_module = device.create_shader_module(
-                &wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap(),
-            );
-            let fs_module = device.create_shader_module(
-                &wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap(),
-            );
+            let vs_module = device.create_shader_module(wgpu::include_spirv!("bake.vert.spv"));
+            let fs_module = device.create_shader_module(wgpu::include_spirv!("bake.frag.spv"));
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 layout: &pipeline_layout,
@@ -602,14 +594,8 @@ impl framework::Example for Example {
             });
 
             // Create the render pipeline
-            let vs_bytes = include_bytes!("forward.vert.spv");
-            let fs_bytes = include_bytes!("forward.frag.spv");
-            let vs_module = device.create_shader_module(
-                &wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap(),
-            );
-            let fs_module = device.create_shader_module(
-                &wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap(),
-            );
+            let vs_module = device.create_shader_module(wgpu::include_spirv!("forward.vert.spv"));
+            let fs_module = device.create_shader_module(wgpu::include_spirv!("forward.frag.spv"));
 
             let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 layout: &pipeline_layout,
