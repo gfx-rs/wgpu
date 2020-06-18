@@ -135,3 +135,13 @@ fn test_vertex_attr_array() {
     assert_eq!(attrs[1].offset, std::mem::size_of::<(f32, f32)>() as u64);
     assert_eq!(attrs[1].shader_location, 3);
 }
+
+/// Macro to load a SPIR-V module statically.
+///
+/// It ensure the word alignment as well as the magic number.
+#[macro_export]
+macro_rules! include_spirv {
+    ($path:literal) => {
+        $crate::util::make_spirv(&$crate::util::WordAligned(*include_bytes!($path)).0)
+    };
+}

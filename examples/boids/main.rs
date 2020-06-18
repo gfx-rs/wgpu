@@ -6,8 +6,6 @@ extern crate rand;
 #[path = "../framework.rs"]
 mod framework;
 
-use wgpu::vertex_attr_array;
-
 // number of boid particles to simulate
 
 const NUM_PARTICLES: u32 = 1500;
@@ -36,17 +34,9 @@ impl framework::Example for Example {
     ) -> (Self, Option<wgpu::CommandBuffer>) {
         // load (and compile) shaders and create shader modules
 
-        let boids = include_bytes!("boids.comp.spv");
-        let boids_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&boids[..])).unwrap());
-
-        let vs = include_bytes!("shader.vert.spv");
-        let vs_module =
-            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs[..])).unwrap());
-
-        let fs = include_bytes!("shader.frag.spv");
-        let fs_module =
-            device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs[..])).unwrap());
+        let boids_module = device.create_shader_module(wgpu::include_spirv!("boids.comp.spv"));
+        let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
+        let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
         // buffer for simulation parameters uniform
 
@@ -148,12 +138,12 @@ impl framework::Example for Example {
                     wgpu::VertexBufferDescriptor {
                         stride: 4 * 4,
                         step_mode: wgpu::InputStepMode::Instance,
-                        attributes: &vertex_attr_array![0 => Float2, 1 => Float2],
+                        attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2],
                     },
                     wgpu::VertexBufferDescriptor {
                         stride: 2 * 4,
                         step_mode: wgpu::InputStepMode::Vertex,
-                        attributes: &vertex_attr_array![2 => Float2],
+                        attributes: &wgpu::vertex_attr_array![2 => Float2],
                     },
                 ],
             },

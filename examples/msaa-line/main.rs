@@ -14,8 +14,6 @@ use std::iter;
 
 use bytemuck::{Pod, Zeroable};
 
-use wgpu::vertex_attr_array;
-
 #[repr(C)]
 #[derive(Clone, Copy)]
 struct Vertex {
@@ -81,7 +79,7 @@ impl Example {
                 vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &vertex_attr_array![0 => Float2, 1 => Float4],
+                    attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float4],
                 }],
             },
             sample_count,
@@ -138,12 +136,8 @@ impl framework::Example for Example {
         log::info!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
-        let vs_bytes = include_bytes!("shader.vert.spv");
-        let fs_bytes = include_bytes!("shader.frag.spv");
-        let vs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&vs_bytes[..])).unwrap());
-        let fs_module = device
-            .create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&fs_bytes[..])).unwrap());
+        let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
+        let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: &[],

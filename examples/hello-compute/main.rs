@@ -47,9 +47,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         .await
         .unwrap();
 
-    let cs = include_bytes!("shader.comp.spv");
-    let cs_module =
-        device.create_shader_module(&wgpu::read_spirv(std::io::Cursor::new(&cs[..])).unwrap());
+    let cs_module = device.create_shader_module(wgpu::include_spirv!("shader.comp.spv"));
 
     let staging_buffer = device.create_buffer(&wgpu::BufferDescriptor {
         label: None,
