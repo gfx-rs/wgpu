@@ -16,6 +16,8 @@ use gfx_memory::{Block, Heaps, MemoryBlock};
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
 use std::iter;
+#[cfg(feature = "tracing")]
+use tracing::{event, span, Level};
 
 struct StagingData<B: hal::Backend> {
     buffer: B::Buffer,
@@ -365,6 +367,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) {
+        #[cfg(feature = "tracing")]
+        let span = span!(Level::TRACE, "queue_submit");
+        #[cfg(feature = "tracing")]
+        let _guard = span.enter();
+
+        #[cfg(feature = "tracing")]
+        event!(Level::WARN, "submitting to queue");
+
         let hub = B::hub(self);
 
         let callbacks = {
@@ -544,6 +554,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         super::fire_map_callbacks(callbacks);
+
+        #[cfg(feature = "tracing")]
+        event!(Level::WARN, "finished submission");
     }
 }
 
