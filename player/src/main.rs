@@ -486,7 +486,8 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let global = wgc::hub::Global::new("player", IdentityPassThroughFactory);
+    let global =
+        wgc::hub::Global::new("player", IdentityPassThroughFactory, wgt::BackendBit::all());
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
 
     #[cfg(feature = "winit")]

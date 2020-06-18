@@ -50,27 +50,43 @@ pub struct Instance {
     ))]
     pub vulkan: Option<gfx_backend_vulkan::Instance>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub metal: gfx_backend_metal::Instance,
+    pub metal: Option<gfx_backend_metal::Instance>,
     #[cfg(windows)]
     pub dx12: Option<gfx_backend_dx12::Instance>,
     #[cfg(windows)]
-    pub dx11: gfx_backend_dx11::Instance,
+    pub dx11: Option<gfx_backend_dx11::Instance>,
 }
 
 impl Instance {
-    pub fn new(name: &str, version: u32) -> Self {
+    pub fn new(name: &str, version: u32, backends: BackendBit) -> Self {
         Instance {
             #[cfg(any(
                 not(any(target_os = "ios", target_os = "macos")),
                 feature = "gfx-backend-vulkan"
             ))]
-            vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
+            vulkan: if backends.contains(Backend::Vulkan.into()) {
+                gfx_backend_vulkan::Instance::create(name, version).ok()
+            } else {
+                None
+            },
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: gfx_backend_metal::Instance::create(name, version).unwrap(),
+            metal: if backends.contains(Backend::Metal.into()) {
+                Some(gfx_backend_metal::Instance::create(name, version).unwrap())
+            } else {
+                None
+            },
             #[cfg(windows)]
-            dx12: gfx_backend_dx12::Instance::create(name, version).ok(),
+            dx12: if backends.contains(Backend::Dx12.into()) {
+                gfx_backend_dx12::Instance::create(name, version).ok()
+            } else {
+                None
+            },
             #[cfg(windows)]
-            dx11: gfx_backend_dx11::Instance::create(name, version).unwrap(),
+            dx11: if backends.contains(Backend::Dx11.into()) {
+                Some(gfx_backend_dx11::Instance::create(name, version).unwrap())
+            } else {
+                None
+            },
         }
     }
 
@@ -86,14 +102,18 @@ impl Instance {
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         unsafe {
-            self.metal.destroy_surface(surface.metal);
+            if let Some(suf) = surface.metal {
+                self.metal.as_mut().unwrap().destroy_surface(suf);
+            }
         }
         #[cfg(windows)]
         unsafe {
             if let Some(suf) = surface.dx12 {
                 self.dx12.as_mut().unwrap().destroy_surface(suf);
             }
-            self.dx11.destroy_surface(surface.dx11);
+            if let Some(suf) = surface.dx11 {
+                self.dx11.as_mut().unwrap().destroy_surface(suf);
+            }
         }
     }
 }
@@ -108,11 +128,11 @@ pub struct Surface {
     ))]
     pub vulkan: Option<GfxSurface<backend::Vulkan>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub metal: GfxSurface<backend::Metal>,
+    pub metal: Option<GfxSurface<backend::Metal>>,
     #[cfg(windows)]
     pub dx12: Option<GfxSurface<backend::Dx12>>,
     #[cfg(windows)]
-    pub dx11: GfxSurface<backend::Dx11>,
+    pub dx11: Option<GfxSurface<backend::Dx11>>,
 }
 
 #[derive(Debug)]
@@ -288,7 +308,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_ref()
                     .and_then(|inst| inst.create_surface(handle).ok()),
                 #[cfg(any(target_os = "ios", target_os = "macos"))]
-                metal: self.instance.metal.create_surface(handle).unwrap(),
+                metal: self
+                    .instance
+                    .metal
+                    .as_ref()
+                    .and_then(|inst| inst.create_surface(handle).ok()),
                 #[cfg(windows)]
                 dx12: self
                     .instance
@@ -296,7 +320,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_ref()
                     .and_then(|inst| inst.create_surface(handle).ok()),
                 #[cfg(windows)]
-                dx11: self.instance.dx11.create_surface(handle).unwrap(),
+                dx11: self
+                    .instance
+                    .dx11
+                    .as_ref()
+                    .and_then(|inst| inst.create_surface(handle).ok()),
             }
         };
 
@@ -334,15 +362,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
-            if let Some(id_metal) = inputs.find(Backend::Metal) {
-                for raw in instance.metal.enumerate_adapters() {
-                    let adapter = Adapter::new(raw, unsafe_extensions);
-                    log::info!("Adapter Metal {:?}", adapter.raw.info);
-                    adapters.push(backend::Metal::hub(self).adapters.register_identity(
-                        id_metal.clone(),
-                        adapter,
-                        &mut token,
-                    ));
+            if let Some(ref inst) = instance.metal {
+                if let Some(id_metal) = inputs.find(Backend::Metal) {
+                    for raw in inst.enumerate_adapters() {
+                        let adapter = Adapter::new(raw, unsafe_extensions);
+                        log::info!("Adapter Metal {:?}", adapter.raw.info);
+                        adapters.push(backend::Metal::hub(self).adapters.register_identity(
+                            id_metal.clone(),
+                            adapter,
+                            &mut token,
+                        ));
+                    }
                 }
             }
         }
@@ -361,16 +391,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
             }
-
-            if let Some(id_dx11) = inputs.find(Backend::Dx11) {
-                for raw in instance.dx11.enumerate_adapters() {
-                    let adapter = Adapter::new(raw, unsafe_extensions);
-                    log::info!("Adapter Dx11 {:?}", adapter.raw.info);
-                    adapters.push(backend::Dx11::hub(self).adapters.register_identity(
-                        id_dx11.clone(),
-                        adapter,
-                        &mut token,
-                    ));
+            if let Some(ref inst) = instance.dx11 {
+                if let Some(id_dx11) = inputs.find(Backend::Dx11) {
+                    for raw in inst.enumerate_adapters() {
+                        let adapter = Adapter::new(raw, unsafe_extensions);
+                        log::info!("Adapter Dx11 {:?}", adapter.raw.info);
+                        adapters.push(backend::Dx11::hub(self).adapters.register_identity(
+                            id_dx11.clone(),
+                            adapter,
+                            &mut token,
+                        ));
+                    }
                 }
             }
         }
@@ -420,20 +451,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             _ => Vec::new(),
         };
         #[cfg(any(target_os = "ios", target_os = "macos"))]
-        let mut adapters_mtl = if id_metal.is_some() {
-            let mut adapters = instance.metal.enumerate_adapters();
-            if let Some(surface) = compatible_surface {
-                adapters.retain(|a| {
-                    a.queue_families
-                        .iter()
-                        .find(|qf| qf.queue_type().supports_graphics())
-                        .map_or(false, |qf| surface.metal.supports_queue_family(qf))
-                });
+        let mut adapters_mtl = match instance.metal {
+            Some(ref inst) if id_metal.is_some() => {
+                let mut adapters = inst.enumerate_adapters();
+                if let Some(&Surface {
+                    metal: Some(ref surface),
+                    ..
+                }) = compatible_surface
+                {
+                    adapters.retain(|a| {
+                        a.queue_families
+                            .iter()
+                            .find(|qf| qf.queue_type().supports_graphics())
+                            .map_or(false, |qf| surface.supports_queue_family(qf))
+                    });
+                }
+                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+                adapters
             }
-            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-            adapters
-        } else {
-            Vec::new()
+            _ => Vec::new(),
         };
         #[cfg(windows)]
         let mut adapters_dx12 = match instance.dx12 {
@@ -457,20 +493,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             _ => Vec::new(),
         };
         #[cfg(windows)]
-        let mut adapters_dx11 = if id_dx11.is_some() {
-            let mut adapters = instance.dx11.enumerate_adapters();
-            if let Some(surface) = compatible_surface {
-                adapters.retain(|a| {
-                    a.queue_families
-                        .iter()
-                        .find(|qf| qf.queue_type().supports_graphics())
-                        .map_or(false, |qf| surface.dx11.supports_queue_family(qf))
-                });
+        let mut adapters_dx11 = match instance.dx11 {
+            Some(ref inst) if id_dx11.is_some() => {
+                let mut adapters = inst.enumerate_adapters();
+                if let Some(&Surface {
+                    dx11: Some(ref surface),
+                    ..
+                }) = compatible_surface
+                {
+                    adapters.retain(|a| {
+                        a.queue_families
+                            .iter()
+                            .find(|qf| qf.queue_type().supports_graphics())
+                            .map_or(false, |qf| surface.supports_queue_family(qf))
+                    });
+                }
+                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+                adapters
             }
-            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-            adapters
-        } else {
-            Vec::new()
+            _ => Vec::new(),
         };
 
         if device_types.is_empty() {
