@@ -314,12 +314,7 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     .collect::<Vec<_>>();
                 self.device_create_shader_module::<B>(
                     device,
-                    &wgc::pipeline::ShaderModuleDescriptor {
-                        code: wgc::U32Array {
-                            bytes: spv.as_ptr(),
-                            length: spv.len(),
-                        },
-                    },
+                    wgc::pipeline::ShaderModuleSource::SpirV(&spv),
                     id,
                 );
             }

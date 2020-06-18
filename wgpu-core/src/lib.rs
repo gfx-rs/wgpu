@@ -163,13 +163,6 @@ struct Stored<T> {
     ref_count: RefCount,
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct U32Array {
-    pub bytes: *const u32,
-    pub length: usize,
-}
-
 #[derive(Clone, Copy, Debug)]
 struct PrivateFeatures {
     shader_validation: bool,

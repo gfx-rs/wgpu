@@ -1749,38 +1749,69 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_shader_module<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &pipeline::ShaderModuleDescriptor,
+        source: pipeline::ShaderModuleSource,
         id_in: Input<G, id::ShaderModuleId>,
     ) -> id::ShaderModuleId {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-
-        let spv = unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) };
-        let raw = unsafe { device.raw.create_shader_module(spv).unwrap() };
-
-        let module = if device.private_features.shader_validation {
-            // Parse the given shader code and store its representation.
-            let spv_iter = spv.into_iter().cloned();
-            let mut parser = naga::front::spirv::Parser::new(spv_iter);
-            parser
-                .parse()
-                .map_err(|err| {
-                    log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
-                    log::warn!("Shader module will not be validated");
-                })
-                .ok()
+        let spv_owned;
+        let spv_flags = if cfg!(debug_assertions) {
+            naga::back::spv::WriterFlags::DEBUG
         } else {
-            None
+            naga::back::spv::WriterFlags::empty()
         };
+
+        let (spv, naga) = match source {
+            pipeline::ShaderModuleSource::SpirV(spv) => {
+                let module = if device.private_features.shader_validation {
+                    // Parse the given shader code and store its representation.
+                    let spv_iter = spv.into_iter().cloned();
+                    naga::front::spv::Parser::new(spv_iter)
+                        .parse()
+                        .map_err(|err| {
+                            log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
+                            log::warn!("Shader module will not be validated");
+                        })
+                        .ok()
+                } else {
+                    None
+                };
+                (spv, module)
+            }
+            pipeline::ShaderModuleSource::Wgsl(code) => {
+                let module = naga::front::wgsl::parse_str(code).unwrap();
+                spv_owned = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
+                (
+                    spv_owned.as_slice(),
+                    if device.private_features.shader_validation {
+                        Some(module)
+                    } else {
+                        None
+                    },
+                )
+            }
+            pipeline::ShaderModuleSource::Naga(module) => {
+                spv_owned = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
+                (
+                    spv_owned.as_slice(),
+                    if device.private_features.shader_validation {
+                        Some(module)
+                    } else {
+                        None
+                    },
+                )
+            }
+        };
+
         let shader = pipeline::ShaderModule {
-            raw,
+            raw: unsafe { device.raw.create_shader_module(spv).unwrap() },
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
             },
-            module,
+            module: naga,
         };
 
         let id = hub
@@ -1791,7 +1822,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref trace) => {
                 let mut trace = trace.lock();
                 let data = trace.make_binary("spv", unsafe {
-                    slice::from_raw_parts(desc.code.bytes as *const u8, desc.code.length * 4)
+                    slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
                 });
                 trace.add(trace::Action::CreateShaderModule { id, data });
             }
