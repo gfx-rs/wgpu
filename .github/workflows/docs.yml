@@ -1,0 +1,23 @@
+name: Documentation
+
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@v1
+
+      - name: build documentation
+        run: cargo doc --lib --all-features
+
+      - name: Deploy 🚀
+        uses: JamesIves/github-pages-deploy-action@releases/v3
+        with:
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          BRANCH: gh-pages
+          FOLDER: target/doc
+          TARGET_FOLDER: doc 
