@@ -256,7 +256,7 @@ impl Trace {
     pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
-        file.write(b"[\n")?;
+        file.write_all(b"[\n")?;
         Ok(Trace {
             path: path.to_path_buf(),
             file,
@@ -287,6 +287,6 @@ impl Trace {
 #[cfg(feature = "trace")]
 impl Drop for Trace {
     fn drop(&mut self) {
-        let _ = self.file.write(b"]");
+        let _ = self.file.write_all(b"]");
     }
 }
