@@ -1,5 +1,9 @@
+mod helpers;
 mod layout;
 mod writer;
+
+#[cfg(test)]
+mod layout_tests;
 
 pub use writer::Writer;
 

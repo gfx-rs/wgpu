@@ -1,5 +1,5 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
-use crate::back::spv::{Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
+use crate::back::spv::{helpers, Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
 use crate::{FastHashMap, FastHashSet};
 use spirv::*;
 
@@ -81,25 +81,6 @@ impl Writer {
         self.id_count
     }
 
-    fn bytes_to_words(&self, bytes: &[u8]) -> Vec<Word> {
-        bytes
-            .chunks(4)
-            .map(|chars| chars.iter().rev().fold(0u32, |u, c| (u << 8) | *c as u32))
-            .collect()
-    }
-
-    fn string_to_words(&self, input: &str) -> Vec<Word> {
-        let bytes = input.as_bytes();
-        let mut words = self.bytes_to_words(bytes);
-
-        if bytes.len() % 4 == 0 {
-            // nul-termination
-            words.push(0x0u32);
-        }
-
-        words
-    }
-
     fn try_add_capabilities(&mut self, capabilities: &[Capability]) {
         for capability in capabilities.iter() {
             self.capabilities.insert(*capability);
@@ -116,7 +97,7 @@ impl Writer {
         let mut instruction = Instruction::new(Op::ExtInstImport);
         let id = self.generate_id();
         instruction.set_result(id);
-        instruction.add_operands(self.string_to_words(name));
+        instruction.add_operands(helpers::string_to_words(name));
         instruction
     }
 
@@ -149,11 +130,11 @@ impl Writer {
         if self.writer_flags.contains(WriterFlags::DEBUG) {
             let mut debug_instruction = Instruction::new(Op::Name);
             debug_instruction.set_result(function_id);
-            debug_instruction.add_operands(self.string_to_words(entry_point.name.as_str()));
+            debug_instruction.add_operands(helpers::string_to_words(entry_point.name.as_str()));
             self.debugs.push(debug_instruction);
         }
 
-        instruction.add_operands(self.string_to_words(entry_point.name.as_str()));
+        instruction.add_operands(helpers::string_to_words(entry_point.name.as_str()));
 
         let function = &ir_module.functions[entry_point.function];
         for ((handle, _), &usage) in ir_module
@@ -609,9 +590,9 @@ impl Writer {
         if self.writer_flags.contains(WriterFlags::DEBUG) {
             let mut debug_instruction = Instruction::new(Op::Name);
             debug_instruction.set_result(id);
-            debug_instruction.add_operands(
-                self.string_to_words(global_variable.name.as_ref().unwrap().as_str()),
-            );
+            debug_instruction.add_operands(helpers::string_to_words(
+                global_variable.name.as_ref().unwrap().as_str(),
+            ));
             self.debugs.push(debug_instruction);
         }
 
@@ -662,7 +643,7 @@ impl Writer {
 
         let mut instruction = Instruction::new(Op::Source);
         instruction.add_operand(SourceLanguage::GLSL as u32);
-        instruction.add_operands(self.bytes_to_words(&version.to_le_bytes()));
+        instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
         instruction
     }
 
