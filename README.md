@@ -13,7 +13,7 @@ Front-end       |       Status       | Notes |
 --------------- | ------------------ | ----- |
 SPIR-V (binary) | :construction:     |       |
 WGSL (Tint)     | :construction:     |       |
-GLSL (Vulkan)   |                    |       |
+GLSL (Vulkan)   | :construction:     |       |
 Rust            |                    |       |
 
 Back-end        |       Status       | Notes |
