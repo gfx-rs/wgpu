@@ -1,5 +1,7 @@
 //! A cross-platform graphics and compute library based on WebGPU.
 
+#![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu-rs/master/logo.png")]
+
 mod backend;
 pub mod util;
 #[macro_use]
@@ -29,7 +31,7 @@ pub use wgt::{
     StencilOperation, StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus,
     TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat,
     TextureUsage, TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -340,18 +342,21 @@ trait Context: Sized {
     );
 }
 
+/// Instance of wgpu. First thing you create when using wgpu.
+///
 /// An instance sets up the context for all other wgpu objects.
 ///
-/// An `Adapter` can be used to open a connection to the corresponding device on the host system,
-/// yielding a [`Device`] object.
+/// Instances and adapters do not have to be kept alive, only devices.
 pub struct Instance {
     context: Arc<C>,
 }
 
-/// A handle to a physical graphics and/or compute device.
+/// Handle to a physical graphics and/or compute device.
 ///
 /// An `Adapter` can be used to open a connection to the corresponding device on the host system,
 /// yielding a [`Device`] object.
+///
+/// Instances and adapters do not have to be kept alive, only devices.
 pub struct Adapter {
     context: Arc<C>,
     id: <C as Context>::AdapterId,
@@ -362,24 +367,29 @@ pub struct Adapter {
 pub struct RequestAdapterOptions<'a> {
     /// Power preference for the adapter.
     pub power_preference: PowerPreference,
-    /// Surface that is required to be presentable with the requested adapter.
+    /// Surface that is required to be presentable with the requested adapter. This does not
+    /// create the surface, only guarantees that the adapter can present to said surface.
     pub compatible_surface: Option<&'a Surface>,
 }
 
-/// An open connection to a graphics and/or compute device.
+/// Open connection to a graphics and/or compute device.
 ///
 /// The `Device` is the responsible for the creation of most rendering and compute resources, as
 /// well as exposing [`Queue`] objects.
+///
+/// A device may be requested from an adapter with [`Adapter::request_device`].
 pub struct Device {
     context: Arc<C>,
     id: <C as Context>::DeviceId,
 }
 
-/// This is passed to `Device::poll` to control whether
-/// it should block or not.
+/// Passed to [`Device::poll`] to control if it should block or not. This has no effect on
+/// the web.
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Maintain {
+    /// Block
     Wait,
+    /// Don't block
     Poll,
 }
 
@@ -446,7 +456,9 @@ impl MapContext {
     }
 }
 
-/// A handle to a GPU-accessible buffer.
+/// Handle to a GPU-accessible buffer.
+///
+/// Created with [`Device::create_buffer`] or [`Device::create_buffer_with_data`]
 pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
@@ -454,7 +466,11 @@ pub struct Buffer {
     usage: BufferUsage,
 }
 
-/// A description of what portion of a buffer to use
+/// Slice into a [`Buffer`].
+///
+/// Created by calling [`Buffer::slice`]. To use the whole buffer, call with unbounded slice:
+///
+/// `buffer.slice(..)`
 #[derive(Copy, Clone)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
@@ -462,14 +478,16 @@ pub struct BufferSlice<'a> {
     size: BufferSize,
 }
 
-/// A handle to a texture on the GPU.
+/// Handle to a texture on the GPU.
+///
+/// Created by calling [`Device::create_texture`]
 pub struct Texture {
     context: Arc<C>,
     id: <C as Context>::TextureId,
     owned: bool,
 }
 
-/// A handle to a texture view.
+/// Handle to a texture view.
 ///
 /// A `TextureView` object describes a texture and associated metadata needed by a
 /// [`RenderPipeline`] or [`BindGroup`].
@@ -479,7 +497,7 @@ pub struct TextureView {
     owned: bool,
 }
 
-/// A handle to a sampler.
+/// Handle to a sampler.
 ///
 /// A `Sampler` object defines how a pipeline will sample from a [`TextureView`]. Samplers define
 /// image filters (including anisotropy) and address (wrapping) modes, among other things. See
@@ -497,15 +515,15 @@ impl Drop for Sampler {
     }
 }
 
-/// A handle to a presentable surface.
+/// Handle to a presentable surface.
 ///
-/// A `Surface` represents a platform-specific surface (e.g. a window) to which rendered images may
-/// be presented. A `Surface` may be created with [`Surface::create`].
+/// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
+/// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
 pub struct Surface {
     id: <C as Context>::SurfaceId,
 }
 
-/// A handle to a swap chain.
+/// Handle to a swap chain.
 ///
 /// A `SwapChain` represents the image or series of images that will be presented to a [`Surface`].
 /// A `SwapChain` may be created with [`Device::create_swap_chain`].
@@ -514,7 +532,7 @@ pub struct SwapChain {
     id: <C as Context>::SwapChainId,
 }
 
-/// An opaque handle to a binding group layout.
+/// Handle to a binding group layout.
 ///
 /// A `BindGroupLayout` is a handle to the GPU-side layout of a binding group. It can be used to
 /// create a [`BindGroupDescriptor`] object, which in turn can be used to create a [`BindGroup`]
@@ -533,7 +551,7 @@ impl Drop for BindGroupLayout {
     }
 }
 
-/// An opaque handle to a binding group.
+/// Handle to a binding group.
 ///
 /// A `BindGroup` represents the set of resources bound to the bindings described by a
 /// [`BindGroupLayout`]. It can be created with [`Device::create_bind_group`]. A `BindGroup` can
@@ -552,7 +570,7 @@ impl Drop for BindGroup {
     }
 }
 
-/// A handle to a compiled shader module.
+/// Handle to a compiled shader module.
 ///
 /// A `ShaderModule` represents a compiled shader module on the GPU. It can be created by passing
 /// valid SPIR-V source code to [`Device::create_shader_module`]. Shader modules are used to define
@@ -584,7 +602,7 @@ pub enum ShaderModuleSource<'a> {
     Wgsl(&'a str),
 }
 
-/// An opaque handle to a pipeline layout.
+/// Handle to a pipeline layout.
 ///
 /// A `PipelineLayout` object describes the available binding groups of a pipeline.
 pub struct PipelineLayout {
@@ -600,7 +618,7 @@ impl Drop for PipelineLayout {
     }
 }
 
-/// A handle to a rendering (graphics) pipeline.
+/// Handle to a rendering (graphics) pipeline.
 ///
 /// A `RenderPipeline` object represents a graphics pipeline and its stages, bindings, vertex
 /// buffers and targets. A `RenderPipeline` may be created with [`Device::create_render_pipeline`].
@@ -617,7 +635,10 @@ impl Drop for RenderPipeline {
     }
 }
 
-/// A handle to a compute pipeline.
+/// Handle to a compute pipeline.
+///
+/// A `ComputePipeline` object represents a compute pipeline and its single shader stage.
+/// A `ComputePipeline` may be created with [`Device::create_compute_pipeline`].
 pub struct ComputePipeline {
     context: Arc<C>,
     id: <C as Context>::ComputePipelineId,
@@ -631,7 +652,7 @@ impl Drop for ComputePipeline {
     }
 }
 
-/// An opaque handle to a command buffer on the GPU.
+/// Handle to a command buffer on the GPU.
 ///
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
 /// queue with [`Queue::submit`]. A `CommandBuffer` is obtained by recording a series of commands to
@@ -651,7 +672,7 @@ impl Drop for CommandBuffer {
     }
 }
 
-/// An object that encodes GPU operations.
+/// Encodes a series of GPU operations.
 ///
 /// A `CommandEncoder` can record [`RenderPass`]es, [`ComputePass`]es, and transfer operations
 /// between driver-managed resources like [`Buffer`]s and [`Texture`]s.
@@ -666,21 +687,24 @@ pub struct CommandEncoder {
     _p: PhantomData<*const u8>,
 }
 
-/// An in-progress recording of a render pass.
+/// In-progress recording of a render pass.
 pub struct RenderPass<'a> {
     id: <C as Context>::RenderPassId,
     parent: &'a mut CommandEncoder,
 }
 
-/// An in-progress recording of a compute pass.
+/// In-progress recording of a compute pass.
 pub struct ComputePass<'a> {
     id: <C as Context>::ComputePassId,
     parent: &'a mut CommandEncoder,
 }
 
-/// An object that encodes GPU operations into a render bundle.
+/// Encodes a series of GPU operations into a reusable "render bundle".
 ///
-/// It only supports a handful of render commands, but it makes them re-usable.
+/// It only supports a handful of render commands, but it makes them reusable. [`RenderBundle`]s
+/// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
+///
+/// Executing a [`RenderBundle`] is often more efficient then issuing the underlying commands manually.
 pub struct RenderBundleEncoder<'a> {
     context: Arc<C>,
     id: <C as Context>::RenderBundleEncoderId,
@@ -690,7 +714,12 @@ pub struct RenderBundleEncoder<'a> {
     _p: PhantomData<*const u8>,
 }
 
-/// A finished render bundle.
+/// Pre-prepared reusable bundle of GPU operations.
+///
+/// It only supports a handful of render commands, but it makes them reusable. [`RenderBundle`]s
+/// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
+///
+/// Executing a [`RenderBundle`] is often more efficient then issuing the underlying commands manually.
 pub struct RenderBundle {
     context: Arc<C>,
     id: <C as Context>::RenderBundleId,
@@ -704,63 +733,86 @@ impl Drop for RenderBundle {
     }
 }
 
-/// A handle to a command queue on a device.
+/// Handle to a command queue on a device.
 ///
-/// A `Queue` executes recorded [`CommandBuffer`] objects.
+/// A `Queue` executes recorded [`CommandBuffer`] objects and provides convenience methods
+/// for writing to [buffers](Queue::write_buffer) and [textures](Queue::write_texture).
 pub struct Queue {
     context: Arc<C>,
     id: <C as Context>::QueueId,
 }
 
-/// A resource that can be bound to a pipeline.
+/// Resource that can be bound to a pipeline.
 #[non_exhaustive]
 pub enum BindingResource<'a> {
+    /// Binding is backed by a buffer.
+    ///
+    /// Corresponds to [`BindingType::UniformBuffer`] and [`BindingType::StorageBuffer`]
+    /// with [`BindGroupLayoutEntry::count`] set to None.
     Buffer(BufferSlice<'a>),
+    /// Binding is a sampler.
+    ///
+    /// Corresponds to [`BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set to None.
     Sampler(&'a Sampler),
+    /// Binding is backed by a texture.
+    ///
+    /// Corresponds to [`BindingType::SampledTexture`] and [`BindingType::StorageTexture`] with
+    /// [`BindGroupLayoutEntry::count`] set to None.
     TextureView(&'a TextureView),
+    /// Binding is backed by an array of textures.
+    ///
+    /// [`Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
+    ///
+    /// Corresponds to [`BindingType::SampledTexture`] and [`BindingType::StorageTexture`] with
+    /// [`BindGroupLayoutEntry::count`] set to Some.
     TextureViewArray(&'a [TextureView]),
 }
 
-/// A bindable resource and the slot to bind it to.
+/// Bindable resource and the slot to bind it to.
 pub struct Binding<'a> {
+    /// Slot for which binding provides resource. Corresponds to an entry of the same
+    /// binding index in the [`BindGroupLayoutDescriptor`].
     pub binding: u32,
+    /// Resource to attach to the binding
     pub resource: BindingResource<'a>,
 }
 
-/// A description of a group of bindings and the resources to be bound.
+/// Describes a group of bindings and the resources to be bound.
 #[derive(Clone)]
 pub struct BindGroupDescriptor<'a> {
-    /// The layout for this bind group.
+    /// The [`BindGroupLayout`] that corresponds to this bind group.
     pub layout: &'a BindGroupLayout,
 
     /// The resources to bind to this bind group.
     pub bindings: &'a [Binding<'a>],
 
-    /// An optional label to apply to the bind group.
-    /// This can be useful for debugging and performance analysis.
+    /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
     pub label: Option<&'a str>,
 }
 
-/// A description of a pipeline layout.
+/// Describes a pipeline layout.
 ///
 /// A `PipelineLayoutDescriptor` can be passed to [`Device::create_pipeline_layout`] to obtain a
 /// [`PipelineLayout`].
 #[derive(Clone)]
 pub struct PipelineLayoutDescriptor<'a> {
+    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
+    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
 }
 
-/// A description of a programmable pipeline stage.
+/// Describes a programmable pipeline stage.
 #[derive(Clone)]
 pub struct ProgrammableStageDescriptor<'a> {
     /// The compiled shader module for this stage.
     pub module: &'a ShaderModule,
 
-    /// The name of the entry point in the compiled shader.
+    /// The name of the entry point in the compiled shader. There must be a function that returns
+    /// void with this name in the shader.
     pub entry_point: &'a str,
 }
 
-/// The vertex input state for a render pipeline.
+/// Describes vertex input state for a render pipeline.
 #[derive(Clone, Debug)]
 pub struct VertexStateDescriptor<'a> {
     /// The format of any index buffers used with this pipeline.
@@ -770,19 +822,21 @@ pub struct VertexStateDescriptor<'a> {
     pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
 }
 
-/// A description of a vertex buffer.
+/// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug)]
 pub struct VertexBufferDescriptor<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub stride: BufferAddress,
 
+    /// How often this vertex buffer is "stepped" forward. Can be per-vertex
+    /// or per-instance.
     pub step_mode: InputStepMode,
 
-    /// The list of attributes which comprise a single vertex.
+    /// The list of attributes which comprise a single vertex, this can be made with [`vertex_attr_array`].
     pub attributes: &'a [VertexAttributeDescriptor],
 }
 
-/// A complete description of a render (graphics) pipeline.
+/// Describes a render (graphics) pipeline.
 #[derive(Clone)]
 pub struct RenderPipelineDescriptor<'a> {
     /// The layout of bind groups for this pipeline.
@@ -809,21 +863,24 @@ pub struct RenderPipelineDescriptor<'a> {
     /// The vertex input state for this pipeline.
     pub vertex_state: VertexStateDescriptor<'a>,
 
-    /// The number of samples calculated per pixel (for MSAA).
+    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
+    /// this should be `1`
     pub sample_count: u32,
 
-    /// Bitmask that restricts the samples of a pixel modified by this pipeline.
+    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
+    /// can be enabled using the value `!0`
     pub sample_mask: u32,
 
     /// When enabled, produces another sample mask per pixel based on the alpha output value, that
     /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
     /// affected by a primitive.
+    ///
     /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
     /// is guaranteed to be all 1-s.
     pub alpha_to_coverage_enabled: bool,
 }
 
-/// A complete description of a compute pipeline.
+/// Describes a compute pipeline.
 #[derive(Clone)]
 pub struct ComputePipelineDescriptor<'a> {
     /// The layout of bind groups for this pipeline.
@@ -833,12 +890,18 @@ pub struct ComputePipelineDescriptor<'a> {
     pub compute_stage: ProgrammableStageDescriptor<'a>,
 }
 
+// The underlying types are also exported so that documentation shows up for them
+
+pub use wgt::RenderPassColorAttachmentDescriptorBase;
+/// Describes a color attachment to a [`RenderPass`].
 pub type RenderPassColorAttachmentDescriptor<'a> =
     wgt::RenderPassColorAttachmentDescriptorBase<&'a TextureView>;
+pub use wgt::RenderPassDepthStencilAttachmentDescriptorBase;
+/// Describes a depth/stencil attachment to a [`RenderPass`].
 pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
     wgt::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
 
-/// A description of all the attachments of a render pass.
+/// Describes the attachments of a [`RenderPass`].
 pub struct RenderPassDescriptor<'a, 'b> {
     /// The color attachments of the render pass.
     pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
@@ -847,37 +910,45 @@ pub struct RenderPassDescriptor<'a, 'b> {
     pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
 }
 
-/// A description of a buffer.
-pub type BufferDescriptor<'a> = wgt::BufferDescriptor<Option<&'a str>>;
+// The underlying types are also exported so that documentation shows up for them
 
-/// A description of a command encoder.
-pub type CommandEncoderDescriptor<'a> = wgt::CommandEncoderDescriptor<Option<&'a str>>;
+pub use wgt::BufferDescriptor as BufferDescriptorBase;
+/// Describes a [`Buffer`].
+pub type BufferDescriptor<'a> = BufferDescriptorBase<Option<&'a str>>;
 
-/// A description of a render bundle.
-pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Option<&'a str>>;
+pub use wgt::CommandEncoderDescriptor as CommandEncoderDescriptorBase;
+/// Describes a [`CommandEncoder`].
+pub type CommandEncoderDescriptor<'a> = CommandEncoderDescriptorBase<Option<&'a str>>;
 
-/// A description of a texture.
-pub type TextureDescriptor<'a> = wgt::TextureDescriptor<Option<&'a str>>;
+pub use wgt::RenderBundleDescriptor as RenderBundleDescriptorBase;
+/// Describes a [`RenderBundle`].
+pub type RenderBundleDescriptor<'a> = RenderBundleDescriptorBase<Option<&'a str>>;
 
-/// A description of a texture view.
-pub type TextureViewDescriptor<'a> = wgt::TextureViewDescriptor<Option<&'a str>>;
+pub use wgt::TextureDescriptor as TextureDescriptorBase;
+/// Describes a [`Texture`].
+pub type TextureDescriptor<'a> = TextureDescriptorBase<Option<&'a str>>;
 
-/// A description of a sampler.
-pub type SamplerDescriptor<'a> = wgt::SamplerDescriptor<Option<&'a str>>;
+pub use wgt::TextureViewDescriptor as TextureViewDescriptorBase;
+/// Describes a [`TextureView`].
+pub type TextureViewDescriptor<'a> = TextureViewDescriptorBase<Option<&'a str>>;
 
-/// A swap chain image that can be rendered to.
+pub use wgt::SamplerDescriptor as SamplerDescriptorBase;
+/// Describes a [`Sampler`].
+pub type SamplerDescriptor<'a> = SamplerDescriptorBase<Option<&'a str>>;
+
+/// Swap chain image that can be rendered to.
 pub struct SwapChainTexture {
     pub view: TextureView,
     detail: <C as Context>::SwapChainOutputDetail,
 }
 
-/// The result of a successful call to `SwapChain::get_next_frame`.
+/// Result of a successful call to [`SwapChain::get_next_frame`].
 pub struct SwapChainFrame {
     pub output: SwapChainTexture,
     pub suboptimal: bool,
 }
 
-/// The result of an unsuccessful call to `SwapChain::get_next_frame`.
+/// Result of an unsuccessful call to [`SwapChain::get_next_frame`].
 #[derive(Debug)]
 pub enum SwapChainError {
     Timeout,
@@ -886,20 +957,20 @@ pub enum SwapChainError {
     OutOfMemory,
 }
 
-/// A view of a buffer which can be used to copy to or from a texture.
+/// View of a buffer which can be used to copy to/from a texture.
 #[derive(Clone)]
 pub struct BufferCopyView<'a> {
-    /// The buffer to be copied to or from.
+    /// The buffer to be copied to/from.
     pub buffer: &'a Buffer,
 
     /// The layout of the texture data in this buffer.
     pub layout: TextureDataLayout,
 }
 
-/// A view of a texture which can be used to copy to or from a buffer or another texture.
+/// View of a texture which can be used to copy to/from a buffer/texture.
 #[derive(Clone)]
 pub struct TextureCopyView<'a> {
-    /// The texture to be copied to or from.
+    /// The texture to be copied to/from.
     pub texture: &'a Texture,
 
     /// The target mip level of the texture.
@@ -910,7 +981,7 @@ pub struct TextureCopyView<'a> {
 }
 
 impl Instance {
-    /// Create an new instance.
+    /// Create an new instance of wgpu.
     pub fn new() -> Self {
         Instance {
             context: Arc::new(C::init()),
@@ -938,6 +1009,10 @@ impl Instance {
     }
 
     /// Creates a surface from a raw window handle.
+    ///
+    /// # Safety
+    ///
+    /// - Raw Window Handle must be a valid object to create a surface upon.
     pub unsafe fn create_surface<W: raw_window_handle::HasRawWindowHandle>(
         &self,
         window: &W,
@@ -999,7 +1074,10 @@ impl Adapter {
     ///
     /// # Panics
     ///
-    /// Panics if the extensions specified by `desc` are not supported by this adapter.
+    /// - Extensions specified by `desc` are not supported by this adapter.
+    /// - Unsafe extensions were requested but enabled when requesting the adapter.
+    /// - Limits requested exceed the values provided by the adapter.
+    /// - Adapter does not support all features wgpu requires to safely operate.
     pub fn request_device(
         &self,
         desc: &DeviceDescriptor,
@@ -1022,18 +1100,28 @@ impl Adapter {
         })
     }
 
+    /// List all extensions that are supported with this adapter.
+    ///
+    /// Extensions must be explicitly requested in [`Adapter::request_device`] in order
+    /// to use them.
     pub fn extensions(&self) -> Extensions {
         Context::adapter_extensions(&*self.context, &self.id)
     }
 
+    /// List the "best" limits that are supported by this adapter.
+    ///
+    /// Limits must be explicitly requested in [`Adapter::request_device`] in to set
+    /// the values that you are allowed to use.
     pub fn limits(&self) -> Limits {
         Context::adapter_limits(&*self.context, &self.id)
     }
 
+    /// List all capabilities that may be used wth this adapter.
     pub fn capabilities(&self) -> Capabilities {
         Context::adapter_capabilities(&*self.context, &self.id)
     }
 
+    /// Get info about the adapter itself.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_info(&self) -> AdapterInfo {
         let context = &self.context;
@@ -1043,18 +1131,29 @@ impl Adapter {
 
 impl Device {
     /// Check for resource cleanups and mapping callbacks.
+    ///
+    /// no-op on the web, device is automatically polled.
     pub fn poll(&self, maintain: Maintain) {
         Context::device_poll(&*self.context, &self.id, maintain);
     }
 
+    /// List all extensions that may be used with this device.
+    ///
+    /// Functions may panic if you use unsupported extensions.
     pub fn extensions(&self) -> Extensions {
         Context::device_extensions(&*self.context, &self.id)
     }
 
+    /// List all limits that were requested of this device.
+    ///
+    /// If any of these limits are exceeded, functions may panic.
     pub fn limits(&self) -> Limits {
         Context::device_limits(&*self.context, &self.id)
     }
 
+    /// List all capabilities that may be used wth this device.
+    ///
+    /// Functions may panic if you use unsupported capabilities.
     pub fn capabilities(&self) -> Capabilities {
         Context::device_capabilities(&*self.context, &self.id)
     }
@@ -1089,7 +1188,7 @@ impl Device {
         }
     }
 
-    /// Creates a new bind group.
+    /// Creates a new [`BindGroup`].
     pub fn create_bind_group(&self, desc: &BindGroupDescriptor) -> BindGroup {
         BindGroup {
             context: Arc::clone(&self.context),
@@ -1097,7 +1196,7 @@ impl Device {
         }
     }
 
-    /// Creates a bind group layout.
+    /// Creates a [`BindGroupLayout`].
     pub fn create_bind_group_layout(&self, desc: &BindGroupLayoutDescriptor) -> BindGroupLayout {
         BindGroupLayout {
             context: Arc::clone(&self.context),
@@ -1105,7 +1204,7 @@ impl Device {
         }
     }
 
-    /// Creates a pipeline layout.
+    /// Creates a [`PipelineLayout`].
     pub fn create_pipeline_layout(&self, desc: &PipelineLayoutDescriptor) -> PipelineLayout {
         PipelineLayout {
             context: Arc::clone(&self.context),
@@ -1113,7 +1212,7 @@ impl Device {
         }
     }
 
-    /// Creates a render pipeline.
+    /// Creates a [`RenderPipeline`].
     pub fn create_render_pipeline(&self, desc: &RenderPipelineDescriptor) -> RenderPipeline {
         RenderPipeline {
             context: Arc::clone(&self.context),
@@ -1121,7 +1220,7 @@ impl Device {
         }
     }
 
-    /// Creates a compute pipeline.
+    /// Creates a [`ComputePipeline`].
     pub fn create_compute_pipeline(&self, desc: &ComputePipelineDescriptor) -> ComputePipeline {
         ComputePipeline {
             context: Arc::clone(&self.context),
@@ -1129,7 +1228,7 @@ impl Device {
         }
     }
 
-    /// Creates a new buffer.
+    /// Creates a [`Buffer`].
     pub fn create_buffer(&self, desc: &BufferDescriptor) -> Buffer {
         let mut map_context = MapContext::new(desc.size);
         if desc.mapped_at_creation {
@@ -1181,6 +1280,11 @@ impl Device {
     }
 
     /// Create a new [`SwapChain`] which targets `surface`.
+    ///
+    /// # Panics
+    ///
+    /// - A old [`SwapChainFrame`] is still alive referencing an old swapchain.
+    /// - Texture format requested is unsupported on the swap chain.
     pub fn create_swap_chain(&self, surface: &Surface, desc: &SwapChainDescriptor) -> SwapChain {
         SwapChain {
             context: Arc::clone(&self.context),
@@ -1197,15 +1301,20 @@ impl Drop for Device {
     }
 }
 
+/// Requesting a device failed.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RequestDeviceError;
 
+/// Error occurred when trying to async map a number.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BufferAsyncError;
 
+/// Type of buffer mapping.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum MapMode {
+    /// Map only for reading
     Read,
+    /// Map only for writing
     Write,
 }
 
@@ -1224,11 +1333,13 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(bounds: S) -> (BufferAddr
     (offset, size)
 }
 
+/// Read only view into a mapped buffer.
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
     data: &'a [u8],
 }
 
+/// Write only view into mapped buffer.
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
     data: &'a mut [u8],
@@ -1283,8 +1394,8 @@ impl Drop for BufferViewMut<'_> {
 }
 
 impl Buffer {
-    /// Use only a portion of this Buffer for a given operation. Choosing a range with 0 size will
-    /// return a slice that extends to the end of the buffer.
+    /// Use only a portion of this Buffer for a given operation. Choosing a range with no end
+    /// will use the rest of the buffer. Using a totally unbounded range will use the entire buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
         let (offset, size) = range_to_offset_size(bounds);
         BufferSlice {
@@ -1302,6 +1413,8 @@ impl Buffer {
 }
 
 impl BufferSlice<'_> {
+    /// Use only a portion of this BufferSlice for a given operation. Choosing a range with no end
+    /// will use the rest of the buffer. Using a totally unbounded range will use the entire BufferSlice.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> Self {
         let (sub_offset, sub_size) = range_to_offset_size(bounds);
         let new_offset = self.offset + sub_offset;
@@ -1362,6 +1475,8 @@ impl BufferSlice<'_> {
         )
     }
 
+    /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     pub fn get_mapped_range(&self) -> BufferView {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = Context::buffer_get_mapped_range(
@@ -1372,6 +1487,8 @@ impl BufferSlice<'_> {
         BufferView { slice: *self, data }
     }
 
+    /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
+    /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
     pub fn get_mapped_range_mut(&self) -> BufferViewMut {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = Context::buffer_get_mapped_range_mut(
@@ -1405,7 +1522,7 @@ impl Texture {
         }
     }
 
-    /// Creates a default view of this whole texture.
+    /// Creates the default view of this whole texture. This is likely what you want.
     pub fn create_default_view(&self) -> TextureView {
         TextureView {
             context: Arc::clone(&self.context),
@@ -1464,6 +1581,11 @@ impl CommandEncoder {
     }
 
     /// Copy data from one buffer to another.
+    ///
+    /// # Panics
+    ///
+    /// - Buffer offsets or copy size not a multiple of [`COPY_BUFFER_ALIGNMENT`].
+    /// - Copy would overrun buffer.
     pub fn copy_buffer_to_buffer(
         &mut self,
         source: &Buffer,
@@ -1484,6 +1606,12 @@ impl CommandEncoder {
     }
 
     /// Copy data from a buffer to a texture.
+    ///
+    /// # Panics
+    ///
+    /// - Copy would overrun buffer.
+    /// - Copy would overrun texture.
+    /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_buffer_to_texture(
         &mut self,
         source: BufferCopyView,
@@ -1500,6 +1628,12 @@ impl CommandEncoder {
     }
 
     /// Copy data from a texture to a buffer.
+    ///
+    /// # Panics
+    ///
+    /// - Copy would overrun buffer.
+    /// - Copy would overrun texture.
+    /// - `source.layout.bytes_per_row` isn't divisible by [`COPY_BYTES_PER_ROW_ALIGNMENT`].
     pub fn copy_texture_to_buffer(
         &mut self,
         source: TextureCopyView,
@@ -1516,6 +1650,12 @@ impl CommandEncoder {
     }
 
     /// Copy data from one texture to another.
+    ///
+    /// # Panics
+    ///
+    /// - Textures are not the same type
+    /// - If a depth texture, or a multisampled texture, the entire texture must be copied
+    /// - Copy would overrun either texture
     pub fn copy_texture_to_texture(
         &mut self,
         source: TextureCopyView,
@@ -1533,7 +1673,10 @@ impl CommandEncoder {
 }
 
 impl<'a> RenderPass<'a> {
-    /// Sets the active bind group for a given bind group index.
+    /// Sets the active bind group for a given bind group index. The bind group layout
+    /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
+    ///
+    /// If the bind group have dynamic offsets, provide them in order of their declaration.
     pub fn set_bind_group(
         &mut self,
         index: u32,
@@ -1550,6 +1693,9 @@ impl<'a> RenderPass<'a> {
         RenderInner::set_pipeline(&mut self.id, &pipeline.id)
     }
 
+    /// Sets the blend color as used by some of the blending modes.
+    ///
+    /// Subsequent blending tests will test against this value.
     pub fn set_blend_color(&mut self, color: Color) {
         self.id.set_blend_color(color)
     }
@@ -1573,12 +1719,10 @@ impl<'a> RenderPass<'a> {
     /// [`RenderPass`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [`RenderPipelineDescriptor::vertex_buffers`].
+    /// [`VertexStateDescriptor::vertex_buffers`].
     ///
-    /// [`draw`]: #method.draw
-    /// [`draw_indexed`]: #method.draw_indexed
-    /// [`RenderPass`]: struct.RenderPass.html
-    /// [`RenderPipelineDescriptor::vertex_buffers`]: struct.RenderPipelineDescriptor.html#structfield.vertex_buffers
+    /// [`draw`]: RenderPass::draw
+    /// [`draw_indexed`]: RenderPass::draw_indexed
     pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
         RenderInner::set_vertex_buffer(
             &mut self.id,
@@ -1703,7 +1847,10 @@ impl<'a> Drop for RenderPass<'a> {
 }
 
 impl<'a> ComputePass<'a> {
-    /// Sets the active bind group for a given bind group index.
+    /// Sets the active bind group for a given bind group index. The bind group layout
+    /// in the active pipeline when the `dispatch()` function is called must match the layout of this bind group.
+    ///
+    /// If the bind group have dynamic offsets, provide them in order of their declaration.
     pub fn set_bind_group(
         &mut self,
         index: u32,
@@ -1754,7 +1901,10 @@ impl<'a> RenderBundleEncoder<'a> {
         }
     }
 
-    /// Sets the active bind group for a given bind group index.
+    /// Sets the active bind group for a given bind group index. The bind group layout
+    /// in the active pipeline when any `draw()` function is called must match the layout of this bind group.
+    ///
+    /// If the bind group have dynamic offsets, provide them in order of their declaration.
     pub fn set_bind_group(
         &mut self,
         index: u32,
@@ -1790,12 +1940,10 @@ impl<'a> RenderBundleEncoder<'a> {
     /// [`RenderBundleEncoder`] will use `buffer` as one of the source vertex buffers.
     ///
     /// The `slot` refers to the index of the matching descriptor in
-    /// [`RenderPipelineDescriptor::vertex_buffers`].
+    /// [`VertexStateDescriptor::vertex_buffers`].
     ///
-    /// [`draw`]: #method.draw
-    /// [`draw_indexed`]: #method.draw_indexed
-    /// [`RenderBundleEncoder`]: struct.RenderBundleEncoder.html
-    /// [`RenderPipelineDescriptor::vertex_buffers`]: struct.RenderPipelineDescriptor.html#structfield.vertex_buffers
+    /// [`draw`]: RenderBundleEncoder::draw
+    /// [`draw_indexed`]: RenderBundleEncoder::draw_indexed
     pub fn set_vertex_buffer(&mut self, slot: u32, buffer_slice: BufferSlice<'a>) {
         RenderInner::set_vertex_buffer(
             &mut self.id,
@@ -1908,8 +2056,11 @@ impl Drop for SwapChainTexture {
 impl SwapChain {
     /// Returns the next texture to be presented by the swapchain for drawing.
     ///
-    /// When the [`SwapChainOutput`] returned by this method is dropped, the swapchain will present
+    /// When the [`SwapChainFrame`] returned by this method is dropped, the swapchain will present
     /// the texture to the associated [`Surface`].
+    ///
+    /// If a SwapChainFrame referencing this surface is alive when the swapchain is recreated,
+    /// recreating the swapchain will panic.
     pub fn get_next_frame(&mut self) -> Result<SwapChainFrame, SwapChainError> {
         let (view_id, status, detail) =
             Context::swap_chain_get_next_texture(&*self.context, &self.id);
