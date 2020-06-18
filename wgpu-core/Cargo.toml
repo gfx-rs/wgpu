@@ -16,10 +16,11 @@ license = "MPL-2.0"
 
 [features]
 default = []
-trace = ["ron", "serde", "wgt/trace"]
-replay = ["serde", "wgt/replay"]
 #NOTE: glutin feature is not stable, use at your own risk
 #glutin = ["gfx-backend-gl/glutin"]
+profiling = ["tracing"]
+replay = ["serde", "wgt/replay"]
+trace = ["ron", "serde", "wgt/trace"]
 
 [dependencies]
 arrayvec = "0.5"
@@ -37,6 +38,7 @@ ron = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 spirv_headers = { version = "1.4.2" }
+tracing = { version = "0.1.15", optional = true }
 vec_map = "0.8.1"
 
 [dependencies.naga]
