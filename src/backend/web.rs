@@ -649,7 +649,7 @@ impl crate::Context for Context {
     >;
     type MapAsyncFuture = MakeSendFuture<MapFuture<()>>;
 
-    fn init() -> Self {
+    fn init(_backends: wgt::BackendBit) -> Self {
         Sendable(web_sys::window().unwrap().navigator().gpu())
     }
 
@@ -682,7 +682,6 @@ impl crate::Context for Context {
         &self,
         options: &crate::RequestAdapterOptions<'_>,
         _unsafe_extensions: wgt::UnsafeExtensions,
-        _backends: wgt::BackendBit,
     ) -> Self::RequestAdapterFuture {
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,

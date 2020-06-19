@@ -6,7 +6,7 @@ use winit::{
 
 async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::TextureFormat) {
     let size = window.inner_size();
-    let instance = wgpu::Instance::new();
+    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
     let adapter = instance
         .request_adapter(
@@ -15,7 +15,6 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                 compatible_surface: Some(&surface),
             },
             wgpu::UnsafeExtensions::disallow(),
-            wgpu::BackendBit::PRIMARY,
         )
         .await
         .unwrap();

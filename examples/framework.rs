@@ -56,7 +56,7 @@ pub trait Example: 'static + Sized {
 async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
     log::info!("Initializing the surface...");
 
-    let instance = wgpu::Instance::new();
+    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let (size, surface) = unsafe {
         let size = window.inner_size();
         let surface = instance.create_surface(&window);
@@ -72,7 +72,6 @@ async fn run_async<E: Example>(event_loop: EventLoop<()>, window: Window) {
                 compatible_surface: Some(&surface),
             },
             unsafe_extensions,
-            wgpu::BackendBit::PRIMARY,
         )
         .await
         .unwrap();
