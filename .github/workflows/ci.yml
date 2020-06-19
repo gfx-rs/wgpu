@@ -96,8 +96,7 @@ jobs:
         name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          # temporary due to https://github.com/Xudong-Huang/generator-rs/issues/21
-          toolchain: nightly-2020-05-01
+          toolchain: nightly
           override: true
       - if: matrix.channel == 'stable'
         run: rustup component add clippy
