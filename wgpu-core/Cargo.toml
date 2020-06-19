@@ -24,7 +24,6 @@ fxhash = "0.2"
 log = "0.4"
 hal = { package = "gfx-hal", version = "0.5.2" }
 gfx-backend-empty = "0.5"
-gfx-descriptor = "0.1"
 parking_lot = "0.10"
 peek-poke = "0.2"
 raw-window-handle = { version = "0.3", optional = true }
@@ -37,6 +36,10 @@ vec_map = "0.8.1"
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
 rev = "e3aea9619865b16a24164d46ab29cca36ad7daf2"
+
+[dependencies.gfx-descriptor]
+git = "https://github.com/gfx-rs/gfx-extras"
+rev = "438353c3f75368c12024ad2fc03cbeb15f351fd9"
 
 [dependencies.gfx-memory]
 git = "https://github.com/gfx-rs/gfx-extras"
