@@ -16,6 +16,7 @@ use crate::{
     id,
     pipeline::PipelineFlags,
     resource::{BufferUse, TextureUse, TextureViewInner},
+    span,
     track::TrackerSet,
     Stored,
 };
@@ -341,6 +342,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         color_attachments: &[ColorAttachmentDescriptor],
         depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
     ) {
+        span!(_guard, TRACE, "CommandEncoder::run_render_pass");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -1296,7 +1299,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod render_ffi {
     use super::{super::Rect, RenderCommand, RenderPass};
-    use crate::{id, RawString};
+    use crate::{id, span, RawString};
     use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
 
@@ -1314,6 +1317,7 @@ pub mod render_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
+        span!(_guard, TRACE, "RenderPass::set_bind_group");
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -1329,6 +1333,7 @@ pub mod render_ffi {
         pass: &mut RenderPass,
         pipeline_id: id::RenderPipelineId,
     ) {
+        span!(_guard, TRACE, "RenderPass::set_pipeline");
         pass.base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
@@ -1341,6 +1346,7 @@ pub mod render_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
+        span!(_guard, TRACE, "RenderPass::set_index_buffer");
         pass.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             offset,
@@ -1356,6 +1362,7 @@ pub mod render_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
+        span!(_guard, TRACE, "RenderPass::set_vertex_buffer");
         pass.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer_id,
@@ -1366,6 +1373,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_blend_color(pass: &mut RenderPass, color: &Color) {
+        span!(_guard, TRACE, "RenderPass::set_blend_color");
         pass.base
             .commands
             .push(RenderCommand::SetBlendColor(*color));
@@ -1373,6 +1381,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
+        span!(_guard, TRACE, "RenderPass::set_stencil_buffer");
         pass.base
             .commands
             .push(RenderCommand::SetStencilReference(value));
@@ -1388,6 +1397,7 @@ pub mod render_ffi {
         depth_min: f32,
         depth_max: f32,
     ) {
+        span!(_guard, TRACE, "RenderPass::set_viewport");
         pass.base.commands.push(RenderCommand::SetViewport {
             rect: Rect { x, y, w, h },
             depth_min,
@@ -1403,6 +1413,7 @@ pub mod render_ffi {
         w: u32,
         h: u32,
     ) {
+        span!(_guard, TRACE, "RenderPass::set_scissor_rect");
         pass.base
             .commands
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
@@ -1416,6 +1427,7 @@ pub mod render_ffi {
         first_vertex: u32,
         first_instance: u32,
     ) {
+        span!(_guard, TRACE, "RenderPass::draw");
         pass.base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
@@ -1433,6 +1445,7 @@ pub mod render_ffi {
         base_vertex: i32,
         first_instance: u32,
     ) {
+        span!(_guard, TRACE, "RenderPass::draw_indexed");
         pass.base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
@@ -1448,6 +1461,7 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
+        span!(_guard, TRACE, "RenderPass::draw_indirect");
         pass.base
             .commands
             .push(RenderCommand::DrawIndirect { buffer_id, offset });
@@ -1459,6 +1473,7 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
+        span!(_guard, TRACE, "RenderPass::draw_indexed_indirect");
         pass.base
             .commands
             .push(RenderCommand::DrawIndexedIndirect { buffer_id, offset });
@@ -1470,6 +1485,7 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
+        span!(_guard, TRACE, "RenderPass::push_debug_group");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -1481,6 +1497,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
+        span!(_guard, TRACE, "RenderPass::pop_debug_group");
         pass.base.commands.push(RenderCommand::PopDebugGroup);
     }
 
@@ -1490,6 +1507,7 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
+        span!(_guard, TRACE, "RenderPass::insert_debug_marker");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -1505,6 +1523,7 @@ pub mod render_ffi {
         render_bundle_ids: *const id::RenderBundleId,
         render_bundle_ids_length: usize,
     ) {
+        span!(_guard, TRACE, "RenderPass::execute_bundles");
         for &bundle_id in slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) {
             pass.base
                 .commands

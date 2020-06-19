@@ -1251,6 +1251,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing"
+version = "0.1.15"
+source = "git+https://github.com/tokio-rs/tracing?rev=845746a2a302f0dfac88ba56ea37dc1e1cb0cd85#845746a2a302f0dfac88ba56ea37dc1e1cb0cd85"
+dependencies = [
+ "cfg-if",
+ "tracing-attributes",
+ "tracing-core",
+]
+
+[[package]]
+name = "tracing-attributes"
+version = "0.1.8"
+source = "git+https://github.com/tokio-rs/tracing?rev=845746a2a302f0dfac88ba56ea37dc1e1cb0cd85#845746a2a302f0dfac88ba56ea37dc1e1cb0cd85"
+dependencies = [
+ "proc-macro2 1.0.18",
+ "quote 1.0.7",
+ "syn",
+]
+
+[[package]]
+name = "tracing-core"
+version = "0.1.10"
+source = "git+https://github.com/tokio-rs/tracing?rev=845746a2a302f0dfac88ba56ea37dc1e1cb0cd85#845746a2a302f0dfac88ba56ea37dc1e1cb0cd85"
+dependencies = [
+ "lazy_static",
+]
+
+[[package]]
 name = "typenum"
 version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1441,6 +1469,7 @@ dependencies = [
  "serde",
  "smallvec",
  "spirv_headers",
+ "tracing",
  "vec_map",
  "wgpu-types",
 ]

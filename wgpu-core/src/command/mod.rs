@@ -20,6 +20,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     resource::{Buffer, Texture},
+    span,
     track::TrackerSet,
     PrivateFeatures, Stored,
 };
@@ -139,6 +140,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor,
     ) -> id::CommandBufferId {
+        span!(_guard, TRACE, "CommandEncoder::finish");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
@@ -164,6 +167,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) {
+        span!(_guard, TRACE, "CommandEncoder::push_debug_group");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -181,6 +186,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) {
+        span!(_guard, TRACE, "CommandEncoder::insert_debug_marker");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -194,6 +201,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_encoder_pop_debug_group<B: GfxBackend>(&self, encoder_id: id::CommandEncoderId) {
+        span!(_guard, TRACE, "CommandEncoder::pop_debug_marker");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 

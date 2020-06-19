@@ -10,6 +10,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
     resource::{BufferUse, Texture, TextureUse},
+    span,
 };
 
 use hal::command::CommandBuffer as _;
@@ -266,6 +267,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination_offset: BufferAddress,
         size: BufferAddress,
     ) {
+        span!(_guard, TRACE, "CommandEncoder::copy_buffer_to_buffer");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -379,6 +382,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &TextureCopyView,
         copy_size: &Extent3d,
     ) {
+        span!(_guard, TRACE, "CommandEncoder::copy_buffer_to_texture");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -472,6 +477,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &BufferCopyView,
         copy_size: &Extent3d,
     ) {
+        span!(_guard, TRACE, "CommandEncoder::copy_texture_to_buffer");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
@@ -573,6 +580,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &TextureCopyView,
         copy_size: &Extent3d,
     ) {
+        span!(_guard, TRACE, "CommandEncoder::copy_texture_to_texture");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 

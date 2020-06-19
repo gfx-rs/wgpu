@@ -34,6 +34,7 @@ ron = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 spirv_headers = { version = "1.4.2" }
+tracing = { git = "https://github.com/tokio-rs/tracing", rev = "845746a2a302f0dfac88ba56ea37dc1e1cb0cd85" }
 vec_map = "0.8.1"
 
 [dependencies.naga]
