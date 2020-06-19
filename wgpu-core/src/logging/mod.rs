@@ -1,3 +1,6 @@
+#[cfg(feature = "subscriber")]
+pub mod subscriber;
+
 #[macro_export]
 macro_rules! span {
     ($guard_name:tt, $level:ident, $name:expr, $($fields:tt)*) => {

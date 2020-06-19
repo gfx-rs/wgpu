@@ -107,7 +107,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         mut base: BasePassRef<ComputeCommand>,
     ) {
-        span!(_guard, TRACE, "CommandEncoder::run_compute_pass");
+        span!(_guard, ERROR, "CommandEncoder::run_compute_pass");
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -316,7 +316,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 pub mod compute_ffi {
     use super::{ComputeCommand, ComputePass};
-    use crate::{id, RawString, span};
+    use crate::{id, span, RawString};
     use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, DynamicOffset};
 
@@ -334,7 +334,7 @@ pub mod compute_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        span!(_guard, TRACE, "ComputePass::set_bind_group");
+        span!(_guard, ERROR, "ComputePass::set_bind_group");
         pass.base.commands.push(ComputeCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -350,7 +350,7 @@ pub mod compute_ffi {
         pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
-        span!(_guard, TRACE, "ComputePass::set_pipeline");
+        span!(_guard, ERROR, "ComputePass::set_pipeline");
         pass.base
             .commands
             .push(ComputeCommand::SetPipeline(pipeline_id));
@@ -363,7 +363,7 @@ pub mod compute_ffi {
         groups_y: u32,
         groups_z: u32,
     ) {
-        span!(_guard, TRACE, "ComputePass::dispatch");
+        span!(_guard, ERROR, "ComputePass::dispatch");
         pass.base
             .commands
             .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
@@ -375,7 +375,7 @@ pub mod compute_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, TRACE, "ComputePass::dispatch_indirect");
+        span!(_guard, ERROR, "ComputePass::dispatch_indirect");
         pass.base
             .commands
             .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
@@ -387,7 +387,7 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, TRACE, "ComputePass::push_debug_group");
+        span!(_guard, ERROR, "ComputePass::push_debug_group");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -399,7 +399,7 @@ pub mod compute_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
-        span!(_guard, TRACE, "ComputePass::pop_debug_group");
+        span!(_guard, ERROR, "ComputePass::pop_debug_group");
         pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
@@ -409,7 +409,7 @@ pub mod compute_ffi {
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, TRACE, "ComputePass::insert_debug_marker");
+        span!(_guard, ERROR, "ComputePass::insert_debug_marker");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 

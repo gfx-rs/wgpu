@@ -94,7 +94,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
     ) -> SwapChainOutput {
-        span!(_guard, TRACE, "SwapChain::get_next_texture");
+        span!(_guard, ERROR, "SwapChain::get_next_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -179,7 +179,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn swap_chain_present<B: GfxBackend>(&self, swap_chain_id: SwapChainId) {
-        span!(_guard, TRACE, "SwapChain::present");
+        span!(_guard, ERROR, "SwapChain::present");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -219,6 +219,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Err(e) = err {
             log::warn!("present failed: {:?}", e);
         }
+
+        tracing::debug!(trace = true, "Presented. End of Frame");
 
         for fbo in sc.acquired_framebuffers.drain(..) {
             unsafe {

@@ -578,7 +578,7 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
-        span!(_guard, TRACE, "Global::new");
+        span!(_guard, ERROR, "Global::new");
         Global {
             instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),

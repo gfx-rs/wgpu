@@ -31,7 +31,7 @@ pub mod device;
 pub mod hub;
 pub mod id;
 pub mod instance;
-mod logging;
+pub mod logging;
 pub mod pipeline;
 pub mod power;
 pub mod resource;
