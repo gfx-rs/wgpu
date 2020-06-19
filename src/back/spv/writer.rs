@@ -335,7 +335,15 @@ impl Writer {
 
                 self.lookup_type.insert(id, handle);
             }
-            crate::TypeInner::Array { base, size } => {
+            crate::TypeInner::Array { base, size, stride } => {
+                if let Some(array_stride) = stride {
+                    let mut instruction = Instruction::new(Op::Decorate);
+                    instruction.add_operand(id);
+                    instruction.add_operand(Decoration::ArrayStride as u32);
+                    instruction.add_operand(array_stride.get());
+                    self.annotations.push(instruction);
+                }
+
                 let type_id = self.get_type_id(arena, handle);
 
                 instruction = Instruction::new(Op::TypeArray);

@@ -451,7 +451,11 @@ impl<W: Write> Writer<W> {
                         write!(self.out, ".{}", COMPONENTS[index as usize])?;
                         Ok(MaybeOwned::Owned(crate::TypeInner::Scalar { kind, width }))
                     }
-                    crate::TypeInner::Array { base, size } => {
+                    crate::TypeInner::Array {
+                        base,
+                        size,
+                        stride: _,
+                    } => {
                         if let crate::ArraySize::Static(length) = size {
                             return Err(Error::AccessIndexExceedsStaticLength(index, length));
                         }
@@ -844,7 +848,11 @@ impl<W: Write> Writer<W> {
                     };
                     write!(self.out, "typedef {} {} *{}", class_name, base_name, name)?;
                 }
-                crate::TypeInner::Array { base, size } => {
+                crate::TypeInner::Array {
+                    base,
+                    size,
+                    stride: _,
+                } => {
                     let base_name = module.types[base].name.or_index(base);
                     let resolved_size = match size {
                         crate::ArraySize::Static(length) => length,

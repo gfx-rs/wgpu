@@ -146,6 +146,7 @@ pub enum Error<'a> {
     UnknownIdent(&'a str),
     UnknownType(&'a str),
     UnknownFunction(&'a str),
+    MissingMemberOffset(&'a str),
     MutabilityViolation(&'a str),
     Other,
 }
@@ -930,6 +931,7 @@ impl Parser {
         let mut members = Vec::new();
         lexer.expect(Token::Paren('{'))?;
         loop {
+            let mut offset = !0;
             if lexer.skip(Token::DoubleParen('[')) {
                 self.scopes.push(Scope::Decoration);
                 let mut ready = true;
@@ -942,7 +944,7 @@ impl Parser {
                             ready = true;
                         }
                         Token::Word("offset") if ready => {
-                            let _offset = lexer.next_uint_literal()?; //TODO
+                            offset = lexer.next_uint_literal()?;
                             ready = false;
                         }
                         other => return Err(Error::Unexpected(other)),
@@ -955,6 +957,9 @@ impl Parser {
                 Token::Paren('}') => return Ok(members),
                 other => return Err(Error::Unexpected(other)),
             };
+            if offset == !0 {
+                return Err(Error::MissingMemberOffset(name));
+            }
             lexer.expect(Token::Separator(':'))?;
             let ty = self.parse_type_decl(lexer, type_arena)?;
             lexer.expect(Token::Separator(';'))?;
@@ -962,6 +967,7 @@ impl Parser {
                 name: Some(name.to_owned()),
                 binding: None,
                 ty,
+                offset,
             });
         }
     }
@@ -1056,7 +1062,11 @@ impl Parser {
                     Token::Separator('>') => crate::ArraySize::Dynamic,
                     other => return Err(Error::Unexpected(other)),
                 };
-                crate::TypeInner::Array { base, size }
+                crate::TypeInner::Array {
+                    base,
+                    size,
+                    stride: None,
+                }
             }
             Token::Word("struct") => {
                 let members = self.parse_struct_body(lexer, type_arena)?;

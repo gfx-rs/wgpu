@@ -237,11 +237,13 @@ impl<'a> Parser<'a> {
                                                         unimplemented!()
                                                     }
                                                 },
+                                                stride: None,
                                             },
                                         })
                                     } else {
                                         ty
                                     },
+                                    offset: 0, //TODO
                                 });
 
                                 if name.is_none() {
@@ -267,6 +269,7 @@ impl<'a> Parser<'a> {
                                         ArraySpecifier::Unsized => ArraySize::Dynamic,
                                         ArraySpecifier::ExplicitlySized(_expr) => unimplemented!(),
                                     },
+                                    stride: None,
                                 },
                             })
                         } else {
@@ -337,6 +340,7 @@ impl<'a> Parser<'a> {
                                 inner: TypeInner::Array {
                                     base: ty,
                                     size: ArraySize::Dynamic,
+                                    stride: None,
                                 },
                             }),
                             ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
@@ -447,6 +451,7 @@ impl<'a> Parser<'a> {
                         inner: TypeInner::Array {
                             base: ty,
                             size: ArraySize::Dynamic,
+                            stride: None,
                         },
                     }),
                     ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
@@ -1066,6 +1071,7 @@ impl<'a> Parser<'a> {
                 ArraySpecifier::Unsized => TypeInner::Array {
                     base: handle,
                     size: ArraySize::Dynamic,
+                    stride: None,
                 },
                 ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
             }
@@ -1091,6 +1097,7 @@ impl<'a> Parser<'a> {
                         inner: TypeInner::Array {
                             base: ty,
                             size: ArraySize::Dynamic,
+                            stride: None,
                         },
                     }),
                     ArraySpecifier::ExplicitlySized(_) => unimplemented!(),

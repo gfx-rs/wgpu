@@ -10,6 +10,7 @@ pub use crate::arena::{Arena, Handle};
 use std::{
     collections::{HashMap, HashSet},
     hash::BuildHasherDefault,
+    num::NonZeroU32,
 };
 
 pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
@@ -53,6 +54,7 @@ pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
     pub ty: Handle<Type>,
+    pub offset: spirv::Word,
 }
 
 bitflags::bitflags! {
@@ -96,6 +98,7 @@ pub enum TypeInner {
     Array {
         base: Handle<Type>,
         size: ArraySize,
+        stride: Option<NonZeroU32>,
     },
     Struct {
         members: Vec<StructMember>,

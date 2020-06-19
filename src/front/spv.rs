@@ -16,7 +16,7 @@ use crate::{
 };
 
 use num_traits::cast::FromPrimitive;
-use std::convert::TryInto;
+use std::{convert::TryInto, num::NonZeroU32};
 
 pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[spirv::Capability::Shader];
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[];
@@ -54,6 +54,7 @@ pub enum Error {
     InvalidBinding(spirv::Word),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionParameterType(spirv::Word),
+    MissingDecoration(spirv::Decoration),
     BadString,
     IncompleteData,
 }
@@ -126,12 +127,20 @@ fn map_storage_class(word: spirv::Word) -> Result<spirv::StorageClass, Error> {
 type MemberIndex = u32;
 
 #[derive(Debug, Default)]
+struct Block {
+    buffer: bool,
+}
+
+#[derive(Debug, Default)]
 struct Decoration {
     name: Option<String>,
     built_in: Option<spirv::BuiltIn>,
     location: Option<spirv::Word>,
     desc_set: Option<spirv::Word>,
     desc_index: Option<spirv::Word>,
+    block: Option<Block>,
+    offset: Option<spirv::Word>,
+    array_stride: Option<NonZeroU32>,
 }
 
 impl Decoration {
@@ -309,6 +318,20 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             spirv::Decoration::Binding => {
                 inst.expect(base_words + 2)?;
                 dec.desc_index = Some(self.next()?);
+            }
+            spirv::Decoration::Block => {
+                dec.block = Some(Block { buffer: false });
+            }
+            spirv::Decoration::BufferBlock => {
+                dec.block = Some(Block { buffer: true });
+            }
+            spirv::Decoration::Offset => {
+                inst.expect(base_words + 2)?;
+                dec.offset = Some(self.next()?);
+            }
+            spirv::Decoration::ArrayStride => {
+                inst.expect(base_words + 2)?;
+                dec.array_stride = NonZeroU32::new(self.next()?);
             }
             other => {
                 log::warn!("Unknown decoration {:?}", other);
@@ -1143,15 +1166,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let id = self.next()?;
         let type_id = self.next()?;
         let length = self.next()?;
+
+        let decor = self.future_decor.remove(&id);
         let inner = crate::TypeInner::Array {
             base: self.lookup_type.lookup(type_id)?.handle,
             size: crate::ArraySize::Static(length),
+            stride: decor.as_ref().and_then(|dec| dec.array_stride),
         };
         self.lookup_type.insert(
             id,
             LookupType {
                 handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                    name: decor.and_then(|dec| dec.name),
                     inner,
                 }),
                 base_id: Some(type_id),
@@ -1169,15 +1195,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(4)?;
         let id = self.next()?;
         let type_id = self.next()?;
+
+        let decor = self.future_decor.remove(&id);
         let inner = crate::TypeInner::Array {
             base: self.lookup_type.lookup(type_id)?.handle,
             size: crate::ArraySize::Dynamic,
+            stride: decor.as_ref().and_then(|dec| dec.array_stride),
         };
         self.lookup_type.insert(
             id,
             LookupType {
                 handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                    name: decor.and_then(|dec| dec.name),
                     inner,
                 }),
                 base_id: Some(type_id),
@@ -1208,14 +1237,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 name: decor.name,
                 binding,
                 ty,
+                offset: decor
+                    .offset
+                    .ok_or(Error::MissingDecoration(spirv::Decoration::Offset))?,
             });
         }
         let inner = crate::TypeInner::Struct { members };
+        let decor = self.future_decor.remove(&id);
+        if let Some(ref decor) = decor {
+            if decor.block.is_some() {
+                // do nothing
+            }
+        }
         self.lookup_type.insert(
             id,
             LookupType {
                 handle: module.types.append(crate::Type {
-                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                    name: decor.and_then(|dec| dec.name),
                     inner,
                 }),
                 base_id: None,
