@@ -83,16 +83,26 @@ fn get_aligned_type_size(
         Ti::Pointer { .. } => 4,
         Ti::Array {
             base,
-            size: naga::ArraySize::Static(size),
-        } => size as wgt::BufferAddress * get_aligned_type_size(module, base, false),
+            size: naga::ArraySize::Static(count),
+            stride,
+        } => {
+            let base_size = match stride {
+                Some(stride) => stride.get() as wgt::BufferAddress,
+                None => get_aligned_type_size(module, base, false),
+            };
+            base_size * count as wgt::BufferAddress
+        }
         Ti::Array {
             base,
             size: naga::ArraySize::Dynamic,
-        } if allow_unbound => get_aligned_type_size(module, base, false),
-        Ti::Struct { ref members } => members
-            .iter()
-            .map(|member| get_aligned_type_size(module, member.ty, false))
-            .sum(),
+            stride,
+        } if allow_unbound => match stride {
+            Some(stride) => stride.get() as wgt::BufferAddress,
+            None => get_aligned_type_size(module, base, false),
+        },
+        Ti::Struct { ref members } => members.last().map_or(0, |member| {
+            member.offset as wgt::BufferAddress + get_aligned_type_size(module, member.ty, false)
+        }),
         _ => panic!("Unexpected struct field"),
     }
 }
