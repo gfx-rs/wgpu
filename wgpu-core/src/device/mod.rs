@@ -1408,7 +1408,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let bind_group_layout = &bind_group_layout_guard[desc.layout];
         assert_eq!(desc.bindings.len(), bind_group_layout.entries.len(), "Bind group has {} entries and bind group layout has {} entries, they should be the same.", desc.bindings.len(), bind_group_layout.entries.len());
 
-        let desc_set = unsafe {
+        let mut desc_set = unsafe {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
             device
                 .desc_allocator
@@ -1424,13 +1424,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             desc_sets.pop().unwrap()
         };
 
-        if let Some(..) = desc.label {
-            //TODO: https://github.com/gfx-rs/gfx-extras/pull/5
-            //unsafe {
-            //    let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
-            //    device.raw.set_descriptor_set_name(desc_set.raw_mut(), &label);
-            //}
+        // Set the descriptor set's label for easier debugging.
+        if let Some(label) = desc.label {
+            unsafe {
+                device
+                    .raw
+                    .set_descriptor_set_name(desc_set.raw_mut(), &label);
+            }
         }
+
+        // Rebind `desc_set` as immutable
+        let desc_set = desc_set;
 
         // fill out the descriptors
         let mut used = TrackerSet::new(B::VARIANT);

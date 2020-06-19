@@ -463,8 +463,7 @@ dependencies = [
 [[package]]
 name = "gfx-descriptor"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1bf35f5d66d1bc56e63e68d7528441453f25992bd954b84309d23c659df2c5da"
+source = "git+https://github.com/gfx-rs/gfx-extras?rev=438353c3f75368c12024ad2fc03cbeb15f351fd9#438353c3f75368c12024ad2fc03cbeb15f351fd9"
 dependencies = [
  "fxhash",
  "gfx-hal",
