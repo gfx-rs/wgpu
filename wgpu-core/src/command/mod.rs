@@ -16,7 +16,7 @@ pub use self::render::*;
 pub use self::transfer::*;
 
 use crate::{
-    device::{all_buffer_stages, all_image_stages, MAX_COLOR_TARGETS},
+    device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id,
     resource::{Buffer, Texture},
@@ -26,133 +26,7 @@ use crate::{
 
 use hal::command::CommandBuffer as _;
 
-use peek_poke::PeekPoke;
-
-use std::{marker::PhantomData, mem, ptr, slice, thread::ThreadId};
-
-#[derive(Clone, Copy, Debug, PeekPoke)]
-pub struct PhantomSlice<T>(PhantomData<T>);
-
-impl<T> Default for PhantomSlice<T> {
-    fn default() -> Self {
-        PhantomSlice(PhantomData)
-    }
-}
-
-impl<T> PhantomSlice<T> {
-    unsafe fn decode_unaligned<'a>(
-        self,
-        pointer: *const u8,
-        count: usize,
-        bound: *const u8,
-    ) -> (*const u8, &'a [T]) {
-        let align_offset = pointer.align_offset(mem::align_of::<T>());
-        let aligned = pointer.add(align_offset);
-        let size = count * mem::size_of::<T>();
-        let end = aligned.add(size);
-        assert!(
-            end <= bound,
-            "End of phantom slice ({:?}) exceeds bound ({:?})",
-            end,
-            bound
-        );
-        (end, slice::from_raw_parts(aligned as *const T, count))
-    }
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct RawPass<P> {
-    data: *mut u8,
-    base: *mut u8,
-    capacity: usize,
-    parent: P,
-}
-
-impl<P: Copy> RawPass<P> {
-    fn new<T>(parent: P) -> Self {
-        let mut vec = Vec::<T>::with_capacity(1);
-        let ptr = vec.as_mut_ptr() as *mut u8;
-        let capacity = mem::size_of::<T>();
-        assert_ne!(capacity, 0);
-        mem::forget(vec);
-        RawPass {
-            data: ptr,
-            base: ptr,
-            capacity,
-            parent,
-        }
-    }
-
-    /// Finish encoding a raw pass.
-    ///
-    /// The last command is provided, yet the encoder
-    /// is guaranteed to have exactly `C::max_size()` space for it.
-    unsafe fn finish<C: peek_poke::Poke>(&mut self, command: C) {
-        self.ensure_extra_size(C::max_size());
-        let extended_end = self.data.add(C::max_size());
-        let end = command.poke_into(self.data);
-        ptr::write_bytes(end, 0, extended_end as usize - end as usize);
-        self.data = extended_end;
-    }
-
-    fn size(&self) -> usize {
-        self.data as usize - self.base as usize
-    }
-
-    /// Recover the data vector of the pass, consuming `self`.
-    unsafe fn into_vec(mut self) -> (Vec<u8>, P) {
-        self.invalidate()
-    }
-
-    /// Make pass contents invalid, return the contained data.
-    ///
-    /// Any following access to the pass will result in a crash
-    /// for accessing address 0.
-    pub unsafe fn invalidate(&mut self) -> (Vec<u8>, P) {
-        let size = self.size();
-        assert!(
-            size <= self.capacity,
-            "Size of RawPass ({}) exceeds capacity ({})",
-            size,
-            self.capacity
-        );
-        let vec = Vec::from_raw_parts(self.base, size, self.capacity);
-        self.data = ptr::null_mut();
-        self.base = ptr::null_mut();
-        self.capacity = 0;
-        (vec, self.parent)
-    }
-
-    unsafe fn ensure_extra_size(&mut self, extra_size: usize) {
-        let size = self.size();
-        if size + extra_size > self.capacity {
-            let mut vec = Vec::from_raw_parts(self.base, size, self.capacity);
-            vec.reserve(extra_size);
-            //let (data, size, capacity) = vec.into_raw_parts(); //TODO: when stable
-            self.data = vec.as_mut_ptr().add(vec.len());
-            self.base = vec.as_mut_ptr();
-            self.capacity = vec.capacity();
-            mem::forget(vec);
-        }
-    }
-
-    #[inline]
-    pub(crate) unsafe fn encode<C: peek_poke::Poke>(&mut self, command: &C) {
-        self.ensure_extra_size(C::max_size());
-        self.data = command.poke_into(self.data);
-    }
-
-    #[inline]
-    pub(crate) unsafe fn encode_slice<T: Copy>(&mut self, data: &[T]) {
-        let align_offset = self.data.align_offset(mem::align_of::<T>());
-        let extra = align_offset + mem::size_of::<T>() * data.len();
-        self.ensure_extra_size(extra);
-        slice::from_raw_parts_mut(self.data.add(align_offset) as *mut T, data.len())
-            .copy_from_slice(data);
-        self.data = self.data.add(extra);
-    }
-}
+use std::thread::ThreadId;
 
 #[derive(Debug)]
 pub struct CommandBuffer<B: hal::Backend> {
@@ -209,48 +83,54 @@ impl<B: GfxBackend> CommandBuffer<B> {
     }
 }
 
-#[repr(C)]
-#[derive(PeekPoke)]
-struct PassComponent<T> {
-    load_op: wgt::LoadOp,
-    store_op: wgt::StoreOp,
-    clear_value: T,
-    read_only: bool,
+#[derive(Copy, Clone, Debug)]
+pub struct BasePassRef<'a, C> {
+    pub commands: &'a [C],
+    pub dynamic_offsets: &'a [wgt::DynamicOffset],
+    pub string_data: &'a [u8],
 }
 
-// required for PeekPoke
-impl<T: Default> Default for PassComponent<T> {
-    fn default() -> Self {
-        PassComponent {
-            load_op: wgt::LoadOp::Clear,
-            store_op: wgt::StoreOp::Clear,
-            clear_value: T::default(),
-            read_only: false,
+#[doc(hidden)]
+#[derive(Debug)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "trace"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "replay"),
+    derive(serde::Deserialize)
+)]
+pub struct BasePass<C> {
+    pub commands: Vec<C>,
+    pub dynamic_offsets: Vec<wgt::DynamicOffset>,
+    pub string_data: Vec<u8>,
+}
+
+impl<C: Clone> BasePass<C> {
+    fn new() -> Self {
+        BasePass {
+            commands: Vec::new(),
+            dynamic_offsets: Vec::new(),
+            string_data: Vec::new(),
         }
     }
-}
 
-#[repr(C)]
-#[derive(Default, PeekPoke)]
-struct RawRenderPassColorAttachmentDescriptor {
-    attachment: u64,
-    resolve_target: u64,
-    component: PassComponent<wgt::Color>,
-}
+    #[cfg(feature = "trace")]
+    fn from_ref(base: BasePassRef<C>) -> Self {
+        BasePass {
+            commands: base.commands.to_vec(),
+            dynamic_offsets: base.dynamic_offsets.to_vec(),
+            string_data: base.string_data.to_vec(),
+        }
+    }
 
-#[repr(C)]
-#[derive(Default, PeekPoke)]
-struct RawRenderPassDepthStencilAttachmentDescriptor {
-    attachment: u64,
-    depth: PassComponent<f32>,
-    stencil: PassComponent<u32>,
-}
-
-#[repr(C)]
-#[derive(Default, PeekPoke)]
-struct RawRenderTargets {
-    colors: [RawRenderPassColorAttachmentDescriptor; MAX_COLOR_TARGETS],
-    depth_stencil: RawRenderPassDepthStencilAttachmentDescriptor,
+    pub fn as_ref(&self) -> BasePassRef<C> {
+        BasePassRef {
+            commands: &self.commands,
+            dynamic_offsets: &self.dynamic_offsets,
+            string_data: &self.string_data,
+        }
+    }
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {

@@ -574,13 +574,13 @@ pub(crate) fn map_texture_state(
     (access, layout)
 }
 
-pub fn map_load_store_ops(load: wgt::LoadOp, store: wgt::StoreOp) -> hal::pass::AttachmentOps {
+pub fn map_load_store_ops<V>(channel: &wgt::PassChannel<V>) -> hal::pass::AttachmentOps {
     hal::pass::AttachmentOps {
-        load: match load {
+        load: match channel.load_op {
             wgt::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
             wgt::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
         },
-        store: match store {
+        store: match channel.store_op {
             wgt::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
             wgt::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
         },

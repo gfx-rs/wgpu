@@ -86,6 +86,7 @@ pub enum HostMap {
 }
 
 #[derive(Clone, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct AttachmentData<T> {
     pub colors: ArrayVec<[T; MAX_COLOR_TARGETS]>,
     pub resolves: ArrayVec<[T; MAX_COLOR_TARGETS]>,
@@ -105,6 +106,7 @@ pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::imag
 pub(crate) type FramebufferKey = AttachmentData<id::TextureViewId>;
 
 #[derive(Clone, Debug, Hash, PartialEq)]
+#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
     pub sample_count: u8,
@@ -1492,17 +1494,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             buffer.usage,
                             pub_usage
                         );
-                        let bind_size = if bb.size == BufferSize::WHOLE {
-                            buffer.size - bb.offset
-                        } else {
-                            let end = bb.offset + bb.size.0;
-                            assert!(
-                                end <= buffer.size,
-                                "Bound buffer range {:?} does not fit in buffer size {}",
-                                bb.offset..end,
-                                buffer.size
-                            );
-                            bb.size.0
+                        let bind_size = match bb.size {
+                            Some(size) => {
+                                let end = bb.offset + size.get();
+                                assert!(
+                                    end <= buffer.size,
+                                    "Bound buffer range {:?} does not fit in buffer size {}",
+                                    bb.offset..end,
+                                    buffer.size
+                                );
+                                size.get()
+                            }
+                            None => buffer.size - bb.offset,
                         };
                         match min_size {
                             Some(non_zero) if non_zero.get() > bind_size => panic!(
@@ -1919,15 +1922,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::RenderBundleEncoderDescriptor,
     ) -> id::RenderBundleEncoderId {
-        let encoder = command::RenderBundleEncoder::new(desc, device_id);
+        let encoder = command::RenderBundleEncoder::new(desc, device_id, None);
         Box::into_raw(Box::new(encoder))
-    }
-
-    pub fn render_bundle_encoder_destroy(
-        &self,
-        render_bundle_encoder: command::RenderBundleEncoder,
-    ) {
-        render_bundle_encoder.destroy();
     }
 
     pub fn render_bundle_destroy<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
@@ -2732,7 +2728,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        _size: BufferSize,
+        _size: Option<BufferSize>,
     ) -> *mut u8 {
         let hub = B::hub(self);
         let mut token = Token::root();

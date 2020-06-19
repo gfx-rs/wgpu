@@ -37,7 +37,7 @@
 !*/
 
 use crate::{
-    command::{PhantomSlice, RawPass, RenderCommand},
+    command::{BasePass, RenderCommand},
     conv,
     device::{AttachmentData, Label, RenderPassContext, MAX_VERTEX_BUFFERS},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Storage, Token},
@@ -47,19 +47,24 @@ use crate::{
     LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use peek_poke::{Peek, Poke};
 use std::{borrow::Borrow, iter, marker::PhantomData, ops::Range};
 
-#[derive(Debug)]
+#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
-    raw: RawPass<id::DeviceId>,
+    base: BasePass<RenderCommand>,
+    parent_id: id::DeviceId,
     pub(crate) context: RenderPassContext,
 }
 
 impl RenderBundleEncoder {
-    pub fn new(desc: &wgt::RenderBundleEncoderDescriptor, device_id: id::DeviceId) -> Self {
+    pub fn new(
+        desc: &wgt::RenderBundleEncoderDescriptor,
+        parent_id: id::DeviceId,
+        base: Option<BasePass<RenderCommand>>,
+    ) -> Self {
         RenderBundleEncoder {
-            raw: RawPass::new::<RenderCommand>(device_id),
+            base: base.unwrap_or_else(BasePass::new),
+            parent_id,
             context: RenderPassContext {
                 attachments: AttachmentData {
                     colors: desc.color_formats.iter().cloned().collect(),
@@ -76,15 +81,7 @@ impl RenderBundleEncoder {
     }
 
     pub fn parent(&self) -> id::DeviceId {
-        self.raw.parent
-    }
-
-    pub fn fill_commands(&mut self, commands: &[RenderCommand], offsets: &[wgt::DynamicOffset]) {
-        unsafe { self.raw.fill_render_commands(commands, offsets) }
-    }
-
-    pub fn destroy(mut self) {
-        unsafe { self.raw.invalidate() };
+        self.parent_id
     }
 }
 
@@ -95,8 +92,7 @@ impl RenderBundleEncoder {
 pub struct RenderBundle {
     // Normalized command stream. It can be executed verbatim,
     // without re-binding anything on the pipeline change.
-    commands: Vec<RenderCommand>,
-    dynamic_offsets: Vec<wgt::DynamicOffset>,
+    base: BasePass<RenderCommand>,
     pub(crate) device_id: Stored<id::DeviceId>,
     pub(crate) used: TrackerSet,
     pub(crate) context: RenderPassContext,
@@ -125,17 +121,16 @@ impl RenderBundle {
     ) {
         use hal::command::CommandBuffer as _;
 
-        let mut offsets = self.dynamic_offsets.as_slice();
+        let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut index_type = hal::IndexType::U16;
         let mut pipeline_layout_id = None::<id::PipelineLayoutId>;
 
-        for command in self.commands.iter() {
+        for command in self.base.commands.iter() {
             match *command {
                 RenderCommand::SetBindGroup {
                     index,
                     num_dynamic_offsets,
                     bind_group_id,
-                    phantom_offsets: _,
                 } => {
                     let bind_group = &bind_group_guard[bind_group_id];
                     comb.bind_graphics_descriptor_sets(
@@ -162,11 +157,7 @@ impl RenderBundle {
                         buffer: &buffer.raw,
                         range: hal::buffer::SubRange {
                             offset,
-                            size: if size != wgt::BufferSize::WHOLE {
-                                Some(size.0)
-                            } else {
-                                None
-                            },
+                            size: size.map(|s| s.get()),
                         },
                         index_type,
                     };
@@ -182,11 +173,7 @@ impl RenderBundle {
                     let buffer = &buffer_guard[buffer_id];
                     let range = hal::buffer::SubRange {
                         offset,
-                        size: if size != wgt::BufferSize::WHOLE {
-                            Some(size.0)
-                        } else {
-                            None
-                        },
+                        size: size.map(|s| s.get()),
                     };
                     comb.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
                 }
@@ -222,23 +209,14 @@ impl RenderBundle {
                     let buffer = &buffer_guard[buffer_id];
                     comb.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                 }
-                RenderCommand::PushDebugGroup {
-                    color: _,
-                    len: _,
-                    phantom_marker: _,
-                } => unimplemented!(),
-                RenderCommand::InsertDebugMarker {
-                    color: _,
-                    len: _,
-                    phantom_marker: _,
-                } => unimplemented!(),
+                RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
+                RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
                 RenderCommand::ExecuteBundle(_)
                 | RenderCommand::SetBlendColor(_)
                 | RenderCommand::SetStencilReference(_)
                 | RenderCommand::SetViewport { .. }
-                | RenderCommand::SetScissor(_)
-                | RenderCommand::End => unreachable!(),
+                | RenderCommand::SetScissor(_) => unreachable!(),
             }
         }
     }
@@ -283,7 +261,7 @@ impl IndexState {
             Some(RenderCommand::SetIndexBuffer {
                 buffer_id: self.buffer.unwrap(),
                 offset: self.range.start,
-                size: wgt::BufferSize(self.range.end - self.range.start),
+                size: wgt::BufferSize::new(self.range.end - self.range.start),
             })
         } else {
             None
@@ -337,7 +315,7 @@ impl VertexState {
                 slot,
                 buffer_id: self.buffer.unwrap(),
                 offset: self.range.start,
-                size: wgt::BufferSize(self.range.end - self.range.start),
+                size: wgt::BufferSize::new(self.range.end - self.range.start),
             })
         } else {
             None
@@ -488,7 +466,6 @@ impl State {
                         bind_group_id: bs.bind_group.unwrap().0,
                         num_dynamic_offsets: (bs.dynamic_offsets.end - bs.dynamic_offsets.start)
                             as u8,
-                        phantom_offsets: PhantomSlice::default(),
                     })
                 } else {
                     None
@@ -508,8 +485,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let (data, device_id) = unsafe { bundle_encoder.raw.finish_render() };
-        let device = &device_guard[device_id];
+        let device = &device_guard[bundle_encoder.parent_id];
         let render_bundle = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -517,7 +493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (buffer_guard, _) = hub.buffers.read(&mut token);
 
             let mut state = State {
-                trackers: TrackerSet::new(device_id.backend()),
+                trackers: TrackerSet::new(bundle_encoder.parent_id.backend()),
                 index: IndexState::new(),
                 vertex: (0..MAX_VERTEX_BUFFERS)
                     .map(|_| VertexState::new())
@@ -528,38 +504,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 used_bind_groups: 0,
             };
             let mut commands = Vec::new();
+            let mut base = bundle_encoder.base.as_ref();
 
-            let mut peeker = data.as_ptr();
-            let raw_data_end = unsafe { data.as_ptr().offset(data.len() as isize) };
-            let mut command = RenderCommand::Draw {
-                vertex_count: 0,
-                instance_count: 0,
-                first_vertex: 0,
-                first_instance: 0,
-            };
-            loop {
-                assert!(
-                    unsafe { peeker.add(RenderCommand::max_size()) <= raw_data_end },
-                    "RenderCommand (size {}) is too big to fit within raw_data",
-                    RenderCommand::max_size(),
-                );
-                peeker = unsafe { RenderCommand::peek_from(peeker, &mut command) };
-
+            for &command in base.commands {
                 match command {
                     RenderCommand::SetBindGroup {
                         index,
                         num_dynamic_offsets,
                         bind_group_id,
-                        phantom_offsets,
                     } => {
-                        let (new_peeker, offsets) = unsafe {
-                            phantom_offsets.decode_unaligned(
-                                peeker,
-                                num_dynamic_offsets as usize,
-                                raw_data_end,
-                            )
-                        };
-                        peeker = new_peeker;
+                        let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
+                        base.dynamic_offsets =
+                            &base.dynamic_offsets[num_dynamic_offsets as usize..];
                         for off in offsets {
                             assert_eq!(
                                 *off as wgt::BufferAddress % wgt::BIND_BUFFER_ALIGNMENT,
@@ -614,10 +570,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .unwrap();
                         assert!(buffer.usage.contains(wgt::BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
-                        let end = if size != wgt::BufferSize::WHOLE {
-                            offset + size.0
-                        } else {
-                            buffer.size
+                        let end = match size {
+                            Some(s) => offset + s.get(),
+                            None => buffer.size,
                         };
                         state.index.set_buffer(buffer_id, offset..end);
                     }
@@ -638,10 +593,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             buffer.usage
                         );
 
-                        let end = if size != wgt::BufferSize::WHOLE {
-                            offset + size.0
-                        } else {
-                            buffer.size
+                        let end = match size {
+                            Some(s) => offset + s.get(),
+                            None => buffer.size,
                         };
                         state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
                     }
@@ -734,17 +688,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         commands.extend(state.flush_binds());
                         commands.push(command);
                     }
-                    RenderCommand::End => break,
-                    RenderCommand::PushDebugGroup {
-                        color: _,
-                        len: _,
-                        phantom_marker: _,
-                    } => unimplemented!(),
-                    RenderCommand::InsertDebugMarker {
-                        color: _,
-                        len: _,
-                        phantom_marker: _,
-                    } => unimplemented!(),
+                    RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
+                    RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                     RenderCommand::PopDebugGroup => unimplemented!(),
                     RenderCommand::ExecuteBundle(_)
                     | RenderCommand::SetBlendColor(_)
@@ -760,10 +705,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let _ = desc.label; //TODO: actually use
                                 //TODO: check if the device is still alive
             RenderBundle {
-                commands,
-                dynamic_offsets: state.flat_dynamic_offsets,
+                base: BasePass {
+                    commands,
+                    dynamic_offsets: state.flat_dynamic_offsets,
+                    string_data: Vec::new(),
+                },
                 device_id: Stored {
-                    value: device_id,
+                    value: bundle_encoder.parent_id,
                     ref_count: device.life_guard.add_ref(),
                 },
                 used: state.trackers,
@@ -786,8 +734,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 trace.lock().add(trace::Action::CreateRenderBundle {
                     id,
                     desc: trace::RenderBundleDescriptor::new(desc.label, &bundle.context),
-                    commands: bundle.commands.clone(),
-                    dynamic_offsets: bundle.dynamic_offsets.clone(),
+                    base: BasePass::from_ref(bundle.base.as_ref()),
                 });
             }
             None => {}
@@ -804,7 +751,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub mod bundle_ffi {
-    use super::{super::PhantomSlice, RenderBundleEncoder, RenderCommand};
+    use super::{RenderBundleEncoder, RenderCommand};
     use crate::{id, RawString};
     use std::{convert::TryInto, slice};
     use wgt::{BufferAddress, BufferSize, DynamicOffset};
@@ -817,41 +764,42 @@ pub mod bundle_ffi {
     // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_set_bind_group(
-        bundle_encoder: &mut RenderBundleEncoder,
+        bundle: &mut RenderBundleEncoder,
         index: u32,
         bind_group_id: id::BindGroupId,
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        bundle_encoder.raw.encode(&RenderCommand::SetBindGroup {
+        bundle.base.commands.push(RenderCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
-            phantom_offsets: PhantomSlice::default(),
         });
-        bundle_encoder
-            .raw
-            .encode_slice(slice::from_raw_parts(offsets, offset_length));
+        bundle
+            .base
+            .dynamic_offsets
+            .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_set_pipeline(
-        bundle_encoder: &mut RenderBundleEncoder,
+    pub extern "C" fn wgpu_render_bundle_set_pipeline(
+        bundle: &mut RenderBundleEncoder,
         pipeline_id: id::RenderPipelineId,
     ) {
-        bundle_encoder
-            .raw
-            .encode(&RenderCommand::SetPipeline(pipeline_id));
+        bundle
+            .base
+            .commands
+            .push(RenderCommand::SetPipeline(pipeline_id));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_set_index_buffer(
-        bundle_encoder: &mut RenderBundleEncoder,
+    pub extern "C" fn wgpu_render_bundle_set_index_buffer(
+        bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferSize,
+        size: Option<BufferSize>,
     ) {
-        bundle_encoder.raw.encode(&RenderCommand::SetIndexBuffer {
+        bundle.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             offset,
             size,
@@ -859,14 +807,14 @@ pub mod bundle_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_set_vertex_buffer(
-        bundle_encoder: &mut RenderBundleEncoder,
+    pub extern "C" fn wgpu_render_bundle_set_vertex_buffer(
+        bundle: &mut RenderBundleEncoder,
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferSize,
+        size: Option<BufferSize>,
     ) {
-        bundle_encoder.raw.encode(&RenderCommand::SetVertexBuffer {
+        bundle.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer_id,
             offset,
@@ -875,14 +823,14 @@ pub mod bundle_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_draw(
-        bundle_encoder: &mut RenderBundleEncoder,
+    pub extern "C" fn wgpu_render_bundle_draw(
+        bundle: &mut RenderBundleEncoder,
         vertex_count: u32,
         instance_count: u32,
         first_vertex: u32,
         first_instance: u32,
     ) {
-        bundle_encoder.raw.encode(&RenderCommand::Draw {
+        bundle.base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
             first_vertex,
@@ -891,15 +839,15 @@ pub mod bundle_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_draw_indexed(
-        bundle_encoder: &mut RenderBundleEncoder,
+    pub extern "C" fn wgpu_render_bundle_draw_indexed(
+        bundle: &mut RenderBundleEncoder,
         index_count: u32,
         instance_count: u32,
         first_index: u32,
         base_vertex: i32,
         first_instance: u32,
     ) {
-        bundle_encoder.raw.encode(&RenderCommand::DrawIndexed {
+        bundle.base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
             first_index,
@@ -909,45 +857,45 @@ pub mod bundle_ffi {
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_bundle_draw_indirect(
-        bundle_encoder: &mut RenderBundleEncoder,
+    pub extern "C" fn wgpu_render_bundle_draw_indirect(
+        bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle_encoder
-            .raw
-            .encode(&RenderCommand::DrawIndirect { buffer_id, offset });
+        bundle
+            .base
+            .commands
+            .push(RenderCommand::DrawIndirect { buffer_id, offset });
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_render_pass_bundle_indexed_indirect(
-        bundle_encoder: &mut RenderBundleEncoder,
+    pub extern "C" fn wgpu_render_pass_bundle_indexed_indirect(
+        bundle: &mut RenderBundleEncoder,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        bundle_encoder
-            .raw
-            .encode(&RenderCommand::DrawIndexedIndirect { buffer_id, offset });
+        bundle
+            .base
+            .commands
+            .push(RenderCommand::DrawIndexedIndirect { buffer_id, offset });
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_push_debug_group(
-        _bundle_encoder: &mut RenderBundleEncoder,
+    pub unsafe extern "C" fn wgpu_render_bundle_push_debug_group(
+        _bundle: &mut RenderBundleEncoder,
         _label: RawString,
     ) {
         //TODO
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_pop_debug_group(
-        _bundle_encoder: &mut RenderBundleEncoder,
-    ) {
+    pub unsafe extern "C" fn wgpu_render_bundle_pop_debug_group(_bundle: &mut RenderBundleEncoder) {
         //TODO
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_render_bundle_insert_debug_marker(
-        _bundle_encoder: &mut RenderBundleEncoder,
+    pub unsafe extern "C" fn wgpu_render_bundle_insert_debug_marker(
+        _bundle: &mut RenderBundleEncoder,
         _label: RawString,
     ) {
         //TODO

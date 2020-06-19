@@ -20,7 +20,7 @@ pub enum BindingResource {
     Buffer {
         id: id::BufferId,
         offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
+        size: Option<wgt::BufferSize>,
     },
     Sampler(id::SamplerId),
     TextureView(id::TextureViewId),
@@ -185,8 +185,7 @@ pub enum Action {
     CreateRenderBundle {
         id: id::RenderBundleId,
         desc: RenderBundleDescriptor,
-        commands: Vec<crate::command::RenderCommand>,
-        dynamic_offsets: Vec<wgt::DynamicOffset>,
+        base: crate::command::BasePass<crate::command::RenderCommand>,
     },
     DestroyRenderBundle(id::RenderBundleId),
     WriteBuffer {
@@ -231,14 +230,12 @@ pub enum Command {
         size: wgt::Extent3d,
     },
     RunComputePass {
-        commands: Vec<crate::command::ComputeCommand>,
-        dynamic_offsets: Vec<wgt::DynamicOffset>,
+        base: crate::command::BasePass<crate::command::ComputeCommand>,
     },
     RunRenderPass {
-        target_colors: Vec<crate::command::RenderPassColorAttachmentDescriptor>,
-        target_depth_stencil: Option<crate::command::RenderPassDepthStencilAttachmentDescriptor>,
-        commands: Vec<crate::command::RenderCommand>,
-        dynamic_offsets: Vec<wgt::DynamicOffset>,
+        base: crate::command::BasePass<crate::command::RenderCommand>,
+        target_colors: Vec<crate::command::ColorAttachmentDescriptor>,
+        target_depth_stencil: Option<crate::command::DepthStencilAttachmentDescriptor>,
     },
 }
 

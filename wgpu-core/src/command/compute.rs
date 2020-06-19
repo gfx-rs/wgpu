@@ -5,7 +5,7 @@
 use crate::{
     command::{
         bind::{Binder, LayoutChange},
-        CommandBuffer, PhantomSlice,
+        BasePass, BasePassRef, CommandBuffer,
     },
     device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
@@ -14,27 +14,25 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
-use peek_poke::{Peek, PeekPoke, Poke};
-use wgt::{BufferAddress, BufferUsage, DynamicOffset, BIND_BUFFER_ALIGNMENT};
+use wgt::{BufferAddress, BufferUsage, BIND_BUFFER_ALIGNMENT};
 
 use std::{iter, str};
 
-#[derive(Debug, PartialEq)]
-enum PipelineState {
-    Required,
-    Set,
-}
-
-#[derive(Clone, Copy, Debug, PeekPoke)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "trace"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "replay"),
+    derive(serde::Deserialize)
+)]
 pub enum ComputeCommand {
     SetBindGroup {
         index: u8,
         num_dynamic_offsets: u8,
         bind_group_id: id::BindGroupId,
-        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
-        phantom_offsets: PhantomSlice<DynamicOffset>,
     },
     SetPipeline(id::ComputePipelineId),
     Dispatch([u32; 3]),
@@ -45,57 +43,30 @@ pub enum ComputeCommand {
     PushDebugGroup {
         color: u32,
         len: usize,
-        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
-        phantom_marker: PhantomSlice<u8>,
     },
     PopDebugGroup,
     InsertDebugMarker {
         color: u32,
         len: usize,
-        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
-        phantom_marker: PhantomSlice<u8>,
     },
-    End,
 }
 
-#[derive(Debug)]
-struct State {
-    binder: Binder,
-    debug_scope_depth: u32,
+#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+pub struct ComputePass {
+    base: BasePass<ComputeCommand>,
+    parent_id: id::CommandEncoderId,
 }
 
-impl Default for ComputeCommand {
-    fn default() -> Self {
-        ComputeCommand::End
-    }
-}
-
-impl super::RawPass<id::CommandEncoderId> {
-    pub unsafe fn new_compute(parent: id::CommandEncoderId) -> Self {
-        Self::new::<ComputeCommand>(parent)
-    }
-
-    pub unsafe fn fill_compute_commands(
-        &mut self,
-        commands: &[ComputeCommand],
-        mut offsets: &[DynamicOffset],
-    ) {
-        for com in commands {
-            self.encode(com);
-            if let ComputeCommand::SetBindGroup {
-                num_dynamic_offsets,
-                ..
-            } = *com
-            {
-                self.encode_slice(&offsets[..num_dynamic_offsets as usize]);
-                offsets = &offsets[num_dynamic_offsets as usize..];
-            }
+impl ComputePass {
+    pub fn new(parent_id: id::CommandEncoderId) -> Self {
+        ComputePass {
+            base: BasePass::new(),
+            parent_id,
         }
     }
 
-    pub unsafe fn finish_compute(mut self) -> (Vec<u8>, id::CommandEncoderId) {
-        self.finish(ComputeCommand::End);
-        self.into_vec()
+    pub fn parent_id(&self) -> id::CommandEncoderId {
+        self.parent_id
     }
 }
 
@@ -105,13 +76,35 @@ pub struct ComputePassDescriptor {
     pub todo: u32,
 }
 
+#[derive(Debug, PartialEq)]
+enum PipelineState {
+    Required,
+    Set,
+}
+
+#[derive(Debug)]
+struct State {
+    binder: Binder,
+    pipeline: PipelineState,
+    debug_scope_depth: u32,
+}
+
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_run_compute_pass<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        raw_data: &[u8],
+        pass: &ComputePass,
+    ) {
+        self.command_encoder_run_compute_pass_impl::<B>(encoder_id, pass.base.as_ref())
+    }
+
+    #[doc(hidden)]
+    pub fn command_encoder_run_compute_pass_impl<B: GfxBackend>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+        mut base: BasePassRef<ComputeCommand>,
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -120,6 +113,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb = &mut cmb_guard[encoder_id];
         let raw = cmb.raw.last_mut().unwrap();
 
+        #[cfg(feature = "trace")]
+        match cmb.commands {
+            Some(ref mut list) => {
+                list.push(crate::device::trace::Command::RunComputePass {
+                    base: BasePass::from_ref(base),
+                });
+            }
+            None => {}
+        }
+
         let (_, mut token) = hub.render_bundles.read(&mut token);
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -127,45 +130,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
 
-        let mut pipeline_state = PipelineState::Required;
-
         let mut state = State {
             binder: Binder::new(cmb.limits.max_bind_groups),
+            pipeline: PipelineState::Required,
             debug_scope_depth: 0,
         };
 
-        let mut peeker = raw_data.as_ptr();
-        let raw_data_end = unsafe { raw_data.as_ptr().add(raw_data.len()) };
-        let mut command = ComputeCommand::Dispatch([0; 3]); // dummy
-        loop {
-            assert!(unsafe { peeker.add(ComputeCommand::max_size()) } <= raw_data_end);
-            peeker = unsafe { ComputeCommand::peek_from(peeker, &mut command) };
-            match command {
+        for command in base.commands {
+            match *command {
                 ComputeCommand::SetBindGroup {
                     index,
                     num_dynamic_offsets,
                     bind_group_id,
-                    phantom_offsets,
                 } => {
-                    let (new_peeker, offsets) = unsafe {
-                        phantom_offsets.decode_unaligned(
-                            peeker,
-                            num_dynamic_offsets as usize,
-                            raw_data_end,
-                        )
-                    };
-                    peeker = new_peeker;
+                    let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
+                    base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
-                    if cfg!(debug_assertions) {
-                        for off in offsets {
-                            assert_eq!(
-                                *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
-                                0,
-                                "Misaligned dynamic buffer offset: {} does not align with {}",
-                                off,
-                                BIND_BUFFER_ALIGNMENT
-                            );
-                        }
+                    for off in offsets {
+                        assert_eq!(
+                            *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
+                            0,
+                            "Misaligned dynamic buffer offset: {} does not align with {}",
+                            off,
+                            BIND_BUFFER_ALIGNMENT
+                        );
                     }
 
                     let bind_group = cmb
@@ -213,7 +201,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
-                    pipeline_state = PipelineState::Set;
+                    state.pipeline = PipelineState::Set;
                     let pipeline = cmb
                         .trackers
                         .compute_pipes
@@ -262,7 +250,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::Dispatch(groups) => {
                     assert_eq!(
-                        pipeline_state,
+                        state.pipeline,
                         PipelineState::Set,
                         "Dispatch error: Pipeline is missing"
                     );
@@ -272,7 +260,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
                     assert_eq!(
-                        pipeline_state,
+                        state.pipeline,
                         PipelineState::Set,
                         "Dispatch error: Pipeline is missing"
                     );
@@ -295,89 +283,40 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.dispatch_indirect(&src_buffer.raw, offset);
                     }
                 }
-                ComputeCommand::PushDebugGroup {
-                    color,
-                    len,
-                    phantom_marker,
-                } => unsafe {
+                ComputeCommand::PushDebugGroup { color, len } => {
                     state.debug_scope_depth += 1;
 
-                    let (new_peeker, label) =
-                        { phantom_marker.decode_unaligned(peeker, len, raw_data_end) };
-                    peeker = new_peeker;
-
-                    raw.begin_debug_marker(str::from_utf8(label).unwrap(), color)
-                },
-                ComputeCommand::PopDebugGroup => unsafe {
+                    let label = str::from_utf8(&base.string_data[..len]).unwrap();
+                    unsafe {
+                        raw.begin_debug_marker(label, color);
+                    }
+                    base.string_data = &base.string_data[len..];
+                }
+                ComputeCommand::PopDebugGroup => {
                     assert_ne!(
                         state.debug_scope_depth, 0,
                         "Can't pop debug group, because number of pushed debug groups is zero!"
                     );
                     state.debug_scope_depth -= 1;
-
-                    raw.end_debug_marker()
-                },
-                ComputeCommand::InsertDebugMarker {
-                    color,
-                    len,
-                    phantom_marker,
-                } => unsafe {
-                    let (new_peeker, label) =
-                        { phantom_marker.decode_unaligned(peeker, len, raw_data_end) };
-                    peeker = new_peeker;
-
-                    raw.insert_debug_marker(str::from_utf8(label).unwrap(), color)
-                },
-                ComputeCommand::End => break,
-            }
-        }
-
-        #[cfg(feature = "trace")]
-        match cmb.commands {
-            Some(ref mut list) => {
-                let mut pass_commands = Vec::new();
-                let mut pass_dynamic_offsets = Vec::new();
-                peeker = raw_data.as_ptr();
-                loop {
-                    peeker = unsafe { ComputeCommand::peek_from(peeker, &mut command) };
-                    match command {
-                        ComputeCommand::SetBindGroup {
-                            num_dynamic_offsets,
-                            phantom_offsets,
-                            ..
-                        } => {
-                            let (new_peeker, offsets) = unsafe {
-                                phantom_offsets.decode_unaligned(
-                                    peeker,
-                                    num_dynamic_offsets as usize,
-                                    raw_data_end,
-                                )
-                            };
-                            peeker = new_peeker;
-                            pass_dynamic_offsets.extend_from_slice(offsets);
-                        }
-                        ComputeCommand::End => break,
-                        _ => {}
+                    unsafe {
+                        raw.end_debug_marker();
                     }
-                    pass_commands.push(command);
                 }
-                list.push(crate::device::trace::Command::RunComputePass {
-                    commands: pass_commands,
-                    dynamic_offsets: pass_dynamic_offsets,
-                });
+                ComputeCommand::InsertDebugMarker { color, len } => {
+                    let label = str::from_utf8(&base.string_data[..len]).unwrap();
+                    unsafe { raw.insert_debug_marker(label, color) }
+                    base.string_data = &base.string_data[len..];
+                }
             }
-            None => {}
         }
     }
 }
 
 pub mod compute_ffi {
-    use super::{super::PhantomSlice, ComputeCommand};
+    use super::{ComputeCommand, ComputePass};
     use crate::{id, RawString};
     use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, DynamicOffset};
-
-    type RawPass = super::super::RawPass<id::CommandEncoderId>;
 
     /// # Safety
     ///
@@ -387,92 +326,87 @@ pub mod compute_ffi {
     // `RawPass::encode` and `RawPass::encode_slice`.
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_set_bind_group(
-        pass: &mut RawPass,
+        pass: &mut ComputePass,
         index: u32,
         bind_group_id: id::BindGroupId,
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        pass.encode(&ComputeCommand::SetBindGroup {
+        pass.base.commands.push(ComputeCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
             bind_group_id,
-            phantom_offsets: PhantomSlice::default(),
         });
-        pass.encode_slice(slice::from_raw_parts(offsets, offset_length));
+        pass.base
+            .dynamic_offsets
+            .extend_from_slice(slice::from_raw_parts(offsets, offset_length));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_set_pipeline(
-        pass: &mut RawPass,
+    pub extern "C" fn wgpu_compute_pass_set_pipeline(
+        pass: &mut ComputePass,
         pipeline_id: id::ComputePipelineId,
     ) {
-        pass.encode(&ComputeCommand::SetPipeline(pipeline_id));
+        pass.base
+            .commands
+            .push(ComputeCommand::SetPipeline(pipeline_id));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_dispatch(
-        pass: &mut RawPass,
+    pub extern "C" fn wgpu_compute_pass_dispatch(
+        pass: &mut ComputePass,
         groups_x: u32,
         groups_y: u32,
         groups_z: u32,
     ) {
-        pass.encode(&ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
+        pass.base
+            .commands
+            .push(ComputeCommand::Dispatch([groups_x, groups_y, groups_z]));
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_dispatch_indirect(
-        pass: &mut RawPass,
+    pub extern "C" fn wgpu_compute_pass_dispatch_indirect(
+        pass: &mut ComputePass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        pass.encode(&ComputeCommand::DispatchIndirect { buffer_id, offset });
+        pass.base
+            .commands
+            .push(ComputeCommand::DispatchIndirect { buffer_id, offset });
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_push_debug_group(
-        pass: &mut RawPass,
+        pass: &mut ComputePass,
         label: RawString,
         color: u32,
     ) {
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        pass.base.string_data.extend_from_slice(bytes);
 
-        pass.encode(&ComputeCommand::PushDebugGroup {
+        pass.base.commands.push(ComputeCommand::PushDebugGroup {
             color,
             len: bytes.len(),
-            phantom_marker: PhantomSlice::default(),
         });
-        pass.encode_slice(bytes);
     }
 
     #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut RawPass) {
-        pass.encode(&ComputeCommand::PopDebugGroup);
+    pub extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut ComputePass) {
+        pass.base.commands.push(ComputeCommand::PopDebugGroup);
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_compute_pass_insert_debug_marker(
-        pass: &mut RawPass,
+        pass: &mut ComputePass,
         label: RawString,
         color: u32,
     ) {
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
+        pass.base.string_data.extend_from_slice(bytes);
 
-        pass.encode(&ComputeCommand::InsertDebugMarker {
+        pass.base.commands.push(ComputeCommand::InsertDebugMarker {
             color,
             len: bytes.len(),
-            phantom_marker: PhantomSlice::default(),
         });
-        pass.encode_slice(bytes);
-    }
-
-    #[no_mangle]
-    pub unsafe extern "C" fn wgpu_compute_pass_finish(
-        pass: &mut RawPass,
-        length: &mut usize,
-    ) -> *const u8 {
-        pass.finish(ComputeCommand::End);
-        *length = pass.size();
-        pass.base
     }
 }
