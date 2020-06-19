@@ -22,7 +22,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let slice_size = numbers.len() * std::mem::size_of::<u32>();
     let size = slice_size as wgpu::BufferAddress;
 
-    let instance = wgpu::Instance::new();
+    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let adapter = instance
         .request_adapter(
             &wgpu::RequestAdapterOptions {
@@ -30,7 +30,6 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 compatible_surface: None,
             },
             wgpu::UnsafeExtensions::disallow(),
-            wgpu::BackendBit::PRIMARY,
         )
         .await
         .unwrap();
