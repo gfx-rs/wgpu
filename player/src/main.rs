@@ -301,7 +301,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         bindings: &entry_vec,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyBindGroup(id) => {
                 self.bind_group_destroy::<B>(id);

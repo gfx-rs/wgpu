@@ -215,6 +215,8 @@ pub struct Sampler<B: hal::Backend> {
     pub(crate) raw: B::Sampler,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
+    /// `true` if this is a comparison sampler
+    pub(crate) comparison: bool,
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {
