@@ -100,9 +100,11 @@ jobs:
           override: true
       - if: matrix.channel == 'stable'
         run: rustup component add clippy
-      - name: cargo clippy/test
-        run: ${{ matrix.build_command }}
+        # build with no features first
+      - if: matrix.additional_core_features == ''
+        run: cargo check --manifest-path wgpu-core/Cargo.toml --no-default-features
       - if: matrix.additional_core_features != ''
         run: cargo check --manifest-path wgpu-core/Cargo.toml --features ${{ matrix.additional_core_features }}
       - if: matrix.additional_player_features != ''
         run: cargo check --manifest-path player/Cargo.toml --features ${{ matrix.additional_player_features }}
+      - run: ${{ matrix.build_command }}

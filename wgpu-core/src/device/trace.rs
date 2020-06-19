@@ -2,10 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{
-    command::{BufferCopyView, TextureCopyView},
-    id,
-};
+use crate::id;
 #[cfg(feature = "trace")]
 use std::io::Write as _;
 use std::ops::Range;
@@ -27,6 +24,7 @@ pub enum BindingResource {
     },
     Sampler(id::SamplerId),
     TextureView(id::TextureViewId),
+    TextureViewArray(Vec<id::TextureViewId>),
 }
 
 #[derive(Debug)]
@@ -94,6 +92,28 @@ pub struct RenderPipelineDescriptor {
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct RenderBundleDescriptor {
+    pub label: String,
+    pub color_formats: Vec<wgt::TextureFormat>,
+    pub depth_stencil_format: Option<wgt::TextureFormat>,
+    pub sample_count: u32,
+}
+
+#[cfg(feature = "trace")]
+impl RenderBundleDescriptor {
+    pub(crate) fn new(label: super::Label, context: &super::RenderPassContext) -> Self {
+        RenderBundleDescriptor {
+            label: super::own_label(&label),
+            color_formats: context.attachments.colors.to_vec(),
+            depth_stencil_format: context.attachments.depth_stencil,
+            sample_count: context.sample_count as u32,
+        }
+    }
+}
+
+#[derive(Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum Action {
     Init {
         desc: wgt::DeviceDescriptor,
@@ -132,7 +152,7 @@ pub enum Action {
     CreateBindGroupLayout {
         id: id::BindGroupLayoutId,
         label: String,
-        entries: Vec<crate::binding_model::BindGroupLayoutEntry>,
+        entries: Vec<wgt::BindGroupLayoutEntry>,
     },
     DestroyBindGroupLayout(id::BindGroupLayoutId),
     CreatePipelineLayout {
@@ -162,6 +182,13 @@ pub enum Action {
         desc: RenderPipelineDescriptor,
     },
     DestroyRenderPipeline(id::RenderPipelineId),
+    CreateRenderBundle {
+        id: id::RenderBundleId,
+        desc: RenderBundleDescriptor,
+        commands: Vec<crate::command::RenderCommand>,
+        dynamic_offsets: Vec<wgt::DynamicOffset>,
+    },
+    DestroyRenderBundle(id::RenderBundleId),
     WriteBuffer {
         id: id::BufferId,
         data: FileName,
@@ -169,7 +196,7 @@ pub enum Action {
         queued: bool,
     },
     WriteTexture {
-        to: TextureCopyView,
+        to: crate::command::TextureCopyView,
         data: FileName,
         layout: wgt::TextureDataLayout,
         size: wgt::Extent3d,
@@ -189,18 +216,18 @@ pub enum Command {
         size: wgt::BufferAddress,
     },
     CopyBufferToTexture {
-        src: BufferCopyView,
-        dst: TextureCopyView,
+        src: crate::command::BufferCopyView,
+        dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToBuffer {
-        src: TextureCopyView,
-        dst: BufferCopyView,
+        src: crate::command::TextureCopyView,
+        dst: crate::command::BufferCopyView,
         size: wgt::Extent3d,
     },
     CopyTextureToTexture {
-        src: TextureCopyView,
-        dst: TextureCopyView,
+        src: crate::command::TextureCopyView,
+        dst: crate::command::TextureCopyView,
         size: wgt::Extent3d,
     },
     RunComputePass {
@@ -229,7 +256,7 @@ impl Trace {
     pub fn new(path: &std::path::Path) -> Result<Self, std::io::Error> {
         log::info!("Tracing into '{:?}'", path);
         let mut file = std::fs::File::create(path.join(FILE_NAME))?;
-        file.write(b"[\n")?;
+        file.write_all(b"[\n")?;
         Ok(Trace {
             path: path.to_path_buf(),
             file,
@@ -260,6 +287,6 @@ impl Trace {
 #[cfg(feature = "trace")]
 impl Drop for Trace {
     fn drop(&mut self) {
-        let _ = self.file.write(b"]");
+        let _ = self.file.write_all(b"]");
     }
 }

@@ -5,7 +5,8 @@
 use crate::{
     device::RenderPassContext,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
-    LifeGuard, RawString, RefCount, Stored, U32Array,
+    validation::StageError,
+    LifeGuard, RawString, RefCount, Stored,
 };
 use std::borrow::Borrow;
 use wgt::{
@@ -32,8 +33,10 @@ pub struct VertexStateDescriptor {
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct ShaderModuleDescriptor {
-    pub code: U32Array,
+pub enum ShaderModuleSource<'a> {
+    SpirV(&'a [u32]),
+    Wgsl(&'a str),
+    Naga(naga::Module),
 }
 
 #[derive(Debug)]
@@ -55,6 +58,11 @@ pub struct ProgrammableStageDescriptor {
 pub struct ComputePipelineDescriptor {
     pub layout: PipelineLayoutId,
     pub compute_stage: ProgrammableStageDescriptor,
+}
+
+#[derive(Clone, Debug)]
+pub enum ComputePipelineError {
+    Stage(StageError),
 }
 
 #[derive(Debug)]
@@ -88,11 +96,28 @@ pub struct RenderPipelineDescriptor {
     pub alpha_to_coverage_enabled: bool,
 }
 
+#[derive(Clone, Debug)]
+pub enum RenderPipelineError {
+    InvalidVertexAttributeOffset {
+        location: wgt::ShaderLocation,
+        offset: BufferAddress,
+    },
+    Stage {
+        flag: wgt::ShaderStage,
+        error: StageError,
+    },
+    IncompatibleOutputFormat {
+        index: u8,
+    },
+    InvalidSampleCount(u32),
+}
+
 bitflags::bitflags! {
     #[repr(transparent)]
     pub struct PipelineFlags: u32 {
         const BLEND_COLOR = 1;
         const STENCIL_REFERENCE = 2;
+        const DEPTH_STENCIL_READ_ONLY = 4;
     }
 }
 
@@ -104,7 +129,6 @@ pub struct RenderPipeline<B: hal::Backend> {
     pub(crate) pass_context: RenderPassContext,
     pub(crate) flags: PipelineFlags,
     pub(crate) index_format: IndexFormat,
-    pub(crate) sample_count: u8,
     pub(crate) vertex_strides: Vec<(BufferAddress, InputStepMode)>,
     pub(crate) life_guard: LifeGuard,
 }

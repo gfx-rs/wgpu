@@ -15,7 +15,7 @@ use crate::{
 use gfx_memory::{Block, Heaps, MemoryBlock};
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
-use std::{iter, sync::atomic::Ordering};
+use std::iter;
 
 struct StagingData<B: hal::Backend> {
     buffer: B::Buffer,
@@ -54,6 +54,10 @@ impl<B: hal::Backend> PendingWrites<B> {
         }
     }
 
+    pub fn consume_temp(&mut self, buffer: B::Buffer, memory: MemoryBlock<B>) {
+        self.temp_buffers.push((buffer, memory));
+    }
+
     fn consume(&mut self, stage: StagingData<B>) {
         self.temp_buffers.push((stage.buffer, stage.memory));
         self.command_buffer = Some(stage.comb);
@@ -61,28 +65,34 @@ impl<B: hal::Backend> PendingWrites<B> {
 }
 
 impl<B: hal::Backend> super::Device<B> {
-    fn stage_data(&mut self, data: &[u8]) -> StagingData<B> {
+    pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
+        if self.pending_writes.command_buffer.is_none() {
+            let mut comb = self.com_allocator.allocate_internal();
+            unsafe {
+                comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+            }
+            self.pending_writes.command_buffer = Some(comb);
+        }
+        self.pending_writes.command_buffer.as_mut().unwrap()
+    }
+
+    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> StagingData<B> {
         let mut buffer = unsafe {
             self.raw
-                .create_buffer(
-                    data.len() as wgt::BufferAddress,
-                    hal::buffer::Usage::TRANSFER_SRC,
-                )
+                .create_buffer(size, hal::buffer::Usage::TRANSFER_SRC)
                 .unwrap()
         };
         //TODO: do we need to transition into HOST_WRITE access first?
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
 
-        let mut memory = self
+        let memory = self
             .mem_allocator
             .lock()
             .allocate(
                 &self.raw,
-                requirements.type_mask as u32,
+                &requirements,
                 gfx_memory::MemoryUsage::Staging { read_back: false },
                 gfx_memory::Kind::Linear,
-                requirements.size,
-                requirements.alignment,
             )
             .unwrap();
         unsafe {
@@ -91,12 +101,6 @@ impl<B: hal::Backend> super::Device<B> {
                 .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
                 .unwrap();
         }
-
-        let mut mapped = memory.map(&self.raw, hal::memory::Segment::ALL).unwrap();
-        unsafe { mapped.write(&self.raw, hal::memory::Segment::ALL) }
-            .unwrap()
-            .slice[..data.len()]
-            .copy_from_slice(data);
 
         let comb = match self.pending_writes.command_buffer.take() {
             Some(comb) => comb,
@@ -147,7 +151,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
-        let mut stage = device.stage_data(data);
+        let data_size = data.len() as wgt::BufferAddress;
+        if data_size == 0 {
+            log::trace!("Ignoring write_buffer of size 0");
+            return;
+        }
+
+        let mut stage = device.prepare_stage(data_size);
+        {
+            let mut mapped = stage
+                .memory
+                .map(&device.raw, hal::memory::Segment::ALL)
+                .unwrap();
+            unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
+                .unwrap()
+                .slice[..data.len()]
+                .copy_from_slice(data);
+        }
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) =
@@ -159,8 +179,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "Write buffer usage {:?} must contain flag COPY_DST",
             dst.usage
         );
-        let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
-        dst.life_guard.use_at(last_submit_index + 1);
+        dst.life_guard.use_at(device.active_submission_index + 1);
+
+        assert_eq!(
+            data_size % wgt::COPY_BUFFER_ALIGNMENT,
+            0,
+            "Buffer write size {} must be a multiple of {}",
+            buffer_offset,
+            wgt::COPY_BUFFER_ALIGNMENT,
+        );
+        assert_eq!(
+            buffer_offset % wgt::COPY_BUFFER_ALIGNMENT,
+            0,
+            "Buffer offset {} must be a multiple of {}",
+            buffer_offset,
+            wgt::COPY_BUFFER_ALIGNMENT,
+        );
+        let destination_start_offset = buffer_offset;
+        let destination_end_offset = buffer_offset + data_size;
+        assert!(
+            destination_end_offset <= dst.size,
+            "Write buffer with indices {}..{} overruns destination buffer of size {}",
+            destination_start_offset,
+            destination_end_offset,
+            dst.size
+        );
 
         let region = hal::command::BufferCopy {
             src: 0,
@@ -217,7 +260,57 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => {}
         }
 
-        let mut stage = device.stage_data(data);
+        if size.width == 0 || size.height == 0 || size.width == 0 {
+            log::trace!("Ignoring write_texture of size 0");
+            return;
+        }
+
+        let texture_format = texture_guard[destination.texture].format;
+        let bytes_per_texel = conv::map_texture_format(texture_format, device.private_features)
+            .surface_desc()
+            .bits as u32
+            / BITS_PER_BYTE;
+        crate::command::validate_linear_texture_data(
+            data_layout,
+            data.len() as wgt::BufferAddress,
+            bytes_per_texel as wgt::BufferAddress,
+            size,
+        );
+
+        let bytes_per_row_alignment = get_lowest_common_denom(
+            device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
+            bytes_per_texel,
+        );
+        let stage_bytes_per_row = align_to(bytes_per_texel * size.width, bytes_per_row_alignment);
+        let stage_size = stage_bytes_per_row as u64
+            * ((size.depth - 1) * data_layout.rows_per_image + size.height) as u64;
+        let mut stage = device.prepare_stage(stage_size);
+        {
+            let mut mapped = stage
+                .memory
+                .map(&device.raw, hal::memory::Segment::ALL)
+                .unwrap();
+            let mapping = unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }.unwrap();
+            if stage_bytes_per_row == data_layout.bytes_per_row {
+                // Unlikely case of the data already being aligned optimally.
+                mapping.slice[..stage_size as usize].copy_from_slice(data);
+            } else {
+                // Copy row by row into the optimal alignment.
+                let copy_bytes_per_row =
+                    stage_bytes_per_row.min(data_layout.bytes_per_row) as usize;
+                for layer in 0..size.depth {
+                    let rows_offset = layer * data_layout.rows_per_image;
+                    for row in 0..size.height {
+                        let data_offset =
+                            (rows_offset + row) as usize * data_layout.bytes_per_row as usize;
+                        let stage_offset =
+                            (rows_offset + row) as usize * stage_bytes_per_row as usize;
+                        mapping.slice[stage_offset..stage_offset + copy_bytes_per_row]
+                            .copy_from_slice(&data[data_offset..data_offset + copy_bytes_per_row]);
+                    }
+                }
+            }
+        }
 
         let mut trackers = device.trackers.lock();
         let (dst, transition) = trackers.textures.use_replace(
@@ -231,25 +324,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "Write texture usage {:?} must contain flag COPY_DST",
             dst.usage
         );
+        crate::command::validate_texture_copy_range(destination, dst.kind, size);
 
-        let last_submit_index = device.life_guard.submission_index.load(Ordering::Relaxed);
-        dst.life_guard.use_at(last_submit_index + 1);
+        dst.life_guard.use_at(device.active_submission_index + 1);
 
-        let bytes_per_texel = conv::map_texture_format(dst.format, device.private_features)
-            .surface_desc()
-            .bits as u32
-            / BITS_PER_BYTE;
-        let buffer_width = data_layout.bytes_per_row / bytes_per_texel;
-        assert_eq!(
-            data_layout.bytes_per_row % bytes_per_texel,
-            0,
-            "Source bytes per row ({}) must be a multiple of bytes per texel ({})",
-            data_layout.bytes_per_row,
-            bytes_per_texel
-        );
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
-            buffer_width,
+            buffer_width: stage_bytes_per_row / bytes_per_texel,
             buffer_height: data_layout.rows_per_image,
             image_layers,
             image_offset,
@@ -300,11 +381,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         comb_raw
                     });
             device.temp_suspected.clear();
-
-            let submit_index = 1 + device
-                .life_guard
-                .submission_index
-                .fetch_add(1, Ordering::Relaxed);
+            device.active_submission_index += 1;
+            let submit_index = device.active_submission_index;
 
             let fence = {
                 let mut signal_swapchain_semaphores = SmallVec::<[_; 1]>::new();
@@ -340,6 +418,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
                             let sc = &mut swap_chain_guard[sc_id.value];
+                            sc.active_submission_index = submit_index;
                             assert!(sc.acquired_view_id.is_some(),
                                 "SwapChainOutput for {:?} was dropped before the respective command buffer {:?} got submitted!",
                                 sc_id.value, cmb_id);
@@ -447,7 +526,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .after_submit_internal(comb_raw, submit_index);
             }
 
-            let callbacks = device.maintain(self, false, &mut token);
+            let callbacks = device.maintain(&hub, false, &mut token);
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
@@ -466,4 +545,48 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         super::fire_map_callbacks(callbacks);
     }
+}
+
+fn get_lowest_common_denom(a: u32, b: u32) -> u32 {
+    let gcd = if a >= b {
+        get_greatest_common_divisor(a, b)
+    } else {
+        get_greatest_common_divisor(b, a)
+    };
+    a * b / gcd
+}
+
+fn get_greatest_common_divisor(mut a: u32, mut b: u32) -> u32 {
+    assert!(a >= b);
+    loop {
+        let c = a % b;
+        if c == 0 {
+            return b;
+        } else {
+            a = b;
+            b = c;
+        }
+    }
+}
+
+fn align_to(value: u32, alignment: u32) -> u32 {
+    match value % alignment {
+        0 => value,
+        other => value - other + alignment,
+    }
+}
+
+#[test]
+fn test_lcd() {
+    assert_eq!(get_lowest_common_denom(2, 2), 2);
+    assert_eq!(get_lowest_common_denom(2, 3), 6);
+    assert_eq!(get_lowest_common_denom(6, 4), 12);
+}
+
+#[test]
+fn test_gcd() {
+    assert_eq!(get_greatest_common_divisor(5, 1), 1);
+    assert_eq!(get_greatest_common_divisor(4, 2), 2);
+    assert_eq!(get_greatest_common_divisor(6, 4), 2);
+    assert_eq!(get_greatest_common_divisor(7, 7), 7);
 }

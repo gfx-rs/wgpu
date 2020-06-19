@@ -38,7 +38,7 @@ use crate::{
     conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId},
-    resource, LifeGuard, PrivateFeatures, Stored,
+    resource, LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
@@ -56,6 +56,7 @@ pub struct SwapChain<B: hal::Backend> {
     pub(crate) semaphore: B::Semaphore,
     pub(crate) acquired_view_id: Option<Stored<TextureViewId>>,
     pub(crate) acquired_framebuffers: Vec<B::Framebuffer>,
+    pub(crate) active_submission_index: SubmissionIndex,
 }
 
 pub(crate) fn swap_chain_descriptor_to_hal(
@@ -101,6 +102,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
         let sc = &mut swap_chain_guard[swap_chain_id];
+        #[cfg_attr(not(feature = "trace"), allow(unused_variables))]
         let device = &device_guard[sc.device_id.value];
 
         let suf = B::get_surface_mut(surface);
@@ -201,9 +203,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::TextureViewInner::SwapChain { image, .. } => image,
         };
 
-        let err = unsafe {
+        let err = {
+            let sem = if sc.active_submission_index > device.last_completed_submission_index() {
+                Some(&sc.semaphore)
+            } else {
+                None
+            };
             let queue = &mut device.queue_group.queues[0];
-            queue.present_surface(B::get_surface_mut(surface), image, Some(&sc.semaphore))
+            unsafe { queue.present_surface(B::get_surface_mut(surface), image, sem) }
         };
         if let Err(e) = err {
             log::warn!("present failed: {:?}", e);

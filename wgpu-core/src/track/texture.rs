@@ -136,6 +136,41 @@ impl ResourceState for TextureState {
         Ok(())
     }
 
+    fn prepend(
+        &mut self,
+        id: Self::Id,
+        selector: Self::Selector,
+        usage: Self::Usage,
+    ) -> Result<(), PendingTransition<Self>> {
+        assert!(self.mips.len() >= selector.levels.end as usize);
+        for (mip_id, mip) in self.mips[selector.levels.start as usize..selector.levels.end as usize]
+            .iter_mut()
+            .enumerate()
+        {
+            let level = selector.levels.start + mip_id as hal::image::Level;
+            let layers = mip.isolate(&selector.layers, Unit::new(usage));
+            for &mut (ref range, ref mut unit) in layers {
+                match unit.first {
+                    Some(old) if old != usage => {
+                        return Err(PendingTransition {
+                            id,
+                            selector: hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::empty(),
+                                levels: level..level + 1,
+                                layers: range.clone(),
+                            },
+                            usage: old..usage,
+                        });
+                    }
+                    _ => {
+                        unit.first = Some(usage);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     fn merge(
         &mut self,
         id: Self::Id,
@@ -342,7 +377,7 @@ mod test {
                 2..3,
                 Unit {
                     first: Some(TextureUse::COPY_SRC),
-                    last: TextureUse::OUTPUT_ATTACHMENT,
+                    last: TextureUse::ATTACHMENT_WRITE,
                 },
             ),
         ]);
@@ -385,7 +420,7 @@ mod test {
             ts1.mips[0].query(&(2..3), |&v| v),
             Some(Ok(Unit {
                 first: Some(TextureUse::SAMPLED),
-                last: TextureUse::OUTPUT_ATTACHMENT,
+                last: TextureUse::ATTACHMENT_WRITE,
             })),
             "wrong final layer 2 state"
         );
@@ -394,7 +429,7 @@ mod test {
         ts2.mips[0] = PlaneStates::from_slice(&[(
             2..3,
             Unit {
-                first: Some(TextureUse::OUTPUT_ATTACHMENT),
+                first: Some(TextureUse::ATTACHMENT_WRITE),
                 last: TextureUse::COPY_SRC,
             },
         )]);

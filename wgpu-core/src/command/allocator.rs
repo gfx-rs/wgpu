@@ -205,11 +205,11 @@ impl<B: hal::Backend> CommandAllocator<B> {
     pub fn maintain(&self, device: &B::Device, last_done_index: SubmissionIndex) {
         let mut inner = self.inner.lock();
         let mut remove_threads = Vec::new();
-        for (thread_id, pool) in inner.pools.iter_mut() {
+        for (&thread_id, pool) in inner.pools.iter_mut() {
             pool.maintain(last_done_index);
-            if pool.total == pool.available.len() {
+            if pool.total == pool.available.len() && thread_id != self.internal_thread_id {
                 assert!(pool.pending.is_empty());
-                remove_threads.push(*thread_id);
+                remove_threads.push(thread_id);
             }
         }
         for thread_id in remove_threads {

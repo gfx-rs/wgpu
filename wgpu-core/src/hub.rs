@@ -5,12 +5,12 @@
 use crate::{
     backend,
     binding_model::{BindGroup, BindGroupLayout, PipelineLayout},
-    command::CommandBuffer,
+    command::{CommandBuffer, RenderBundle},
     device::Device,
     id::{
         AdapterId, BindGroupId, BindGroupLayoutId, BufferId, CommandBufferId, ComputePipelineId,
-        DeviceId, PipelineLayoutId, RenderPipelineId, SamplerId, ShaderModuleId, SurfaceId,
-        SwapChainId, TextureId, TextureViewId, TypedId,
+        DeviceId, PipelineLayoutId, RenderBundleId, RenderPipelineId, SamplerId, ShaderModuleId,
+        SurfaceId, SwapChainId, TextureId, TextureViewId, TypedId,
     },
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
@@ -174,9 +174,10 @@ impl<B: hal::Backend> Access<SwapChain<B>> for Root {}
 impl<B: hal::Backend> Access<SwapChain<B>> for Device<B> {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Root {}
 impl<B: hal::Backend> Access<PipelineLayout<B>> for Device<B> {}
-impl<B: hal::Backend> Access<PipelineLayout<B>> for CommandBuffer<B> {}
+impl<B: hal::Backend> Access<PipelineLayout<B>> for RenderBundle {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroupLayout<B>> for Device<B> {}
+impl<B: hal::Backend> Access<BindGroupLayout<B>> for PipelineLayout<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Root {}
 impl<B: hal::Backend> Access<BindGroup<B>> for Device<B> {}
 impl<B: hal::Backend> Access<BindGroup<B>> for BindGroupLayout<B> {}
@@ -185,13 +186,15 @@ impl<B: hal::Backend> Access<BindGroup<B>> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Root {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<CommandBuffer<B>> for SwapChain<B> {}
+impl<B: hal::Backend> Access<RenderBundle> for Device<B> {}
+impl<B: hal::Backend> Access<RenderBundle> for CommandBuffer<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<ComputePipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for Device<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for BindGroup<B> {}
 impl<B: hal::Backend> Access<RenderPipeline<B>> for ComputePipeline<B> {}
 impl<B: hal::Backend> Access<ShaderModule<B>> for Device<B> {}
-impl<B: hal::Backend> Access<ShaderModule<B>> for PipelineLayout<B> {}
+impl<B: hal::Backend> Access<ShaderModule<B>> for BindGroupLayout<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for Root {}
 impl<B: hal::Backend> Access<Buffer<B>> for Device<B> {}
 impl<B: hal::Backend> Access<Buffer<B>> for BindGroupLayout<B> {}
@@ -297,6 +300,7 @@ pub trait GlobalIdentityHandlerFactory:
     + IdentityHandlerFactory<BindGroupLayoutId>
     + IdentityHandlerFactory<BindGroupId>
     + IdentityHandlerFactory<CommandBufferId>
+    + IdentityHandlerFactory<RenderBundleId>
     + IdentityHandlerFactory<RenderPipelineId>
     + IdentityHandlerFactory<ComputePipelineId>
     + IdentityHandlerFactory<BufferId>
@@ -404,6 +408,7 @@ pub struct Hub<B: hal::Backend, F: GlobalIdentityHandlerFactory> {
     pub bind_group_layouts: Registry<BindGroupLayout<B>, BindGroupLayoutId, F>,
     pub bind_groups: Registry<BindGroup<B>, BindGroupId, F>,
     pub command_buffers: Registry<CommandBuffer<B>, CommandBufferId, F>,
+    pub render_bundles: Registry<RenderBundle, RenderBundleId, F>,
     pub render_pipelines: Registry<RenderPipeline<B>, RenderPipelineId, F>,
     pub compute_pipelines: Registry<ComputePipeline<B>, ComputePipelineId, F>,
     pub buffers: Registry<Buffer<B>, BufferId, F>,
@@ -423,6 +428,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             bind_group_layouts: Registry::new(B::VARIANT, factory, "BindGroupLayout"),
             bind_groups: Registry::new(B::VARIANT, factory, "BindGroup"),
             command_buffers: Registry::new(B::VARIANT, factory, "CommandBuffer"),
+            render_bundles: Registry::new(B::VARIANT, factory, "RenderBundle"),
             render_pipelines: Registry::new(B::VARIANT, factory, "RenderPipeline"),
             compute_pipelines: Registry::new(B::VARIANT, factory, "ComputePipeline"),
             buffers: Registry::new(B::VARIANT, factory, "Buffer"),
@@ -570,9 +576,9 @@ pub struct Global<G: GlobalIdentityHandlerFactory> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn new(name: &str, factory: G) -> Self {
+    pub fn new(name: &str, factory: G, backends: wgt::BackendBit) -> Self {
         Global {
-            instance: Instance::new(name, 1),
+            instance: Instance::new(name, 1, backends),
             surfaces: Registry::without_backend(&factory, "Surface"),
             hubs: Hubs::new(&factory),
         }
@@ -631,7 +637,7 @@ impl GfxBackend for backend::Metal {
         &global.hubs.metal
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
-        &mut surface.metal
+        surface.metal.as_mut().unwrap()
     }
 }
 
@@ -653,6 +659,12 @@ impl GfxBackend for backend::Dx11 {
         &global.hubs.dx11
     }
     fn get_surface_mut(surface: &mut Surface) -> &mut Self::Surface {
-        &mut surface.dx11
+        surface.dx11.as_mut().unwrap()
     }
+}
+
+#[cfg(test)]
+fn _test_send_sync(global: &Global<IdentityManagerFactory>) {
+    fn test_internal<T: Send + Sync>(_: T) {}
+    test_internal(global)
 }

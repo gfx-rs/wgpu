@@ -15,7 +15,7 @@ use wgc::device::trace;
 use std::{
     ffi::CString,
     fmt::Debug,
-    fs::File,
+    fs,
     marker::PhantomData,
     path::{Path, PathBuf},
     ptr,
@@ -143,19 +143,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     commands,
                     dynamic_offsets,
                 } => unsafe {
-                    let mut offsets = &dynamic_offsets[..];
                     let mut pass = wgc::command::RawPass::new_compute(encoder);
-                    for com in commands {
-                        pass.encode(&com);
-                        if let wgc::command::ComputeCommand::SetBindGroup {
-                            num_dynamic_offsets,
-                            ..
-                        } = com
-                        {
-                            pass.encode_slice(&offsets[..num_dynamic_offsets as usize]);
-                            offsets = &offsets[num_dynamic_offsets as usize..];
-                        }
-                    }
+                    pass.fill_compute_commands(&commands, &dynamic_offsets);
                     let (data, _) = pass.finish_compute();
                     self.command_encoder_run_compute_pass::<B>(encoder, &data);
                 },
@@ -165,7 +154,6 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     commands,
                     dynamic_offsets,
                 } => unsafe {
-                    let mut offsets = &dynamic_offsets[..];
                     let mut pass = wgc::command::RawPass::new_render(
                         encoder,
                         &wgc::command::RenderPassDescriptor {
@@ -174,17 +162,7 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                             depth_stencil_attachment: target_depth_stencil.as_ref(),
                         },
                     );
-                    for com in commands {
-                        pass.encode(&com);
-                        if let wgc::command::RenderCommand::SetBindGroup {
-                            num_dynamic_offsets,
-                            ..
-                        } = com
-                        {
-                            pass.encode_slice(&offsets[..num_dynamic_offsets as usize]);
-                            offsets = &offsets[num_dynamic_offsets as usize..];
-                        }
-                    }
+                    pass.fill_render_commands(&commands, &dynamic_offsets);
                     let (data, _) = pass.finish_render();
                     self.command_encoder_run_render_pass::<B>(encoder, &data);
                 },
@@ -254,16 +232,15 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
             }
             A::CreateBindGroupLayout { id, label, entries } => {
-                let label = Label::new(&label);
                 self.device_create_bind_group_layout::<B>(
                     device,
-                    &wgc::binding_model::BindGroupLayoutDescriptor {
-                        label: label.as_ptr(),
-                        entries: entries.as_ptr(),
-                        entries_length: entries.len(),
+                    &wgt::BindGroupLayoutDescriptor {
+                        label: Some(&label),
+                        bindings: &entries,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_destroy::<B>(id);
@@ -280,7 +257,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         bind_group_layouts_length: bind_group_layouts.len(),
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_destroy::<B>(id);
@@ -292,15 +270,14 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 entries,
             } => {
                 use wgc::binding_model as bm;
-                let label = Label::new(&label);
                 let entry_vec = entries
-                    .into_iter()
+                    .iter()
                     .map(|(binding, res)| wgc::binding_model::BindGroupEntry {
-                        binding,
-                        resource: match res {
+                        binding: *binding,
+                        resource: match *res {
                             trace::BindingResource::Buffer { id, offset, size } => {
                                 bm::BindingResource::Buffer(bm::BufferBinding {
-                                    buffer: id,
+                                    buffer_id: id,
                                     offset,
                                     size,
                                 })
@@ -309,6 +286,9 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                             trace::BindingResource::TextureView(id) => {
                                 bm::BindingResource::TextureView(id)
                             }
+                            trace::BindingResource::TextureViewArray(ref binding_array) => {
+                                bm::BindingResource::TextureViewArray(binding_array)
+                            }
                         },
                     })
                     .collect::<Vec<_>>();
@@ -316,10 +296,9 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_create_bind_group::<B>(
                     device,
                     &wgc::binding_model::BindGroupDescriptor {
-                        label: label.as_ptr(),
+                        label: Some(&label),
                         layout: layout_id,
-                        entries: entry_vec.as_ptr(),
-                        entries_length: entry_vec.len(),
+                        bindings: &entry_vec,
                     },
                     id,
                 );
@@ -328,15 +307,14 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.bind_group_destroy::<B>(id);
             }
             A::CreateShaderModule { id, data } => {
-                let spv = wgt::read_spirv(File::open(dir.join(data)).unwrap()).unwrap();
+                let byte_vec = fs::read(dir.join(data)).unwrap();
+                let spv = byte_vec
+                    .chunks(4)
+                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                    .collect::<Vec<_>>();
                 self.device_create_shader_module::<B>(
                     device,
-                    &wgc::pipeline::ShaderModuleDescriptor {
-                        code: wgc::U32Array {
-                            bytes: spv.as_ptr(),
-                            length: spv.len(),
-                        },
-                    },
+                    wgc::pipeline::ShaderModuleSource::SpirV(&spv),
                     id,
                 );
             }
@@ -353,7 +331,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         compute_stage: cs_stage.desc,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_destroy::<B>(id);
@@ -400,10 +379,39 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
+            }
+            A::CreateRenderBundle {
+                id,
+                desc,
+                commands,
+                dynamic_offsets,
+            } => {
+                let label = Label::new(&desc.label);
+                let mut bundle_encoder = wgc::command::RenderBundleEncoder::new(
+                    &wgt::RenderBundleEncoderDescriptor {
+                        label: None,
+                        color_formats: &desc.color_formats,
+                        depth_stencil_format: desc.depth_stencil_format,
+                        sample_count: desc.sample_count,
+                    },
+                    device,
+                );
+                bundle_encoder.fill_commands(&commands, &dynamic_offsets);
+                self.render_bundle_encoder_finish::<B>(
+                    bundle_encoder,
+                    &wgt::RenderBundleDescriptor {
+                        label: label.as_ptr(),
+                    },
+                    id,
+                );
+            }
+            A::DestroyRenderBundle(id) => {
+                self.render_bundle_destroy::<B>(id);
             }
             A::WriteBuffer {
                 id,
@@ -461,7 +469,7 @@ fn main() {
     };
 
     log::info!("Loading trace '{:?}'", dir);
-    let file = File::open(dir.join(trace::FILE_NAME)).unwrap();
+    let file = fs::File::open(dir.join(trace::FILE_NAME)).unwrap();
     let mut actions: Vec<trace::Action> = ron::de::from_reader(file).unwrap();
     actions.reverse(); // allows us to pop from the top
     log::info!("Found {} actions", actions.len());
@@ -478,7 +486,8 @@ fn main() {
         .build(&event_loop)
         .unwrap();
 
-    let global = wgc::hub::Global::new("player", IdentityPassThroughFactory);
+    let global =
+        wgc::hub::Global::new("player", IdentityPassThroughFactory, wgt::BackendBit::all());
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
 
     #[cfg(feature = "winit")]
@@ -497,6 +506,7 @@ fn main() {
                         #[cfg(not(feature = "winit"))]
                         compatible_surface: None,
                     },
+                    unsafe { wgt::UnsafeExtensions::allow() },
                     wgc::instance::AdapterInputs::IdSet(
                         &[wgc::id::TypedId::zip(0, 0, backend)],
                         |id| id.backend(),

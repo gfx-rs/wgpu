@@ -80,6 +80,14 @@ pub trait ResourceState: Clone + Default {
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>>;
 
+    /// Sets up the first usage of the selected sub-resources.
+    fn prepend(
+        &mut self,
+        id: Self::Id,
+        selector: Self::Selector,
+        usage: Self::Usage,
+    ) -> Result<(), PendingTransition<Self>>;
+
     /// Merge the state of this resource tracked by a different instance
     /// with the current one.
     ///
@@ -237,11 +245,6 @@ impl<S: ResourceState> ResourceTracker<S> {
         self.map.clear();
     }
 
-    /// Returns true if the tracker is empty.
-    pub fn is_empty(&self) -> bool {
-        self.map.is_empty()
-    }
-
     /// Initialize a resource to be used.
     ///
     /// Returns false if the resource is already registered.
@@ -324,6 +327,21 @@ impl<S: ResourceState> ResourceTracker<S> {
             .change(id, selector, usage, Some(&mut self.temp))
             .ok(); //TODO: unwrap?
         self.temp.drain(..)
+    }
+
+    /// Turn the tracking from the "expand" mode into the "replace" one,
+    /// installing the selected usage as the "first".
+    /// This is a special operation only used by the render pass attachments.
+    pub fn prepend(
+        &mut self,
+        id: S::Id,
+        ref_count: &RefCount,
+        selector: S::Selector,
+        usage: S::Usage,
+    ) -> Result<(), PendingTransition<S>> {
+        Self::get_or_insert(self.backend, &mut self.map, id, ref_count)
+            .state
+            .prepend(id, selector, usage)
     }
 
     /// Merge another tracker into `self` by extending the current states
@@ -420,6 +438,15 @@ impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
         Ok(())
     }
 
+    fn prepend(
+        &mut self,
+        _id: Self::Id,
+        _selector: Self::Selector,
+        _usage: Self::Usage,
+    ) -> Result<(), PendingTransition<Self>> {
+        Ok(())
+    }
+
     fn merge(
         &mut self,
         _id: Self::Id,
@@ -444,6 +471,7 @@ pub(crate) struct TrackerSet {
     pub samplers: ResourceTracker<PhantomData<id::SamplerId>>,
     pub compute_pipes: ResourceTracker<PhantomData<id::ComputePipelineId>>,
     pub render_pipes: ResourceTracker<PhantomData<id::RenderPipelineId>>,
+    pub bundles: ResourceTracker<PhantomData<id::RenderBundleId>>,
 }
 
 impl TrackerSet {
@@ -457,6 +485,7 @@ impl TrackerSet {
             samplers: ResourceTracker::new(backend),
             compute_pipes: ResourceTracker::new(backend),
             render_pipes: ResourceTracker::new(backend),
+            bundles: ResourceTracker::new(backend),
         }
     }
 
@@ -469,6 +498,7 @@ impl TrackerSet {
         self.samplers.clear();
         self.compute_pipes.clear();
         self.render_pipes.clear();
+        self.bundles.clear();
     }
 
     /// Try to optimize the tracking representation.
@@ -480,6 +510,7 @@ impl TrackerSet {
         self.samplers.optimize();
         self.compute_pipes.optimize();
         self.render_pipes.optimize();
+        self.bundles.optimize();
     }
 
     /// Merge all the trackers of another instance by extending
@@ -494,6 +525,7 @@ impl TrackerSet {
             .merge_extend(&other.compute_pipes)
             .unwrap();
         self.render_pipes.merge_extend(&other.render_pipes).unwrap();
+        self.bundles.merge_extend(&other.bundles).unwrap();
     }
 
     pub fn backend(&self) -> wgt::Backend {

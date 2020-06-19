@@ -7,7 +7,7 @@ use crate::{
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId},
-    power, LifeGuard, Stored,
+    power, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -18,7 +18,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use hal::{
-    self,
     adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
     queue::QueueFamily as _,
     window::Surface as _,
@@ -51,27 +50,43 @@ pub struct Instance {
     ))]
     pub vulkan: Option<gfx_backend_vulkan::Instance>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub metal: gfx_backend_metal::Instance,
+    pub metal: Option<gfx_backend_metal::Instance>,
     #[cfg(windows)]
     pub dx12: Option<gfx_backend_dx12::Instance>,
     #[cfg(windows)]
-    pub dx11: gfx_backend_dx11::Instance,
+    pub dx11: Option<gfx_backend_dx11::Instance>,
 }
 
 impl Instance {
-    pub fn new(name: &str, version: u32) -> Self {
+    pub fn new(name: &str, version: u32, backends: BackendBit) -> Self {
         Instance {
             #[cfg(any(
                 not(any(target_os = "ios", target_os = "macos")),
                 feature = "gfx-backend-vulkan"
             ))]
-            vulkan: gfx_backend_vulkan::Instance::create(name, version).ok(),
+            vulkan: if backends.contains(Backend::Vulkan.into()) {
+                gfx_backend_vulkan::Instance::create(name, version).ok()
+            } else {
+                None
+            },
             #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: gfx_backend_metal::Instance::create(name, version).unwrap(),
+            metal: if backends.contains(Backend::Metal.into()) {
+                Some(gfx_backend_metal::Instance::create(name, version).unwrap())
+            } else {
+                None
+            },
             #[cfg(windows)]
-            dx12: gfx_backend_dx12::Instance::create(name, version).ok(),
+            dx12: if backends.contains(Backend::Dx12.into()) {
+                gfx_backend_dx12::Instance::create(name, version).ok()
+            } else {
+                None
+            },
             #[cfg(windows)]
-            dx11: gfx_backend_dx11::Instance::create(name, version).unwrap(),
+            dx11: if backends.contains(Backend::Dx11.into()) {
+                Some(gfx_backend_dx11::Instance::create(name, version).unwrap())
+            } else {
+                None
+            },
         }
     }
 
@@ -87,14 +102,18 @@ impl Instance {
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         unsafe {
-            self.metal.destroy_surface(surface.metal);
+            if let Some(suf) = surface.metal {
+                self.metal.as_mut().unwrap().destroy_surface(suf);
+            }
         }
         #[cfg(windows)]
         unsafe {
             if let Some(suf) = surface.dx12 {
                 self.dx12.as_mut().unwrap().destroy_surface(suf);
             }
-            self.dx11.destroy_surface(surface.dx11);
+            if let Some(suf) = surface.dx11 {
+                self.dx11.as_mut().unwrap().destroy_surface(suf);
+            }
         }
     }
 }
@@ -109,23 +128,76 @@ pub struct Surface {
     ))]
     pub vulkan: Option<GfxSurface<backend::Vulkan>>,
     #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub metal: GfxSurface<backend::Metal>,
+    pub metal: Option<GfxSurface<backend::Metal>>,
     #[cfg(windows)]
     pub dx12: Option<GfxSurface<backend::Dx12>>,
     #[cfg(windows)]
-    pub dx11: GfxSurface<backend::Dx11>,
+    pub dx11: Option<GfxSurface<backend::Dx11>>,
 }
 
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
+    extensions: wgt::Extensions,
+    limits: wgt::Limits,
+    capabilities: wgt::Capabilities,
+    unsafe_extensions: wgt::UnsafeExtensions,
     life_guard: LifeGuard,
 }
 
 impl<B: hal::Backend> Adapter<B> {
-    fn new(raw: hal::adapter::Adapter<B>) -> Self {
+    fn new(raw: hal::adapter::Adapter<B>, unsafe_extensions: wgt::UnsafeExtensions) -> Self {
+        let adapter_features = raw.physical_device.features();
+
+        let mut extensions = wgt::Extensions::default() | wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS;
+        extensions.set(
+            wgt::Extensions::ANISOTROPIC_FILTERING,
+            adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+        );
+        extensions.set(
+            wgt::Extensions::BINDING_INDEXING,
+            adapter_features.intersects(
+                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
+                    | hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+            ),
+        );
+        if unsafe_extensions.allowed() {
+            // Unsafe extensions go here
+        }
+
+        let adapter_limits = raw.physical_device.limits();
+
+        let limits = wgt::Limits {
+            max_bind_groups: (adapter_limits.max_bound_descriptor_sets as u32)
+                .min(MAX_BIND_GROUPS as u32),
+            _non_exhaustive: unsafe { wgt::NonExhaustive::new() },
+        };
+
+        let mut capabilities = wgt::Capabilities::empty();
+
+        capabilities.set(
+            wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
+        );
+        capabilities.set(
+            wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
+            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
+        );
+        capabilities.set(
+            wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
+        );
+        capabilities.set(
+            wgt::Capabilities::UNSIZED_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
+        );
+
         Adapter {
             raw,
+            extensions,
+            limits,
+            capabilities,
+            unsafe_extensions,
             life_guard: LifeGuard::new(),
         }
     }
@@ -167,20 +239,20 @@ impl AdapterInfo {
     }
 }
 
-/// Supported physical device types
+/// Supported physical device types.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum DeviceType {
-    /// Other
+    /// Other.
     Other,
-    /// Integrated
+    /// Integrated GPU with shared CPU/GPU memory.
     IntegratedGpu,
-    /// Discrete
+    /// Discrete GPU with separate CPU/GPU memory.
     DiscreteGpu,
-    /// Virtual / Hosted
+    /// Virtual / Hosted.
     VirtualGpu,
-    /// Cpu / Software Rendering
+    /// Cpu / Software Rendering.
     Cpu,
 }
 
@@ -236,7 +308,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_ref()
                     .and_then(|inst| inst.create_surface(handle).ok()),
                 #[cfg(any(target_os = "ios", target_os = "macos"))]
-                metal: self.instance.metal.create_surface(handle).unwrap(),
+                metal: self
+                    .instance
+                    .metal
+                    .as_ref()
+                    .and_then(|inst| inst.create_surface(handle).ok()),
                 #[cfg(windows)]
                 dx12: self
                     .instance
@@ -244,7 +320,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .as_ref()
                     .and_then(|inst| inst.create_surface(handle).ok()),
                 #[cfg(windows)]
-                dx11: self.instance.dx11.create_surface(handle).unwrap(),
+                dx11: self
+                    .instance
+                    .dx11
+                    .as_ref()
+                    .and_then(|inst| inst.create_surface(handle).ok()),
             }
         };
 
@@ -252,7 +332,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.surfaces.register_identity(id_in, surface, &mut token)
     }
 
-    pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
+    pub fn enumerate_adapters(
+        &self,
+        unsafe_extensions: wgt::UnsafeExtensions,
+        inputs: AdapterInputs<Input<G, AdapterId>>,
+    ) -> Vec<AdapterId> {
         let instance = &self.instance;
         let mut token = Token::root();
         let mut adapters = Vec::new();
@@ -265,7 +349,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref inst) = instance.vulkan {
                 if let Some(id_vulkan) = inputs.find(Backend::Vulkan) {
                     for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw);
+                        let adapter = Adapter::new(raw, unsafe_extensions);
                         log::info!("Adapter Vulkan {:?}", adapter.raw.info);
                         adapters.push(backend::Vulkan::hub(self).adapters.register_identity(
                             id_vulkan.clone(),
@@ -278,15 +362,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
-            if let Some(id_metal) = inputs.find(Backend::Metal) {
-                for raw in instance.metal.enumerate_adapters() {
-                    let adapter = Adapter::new(raw);
-                    log::info!("Adapter Metal {:?}", adapter.raw.info);
-                    adapters.push(backend::Metal::hub(self).adapters.register_identity(
-                        id_metal.clone(),
-                        adapter,
-                        &mut token,
-                    ));
+            if let Some(ref inst) = instance.metal {
+                if let Some(id_metal) = inputs.find(Backend::Metal) {
+                    for raw in inst.enumerate_adapters() {
+                        let adapter = Adapter::new(raw, unsafe_extensions);
+                        log::info!("Adapter Metal {:?}", adapter.raw.info);
+                        adapters.push(backend::Metal::hub(self).adapters.register_identity(
+                            id_metal.clone(),
+                            adapter,
+                            &mut token,
+                        ));
+                    }
                 }
             }
         }
@@ -295,7 +381,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref inst) = instance.dx12 {
                 if let Some(id_dx12) = inputs.find(Backend::Dx12) {
                     for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw);
+                        let adapter = Adapter::new(raw, unsafe_extensions);
                         log::info!("Adapter Dx12 {:?}", adapter.raw.info);
                         adapters.push(backend::Dx12::hub(self).adapters.register_identity(
                             id_dx12.clone(),
@@ -305,16 +391,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                 }
             }
-
-            if let Some(id_dx11) = inputs.find(Backend::Dx11) {
-                for raw in instance.dx11.enumerate_adapters() {
-                    let adapter = Adapter::new(raw);
-                    log::info!("Adapter Dx11 {:?}", adapter.raw.info);
-                    adapters.push(backend::Dx11::hub(self).adapters.register_identity(
-                        id_dx11.clone(),
-                        adapter,
-                        &mut token,
-                    ));
+            if let Some(ref inst) = instance.dx11 {
+                if let Some(id_dx11) = inputs.find(Backend::Dx11) {
+                    for raw in inst.enumerate_adapters() {
+                        let adapter = Adapter::new(raw, unsafe_extensions);
+                        log::info!("Adapter Dx11 {:?}", adapter.raw.info);
+                        adapters.push(backend::Dx11::hub(self).adapters.register_identity(
+                            id_dx11.clone(),
+                            adapter,
+                            &mut token,
+                        ));
+                    }
                 }
             }
         }
@@ -325,6 +412,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn pick_adapter(
         &self,
         desc: &RequestAdapterOptions,
+        unsafe_extensions: wgt::UnsafeExtensions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Option<AdapterId> {
         let instance = &self.instance;
@@ -363,20 +451,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             _ => Vec::new(),
         };
         #[cfg(any(target_os = "ios", target_os = "macos"))]
-        let mut adapters_mtl = if id_metal.is_some() {
-            let mut adapters = instance.metal.enumerate_adapters();
-            if let Some(surface) = compatible_surface {
-                adapters.retain(|a| {
-                    a.queue_families
-                        .iter()
-                        .find(|qf| qf.queue_type().supports_graphics())
-                        .map_or(false, |qf| surface.metal.supports_queue_family(qf))
-                });
+        let mut adapters_mtl = match instance.metal {
+            Some(ref inst) if id_metal.is_some() => {
+                let mut adapters = inst.enumerate_adapters();
+                if let Some(&Surface {
+                    metal: Some(ref surface),
+                    ..
+                }) = compatible_surface
+                {
+                    adapters.retain(|a| {
+                        a.queue_families
+                            .iter()
+                            .find(|qf| qf.queue_type().supports_graphics())
+                            .map_or(false, |qf| surface.supports_queue_family(qf))
+                    });
+                }
+                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+                adapters
             }
-            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-            adapters
-        } else {
-            Vec::new()
+            _ => Vec::new(),
         };
         #[cfg(windows)]
         let mut adapters_dx12 = match instance.dx12 {
@@ -400,20 +493,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             _ => Vec::new(),
         };
         #[cfg(windows)]
-        let mut adapters_dx11 = if id_dx11.is_some() {
-            let mut adapters = instance.dx11.enumerate_adapters();
-            if let Some(surface) = compatible_surface {
-                adapters.retain(|a| {
-                    a.queue_families
-                        .iter()
-                        .find(|qf| qf.queue_type().supports_graphics())
-                        .map_or(false, |qf| surface.dx11.supports_queue_family(qf))
-                });
+        let mut adapters_dx11 = match instance.dx11 {
+            Some(ref inst) if id_dx11.is_some() => {
+                let mut adapters = inst.enumerate_adapters();
+                if let Some(&Surface {
+                    dx11: Some(ref surface),
+                    ..
+                }) = compatible_surface
+                {
+                    adapters.retain(|a| {
+                        a.queue_families
+                            .iter()
+                            .find(|qf| qf.queue_type().supports_graphics())
+                            .map_or(false, |qf| surface.supports_queue_family(qf))
+                    });
+                }
+                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+                adapters
             }
-            device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-            adapters
-        } else {
-            Vec::new()
+            _ => Vec::new(),
         };
 
         if device_types.is_empty() {
@@ -463,7 +561,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         ))]
         {
             if selected < adapters_vk.len() {
-                let adapter = Adapter::new(adapters_vk.swap_remove(selected));
+                let adapter = Adapter::new(adapters_vk.swap_remove(selected), unsafe_extensions);
                 log::info!("Adapter Vulkan {:?}", adapter.raw.info);
                 let id = backend::Vulkan::hub(self).adapters.register_identity(
                     id_vulkan.unwrap(),
@@ -477,7 +575,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(any(target_os = "ios", target_os = "macos"))]
         {
             if selected < adapters_mtl.len() {
-                let adapter = Adapter::new(adapters_mtl.swap_remove(selected));
+                let adapter = Adapter::new(adapters_mtl.swap_remove(selected), unsafe_extensions);
                 log::info!("Adapter Metal {:?}", adapter.raw.info);
                 let id = backend::Metal::hub(self).adapters.register_identity(
                     id_metal.unwrap(),
@@ -491,7 +589,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(windows)]
         {
             if selected < adapters_dx12.len() {
-                let adapter = Adapter::new(adapters_dx12.swap_remove(selected));
+                let adapter = Adapter::new(adapters_dx12.swap_remove(selected), unsafe_extensions);
                 log::info!("Adapter Dx12 {:?}", adapter.raw.info);
                 let id = backend::Dx12::hub(self).adapters.register_identity(
                     id_dx12.unwrap(),
@@ -502,7 +600,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             selected -= adapters_dx12.len();
             if selected < adapters_dx11.len() {
-                let adapter = Adapter::new(adapters_dx11.swap_remove(selected));
+                let adapter = Adapter::new(adapters_dx11.swap_remove(selected), unsafe_extensions);
                 log::info!("Adapter Dx11 {:?}", adapter.raw.info);
                 let id = backend::Dx11::hub(self).adapters.register_identity(
                     id_dx11.unwrap(),
@@ -525,6 +623,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
         AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend())
+    }
+
+    pub fn adapter_extensions<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Extensions {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = &adapter_guard[adapter_id];
+
+        adapter.extensions
+    }
+
+    pub fn adapter_limits<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Limits {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = &adapter_guard[adapter_id];
+
+        adapter.limits.clone()
+    }
+
+    pub fn adapter_capabilities<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Capabilities {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = &adapter_guard[adapter_id];
+
+        adapter.capabilities
     }
 
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
@@ -560,14 +685,82 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (adapter_guard, _) = hub.adapters.read(&mut token);
             let adapter = &adapter_guard[adapter_id];
             let phd = &adapter.raw.physical_device;
+
+            // Verify all extensions were exposed by the adapter
+            if !adapter.unsafe_extensions.allowed() {
+                assert!(
+                    !desc.extensions.intersects(wgt::Extensions::ALL_UNSAFE),
+                    "Cannot enable unsafe extensions without passing UnsafeExtensions::allow() when getting an adapter. Enabled unsafe extensions: {:?}",
+                    desc.extensions & wgt::Extensions::ALL_UNSAFE
+                )
+            }
+            assert!(
+                adapter.extensions.contains(desc.extensions),
+                "Cannot enable extensions that adapter doesn't support. Unsupported extensions: {:?}",
+                desc.extensions - adapter.extensions
+            );
+
+            // Verify extension preconditions
+            if desc
+                .extensions
+                .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS)
+                && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
+            {
+                log::warn!("Extension MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+            }
+
+            let available_features = adapter.raw.physical_device.features();
+
+            // Check features that are always needed
             let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
                 | hal::Features::NDC_Y_UP;
-            let enabled_features = adapter.raw.physical_device.features() & wishful_features;
+            let mut enabled_features = available_features & wishful_features;
             if enabled_features != wishful_features {
                 log::warn!(
                     "Missing features: {:?}",
                     wishful_features - enabled_features
+                );
+            }
+
+            // Extensions
+            enabled_features.set(
+                hal::Features::SAMPLER_ANISOTROPY,
+                desc.extensions
+                    .contains(wgt::Extensions::ANISOTROPIC_FILTERING),
+            );
+
+            let mut enabled_capabilities = adapter.capabilities & wgt::Capabilities::ALL_BUILT_IN;
+
+            // Capabilities without extension gates
+            enabled_features.set(
+                hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
+                adapter
+                    .capabilities
+                    .contains(wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY),
+            );
+            enabled_features.set(
+                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
+                adapter
+                    .capabilities
+                    .contains(wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
+            );
+
+            // Capabilities behind BINDING_INDEXING
+            if desc.extensions.contains(wgt::Extensions::BINDING_INDEXING) {
+                enabled_capabilities
+                    .insert(adapter.capabilities & wgt::Capabilities::ALL_BINDING_INDEXING);
+                enabled_features.set(
+                    hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+                    adapter
+                        .capabilities
+                        .contains(wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+                );
+                enabled_features.set(
+                    hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+                    adapter
+                        .capabilities
+                        .contains(wgt::Capabilities::UNSIZED_BINDING_ARRAY),
                 );
             }
 
@@ -600,10 +793,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let mem_props = phd.memory_properties();
-            let supports_texture_d24_s8 = phd
-                .format_properties(Some(hal::format::Format::D24UnormS8Uint))
-                .optimal_tiling
-                .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
+            if !desc.shader_validation {
+                log::warn!("Shader validation is disabled");
+            }
+            let private_features = PrivateFeatures {
+                shader_validation: desc.shader_validation,
+                texture_d24_s8: phd
+                    .format_properties(Some(hal::format::Format::D24UnormS8Uint))
+                    .optimal_tiling
+                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
+            };
 
             Device::new(
                 gpu.device,
@@ -613,9 +812,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
-                limits.non_coherent_atom_size as u64,
-                supports_texture_d24_s8,
+                limits,
+                private_features,
                 desc,
+                enabled_capabilities,
                 trace_path,
             )
         };
