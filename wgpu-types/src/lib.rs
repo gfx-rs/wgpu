@@ -1474,7 +1474,7 @@ impl Default for FilterMode {
 }
 
 /// Describes a [`Sampler`]
-#[derive(Default, Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct SamplerDescriptor<L> {
@@ -1505,6 +1505,25 @@ pub struct SamplerDescriptor<L> {
     pub anisotropy_clamp: Option<u8>,
     /// This struct must be partially constructed from its default
     pub _non_exhaustive: NonExhaustive,
+}
+
+impl<L: Default> Default for SamplerDescriptor<L> {
+    fn default() -> Self {
+        Self {
+            label: Default::default(),
+            address_mode_u: Default::default(),
+            address_mode_v: Default::default(),
+            address_mode_w: Default::default(),
+            mag_filter: Default::default(),
+            min_filter: Default::default(),
+            mipmap_filter: Default::default(),
+            lod_min_clamp: 0.0,
+            lod_max_clamp: f32::MAX,
+            compare: Default::default(),
+            anisotropy_clamp: Default::default(),
+            _non_exhaustive: Default::default(),
+        }
+    }
 }
 
 impl<L> SamplerDescriptor<L> {
