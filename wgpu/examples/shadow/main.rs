@@ -756,18 +756,11 @@ impl framework::Example for Example {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &light.target_view,
-                    depth: wgpu::PassChannel {
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_value: 1.0,
-                        read_only: false,
-                    },
-                    stencil: wgpu::PassChannel {
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_value: 0,
-                        read_only: false,
-                    },
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
                 }),
             });
             pass.set_pipeline(&self.shadow_pass.pipeline);
@@ -787,32 +780,23 @@ impl framework::Example for Example {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
-                    channel: wgpu::PassChannel {
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_value: wgpu::Color {
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.1,
                             g: 0.2,
                             b: 0.3,
                             a: 1.0,
-                        },
-                        read_only: false,
+                        }),
+                        store: true,
                     },
                 }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.forward_depth,
-                    depth: wgpu::PassChannel {
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Clear,
-                        clear_value: 1.0,
-                        read_only: false,
-                    },
-                    stencil: wgpu::PassChannel {
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Clear,
-                        clear_value: 0,
-                        read_only: false,
-                    },
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: false,
+                    }),
+                    stencil_ops: None,
                 }),
             });
             pass.set_pipeline(&self.forward_pass.pipeline);

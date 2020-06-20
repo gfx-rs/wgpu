@@ -186,11 +186,9 @@ impl Example {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &views[target_mip],
                     resolve_target: None,
-                    channel: wgpu::PassChannel {
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_value: wgpu::Color::WHITE,
-                        read_only: false,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                        store: true,
                     },
                 }],
                 depth_stencil_attachment: None,
@@ -411,20 +409,19 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
+            let clear_color = wgpu::Color {
+                r: 0.1,
+                g: 0.2,
+                b: 0.3,
+                a: 1.0,
+            };
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
-                    channel: wgpu::PassChannel {
-                        load_op: wgpu::LoadOp::Clear,
-                        store_op: wgpu::StoreOp::Store,
-                        clear_value: wgpu::Color {
-                            r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
-                            a: 1.0,
-                        },
-                        read_only: false,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(clear_color),
+                        store: true,
                     },
                 }],
                 depth_stencil_attachment: None,
