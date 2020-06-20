@@ -65,9 +65,7 @@ impl framework::Example for Example {
                         wgpu::ShaderStage::COMPUTE,
                         wgpu::BindingType::UniformBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::NonZeroBufferAddress::new(
-                                sim_param_data.len() as _
-                            ),
+                            min_binding_size: wgpu::BufferSize::new(sim_param_data.len() as _),
                         },
                     ),
                     wgpu::BindGroupLayoutEntry::new(
@@ -75,9 +73,7 @@ impl framework::Example for Example {
                         wgpu::ShaderStage::COMPUTE,
                         wgpu::BindingType::StorageBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::NonZeroBufferAddress::new(
-                                (NUM_PARTICLES * 16) as _,
-                            ),
+                            min_binding_size: wgpu::BufferSize::new((NUM_PARTICLES * 16) as _),
                             readonly: false,
                         },
                     ),
@@ -86,9 +82,7 @@ impl framework::Example for Example {
                         wgpu::ShaderStage::COMPUTE,
                         wgpu::BindingType::StorageBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::NonZeroBufferAddress::new(
-                                (NUM_PARTICLES * 16) as _,
-                            ),
+                            min_binding_size: wgpu::BufferSize::new((NUM_PARTICLES * 16) as _),
                             readonly: false,
                         },
                     ),
@@ -269,9 +263,10 @@ impl framework::Example for Example {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &frame.view,
                 resolve_target: None,
-                load_op: wgpu::LoadOp::Clear,
-                store_op: wgpu::StoreOp::Store,
-                clear_color: wgpu::Color::BLACK,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: true,
+                },
             }],
             depth_stencil_attachment: None,
         };

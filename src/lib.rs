@@ -25,12 +25,12 @@ pub use wgt::{
     BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage,
     Capabilities, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
     CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
-    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
-    NonZeroBufferAddress, Origin3d, PowerPreference, PresentMode, PrimitiveTopology,
-    RasterizationStateDescriptor, RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage,
-    StencilOperation, StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus,
-    TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat,
-    TextureUsage, TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
+    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, Origin3d,
+    PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
+    RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage, StencilOperation,
+    StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
+    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
+    TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
     BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
@@ -60,13 +60,18 @@ trait RenderInner<Ctx: Context> {
         bind_group: &Ctx::BindGroupId,
         offsets: &[DynamicOffset],
     );
-    fn set_index_buffer(&mut self, buffer: &Ctx::BufferId, offset: BufferAddress, size: BufferSize);
+    fn set_index_buffer(
+        &mut self,
+        buffer: &Ctx::BufferId,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    );
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: &Ctx::BufferId,
         offset: BufferAddress,
-        size: BufferSize,
+        size: Option<BufferSize>,
     );
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
@@ -420,11 +425,10 @@ impl MapContext {
         );
     }
 
-    fn add(&mut self, offset: BufferAddress, size: BufferSize) -> BufferAddress {
-        let end = if size == BufferSize::WHOLE {
-            self.initial_range.end
-        } else {
-            offset + size.0
+    fn add(&mut self, offset: BufferAddress, size: Option<BufferSize>) -> BufferAddress {
+        let end = match size {
+            Some(s) => offset + s.get(),
+            None => self.initial_range.end,
         };
         assert!(self.initial_range.start <= offset && end <= self.initial_range.end);
         for sub in self.sub_ranges.iter() {
@@ -438,11 +442,10 @@ impl MapContext {
         end
     }
 
-    fn remove(&mut self, offset: BufferAddress, size: BufferSize) {
-        let end = if size == BufferSize::WHOLE {
-            self.initial_range.end
-        } else {
-            offset + size.0
+    fn remove(&mut self, offset: BufferAddress, size: Option<BufferSize>) {
+        let end = match size {
+            Some(s) => offset + s.get(),
+            None => self.initial_range.end,
         };
 
         // Switch this out with `Vec::remove_item` once that stabilizes.
@@ -474,7 +477,7 @@ pub struct Buffer {
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
     offset: BufferAddress,
-    size: BufferSize,
+    size: Option<BufferSize>,
 }
 
 /// Handle to a texture on the GPU.
@@ -889,18 +892,39 @@ pub struct ComputePipelineDescriptor<'a> {
     pub compute_stage: ProgrammableStageDescriptor<'a>,
 }
 
-// The underlying types are also exported so that documentation shows up for them
+/// Operation to perform to the output attachment at the start of a renderpass.
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub enum LoadOp<V> {
+    /// Clear with a specified value.
+    Clear(V),
+    /// Load from memory.
+    Load,
+}
 
-pub use wgt::RenderPassColorAttachmentDescriptorBase;
+/// Pair of load and store operations for an attachment aspect.
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct Operations<V> {
+    pub load: LoadOp<V>,
+    pub store: bool,
+}
+
 /// Describes a color attachment to a [`RenderPass`].
-pub type RenderPassColorAttachmentDescriptor<'a> =
-    wgt::RenderPassColorAttachmentDescriptorBase<&'a TextureView>;
-pub use wgt::RenderPassDepthStencilAttachmentDescriptorBase;
+#[derive(Clone)]
+pub struct RenderPassColorAttachmentDescriptor<'a> {
+    pub attachment: &'a TextureView,
+    pub resolve_target: Option<&'a TextureView>,
+    pub ops: Operations<Color>,
+}
 /// Describes a depth/stencil attachment to a [`RenderPass`].
-pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
-    wgt::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
+#[derive(Clone)]
+pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
+    pub attachment: &'a TextureView,
+    pub depth_ops: Option<Operations<f32>>,
+    pub stencil_ops: Option<Operations<u32>>,
+}
 
 /// Describes the attachments of a [`RenderPass`].
+#[derive(Clone)]
 pub struct RenderPassDescriptor<'a, 'b> {
     /// The color attachments of the render pass.
     pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
@@ -1313,16 +1337,18 @@ pub enum MapMode {
     Write,
 }
 
-fn range_to_offset_size<S: RangeBounds<BufferAddress>>(bounds: S) -> (BufferAddress, BufferSize) {
+fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
+    bounds: S,
+) -> (BufferAddress, Option<BufferSize>) {
     let offset = match bounds.start_bound() {
         Bound::Included(&bound) => bound,
         Bound::Excluded(&bound) => bound + 1,
         Bound::Unbounded => 0,
     };
     let size = match bounds.end_bound() {
-        Bound::Included(&bound) => BufferSize(bound + 1 - offset),
-        Bound::Excluded(&bound) => BufferSize(bound - offset),
-        Bound::Unbounded => BufferSize::WHOLE,
+        Bound::Included(&bound) => BufferSize::new(bound + 1 - offset),
+        Bound::Excluded(&bound) => BufferSize::new(bound - offset),
+        Bound::Unbounded => None,
     };
 
     (offset, size)
@@ -1408,31 +1434,7 @@ impl Buffer {
 }
 
 impl BufferSlice<'_> {
-    /// Use only a portion of this BufferSlice for a given operation. Choosing a range with no end
-    /// will use the rest of the buffer. Using a totally unbounded range will use the entire BufferSlice.
-    pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> Self {
-        let (sub_offset, sub_size) = range_to_offset_size(bounds);
-        let new_offset = self.offset + sub_offset;
-        let new_size = if sub_size == BufferSize::WHOLE {
-            BufferSize(
-                self.size
-                    .0
-                    .checked_sub(sub_offset)
-                    .expect("underflow when slicing `BufferSlice`"),
-            )
-        } else {
-            assert!(
-                new_offset + sub_size.0 <= self.offset + self.size.0,
-                "offset and size must stay within the bounds of the parent slice"
-            );
-            sub_size
-        };
-        Self {
-            buffer: self.buffer,
-            offset: new_offset,
-            size: new_size,
-        }
-    }
+    //TODO: fn slice(&self) -> Self
 
     /// Map the buffer. Buffer is ready to map once the future is resolved.
     ///
@@ -1454,10 +1456,9 @@ impl BufferSlice<'_> {
                 "Buffer {:?} is already mapped",
                 self.buffer.id
             );
-            let end = if self.size == BufferSize::WHOLE {
-                mc.total_size
-            } else {
-                self.offset + self.size.0
+            let end = match self.size {
+                Some(s) => self.offset + s.get(),
+                None => mc.total_size,
             };
             mc.initial_range = self.offset..end;
             end

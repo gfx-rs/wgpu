@@ -28,14 +28,14 @@ vulkan = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "a02a56684114da702a64e30af49d0167e273402b"
+rev = "c7be94047d156a3bde88d03cd5c229bedb6efe62"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "a02a56684114da702a64e30af49d0167e273402b"
+rev = "c7be94047d156a3bde88d03cd5c229bedb6efe62"
 
 [dependencies]
 arrayvec = "0.5"
@@ -67,6 +67,9 @@ test = true
 [patch."https://github.com/gfx-rs/wgpu"]
 #wgpu-types = { version = "0.5.0", path = "../wgpu/wgpu-types" }
 #wgpu-core = { version = "0.5.0", path = "../wgpu/wgpu-core" }
+
+[patch."https://github.com/gfx-rs/naga"]
+#naga = { path = "../naga" }
 
 [patch.crates-io]
 #gfx-hal = { version = "0.5.0", path = "../gfx/src/hal" }

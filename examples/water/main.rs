@@ -358,11 +358,9 @@ impl framework::Example for Example {
                         wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                         wgpu::BindingType::UniformBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
-                                WaterUniforms,
-                            >(
-                            )
-                                as _),
+                            min_binding_size: wgpu::BufferSize::new(
+                                mem::size_of::<WaterUniforms>() as _,
+                            ),
                         },
                     ),
                     // Reflection texture.
@@ -404,11 +402,9 @@ impl framework::Example for Example {
                         wgpu::ShaderStage::VERTEX,
                         wgpu::BindingType::UniformBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
-                                TerrainUniforms,
-                            >(
-                            )
-                                as _),
+                            min_binding_size: wgpu::BufferSize::new(
+                                mem::size_of::<TerrainUniforms>() as _,
+                            ),
                         },
                     ),
                 ],
@@ -687,6 +683,12 @@ impl framework::Example for Example {
     ) -> wgpu::CommandBuffer {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;
+        let back_color = wgpu::Color {
+            r: 161.0 / 255.0,
+            g: 246.0 / 255.0,
+            b: 255.0 / 255.0,
+            a: 1.0,
+        };
 
         // Write the sin/cos values to the uniform buffer for the water.
         let (water_sin, water_cos) = ((self.current_frame as f32) / 600.0).sin_cos();
@@ -717,27 +719,20 @@ impl framework::Example for Example {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &self.reflect_view,
                     resolve_target: None,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color {
-                        r: 161.0 / 255.0,
-                        g: 246.0 / 255.0,
-                        b: 255.0 / 255.0,
-                        a: 1.0,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(back_color),
+                        store: true,
                     },
                 }],
                 // We still need to use the depth buffer here
                 // since the pipeline requires it.
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.depth_buffer,
-                    depth_load_op: wgpu::LoadOp::Clear,
-                    depth_store_op: wgpu::StoreOp::Clear,
-                    clear_depth: 1.0,
-                    depth_read_only: false,
-                    stencil_load_op: wgpu::LoadOp::Clear,
-                    stencil_store_op: wgpu::StoreOp::Store,
-                    clear_stencil: 0,
-                    stencil_read_only: false,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
                 }),
             });
             rpass.set_pipeline(&self.terrain_pipeline);
@@ -752,25 +747,18 @@ impl framework::Example for Example {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color {
-                        r: 161.0 / 255.0,
-                        g: 246.0 / 255.0,
-                        b: 255.0 / 255.0,
-                        a: 1.0,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(back_color),
+                        store: true,
                     },
                 }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.depth_buffer,
-                    depth_load_op: wgpu::LoadOp::Clear,
-                    depth_store_op: wgpu::StoreOp::Store,
-                    clear_depth: 1.0,
-                    depth_read_only: false,
-                    stencil_load_op: wgpu::LoadOp::Clear,
-                    stencil_store_op: wgpu::StoreOp::Store,
-                    clear_stencil: 0,
-                    stencil_read_only: false,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
+                    }),
+                    stencil_ops: None,
                 }),
             });
             rpass.set_pipeline(&self.terrain_pipeline);
@@ -785,25 +773,15 @@ impl framework::Example for Example {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
-                    load_op: wgpu::LoadOp::Load,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color {
-                        r: 161.0 / 255.0,
-                        g: 246.0 / 255.0,
-                        b: 255.0 / 255.0,
-                        a: 1.0,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Load,
+                        store: true,
                     },
                 }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.depth_buffer,
-                    depth_load_op: wgpu::LoadOp::Load,
-                    depth_store_op: wgpu::StoreOp::Store,
-                    clear_depth: 1.0,
-                    depth_read_only: true,
-                    stencil_load_op: wgpu::LoadOp::Load,
-                    stencil_store_op: wgpu::StoreOp::Store,
-                    clear_stencil: 0,
-                    stencil_read_only: false,
+                    depth_ops: None,
+                    stencil_ops: None,
                 }),
             });
 

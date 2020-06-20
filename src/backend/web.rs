@@ -1,6 +1,6 @@
 use crate::{
     BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType, BufferDescriptor,
-    CommandEncoderDescriptor, ComputePipelineDescriptor, PipelineLayoutDescriptor,
+    CommandEncoderDescriptor, ComputePipelineDescriptor, LoadOp, PipelineLayoutDescriptor,
     ProgrammableStageDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource,
     SwapChainStatus, TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
 };
@@ -107,22 +107,27 @@ impl crate::RenderInner<Context> for RenderPass {
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
         offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
+        size: Option<wgt::BufferSize>,
     ) {
-        assert_ne!(size, wgt::BufferSize::WHOLE); //TODO
-        self.0
-            .set_index_buffer_with_f64_and_f64(&buffer.0, offset as f64, size.0 as f64);
+        self.0.set_index_buffer_with_f64_and_f64(
+            &buffer.0,
+            offset as f64,
+            size.expect("TODO").get() as f64,
+        );
     }
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: &Sendable<web_sys::GpuBuffer>,
         offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
+        size: Option<wgt::BufferSize>,
     ) {
-        assert_ne!(size, wgt::BufferSize::WHOLE); //TODO
-        self.0
-            .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, size.0 as f64);
+        self.0.set_vertex_buffer_with_f64_and_f64(
+            slot,
+            &buffer.0,
+            offset as f64,
+            size.expect("TODO").get() as f64,
+        );
     }
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         self.0
@@ -185,11 +190,11 @@ impl crate::RenderPassInner<Context> for RenderPass {
         self.0.set_stencil_reference(reference);
     }
 
-    fn insert_debug_marker(&mut self, label: &str) {
+    fn insert_debug_marker(&mut self, _label: &str) {
         unimplemented!()
     }
 
-    fn push_debug_group(&mut self, group_label: &str) {
+    fn push_debug_group(&mut self, _group_label: &str) {
         unimplemented!()
     }
 
@@ -197,7 +202,7 @@ impl crate::RenderPassInner<Context> for RenderPass {
         unimplemented!()
     }
 
-    fn execute_bundles<'a, I: Iterator<Item = &'a ()>>(&mut self, render_bundles: I) {
+    fn execute_bundles<'a, I: Iterator<Item = &'a ()>>(&mut self, _render_bundles: I) {
         unimplemented!()
     }
 }
@@ -558,10 +563,11 @@ fn map_color(color: wgt::Color) -> web_sys::GpuColorDict {
     web_sys::GpuColorDict::new(color.a, color.b, color.g, color.r)
 }
 
-fn map_store_op(op: wgt::StoreOp) -> web_sys::GpuStoreOp {
-    match op {
-        wgt::StoreOp::Clear => web_sys::GpuStoreOp::Clear,
-        wgt::StoreOp::Store => web_sys::GpuStoreOp::Store,
+fn map_store_op(store: bool) -> web_sys::GpuStoreOp {
+    if store {
+        web_sys::GpuStoreOp::Store
+    } else {
+        web_sys::GpuStoreOp::Clear
     }
 }
 
@@ -778,7 +784,7 @@ impl crate::Context for Context {
             ShaderModuleSource::SpirV(spv) => {
                 web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(spv))
             }
-            ShaderModuleSource::Wgsl(code) => {
+            ShaderModuleSource::Wgsl(_code) => {
                 panic!("WGSL is not yet supported by the Web backend")
             }
         };
@@ -879,8 +885,8 @@ impl crate::Context for Context {
                         let mut mapped_buffer_binding =
                             web_sys::GpuBufferBinding::new(&buffer_slice.buffer.id.0);
                         mapped_buffer_binding.offset(buffer_slice.offset as f64);
-                        if buffer_slice.size != wgt::BufferSize::WHOLE {
-                            mapped_buffer_binding.size(buffer_slice.size.0 as f64);
+                        if let Some(s) = buffer_slice.size {
+                            mapped_buffer_binding.size(s.get() as f64);
                         }
                         JsValue::from(mapped_buffer_binding.clone())
                     }
@@ -1286,13 +1292,9 @@ impl crate::Context for Context {
                 let mut mapped_color_attachment =
                     web_sys::GpuRenderPassColorAttachmentDescriptor::new(
                         &ca.attachment.id.0,
-                        &match ca.load_op {
-                            wgt::LoadOp::Clear => {
-                                wasm_bindgen::JsValue::from(map_color(ca.clear_color))
-                            }
-                            wgt::LoadOp::Load => {
-                                wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load)
-                            }
+                        &match ca.ops.load {
+                            LoadOp::Clear(color) => wasm_bindgen::JsValue::from(map_color(color)),
+                            LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
                         },
                     );
 
@@ -1300,7 +1302,7 @@ impl crate::Context for Context {
                     mapped_color_attachment.resolve_target(&rt.id.0);
                 }
 
-                mapped_color_attachment.store_op(map_store_op(ca.store_op));
+                mapped_color_attachment.store_op(map_store_op(ca.ops.store));
 
                 mapped_color_attachment
             })
@@ -1311,19 +1313,39 @@ impl crate::Context for Context {
         // TODO: label
 
         if let Some(dsa) = &desc.depth_stencil_attachment {
+            let (depth_load_op, depth_store_op) = match dsa.depth_ops {
+                Some(ref ops) => {
+                    let load_op = match ops.load {
+                        LoadOp::Clear(value) => wasm_bindgen::JsValue::from(value),
+                        LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
+                    };
+                    (load_op, map_store_op(ops.store))
+                }
+                None => (
+                    wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
+                    web_sys::GpuStoreOp::Store,
+                ),
+            };
+            let (stencil_load_op, stencil_store_op) = match dsa.depth_ops {
+                Some(ref ops) => {
+                    let load_op = match ops.load {
+                        LoadOp::Clear(value) => wasm_bindgen::JsValue::from(value),
+                        LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
+                    };
+                    (load_op, map_store_op(ops.store))
+                }
+                None => (
+                    wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
+                    web_sys::GpuStoreOp::Store,
+                ),
+            };
             let mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachmentDescriptor::new(
                     &dsa.attachment.id.0,
-                    &match dsa.depth_load_op {
-                        wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(dsa.clear_depth),
-                        wgt::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
-                    },
-                    map_store_op(dsa.depth_store_op),
-                    &match dsa.stencil_load_op {
-                        wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(dsa.clear_stencil),
-                        wgt::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
-                    },
-                    map_store_op(dsa.stencil_store_op),
+                    &depth_load_op,
+                    depth_store_op,
+                    &stencil_load_op,
+                    stencil_store_op,
                 );
 
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
