@@ -68,7 +68,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
             wgpu::BindingType::StorageBuffer {
                 dynamic: false,
                 readonly: false,
-                min_binding_size: wgpu::NonZeroBufferAddress::new(4),
+                min_binding_size: wgpu::BufferSize::new(4),
             },
         )],
     });

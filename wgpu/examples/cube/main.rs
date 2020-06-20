@@ -140,7 +140,7 @@ impl framework::Example for Example {
                     wgpu::ShaderStage::VERTEX,
                     wgpu::BindingType::UniformBuffer {
                         dynamic: false,
-                        min_binding_size: wgpu::NonZeroBufferAddress::new(64),
+                        min_binding_size: wgpu::BufferSize::new(64),
                     },
                 ),
                 wgpu::BindGroupLayoutEntry::new(
@@ -326,13 +326,16 @@ impl framework::Example for Example {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
+                    channel: wgpu::PassChannel {
+                        load_op: wgpu::LoadOp::Clear,
+                        store_op: wgpu::StoreOp::Store,
+                        clear_value: wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        },
+                        read_only: false,
                     },
                 }],
                 depth_stencil_attachment: None,

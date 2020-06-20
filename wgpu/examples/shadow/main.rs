@@ -247,11 +247,9 @@ impl framework::Example for Example {
                     wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     wgpu::BindingType::UniformBuffer {
                         dynamic: false,
-                        min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
-                            EntityUniforms,
-                        >(
-                        )
-                            as _),
+                        min_binding_size: wgpu::BufferSize::new(
+                            mem::size_of::<EntityUniforms>() as _
+                        ),
                     },
                 )],
                 label: None,
@@ -437,7 +435,7 @@ impl framework::Example for Example {
                         wgpu::ShaderStage::VERTEX,
                         wgpu::BindingType::UniformBuffer {
                             dynamic: false,
-                            min_binding_size: wgpu::NonZeroBufferAddress::new(uniform_size),
+                            min_binding_size: wgpu::BufferSize::new(uniform_size),
                         },
                     )],
                     label: None,
@@ -521,7 +519,7 @@ impl framework::Example for Example {
                             wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                             wgpu::BindingType::UniformBuffer {
                                 dynamic: false,
-                                min_binding_size: wgpu::NonZeroBufferAddress::new(mem::size_of::<
+                                min_binding_size: wgpu::BufferSize::new(mem::size_of::<
                                     ForwardUniforms,
                                 >(
                                 )
@@ -533,9 +531,7 @@ impl framework::Example for Example {
                             wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                             wgpu::BindingType::UniformBuffer {
                                 dynamic: false,
-                                min_binding_size: wgpu::NonZeroBufferAddress::new(
-                                    light_uniform_size,
-                                ),
+                                min_binding_size: wgpu::BufferSize::new(light_uniform_size),
                             },
                         ),
                         wgpu::BindGroupLayoutEntry::new(
@@ -760,14 +756,18 @@ impl framework::Example for Example {
                 color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &light.target_view,
-                    depth_load_op: wgpu::LoadOp::Clear,
-                    depth_store_op: wgpu::StoreOp::Store,
-                    depth_read_only: false,
-                    stencil_load_op: wgpu::LoadOp::Clear,
-                    stencil_store_op: wgpu::StoreOp::Store,
-                    clear_depth: 1.0,
-                    clear_stencil: 0,
-                    stencil_read_only: false,
+                    depth: wgpu::PassChannel {
+                        load_op: wgpu::LoadOp::Clear,
+                        store_op: wgpu::StoreOp::Store,
+                        clear_value: 1.0,
+                        read_only: false,
+                    },
+                    stencil: wgpu::PassChannel {
+                        load_op: wgpu::LoadOp::Clear,
+                        store_op: wgpu::StoreOp::Store,
+                        clear_value: 0,
+                        read_only: false,
+                    },
                 }),
             });
             pass.set_pipeline(&self.shadow_pass.pipeline);
@@ -787,25 +787,32 @@ impl framework::Example for Example {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color {
-                        r: 0.1,
-                        g: 0.2,
-                        b: 0.3,
-                        a: 1.0,
+                    channel: wgpu::PassChannel {
+                        load_op: wgpu::LoadOp::Clear,
+                        store_op: wgpu::StoreOp::Store,
+                        clear_value: wgpu::Color {
+                            r: 0.1,
+                            g: 0.2,
+                            b: 0.3,
+                            a: 1.0,
+                        },
+                        read_only: false,
                     },
                 }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.forward_depth,
-                    depth_load_op: wgpu::LoadOp::Clear,
-                    depth_store_op: wgpu::StoreOp::Store,
-                    depth_read_only: false,
-                    stencil_load_op: wgpu::LoadOp::Clear,
-                    stencil_store_op: wgpu::StoreOp::Store,
-                    clear_depth: 1.0,
-                    clear_stencil: 0,
-                    stencil_read_only: false,
+                    depth: wgpu::PassChannel {
+                        load_op: wgpu::LoadOp::Clear,
+                        store_op: wgpu::StoreOp::Clear,
+                        clear_value: 1.0,
+                        read_only: false,
+                    },
+                    stencil: wgpu::PassChannel {
+                        load_op: wgpu::LoadOp::Clear,
+                        store_op: wgpu::StoreOp::Clear,
+                        clear_value: 0,
+                        read_only: false,
+                    },
                 }),
             });
             pass.set_pipeline(&self.forward_pass.pipeline);

@@ -86,9 +86,12 @@ async fn run() {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &texture.create_default_view(),
                 resolve_target: None,
-                load_op: wgpu::LoadOp::Clear,
-                store_op: wgpu::StoreOp::Store,
-                clear_color: wgpu::Color::RED,
+                channel: wgpu::PassChannel {
+                    load_op: wgpu::LoadOp::Clear,
+                    store_op: wgpu::StoreOp::Store,
+                    clear_value: wgpu::Color::RED,
+                    read_only: false,
+                },
             }],
             depth_stencil_attachment: None,
         });
