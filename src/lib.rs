@@ -25,12 +25,12 @@ pub use wgt::{
     BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage,
     Capabilities, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
     CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
-    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, LoadOp,
-    Origin3d, PassChannel, PowerPreference, PresentMode, PrimitiveTopology,
-    RasterizationStateDescriptor, RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage,
-    StencilOperation, StencilStateFaceDescriptor, StoreOp, SwapChainDescriptor, SwapChainStatus,
-    TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat,
-    TextureUsage, TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
+    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, Origin3d,
+    PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
+    RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage, StencilOperation,
+    StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
+    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
+    TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
     BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
@@ -892,18 +892,39 @@ pub struct ComputePipelineDescriptor<'a> {
     pub compute_stage: ProgrammableStageDescriptor<'a>,
 }
 
-// The underlying types are also exported so that documentation shows up for them
+/// Operation to perform to the output attachment at the start of a renderpass.
+#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+pub enum LoadOp<V> {
+    /// Clear with a specified value.
+    Clear(V),
+    /// Load from memory.
+    Load,
+}
 
-pub use wgt::RenderPassColorAttachmentDescriptorBase;
+/// Pair of load and store operations for an attachment aspect.
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub struct Operations<V> {
+    pub load: LoadOp<V>,
+    pub store: bool,
+}
+
 /// Describes a color attachment to a [`RenderPass`].
-pub type RenderPassColorAttachmentDescriptor<'a> =
-    wgt::RenderPassColorAttachmentDescriptorBase<&'a TextureView>;
-pub use wgt::RenderPassDepthStencilAttachmentDescriptorBase;
+#[derive(Clone)]
+pub struct RenderPassColorAttachmentDescriptor<'a> {
+    pub attachment: &'a TextureView,
+    pub resolve_target: Option<&'a TextureView>,
+    pub ops: Operations<Color>,
+}
 /// Describes a depth/stencil attachment to a [`RenderPass`].
-pub type RenderPassDepthStencilAttachmentDescriptor<'a> =
-    wgt::RenderPassDepthStencilAttachmentDescriptorBase<&'a TextureView>;
+#[derive(Clone)]
+pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
+    pub attachment: &'a TextureView,
+    pub depth_ops: Option<Operations<f32>>,
+    pub stencil_ops: Option<Operations<u32>>,
+}
 
 /// Describes the attachments of a [`RenderPass`].
+#[derive(Clone)]
 pub struct RenderPassDescriptor<'a, 'b> {
     /// The color attachments of the render pass.
     pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],

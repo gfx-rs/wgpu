@@ -1,9 +1,9 @@
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
     BufferDescriptor, Capabilities, CommandEncoderDescriptor, ComputePipelineDescriptor,
-    Extensions, Limits, MapMode, PipelineLayoutDescriptor, RenderPipelineDescriptor,
-    SamplerDescriptor, ShaderModuleSource, SwapChainStatus, TextureDescriptor,
-    TextureViewDescriptor,
+    Extensions, Limits, LoadOp, MapMode, Operations, PipelineLayoutDescriptor,
+    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource, SwapChainStatus,
+    TextureDescriptor, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -283,6 +283,43 @@ fn map_texture_copy_view(view: crate::TextureCopyView) -> wgc::command::TextureC
     }
 }
 
+fn map_pass_channel<V: Copy + Default>(ops: Option<&Operations<V>>) -> wgt::PassChannel<V> {
+    match ops {
+        Some(&Operations {
+            load: LoadOp::Clear(clear_value),
+            store,
+        }) => wgt::PassChannel {
+            load_op: wgt::LoadOp::Clear,
+            store_op: if store {
+                wgt::StoreOp::Store
+            } else {
+                wgt::StoreOp::Clear
+            },
+            clear_value,
+            read_only: false,
+        },
+        Some(&Operations {
+            load: LoadOp::Load,
+            store,
+        }) => wgt::PassChannel {
+            load_op: wgt::LoadOp::Load,
+            store_op: if store {
+                wgt::StoreOp::Store
+            } else {
+                wgt::StoreOp::Clear
+            },
+            clear_value: V::default(),
+            read_only: false,
+        },
+        None => wgt::PassChannel {
+            load_op: wgt::LoadOp::Load,
+            store_op: wgt::StoreOp::Store,
+            clear_value: V::default(),
+            read_only: true,
+        },
+    }
+}
+
 impl crate::Context for Context {
     type AdapterId = wgc::id::AdapterId;
     type DeviceId = wgc::id::DeviceId;
@@ -453,7 +490,8 @@ impl crate::Context for Context {
                 bindings: &bindings,
             },
             PhantomData
-        )).unwrap()
+        ))
+        .unwrap()
     }
 
     fn device_create_pipeline_layout(
@@ -879,15 +917,15 @@ impl crate::Context for Context {
             .map(|ca| wgc::command::ColorAttachmentDescriptor {
                 attachment: ca.attachment.id,
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
-                channel: ca.channel.clone(),
+                channel: map_pass_channel(Some(&ca.ops)),
             })
             .collect::<ArrayVec<[_; wgc::device::MAX_COLOR_TARGETS]>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
             wgc::command::DepthStencilAttachmentDescriptor {
                 attachment: dsa.attachment.id,
-                depth: dsa.depth.clone(),
-                stencil: dsa.stencil.clone(),
+                depth: map_pass_channel(dsa.depth_ops.as_ref()),
+                stencil: map_pass_channel(dsa.stencil_ops.as_ref()),
             }
         });
 

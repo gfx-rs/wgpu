@@ -263,11 +263,9 @@ impl framework::Example for Example {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &frame.view,
                 resolve_target: None,
-                channel: wgpu::PassChannel {
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_value: wgpu::Color::BLACK,
-                    read_only: false,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    store: true,
                 },
             }],
             depth_stencil_attachment: None,

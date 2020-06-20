@@ -114,11 +114,9 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                         color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                             attachment: &frame.view,
                             resolve_target: None,
-                            channel: wgpu::PassChannel {
-                                load_op: wgpu::LoadOp::Clear,
-                                store_op: wgpu::StoreOp::Store,
-                                clear_value: wgpu::Color::GREEN,
-                                read_only: false,
+                            ops: wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
+                                store: true,
                             },
                         }],
                         depth_stencil_attachment: None,
