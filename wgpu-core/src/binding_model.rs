@@ -28,6 +28,27 @@ pub enum BindGroupLayoutError {
     ArrayUnsupported,
 }
 
+#[derive(Clone, Debug)]
+pub enum BindGroupError {
+    /// Number of bindings in bind group descriptor does not match
+    /// the number of bindings defined in the bind group layout.
+    BindingsNumMismatch { actual: usize, expected: usize },
+    /// Unable to find a corresponding declaration for the given binding,
+    MissingBindingDeclaration(u32),
+    /// The given binding has a different type than the one in the layout.
+    WrongBindingType {
+        // Index of the binding
+        binding: u32,
+        // The type given to the function
+        actual: wgt::BindingType,
+        // Human-readable description of expected types
+        expected: &'static str,
+    },
+    /// The given sampler is/is not a comparison sampler,
+    /// while the layout type indicates otherwise.
+    WrongSamplerComparison,
+}
+
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 
 #[derive(Debug)]
