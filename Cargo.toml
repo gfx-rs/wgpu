@@ -1,13 +1,7 @@
 [package]
 name = "wgpu"
 version = "0.5.0"
-authors = [
-    "Dzmitry Malyshau <kvark@mozilla.com>",
-    "Joshua Groves <josh@joshgroves.com>",
-    "Lucas Kent <rubickent@gmail.com>",
-    "kyren <kerriganw@gmail.com>",
-    "Cormac O'Brien <cormac@c-obrien.org>",
-]
+authors = ["wgpu developers"]
 edition = "2018"
 description = "Rusty WebGPU API wrapper"
 homepage = "https://github.com/gfx-rs/wgpu-rs"

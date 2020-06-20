@@ -25,6 +25,7 @@ All framework-based examples render to the window.
 | off-screen rendering   |        |        |        |           | :star: |        |                | :star: |
 | stencil testing        |        |        |        |           |        |        |                |        |
 | depth testing          |        |        |        |           | :star: |        |                | :star: |
+| depth biasing          |        |        |        |           | :star: |        |                |        |
 | read-only depth        |        |        |        |           |        |        |                | :star: |
 | blending               |        |        |        |           |        |        |                | :star: |
 | render bundles         |        |        |        | :star:    |        |        |                | :star: |
