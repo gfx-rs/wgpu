@@ -255,21 +255,23 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
+            let channel = wgpu::PassChannel {
+                load_op: wgpu::LoadOp::Clear,
+                store_op: wgpu::StoreOp::Store,
+                clear_value: wgpu::Color::BLACK,
+                read_only: false,
+            };
             let rpass_color_attachment = if self.sample_count == 1 {
                 wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color::BLACK,
+                    channel,
                 }
             } else {
                 wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &self.multisampled_framebuffer,
                     resolve_target: Some(&frame.view),
-                    load_op: wgpu::LoadOp::Clear,
-                    store_op: wgpu::StoreOp::Store,
-                    clear_color: wgpu::Color::BLACK,
+                    channel,
                 }
             };
 

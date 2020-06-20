@@ -36,9 +36,9 @@ mod pass_impl {
     use std::ops::Range;
     use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 
-    impl crate::ComputePassInner<Context> for wgc::command::RawPass<wgc::id::CommandEncoderId> {
+    impl crate::ComputePassInner<Context> for wgc::command::ComputePass {
         fn set_pipeline(&mut self, pipeline: &wgc::id::ComputePipelineId) {
-            unsafe { wgpu_compute_pass_set_pipeline(self, *pipeline) }
+            wgpu_compute_pass_set_pipeline(self, *pipeline)
         }
         fn set_bind_group(
             &mut self,
@@ -57,20 +57,20 @@ mod pass_impl {
             }
         }
         fn dispatch(&mut self, x: u32, y: u32, z: u32) {
-            unsafe { wgpu_compute_pass_dispatch(self, x, y, z) }
+            wgpu_compute_pass_dispatch(self, x, y, z)
         }
         fn dispatch_indirect(
             &mut self,
             indirect_buffer: &wgc::id::BufferId,
             indirect_offset: wgt::BufferAddress,
         ) {
-            unsafe { wgpu_compute_pass_dispatch_indirect(self, *indirect_buffer, indirect_offset) }
+            wgpu_compute_pass_dispatch_indirect(self, *indirect_buffer, indirect_offset)
         }
     }
 
-    impl crate::RenderInner<Context> for wgc::command::RawPass<wgc::id::CommandEncoderId> {
+    impl crate::RenderInner<Context> for wgc::command::RenderPass {
         fn set_pipeline(&mut self, pipeline: &wgc::id::RenderPipelineId) {
-            unsafe { wgpu_render_pass_set_pipeline(self, *pipeline) }
+            wgpu_render_pass_set_pipeline(self, *pipeline)
         }
         fn set_bind_group(
             &mut self,
@@ -92,66 +92,60 @@ mod pass_impl {
             &mut self,
             buffer: &wgc::id::BufferId,
             offset: wgt::BufferAddress,
-            size: wgt::BufferSize,
+            size: Option<wgt::BufferSize>,
         ) {
-            unsafe { wgpu_render_pass_set_index_buffer(self, *buffer, offset, size) }
+            wgpu_render_pass_set_index_buffer(self, *buffer, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,
             slot: u32,
             buffer: &wgc::id::BufferId,
             offset: wgt::BufferAddress,
-            size: wgt::BufferSize,
+            size: Option<wgt::BufferSize>,
         ) {
-            unsafe { wgpu_render_pass_set_vertex_buffer(self, slot, *buffer, offset, size) }
+            wgpu_render_pass_set_vertex_buffer(self, slot, *buffer, offset, size)
         }
         fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-            unsafe {
-                wgpu_render_pass_draw(
-                    self,
-                    vertices.end - vertices.start,
-                    instances.end - instances.start,
-                    vertices.start,
-                    instances.start,
-                )
-            }
+            wgpu_render_pass_draw(
+                self,
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            )
         }
         fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-            unsafe {
-                wgpu_render_pass_draw_indexed(
-                    self,
-                    indices.end - indices.start,
-                    instances.end - instances.start,
-                    indices.start,
-                    base_vertex,
-                    instances.start,
-                )
-            }
+            wgpu_render_pass_draw_indexed(
+                self,
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            )
         }
         fn draw_indirect(
             &mut self,
             indirect_buffer: &wgc::id::BufferId,
             indirect_offset: wgt::BufferAddress,
         ) {
-            unsafe { wgpu_render_pass_draw_indirect(self, *indirect_buffer, indirect_offset) }
+            wgpu_render_pass_draw_indirect(self, *indirect_buffer, indirect_offset)
         }
         fn draw_indexed_indirect(
             &mut self,
             indirect_buffer: &wgc::id::BufferId,
             indirect_offset: wgt::BufferAddress,
         ) {
-            unsafe {
-                wgpu_render_pass_draw_indexed_indirect(self, *indirect_buffer, indirect_offset)
-            }
+            wgpu_render_pass_draw_indexed_indirect(self, *indirect_buffer, indirect_offset)
         }
     }
 
-    impl crate::RenderPassInner<Context> for wgc::command::RawPass<wgc::id::CommandEncoderId> {
+    impl crate::RenderPassInner<Context> for wgc::command::RenderPass {
         fn set_blend_color(&mut self, color: wgt::Color) {
-            unsafe { wgpu_render_pass_set_blend_color(self, &color) }
+            wgpu_render_pass_set_blend_color(self, &color)
         }
         fn set_scissor_rect(&mut self, x: u32, y: u32, width: u32, height: u32) {
-            unsafe { wgpu_render_pass_set_scissor_rect(self, x, y, width, height) }
+            wgpu_render_pass_set_scissor_rect(self, x, y, width, height)
         }
         fn set_viewport(
             &mut self,
@@ -162,12 +156,10 @@ mod pass_impl {
             min_depth: f32,
             max_depth: f32,
         ) {
-            unsafe {
-                wgpu_render_pass_set_viewport(self, x, y, width, height, min_depth, max_depth)
-            }
+            wgpu_render_pass_set_viewport(self, x, y, width, height, min_depth, max_depth)
         }
         fn set_stencil_reference(&mut self, reference: u32) {
-            unsafe { wgpu_render_pass_set_stencil_reference(self, reference) }
+            wgpu_render_pass_set_stencil_reference(self, reference)
         }
 
         fn insert_debug_marker(&mut self, label: &str) {
@@ -185,9 +177,7 @@ mod pass_impl {
         }
 
         fn pop_debug_group(&mut self) {
-            unsafe {
-                wgpu_render_pass_pop_debug_group(self);
-            }
+            wgpu_render_pass_pop_debug_group(self);
         }
 
         fn execute_bundles<'a, I: Iterator<Item = &'a wgc::id::RenderBundleId>>(
@@ -207,7 +197,7 @@ mod pass_impl {
 
     impl crate::RenderInner<Context> for wgc::command::RenderBundleEncoder {
         fn set_pipeline(&mut self, pipeline: &wgc::id::RenderPipelineId) {
-            unsafe { wgpu_render_bundle_set_pipeline(self, *pipeline) }
+            wgpu_render_bundle_set_pipeline(self, *pipeline)
         }
         fn set_bind_group(
             &mut self,
@@ -229,57 +219,51 @@ mod pass_impl {
             &mut self,
             buffer: &wgc::id::BufferId,
             offset: wgt::BufferAddress,
-            size: wgt::BufferSize,
+            size: Option<wgt::BufferSize>,
         ) {
-            unsafe { wgpu_render_bundle_set_index_buffer(self, *buffer, offset, size) }
+            wgpu_render_bundle_set_index_buffer(self, *buffer, offset, size)
         }
         fn set_vertex_buffer(
             &mut self,
             slot: u32,
             buffer: &wgc::id::BufferId,
             offset: wgt::BufferAddress,
-            size: wgt::BufferSize,
+            size: Option<wgt::BufferSize>,
         ) {
-            unsafe { wgpu_render_bundle_set_vertex_buffer(self, slot, *buffer, offset, size) }
+            wgpu_render_bundle_set_vertex_buffer(self, slot, *buffer, offset, size)
         }
         fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
-            unsafe {
-                wgpu_render_bundle_draw(
-                    self,
-                    vertices.end - vertices.start,
-                    instances.end - instances.start,
-                    vertices.start,
-                    instances.start,
-                )
-            }
+            wgpu_render_bundle_draw(
+                self,
+                vertices.end - vertices.start,
+                instances.end - instances.start,
+                vertices.start,
+                instances.start,
+            )
         }
         fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>) {
-            unsafe {
-                wgpu_render_bundle_draw_indexed(
-                    self,
-                    indices.end - indices.start,
-                    instances.end - instances.start,
-                    indices.start,
-                    base_vertex,
-                    instances.start,
-                )
-            }
+            wgpu_render_bundle_draw_indexed(
+                self,
+                indices.end - indices.start,
+                instances.end - instances.start,
+                indices.start,
+                base_vertex,
+                instances.start,
+            )
         }
         fn draw_indirect(
             &mut self,
             indirect_buffer: &wgc::id::BufferId,
             indirect_offset: wgt::BufferAddress,
         ) {
-            unsafe { wgpu_render_bundle_draw_indirect(self, *indirect_buffer, indirect_offset) }
+            wgpu_render_bundle_draw_indirect(self, *indirect_buffer, indirect_offset)
         }
         fn draw_indexed_indirect(
             &mut self,
             indirect_buffer: &wgc::id::BufferId,
             indirect_offset: wgt::BufferAddress,
         ) {
-            unsafe {
-                wgpu_render_pass_bundle_indexed_indirect(self, *indirect_buffer, indirect_offset)
-            }
+            wgpu_render_pass_bundle_indexed_indirect(self, *indirect_buffer, indirect_offset)
         }
     }
 }
@@ -314,8 +298,8 @@ impl crate::Context for Context {
     type RenderPipelineId = wgc::id::RenderPipelineId;
     type ComputePipelineId = wgc::id::ComputePipelineId;
     type CommandEncoderId = wgc::id::CommandEncoderId;
-    type ComputePassId = wgc::command::RawPass<wgc::id::CommandEncoderId>;
-    type RenderPassId = wgc::command::RawPass<wgc::id::CommandEncoderId>;
+    type ComputePassId = wgc::command::ComputePass;
+    type RenderPassId = wgc::command::RenderPass;
     type CommandBufferId = wgc::id::CommandBufferId;
     type RenderBundleEncoderId = wgc::command::RenderBundleEncoder;
     type RenderBundleId = wgc::id::RenderBundleId;
@@ -469,7 +453,7 @@ impl crate::Context for Context {
                 bindings: &bindings,
             },
             PhantomData
-        ))
+        )).unwrap()
     }
 
     fn device_create_pipeline_layout(
@@ -647,7 +631,7 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &wgt::RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId {
-        wgc::command::RenderBundleEncoder::new(desc, *device)
+        wgc::command::RenderBundleEncoder::new(desc, *device, None)
     }
 
     fn device_drop(&self, device: &Self::DeviceId) {
@@ -711,7 +695,7 @@ impl crate::Context for Context {
         let ptr = gfx_select!(*buffer => self.buffer_get_mapped_range(
             *buffer,
             sub_range.start,
-            wgt::BufferSize(size)
+            wgt::BufferSize::new(size)
         ));
         unsafe { slice::from_raw_parts(ptr, size as usize) }
     }
@@ -725,7 +709,7 @@ impl crate::Context for Context {
         let ptr = gfx_select!(*buffer => self.buffer_get_mapped_range(
             *buffer,
             sub_range.start,
-            wgt::BufferSize(size)
+            wgt::BufferSize::new(size)
         ));
         unsafe { slice::from_raw_parts_mut(ptr, size as usize) }
     }
@@ -873,7 +857,7 @@ impl crate::Context for Context {
         &self,
         encoder: &Self::CommandEncoderId,
     ) -> Self::ComputePassId {
-        unsafe { wgc::command::RawPass::new_compute(*encoder) }
+        wgc::command::ComputePass::new(*encoder)
     }
 
     fn command_encoder_end_compute_pass(
@@ -881,13 +865,7 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::ComputePassId,
     ) {
-        let data = unsafe {
-            let mut length = 0;
-            let ptr = wgc::command::compute_ffi::wgpu_compute_pass_finish(pass, &mut length);
-            slice::from_raw_parts(ptr, length)
-        };
-        gfx_select!(*encoder => self.command_encoder_run_compute_pass(*encoder, data));
-        unsafe { pass.invalidate() };
+        gfx_select!(*encoder => self.command_encoder_run_compute_pass(*encoder, pass));
     }
 
     fn command_encoder_begin_render_pass<'a>(
@@ -898,39 +876,28 @@ impl crate::Context for Context {
         let colors = desc
             .color_attachments
             .iter()
-            .map(|ca| wgc::command::RenderPassColorAttachmentDescriptor {
+            .map(|ca| wgc::command::ColorAttachmentDescriptor {
                 attachment: ca.attachment.id,
                 resolve_target: ca.resolve_target.map(|rt| rt.id),
-                load_op: ca.load_op,
-                store_op: ca.store_op,
-                clear_color: ca.clear_color,
+                channel: ca.channel.clone(),
             })
-            .collect::<ArrayVec<[_; 4]>>();
+            .collect::<ArrayVec<[_; wgc::device::MAX_COLOR_TARGETS]>>();
 
         let depth_stencil = desc.depth_stencil_attachment.as_ref().map(|dsa| {
-            wgc::command::RenderPassDepthStencilAttachmentDescriptor {
+            wgc::command::DepthStencilAttachmentDescriptor {
                 attachment: dsa.attachment.id,
-                depth_load_op: dsa.depth_load_op,
-                depth_store_op: dsa.depth_store_op,
-                depth_read_only: dsa.depth_read_only,
-                clear_depth: dsa.clear_depth,
-                stencil_load_op: dsa.stencil_load_op,
-                stencil_store_op: dsa.stencil_store_op,
-                clear_stencil: dsa.clear_stencil,
-                stencil_read_only: dsa.depth_read_only,
+                depth: dsa.depth.clone(),
+                stencil: dsa.stencil.clone(),
             }
         });
 
-        unsafe {
-            wgc::command::RawPass::new_render(
-                *encoder,
-                &wgc::command::RenderPassDescriptor {
-                    color_attachments: colors.as_ptr(),
-                    color_attachments_length: colors.len(),
-                    depth_stencil_attachment: depth_stencil.as_ref(),
-                },
-            )
-        }
+        wgc::command::RenderPass::new(
+            *encoder,
+            wgc::command::RenderPassDescriptor {
+                color_attachments: &colors,
+                depth_stencil_attachment: depth_stencil.as_ref(),
+            },
+        )
     }
 
     fn command_encoder_end_render_pass(
@@ -938,13 +905,7 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::RenderPassId,
     ) {
-        let data = unsafe {
-            let mut length = 0;
-            let ptr = wgc::command::render_ffi::wgpu_render_pass_finish(pass, &mut length);
-            slice::from_raw_parts(ptr, length)
-        };
-        gfx_select!(*encoder => self.command_encoder_run_render_pass(*encoder, data));
-        unsafe { pass.invalidate() };
+        gfx_select!(*encoder => self.command_encoder_run_render_pass(*encoder, pass));
     }
 
     fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
@@ -958,7 +919,11 @@ impl crate::Context for Context {
         desc: &crate::RenderBundleDescriptor,
     ) -> Self::RenderBundleId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
-        gfx_select!(encoder.parent() => self.render_bundle_encoder_finish(encoder, &desc.map_label(|_| owned_label.as_ptr()), PhantomData))
+        gfx_select!(encoder.parent() => self.render_bundle_encoder_finish(
+            encoder,
+            &desc.map_label(|_| owned_label.as_ptr()),
+            PhantomData
+        ))
     }
 
     fn queue_write_buffer(

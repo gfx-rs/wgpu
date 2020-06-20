@@ -107,22 +107,27 @@ impl crate::RenderInner<Context> for RenderPass {
         &mut self,
         buffer: &Sendable<web_sys::GpuBuffer>,
         offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
+        size: Option<wgt::BufferSize>,
     ) {
-        assert_ne!(size, wgt::BufferSize::WHOLE); //TODO
-        self.0
-            .set_index_buffer_with_f64_and_f64(&buffer.0, offset as f64, size.0 as f64);
+        self.0.set_index_buffer_with_f64_and_f64(
+            &buffer.0,
+            offset as f64,
+            size.expect("TODO").get() as f64,
+        );
     }
     fn set_vertex_buffer(
         &mut self,
         slot: u32,
         buffer: &Sendable<web_sys::GpuBuffer>,
         offset: wgt::BufferAddress,
-        size: wgt::BufferSize,
+        size: Option<wgt::BufferSize>,
     ) {
-        assert_ne!(size, wgt::BufferSize::WHOLE); //TODO
-        self.0
-            .set_vertex_buffer_with_f64_and_f64(slot, &buffer.0, offset as f64, size.0 as f64);
+        self.0.set_vertex_buffer_with_f64_and_f64(
+            slot,
+            &buffer.0,
+            offset as f64,
+            size.expect("TODO").get() as f64,
+        );
     }
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         self.0
@@ -879,8 +884,8 @@ impl crate::Context for Context {
                         let mut mapped_buffer_binding =
                             web_sys::GpuBufferBinding::new(&buffer_slice.buffer.id.0);
                         mapped_buffer_binding.offset(buffer_slice.offset as f64);
-                        if buffer_slice.size != wgt::BufferSize::WHOLE {
-                            mapped_buffer_binding.size(buffer_slice.size.0 as f64);
+                        if let Some(s) = buffer_slice.size {
+                            mapped_buffer_binding.size(s.get() as f64);
                         }
                         JsValue::from(mapped_buffer_binding.clone())
                     }
@@ -1286,9 +1291,9 @@ impl crate::Context for Context {
                 let mut mapped_color_attachment =
                     web_sys::GpuRenderPassColorAttachmentDescriptor::new(
                         &ca.attachment.id.0,
-                        &match ca.load_op {
+                        &match ca.channel.load_op {
                             wgt::LoadOp::Clear => {
-                                wasm_bindgen::JsValue::from(map_color(ca.clear_color))
+                                wasm_bindgen::JsValue::from(map_color(ca.channel.clear_value))
                             }
                             wgt::LoadOp::Load => {
                                 wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load)
@@ -1300,7 +1305,7 @@ impl crate::Context for Context {
                     mapped_color_attachment.resolve_target(&rt.id.0);
                 }
 
-                mapped_color_attachment.store_op(map_store_op(ca.store_op));
+                mapped_color_attachment.store_op(map_store_op(ca.channel.store_op));
 
                 mapped_color_attachment
             })
@@ -1314,16 +1319,16 @@ impl crate::Context for Context {
             let mapped_depth_stencil_attachment =
                 web_sys::GpuRenderPassDepthStencilAttachmentDescriptor::new(
                     &dsa.attachment.id.0,
-                    &match dsa.depth_load_op {
-                        wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(dsa.clear_depth),
+                    &match dsa.depth.load_op {
+                        wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(dsa.depth.clear_value),
                         wgt::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
                     },
-                    map_store_op(dsa.depth_store_op),
-                    &match dsa.stencil_load_op {
-                        wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(dsa.clear_stencil),
+                    map_store_op(dsa.depth.store_op),
+                    &match dsa.stencil.load_op {
+                        wgt::LoadOp::Clear => wasm_bindgen::JsValue::from(dsa.stencil.clear_value),
                         wgt::LoadOp::Load => wasm_bindgen::JsValue::from(web_sys::GpuLoadOp::Load),
                     },
-                    map_store_op(dsa.stencil_store_op),
+                    map_store_op(dsa.stencil.store_op),
                 );
 
             mapped_desc.depth_stencil_attachment(&mapped_depth_stencil_attachment);
