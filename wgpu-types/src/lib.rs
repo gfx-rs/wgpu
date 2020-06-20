@@ -2,16 +2,13 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#[cfg(feature = "peek-poke")]
-use peek_poke::PeekPoke;
-#[cfg(feature = "replay")]
-use serde::Deserialize;
-#[cfg(feature = "trace")]
-use serde::Serialize;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
-/// Integral type used for buffer sizes/offsets.
+/// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
-pub type NonZeroBufferAddress = std::num::NonZeroU64;
+/// Integral type used for buffer slice sizes.
+pub type BufferSize = std::num::NonZeroU64;
 
 /// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
 ///
@@ -23,32 +20,6 @@ pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// Buffer to buffer copy offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
-
-/// Integral newtype for buffer sizes.
-#[repr(transparent)]
-#[derive(Clone, Copy, Debug, Hash, PartialEq)]
-#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
-#[cfg_attr(
-    feature = "trace",
-    derive(serde::Serialize),
-    serde(into = "SerBufferSize")
-)]
-#[cfg_attr(
-    feature = "replay",
-    derive(serde::Deserialize),
-    serde(from = "SerBufferSize")
-)]
-pub struct BufferSize(pub BufferAddress);
-
-impl BufferSize {
-    pub const WHOLE: BufferSize = BufferSize(!0);
-}
-
-impl Default for BufferSize {
-    fn default() -> Self {
-        BufferSize::WHOLE
-    }
-}
 
 /// Backends supported by wgpu.
 #[repr(u8)]
@@ -612,8 +583,7 @@ pub struct RasterizationStateDescriptor {
 /// loading from texture in a shader. When writing to the texture, the opposite conversion takes place.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
 pub enum TextureFormat {
     // Normal 8 bit formats
     /// Red channel only. 8 bit integer per channel. [0, 255] converted to/from float [0, 1] in shader.
@@ -1149,9 +1119,7 @@ pub enum SwapChainStatus {
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum LoadOp {
     /// Clear the output attachment with the clear color. Clearing is faster than loading.
     Clear = 0,
@@ -1162,9 +1130,7 @@ pub enum LoadOp {
 /// Operation to perform to the output attachment at the end of a renderpass.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StoreOp {
     /// Clear the render target. If you don't care about the contents of the target, this can be faster.
     Clear = 0,
@@ -1172,12 +1138,27 @@ pub enum StoreOp {
     Store = 1,
 }
 
+/// Describes an individual channel within a render pass, such as color, depth, or stencil.
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct PassChannel<V> {
+    /// Operation to perform to the output attachment at the start of a renderpass. This must be clear if it
+    /// is the first renderpass rendering to a swap chain image.
+    pub load_op: LoadOp,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: StoreOp,
+    /// If load_op is [`LoadOp::Clear`], the attachement will be cleared to this color.
+    pub clear_value: V,
+    /// If true, the relevant channel is not changed by a renderpass, and the corresponding attachment
+    /// can be used inside the pass by other read-only usages.
+    pub read_only: bool,
+}
+
 /// Describes a color attachment to a [`RenderPass`].
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderPassColorAttachmentDescriptorBase<T> {
     /// Texture attachment to render to. Must contain [`TextureUsage::OUTPUT_ATTACHMENT`].
     pub attachment: T,
@@ -1185,44 +1166,22 @@ pub struct RenderPassColorAttachmentDescriptorBase<T> {
     /// attachment has 1 sample (does not have MSAA). This is not mandatory for rendering with multisampling,
     /// you can choose to resolve later or manually.
     pub resolve_target: Option<T>,
-    /// Operation to perform to the output attachment at the start of a renderpass. This must be clear if it
-    /// is the first renderpass rendering to a swap chain image.
-    pub load_op: LoadOp,
-    /// Operation to perform to the output attachment at the end of a renderpass.
-    pub store_op: StoreOp,
-    /// If load_op is [`LoadOp::Clear`], the attachement will be cleared to this color.
-    pub clear_color: Color,
+    /// Color channel.
+    pub channel: PassChannel<Color>,
 }
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
 #[repr(C)]
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     /// Texture attachment to render to. Must contain [`TextureUsage::OUTPUT_ATTACHMENT`] and be a valid
     /// texture type for a depth/stencil attachment.
     pub attachment: T,
-    /// Operation to perform to the depth component of the output attachment at the start of a renderpass.
-    pub depth_load_op: LoadOp,
-    /// Operation to perform to the depth component of the output attachment at the end of a renderpass.
-    pub depth_store_op: StoreOp,
-    /// If depth_load_op is [`LoadOp::Clear`], the depth component will be cleared to this depth.
-    pub clear_depth: f32,
-    /// Enabling read only depth means that depth cannot be cleared or written to, but it can be used
-    /// as the input to some part of this render pass.
-    pub depth_read_only: bool,
-    /// Operation to perform to the stencil component of the output attachment at the start of a renderpass.
-    pub stencil_load_op: LoadOp,
-    /// Operation to perform to the stencil component of the output attachment at the end of a renderpass.
-    pub stencil_store_op: StoreOp,
-    /// If stencil_load_op is [`LoadOp::Clear`], the stencil component will be cleared to this stencil value.
-    /// Only the low 8 bits are used.
-    pub clear_stencil: u32,
-    /// Enabling read only stencil means that stencil cannot be cleared or written to, but it can be used
-    /// as the input to some part of this render pass.
-    pub stencil_read_only: bool,
+    /// Depth channel.
+    pub depth: PassChannel<f32>,
+    /// Stencil channel.
+    pub stencil: PassChannel<u32>,
 }
 
 /// RGBA double precision color.
@@ -1230,9 +1189,7 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
 /// This is not to be used as a generic color type, only for specific wgpu interfaces.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-#[cfg_attr(feature = "peek-poke", derive(PeekPoke))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Color {
     pub r: f64,
     pub g: f64,
@@ -1683,7 +1640,7 @@ pub enum BindingType {
         /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
         /// plus one element of the unbound array, which can only be last in the structure.
         /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
-        min_binding_size: Option<NonZeroBufferAddress>,
+        min_binding_size: Option<BufferSize>,
     },
     /// A storage buffer.
     ///
@@ -1701,7 +1658,7 @@ pub enum BindingType {
         /// When pipeline is created, the size has to cover at least the corresponding structure in the shader
         /// plus one element of the unbound array, which can only be last in the structure.
         /// If `None`, the check is performed at draw call time instead of pipeline and bind group creation.
-        min_binding_size: Option<NonZeroBufferAddress>,
+        min_binding_size: Option<BufferSize>,
         /// The buffer can only be read in the shader and it must be annotated with `readonly`.
         ///
         /// Example GLSL syntax:
@@ -1816,34 +1773,4 @@ pub struct BindGroupLayoutDescriptor<'a> {
 
     /// Array of bindings in this BindGroupLayout
     pub bindings: &'a [BindGroupLayoutEntry],
-}
-
-/// This type allows us to make the serialized representation of a BufferSize more human-readable
-#[allow(dead_code)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-enum SerBufferSize {
-    Size(u64),
-    Whole,
-}
-
-#[cfg(feature = "trace")]
-impl From<BufferSize> for SerBufferSize {
-    fn from(buffer_size: BufferSize) -> Self {
-        if buffer_size == BufferSize::WHOLE {
-            Self::Whole
-        } else {
-            Self::Size(buffer_size.0)
-        }
-    }
-}
-
-#[cfg(feature = "replay")]
-impl From<SerBufferSize> for BufferSize {
-    fn from(ser_buffer_size: SerBufferSize) -> Self {
-        match ser_buffer_size {
-            SerBufferSize::Size(size) => BufferSize(size),
-            SerBufferSize::Whole => BufferSize::WHOLE,
-        }
-    }
 }

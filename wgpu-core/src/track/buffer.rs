@@ -150,7 +150,7 @@ mod test {
             first: None,
             last: BufferUse::INDEX,
         };
-        let id = Id::default();
+        let id = Id::dummy();
         assert_eq!(
             bs.change(id, (), BufferUse::STORAGE_STORE, None),
             Err(PendingTransition {
@@ -170,7 +170,7 @@ mod test {
             first: None,
             last: BufferUse::STORAGE_STORE,
         };
-        let id = Id::default();
+        let id = Id::dummy();
         let mut list = Vec::new();
         bs.change(id, (), BufferUse::VERTEX, Some(&mut list))
             .unwrap();
@@ -216,7 +216,7 @@ mod test {
             first: None,
             last: BufferUse::VERTEX,
         };
-        let id = Id::default();
+        let id = Id::dummy();
         bs.prepend(id, (), BufferUse::INDEX).unwrap();
         bs.prepend(id, (), BufferUse::INDEX).unwrap();
         assert_eq!(

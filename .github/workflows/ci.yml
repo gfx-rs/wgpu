@@ -76,13 +76,13 @@ jobs:
             name: Ubuntu Nightly
             channel: nightly
             build_command: cargo test
-            additional_core_features:
+            additional_core_features: serial-pass
             additional_player_features: winit
           - os: windows-2019
             name: Windows Stable
             channel: stable
             build_command: rustup default stable-msvc; cargo clippy
-            additional_core_features: trace
+            additional_core_features: trace,serial-pass
             additional_player_features: renderdoc
           - os: windows-2019
             name: Windows Nightly

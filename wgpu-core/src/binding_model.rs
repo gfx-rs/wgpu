@@ -88,7 +88,7 @@ pub struct PipelineLayout<B: hal::Backend> {
 pub struct BufferBinding {
     pub buffer_id: BufferId,
     pub offset: wgt::BufferAddress,
-    pub size: wgt::BufferSize,
+    pub size: Option<wgt::BufferSize>,
 }
 
 // Note: Duplicated in wgpu-rs as BindingResource

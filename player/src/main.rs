@@ -139,33 +139,21 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 trace::Command::CopyTextureToTexture { src, dst, size } => {
                     self.command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
                 }
-                trace::Command::RunComputePass {
-                    commands,
-                    dynamic_offsets,
-                } => unsafe {
-                    let mut pass = wgc::command::RawPass::new_compute(encoder);
-                    pass.fill_compute_commands(&commands, &dynamic_offsets);
-                    let (data, _) = pass.finish_compute();
-                    self.command_encoder_run_compute_pass::<B>(encoder, &data);
-                },
+                trace::Command::RunComputePass { base } => {
+                    self.command_encoder_run_compute_pass_impl::<B>(encoder, base.as_ref());
+                }
                 trace::Command::RunRenderPass {
+                    base,
                     target_colors,
                     target_depth_stencil,
-                    commands,
-                    dynamic_offsets,
-                } => unsafe {
-                    let mut pass = wgc::command::RawPass::new_render(
+                } => {
+                    self.command_encoder_run_render_pass_impl::<B>(
                         encoder,
-                        &wgc::command::RenderPassDescriptor {
-                            color_attachments: target_colors.as_ptr(),
-                            color_attachments_length: target_colors.len(),
-                            depth_stencil_attachment: target_depth_stencil.as_ref(),
-                        },
+                        base.as_ref(),
+                        &target_colors,
+                        target_depth_stencil.as_ref(),
                     );
-                    pass.fill_render_commands(&commands, &dynamic_offsets);
-                    let (data, _) = pass.finish_render();
-                    self.command_encoder_run_render_pass::<B>(encoder, &data);
-                },
+                }
             }
         }
         self.command_encoder_finish::<B>(encoder, &wgt::CommandBufferDescriptor { todo: 0 })
@@ -386,14 +374,9 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
             }
-            A::CreateRenderBundle {
-                id,
-                desc,
-                commands,
-                dynamic_offsets,
-            } => {
+            A::CreateRenderBundle { id, desc, base } => {
                 let label = Label::new(&desc.label);
-                let mut bundle_encoder = wgc::command::RenderBundleEncoder::new(
+                let bundle = wgc::command::RenderBundleEncoder::new(
                     &wgt::RenderBundleEncoderDescriptor {
                         label: None,
                         color_formats: &desc.color_formats,
@@ -401,10 +384,10 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         sample_count: desc.sample_count,
                     },
                     device,
+                    Some(base),
                 );
-                bundle_encoder.fill_commands(&commands, &dynamic_offsets);
                 self.render_bundle_encoder_finish::<B>(
-                    bundle_encoder,
+                    bundle,
                     &wgt::RenderBundleDescriptor {
                         label: label.as_ptr(),
                     },

@@ -324,7 +324,7 @@ mod test {
 
     #[test]
     fn merge() {
-        let id = Id::default();
+        let id = Id::dummy();
         let mut ts1 = TextureState::default();
         ts1.mips.push(PlaneStates::from_slice(&[(
             1..3,
@@ -342,7 +342,7 @@ mod test {
             Unit::new(TextureUse::COPY_SRC),
         )]));
         assert_eq!(
-            ts1.merge(Id::default(), &ts2, None),
+            ts1.merge(Id::dummy(), &ts2, None),
             Ok(()),
             "failed to extend a compatible state"
         );
@@ -357,7 +357,7 @@ mod test {
 
         ts2.mips[0] = PlaneStates::from_slice(&[(1..2, Unit::new(TextureUse::COPY_DST))]);
         assert_eq!(
-            ts1.clone().merge(Id::default(), &ts2, None),
+            ts1.clone().merge(Id::dummy(), &ts2, None),
             Err(PendingTransition {
                 id,
                 selector: SubresourceRange {
@@ -381,7 +381,7 @@ mod test {
                 },
             ),
         ]);
-        ts1.merge(Id::default(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(
             &list,
             &[
@@ -433,7 +433,7 @@ mod test {
                 last: TextureUse::COPY_SRC,
             },
         )]);
-        ts1.merge(Id::default(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(&list, &[], "unexpected replacing transition");
 
         list.clear();
@@ -444,7 +444,7 @@ mod test {
                 last: TextureUse::COPY_DST,
             },
         )]);
-        ts1.merge(Id::default(), &ts2, Some(&mut list)).unwrap();
+        ts1.merge(Id::dummy(), &ts2, Some(&mut list)).unwrap();
         assert_eq!(
             &list,
             &[PendingTransition {
