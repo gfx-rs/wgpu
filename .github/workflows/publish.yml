@@ -3,7 +3,7 @@ name: Publish
 on:
   push:
     branches:
-      - master-TEMPORARILY-DISABLED
+      - gecko
 
 env:
   RUSTFLAGS: --cfg=web_sys_unstable_apis
