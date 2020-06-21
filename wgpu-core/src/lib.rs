@@ -9,19 +9,23 @@
     unused_qualifications
 )]
 
+#[macro_use]
+mod macros;
+
 pub mod backend {
-    #[cfg(windows)]
-    pub use gfx_backend_dx11::Backend as Dx11;
-    #[cfg(windows)]
-    pub use gfx_backend_dx12::Backend as Dx12;
     pub use gfx_backend_empty::Backend as Empty;
-    #[cfg(any(target_os = "ios", target_os = "macos"))]
-    pub use gfx_backend_metal::Backend as Metal;
+
     #[cfg(any(
         not(any(target_os = "ios", target_os = "macos")),
         feature = "gfx-backend-vulkan"
     ))]
     pub use gfx_backend_vulkan::Backend as Vulkan;
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub use gfx_backend_metal::Backend as Metal;
+    #[cfg(windows)]
+    pub use gfx_backend_dx12::Backend as Dx12;
+    #[cfg(windows)]
+    pub use gfx_backend_dx11::Backend as Dx11;
 }
 
 pub mod binding_model;

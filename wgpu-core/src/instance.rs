@@ -59,61 +59,45 @@ pub struct Instance {
 
 impl Instance {
     pub fn new(name: &str, version: u32, backends: BackendBit) -> Self {
-        Instance {
-            #[cfg(any(
-                not(any(target_os = "ios", target_os = "macos")),
-                feature = "gfx-backend-vulkan"
-            ))]
-            vulkan: if backends.contains(Backend::Vulkan.into()) {
-                gfx_backend_vulkan::Instance::create(name, version).ok()
-            } else {
-                None
-            },
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: if backends.contains(Backend::Metal.into()) {
-                Some(gfx_backend_metal::Instance::create(name, version).unwrap())
-            } else {
-                None
-            },
-            #[cfg(windows)]
-            dx12: if backends.contains(Backend::Dx12.into()) {
-                gfx_backend_dx12::Instance::create(name, version).ok()
-            } else {
-                None
-            },
-            #[cfg(windows)]
-            dx11: if backends.contains(Backend::Dx11.into()) {
-                Some(gfx_backend_dx11::Instance::create(name, version).unwrap())
-            } else {
-                None
-            },
+        backends_map! {
+            let map = |(backend, backend_create)| {
+                if backends.contains(backend.into()) {
+                    backend_create(name, version).ok()
+                } else {
+                    None
+                }
+            };
+            Instance {
+                #[vulkan]
+                vulkan: map((Backend::Vulkan, gfx_backend_vulkan::Instance::create)),
+                #[metal]
+                metal: map((Backend::Metal, gfx_backend_metal::Instance::create)),
+                #[dx12]
+                dx12: map((Backend::Dx12, gfx_backend_dx12::Instance::create)),
+                #[dx11]
+                dx11: map((Backend::Dx11, gfx_backend_dx11::Instance::create)),
+            }
         }
     }
 
     pub(crate) fn destroy_surface(&mut self, surface: Surface) {
-        #[cfg(any(
-            not(any(target_os = "ios", target_os = "macos")),
-            feature = "gfx-backend-vulkan"
-        ))]
-        unsafe {
-            if let Some(suf) = surface.vulkan {
-                self.vulkan.as_mut().unwrap().destroy_surface(suf);
-            }
-        }
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        unsafe {
-            if let Some(suf) = surface.metal {
-                self.metal.as_mut().unwrap().destroy_surface(suf);
-            }
-        }
-        #[cfg(windows)]
-        unsafe {
-            if let Some(suf) = surface.dx12 {
-                self.dx12.as_mut().unwrap().destroy_surface(suf);
-            }
-            if let Some(suf) = surface.dx11 {
-                self.dx11.as_mut().unwrap().destroy_surface(suf);
-            }
+        backends_map! {
+            let map = |(surface_backend, self_backend)| {
+                unsafe {
+                    if let Some(suf) = surface_backend {
+                        self_backend.as_mut().unwrap().destroy_surface(suf);
+                    }
+                }
+            };
+
+            #[vulkan]
+            map((surface.vulkan, &mut self.vulkan)),
+            #[metal]
+            map((surface.metal, &mut self.metal)),
+            #[dx12]
+            map((surface.dx12, &mut self.dx12)),
+            #[dx11]
+            map((surface.dx11, &mut self.dx11)),
         }
     }
 }
@@ -300,35 +284,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         span!(_guard, INFO, "Instance::create_surface");
 
         let surface = unsafe {
-            Surface {
-                #[cfg(any(
-                    windows,
-                    all(unix, not(any(target_os = "ios", target_os = "macos"))),
-                    feature = "gfx-backend-vulkan",
-                ))]
-                vulkan: self
-                    .instance
-                    .vulkan
+            backends_map! {
+                let map = |inst| {
+                    inst
                     .as_ref()
-                    .and_then(|inst| inst.create_surface(handle).ok()),
-                #[cfg(any(target_os = "ios", target_os = "macos"))]
-                metal: self
-                    .instance
-                    .metal
-                    .as_ref()
-                    .and_then(|inst| inst.create_surface(handle).ok()),
-                #[cfg(windows)]
-                dx12: self
-                    .instance
-                    .dx12
-                    .as_ref()
-                    .and_then(|inst| inst.create_surface(handle).ok()),
-                #[cfg(windows)]
-                dx11: self
-                    .instance
-                    .dx11
-                    .as_ref()
-                    .and_then(|inst| inst.create_surface(handle).ok()),
+                    .and_then(|inst| inst.create_surface(handle).ok())
+                };
+
+                Surface {
+                    #[vulkan]
+                    vulkan: map(&self.instance.vulkan),
+                    #[metal]
+                    metal: map(&self.instance.metal),
+                    #[dx12]
+                    dx12: map(&self.instance.dx12),
+                    #[dx11]
+                    dx11: map(&self.instance.dx11),
+                }
             }
         };
 
@@ -347,69 +319,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let mut adapters = Vec::new();
 
-        #[cfg(any(
-            not(any(target_os = "ios", target_os = "macos")),
-            feature = "gfx-backend-vulkan"
-        ))]
-        {
-            if let Some(ref inst) = instance.vulkan {
-                if let Some(id_vulkan) = inputs.find(Backend::Vulkan) {
-                    for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw, unsafe_extensions);
-                        log::info!("Adapter Vulkan {:?}", adapter.raw.info);
-                        adapters.push(backend::Vulkan::hub(self).adapters.register_identity(
-                            id_vulkan.clone(),
-                            adapter,
-                            &mut token,
-                        ));
+        backends_map! {
+            let map = |(instance_field, backend, backend_info, backend_hub)| {
+                if let Some(inst) = instance_field {
+                    if let Some(id_backend) = inputs.find(backend) {
+                        for raw in inst.enumerate_adapters() {
+                            let adapter = Adapter::new(raw, unsafe_extensions);
+                            log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
+                            adapters.push(backend_hub(self).adapters.register_identity(
+                                id_backend.clone(),
+                                adapter,
+                                &mut token,
+                            ));
+                        }
                     }
                 }
-            }
-        }
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        {
-            if let Some(ref inst) = instance.metal {
-                if let Some(id_metal) = inputs.find(Backend::Metal) {
-                    for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw, unsafe_extensions);
-                        log::info!("Adapter Metal {:?}", adapter.raw.info);
-                        adapters.push(backend::Metal::hub(self).adapters.register_identity(
-                            id_metal.clone(),
-                            adapter,
-                            &mut token,
-                        ));
-                    }
-                }
-            }
-        }
-        #[cfg(windows)]
-        {
-            if let Some(ref inst) = instance.dx12 {
-                if let Some(id_dx12) = inputs.find(Backend::Dx12) {
-                    for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw, unsafe_extensions);
-                        log::info!("Adapter Dx12 {:?}", adapter.raw.info);
-                        adapters.push(backend::Dx12::hub(self).adapters.register_identity(
-                            id_dx12.clone(),
-                            adapter,
-                            &mut token,
-                        ));
-                    }
-                }
-            }
-            if let Some(ref inst) = instance.dx11 {
-                if let Some(id_dx11) = inputs.find(Backend::Dx11) {
-                    for raw in inst.enumerate_adapters() {
-                        let adapter = Adapter::new(raw, unsafe_extensions);
-                        log::info!("Adapter Dx11 {:?}", adapter.raw.info);
-                        adapters.push(backend::Dx11::hub(self).adapters.register_identity(
-                            id_dx11.clone(),
-                            adapter,
-                            &mut token,
-                        ));
-                    }
-                }
-            }
+            };
+
+            #[vulkan]
+            map((&instance.vulkan, Backend::Vulkan, "Vulkan", backend::Vulkan::hub)),
+            #[metal]
+            map((&instance.metal, Backend::Metal, "Metal", backend::Metal::hub)),
+            #[dx12]
+            map((&instance.dx12, Backend::Dx12, "Dx12", backend::Dx12::hub)),
+            #[dx11]
+            map((&instance.dx11, Backend::Dx11, "Dx11", backend::Dx11::hub)),
         }
 
         adapters
@@ -429,98 +363,62 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let compatible_surface = desc.compatible_surface.map(|id| &surface_guard[id]);
         let mut device_types = Vec::new();
 
-        let id_vulkan = inputs.find(Backend::Vulkan);
-        let id_metal = inputs.find(Backend::Metal);
-        let id_dx12 = inputs.find(Backend::Dx12);
-        let id_dx11 = inputs.find(Backend::Dx11);
+        let mut id_vulkan = inputs.find(Backend::Vulkan);
+        let mut id_metal = inputs.find(Backend::Metal);
+        let mut id_dx12 = inputs.find(Backend::Dx12);
+        let mut id_dx11 = inputs.find(Backend::Dx11);
 
-        #[cfg(any(
-            not(any(target_os = "ios", target_os = "macos")),
-            feature = "gfx-backend-vulkan"
-        ))]
-        let mut adapters_vk = match instance.vulkan {
-            Some(ref inst) if id_vulkan.is_some() => {
-                let mut adapters = inst.enumerate_adapters();
-                if let Some(&Surface {
-                    vulkan: Some(ref surface),
-                    ..
-                }) = compatible_surface
-                {
-                    adapters.retain(|a| {
-                        a.queue_families
-                            .iter()
-                            .find(|qf| qf.queue_type().supports_graphics())
-                            .map_or(false, |qf| surface.supports_queue_family(qf))
-                    });
+        backends_map! {
+            let map = |(instance_backend, id_backend, surface_backend)| {
+                match instance_backend {
+                    Some(ref inst) if id_backend.is_some() => {
+                        let mut adapters = inst.enumerate_adapters();
+                        if let Some(surface_backend) = compatible_surface.and_then(surface_backend) {
+                            adapters.retain(|a| {
+                                a.queue_families
+                                    .iter()
+                                    .find(|qf| qf.queue_type().supports_graphics())
+                                    .map_or(false, |qf| surface_backend.supports_queue_family(qf))
+                            });
+                        }
+                        device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
+                        adapters
+                    }
+                    _ => Vec::new(),
                 }
-                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-                adapters
-            }
-            _ => Vec::new(),
-        };
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        let mut adapters_mtl = match instance.metal {
-            Some(ref inst) if id_metal.is_some() => {
-                let mut adapters = inst.enumerate_adapters();
-                if let Some(&Surface {
-                    metal: Some(ref surface),
-                    ..
-                }) = compatible_surface
-                {
-                    adapters.retain(|a| {
-                        a.queue_families
-                            .iter()
-                            .find(|qf| qf.queue_type().supports_graphics())
-                            .map_or(false, |qf| surface.supports_queue_family(qf))
-                    });
+            };
+
+            // NB: The internal function definitions are a workaround for Rust
+            // being weird with lifetimes for closure literals...
+            #[vulkan]
+            let adapters_vk = map((&instance.vulkan, &id_vulkan, {
+                fn surface_vulkan(surf: &Surface) -> Option<&GfxSurface<backend::Vulkan>> {
+                    surf.vulkan.as_ref()
                 }
-                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-                adapters
-            }
-            _ => Vec::new(),
-        };
-        #[cfg(windows)]
-        let mut adapters_dx12 = match instance.dx12 {
-            Some(ref inst) if id_dx12.is_some() => {
-                let mut adapters = inst.enumerate_adapters();
-                if let Some(&Surface {
-                    dx12: Some(ref surface),
-                    ..
-                }) = compatible_surface
-                {
-                    adapters.retain(|a| {
-                        a.queue_families
-                            .iter()
-                            .find(|qf| qf.queue_type().supports_graphics())
-                            .map_or(false, |qf| surface.supports_queue_family(qf))
-                    });
+                surface_vulkan
+            }));
+            #[metal]
+            let adapters_mtl = map((&instance.metal, &id_metal, {
+                fn surface_metal(surf: &Surface) -> Option<&GfxSurface<backend::Metal>> {
+                    surf.metal.as_ref()
                 }
-                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-                adapters
-            }
-            _ => Vec::new(),
-        };
-        #[cfg(windows)]
-        let mut adapters_dx11 = match instance.dx11 {
-            Some(ref inst) if id_dx11.is_some() => {
-                let mut adapters = inst.enumerate_adapters();
-                if let Some(&Surface {
-                    dx11: Some(ref surface),
-                    ..
-                }) = compatible_surface
-                {
-                    adapters.retain(|a| {
-                        a.queue_families
-                            .iter()
-                            .find(|qf| qf.queue_type().supports_graphics())
-                            .map_or(false, |qf| surface.supports_queue_family(qf))
-                    });
+                surface_metal
+            }));
+            #[dx12]
+            let adapters_dx12 = map((&instance.dx12, &id_dx12, {
+                fn surface_dx12(surf: &Surface) -> Option<&GfxSurface<backend::Dx12>> {
+                    surf.dx12.as_ref()
                 }
-                device_types.extend(adapters.iter().map(|ad| ad.info.device_type.clone()));
-                adapters
-            }
-            _ => Vec::new(),
-        };
+                surface_dx12
+            }));
+            #[dx11]
+            let adapters_dx11 = map((&instance.dx11, &id_dx11, {
+                fn surface_dx11(surf: &Surface) -> Option<&GfxSurface<backend::Dx11>> {
+                    surf.dx11.as_ref()
+                }
+                surface_dx11
+            }));
+        }
 
         if device_types.is_empty() {
             log::warn!("No adapters are available!");
@@ -563,64 +461,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut selected = preferred_gpu.unwrap_or(0);
-        #[cfg(any(
-            not(any(target_os = "ios", target_os = "macos")),
-            feature = "gfx-backend-vulkan"
-        ))]
-        {
-            if selected < adapters_vk.len() {
-                let adapter = Adapter::new(adapters_vk.swap_remove(selected), unsafe_extensions);
-                log::info!("Adapter Vulkan {:?}", adapter.raw.info);
-                let id = backend::Vulkan::hub(self).adapters.register_identity(
-                    id_vulkan.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_vk.len();
-        }
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        {
-            if selected < adapters_mtl.len() {
-                let adapter = Adapter::new(adapters_mtl.swap_remove(selected), unsafe_extensions);
-                log::info!("Adapter Metal {:?}", adapter.raw.info);
-                let id = backend::Metal::hub(self).adapters.register_identity(
-                    id_metal.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_mtl.len();
-        }
-        #[cfg(windows)]
-        {
-            if selected < adapters_dx12.len() {
-                let adapter = Adapter::new(adapters_dx12.swap_remove(selected), unsafe_extensions);
-                log::info!("Adapter Dx12 {:?}", adapter.raw.info);
-                let id = backend::Dx12::hub(self).adapters.register_identity(
-                    id_dx12.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_dx12.len();
-            if selected < adapters_dx11.len() {
-                let adapter = Adapter::new(adapters_dx11.swap_remove(selected), unsafe_extensions);
-                log::info!("Adapter Dx11 {:?}", adapter.raw.info);
-                let id = backend::Dx11::hub(self).adapters.register_identity(
-                    id_dx11.unwrap(),
-                    adapter,
-                    &mut token,
-                );
-                return Some(id);
-            }
-            selected -= adapters_dx11.len();
+
+        backends_map! {
+            let map = |(info_adapter, id_backend, mut adapters_backend, backend_hub)| {
+                if selected < adapters_backend.len() {
+                    let adapter = Adapter::new(adapters_backend.swap_remove(selected), unsafe_extensions);
+                    log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
+                    let id = backend_hub(self).adapters.register_identity(
+                        id_backend.take().unwrap(),
+                        adapter,
+                        &mut token,
+                    );
+                    return Some(id);
+                }
+                selected -= adapters_backend.len();
+            };
+
+            #[vulkan]
+            map(("Vulkan", &mut id_vulkan, adapters_vk, backend::Vulkan::hub)),
+            #[metal]
+            map(("Metal", &mut id_metal, adapters_mtl, backend::Metal::hub)),
+            #[dx12]
+            map(("Dx12", &mut id_dx12, adapters_dx12, backend::Dx12::hub)),
+            #[dx11]
+            map(("Dx11", &mut id_dx11, adapters_dx11, backend::Dx11::hub)),
         }
 
-        let _ = (selected, id_vulkan, id_metal, id_dx12, id_dx11);
+        let _ = (
+            selected,
+            id_vulkan.take(),
+            id_metal.take(),
+            id_dx12.take(),
+            id_dx11.take(),
+        );
         log::warn!("Some adapters are present, but enumerating them failed!");
         None
     }

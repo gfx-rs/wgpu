@@ -2734,17 +2734,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         use crate::backend;
         let mut callbacks = Vec::new();
 
-        #[cfg(any(
-            not(any(target_os = "ios", target_os = "macos")),
-            feature = "gfx-backend-vulkan"
-        ))]
-        self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks);
-        #[cfg(windows)]
-        self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks);
-        #[cfg(windows)]
-        self.poll_devices::<backend::Dx12>(force_wait, &mut callbacks);
-        #[cfg(any(target_os = "ios", target_os = "macos"))]
-        self.poll_devices::<backend::Metal>(force_wait, &mut callbacks);
+        backends! {
+            #[vulkan] {
+                self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks);
+            }
+            #[metal] {
+                self.poll_devices::<backend::Metal>(force_wait, &mut callbacks);
+            }
+            #[dx12] {
+                self.poll_devices::<backend::Dx12>(force_wait, &mut callbacks);
+            }
+            #[dx11] {
+                self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks);
+            }
+        }
 
         fire_map_callbacks(callbacks);
     }
