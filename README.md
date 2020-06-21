@@ -37,11 +37,13 @@ cargo run --example hello-compute 1 2 3 4
 
 #### Run Examples on the Web (`wasm32-unknown-unknown`)
 
-Running on the web is still work-in-progress. You may need to enable experimental flags on your browser. Check browser implementation status on [webgpu.io](https://webgpu.io).
+Running on the web is still work-in-progress. You may need to enable experimental flags on your browser. Check browser implementation status on [webgpu.io](https://webgpu.io). Notably, `wgpu-rs` is often ahead in catching up with upstream WebGPU API changes. We keep the `gecko` branch pointing to the code that should work on latest Firefox.
 
 To run examples on the `wasm32-unknown-unknown` target, first build the example as usual, then run `wasm-bindgen`:
 
 ```bash
+# Checkout `gecko` branch that matches the state of Firefox
+git checkout upstream/gecko
 # Install or update wasm-bindgen-cli
 cargo install -f wasm-bindgen-cli
 # Build with the wasm target
