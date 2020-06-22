@@ -140,7 +140,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor,
     ) -> id::CommandBufferId {
-        span!(_guard, ERROR, "CommandEncoder::finish");
+        span!(_guard, INFO, "CommandEncoder::finish");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -167,7 +167,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) {
-        span!(_guard, ERROR, "CommandEncoder::push_debug_group");
+        span!(_guard, DEBUG, "CommandEncoder::push_debug_group");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -186,7 +186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         encoder_id: id::CommandEncoderId,
         label: &str,
     ) {
-        span!(_guard, ERROR, "CommandEncoder::insert_debug_marker");
+        span!(_guard, DEBUG, "CommandEncoder::insert_debug_marker");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -201,7 +201,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_encoder_pop_debug_group<B: GfxBackend>(&self, encoder_id: id::CommandEncoderId) {
-        span!(_guard, ERROR, "CommandEncoder::pop_debug_marker");
+        span!(_guard, DEBUG, "CommandEncoder::pop_debug_marker");
 
         let hub = B::hub(self);
         let mut token = Token::root();

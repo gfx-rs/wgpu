@@ -267,7 +267,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination_offset: BufferAddress,
         size: BufferAddress,
     ) {
-        span!(_guard, ERROR, "CommandEncoder::copy_buffer_to_buffer");
+        span!(_guard, INFO, "CommandEncoder::copy_buffer_to_buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -382,7 +382,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &TextureCopyView,
         copy_size: &Extent3d,
     ) {
-        span!(_guard, ERROR, "CommandEncoder::copy_buffer_to_texture");
+        span!(_guard, INFO, "CommandEncoder::copy_buffer_to_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -477,7 +477,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &BufferCopyView,
         copy_size: &Extent3d,
     ) {
-        span!(_guard, ERROR, "CommandEncoder::copy_texture_to_buffer");
+        span!(_guard, INFO, "CommandEncoder::copy_texture_to_buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -580,7 +580,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: &TextureCopyView,
         copy_size: &Extent3d,
     ) {
-        span!(_guard, ERROR, "CommandEncoder::copy_texture_to_texture");
+        span!(_guard, INFO, "CommandEncoder::copy_texture_to_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();

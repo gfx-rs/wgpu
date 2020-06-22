@@ -147,7 +147,7 @@ pub struct Adapter<B: hal::Backend> {
 
 impl<B: hal::Backend> Adapter<B> {
     fn new(raw: hal::adapter::Adapter<B>, unsafe_extensions: wgt::UnsafeExtensions) -> Self {
-        span!(_guard, ERROR, "Adapter::new");
+        span!(_guard, INFO, "Adapter::new");
 
         let adapter_features = raw.physical_device.features();
 
@@ -297,7 +297,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         handle: &impl raw_window_handle::HasRawWindowHandle,
         id_in: Input<G, SurfaceId>,
     ) -> SurfaceId {
-        span!(_guard, ERROR, "Instance::create_surface");
+        span!(_guard, INFO, "Instance::create_surface");
 
         let surface = unsafe {
             Surface {
@@ -341,7 +341,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe_extensions: wgt::UnsafeExtensions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Vec<AdapterId> {
-        span!(_guard, ERROR, "Instance::enumerate_adapters");
+        span!(_guard, INFO, "Instance::enumerate_adapters");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -421,7 +421,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe_extensions: wgt::UnsafeExtensions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Option<AdapterId> {
-        span!(_guard, ERROR, "Instance::pick_adapter");
+        span!(_guard, INFO, "Instance::pick_adapter");
 
         let instance = &self.instance;
         let mut token = Token::root();
@@ -626,7 +626,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_get_info<B: GfxBackend>(&self, adapter_id: AdapterId) -> AdapterInfo {
-        span!(_guard, ERROR, "Adapter::get_info");
+        span!(_guard, INFO, "Adapter::get_info");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -636,7 +636,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_extensions<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Extensions {
-        span!(_guard, ERROR, "Adapter::extensions");
+        span!(_guard, INFO, "Adapter::extensions");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -647,7 +647,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_limits<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Limits {
-        span!(_guard, ERROR, "Adapter::limits");
+        span!(_guard, INFO, "Adapter::limits");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -658,7 +658,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_capabilities<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Capabilities {
-        span!(_guard, ERROR, "Adapter::capabilities");
+        span!(_guard, INFO, "Adapter::capabilities");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -669,7 +669,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
-        span!(_guard, ERROR, "Adapter::drop");
+        span!(_guard, INFO, "Adapter::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -697,7 +697,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
     ) -> DeviceId {
-        span!(_guard, ERROR, "Adapter::request_device");
+        span!(_guard, INFO, "Adapter::request_device");
 
         let hub = B::hub(self);
         let mut token = Token::root();

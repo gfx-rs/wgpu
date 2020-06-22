@@ -94,7 +94,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
     ) -> SwapChainOutput {
-        span!(_guard, ERROR, "SwapChain::get_next_texture");
+        span!(_guard, INFO, "SwapChain::get_next_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -179,7 +179,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn swap_chain_present<B: GfxBackend>(&self, swap_chain_id: SwapChainId) {
-        span!(_guard, ERROR, "SwapChain::present");
+        span!(_guard, INFO, "SwapChain::present");
 
         let hub = B::hub(self);
         let mut token = Token::root();

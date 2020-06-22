@@ -48,9 +48,6 @@ pub fn initialize_default_subscriber(chrome_trace_path: Option<impl AsRef<Path>>
     }
 }
 
-static CURRENT_PROCESS_ID: once_cell::sync::Lazy<u32> =
-    once_cell::sync::Lazy::new(|| std::process::id());
-
 thread_local! {
     static CURRENT_THREAD_ID: usize = thread_id::get();
 }
@@ -71,6 +68,7 @@ enum EventType {
 pub struct ChromeTracingLayer {
     file: Arc<Mutex<std::fs::File>>,
     start_time: Instant,
+    process_id: u32,
 }
 
 impl ChromeTracingLayer {
@@ -81,6 +79,7 @@ impl ChromeTracingLayer {
             ChromeTracingLayer {
                 file: Arc::new(Mutex::new(file)),
                 start_time: Instant::now(),
+                process_id: std::process::id(),
             }
         })
     }
@@ -144,7 +143,7 @@ impl ChromeTracingLayer {
             category,
             event_type_str,
             diff_in_us,
-            *CURRENT_PROCESS_ID,
+            self.process_id,
             CURRENT_THREAD_ID.with(|v| *v),
             instant_scope,
         )

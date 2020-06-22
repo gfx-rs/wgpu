@@ -635,7 +635,7 @@ impl<B: hal::Backend> Device<B> {
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_extensions<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Extensions {
-        span!(_guard, ERROR, "Device::extensions");
+        span!(_guard, INFO, "Device::extensions");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -646,7 +646,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_limits<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Limits {
-        span!(_guard, ERROR, "Device::limits");
+        span!(_guard, INFO, "Device::limits");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -657,7 +657,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_capabilities<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Capabilities {
-        span!(_guard, ERROR, "Device::capabilities");
+        span!(_guard, INFO, "Device::capabilities");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -673,7 +673,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::BufferDescriptor<Label>,
         id_in: Input<G, id::BufferId>,
     ) -> id::BufferId {
-        span!(_guard, ERROR, "Device::create_buffer");
+        span!(_guard, INFO, "Device::create_buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -793,7 +793,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &[u8],
     ) {
-        span!(_guard, ERROR, "Device::set_buffer_sub_data");
+        span!(_guard, INFO, "Device::set_buffer_sub_data");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -852,7 +852,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         data: &mut [u8],
     ) {
-        span!(_guard, ERROR, "Device::get_buffer_sub_data");
+        span!(_guard, INFO, "Device::get_buffer_sub_data");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -890,7 +890,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: id::BufferId) {
-        span!(_guard, ERROR, "Buffer::drop");
+        span!(_guard, INFO, "Buffer::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -916,7 +916,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::TextureDescriptor<Label>,
         id_in: Input<G, id::TextureId>,
     ) -> id::TextureId {
-        span!(_guard, ERROR, "Device::create_texture");
+        span!(_guard, INFO, "Device::create_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -947,7 +947,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn texture_destroy<B: GfxBackend>(&self, texture_id: id::TextureId) {
-        span!(_guard, ERROR, "Texture::drop");
+        span!(_guard, INFO, "Texture::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -972,7 +972,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: Option<&wgt::TextureViewDescriptor<Label>>,
         id_in: Input<G, id::TextureViewId>,
     ) -> id::TextureViewId {
-        span!(_guard, ERROR, "Texture::create_view");
+        span!(_guard, INFO, "Texture::create_view");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1064,7 +1064,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn texture_view_destroy<B: GfxBackend>(&self, texture_view_id: id::TextureViewId) {
-        span!(_guard, ERROR, "Texture::view_destroy");
+        span!(_guard, INFO, "Texture::view_destroy");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1099,7 +1099,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::SamplerDescriptor<Label>,
         id_in: Input<G, id::SamplerId>,
     ) -> id::SamplerId {
-        span!(_guard, ERROR, "Device::create_sampler");
+        span!(_guard, INFO, "Device::create_sampler");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1166,7 +1166,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn sampler_destroy<B: GfxBackend>(&self, sampler_id: id::SamplerId) {
-        span!(_guard, ERROR, "Sampler::drop");
+        span!(_guard, INFO, "Sampler::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1192,7 +1192,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
     ) -> Result<id::BindGroupLayoutId, binding_model::BindGroupLayoutError> {
-        span!(_guard, ERROR, "Device::create_bind_group_layout");
+        span!(_guard, INFO, "Device::create_bind_group_layout");
 
         let mut token = Token::root();
         let hub = B::hub(self);
@@ -1312,7 +1312,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         bind_group_layout_id: id::BindGroupLayoutId,
     ) {
-        span!(_guard, ERROR, "BindGroupLayout::drop");
+        span!(_guard, INFO, "BindGroupLayout::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1342,7 +1342,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &binding_model::PipelineLayoutDescriptor,
         id_in: Input<G, id::PipelineLayoutId>,
     ) -> Result<id::PipelineLayoutId, binding_model::PipelineLayoutError> {
-        span!(_guard, ERROR, "Device::create_pipeline_layout");
+        span!(_guard, INFO, "Device::create_pipeline_layout");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1407,7 +1407,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn pipeline_layout_destroy<B: GfxBackend>(&self, pipeline_layout_id: id::PipelineLayoutId) {
-        span!(_guard, ERROR, "PipelineLayout::drop");
+        span!(_guard, INFO, "PipelineLayout::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1439,7 +1439,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<id::BindGroupId, BindGroupError> {
         use crate::binding_model::BindingResource as Br;
 
-        span!(_guard, ERROR, "Device::create_bind_group");
+        span!(_guard, INFO, "Device::create_bind_group");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1809,7 +1809,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn bind_group_destroy<B: GfxBackend>(&self, bind_group_id: id::BindGroupId) {
-        span!(_guard, ERROR, "BindGroup::drop");
+        span!(_guard, INFO, "BindGroup::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1835,7 +1835,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         source: pipeline::ShaderModuleSource,
         id_in: Input<G, id::ShaderModuleId>,
     ) -> id::ShaderModuleId {
-        span!(_guard, ERROR, "Device::create_shader_module");
+        span!(_guard, INFO, "Device::create_shader_module");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1917,7 +1917,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn shader_module_destroy<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
-        span!(_guard, ERROR, "ShaderModule::drop");
+        span!(_guard, INFO, "ShaderModule::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1943,7 +1943,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
     ) -> id::CommandEncoderId {
-        span!(_guard, ERROR, "Device::create_command_encoder");
+        span!(_guard, INFO, "Device::create_command_encoder");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1981,7 +1981,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_encoder_destroy<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
-        span!(_guard, ERROR, "CommandEncoder::drop");
+        span!(_guard, INFO, "CommandEncoder::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1998,7 +1998,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn command_buffer_destroy<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
-        span!(_guard, ERROR, "CommandBuffer::drop");
+        span!(_guard, INFO, "CommandBuffer::drop");
         self.command_encoder_destroy::<B>(command_buffer_id)
     }
 
@@ -2007,13 +2007,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::RenderBundleEncoderDescriptor,
     ) -> id::RenderBundleEncoderId {
-        span!(_guard, ERROR, "Device::create_render_bundle_encoder");
+        span!(_guard, INFO, "Device::create_render_bundle_encoder");
         let encoder = command::RenderBundleEncoder::new(desc, device_id, None);
         Box::into_raw(Box::new(encoder))
     }
 
     pub fn render_bundle_destroy<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {
-        span!(_guard, ERROR, "RenderBundle::drop");
+        span!(_guard, INFO, "RenderBundle::drop");
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -2038,7 +2038,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::RenderPipelineDescriptor,
         id_in: Input<G, id::RenderPipelineId>,
     ) -> Result<id::RenderPipelineId, pipeline::RenderPipelineError> {
-        span!(_guard, ERROR, "Device::create_render_pipeline");
+        span!(_guard, INFO, "Device::create_render_pipeline");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2414,7 +2414,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn render_pipeline_destroy<B: GfxBackend>(&self, render_pipeline_id: id::RenderPipelineId) {
-        span!(_guard, ERROR, "RenderPipeline::drop");
+        span!(_guard, INFO, "RenderPipeline::drop");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -2443,7 +2443,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &pipeline::ComputePipelineDescriptor,
         id_in: Input<G, id::ComputePipelineId>,
     ) -> Result<id::ComputePipelineId, pipeline::ComputePipelineError> {
-        span!(_guard, ERROR, "Device::create_compute_pipeline");
+        span!(_guard, INFO, "Device::create_compute_pipeline");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2543,7 +2543,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         compute_pipeline_id: id::ComputePipelineId,
     ) {
-        span!(_guard, ERROR, "ComputePipeline::drop");
+        span!(_guard, INFO, "ComputePipeline::drop");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -2572,7 +2572,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         surface_id: id::SurfaceId,
         desc: &wgt::SwapChainDescriptor,
     ) -> id::SwapChainId {
-        span!(_guard, ERROR, "Device::create_swap_chain");
+        span!(_guard, INFO, "Device::create_swap_chain");
 
         fn validate_swap_chain_descriptor(
             config: &mut hal::window::SwapchainConfig,
@@ -2701,7 +2701,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_poll<B: GfxBackend>(&self, device_id: id::DeviceId, force_wait: bool) {
-        span!(_guard, ERROR, "Device::poll");
+        span!(_guard, INFO, "Device::poll");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2717,7 +2717,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         force_wait: bool,
         callbacks: &mut Vec<BufferMapPendingCallback>,
     ) {
-        span!(_guard, ERROR, "Device::poll_devices");
+        span!(_guard, INFO, "Device::poll_devices");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2748,7 +2748,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn device_destroy<B: GfxBackend>(&self, device_id: id::DeviceId) {
-        span!(_guard, ERROR, "Device::drop");
+        span!(_guard, INFO, "Device::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2773,7 +2773,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
     ) {
-        span!(_guard, ERROR, "Device::buffer_map_async");
+        span!(_guard, INFO, "Device::buffer_map_async");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2833,7 +2833,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         offset: BufferAddress,
         _size: Option<BufferSize>,
     ) -> *mut u8 {
-        span!(_guard, ERROR, "Device::buffer_get_mapped_range");
+        span!(_guard, INFO, "Device::buffer_get_mapped_range");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -2853,7 +2853,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn buffer_unmap<B: GfxBackend>(&self, buffer_id: id::BufferId) {
-        span!(_guard, ERROR, "Device::buffer_unmap");
+        span!(_guard, INFO, "Device::buffer_unmap");
 
         let hub = B::hub(self);
         let mut token = Token::root();

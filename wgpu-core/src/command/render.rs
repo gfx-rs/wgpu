@@ -342,7 +342,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         color_attachments: &[ColorAttachmentDescriptor],
         depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
     ) {
-        span!(_guard, ERROR, "CommandEncoder::run_render_pass");
+        span!(_guard, INFO, "CommandEncoder::run_render_pass");
 
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -1317,7 +1317,7 @@ pub mod render_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        span!(_guard, ERROR, "RenderPass::set_bind_group");
+        span!(_guard, DEBUG, "RenderPass::set_bind_group");
         pass.base.commands.push(RenderCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -1333,7 +1333,7 @@ pub mod render_ffi {
         pass: &mut RenderPass,
         pipeline_id: id::RenderPipelineId,
     ) {
-        span!(_guard, ERROR, "RenderPass::set_pipeline");
+        span!(_guard, DEBUG, "RenderPass::set_pipeline");
         pass.base
             .commands
             .push(RenderCommand::SetPipeline(pipeline_id));
@@ -1346,7 +1346,7 @@ pub mod render_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        span!(_guard, ERROR, "RenderPass::set_index_buffer");
+        span!(_guard, DEBUG, "RenderPass::set_index_buffer");
         pass.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             offset,
@@ -1362,7 +1362,7 @@ pub mod render_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        span!(_guard, ERROR, "RenderPass::set_vertex_buffer");
+        span!(_guard, DEBUG, "RenderPass::set_vertex_buffer");
         pass.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer_id,
@@ -1373,7 +1373,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_blend_color(pass: &mut RenderPass, color: &Color) {
-        span!(_guard, ERROR, "RenderPass::set_blend_color");
+        span!(_guard, DEBUG, "RenderPass::set_blend_color");
         pass.base
             .commands
             .push(RenderCommand::SetBlendColor(*color));
@@ -1381,7 +1381,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_set_stencil_reference(pass: &mut RenderPass, value: u32) {
-        span!(_guard, ERROR, "RenderPass::set_stencil_buffer");
+        span!(_guard, DEBUG, "RenderPass::set_stencil_buffer");
         pass.base
             .commands
             .push(RenderCommand::SetStencilReference(value));
@@ -1397,7 +1397,7 @@ pub mod render_ffi {
         depth_min: f32,
         depth_max: f32,
     ) {
-        span!(_guard, ERROR, "RenderPass::set_viewport");
+        span!(_guard, DEBUG, "RenderPass::set_viewport");
         pass.base.commands.push(RenderCommand::SetViewport {
             rect: Rect { x, y, w, h },
             depth_min,
@@ -1413,7 +1413,7 @@ pub mod render_ffi {
         w: u32,
         h: u32,
     ) {
-        span!(_guard, ERROR, "RenderPass::set_scissor_rect");
+        span!(_guard, DEBUG, "RenderPass::set_scissor_rect");
         pass.base
             .commands
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
@@ -1427,7 +1427,7 @@ pub mod render_ffi {
         first_vertex: u32,
         first_instance: u32,
     ) {
-        span!(_guard, ERROR, "RenderPass::draw");
+        span!(_guard, DEBUG, "RenderPass::draw");
         pass.base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
@@ -1445,7 +1445,7 @@ pub mod render_ffi {
         base_vertex: i32,
         first_instance: u32,
     ) {
-        span!(_guard, ERROR, "RenderPass::draw_indexed");
+        span!(_guard, DEBUG, "RenderPass::draw_indexed");
         pass.base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
@@ -1461,7 +1461,7 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, ERROR, "RenderPass::draw_indirect");
+        span!(_guard, DEBUG, "RenderPass::draw_indirect");
         pass.base
             .commands
             .push(RenderCommand::DrawIndirect { buffer_id, offset });
@@ -1473,7 +1473,7 @@ pub mod render_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, ERROR, "RenderPass::draw_indexed_indirect");
+        span!(_guard, DEBUG, "RenderPass::draw_indexed_indirect");
         pass.base
             .commands
             .push(RenderCommand::DrawIndexedIndirect { buffer_id, offset });
@@ -1485,7 +1485,7 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, ERROR, "RenderPass::push_debug_group");
+        span!(_guard, DEBUG, "RenderPass::push_debug_group");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -1497,7 +1497,7 @@ pub mod render_ffi {
 
     #[no_mangle]
     pub extern "C" fn wgpu_render_pass_pop_debug_group(pass: &mut RenderPass) {
-        span!(_guard, ERROR, "RenderPass::pop_debug_group");
+        span!(_guard, DEBUG, "RenderPass::pop_debug_group");
         pass.base.commands.push(RenderCommand::PopDebugGroup);
     }
 
@@ -1507,7 +1507,7 @@ pub mod render_ffi {
         label: RawString,
         color: u32,
     ) {
-        span!(_guard, ERROR, "RenderPass::insert_debug_marker");
+        span!(_guard, DEBUG, "RenderPass::insert_debug_marker");
         let bytes = ffi::CStr::from_ptr(label).to_bytes();
         pass.base.string_data.extend_from_slice(bytes);
 
@@ -1523,7 +1523,7 @@ pub mod render_ffi {
         render_bundle_ids: *const id::RenderBundleId,
         render_bundle_ids_length: usize,
     ) {
-        span!(_guard, ERROR, "RenderPass::execute_bundles");
+        span!(_guard, DEBUG, "RenderPass::execute_bundles");
         for &bundle_id in slice::from_raw_parts(render_bundle_ids, render_bundle_ids_length) {
             pass.base
                 .commands

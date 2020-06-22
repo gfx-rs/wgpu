@@ -441,7 +441,8 @@ fn main() {
     env_logger::init();
 
     #[cfg(feature = "renderdoc")]
-    let mut _rd = renderdoc::RenderDoc::<renderdoc::V110>::new()
+    #[cfg_attr(feature = "winit", allow(unused))]
+    let mut rd = renderdoc::RenderDoc::<renderdoc::V110>::new()
         .expect("Failed to connect to RenderDoc: are you running without it?");
 
     //TODO: setting for the backend bits
@@ -514,14 +515,14 @@ fn main() {
     #[cfg(not(feature = "winit"))]
     {
         #[cfg(feature = "renderdoc")]
-        _rd.start_frame_capture(ptr::null(), ptr::null());
+        rd.start_frame_capture(ptr::null(), ptr::null());
 
         while let Some(action) = actions.pop() {
             gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
         }
 
         #[cfg(feature = "renderdoc")]
-        _rd.end_frame_capture(ptr::null(), ptr::null());
+        rd.end_frame_capture(ptr::null(), ptr::null());
         gfx_select!(device => global.device_poll(device, true));
     }
     #[cfg(feature = "winit")]

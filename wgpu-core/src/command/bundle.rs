@@ -63,7 +63,7 @@ impl RenderBundleEncoder {
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
     ) -> Self {
-        span!(_guard, ERROR, "RenderBundleEncoder::new");
+        span!(_guard, INFO, "RenderBundleEncoder::new");
         RenderBundleEncoder {
             base: base.unwrap_or_else(BasePass::new),
             parent_id,
@@ -483,7 +483,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &wgt::RenderBundleDescriptor<Label>,
         id_in: Input<G, id::RenderBundleId>,
     ) -> id::RenderBundleId {
-        span!(_guard, ERROR, "RenderBundleEncoder::finish");
+        span!(_guard, INFO, "RenderBundleEncoder::finish");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -773,7 +773,7 @@ pub mod bundle_ffi {
         offsets: *const DynamicOffset,
         offset_length: usize,
     ) {
-        span!(_guard, ERROR, "RenderBundle::set_bind_group");
+        span!(_guard, DEBUG, "RenderBundle::set_bind_group");
         bundle.base.commands.push(RenderCommand::SetBindGroup {
             index: index.try_into().unwrap(),
             num_dynamic_offsets: offset_length.try_into().unwrap(),
@@ -790,7 +790,7 @@ pub mod bundle_ffi {
         bundle: &mut RenderBundleEncoder,
         pipeline_id: id::RenderPipelineId,
     ) {
-        span!(_guard, ERROR, "RenderBundle::set_pipeline");
+        span!(_guard, DEBUG, "RenderBundle::set_pipeline");
         bundle
             .base
             .commands
@@ -804,7 +804,7 @@ pub mod bundle_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        span!(_guard, ERROR, "RenderBundle::set_index_buffer");
+        span!(_guard, DEBUG, "RenderBundle::set_index_buffer");
         bundle.base.commands.push(RenderCommand::SetIndexBuffer {
             buffer_id,
             offset,
@@ -820,7 +820,7 @@ pub mod bundle_ffi {
         offset: BufferAddress,
         size: Option<BufferSize>,
     ) {
-        span!(_guard, ERROR, "RenderBundle::set_vertex_buffer");
+        span!(_guard, DEBUG, "RenderBundle::set_vertex_buffer");
         bundle.base.commands.push(RenderCommand::SetVertexBuffer {
             slot,
             buffer_id,
@@ -837,7 +837,7 @@ pub mod bundle_ffi {
         first_vertex: u32,
         first_instance: u32,
     ) {
-        span!(_guard, ERROR, "RenderBundle::draw");
+        span!(_guard, DEBUG, "RenderBundle::draw");
         bundle.base.commands.push(RenderCommand::Draw {
             vertex_count,
             instance_count,
@@ -855,7 +855,7 @@ pub mod bundle_ffi {
         base_vertex: i32,
         first_instance: u32,
     ) {
-        span!(_guard, ERROR, "RenderBundle::draw_indexed");
+        span!(_guard, DEBUG, "RenderBundle::draw_indexed");
         bundle.base.commands.push(RenderCommand::DrawIndexed {
             index_count,
             instance_count,
@@ -871,7 +871,7 @@ pub mod bundle_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, ERROR, "RenderBundle::draw_indirect");
+        span!(_guard, DEBUG, "RenderBundle::draw_indirect");
         bundle
             .base
             .commands
@@ -884,7 +884,7 @@ pub mod bundle_ffi {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     ) {
-        span!(_guard, ERROR, "RenderBundle::draw_indexed_indirect");
+        span!(_guard, DEBUG, "RenderBundle::draw_indexed_indirect");
         bundle
             .base
             .commands
@@ -896,13 +896,13 @@ pub mod bundle_ffi {
         _bundle: &mut RenderBundleEncoder,
         _label: RawString,
     ) {
-        span!(_guard, ERROR, "RenderBundle::push_debug_group");
+        span!(_guard, DEBUG, "RenderBundle::push_debug_group");
         //TODO
     }
 
     #[no_mangle]
     pub unsafe extern "C" fn wgpu_render_bundle_pop_debug_group(_bundle: &mut RenderBundleEncoder) {
-        span!(_guard, ERROR, "RenderBundle::pop_debug_group");
+        span!(_guard, DEBUG, "RenderBundle::pop_debug_group");
         //TODO
     }
 
@@ -911,7 +911,7 @@ pub mod bundle_ffi {
         _bundle: &mut RenderBundleEncoder,
         _label: RawString,
     ) {
-        span!(_guard, ERROR, "RenderBundle::insert_debug_marker");
+        span!(_guard, DEBUG, "RenderBundle::insert_debug_marker");
         //TODO
     }
 }

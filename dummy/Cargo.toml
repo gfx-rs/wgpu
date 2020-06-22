@@ -13,4 +13,4 @@ publish = false
 path = "../wgpu-core"
 package = "wgpu-core"
 version = "0.5"
-features = ["battery", "serial-pass", "trace"]
+features = ["battery", "serial-pass", "subscriber", "trace"]
