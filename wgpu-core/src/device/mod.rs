@@ -81,6 +81,8 @@ pub fn all_image_stages() -> hal::pso::PipelineStage {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum HostMap {
     Read,
     Write,

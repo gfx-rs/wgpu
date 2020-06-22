@@ -1475,7 +1475,7 @@ impl<L: Default> Default for SamplerDescriptor<L> {
             min_filter: Default::default(),
             mipmap_filter: Default::default(),
             lod_min_clamp: 0.0,
-            lod_max_clamp: f32::MAX,
+            lod_max_clamp: std::f32::MAX,
             compare: Default::default(),
             anisotropy_clamp: Default::default(),
             _non_exhaustive: Default::default(),
