@@ -553,18 +553,17 @@ pub struct Hubs<F: GlobalIdentityHandlerFactory> {
 
 impl<F: GlobalIdentityHandlerFactory> Hubs<F> {
     fn new(factory: &F) -> Self {
-        Hubs {
-            #[cfg(any(
-                not(any(target_os = "ios", target_os = "macos")),
-                feature = "gfx-backend-vulkan"
-            ))]
-            vulkan: Hub::new(factory),
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
-            metal: Hub::new(factory),
-            #[cfg(windows)]
-            dx12: Hub::new(factory),
-            #[cfg(windows)]
-            dx11: Hub::new(factory),
+        backends! {
+            Hubs {
+                #[vulkan]
+                vulkan: Hub::new(factory),
+                #[metal]
+                metal: Hub::new(factory),
+                #[dx12]
+                dx12: Hub::new(factory),
+                #[dx11]
+                dx11: Hub::new(factory),
+            }
         }
     }
 }
@@ -592,18 +591,23 @@ impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
         if !thread::panicking() {
             log::info!("Dropping Global");
             let mut surface_guard = self.surfaces.data.write();
+
             // destroy hubs
-            #[cfg(any(
-                not(any(target_os = "ios", target_os = "macos")),
-                feature = "gfx-backend-vulkan"
-            ))]
-            self.hubs.vulkan.clear(&mut *surface_guard);
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
-            self.hubs.metal.clear(&mut *surface_guard);
-            #[cfg(windows)]
-            self.hubs.dx12.clear(&mut *surface_guard);
-            #[cfg(windows)]
-            self.hubs.dx11.clear(&mut *surface_guard);
+            backends! {
+                #[vulkan] {
+                    self.hubs.vulkan.clear(&mut *surface_guard);
+                }
+                #[metal] {
+                    self.hubs.metal.clear(&mut *surface_guard);
+                }
+                #[dx12] {
+                    self.hubs.dx12.clear(&mut *surface_guard);
+                }
+                #[dx11] {
+                    self.hubs.dx11.clear(&mut *surface_guard);
+                }
+            }
+
             // destroy surfaces
             for (_, (surface, _)) in surface_guard.map.drain() {
                 self.instance.destroy_surface(surface);
