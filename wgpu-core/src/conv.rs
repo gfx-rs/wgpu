@@ -533,11 +533,10 @@ pub(crate) fn map_texture_state(
         W::COPY_SRC => L::TransferSrcOptimal,
         W::COPY_DST => L::TransferDstOptimal,
         W::SAMPLED if is_color => L::ShaderReadOnlyOptimal,
-        W::SAMPLED => L::DepthStencilReadOnlyOptimal,
         W::ATTACHMENT_READ | W::ATTACHMENT_WRITE if is_color => L::ColorAttachmentOptimal,
-        W::ATTACHMENT_READ => L::DepthStencilReadOnlyOptimal,
+        _ if is_color => L::General,
         W::ATTACHMENT_WRITE => L::DepthStencilAttachmentOptimal,
-        _ => L::General,
+        _ => L::DepthStencilReadOnlyOptimal,
     };
 
     let mut access = A::empty();
