@@ -10,6 +10,7 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::{BufferMapState, BufferUse, TextureUse},
+    span,
 };
 
 use gfx_memory::{Block, Heaps, MemoryBlock};
@@ -130,6 +131,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
     ) {
+        span!(_guard, INFO, "Queue::write_buffer");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
@@ -238,6 +241,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data_layout: &wgt::TextureDataLayout,
         size: &wgt::Extent3d,
     ) {
+        span!(_guard, INFO, "Queue::write_texture");
+
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
@@ -365,6 +370,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
     ) {
+        span!(_guard, INFO, "Queue::submit");
+
         let hub = B::hub(self);
 
         let callbacks = {

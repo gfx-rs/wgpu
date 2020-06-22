@@ -441,6 +441,7 @@ fn main() {
     env_logger::init();
 
     #[cfg(feature = "renderdoc")]
+    #[cfg_attr(feature = "winit", allow(unused))]
     let mut rd = renderdoc::RenderDoc::<renderdoc::V110>::new()
         .expect("Failed to connect to RenderDoc: are you running without it?");
 

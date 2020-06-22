@@ -38,7 +38,7 @@ use crate::{
     conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId},
-    resource, LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
+    resource, span, LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
@@ -94,6 +94,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
     ) -> SwapChainOutput {
+        span!(_guard, INFO, "SwapChain::get_next_texture");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -177,6 +179,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     }
 
     pub fn swap_chain_present<B: GfxBackend>(&self, swap_chain_id: SwapChainId) {
+        span!(_guard, INFO, "SwapChain::present");
+
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -215,6 +219,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if let Err(e) = err {
             log::warn!("present failed: {:?}", e);
         }
+
+        tracing::debug!(trace = true, "Presented. End of Frame");
 
         for fbo in sc.acquired_framebuffers.drain(..) {
             unsafe {
