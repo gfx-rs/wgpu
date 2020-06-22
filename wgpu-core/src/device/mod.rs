@@ -225,7 +225,7 @@ impl<B: GfxBackend> Device<B> {
                     min_device_allocation: 0x1_0000,
                 },
                 gfx_memory::LinearConfig {
-                    linear_size: 0x100_0000,
+                    line_size: 0x100_0000,
                 },
                 hal_limits.non_coherent_atom_size as u64,
             )
