@@ -883,10 +883,24 @@ impl Writer {
         output: &mut Vec<Instruction>,
     ) -> Instruction {
         match statement {
-            crate::Statement::Return { value: _ } => match function.return_type {
-                Some(_) => unimplemented!(),
-                None => Instruction::new(Op::Return),
-            },
+            crate::Statement::Return { value } => {
+                match function.return_type {
+                    Some(_) => {
+                        let value = value.unwrap();
+
+                        // Parse the expression
+                        let value_expression = &function.expressions[value];
+                        let (value_id, _) =
+                            self.parse_expression(ir_module, function, value_expression, output);
+
+                        // Construct the return value instruction
+                        let mut instruction = Instruction::new(Op::ReturnValue);
+                        instruction.add_operand(value_id);
+                        instruction
+                    }
+                    None => Instruction::new(Op::Return),
+                }
+            }
             crate::Statement::Store { pointer, value } => {
                 let mut instruction = Instruction::new(Op::Store);
 
