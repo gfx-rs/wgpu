@@ -1,8 +1,6 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
-extern crate rand;
-
 #[path = "../framework.rs"]
 mod framework;
 
@@ -257,6 +255,7 @@ impl framework::Example for Example {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
+        _spawner: &impl futures::task::LocalSpawn,
     ) -> wgpu::CommandBuffer {
         // create render pass descriptor
         let render_pass_descriptor = wgpu::RenderPassDescriptor {

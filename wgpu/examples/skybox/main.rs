@@ -1,3 +1,5 @@
+use futures::task::{LocalSpawn, LocalSpawnExt};
+
 #[path = "../framework.rs"]
 mod framework;
 
@@ -19,6 +21,7 @@ pub struct Skybox {
     bind_group: wgpu::BindGroup,
     uniform_buf: wgpu::Buffer,
     uniforms: Uniforms,
+    staging_belt: wgpu::util::StagingBelt,
 }
 
 impl Skybox {
@@ -234,6 +237,7 @@ impl framework::Example for Skybox {
                 uniform_buf,
                 aspect,
                 uniforms,
+                staging_belt: wgpu::util::StagingBelt::new(0x100, device),
             },
             None,
         )
@@ -261,15 +265,22 @@ impl framework::Example for Skybox {
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        spawner: &impl LocalSpawn,
     ) -> wgpu::CommandBuffer {
         // update rotation
         let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
         self.uniforms[1] = self.uniforms[1] * rotation;
-        queue.write_buffer(
-            &self.uniform_buf,
-            0,
-            bytemuck::cast_slice(&raw_uniforms(&self.uniforms)),
-        );
+        let raw_uniforms = raw_uniforms(&self.uniforms);
+        self.staging_belt
+            .write_buffer(
+                &self.uniform_buf,
+                0,
+                wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
+                device,
+            )
+            .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
+        let upload_future = self.staging_belt.flush(queue, device);
+        spawner.spawn_local(upload_future).unwrap();
 
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });

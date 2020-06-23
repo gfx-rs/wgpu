@@ -1,5 +1,9 @@
+mod belt;
+
 #[cfg(all(not(target_arch = "wasm32"), feature = "subscriber"))]
 pub use wgc::logging::subscriber::{initialize_default_subscriber, ChromeTracingLayer};
+
+pub use belt::StagingBelt;
 
 /// Wrapper aligning contents to at least 4.
 #[repr(align(4))]
