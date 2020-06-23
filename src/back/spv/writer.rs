@@ -1,7 +1,12 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
 use super::{helpers, Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
-use crate::{FastHashMap, FastHashSet};
+use crate::{FastHashMap, FastHashSet, ImageFlags, VectorSize};
 use spirv::{Op, Word};
+
+enum Signedness {
+    Unsigned = 0,
+    Signed = 1,
+}
 
 trait LookupHelper<T> {
     type Target;
@@ -87,11 +92,165 @@ impl Writer {
         }
     }
 
-    fn instruction_capability(&self, capability: spirv::Capability) -> Instruction {
-        let mut instruction = Instruction::new(Op::Capability);
-        instruction.add_operand(capability as u32);
+    fn get_type_id(
+        &mut self,
+        arena: &crate::Arena<crate::Type>,
+        handle: crate::Handle<crate::Type>,
+    ) -> Word {
+        match self.lookup_type.lookup_id(handle) {
+            Some(word) => word,
+            None => {
+                let (instruction, id) = self.parse_type_declaration(arena, handle);
+                instruction.to_words(&mut self.logical_layout.declarations);
+                id
+            }
+        }
+    }
+
+    fn get_constant_id(
+        &mut self,
+        handle: crate::Handle<crate::Constant>,
+        ir_module: &crate::Module,
+    ) -> Word {
+        match self.lookup_constant.lookup_id(handle) {
+            Some(word) => word,
+            None => {
+                let (instruction, id) = self.parse_constant_type(handle, ir_module);
+                instruction.to_words(&mut self.logical_layout.declarations);
+                id
+            }
+        }
+    }
+
+    fn get_global_variable_id(
+        &mut self,
+        arena: &crate::Arena<crate::Type>,
+        global_arena: &crate::Arena<crate::GlobalVariable>,
+        handle: crate::Handle<crate::GlobalVariable>,
+    ) -> Word {
+        match self.lookup_global_variable.lookup_id(handle) {
+            Some(word) => word,
+            None => {
+                let global_variable = &global_arena[handle];
+                let (instruction, id) = self.parse_global_variable(arena, global_variable, handle);
+                instruction.to_words(&mut self.logical_layout.declarations);
+                id
+            }
+        }
+    }
+
+    fn get_function_type(
+        &mut self,
+        ty: Option<crate::Handle<crate::Type>>,
+        arena: &crate::Arena<crate::Type>,
+    ) -> Word {
+        match ty {
+            Some(handle) => self.get_type_id(arena, handle),
+            None => match self.void_type {
+                Some(id) => id,
+                None => {
+                    let id = self.generate_id();
+                    self.void_type = Some(id);
+                    self.instruction_type_void(id)
+                        .to_words(&mut self.logical_layout.declarations);
+                    id
+                }
+            },
+        }
+    }
+
+    fn get_pointer_id(
+        &mut self,
+        arena: &crate::Arena<crate::Type>,
+        handle: crate::Handle<crate::Type>,
+        class: spirv::StorageClass,
+    ) -> Word {
+        let ty = &arena[handle];
+        let type_id = self.get_type_id(arena, handle);
+        match ty.inner {
+            crate::TypeInner::Pointer { .. } => type_id,
+            _ => {
+                let pointer_id = self.generate_id();
+                let instruction = self.instruction_type_pointer(pointer_id, class, type_id);
+                instruction.to_words(&mut self.logical_layout.declarations);
+
+                /* TODO
+                    Not able to lookup Pointer, because there is no Handle in the IR for it.
+                    Idea would be to not have any handles at all in the lookups, so we aren't bound
+                    to the IR. We can then insert, like here runtime values to the lookups
+                */
+                // self.lookup_type.insert(pointer_id, global_variable.ty);
+                pointer_id
+            }
+        }
+    }
+
+    fn find_scalar_handle(
+        &self,
+        arena: &crate::Arena<crate::Type>,
+        kind: crate::ScalarKind,
+        width: u8,
+    ) -> crate::Handle<crate::Type> {
+        let mut scalar_handle = None;
+        for (handle, ty) in arena.iter() {
+            match ty.inner {
+                crate::TypeInner::Scalar {
+                    kind: lookup_kind,
+                    width: lookup_width,
+                } => {
+                    if kind == lookup_kind && width == lookup_width {
+                        scalar_handle = Some(handle);
+                        break;
+                    }
+                }
+                _ => continue,
+            }
+        }
+        scalar_handle.unwrap()
+    }
+
+    ///
+    /// Debug Instructions
+    ///
+
+    fn instruction_source(
+        &self,
+        source_language: spirv::SourceLanguage,
+        version: u32,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::Source);
+        instruction.add_operand(source_language as u32);
+        instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
         instruction
     }
+
+    fn instruction_name(&self, target_id: Word, name: &str) -> Instruction {
+        let mut instruction = Instruction::new(Op::Name);
+        instruction.set_result(target_id);
+        instruction.add_operands(helpers::string_to_words(name));
+        instruction
+    }
+
+    ///
+    /// Annotation Instructions
+    ///
+
+    fn instruction_decorate(
+        &self,
+        target_id: Word,
+        decoration: spirv::Decoration,
+        operands: &[Word],
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::Decorate);
+        instruction.add_operand(target_id);
+        instruction.add_operand(decoration as u32);
+        instruction.add_operands(Vec::from(operands));
+        instruction
+    }
+
+    ///
+    /// Extension Instructions
+    ///
 
     fn instruction_ext_inst_import(&mut self, name: &str) -> Instruction {
         let mut instruction = Instruction::new(Op::ExtInstImport);
@@ -100,6 +259,10 @@ impl Writer {
         instruction.add_operands(helpers::string_to_words(name));
         instruction
     }
+
+    ///
+    /// Mode-Setting Instructions
+    ///
 
     fn instruction_memory_model(&mut self) -> Instruction {
         let mut instruction = Instruction::new(Op::MemoryModel);
@@ -132,14 +295,6 @@ impl Writer {
 
         instruction.add_operand(exec_model as u32);
         instruction.add_operand(function_id);
-
-        if self.writer_flags.contains(WriterFlags::DEBUG) {
-            let mut debug_instruction = Instruction::new(Op::Name);
-            debug_instruction.set_result(function_id);
-            debug_instruction.add_operands(helpers::string_to_words(entry_point.name.as_str()));
-            self.debugs.push(debug_instruction);
-        }
-
         instruction.add_operands(helpers::string_to_words(entry_point.name.as_str()));
 
         let function = &ir_module.functions[entry_point.function];
@@ -164,158 +319,436 @@ impl Writer {
             crate::ShaderStage::Fragment => {
                 let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
                 self.try_add_capabilities(execution_mode.required_capabilities());
-
-                let mut execution_mode_instruction = Instruction::new(Op::ExecutionMode);
-                execution_mode_instruction.add_operand(function_id);
-                execution_mode_instruction.add_operand(execution_mode as u32);
-                execution_mode_instruction.to_words(&mut self.logical_layout.execution_modes);
+                self.instruction_execution_mode(function_id, execution_mode)
+                    .to_words(&mut self.logical_layout.execution_modes);
             }
             crate::ShaderStage::Compute => {}
+        }
+
+        if self.writer_flags.contains(WriterFlags::DEBUG) {
+            self.debugs
+                .push(self.instruction_name(function_id, entry_point.name.as_str()));
         }
 
         instruction
     }
 
-    fn get_type_id(
-        &mut self,
-        arena: &crate::Arena<crate::Type>,
-        handle: crate::Handle<crate::Type>,
-    ) -> Word {
-        match self.lookup_type.lookup_id(handle) {
-            Some(word) => word,
-            None => {
-                let (instruction, id) = self.instruction_type_declaration(arena, handle);
-                instruction.to_words(&mut self.logical_layout.declarations);
-                id
-            }
-        }
-    }
-
-    fn get_constant_id(
-        &mut self,
-        handle: crate::Handle<crate::Constant>,
-        ir_module: &crate::Module,
-    ) -> Word {
-        match self.lookup_constant.lookup_id(handle) {
-            Some(word) => word,
-            None => {
-                let (instruction, id) = self.instruction_constant_type(handle, ir_module);
-                instruction.to_words(&mut self.logical_layout.declarations);
-                id
-            }
-        }
-    }
-
-    fn get_global_variable_id(
-        &mut self,
-        arena: &crate::Arena<crate::Type>,
-        global_arena: &crate::Arena<crate::GlobalVariable>,
-        handle: crate::Handle<crate::GlobalVariable>,
-    ) -> Word {
-        match self.lookup_global_variable.lookup_id(handle) {
-            Some(word) => word,
-            None => {
-                let global_variable = &global_arena[handle];
-                let (instruction, id) =
-                    self.instruction_global_variable(arena, global_variable, handle);
-                instruction.to_words(&mut self.logical_layout.declarations);
-                id
-            }
-        }
-    }
-
-    fn get_function_type(
-        &mut self,
-        ty: Option<crate::Handle<crate::Type>>,
-        arena: &crate::Arena<crate::Type>,
-    ) -> Word {
-        match ty {
-            Some(handle) => self.get_type_id(arena, handle),
-            None => match self.void_type {
-                Some(id) => id,
-                None => {
-                    let id = self.generate_id();
-
-                    let mut instruction = Instruction::new(Op::TypeVoid);
-                    instruction.set_result(id);
-
-                    self.void_type = Some(id);
-                    instruction.to_words(&mut self.logical_layout.declarations);
-                    id
-                }
-            },
-        }
-    }
-
-    fn find_scalar_handle(
+    fn instruction_execution_mode(
         &self,
-        arena: &crate::Arena<crate::Type>,
-        kind: crate::ScalarKind,
-        width: u8,
-    ) -> crate::Handle<crate::Type> {
-        let mut scalar_handle = None;
-        for (handle, ty) in arena.iter() {
-            match ty.inner {
-                crate::TypeInner::Scalar {
-                    kind: _kind,
-                    width: _width,
-                } => {
-                    if kind == _kind && width == _width {
-                        scalar_handle = Some(handle);
-                        break;
-                    }
-                }
-                _ => continue,
-            }
-        }
-        scalar_handle.unwrap()
+        function_id: Word,
+        execution_mode: spirv::ExecutionMode,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::ExecutionMode);
+        instruction.add_operand(function_id);
+        instruction.add_operand(execution_mode as u32);
+        instruction
     }
 
-    fn instruction_type_declaration(
+    fn instruction_capability(&self, capability: spirv::Capability) -> Instruction {
+        let mut instruction = Instruction::new(Op::Capability);
+        instruction.add_operand(capability as u32);
+        instruction
+    }
+
+    ///
+    /// Type-Declaration Instructions
+    ///
+
+    fn instruction_type_void(&self, id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeVoid);
+        instruction.set_result(id);
+        instruction
+    }
+
+    fn instruction_type_bool(&self, id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeBool);
+        instruction.set_result(id);
+        instruction
+    }
+
+    fn instruction_type_int(&self, id: Word, width: u8, signedness: Signedness) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeInt);
+        instruction.set_result(id);
+        instruction.add_operand(width as u32);
+        instruction.add_operand(signedness as u32);
+        instruction
+    }
+
+    fn instruction_type_float(&self, id: Word, width: u8) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeFloat);
+        instruction.set_result(id);
+        instruction.add_operand(width as u32);
+        instruction
+    }
+
+    fn instruction_type_vector(
+        &self,
+        id: Word,
+        component_type_id: Word,
+        component_count: VectorSize,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeVector);
+        instruction.set_result(id);
+        instruction.add_operand(component_type_id);
+        instruction.add_operand(component_count as u32);
+        instruction
+    }
+
+    fn instruction_type_matrix(
+        &self,
+        id: Word,
+        column_type_id: Word,
+        column_count: VectorSize,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeMatrix);
+        instruction.set_result(id);
+        instruction.add_operand(column_type_id);
+        instruction.add_operand(column_count as u32);
+        instruction
+    }
+
+    fn instruction_type_image(
+        &self,
+        id: Word,
+        sampled_type_id: Word,
+        dim: spirv::Dim,
+        flags: ImageFlags,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeImage);
+        instruction.set_result(id);
+        instruction.add_operand(sampled_type_id);
+        instruction.add_operand(dim as u32);
+
+        // TODO Add Depth, but how to determine? Not yet in the WGSL spec
+        instruction.add_operand(1);
+
+        instruction.add_operand(if flags.contains(crate::ImageFlags::ARRAYED) {
+            1
+        } else {
+            0
+        });
+
+        instruction.add_operand(if flags.contains(crate::ImageFlags::MULTISAMPLED) {
+            1
+        } else {
+            0
+        });
+
+        instruction.add_operand(if flags.contains(crate::ImageFlags::SAMPLED) {
+            1
+        } else {
+            0
+        });
+
+        // TODO Image Format defaults to Unknown, not yet in IR
+        instruction.add_operand(spirv::ImageFormat::Unknown as u32);
+
+        // Access Qualifier
+        instruction.add_operand(
+            if flags.contains(crate::ImageFlags::CAN_STORE)
+                && flags.contains(crate::ImageFlags::CAN_LOAD)
+            {
+                2
+            } else if flags.contains(crate::ImageFlags::CAN_STORE) {
+                1
+            } else {
+                0
+            },
+        );
+        instruction
+    }
+
+    fn instruction_type_sampler(&self, id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeSampler);
+        instruction.set_result(id);
+        instruction
+    }
+
+    fn instruction_type_array(
+        &self,
+        id: Word,
+        element_type_id: Word,
+        length_id: Word,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeArray);
+        instruction.set_result(id);
+        instruction.add_operand(element_type_id);
+        instruction.add_operand(length_id);
+        instruction
+    }
+
+    fn instruction_type_runtime_array(&self, id: Word, element_type_id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeRuntimeArray);
+        instruction.set_result(id);
+        instruction.add_operand(element_type_id);
+        instruction
+    }
+
+    fn instruction_type_struct(&self, id: Word, member_ids: Vec<Word>) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeStruct);
+        instruction.set_result(id);
+        instruction.add_operands(member_ids);
+        instruction
+    }
+
+    fn instruction_type_pointer(
+        &self,
+        id: Word,
+        storage_class: spirv::StorageClass,
+        type_id: Word,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypePointer);
+        instruction.set_result(id);
+        instruction.add_operand(storage_class as u32);
+        instruction.add_operand(type_id);
+        instruction
+    }
+
+    fn instruction_type_function(
+        &self,
+        id: Word,
+        return_type_id: Word,
+        parameter_ids: Vec<Word>,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::TypeFunction);
+        instruction.set_result(id);
+        instruction.add_operand(return_type_id);
+        instruction.add_operands(parameter_ids);
+        instruction
+    }
+
+    ///
+    /// Constant-Creation Instructions
+    ///
+
+    fn instruction_constant_true(&self, scalar_constant_id: Word, id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::ConstantTrue);
+        instruction.set_type(scalar_constant_id);
+        instruction.set_result(id);
+        instruction
+    }
+
+    fn instruction_constant_false(&self, scalar_constant_id: Word, id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::ConstantFalse);
+        instruction.set_type(scalar_constant_id);
+        instruction.set_result(id);
+        instruction
+    }
+
+    fn instruction_constant(
+        &self,
+        scalar_constant_id: Word,
+        id: Word,
+        values: &[Word],
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::Constant);
+        instruction.set_type(scalar_constant_id);
+        instruction.set_result(id);
+        for value in values {
+            instruction.add_operand(*value);
+        }
+        instruction
+    }
+
+    fn instruction_constant_composite(
+        &self,
+        composite_type_id: Word,
+        id: Word,
+        constituent_ids: Vec<Word>,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::ConstantComposite);
+        instruction.set_type(composite_type_id);
+        instruction.set_result(id);
+        instruction.add_operands(constituent_ids);
+        instruction
+    }
+
+    ///
+    /// Memory Instructions
+    ///
+
+    fn instruction_variable(
+        &self,
+        pointer_type_id: Word,
+        id: Word,
+        storage_class: spirv::StorageClass,
+        initializer_id: Option<Word>,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::Variable);
+        instruction.set_type(pointer_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(storage_class as u32);
+
+        if let Some(initializer_id) = initializer_id {
+            instruction.add_operand(initializer_id);
+        }
+
+        instruction
+    }
+
+    fn instruction_load(
+        &self,
+        type_id: Word,
+        id: Word,
+        pointer_type_id: Word,
+        memory_access: Option<spirv::MemoryAccess>,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::Load);
+        instruction.set_type(type_id);
+        instruction.set_result(id);
+        instruction.add_operand(pointer_type_id);
+
+        instruction.add_operand(if let Some(memory_access) = memory_access {
+            memory_access.bits()
+        } else {
+            spirv::MemoryAccess::NONE.bits()
+        });
+
+        instruction
+    }
+
+    fn instruction_store(&self, pointer_type_id: Word, object_id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::Store);
+        instruction.set_type(pointer_type_id);
+        instruction.add_operand(object_id);
+        instruction
+    }
+
+    ///
+    /// Function Instructions
+    ///
+
+    fn instruction_function(
+        &self,
+        return_type_id: Word,
+        id: Word,
+        function_control: spirv::FunctionControl,
+        function_type_id: Word,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::Function);
+        instruction.set_type(return_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(function_control.bits());
+        instruction.add_operand(function_type_id);
+        instruction
+    }
+
+    fn instruction_function_end(&self) -> Instruction {
+        Instruction::new(Op::FunctionEnd)
+    }
+
+    ///
+    /// Image Instructions
+    ///
+
+    ///
+    /// Conversion Instructions
+    ///
+
+    ///
+    /// Composite Instructions
+    ///
+
+    fn instruction_composite_construct(
+        &self,
+        composite_type_id: Word,
+        id: Word,
+        constituent_ids: Vec<Word>,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::CompositeConstruct);
+        instruction.set_type(composite_type_id);
+        instruction.set_result(id);
+        instruction.add_operands(constituent_ids);
+        instruction
+    }
+
+    ///
+    /// Arithmetic Instructions
+    ///
+
+    fn instruction_vector_times_scalar(
+        &self,
+        float_type_id: Word,
+        id: Word,
+        vector_type_id: Word,
+        scalar_type_id: Word,
+    ) -> Instruction {
+        let mut instruction = Instruction::new(Op::VectorTimesScalar);
+        instruction.set_type(float_type_id);
+        instruction.set_result(id);
+        instruction.add_operand(vector_type_id);
+        instruction.add_operand(scalar_type_id);
+        instruction
+    }
+
+    ///
+    /// Bit Instructions
+    ///
+
+    ///
+    /// Relational and Logical Instructions
+    ///
+
+    ///
+    /// Derivative Instructions
+    ///
+
+    ///
+    /// Control-Flow Instructions
+    ///
+
+    fn instruction_label(&self, id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::Label);
+        instruction.set_result(id);
+        instruction
+    }
+
+    fn instruction_return(&self) -> Instruction {
+        Instruction::new(Op::Return)
+    }
+
+    fn instruction_return_value(&self, value_id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::ReturnValue);
+        instruction.add_operand(value_id);
+        instruction
+    }
+
+    ///
+    /// Atomic Instructions
+    ///
+
+    ///
+    /// Primitive Instructions
+    ///
+
+    fn parse_type_declaration(
         &mut self,
         arena: &crate::Arena<crate::Type>,
         handle: crate::Handle<crate::Type>,
     ) -> (Instruction, Word) {
         let ty = &arena[handle];
         let id = self.generate_id();
-        let mut instruction;
+
+        let instruction;
 
         match ty.inner {
             crate::TypeInner::Scalar { kind, width } => {
-                match kind {
+                instruction = match kind {
                     crate::ScalarKind::Sint => {
-                        instruction = Instruction::new(Op::TypeInt);
-                        instruction.set_result(id);
-                        instruction.add_operand(width as u32);
-                        instruction.add_operand(0x1u32);
+                        self.instruction_type_int(id, width, Signedness::Signed)
                     }
                     crate::ScalarKind::Uint => {
-                        instruction = Instruction::new(Op::TypeInt);
-                        instruction.set_result(id);
-                        instruction.add_operand(width as u32);
-                        instruction.add_operand(0x0u32);
+                        self.instruction_type_int(id, width, Signedness::Unsigned)
                     }
-                    crate::ScalarKind::Float => {
-                        instruction = Instruction::new(Op::TypeFloat);
-                        instruction.set_result(id);
-                        instruction.add_operand(width as u32);
-                    }
-                    crate::ScalarKind::Bool => {
-                        instruction = Instruction::new(Op::TypeBool);
-                        instruction.set_result(id);
-                    }
-                }
+                    crate::ScalarKind::Float => self.instruction_type_float(id, width),
+                    crate::ScalarKind::Bool => self.instruction_type_bool(id),
+                };
                 self.lookup_type.insert(id, handle);
             }
             crate::TypeInner::Vector { size, kind, width } => {
                 let scalar_handle = self.find_scalar_handle(arena, kind, width);
                 let scalar_id = self.get_type_id(arena, scalar_handle);
-
-                instruction = Instruction::new(Op::TypeVector);
-                instruction.set_result(id);
-                instruction.add_operand(scalar_id);
-                instruction.add_operand(size as u32);
-
+                instruction = self.instruction_type_vector(id, scalar_id, size);
                 self.lookup_type.insert(id, handle);
             }
             crate::TypeInner::Matrix {
@@ -327,53 +760,7 @@ impl Writer {
                 let scalar_handle = self.find_scalar_handle(arena, kind, width);
                 let scalar_id = self.get_type_id(arena, scalar_handle);
 
-                instruction = Instruction::new(Op::TypeMatrix);
-                instruction.set_result(id);
-                instruction.add_operand(scalar_id);
-                instruction.add_operand(columns as u32);
-            }
-            crate::TypeInner::Pointer { base, class } => {
-                let type_id = self.get_type_id(arena, base);
-                instruction = Instruction::new(Op::TypePointer);
-                instruction.set_result(id);
-                instruction.add_operand(class as u32);
-                instruction.add_operand(type_id);
-
-                self.lookup_type.insert(id, handle);
-            }
-            crate::TypeInner::Array { base, size, stride } => {
-                if let Some(array_stride) = stride {
-                    let mut instruction = Instruction::new(Op::Decorate);
-                    instruction.add_operand(id);
-                    instruction.add_operand(spirv::Decoration::ArrayStride as u32);
-                    instruction.add_operand(array_stride.get());
-                    self.annotations.push(instruction);
-                }
-
-                let type_id = self.get_type_id(arena, handle);
-
-                instruction = Instruction::new(Op::TypeArray);
-                instruction.set_result(id);
-                instruction.add_operand(type_id);
-
-                match size {
-                    crate::ArraySize::Static(word) => {
-                        instruction.add_operand(word);
-                    }
-                    _ => panic!("Array size {:?} unsupported", size),
-                }
-
-                self.lookup_type.insert(id, base);
-            }
-            crate::TypeInner::Struct { ref members } => {
-                instruction = Instruction::new(Op::TypeStruct);
-                instruction.set_result(id);
-
-                for member in members {
-                    let type_id = self.get_type_id(arena, member.ty);
-                    instruction.add_operand(type_id);
-                }
-
+                instruction = self.instruction_type_matrix(id, scalar_id, columns);
                 self.lookup_type.insert(id, handle);
             }
             crate::TypeInner::Image { base, dim, flags } => {
@@ -386,59 +773,62 @@ impl Writer {
                 };
                 self.try_add_capabilities(dim.required_capabilities());
 
-                instruction = Instruction::new(Op::TypeImage);
-                instruction.set_result(id);
-                instruction.add_operand(type_id);
-                instruction.add_operand(dim as u32);
-
-                // TODO Add Depth, but how to determine? Not yet in the WGSL spec
-                instruction.add_operand(1);
-
-                instruction.add_operand(if flags.contains(crate::ImageFlags::ARRAYED) {
-                    1
-                } else {
-                    0
-                });
-
-                instruction.add_operand(if flags.contains(crate::ImageFlags::MULTISAMPLED) {
-                    1
-                } else {
-                    0
-                });
-
-                instruction.add_operand(if flags.contains(crate::ImageFlags::SAMPLED) {
-                    1
-                } else {
-                    0
-                });
-                // TODO Defaults to Unknown, not yet in IR
-                instruction.add_operand(spirv::ImageFormat::Unknown as u32);
-
-                instruction.add_operand(
-                    if flags.contains(crate::ImageFlags::CAN_STORE)
-                        && flags.contains(crate::ImageFlags::CAN_LOAD)
-                    {
-                        2
-                    } else if flags.contains(crate::ImageFlags::CAN_STORE) {
-                        1
-                    } else {
-                        0
-                    },
-                );
-
+                instruction = self.instruction_type_image(id, type_id, dim, flags);
                 self.lookup_type.insert(id, base);
             }
             crate::TypeInner::Sampler { comparison: _ } => {
-                instruction = Instruction::new(Op::TypeSampler);
-                instruction.set_result(id);
+                instruction = self.instruction_type_sampler(id);
                 self.lookup_type.insert(id, handle);
             }
-        }
+            crate::TypeInner::Array { base, size, stride } => {
+                if let Some(array_stride) = stride {
+                    self.annotations.push(self.instruction_decorate(
+                        id,
+                        spirv::Decoration::ArrayStride,
+                        &[array_stride.get()],
+                    ));
+                }
+
+                let type_id = self.get_type_id(arena, handle);
+                instruction = match size {
+                    crate::ArraySize::Static(length) => {
+                        self.instruction_type_array(id, type_id, length)
+                    }
+                    crate::ArraySize::Dynamic => self.instruction_type_runtime_array(id, type_id),
+                };
+
+                self.lookup_type.insert(id, base);
+            }
+            crate::TypeInner::Struct { ref members } => {
+                let mut member_ids = Vec::with_capacity(members.len());
+                for member in members {
+                    let member_id = self.get_type_id(arena, member.ty);
+                    member_ids.push(member_id);
+                }
+                instruction = self.instruction_type_struct(id, member_ids);
+                self.lookup_type.insert(id, handle);
+            }
+            crate::TypeInner::Pointer { base, class } => {
+                let type_id = self.get_type_id(arena, base);
+                let storage_class = match class {
+                    crate::StorageClass::Constant => spirv::StorageClass::UniformConstant,
+                    crate::StorageClass::Function => spirv::StorageClass::Function,
+                    crate::StorageClass::Input => spirv::StorageClass::Input,
+                    crate::StorageClass::Output => spirv::StorageClass::Output,
+                    crate::StorageClass::Private => spirv::StorageClass::Private,
+                    crate::StorageClass::StorageBuffer => spirv::StorageClass::StorageBuffer,
+                    crate::StorageClass::Uniform => spirv::StorageClass::Uniform,
+                    crate::StorageClass::WorkGroup => spirv::StorageClass::Workgroup,
+                };
+                instruction = self.instruction_type_pointer(id, storage_class, type_id);
+                self.lookup_type.insert(id, handle);
+            }
+        };
 
         (instruction, id)
     }
 
-    fn instruction_constant_type(
+    fn parse_constant_type(
         &mut self,
         handle: crate::Handle<crate::Constant>,
         ir_module: &crate::Module,
@@ -450,147 +840,89 @@ impl Writer {
 
         match constant.inner {
             crate::ConstantInner::Sint(val) => {
+                let ty = &ir_module.types[constant.ty];
                 let type_id = self.get_type_id(arena, constant.ty);
 
-                let mut instruction = Instruction::new(Op::Constant);
-                instruction.set_type(type_id);
-                instruction.set_result(id);
-
-                let ty = &ir_module.types[constant.ty];
-                match ty.inner {
+                let instruction = match ty.inner {
                     crate::TypeInner::Scalar { kind: _, width } => match width {
-                        32 => {
-                            instruction.add_operand(val as u32);
-                        }
+                        32 => self.instruction_constant(type_id, id, &[val as u32]),
                         64 => {
                             let (low, high) = ((val >> 32) as u32, val as u32);
-                            instruction.add_operand(low);
-                            instruction.add_operand(high);
+                            self.instruction_constant(type_id, id, &[low, high])
                         }
                         _ => unreachable!(),
                     },
                     _ => unreachable!(),
-                }
-
+                };
                 (instruction, id)
             }
             crate::ConstantInner::Uint(val) => {
+                let ty = &ir_module.types[constant.ty];
                 let type_id = self.get_type_id(arena, constant.ty);
 
-                let mut instruction = Instruction::new(Op::Constant);
-                instruction.set_type(type_id);
-                instruction.set_result(id);
-
-                let ty = &ir_module.types[constant.ty];
-                match ty.inner {
+                let instruction = match ty.inner {
                     crate::TypeInner::Scalar { kind: _, width } => match width {
-                        32 => {
-                            instruction.add_operand(val as u32);
-                        }
+                        32 => self.instruction_constant(type_id, id, &[val as u32]),
                         64 => {
                             let (low, high) = ((val >> 32) as u32, val as u32);
-                            instruction.add_operand(low);
-                            instruction.add_operand(high);
+                            self.instruction_constant(type_id, id, &[low, high])
                         }
                         _ => unreachable!(),
                     },
                     _ => unreachable!(),
-                }
+                };
 
                 (instruction, id)
             }
             crate::ConstantInner::Float(val) => {
+                let ty = &ir_module.types[constant.ty];
                 let type_id = self.get_type_id(arena, constant.ty);
 
-                let mut instruction = Instruction::new(Op::Constant);
-                instruction.set_type(type_id);
-                instruction.set_result(id);
-
-                let ty = &ir_module.types[constant.ty];
-                match ty.inner {
+                let instruction = match ty.inner {
                     crate::TypeInner::Scalar { kind: _, width } => match width {
-                        32 => {
-                            instruction.add_operand((val as f32).to_bits());
-                        }
+                        32 => self.instruction_constant(type_id, id, &[(val as f32).to_bits()]),
                         64 => {
                             let bits = f64::to_bits(val);
                             let (low, high) = ((bits >> 32) as u32, bits as u32);
-                            instruction.add_operand(low);
-                            instruction.add_operand(high);
+                            self.instruction_constant(type_id, id, &[low, high])
                         }
                         _ => unreachable!(),
                     },
                     _ => unreachable!(),
-                }
-
+                };
                 (instruction, id)
             }
             crate::ConstantInner::Bool(val) => {
                 let type_id = self.get_type_id(arena, constant.ty);
 
-                let mut instruction = Instruction::new(if val {
-                    Op::ConstantTrue
+                let instruction = if val {
+                    self.instruction_constant_true(type_id, id)
                 } else {
-                    Op::ConstantFalse
-                });
+                    self.instruction_constant_false(type_id, id)
+                };
 
-                instruction.set_type(type_id);
-                instruction.set_result(id);
                 (instruction, id)
             }
             crate::ConstantInner::Composite(ref constituents) => {
-                let type_id = self.get_type_id(arena, constant.ty);
-
-                let mut instruction = Instruction::new(Op::ConstantComposite);
-                instruction.set_type(type_id);
-                instruction.set_result(id);
-
+                let mut constituent_ids = Vec::with_capacity(constituents.len());
                 for constituent in constituents.iter() {
-                    let id = self.get_constant_id(*constituent, &ir_module);
-                    instruction.add_operand(id);
+                    let constituent_id = self.get_constant_id(*constituent, &ir_module);
+                    constituent_ids.push(constituent_id);
                 }
 
+                let type_id = self.get_type_id(arena, constant.ty);
+                let instruction = self.instruction_constant_composite(type_id, id, constituent_ids);
                 (instruction, id)
             }
         }
     }
 
-    fn get_pointer_id(
-        &mut self,
-        arena: &crate::Arena<crate::Type>,
-        handle: crate::Handle<crate::Type>,
-        class: spirv::StorageClass,
-    ) -> Word {
-        let ty = &arena[handle];
-        let type_id = self.get_type_id(arena, handle);
-        match ty.inner {
-            crate::TypeInner::Pointer { .. } => type_id,
-            _ => {
-                let pointer_id = self.generate_id();
-                let mut instruction = Instruction::new(Op::TypePointer);
-                instruction.set_result(pointer_id);
-                instruction.add_operand((class) as u32);
-                instruction.add_operand(type_id);
-                instruction.to_words(&mut self.logical_layout.declarations);
-
-                /* TODO
-                    Not able to lookup Pointer, because there is no Handle in the IR for it.
-                    Idea would be to not have any handles at all in the lookups, so we aren't bound
-                    to the IR. We can then insert, like here runtime values to the lookups
-                */
-                // self.lookup_type.insert(pointer_id, global_variable.ty);
-                pointer_id
-            }
-        }
-    }
-
-    fn instruction_global_variable(
+    fn parse_global_variable(
         &mut self,
         arena: &crate::Arena<crate::Type>,
         global_variable: &crate::GlobalVariable,
         handle: crate::Handle<crate::GlobalVariable>,
     ) -> (Instruction, Word) {
-        let mut instruction = Instruction::new(Op::Variable);
         let id = self.generate_id();
 
         let class = match global_variable.class {
@@ -606,40 +938,32 @@ impl Writer {
         self.try_add_capabilities(class.required_capabilities());
 
         let pointer_id = self.get_pointer_id(arena, global_variable.ty, class);
-
-        instruction.set_type(pointer_id);
-        instruction.set_result(id);
-        instruction.add_operand(class as u32);
+        let instruction = self.instruction_variable(pointer_id, id, class, None);
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
-            let mut debug_instruction = Instruction::new(Op::Name);
-            debug_instruction.set_result(id);
-            debug_instruction.add_operands(helpers::string_to_words(
-                global_variable.name.as_ref().unwrap().as_str(),
-            ));
-            self.debugs.push(debug_instruction);
+            self.debugs
+                .push(self.instruction_name(id, global_variable.name.as_ref().unwrap().as_str()));
         }
 
         match global_variable.binding.as_ref().unwrap() {
             crate::Binding::Location(location) => {
-                let mut instruction = Instruction::new(Op::Decorate);
-                instruction.add_operand(id);
-                instruction.add_operand(spirv::Decoration::Location as u32);
-                instruction.add_operand(*location);
-                self.annotations.push(instruction);
+                self.annotations.push(self.instruction_decorate(
+                    id,
+                    spirv::Decoration::Location,
+                    &[*location],
+                ));
             }
             crate::Binding::Descriptor { set, binding } => {
-                let mut set_instruction = Instruction::new(Op::Decorate);
-                set_instruction.add_operand(id);
-                set_instruction.add_operand(spirv::Decoration::DescriptorSet as u32);
-                set_instruction.add_operand(*set);
-                self.annotations.push(set_instruction);
-
-                let mut binding_instruction = Instruction::new(Op::Decorate);
-                binding_instruction.add_operand(id);
-                binding_instruction.add_operand(spirv::Decoration::Binding as u32);
-                binding_instruction.add_operand(*binding);
-                self.annotations.push(binding_instruction);
+                self.annotations.push(self.instruction_decorate(
+                    id,
+                    spirv::Decoration::DescriptorSet,
+                    &[*set],
+                ));
+                self.annotations.push(self.instruction_decorate(
+                    id,
+                    spirv::Decoration::Binding,
+                    &[*binding],
+                ));
             }
             crate::Binding::BuiltIn(built_in) => {
                 let built_in = match built_in {
@@ -660,11 +984,11 @@ impl Writer {
                     crate::BuiltIn::WorkGroupId => spirv::BuiltIn::WorkgroupId,
                 };
 
-                let mut instruction = Instruction::new(Op::Decorate);
-                instruction.add_operand(id);
-                instruction.add_operand(spirv::Decoration::BuiltIn as u32);
-                instruction.add_operand(built_in as u32);
-                self.annotations.push(instruction);
+                self.annotations.push(self.instruction_decorate(
+                    id,
+                    spirv::Decoration::BuiltIn,
+                    &[built_in as u32],
+                ));
             }
         }
 
@@ -674,22 +998,7 @@ impl Writer {
         (instruction, id)
     }
 
-    fn write_physical_layout(&mut self) {
-        self.physical_layout.bound = self.id_count + 1;
-    }
-
-    fn instruction_source(
-        &self,
-        source_language: spirv::SourceLanguage,
-        version: u32,
-    ) -> Instruction {
-        let mut instruction = Instruction::new(Op::Source);
-        instruction.add_operand(source_language as u32);
-        instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
-        instruction
-    }
-
-    fn instruction_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
+    fn parse_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
         let mut id = None;
 
         for (k, v) in self.lookup_function_type.iter() {
@@ -702,23 +1011,19 @@ impl Writer {
         if id.is_none() {
             let _id = self.generate_id();
             id = Some(_id);
-
-            let mut instruction = Instruction::new(Op::TypeFunction);
-            instruction.set_result(_id);
-            instruction.add_operand(lookup_function_type.return_type_id);
-
-            for parameter_type_id in lookup_function_type.parameter_type_ids.iter() {
-                instruction.add_operand(*parameter_type_id);
-            }
-
-            self.lookup_function_type.insert(_id, lookup_function_type);
+            let instruction = self.instruction_type_function(
+                _id,
+                lookup_function_type.return_type_id,
+                lookup_function_type.parameter_type_ids.clone(),
+            );
             instruction.to_words(&mut self.logical_layout.declarations);
+            self.lookup_function_type.insert(_id, lookup_function_type);
         }
 
         id.unwrap()
     }
 
-    fn instruction_function(
+    fn parse_function(
         &mut self,
         handle: crate::Handle<crate::Function>,
         function: &crate::Function,
@@ -727,13 +1032,6 @@ impl Writer {
         let id = self.generate_id();
 
         let return_type_id = self.get_function_type(function.return_type, arena);
-
-        let mut instruction = Instruction::new(Op::Function);
-        instruction.set_type(return_type_id);
-        instruction.set_result(id);
-
-        let control = spirv::FunctionControl::empty();
-        instruction.add_operand(control.bits());
 
         let mut parameter_type_ids = Vec::with_capacity(function.parameter_types.len());
         for parameter_type in function.parameter_types.iter() {
@@ -745,12 +1043,16 @@ impl Writer {
             parameter_type_ids,
         };
 
-        let type_function_id = self.instruction_function_type(lookup_function_type);
+        let type_function_id = self.parse_function_type(lookup_function_type);
 
-        instruction.add_operand(type_function_id);
+        let instruction = self.instruction_function(
+            return_type_id,
+            id,
+            spirv::FunctionControl::empty(),
+            type_function_id,
+        );
 
         self.lookup_function.insert(id, handle);
-
         instruction
     }
 
@@ -784,17 +1086,16 @@ impl Writer {
                 let id = self.generate_id();
                 let type_id = self.get_type_id(&ir_module.types, *ty);
 
-                let mut instruction = Instruction::new(Op::CompositeConstruct);
-                instruction.set_type(type_id);
-                instruction.set_result(id);
-
+                let mut constituent_ids = Vec::with_capacity(components.len());
                 for component in components {
                     let expression = &function.expressions[*component];
                     let (component_id, _) =
                         self.parse_expression(ir_module, &function, expression, output);
-                    instruction.add_operand(component_id);
+                    constituent_ids.push(component_id);
                 }
 
+                let instruction =
+                    self.instruction_composite_construct(type_id, id, constituent_ids);
                 output.push(instruction);
 
                 (id, inner)
@@ -865,18 +1166,21 @@ impl Writer {
 
                         // TODO Quick fix
                         let load_id = self.generate_id();
-                        let mut instruction = Instruction::new(Op::Load);
-                        instruction.set_type(result_type_id.unwrap());
-                        instruction.set_result(load_id);
-                        instruction.add_operand(vector_id.unwrap());
 
-                        output.push(instruction);
+                        let load_instruction = self.instruction_load(
+                            result_type_id.unwrap(),
+                            load_id,
+                            vector_id.unwrap(),
+                            None,
+                        );
+                        output.push(load_instruction);
 
-                        let mut instruction = Instruction::new(Op::VectorTimesScalar);
-                        instruction.set_type(result_type_id.unwrap());
-                        instruction.set_result(id);
-                        instruction.add_operand(load_id);
-                        instruction.add_operand(scalar_id.unwrap());
+                        let instruction = self.instruction_vector_times_scalar(
+                            result_type_id.unwrap(),
+                            id,
+                            load_id,
+                            scalar_id.unwrap(),
+                        );
                         output.push(instruction);
 
                         // TODO Not sure how or what to return
@@ -894,23 +1198,21 @@ impl Writer {
             crate::Expression::LocalVariable(variable) => {
                 let id = self.generate_id();
                 let var = &function.local_variables[*variable];
-
                 let ty = &ir_module.types[var.ty];
 
                 let pointer_id =
                     self.get_pointer_id(&ir_module.types, var.ty, spirv::StorageClass::Function);
 
-                let mut instruction = Instruction::new(Op::Variable);
-                instruction.set_type(pointer_id);
-                instruction.set_result(id);
-                instruction.add_operand(spirv::StorageClass::Function as u32);
+                let instruction =
+                    self.instruction_variable(pointer_id, id, spirv::StorageClass::Function, None);
+                output.push(instruction);
                 (id, &ty.inner)
             }
             _ => unimplemented!("{:?}", expression),
         }
     }
 
-    fn instruction_function_block(
+    fn parse_function_block(
         &mut self,
         ir_module: &crate::Module,
         function: &crate::Function,
@@ -918,27 +1220,14 @@ impl Writer {
         output: &mut Vec<Instruction>,
     ) -> Instruction {
         match statement {
-            crate::Statement::Return { value } => {
-                match function.return_type {
-                    Some(_) => {
-                        let value = value.unwrap();
-
-                        // Parse the expression
-                        let value_expression = &function.expressions[value];
-                        let (value_id, _) =
-                            self.parse_expression(ir_module, function, value_expression, output);
-
-                        // Construct the return value instruction
-                        let mut instruction = Instruction::new(Op::ReturnValue);
-                        instruction.add_operand(value_id);
-                        instruction
-                    }
-                    None => Instruction::new(Op::Return),
+            crate::Statement::Return { .. } => match function.return_type {
+                Some(ty) => {
+                    let value_id = self.get_type_id(&ir_module.types, ty);
+                    self.instruction_return_value(value_id)
                 }
-            }
+                None => self.instruction_return(),
+            },
             crate::Statement::Store { pointer, value } => {
-                let mut instruction = Instruction::new(Op::Store);
-
                 let pointer_expression = &function.expressions[*pointer];
                 let value_expression = &function.expressions[*value];
                 let (pointer_id, _) =
@@ -946,23 +1235,14 @@ impl Writer {
                 let (value_id, _) =
                     self.parse_expression(ir_module, function, value_expression, output);
 
-                instruction.add_operand(pointer_id);
-                instruction.add_operand(value_id);
-
-                instruction
+                self.instruction_store(pointer_id, value_id)
             }
             _ => unimplemented!(),
         }
     }
 
-    fn instruction_label(&mut self) -> Instruction {
-        let mut instruction = Instruction::new(Op::Label);
-        instruction.set_result(self.generate_id());
-        instruction
-    }
-
-    fn instruction_function_end(&self) -> Instruction {
-        Instruction::new(Op::FunctionEnd)
+    fn write_physical_layout(&mut self) {
+        self.physical_layout.bound = self.id_count + 1;
     }
 
     fn write_logical_layout(&mut self, ir_module: &crate::Module) {
@@ -976,18 +1256,15 @@ impl Writer {
 
         for (handle, function) in ir_module.functions.iter() {
             let mut function_instructions: Vec<Instruction> = vec![];
-            function_instructions.push(self.instruction_function(
-                handle,
-                function,
-                &ir_module.types,
-            ));
+            function_instructions.push(self.parse_function(handle, function, &ir_module.types));
 
-            function_instructions.push(self.instruction_label());
+            let id = self.generate_id();
+            function_instructions.push(self.instruction_label(id));
 
             for block in function.body.iter() {
                 let mut output: Vec<Instruction> = vec![];
                 let instruction =
-                    self.instruction_function_block(ir_module, function, &block, &mut output);
+                    self.parse_function_block(ir_module, function, &block, &mut output);
                 function_instructions.append(&mut output);
                 function_instructions.push(instruction);
             }
@@ -1138,6 +1415,44 @@ mod tests {
     }
 
     #[test]
+    fn test_instruction_name() {
+        let writer = create_writer();
+        let instruction = writer.instruction_name(1, "Test");
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::Name,
+            wc: 3,
+            type_id: false,
+            result_id: true,
+            operands: true,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_execution_mode() {
+        let writer = create_writer();
+        let instruction = writer.instruction_execution_mode(1, ExecutionMode::OriginUpperLeft);
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::ExecutionMode,
+            wc: 3,
+            type_id: false,
+            result_id: false,
+            operands: true,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
     fn test_instruction_source() {
         let writer = create_writer();
         let version = 450;
@@ -1159,8 +1474,8 @@ mod tests {
 
     #[test]
     fn test_instruction_label() {
-        let mut writer = create_writer();
-        let instruction = writer.instruction_label();
+        let writer = create_writer();
+        let instruction = writer.instruction_label(1);
         let mut output = vec![];
 
         let requirements = SpecRequirements {
@@ -1188,6 +1503,25 @@ mod tests {
             type_id: false,
             result_id: false,
             operands: false,
+        };
+        validate_spec_requirements(requirements, &instruction);
+
+        instruction.to_words(&mut output);
+        validate_instruction(output.as_slice(), &instruction);
+    }
+
+    #[test]
+    fn test_instruction_decorate() {
+        let writer = create_writer();
+        let instruction = writer.instruction_decorate(1, Decoration::Location, &[1]);
+        let mut output = vec![];
+
+        let requirements = SpecRequirements {
+            op: Op::Decorate,
+            wc: 3,
+            type_id: false,
+            result_id: false,
+            operands: true,
         };
         validate_spec_requirements(requirements, &instruction);
 
