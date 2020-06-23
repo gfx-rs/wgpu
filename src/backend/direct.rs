@@ -184,6 +184,7 @@ mod pass_impl {
             &mut self,
             render_bundles: I,
         ) {
+            wgc::span!(_guard, TRACE, "RenderPass::execute_bundles wrapper");
             let temp_render_bundles = render_bundles.cloned().collect::<SmallVec<[_; 4]>>();
             unsafe {
                 wgpu_render_pass_execute_bundles(
@@ -450,6 +451,7 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &BindGroupDescriptor,
     ) -> Self::BindGroupId {
+        wgc::span!(_guard, TRACE, "Device::create_bind_group wrapper");
         use wgc::binding_model as bm;
 
         let texture_view_arena: Arena<wgc::id::TextureViewId> = Arena::new();
@@ -499,6 +501,7 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &PipelineLayoutDescriptor,
     ) -> Self::PipelineLayoutId {
+        wgc::span!(_guard, TRACE, "Device::create_pipeline_layout wrapper");
         //TODO: avoid allocation here
         let temp_layouts = desc
             .bind_group_layouts
@@ -522,6 +525,7 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &RenderPipelineDescriptor,
     ) -> Self::RenderPipelineId {
+        wgc::span!(_guard, TRACE, "Device::create_render_pipeline wrapper");
         use wgc::pipeline as pipe;
 
         let vertex_entry_point = CString::new(desc.vertex_stage.entry_point).unwrap();
@@ -697,6 +701,8 @@ impl crate::Context for Context {
         mode: MapMode,
         range: Range<wgt::BufferAddress>,
     ) -> Self::MapAsyncFuture {
+        wgc::span!(_guard, TRACE, "Buffer::buffer_map_async wrapper");
+
         let (future, completion) = native_gpu_future::new_gpu_future();
 
         extern "C" fn buffer_map_future_wrapper(
@@ -911,6 +917,7 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         desc: &crate::RenderPassDescriptor<'a, '_>,
     ) -> Self::RenderPassId {
+        wgc::span!(_guard, TRACE, "CommandEncoder::begin_render_pass wrapper");
         let colors = desc
             .color_attachments
             .iter()

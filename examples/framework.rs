@@ -16,8 +16,7 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 
 #[allow(dead_code)]
 pub fn cast_slice<T>(data: &[T]) -> &[u8] {
-    use std::mem::size_of;
-    use std::slice::from_raw_parts;
+    use std::{mem::size_of, slice::from_raw_parts};
 
     unsafe { from_raw_parts(data.as_ptr() as *const u8, data.len() * size_of::<T>()) }
 }
@@ -191,7 +190,7 @@ pub fn run<E: Example>(title: &str) {
     let event_loop = EventLoop::new();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title(title);
-    #[cfg(windows_OFF)] //TODO
+    #[cfg(windows_OFF)] // TODO
     {
         use winit::platform::windows::WindowBuilderExtWindows;
         builder = builder.with_no_redirection_bitmap(true);
@@ -201,6 +200,13 @@ pub fn run<E: Example>(title: &str) {
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::init();
+
+        #[cfg(feature = "subscriber")]
+        {
+            let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACING");
+            wgpu::util::initialize_default_subscriber(chrome_tracing_dir.ok());
+        };
+
         futures::executor::block_on(run_async::<E>(event_loop, window));
     }
     #[cfg(target_arch = "wasm32")]
