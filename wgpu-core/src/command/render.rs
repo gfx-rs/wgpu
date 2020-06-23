@@ -166,6 +166,20 @@ impl RenderPass {
     }
 }
 
+impl fmt::Debug for RenderPass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "RenderPass {{ encoder_id: {:?}, color_targets: {:?}, depth_stencil_target: {:?}, data: {:?} commands and {:?} dynamic offsets }}",
+            self.parent_id,
+            self.color_targets,
+            self.depth_stencil_target,
+            self.base.commands.len(),
+            self.base.dynamic_offsets.len()
+        )
+    }
+}
+
 #[derive(Debug, PartialEq)]
 enum OptionalState {
     Unused,
