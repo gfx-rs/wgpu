@@ -38,7 +38,12 @@ raw-window-handle = { version = "0.3", optional = true }
 ron = { version = "0.5", optional = true }
 serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
+spirv_headers = { version = "1.4.2" }
 vec_map = "0.8.1"
+
+[dependencies.naga]
+git = "https://github.com/gfx-rs/naga"
+rev = "bce6358eb1026c13d2f1c6d365af37afe8869a86"
 
 [dependencies.wgt]
 path = "../wgpu-types"

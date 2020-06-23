@@ -30,6 +30,8 @@ use std::{
     sync::atomic::Ordering,
 };
 
+use spirv_headers::ExecutionModel;
+
 mod life;
 #[cfg(any(feature = "trace", feature = "replay"))]
 pub mod trace;
@@ -1511,12 +1513,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let spv = unsafe { slice::from_raw_parts(desc.code.bytes, desc.code.length) };
         let raw = unsafe { device.raw.create_shader_module(spv).unwrap() };
+
+        let module = {
+            // Parse the given shader code and store its representation.
+            let spv_iter = spv.into_iter().cloned();
+            let mut parser = naga::front::spirv::Parser::new(spv_iter);
+            parser
+                .parse()
+                .map_err(|err| {
+                    log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
+                    log::warn!("Shader module will not be validated");
+                })
+                .ok()
+        };
         let shader = pipeline::ShaderModule {
             raw,
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
             },
+            module,
         };
 
         let id = hub
@@ -2014,23 +2030,55 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            let vertex = hal::pso::EntryPoint::<B> {
-                entry: unsafe { ffi::CStr::from_ptr(desc.vertex_stage.entry_point) }
-                    .to_str()
-                    .to_owned()
-                    .unwrap(), // TODO
-                module: &shader_module_guard[desc.vertex_stage.module].raw,
-                specialization: hal::pso::Specialization::EMPTY,
-            };
-            let fragment =
-                unsafe { desc.fragment_stage.as_ref() }.map(|stage| hal::pso::EntryPoint::<B> {
-                    entry: unsafe { ffi::CStr::from_ptr(stage.entry_point) }
+            let vertex = {
+                let entry_point_name =
+                    unsafe { ffi::CStr::from_ptr(desc.vertex_stage.entry_point) }
                         .to_str()
                         .to_owned()
-                        .unwrap(), // TODO
-                    module: &shader_module_guard[stage.module].raw,
+                        .unwrap();
+
+                let shader_module = &shader_module_guard[desc.vertex_stage.module];
+
+                if let Some(ref module) = shader_module.module {
+                    if let Err(e) =
+                        validate_shader(module, entry_point_name, ExecutionModel::Vertex)
+                    {
+                        log::error!("Failed validating vertex shader module: {:?}", e);
+                    }
+                }
+
+                hal::pso::EntryPoint::<B> {
+                    entry: entry_point_name, // TODO
+                    module: &shader_module.raw,
                     specialization: hal::pso::Specialization::EMPTY,
-                });
+                }
+            };
+
+            let fragment = {
+                let fragment_stage = unsafe { desc.fragment_stage.as_ref() };
+                fragment_stage.map(|stage| {
+                    let entry_point_name = unsafe { ffi::CStr::from_ptr(stage.entry_point) }
+                        .to_str()
+                        .to_owned()
+                        .unwrap();
+
+                    let shader_module = &shader_module_guard[stage.module];
+
+                    if let Some(ref module) = shader_module.module {
+                        if let Err(e) =
+                            validate_shader(module, entry_point_name, ExecutionModel::Fragment)
+                        {
+                            log::error!("Failed validating fragment shader module: {:?}", e);
+                        }
+                    }
+
+                    hal::pso::EntryPoint::<B> {
+                        entry: entry_point_name, // TODO
+                        module: &shader_module.raw,
+                        specialization: hal::pso::Specialization::EMPTY,
+                    }
+                })
+            };
 
             let shaders = hal::pso::GraphicsShaderSet {
                 vertex,
@@ -2195,12 +2243,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
+            let entry_point_name = unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
+                .to_str()
+                .to_owned()
+                .unwrap();
+
+            let shader_module = &shader_module_guard[pipeline_stage.module];
+
+            if let Some(ref module) = shader_module.module {
+                if let Err(e) = validate_shader(module, entry_point_name, ExecutionModel::GLCompute)
+                {
+                    log::error!("Failed validating compute shader module: {:?}", e);
+                }
+            }
+
             let shader = hal::pso::EntryPoint::<B> {
-                entry: unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
-                    .to_str()
-                    .to_owned()
-                    .unwrap(), // TODO
-                module: &shader_module_guard[pipeline_stage.module].raw,
+                entry: entry_point_name, // TODO
+                module: &shader_module.raw,
                 specialization: hal::pso::Specialization::EMPTY,
             };
 
@@ -2573,5 +2632,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         buffer.map_state = resource::BufferMapState::Idle;
+    }
+}
+
+/// Errors produced when validating the shader modules of a pipeline.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+enum ShaderValidationError {
+    /// Unable to find an entry point matching the specified execution model.
+    MissingEntryPoint(ExecutionModel),
+}
+
+fn validate_shader(
+    module: &naga::Module,
+    entry_point_name: &str,
+    execution_model: ExecutionModel,
+) -> Result<(), ShaderValidationError> {
+    // Since a shader module can have multiple entry points with the same name,
+    // we need to look for one with the right execution model.
+    let entry_point = module.entry_points.iter().find(|entry_point| {
+        entry_point.name == entry_point_name && entry_point.exec_model == execution_model
+    });
+
+    match entry_point {
+        Some(_) => Ok(()),
+        None => Err(ShaderValidationError::MissingEntryPoint(execution_model)),
     }
 }

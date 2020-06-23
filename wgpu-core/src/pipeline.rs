@@ -40,6 +40,7 @@ pub struct ShaderModuleDescriptor {
 pub struct ShaderModule<B: hal::Backend> {
     pub(crate) raw: B::ShaderModule,
     pub(crate) device_id: Stored<DeviceId>,
+    pub(crate) module: Option<naga::Module>,
 }
 
 #[repr(C)]
