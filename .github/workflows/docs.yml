@@ -13,8 +13,20 @@ jobs:
       - name: Checkout the code
         uses: actions/checkout@v2
 
-      - name: Build the docs
-        run: cargo doc --lib --all-features
+      - name: Install latest nightly
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly
+          override: true
+        continue-on-error: true
+
+      - name: Build the docs (nightly)
+        run: |
+          cargo +nightly doc --lib --all-features
+
+      - name: Build the docs (stable)
+        run: cargo +stable doc --lib --all-features
+        if: ${{ failure() }}
 
       - name: Deploy the docs
         uses: JamesIves/github-pages-deploy-action@releases/v3
