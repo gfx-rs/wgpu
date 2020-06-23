@@ -137,6 +137,13 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::init();
+
+        #[cfg(feature = "subscriber")]
+        {
+            let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACING");
+            wgpu::util::initialize_default_subscriber(chrome_tracing_dir.ok());
+        };
+
         futures::executor::block_on(run());
     }
     #[cfg(target_arch = "wasm32")]
@@ -165,9 +172,7 @@ mod tests {
 
     #[test]
     fn test_multithreaded_compute() {
-        use std::sync::mpsc;
-        use std::thread;
-        use std::time::Duration;
+        use std::{sync::mpsc, thread, time::Duration};
 
         let thread_count = 8;
 

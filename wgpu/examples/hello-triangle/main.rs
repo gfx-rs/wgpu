@@ -142,6 +142,7 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
         env_logger::init();
+
         // Temporarily avoid srgb formats for the swapchain on the web
         futures::executor::block_on(run(event_loop, window, wgpu::TextureFormat::Bgra8UnormSrgb));
     }

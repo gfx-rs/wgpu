@@ -10,11 +10,15 @@ keywords = ["graphics"]
 license = "MPL-2.0"
 exclude = ["etc/**/*", "examples/**/*", "tests/**/*", "Cargo.lock", "target/**/*"]
 
+[package.metadata.docs.rs]
+all-features = true
+
 [lib]
 
 [features]
 default = []
 trace = ["wgc/trace"]
+subscriber = ["wgc/subscriber"]
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
 vulkan = ["wgc/gfx-backend-vulkan"]
 
@@ -22,22 +26,23 @@ vulkan = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "6b3863af624741491f197ce504cc58586fe077b5"
+rev = "285b31a6a1d041cd8983f951817390a85191ac6d"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "6b3863af624741491f197ce504cc58586fe077b5"
+rev = "285b31a6a1d041cd8983f951817390a85191ac6d"
 
 [dependencies]
 arrayvec = "0.5"
 futures = "0.3"
-smallvec = "1"
-typed-arena = "2.0.1"
-raw-window-handle = "0.3"
 parking_lot = "0.10"
+raw-window-handle = "0.3"
+smallvec = "1"
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+typed-arena = "2.0.1"
 
 #Note: we may consider switching this to "dev-dependencies" if users
 # want to opt into X11 explicitly.
