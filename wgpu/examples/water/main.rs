@@ -4,7 +4,7 @@ mod framework;
 mod point_gen;
 
 use cgmath::Point3;
-use std::mem;
+use std::{iter, mem};
 
 ///
 /// Radius of the terrain.
@@ -269,7 +269,7 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>) {
+    ) -> Self {
         // Size of one water vertex
         let water_vertex_size = mem::size_of::<point_gen::WaterVertexAttributes>();
 
@@ -609,7 +609,7 @@ impl framework::Example for Example {
         });
 
         // Done
-        let this = Example {
+        Example {
             water_vertex_buf,
             water_vertex_count: water_vertices.len(),
             water_bind_group_layout,
@@ -632,8 +632,7 @@ impl framework::Example for Example {
             current_frame: 0,
 
             active: Some(0),
-        };
-        (this, None)
+        }
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
@@ -681,7 +680,7 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _spawner: &impl futures::task::LocalSpawn,
-    ) -> wgpu::CommandBuffer {
+    ) {
         // Increment frame count regardless of if we draw.
         self.current_frame += 1;
         let back_color = wgpu::Color {
@@ -699,20 +698,20 @@ impl framework::Example for Example {
             bytemuck::cast_slice(&[water_sin, water_cos]),
         );
 
+        // Only render valid frames. See resize method.
+        if let Some(active) = self.active {
+            if active >= self.current_frame {
+                return;
+            }
+        } else {
+            return;
+        }
+
         // The encoder provides a way to turn our instructions here, into
         // a command buffer the GPU can understand.
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Main Command Encoder"),
         });
-
-        // Only render valid frames. See resize method.
-        if let Some(active) = self.active {
-            if active >= self.current_frame {
-                return encoder.finish();
-            }
-        } else {
-            return encoder.finish();
-        }
 
         // First pass: render the reflection.
         {
@@ -792,7 +791,7 @@ impl framework::Example for Example {
             rpass.draw(0..self.water_vertex_count as u32, 0..1);
         }
 
-        encoder.finish()
+        queue.submit(iter::once(encoder.finish()));
     }
 }
 

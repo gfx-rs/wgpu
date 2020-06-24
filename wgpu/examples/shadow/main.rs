@@ -1,4 +1,4 @@
-use std::{mem, ops::Range, rc::Rc};
+use std::{iter, mem, ops::Range, rc::Rc};
 
 #[path = "../framework.rs"]
 mod framework;
@@ -207,7 +207,7 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>) {
+    ) -> Self {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
@@ -656,7 +656,7 @@ impl framework::Example for Example {
             label: None,
         });
 
-        let this = Example {
+        Example {
             entities,
             lights,
             lights_are_dirty: true,
@@ -664,8 +664,7 @@ impl framework::Example for Example {
             forward_pass,
             forward_depth: depth_texture.create_default_view(),
             light_uniform_buf,
-        };
-        (this, None)
+        }
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
@@ -709,7 +708,7 @@ impl framework::Example for Example {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         _spawner: &impl futures::task::LocalSpawn,
-    ) -> wgpu::CommandBuffer {
+    ) {
         // update uniforms
         for entity in self.entities.iter_mut() {
             if entity.rotation_speed != 0.0 {
@@ -811,7 +810,7 @@ impl framework::Example for Example {
             }
         }
 
-        encoder.finish()
+        queue.submit(iter::once(encoder.finish()));
     }
 }
 

@@ -204,8 +204,8 @@ impl framework::Example for Example {
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>) {
+        queue: &wgpu::Queue,
+    ) -> Self {
         use std::mem;
 
         let mut init_encoder =
@@ -375,14 +375,14 @@ impl framework::Example for Example {
 
         // Done
         Self::generate_mipmaps(&mut init_encoder, &device, &texture, mip_level_count);
+        queue.submit(Some(init_encoder.finish()));
 
-        let this = Example {
+        Example {
             vertex_buf,
             bind_group,
             uniform_buf,
             draw_pipeline,
-        };
-        (this, Some(init_encoder.finish()))
+        }
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
@@ -404,9 +404,9 @@ impl framework::Example for Example {
         &mut self,
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
+        queue: &wgpu::Queue,
         _spawner: &impl futures::task::LocalSpawn,
-    ) -> wgpu::CommandBuffer {
+    ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -433,7 +433,7 @@ impl framework::Example for Example {
             rpass.draw(0..4, 0..1);
         }
 
-        encoder.finish()
+        queue.submit(Some(encoder.finish()));
     }
 }
 
