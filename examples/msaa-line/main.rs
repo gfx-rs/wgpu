@@ -132,7 +132,7 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>) {
+    ) -> Self {
         log::info!("Press left/right arrow keys to change sample_count.");
         let sample_count = 4;
 
@@ -179,7 +179,7 @@ impl framework::Example for Example {
             vertex_count,
         );
 
-        let this = Example {
+        Example {
             bundle,
             vs_module,
             fs_module,
@@ -190,8 +190,7 @@ impl framework::Example for Example {
             sample_count,
             rebuild_bundle: false,
             sc_desc: sc_desc.clone(),
-        };
-        (this, None)
+        }
     }
 
     fn update(&mut self, event: winit::event::WindowEvent) {
@@ -234,9 +233,9 @@ impl framework::Example for Example {
         &mut self,
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
+        queue: &wgpu::Queue,
         _spawner: &impl futures::task::LocalSpawn,
-    ) -> wgpu::CommandBuffer {
+    ) {
         if self.rebuild_bundle {
             self.bundle = Example::create_bundle(
                 device,
@@ -282,7 +281,7 @@ impl framework::Example for Example {
                 .execute_bundles(iter::once(&self.bundle));
         }
 
-        encoder.finish()
+        queue.submit(iter::once(encoder.finish()));
     }
 }
 

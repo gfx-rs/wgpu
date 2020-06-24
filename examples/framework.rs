@@ -38,7 +38,7 @@ pub trait Example: 'static + Sized {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>);
+    ) -> Self;
     fn resize(
         &mut self,
         sc_desc: &wgpu::SwapChainDescriptor,
@@ -52,7 +52,7 @@ pub trait Example: 'static + Sized {
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         spawner: &impl LocalSpawn,
-    ) -> wgpu::CommandBuffer;
+    );
 }
 
 async fn run_async<E: Example, S: LocalSpawn + 'static + Sized>(
@@ -112,10 +112,7 @@ async fn run_async<E: Example, S: LocalSpawn + 'static + Sized>(
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     log::info!("Initializing the example...");
-    let (mut example, init_command_buf) = E::init(&sc_desc, &device, &queue);
-    if init_command_buf.is_some() {
-        queue.submit(init_command_buf);
-    }
+    let mut example = E::init(&sc_desc, &device, &queue);
 
     #[cfg(not(target_arch = "wasm32"))]
     let mut last_update_inst = Instant::now();
@@ -185,8 +182,7 @@ async fn run_async<E: Example, S: LocalSpawn + 'static + Sized>(
                     }
                 };
 
-                let command_buf = example.render(&frame.output, &device, &queue, &spawner);
-                queue.submit(Some(command_buf));
+                example.render(&frame.output, &device, &queue, &spawner);
             }
             _ => {}
         }
