@@ -158,7 +158,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .expect("Used swap chain frame has already presented");
             comb.trackers.views.remove(view_id.value);
         }
-        log::debug!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
+        log::trace!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
         encoder_id
     }
 
