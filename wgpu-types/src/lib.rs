@@ -2,6 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+// The intra doc links to the wgpu crate in this crate actually succesfully link to the types in the wgpu crate, when built from the wgpu crate.
+// However when building from both the wgpu crate or this crate cargo doc will claim all the links cannot be resolved
+// despite the fact that it works fine when it needs to.
+// So we just disable those warnings.
+#![allow(intra_doc_link_resolution_failure)]
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
