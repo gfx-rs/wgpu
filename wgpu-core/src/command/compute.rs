@@ -17,7 +17,7 @@ use crate::{
 use hal::command::CommandBuffer as _;
 use wgt::{BufferAddress, BufferUsage, BIND_BUFFER_ALIGNMENT};
 
-use std::{iter, str};
+use std::{fmt, iter, str};
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
@@ -68,6 +68,18 @@ impl ComputePass {
 
     pub fn parent_id(&self) -> id::CommandEncoderId {
         self.parent_id
+    }
+}
+
+impl fmt::Debug for ComputePass {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "ComputePass {{ encoder_id: {:?}, data: {:?} commands and {:?} dynamic offsets }}",
+            self.parent_id,
+            self.base.commands.len(),
+            self.base.dynamic_offsets.len()
+        )
     }
 }
 
