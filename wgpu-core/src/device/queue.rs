@@ -504,7 +504,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         comb.raw.insert(0, transit);
                     }
 
-                    log::debug!("Device after submission {}: {:#?}", submit_index, trackers);
+                    log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
                 }
 
                 // now prepare the GPU submission

@@ -629,15 +629,17 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             })
             .collect::<FastHashMap<_, _>>();
 
-        log::debug!("Free framebuffers {:?}", remove_list);
-        for (ref key, submit_index) in remove_list {
-            let framebuffer = framebuffers.remove(key).unwrap();
-            self.active
-                .iter_mut()
-                .find(|a| a.index == submit_index)
-                .map_or(&mut self.free_resources, |a| &mut a.last_resources)
-                .framebuffers
-                .push(framebuffer);
+        if !remove_list.is_empty() {
+            log::debug!("Free framebuffers {:?}", remove_list);
+            for (ref key, submit_index) in remove_list {
+                let framebuffer = framebuffers.remove(key).unwrap();
+                self.active
+                    .iter_mut()
+                    .find(|a| a.index == submit_index)
+                    .map_or(&mut self.free_resources, |a| &mut a.last_resources)
+                    .framebuffers
+                    .push(framebuffer);
+            }
         }
     }
 
