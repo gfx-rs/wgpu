@@ -8,139 +8,68 @@ use glsl::{
     syntax::*,
 };
 use parser::{Token, TokenMetadata};
-use std::fmt;
 
 mod helpers;
 mod parser;
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ErrorKind {
+    #[error("Unexpected token:\nexpected: {}\ngot: {}", expected.iter().map(|t| t.type_to_string()).collect::<Vec<_>>().join(" |"), got.token)]
     UnexpectedToken {
         expected: Vec<Token>,
         got: TokenMetadata,
     },
+    #[error("Unexpected word:\nexpected: {}\ngot: {got}", expected.join("|"))]
     UnexpectedWord {
         expected: Vec<&'static str>,
         got: String,
     },
-    ExpectedEOL {
-        got: TokenMetadata,
-    },
-    UnknownPragma {
-        pragma: String,
-    },
-    ExtensionNotSupported {
-        extension: String,
-    },
+    #[error("Expected end of line:\ngot: {}", got.token)]
+    ExpectedEOL { got: TokenMetadata },
+    #[error("Unknown pragma: {pragma}")]
+    UnknownPragma { pragma: String },
+    #[error("The extension \"{extension}\" is not supported")]
+    ExtensionNotSupported { extension: String },
+    #[error("All extensions can't be require or enable")]
     AllExtensionsEnabled,
-    ExtensionUnknownBehavior {
-        behavior: String,
+    #[error("The extension behavior must be one of require|enable|warn|disable got: {behavior}")]
+    ExtensionUnknownBehavior { behavior: String },
+    #[error("The version {version} isn't supported; use either 450 or 460")]
+    UnsupportedVersion { version: usize },
+    #[error("The profile {profile} isn't supported; use core")]
+    UnsupportedProfile { profile: String },
+    #[error("The profile {profile} isn't defined; use core")]
+    UnknownProfile { profile: String },
+    #[error("The preprocessor directive {directive} isn't defined")]
+    UnknownPreprocessorDirective { directive: String },
+    #[error("The preprocessor directives \"else\", \"elif\" or \"endif\" must be preceded by an \"if\", token: {}", token.token)]
+    UnboundedIfCloserOrVariant { token: TokenMetadata },
+    #[error("The preprocessor \"if\" directive can only contain integrals found: {}", token.token)]
+    NonIntegralType { token: TokenMetadata },
+    #[error("Type resolver error: {kind}")]
+    TypeResolverError {
+        #[from]
+        kind: crate::proc::ResolveError,
     },
-    UnsupportedVersion {
-        version: usize,
+    #[error("Parser error: {error}")]
+    ParseError {
+        #[from]
+        error: ParseError,
     },
-    UnsupportedProfile {
-        profile: String,
-    },
-    UnknownProfile {
-        profile: String,
-    },
-    UnknownPreprocessorDirective {
-        directive: String,
-    },
-    UnboundedIfCloserOrVariant {
-        token: TokenMetadata,
-    },
-    NonIntegralType {
-        token: TokenMetadata,
-    },
+    #[error("Macro can't begin with GL_")]
     ReservedMacro,
+    #[error("End of line")]
     EOL,
+    #[error("End of file")]
     EOF,
 }
 
-impl fmt::Display for ErrorKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ErrorKind::UnexpectedToken { expected, got } => write!(
-                f,
-                "Unexpected token:\nexpected: {}\ngot: {}",
-                expected
-                    .iter()
-                    .map(|token| {
-                        let mut type_string = token.type_to_string();
-                        type_string.push_str(" |");
-                        type_string
-                    })
-                    .collect::<String>(),
-                got.token
-            ),
-            ErrorKind::UnexpectedWord { expected, got } => write!(
-                f,
-                "Unexpected word:\nexpected: {}\ngot: {}",
-                expected.iter().fold(String::new(), |mut acc, word| {
-                    acc.push_str(*word);
-
-                    acc.push_str("|");
-
-                    acc
-                }),
-                got
-            ),
-            ErrorKind::ExpectedEOL { got } => {
-                write!(f, "Expected end of line:\ngot: {}", got.token)
-            }
-            ErrorKind::UnknownPragma { pragma } => write!(f, "Unknown pragma: {}", pragma),
-            ErrorKind::ExtensionNotSupported { extension } => {
-                write!(f, "The extension \"{}\" is not supported", extension)
-            }
-            ErrorKind::AllExtensionsEnabled => {
-                write!(f, "All extensions can't be require or enable")
-            }
-            ErrorKind::ExtensionUnknownBehavior { behavior } => write!(
-                f,
-                "The extension behavior must be one of require|enable|warn|disable got: {}",
-                behavior
-            ),
-            ErrorKind::UnsupportedVersion { version } => write!(
-                f,
-                "The version {} isn't supported use either 450 or 460",
-                version
-            ),
-            ErrorKind::UnsupportedProfile { profile } => {
-                write!(f, "The profile {} isn't supported use core", profile)
-            }
-            ErrorKind::UnknownProfile { profile } => {
-                write!(f, "The profile {} isn't defined use core", profile)
-            }
-            ErrorKind::UnknownPreprocessorDirective { directive } => {
-                write!(f, "The preprocessor directive {} isn't defined", directive)
-            }
-            ErrorKind::UnboundedIfCloserOrVariant { token } => {
-                write!(f, "The preprocessor directives \"else\", \"elif\" or \"endif\" must be preceded by an \"if\", token: {}", token.token)
-            }
-            ErrorKind::NonIntegralType { token } => {
-                write!(f, "The preprocessor \"if\" directive can only contain integrals found: {}", token.token)
-            }
-            ErrorKind::ReservedMacro => write!(f, "Macro can't begin with GL_"),
-            ErrorKind::EOL => write!(f, "End of line"),
-            ErrorKind::EOF => write!(f, "End of file"),
-        }
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
+#[error("{kind}")]
 pub struct Error {
-    pub kind: ErrorKind,
+    #[from]
+    kind: ErrorKind,
 }
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
-    }
-}
-
-impl std::error::Error for Error {}
 
 #[derive(Debug, Copy, Clone)]
 enum Global {
@@ -160,8 +89,8 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(source: &'a str, shader_stage: ShaderStage) -> Result<Self, ParseError> {
-        Ok(Self {
+    pub fn new(source: &'a str, shader_stage: ShaderStage) -> Self {
+        Self {
             source,
             types: Arena::new(),
             globals: Arena::new(),
@@ -170,11 +99,11 @@ impl<'a> Parser<'a> {
             functions: Arena::new(),
             function_lookup: FastHashMap::default(),
             shader_stage,
-        })
+        }
     }
 
-    pub fn parse(mut self, entry: String) -> Result<crate::Module, ParseError> {
-        let ast = TranslationUnit::parse(self.source)?;
+    pub fn parse(mut self, entry: String) -> Result<crate::Module, Error> {
+        let ast = TranslationUnit::parse(self.source).map_err(|e| Error { kind: e.into() })?;
 
         //println!("{:#?}", ast);
 
@@ -188,7 +117,7 @@ impl<'a> Parser<'a> {
                     unreachable!()
                 }
                 ExternalDeclaration::FunctionDefinition(function) => {
-                    let function = self.parse_function_definition(function);
+                    let function = self.parse_function_definition(function)?;
 
                     if *self.functions[function].name.as_ref().unwrap() == entry {
                         assert!(entry_point.is_none());
@@ -312,7 +241,10 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_function_definition(&mut self, function: FunctionDefinition) -> Handle<Function> {
+    fn parse_function_definition(
+        &mut self,
+        function: FunctionDefinition,
+    ) -> Result<Handle<Function>, Error> {
         let name = function.prototype.name.0;
 
         // Parse return type
@@ -372,7 +304,7 @@ impl<'a> Parser<'a> {
                                 &mut local_variables,
                                 &mut locals_map,
                                 &parameter_lookup,
-                            );
+                            )?;
                         }
                         _ => unimplemented!(),
                     },
@@ -388,7 +320,7 @@ impl<'a> Parser<'a> {
                             &mut local_variables,
                             &mut locals_map,
                             &parameter_lookup,
-                        ));
+                        )?);
                     }
                     SimpleStatement::Selection(_) => unimplemented!(),
                     SimpleStatement::Switch(_) => unimplemented!(),
@@ -399,13 +331,15 @@ impl<'a> Parser<'a> {
                         JumpStatement::Break => crate::Statement::Break,
                         JumpStatement::Return(expr) => crate::Statement::Return {
                             value: expr.map(|expr| {
-                                let expr = self.parse_expression(
-                                    *expr,
-                                    &mut expressions,
-                                    &mut local_variables,
-                                    &mut locals_map,
-                                    &parameter_lookup,
-                                );
+                                let expr = self
+                                    .parse_expression(
+                                        *expr,
+                                        &mut expressions,
+                                        &mut local_variables,
+                                        &mut locals_map,
+                                        &parameter_lookup,
+                                    )
+                                    .unwrap();
                                 expressions.append(expr)
                             }),
                         },
@@ -427,7 +361,7 @@ impl<'a> Parser<'a> {
 
         self.function_lookup.insert(name, handle);
 
-        handle
+        Ok(handle)
     }
 
     fn parse_local_variable(
@@ -437,7 +371,7 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
-    ) -> Handle<LocalVariable> {
+    ) -> Result<Handle<LocalVariable>, Error> {
         let name = init.head.name.map(|d| d.0);
         let ty = {
             let ty = self.parse_type(init.head.ty.ty).unwrap();
@@ -459,15 +393,17 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let initializer = init.head.initializer.map(|initializer| {
-            self.parse_initializer(
+        let initializer = if let Some(initializer) = init.head.initializer {
+            Some(self.parse_initializer(
                 initializer,
                 expressions,
                 locals,
                 locals_map,
                 parameter_lookup,
-            )
-        });
+            )?)
+        } else {
+            None
+        };
 
         let handle = locals.append(LocalVariable {
             name: name.clone(),
@@ -477,7 +413,7 @@ impl<'a> Parser<'a> {
 
         locals_map.insert(name.unwrap(), handle);
 
-        handle
+        Ok(handle)
     }
 
     fn parse_initializer(
@@ -487,13 +423,18 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
-    ) -> Handle<Expression> {
+    ) -> Result<Handle<Expression>, Error> {
         match initializer {
             Initializer::Simple(expr) => {
-                let handle =
-                    self.parse_expression(*expr, expressions, locals, locals_map, parameter_lookup);
+                let handle = self.parse_expression(
+                    *expr,
+                    expressions,
+                    locals,
+                    locals_map,
+                    parameter_lookup,
+                )?;
 
-                expressions.append(handle)
+                Ok(expressions.append(handle))
             }
             Initializer::List(_exprs) => unimplemented!(),
         }
@@ -506,7 +447,7 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
-    ) -> crate::Statement {
+    ) -> Result<crate::Statement, Error> {
         match expr {
             Expr::Assignment(reg, op, value) => {
                 let pointer = {
@@ -516,7 +457,7 @@ impl<'a> Parser<'a> {
                         locals,
                         locals_map,
                         parameter_lookup,
-                    );
+                    )?;
                     expressions.append(pointer)
                 };
 
@@ -526,7 +467,7 @@ impl<'a> Parser<'a> {
                     locals,
                     locals_map,
                     parameter_lookup,
-                );
+                )?;
                 let value = match op {
                     AssignmentOp::Equal => right,
                     AssignmentOp::Mult => Expression::Binary {
@@ -583,10 +524,10 @@ impl<'a> Parser<'a> {
                     },
                 };
 
-                crate::Statement::Store {
+                Ok(crate::Statement::Store {
                     pointer,
                     value: expressions.append(value),
-                }
+                })
             }
             Expr::FunCall(_, _) => unimplemented!(),
             Expr::PostInc(_) => unimplemented!(),
@@ -602,14 +543,14 @@ impl<'a> Parser<'a> {
         locals: &mut Arena<LocalVariable>,
         locals_map: &mut FastHashMap<String, Handle<LocalVariable>>,
         parameter_lookup: &FastHashMap<String, Expression>,
-    ) -> Expression {
+    ) -> Result<Expression, Error> {
         match expr {
             Expr::Variable(ident) => {
                 let name = ident.0;
 
                 match name.as_str() {
-                    "gl_VertexIndex" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
+                    "gl_VertexIndex" => Ok(Expression::GlobalVariable(
+                        self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
                             class: StorageClass::Input,
                             binding: Some(Binding::BuiltIn(BuiltIn::VertexIndex)),
@@ -620,10 +561,10 @@ impl<'a> Parser<'a> {
                                     width: 32,
                                 },
                             }),
-                        }))
-                    }
-                    "gl_InstanceIndex" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
+                        }),
+                    )),
+                    "gl_InstanceIndex" => Ok(Expression::GlobalVariable(
+                        self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
                             class: StorageClass::Input,
                             binding: Some(Binding::BuiltIn(BuiltIn::InstanceIndex)),
@@ -634,10 +575,10 @@ impl<'a> Parser<'a> {
                                     width: 32,
                                 },
                             }),
-                        }))
-                    }
-                    "gl_BaseVertex" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
+                        }),
+                    )),
+                    "gl_BaseVertex" => Ok(Expression::GlobalVariable(
+                        self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
                             class: StorageClass::Input,
                             binding: Some(Binding::BuiltIn(BuiltIn::BaseVertex)),
@@ -648,10 +589,10 @@ impl<'a> Parser<'a> {
                                     width: 32,
                                 },
                             }),
-                        }))
-                    }
-                    "gl_BaseInstance" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
+                        }),
+                    )),
+                    "gl_BaseInstance" => Ok(Expression::GlobalVariable(
+                        self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
                             class: StorageClass::Input,
                             binding: Some(Binding::BuiltIn(BuiltIn::BaseInstance)),
@@ -662,10 +603,10 @@ impl<'a> Parser<'a> {
                                     width: 32,
                                 },
                             }),
-                        }))
-                    }
-                    "gl_Position" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
+                        }),
+                    )),
+                    "gl_Position" => Ok(Expression::GlobalVariable(self.globals.fetch_or_append(
+                        GlobalVariable {
                             name: Some(name),
                             class: match self.shader_stage {
                                 ShaderStage::Vertex => StorageClass::Output,
@@ -681,10 +622,10 @@ impl<'a> Parser<'a> {
                                     width: 32,
                                 },
                             }),
-                        }))
-                    }
-                    "gl_PointSize" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
+                        },
+                    ))),
+                    "gl_PointSize" => Ok(Expression::GlobalVariable(self.globals.fetch_or_append(
+                        GlobalVariable {
                             name: Some(name),
                             class: StorageClass::Output,
                             binding: Some(Binding::BuiltIn(BuiltIn::PointSize)),
@@ -695,10 +636,10 @@ impl<'a> Parser<'a> {
                                     width: 32,
                                 },
                             }),
-                        }))
-                    }
-                    "gl_ClipDistance" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
+                        },
+                    ))),
+                    "gl_ClipDistance" => Ok(Expression::GlobalVariable(
+                        self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
                             class: StorageClass::Output,
                             binding: Some(Binding::BuiltIn(BuiltIn::ClipDistance)),
@@ -709,24 +650,24 @@ impl<'a> Parser<'a> {
                                     width: 32,
                                 },
                             }),
-                        }))
-                    }
+                        }),
+                    )),
                     other => {
                         if let Some(global) = self.globals_lookup.get(other) {
                             match *global {
-                                Global::Variable(handle) => Expression::GlobalVariable(handle),
+                                Global::Variable(handle) => Ok(Expression::GlobalVariable(handle)),
                                 Global::StructShorthand(struct_handle, index) => {
-                                    Expression::AccessIndex {
+                                    Ok(Expression::AccessIndex {
                                         base: expressions
                                             .append(Expression::GlobalVariable(struct_handle)),
                                         index,
-                                    }
+                                    })
                                 }
                             }
                         } else if let Some(expr) = parameter_lookup.get(other) {
-                            expr.clone()
+                            Ok(expr.clone())
                         } else if let Some(local) = locals_map.get(other) {
-                            Expression::LocalVariable(*local)
+                            Ok(Expression::LocalVariable(*local))
                         } else {
                             println!("{}", other);
                             panic!()
@@ -734,8 +675,8 @@ impl<'a> Parser<'a> {
                     }
                 }
             }
-            Expr::IntConst(value) => {
-                Expression::Constant(self.constants.fetch_or_append(Constant {
+            Expr::IntConst(value) => Ok(Expression::Constant(self.constants.fetch_or_append(
+                Constant {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Sint(value as i64),
@@ -746,10 +687,10 @@ impl<'a> Parser<'a> {
                             width: 32,
                         },
                     }),
-                }))
-            }
-            Expr::UIntConst(value) => {
-                Expression::Constant(self.constants.fetch_or_append(Constant {
+                },
+            ))),
+            Expr::UIntConst(value) => Ok(Expression::Constant(self.constants.fetch_or_append(
+                Constant {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Uint(value as u64),
@@ -760,10 +701,10 @@ impl<'a> Parser<'a> {
                             width: 32,
                         },
                     }),
-                }))
-            }
-            Expr::BoolConst(value) => {
-                Expression::Constant(self.constants.fetch_or_append(Constant {
+                },
+            ))),
+            Expr::BoolConst(value) => Ok(Expression::Constant(self.constants.fetch_or_append(
+                Constant {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Bool(value),
@@ -774,10 +715,10 @@ impl<'a> Parser<'a> {
                             width: 1,
                         },
                     }),
-                }))
-            }
-            Expr::FloatConst(value) => {
-                Expression::Constant(self.constants.fetch_or_append(Constant {
+                },
+            ))),
+            Expr::FloatConst(value) => Ok(Expression::Constant(self.constants.fetch_or_append(
+                Constant {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Float(value as f64),
@@ -788,10 +729,10 @@ impl<'a> Parser<'a> {
                             width: 32,
                         },
                     }),
-                }))
-            }
-            Expr::DoubleConst(value) => {
-                Expression::Constant(self.constants.fetch_or_append(Constant {
+                },
+            ))),
+            Expr::DoubleConst(value) => Ok(Expression::Constant(self.constants.fetch_or_append(
+                Constant {
                     name: None,
                     specialization: None,
                     inner: ConstantInner::Float(value),
@@ -802,25 +743,37 @@ impl<'a> Parser<'a> {
                             width: 64,
                         },
                     }),
-                }))
+                },
+            ))),
+            Expr::Unary(op, reg) => {
+                let expr =
+                    self.parse_expression(*reg, expressions, locals, locals_map, parameter_lookup)?;
+                Ok(Expression::Unary {
+                    op: helpers::glsl_to_spirv_unary_op(op),
+                    expr: expressions.append(expr),
+                })
             }
-            Expr::Unary(_op, _reg) => unimplemented!(),
             Expr::Binary(op, left, right) => {
-                let left =
-                    self.parse_expression(*left, expressions, locals, locals_map, parameter_lookup);
+                let left = self.parse_expression(
+                    *left,
+                    expressions,
+                    locals,
+                    locals_map,
+                    parameter_lookup,
+                )?;
                 let right = self.parse_expression(
                     *right,
                     expressions,
                     locals,
                     locals_map,
                     parameter_lookup,
-                );
+                )?;
 
-                Expression::Binary {
+                Ok(Expression::Binary {
                     op: helpers::glsl_to_spirv_binary_op(op),
                     left: expressions.append(left),
                     right: expressions.append(right),
-                }
+                })
             }
             Expr::Ternary(_condition, _accept, _reject) => unimplemented!(),
             Expr::Assignment(_, _, _) => panic!(),
@@ -832,7 +785,7 @@ impl<'a> Parser<'a> {
                 };
 
                 match name.as_str() {
-                    "vec2" | "vec3" | "vec4" => Expression::Compose {
+                    "vec2" | "vec3" | "vec4" => Ok(Expression::Compose {
                         ty: self.types.fetch_or_append(Type {
                             name: None,
                             inner: TypeInner::Vector {
@@ -849,17 +802,19 @@ impl<'a> Parser<'a> {
                         components: args
                             .into_iter()
                             .map(|arg| {
-                                let expr = self.parse_expression(
-                                    arg,
-                                    expressions,
-                                    locals,
-                                    locals_map,
-                                    parameter_lookup,
-                                );
+                                let expr = self
+                                    .parse_expression(
+                                        arg,
+                                        expressions,
+                                        locals,
+                                        locals_map,
+                                        parameter_lookup,
+                                    )
+                                    .unwrap();
                                 expressions.append(expr)
                             })
                             .collect(),
-                    },
+                    }),
                     "texture" => {
                         let (image, sampler) =
                             if let Expr::FunCall(ident, mut sample_args) = args.remove(0) {
@@ -876,14 +831,14 @@ impl<'a> Parser<'a> {
                                             locals,
                                             locals_map,
                                             parameter_lookup,
-                                        ),
+                                        )?,
                                         self.parse_expression(
                                             sample_args.remove(0),
                                             expressions,
                                             locals,
                                             locals_map,
                                             parameter_lookup,
-                                        ),
+                                        )?,
                                     ),
                                     _ => unimplemented!(),
                                 }
@@ -897,30 +852,32 @@ impl<'a> Parser<'a> {
                             locals,
                             locals_map,
                             parameter_lookup,
-                        );
+                        )?;
 
-                        Expression::ImageSample {
+                        Ok(Expression::ImageSample {
                             image: expressions.append(image),
                             sampler: expressions.append(sampler),
                             coordinate: expressions.append(coordinate),
-                        }
+                        })
                     }
-                    _ => Expression::Call {
+                    _ => Ok(Expression::Call {
                         name,
                         arguments: args
                             .into_iter()
                             .map(|arg| {
-                                let expr = self.parse_expression(
-                                    arg,
-                                    expressions,
-                                    locals,
-                                    locals_map,
-                                    parameter_lookup,
-                                );
+                                let expr = self
+                                    .parse_expression(
+                                        arg,
+                                        expressions,
+                                        locals,
+                                        locals_map,
+                                        parameter_lookup,
+                                    )
+                                    .unwrap();
                                 expressions.append(expr)
                             })
                             .collect(),
-                    },
+                    }),
                 }
             }
             Expr::Dot(reg, ident) => {
@@ -931,7 +888,7 @@ impl<'a> Parser<'a> {
                         locals,
                         locals_map,
                         parameter_lookup,
-                    );
+                    )?;
                     expressions.append(expr)
                 };
 
@@ -948,7 +905,7 @@ impl<'a> Parser<'a> {
                         &self.functions,
                         &self.function_lookup,
                     )
-                    .unwrap();
+                    .map_err(|e| Error { kind: e.into() })?;
                 let base_type = &self.types[type_handle];
                 match base_type.inner {
                     crate::TypeInner::Struct { ref members } => {
@@ -956,10 +913,10 @@ impl<'a> Parser<'a> {
                             .iter()
                             .position(|m| m.name.as_deref() == Some(name))
                             .unwrap() as u32;
-                        crate::Expression::AccessIndex {
+                        Ok(crate::Expression::AccessIndex {
                             base: handle,
                             index,
-                        }
+                        })
                     }
                     crate::TypeInner::Vector { size, kind, width }
                     | crate::TypeInner::Matrix {
@@ -999,23 +956,23 @@ impl<'a> Parser<'a> {
                                 } else {
                                     crate::TypeInner::Vector { size, kind, width }
                                 };
-                            crate::Expression::Compose {
+                            Ok(crate::Expression::Compose {
                                 ty: crate::proc::Typifier::deduce_type_handle(
                                     inner,
                                     &mut self.types,
                                 ),
                                 components,
-                            }
+                            })
                         } else {
                             let ch = name.chars().next().unwrap();
                             let index = MEMBERS[..size as usize]
                                 .iter()
                                 .position(|&m| m == ch)
                                 .unwrap() as u32;
-                            crate::Expression::AccessIndex {
+                            Ok(crate::Expression::AccessIndex {
                                 base: handle,
                                 index,
-                            }
+                            })
                         }
                     }
                     _ => panic!(),
@@ -1170,18 +1127,14 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse_str(
-    source: &str,
-    entry: String,
-    stage: ShaderStage,
-) -> Result<crate::Module, ParseError> {
-    let input = parser::parse(source).unwrap();
+pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<crate::Module, Error> {
+    let input = parser::parse(source)?;
 
     log::debug!("------GLSL PREPROCESSOR------");
     log::debug!("\n{}", input);
     log::debug!("-----------------------------");
 
-    Parser::new(&input, stage)?.parse(entry)
+    Parser::new(&input, stage).parse(entry)
 }
 
 #[cfg(test)]

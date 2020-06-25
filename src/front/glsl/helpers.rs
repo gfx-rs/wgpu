@@ -1,5 +1,16 @@
 use crate::{Arena, ImageDimension, ImageFlags, ScalarKind, Type, TypeInner, VectorSize};
-use glsl::syntax::{BinaryOp, TypeSpecifierNonArray};
+use glsl::syntax::{BinaryOp, TypeSpecifierNonArray, UnaryOp};
+
+pub fn glsl_to_spirv_unary_op(op: UnaryOp) -> crate::UnaryOperator {
+    match op {
+        UnaryOp::Inc => todo!(),
+        UnaryOp::Dec => todo!(),
+        UnaryOp::Add => todo!(),
+        UnaryOp::Minus => crate::UnaryOperator::Negate,
+        UnaryOp::Not => crate::UnaryOperator::Not,
+        UnaryOp::Complement => todo!(),
+    }
+}
 
 pub fn glsl_to_spirv_binary_op(op: BinaryOp) -> crate::BinaryOperator {
     match op {

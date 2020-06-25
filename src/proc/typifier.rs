@@ -7,10 +7,13 @@ pub struct Typifier {
     types: Vec<Handle<crate::Type>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ResolveError {
+    #[error("Invalid index into array")]
     InvalidAccessIndex,
-    FunctionNotDefined,
+    #[error("Function {name} not defined")]
+    FunctionNotDefined { name: String },
+    #[error("Function without return type")]
     FunctionReturnsVoid,
 }
 
@@ -123,6 +126,8 @@ impl Typifier {
                                 ty_left
                             } else if let crate::TypeInner::Scalar { .. } = types[ty_right].inner {
                                 ty_left
+                            } else if let crate::TypeInner::Scalar { .. } = types[ty_left].inner {
+                                ty_right
                             } else if let crate::TypeInner::Matrix {
                                 columns,
                                 kind,
@@ -166,7 +171,7 @@ impl Typifier {
                         ref name,
                         ref arguments,
                     } => match name.as_str() {
-                        "distance" | "length" => {
+                        "distance" | "length" | "dot" => {
                             let ty_handle = self.types[arguments[0].index()];
                             let inner = match types[ty_handle].inner {
                                 crate::TypeInner::Vector { kind, width, .. } => {
@@ -176,10 +181,14 @@ impl Typifier {
                             };
                             Self::deduce_type_handle(inner, types)
                         }
-                        "normalize" | "fclamp" => self.types[arguments[0].index()],
-                        other => functions[*function_lookup
-                            .get(other)
-                            .ok_or(ResolveError::FunctionNotDefined)?]
+                        "normalize" | "fclamp" | "max" | "reflect" | "pow" | "clamp" | "mix" => {
+                            self.types[arguments[0].index()]
+                        }
+                        other => functions[*function_lookup.get(other).ok_or(
+                            ResolveError::FunctionNotDefined {
+                                name: other.to_string(),
+                            },
+                        )?]
                         .return_type
                         .ok_or(ResolveError::FunctionReturnsVoid)?,
                     },
