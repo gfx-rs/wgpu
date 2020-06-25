@@ -95,7 +95,7 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>) {
+    ) -> Self {
         let mut uniform_workaround = false;
         let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
         let fs_bytes: Vec<u8> = match device.capabilities() {
@@ -335,16 +335,13 @@ impl framework::Example for Example {
             alpha_to_coverage_enabled: false,
         });
 
-        (
-            Self {
-                vertex_buffer,
-                index_buffer,
-                bind_group,
-                pipeline,
-                uniform_workaround_data,
-            },
-            None,
-        )
+        Self {
+            vertex_buffer,
+            index_buffer,
+            bind_group,
+            pipeline,
+            uniform_workaround_data,
+        }
     }
     fn resize(
         &mut self,
@@ -361,8 +358,9 @@ impl framework::Example for Example {
         &mut self,
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-    ) -> wgpu::CommandBuffer {
+        queue: &wgpu::Queue,
+        _spawner: &impl futures::task::LocalSpawn,
+    ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("primary"),
         });
@@ -393,7 +391,7 @@ impl framework::Example for Example {
 
         drop(rpass);
 
-        encoder.finish()
+        queue.submit(Some(encoder.finish()));
     }
 }
 
