@@ -1,4 +1,4 @@
-use std::{fmt, hash, marker::PhantomData, num::NonZeroU32};
+use std::{cmp::Ordering, fmt, hash, marker::PhantomData, num::NonZeroU32};
 
 /// An unique index in the arena array that a handle points to.
 ///
@@ -29,6 +29,16 @@ impl<T> PartialEq for Handle<T> {
     }
 }
 impl<T> Eq for Handle<T> {}
+impl<T> PartialOrd for Handle<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.index.partial_cmp(&other.index)
+    }
+}
+impl<T> Ord for Handle<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.index.cmp(&other.index)
+    }
+}
 impl<T> fmt::Debug for Handle<T> {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         write!(formatter, "Handle({})", self.index)

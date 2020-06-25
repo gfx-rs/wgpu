@@ -20,6 +20,7 @@ fn load_glsl(name: &str, entry: &str, exec: ExecutionModel) -> naga::Module {
 #[test]
 fn convert_quad() {
     let module = load_wgsl("quad.wgsl");
+    naga::proc::Validator::new().validate(&module).unwrap();
     {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
@@ -51,6 +52,7 @@ fn convert_quad() {
 #[test]
 fn convert_boids() {
     let module = load_wgsl("boids.wgsl");
+    naga::proc::Validator::new().validate(&module).unwrap();
     {
         use naga::back::msl;
         let mut binding_map = msl::BindingMap::default();
@@ -93,6 +95,7 @@ fn convert_boids() {
 #[ignore]
 fn convert_phong_lighting() {
     let module = load_glsl("glsl_phong_lighting.frag", "main", ExecutionModel::Fragment);
+    naga::proc::Validator::new().validate(&module).unwrap();
 
     let header = naga::Header {
         version: (1, 0, 0),
