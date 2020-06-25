@@ -32,20 +32,17 @@ pub struct BindTarget {
 
 #[derive(Clone, Debug, Hash, Eq, Ord, PartialEq, PartialOrd)]
 pub struct BindSource {
-    pub set: spirv::Word,
-    pub binding: spirv::Word,
+    pub set: u32,
+    pub binding: u32,
 }
 
 pub type BindingMap = FastHashMap<BindSource, BindTarget>;
 
 enum ResolvedBinding {
-    BuiltIn(spirv::BuiltIn),
-    Attribute(spirv::Word),
-    Color(spirv::Word),
-    User {
-        prefix: &'static str,
-        index: spirv::Word,
-    },
+    BuiltIn(crate::BuiltIn),
+    Attribute(u32),
+    Color(u32),
+    User { prefix: &'static str, index: u32 },
     Resource(BindTarget),
 }
 
@@ -61,10 +58,11 @@ impl Display for Level {
     }
 }
 
+// Note: some of these should be removed in favor of proper IR validation.
+
 #[derive(Debug)]
 pub enum Error {
     Format(FmtError),
-    UnsupportedExecutionModel(spirv::ExecutionModel),
     UnexpectedLocation,
     MixedExecutionModels(crate::Handle<crate::Function>),
     MissingBinding(crate::Handle<crate::GlobalVariable>),
@@ -73,7 +71,6 @@ pub enum Error {
     MutabilityViolation(crate::Handle<crate::GlobalVariable>),
     BadName(String),
     UnexpectedGlobalType(crate::Handle<crate::Type>),
-    UnimplementedBuiltIn(spirv::BuiltIn),
     UnimplementedBindTarget(BindTarget),
     UnexpectedIndexing(crate::TypeInner),
     UnsupportedCompose(crate::Handle<crate::Type>),
@@ -86,8 +83,6 @@ pub enum Error {
     UnsupportedExpression(crate::Expression),
     UnableToReturnValue(crate::Handle<crate::Expression>),
     UnsupportedStatement(crate::Statement),
-    UnsupportedDim(spirv::Dim),
-    ExecutionModelReturnType(spirv::ExecutionModel, crate::Handle<crate::Type>),
     AccessIndexExceedsStaticLength(u32, u32),
 }
 
@@ -269,9 +264,9 @@ impl<'a> TypedGlobalVariable<'a> {
         let var = &self.module.global_variables[self.handle];
         let name = var.name.or_index(self.handle);
         let (space_qualifier, reference) = match var.class {
-            spirv::StorageClass::Uniform
-            | spirv::StorageClass::UniformConstant
-            | spirv::StorageClass::StorageBuffer => {
+            crate::StorageClass::Constant
+            | crate::StorageClass::Uniform
+            | crate::StorageClass::StorageBuffer => {
                 let space = if self.usage.contains(crate::GlobalUse::STORE) {
                     "device "
                 } else {
@@ -286,10 +281,10 @@ impl<'a> TypedGlobalVariable<'a> {
             match ty.inner {
                 crate::TypeInner::Pointer { base, class } => {
                     let ty_handle = match class {
-                        spirv::StorageClass::Input
-                        | spirv::StorageClass::Output
-                        | spirv::StorageClass::Uniform
-                        | spirv::StorageClass::UniformConstant => base,
+                        crate::StorageClass::Constant
+                        | crate::StorageClass::Input
+                        | crate::StorageClass::Output
+                        | crate::StorageClass::Uniform => base,
                         _ => var.ty,
                     };
                     let ty_name = self.module.types[ty_handle].name.or_index(ty_handle);
@@ -312,12 +307,26 @@ impl ResolvedBinding {
     fn try_fmt<W: Write>(&self, formatter: &mut W) -> Result<(), Error> {
         match *self {
             ResolvedBinding::BuiltIn(built_in) => {
+                use crate::BuiltIn as Bi;
                 let name = match built_in {
-                    spirv::BuiltIn::ClipDistance => "clip_distance",
-                    spirv::BuiltIn::GlobalInvocationId => "thread_position_in_grid",
-                    spirv::BuiltIn::PointSize => "point_size",
-                    spirv::BuiltIn::Position => "position",
-                    _ => return Err(Error::UnimplementedBuiltIn(built_in)),
+                    // vertex
+                    Bi::BaseInstance => "base_instance",
+                    Bi::BaseVertex => "base_vertex",
+                    Bi::ClipDistance => "clip_distance",
+                    Bi::InstanceIndex => "instance_id",
+                    Bi::PointSize => "point_size",
+                    Bi::Position => "position",
+                    Bi::VertexIndex => "vertex_id",
+                    // fragment
+                    Bi::FragCoord => "position",
+                    Bi::FragDepth => "depth(any)",
+                    Bi::FrontFacing => "front_facing",
+                    Bi::SampleIndex => "sample_id",
+                    // compute
+                    Bi::GlobalInvocationId => "thread_position_in_grid",
+                    Bi::LocalInvocationId => "thread_position_in_threadgroup",
+                    Bi::LocalInvocationIndex => "thread_index_in_threadgroup",
+                    Bi::WorkGroupId => "threadgroup_position_in_grid",
                 };
                 Ok(formatter.write_str(name)?)
             }
@@ -492,7 +501,7 @@ impl<W: Write> Writer<W> {
                 let var = &module.global_variables[handle];
                 let inner = &module.types[var.ty].inner;
                 match var.class {
-                    spirv::StorageClass::Output => {
+                    crate::StorageClass::Output => {
                         if GLOBAL_POINTERS {
                             if let crate::TypeInner::Pointer { base, .. } = *inner {
                                 let base_inner = &module.types[base].inner;
@@ -505,7 +514,7 @@ impl<W: Write> Writer<W> {
                         }
                         write!(self.out, "{}.", OUTPUT_STRUCT_NAME)?;
                     }
-                    spirv::StorageClass::Input => {
+                    crate::StorageClass::Input => {
                         if let Some(crate::Binding::Location(_)) = var.binding {
                             write!(self.out, "{}.", LOCATION_INPUT_STRUCT_NAME)?;
                         }
@@ -835,16 +844,13 @@ impl<W: Write> Writer<W> {
                     )?;
                 }
                 crate::TypeInner::Pointer { base, class } => {
+                    use crate::StorageClass as Sc;
                     let base_name = module.types[base].name.or_index(base);
                     let class_name = match class {
-                        spirv::StorageClass::Input | spirv::StorageClass::Output => continue,
-                        spirv::StorageClass::Uniform | spirv::StorageClass::UniformConstant => {
-                            "constant"
-                        }
-                        other => {
-                            log::warn!("Unexpected pointer class {:?}", other);
-                            ""
-                        }
+                        Sc::Input | Sc::Output => continue,
+                        Sc::Constant | Sc::Uniform => "constant",
+                        Sc::StorageBuffer => "device",
+                        Sc::Private | Sc::Function | Sc::WorkGroup => "",
                     };
                     write!(self.out, "typedef {} {} *{}", class_name, base_name, name)?;
                 }
@@ -882,11 +888,10 @@ impl<W: Write> Writer<W> {
                 crate::TypeInner::Image { base, dim, flags } => {
                     let base_name = module.types[base].name.or_index(base);
                     let dim = match dim {
-                        spirv::Dim::Dim1D => "1d",
-                        spirv::Dim::Dim2D => "2d",
-                        spirv::Dim::Dim3D => "3d",
-                        spirv::Dim::DimCube => "Cube",
-                        other => return Err(Error::UnsupportedDim(other)),
+                        crate::ImageDimension::D1 => "1d",
+                        crate::ImageDimension::D2 => "2d",
+                        crate::ImageDimension::D3 => "3d",
+                        crate::ImageDimension::Cube => "Cube",
                     };
                     let access = if flags.contains(crate::ImageFlags::SAMPLED) {
                         if flags.intersects(crate::ImageFlags::CAN_STORE) {
@@ -923,16 +928,16 @@ impl<W: Write> Writer<W> {
         for (fun_handle, fun) in module.functions.iter() {
             let fun_name = fun.name.or_index(fun_handle);
             // find the entry point(s) and inputs/outputs
-            let mut exec_model = None;
+            let mut shader_stage = None;
             let mut last_used_global = None;
             for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage) {
                 match var.class {
-                    spirv::StorageClass::Input => {
+                    crate::StorageClass::Input => {
                         if let Some(crate::Binding::Location(_)) = var.binding {
                             continue;
                         }
                     }
-                    spirv::StorageClass::Output => continue,
+                    crate::StorageClass::Output => continue,
                     _ => {}
                 }
                 if !usage.is_empty() {
@@ -941,46 +946,43 @@ impl<W: Write> Writer<W> {
             }
             for ep in module.entry_points.iter() {
                 if ep.function == fun_handle {
-                    if exec_model.is_some() {
-                        if exec_model != Some(ep.exec_model) {
+                    if shader_stage.is_some() {
+                        if shader_stage != Some(ep.stage) {
                             return Err(Error::MixedExecutionModels(fun_handle));
                         }
                     } else {
-                        exec_model = Some(ep.exec_model);
+                        shader_stage = Some(ep.stage);
                     }
                 }
             }
             let output_name = fun.name.or_index(OutputStructIndex(fun_handle));
 
             // make dedicated input/output structs
-            if let Some(em) = exec_model {
-                if let Some(return_type) = fun.return_type {
-                    return Err(Error::ExecutionModelReturnType(em, return_type));
-                }
-                let (em_str, in_mode, out_mode) = match em {
-                    spirv::ExecutionModel::Vertex => (
+            if let Some(stage) = shader_stage {
+                assert_eq!(fun.return_type, None);
+                let (em_str, in_mode, out_mode) = match stage {
+                    crate::ShaderStage::Vertex => (
                         "vertex",
                         LocationMode::VertexInput,
                         LocationMode::Intermediate,
                     ),
-                    spirv::ExecutionModel::Fragment => (
+                    crate::ShaderStage::Fragment => (
                         "fragment",
                         LocationMode::Intermediate,
                         LocationMode::FragmentOutput,
                     ),
-                    spirv::ExecutionModel::GLCompute => {
+                    crate::ShaderStage::Compute => {
                         ("kernel", LocationMode::Uniform, LocationMode::Uniform)
                     }
-                    _ => return Err(Error::UnsupportedExecutionModel(em)),
                 };
                 let location_input_name = fun.name.or_index(InputStructIndex(fun_handle));
 
-                if em != spirv::ExecutionModel::GLCompute {
+                if stage != crate::ShaderStage::Compute {
                     writeln!(self.out, "struct {} {{", location_input_name)?;
                     for ((handle, var), &usage) in
                         module.global_variables.iter().zip(&fun.global_usage)
                     {
-                        if var.class != spirv::StorageClass::Input
+                        if var.class != crate::StorageClass::Input
                             || !usage.contains(crate::GlobalUse::LOAD)
                         {
                             continue;
@@ -1027,7 +1029,7 @@ impl<W: Write> Writer<W> {
                     for ((handle, var), &usage) in
                         module.global_variables.iter().zip(&fun.global_usage)
                     {
-                        if var.class != spirv::StorageClass::Output
+                        if var.class != crate::StorageClass::Output
                             || !usage.contains(crate::GlobalUse::STORE)
                         {
                             continue;
@@ -1084,24 +1086,24 @@ impl<W: Write> Writer<W> {
 
                 for ((handle, var), &usage) in module.global_variables.iter().zip(&fun.global_usage)
                 {
-                    if usage.is_empty() || var.class == spirv::StorageClass::Output {
+                    if usage.is_empty() || var.class == crate::StorageClass::Output {
                         continue;
                     }
-                    if var.class == spirv::StorageClass::Input {
+                    if var.class == crate::StorageClass::Input {
                         if let Some(crate::Binding::Location(_)) = var.binding {
                             // location inputs are put into a separate struct
                             continue;
                         }
                     }
-                    let loc_mode = match (em, var.class) {
-                        (spirv::ExecutionModel::Vertex, spirv::StorageClass::Input) => {
+                    let loc_mode = match (stage, var.class) {
+                        (crate::ShaderStage::Vertex, crate::StorageClass::Input) => {
                             LocationMode::VertexInput
                         }
-                        (spirv::ExecutionModel::Vertex, spirv::StorageClass::Output)
-                        | (spirv::ExecutionModel::Fragment, spirv::StorageClass::Input) => {
+                        (crate::ShaderStage::Vertex, crate::StorageClass::Output)
+                        | (crate::ShaderStage::Fragment, crate::StorageClass::Input) => {
                             LocationMode::Intermediate
                         }
-                        (spirv::ExecutionModel::Fragment, spirv::StorageClass::Output) => {
+                        (crate::ShaderStage::Fragment, crate::StorageClass::Output) => {
                             LocationMode::FragmentOutput
                         }
                         _ => LocationMode::Uniform,
@@ -1143,12 +1145,12 @@ impl<W: Write> Writer<W> {
             writeln!(self.out, ") {{")?;
 
             // write down function body
-            let has_output = match exec_model {
-                Some(spirv::ExecutionModel::Vertex) | Some(spirv::ExecutionModel::Fragment) => {
+            let has_output = match shader_stage {
+                Some(crate::ShaderStage::Vertex) | Some(crate::ShaderStage::Fragment) => {
                     writeln!(self.out, "\t{} {};", output_name, OUTPUT_STRUCT_NAME)?;
                     true
                 }
-                _ => false,
+                Some(crate::ShaderStage::Compute) | None => false,
             };
             for (local_handle, local) in fun.local_variables.iter() {
                 let ty_name = module.types[local.ty].name.or_index(local.ty);

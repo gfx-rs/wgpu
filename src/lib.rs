@@ -22,6 +22,47 @@ pub struct Header {
     pub generator: u32,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ShaderStage {
+    Vertex,
+    Fragment,
+    Compute,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum StorageClass {
+    Constant,
+    Function,
+    Input,
+    Output,
+    Private,
+    StorageBuffer,
+    Uniform,
+    WorkGroup,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum BuiltIn {
+    // vertex
+    BaseInstance,
+    BaseVertex,
+    ClipDistance,
+    InstanceIndex,
+    Position,
+    VertexIndex,
+    // fragment
+    PointSize,
+    FragCoord,
+    FrontFacing,
+    SampleIndex,
+    FragDepth,
+    // compute
+    GlobalInvocationId,
+    LocalInvocationId,
+    LocalInvocationIndex,
+    WorkGroupId,
+}
+
 pub type Bytes = u8;
 
 #[repr(u8)]
@@ -44,7 +85,7 @@ pub enum ScalarKind {
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum ArraySize {
-    Static(spirv::Word),
+    Static(u32),
     Dynamic,
 }
 
@@ -54,7 +95,15 @@ pub struct StructMember {
     pub name: Option<String>,
     pub binding: Option<Binding>,
     pub ty: Handle<Type>,
-    pub offset: spirv::Word,
+    pub offset: u32,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum ImageDimension {
+    D1,
+    D2,
+    D3,
+    Cube,
 }
 
 bitflags::bitflags! {
@@ -93,7 +142,7 @@ pub enum TypeInner {
     },
     Pointer {
         base: Handle<Type>,
-        class: spirv::StorageClass,
+        class: StorageClass,
     },
     Array {
         base: Handle<Type>,
@@ -105,7 +154,7 @@ pub enum TypeInner {
     },
     Image {
         base: Handle<Type>,
-        dim: spirv::Dim,
+        dim: ImageDimension,
         flags: ImageFlags,
     },
     Sampler {
@@ -116,7 +165,7 @@ pub enum TypeInner {
 #[derive(Debug, PartialEq)]
 pub struct Constant {
     pub name: Option<String>,
-    pub specialization: Option<spirv::Word>,
+    pub specialization: Option<u32>,
     pub inner: ConstantInner,
     pub ty: Handle<Type>,
 }
@@ -133,12 +182,9 @@ pub enum ConstantInner {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Binding {
-    BuiltIn(spirv::BuiltIn),
-    Location(spirv::Word),
-    Descriptor {
-        set: spirv::Word,
-        binding: spirv::Word,
-    },
+    BuiltIn(BuiltIn),
+    Location(u32),
+    Descriptor { set: u32, binding: u32 },
 }
 
 bitflags::bitflags! {
@@ -151,7 +197,7 @@ bitflags::bitflags! {
 #[derive(Clone, Debug, PartialEq)]
 pub struct GlobalVariable {
     pub name: Option<String>,
-    pub class: spirv::StorageClass,
+    pub class: StorageClass,
     pub binding: Option<Binding>,
     pub ty: Handle<Type>,
 }
@@ -302,7 +348,7 @@ pub enum Statement {
 #[derive(Debug)]
 pub struct Function {
     pub name: Option<String>,
-    pub control: spirv::FunctionControl,
+    //pub control: spirv::FunctionControl,
     pub parameter_types: Vec<Handle<Type>>,
     pub return_type: Option<Handle<Type>>,
     pub global_usage: Vec<GlobalUse>,
@@ -313,7 +359,7 @@ pub struct Function {
 
 #[derive(Debug)]
 pub struct EntryPoint {
-    pub exec_model: spirv::ExecutionModel,
+    pub stage: ShaderStage,
     pub name: String,
     pub function: Handle<Function>,
 }

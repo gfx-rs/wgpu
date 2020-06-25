@@ -1,14 +1,13 @@
 use crate::{
-    Arena, ArraySize, BinaryOperator, Binding, Constant, ConstantInner, EntryPoint, Expression,
-    FastHashMap, Function, GlobalVariable, Handle, Header, LocalVariable, Module, ScalarKind,
-    StructMember, Type, TypeInner, VectorSize,
+    Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Constant, ConstantInner, EntryPoint,
+    Expression, FastHashMap, Function, GlobalVariable, Handle, Header, LocalVariable, Module,
+    ScalarKind, ShaderStage, StorageClass, StructMember, Type, TypeInner, VectorSize,
 };
 use glsl::{
     parser::{Parse, ParseError},
     syntax::*,
 };
 use parser::{Token, TokenMetadata};
-use spirv::{BuiltIn, ExecutionModel, StorageClass};
 use std::fmt;
 
 mod helpers;
@@ -157,11 +156,11 @@ struct Parser<'a> {
     constants: Arena<Constant>,
     functions: Arena<Function>,
     function_lookup: FastHashMap<String, Handle<Function>>,
-    exec_model: ExecutionModel,
+    shader_stage: ShaderStage,
 }
 
 impl<'a> Parser<'a> {
-    pub fn new(source: &'a str, exec_model: ExecutionModel) -> Result<Self, ParseError> {
+    pub fn new(source: &'a str, shader_stage: ShaderStage) -> Result<Self, ParseError> {
         Ok(Self {
             source,
             types: Arena::new(),
@@ -170,7 +169,7 @@ impl<'a> Parser<'a> {
             constants: Arena::new(),
             functions: Arena::new(),
             function_lookup: FastHashMap::default(),
-            exec_model,
+            shader_stage,
         })
     }
 
@@ -306,7 +305,7 @@ impl<'a> Parser<'a> {
             global_variables: self.globals,
             functions: self.functions,
             entry_points: vec![EntryPoint {
-                exec_model: self.exec_model,
+                stage: self.shader_stage,
                 function: entry_point.unwrap(),
                 name: entry,
             }],
@@ -418,7 +417,6 @@ impl<'a> Parser<'a> {
 
         let handle = self.functions.append(Function {
             name: Some(name.clone()),
-            control: spirv::FunctionControl::NONE,
             parameter_types,
             return_type: ty,
             global_usage: vec![],
@@ -638,20 +636,6 @@ impl<'a> Parser<'a> {
                             }),
                         }))
                     }
-                    "gl_DrawID" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
-                            name: Some(name),
-                            class: StorageClass::Input,
-                            binding: Some(Binding::BuiltIn(BuiltIn::DrawIndex)),
-                            ty: self.types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Scalar {
-                                    kind: ScalarKind::Sint,
-                                    width: 32,
-                                },
-                            }),
-                        }))
-                    }
                     "gl_BaseVertex" => {
                         Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
@@ -683,9 +667,9 @@ impl<'a> Parser<'a> {
                     "gl_Position" => {
                         Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
                             name: Some(name),
-                            class: match self.exec_model {
-                                ExecutionModel::Vertex => StorageClass::Output,
-                                ExecutionModel::Fragment => StorageClass::Input,
+                            class: match self.shader_stage {
+                                ShaderStage::Vertex => StorageClass::Output,
+                                ShaderStage::Fragment => StorageClass::Input,
                                 _ => panic!(),
                             },
                             binding: Some(Binding::BuiltIn(BuiltIn::Position)),
@@ -718,20 +702,6 @@ impl<'a> Parser<'a> {
                             name: Some(name),
                             class: StorageClass::Output,
                             binding: Some(Binding::BuiltIn(BuiltIn::ClipDistance)),
-                            ty: self.types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Scalar {
-                                    kind: ScalarKind::Float,
-                                    width: 32,
-                                },
-                            }),
-                        }))
-                    }
-                    "gl_CullDistance" => {
-                        Expression::GlobalVariable(self.globals.fetch_or_append(GlobalVariable {
-                            name: Some(name),
-                            class: StorageClass::Output,
-                            binding: Some(Binding::BuiltIn(BuiltIn::CullDistance)),
                             ty: self.types.fetch_or_append(Type {
                                 name: None,
                                 inner: TypeInner::Scalar {
@@ -1131,16 +1101,16 @@ impl<'a> Parser<'a> {
                 TypeQualifierSpec::Storage(storage_qualifier) => {
                     assert!(storage.is_none());
 
-                    match storage_qualifier {
-                        StorageQualifier::Const => storage = Some(StorageClass::UniformConstant),
-                        StorageQualifier::In => storage = Some(StorageClass::Input),
-                        StorageQualifier::Out => storage = Some(StorageClass::Output),
-                        StorageQualifier::Uniform => storage = Some(StorageClass::Uniform),
-                        StorageQualifier::Buffer => storage = Some(StorageClass::StorageBuffer),
-                        StorageQualifier::Shared => storage = Some(StorageClass::Workgroup),
-                        StorageQualifier::Coherent => storage = Some(StorageClass::Workgroup),
+                    storage = Some(match storage_qualifier {
+                        StorageQualifier::Const => StorageClass::Constant,
+                        StorageQualifier::In => StorageClass::Input,
+                        StorageQualifier::Out => StorageClass::Output,
+                        StorageQualifier::Uniform => StorageClass::Uniform,
+                        StorageQualifier::Buffer => StorageClass::StorageBuffer,
+                        StorageQualifier::Shared => StorageClass::WorkGroup,
+                        StorageQualifier::Coherent => StorageClass::WorkGroup,
                         _ => panic!(),
-                    }
+                    });
                 }
                 TypeQualifierSpec::Layout(layout_qualifier) => {
                     assert!(binding.is_none());
@@ -1203,7 +1173,7 @@ impl<'a> Parser<'a> {
 pub fn parse_str(
     source: &str,
     entry: String,
-    exec: ExecutionModel,
+    stage: ShaderStage,
 ) -> Result<crate::Module, ParseError> {
     let input = parser::parse(source).unwrap();
 
@@ -1211,7 +1181,7 @@ pub fn parse_str(
     log::debug!("\n{}", input);
     log::debug!("-----------------------------");
 
-    Parser::new(&input, exec)?.parse(entry)
+    Parser::new(&input, stage)?.parse(entry)
 }
 
 #[cfg(test)]
@@ -1224,7 +1194,7 @@ mod tests {
 
         println!(
             "{:#?}",
-            parse_str(data, String::from("main"), spirv::ExecutionModel::Vertex)
+            parse_str(data, String::from("main"), crate::ShaderStage::Vertex)
         );
     }
 
@@ -1236,7 +1206,7 @@ mod tests {
 
         println!(
             "{:#?}",
-            parse_str(data, String::from("main"), spirv::ExecutionModel::Fragment)
+            parse_str(data, String::from("main"), crate::ShaderStage::Fragment)
         );
     }
 
@@ -1249,7 +1219,7 @@ mod tests {
 
         println!(
             "{:#?}",
-            parse_str(data, String::from("main"), spirv::ExecutionModel::Vertex)
+            parse_str(data, String::from("main"), crate::ShaderStage::Vertex)
         );
     }
 
@@ -1263,7 +1233,7 @@ mod tests {
 
         println!(
             "{:#?}",
-            parse_str(data, String::from("main"), spirv::ExecutionModel::Vertex)
+            parse_str(data, String::from("main"), crate::ShaderStage::Vertex)
         );
     }
 }

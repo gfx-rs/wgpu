@@ -1,7 +1,7 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
-use crate::back::spv::{helpers, Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
+use super::{helpers, Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
 use crate::{FastHashMap, FastHashSet};
-use spirv::*;
+use spirv::{Op, Word};
 
 trait LookupHelper<T> {
     type Target;
@@ -45,7 +45,7 @@ pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
     id_count: u32,
-    capabilities: FastHashSet<Capability>,
+    capabilities: FastHashSet<spirv::Capability>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     writer_flags: WriterFlags,
@@ -81,13 +81,13 @@ impl Writer {
         self.id_count
     }
 
-    fn try_add_capabilities(&mut self, capabilities: &[Capability]) {
+    fn try_add_capabilities(&mut self, capabilities: &[spirv::Capability]) {
         for capability in capabilities.iter() {
             self.capabilities.insert(*capability);
         }
     }
 
-    fn instruction_capability(&self, capability: Capability) -> Instruction {
+    fn instruction_capability(&self, capability: spirv::Capability) -> Instruction {
         let mut instruction = Instruction::new(Op::Capability);
         instruction.add_operand(capability as u32);
         instruction
@@ -103,8 +103,8 @@ impl Writer {
 
     fn instruction_memory_model(&mut self) -> Instruction {
         let mut instruction = Instruction::new(Op::MemoryModel);
-        let addressing_model = AddressingModel::Logical;
-        let memory_model = MemoryModel::GLSL450;
+        let addressing_model = spirv::AddressingModel::Logical;
+        let memory_model = spirv::MemoryModel::GLSL450;
         self.try_add_capabilities(addressing_model.required_capabilities());
         self.try_add_capabilities(memory_model.required_capabilities());
 
@@ -124,7 +124,13 @@ impl Writer {
             .lookup_id(entry_point.function)
             .unwrap();
 
-        instruction.add_operand(entry_point.exec_model as u32);
+        let exec_model = match entry_point.stage {
+            crate::ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
+            crate::ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
+            crate::ShaderStage::Compute => spirv::ExecutionModel::GLCompute,
+        };
+
+        instruction.add_operand(exec_model as u32);
         instruction.add_operand(function_id);
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
@@ -152,11 +158,11 @@ impl Writer {
             }
         }
 
-        self.try_add_capabilities(entry_point.exec_model.required_capabilities());
-        match entry_point.exec_model {
-            ExecutionModel::Vertex => {}
-            ExecutionModel::Fragment => {
-                let execution_mode = ExecutionMode::OriginUpperLeft;
+        self.try_add_capabilities(exec_model.required_capabilities());
+        match entry_point.stage {
+            crate::ShaderStage::Vertex => {}
+            crate::ShaderStage::Fragment => {
+                let execution_mode = spirv::ExecutionMode::OriginUpperLeft;
                 self.try_add_capabilities(execution_mode.required_capabilities());
 
                 let mut execution_mode_instruction = Instruction::new(Op::ExecutionMode);
@@ -164,7 +170,7 @@ impl Writer {
                 execution_mode_instruction.add_operand(execution_mode as u32);
                 execution_mode_instruction.to_words(&mut self.logical_layout.execution_modes);
             }
-            _ => unimplemented!(),
+            crate::ShaderStage::Compute => {}
         }
 
         instruction
@@ -339,7 +345,7 @@ impl Writer {
                 if let Some(array_stride) = stride {
                     let mut instruction = Instruction::new(Op::Decorate);
                     instruction.add_operand(id);
-                    instruction.add_operand(Decoration::ArrayStride as u32);
+                    instruction.add_operand(spirv::Decoration::ArrayStride as u32);
                     instruction.add_operand(array_stride.get());
                     self.annotations.push(instruction);
                 }
@@ -372,6 +378,12 @@ impl Writer {
             }
             crate::TypeInner::Image { base, dim, flags } => {
                 let type_id = self.get_type_id(arena, base);
+                let dim = match dim {
+                    crate::ImageDimension::D1 => spirv::Dim::Dim1D,
+                    crate::ImageDimension::D2 => spirv::Dim::Dim2D,
+                    crate::ImageDimension::D3 => spirv::Dim::Dim2D,
+                    crate::ImageDimension::Cube => spirv::Dim::DimCube,
+                };
                 self.try_add_capabilities(dim.required_capabilities());
 
                 instruction = Instruction::new(Op::TypeImage);
@@ -394,19 +406,13 @@ impl Writer {
                     0
                 });
 
-                if let Dim::DimSubpassData = dim {
-                    instruction.add_operand(2);
-                    instruction.add_operand(ImageFormat::Unknown as u32);
+                instruction.add_operand(if flags.contains(crate::ImageFlags::SAMPLED) {
+                    1
                 } else {
-                    instruction.add_operand(if flags.contains(crate::ImageFlags::SAMPLED) {
-                        1
-                    } else {
-                        0
-                    });
-
-                    // TODO Defaults to Unknown, not yet in IR
-                    instruction.add_operand(ImageFormat::Unknown as u32);
-                };
+                    0
+                });
+                // TODO Defaults to Unknown, not yet in IR
+                instruction.add_operand(spirv::ImageFormat::Unknown as u32);
 
                 instruction.add_operand(
                     if flags.contains(crate::ImageFlags::CAN_STORE)
@@ -553,7 +559,7 @@ impl Writer {
         &mut self,
         arena: &crate::Arena<crate::Type>,
         handle: crate::Handle<crate::Type>,
-        class: StorageClass,
+        class: spirv::StorageClass,
     ) -> Word {
         let ty = &arena[handle];
         let type_id = self.get_type_id(arena, handle);
@@ -587,13 +593,23 @@ impl Writer {
         let mut instruction = Instruction::new(Op::Variable);
         let id = self.generate_id();
 
-        self.try_add_capabilities(global_variable.class.required_capabilities());
+        let class = match global_variable.class {
+            crate::StorageClass::Constant => spirv::StorageClass::UniformConstant,
+            crate::StorageClass::Function => spirv::StorageClass::Function,
+            crate::StorageClass::Input => spirv::StorageClass::Input,
+            crate::StorageClass::Output => spirv::StorageClass::Output,
+            crate::StorageClass::Private => spirv::StorageClass::Private,
+            crate::StorageClass::StorageBuffer => spirv::StorageClass::StorageBuffer,
+            crate::StorageClass::Uniform => spirv::StorageClass::Uniform,
+            crate::StorageClass::WorkGroup => spirv::StorageClass::Workgroup,
+        };
+        self.try_add_capabilities(class.required_capabilities());
 
-        let pointer_id = self.get_pointer_id(arena, global_variable.ty, global_variable.class);
+        let pointer_id = self.get_pointer_id(arena, global_variable.ty, class);
 
         instruction.set_type(pointer_id);
         instruction.set_result(id);
-        instruction.add_operand(global_variable.class as u32);
+        instruction.add_operand(class as u32);
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
             let mut debug_instruction = Instruction::new(Op::Name);
@@ -608,30 +624,46 @@ impl Writer {
             crate::Binding::Location(location) => {
                 let mut instruction = Instruction::new(Op::Decorate);
                 instruction.add_operand(id);
-                instruction.add_operand(Decoration::Location as u32);
+                instruction.add_operand(spirv::Decoration::Location as u32);
                 instruction.add_operand(*location);
                 self.annotations.push(instruction);
             }
             crate::Binding::Descriptor { set, binding } => {
                 let mut set_instruction = Instruction::new(Op::Decorate);
                 set_instruction.add_operand(id);
-                set_instruction.add_operand(Decoration::DescriptorSet as u32);
+                set_instruction.add_operand(spirv::Decoration::DescriptorSet as u32);
                 set_instruction.add_operand(*set);
                 self.annotations.push(set_instruction);
 
                 let mut binding_instruction = Instruction::new(Op::Decorate);
                 binding_instruction.add_operand(id);
-                binding_instruction.add_operand(Decoration::Binding as u32);
+                binding_instruction.add_operand(spirv::Decoration::Binding as u32);
                 binding_instruction.add_operand(*binding);
                 self.annotations.push(binding_instruction);
             }
             crate::Binding::BuiltIn(built_in) => {
-                let built_in_u32: u32 = unsafe { std::mem::transmute(*built_in) };
+                let built_in = match built_in {
+                    crate::BuiltIn::BaseInstance => spirv::BuiltIn::BaseInstance,
+                    crate::BuiltIn::BaseVertex => spirv::BuiltIn::BaseVertex,
+                    crate::BuiltIn::ClipDistance => spirv::BuiltIn::ClipDistance,
+                    crate::BuiltIn::InstanceIndex => spirv::BuiltIn::InstanceIndex,
+                    crate::BuiltIn::Position => spirv::BuiltIn::Position,
+                    crate::BuiltIn::VertexIndex => spirv::BuiltIn::VertexIndex,
+                    crate::BuiltIn::PointSize => spirv::BuiltIn::PointSize,
+                    crate::BuiltIn::FragCoord => spirv::BuiltIn::FragCoord,
+                    crate::BuiltIn::FrontFacing => spirv::BuiltIn::FrontFacing,
+                    crate::BuiltIn::SampleIndex => spirv::BuiltIn::SampleId,
+                    crate::BuiltIn::FragDepth => spirv::BuiltIn::FragDepth,
+                    crate::BuiltIn::GlobalInvocationId => spirv::BuiltIn::GlobalInvocationId,
+                    crate::BuiltIn::LocalInvocationId => spirv::BuiltIn::LocalInvocationId,
+                    crate::BuiltIn::LocalInvocationIndex => spirv::BuiltIn::LocalInvocationIndex,
+                    crate::BuiltIn::WorkGroupId => spirv::BuiltIn::WorkgroupId,
+                };
 
                 let mut instruction = Instruction::new(Op::Decorate);
                 instruction.add_operand(id);
-                instruction.add_operand(Decoration::BuiltIn as u32);
-                instruction.add_operand(built_in_u32);
+                instruction.add_operand(spirv::Decoration::BuiltIn as u32);
+                instruction.add_operand(built_in as u32);
                 self.annotations.push(instruction);
             }
         }
@@ -646,7 +678,11 @@ impl Writer {
         self.physical_layout.bound = self.id_count + 1;
     }
 
-    fn instruction_source(&self, source_language: SourceLanguage, version: u32) -> Instruction {
+    fn instruction_source(
+        &self,
+        source_language: spirv::SourceLanguage,
+        version: u32,
+    ) -> Instruction {
         let mut instruction = Instruction::new(Op::Source);
         instruction.add_operand(source_language as u32);
         instruction.add_operands(helpers::bytes_to_words(&version.to_le_bytes()));
@@ -696,9 +732,8 @@ impl Writer {
         instruction.set_type(return_type_id);
         instruction.set_result(id);
 
-        let control_u32: Word = unsafe { std::mem::transmute(function.control) };
-
-        instruction.add_operand(control_u32);
+        let control = spirv::FunctionControl::empty();
+        instruction.add_operand(control.bits());
 
         let mut parameter_type_ids = Vec::with_capacity(function.parameter_types.len());
         for parameter_type in function.parameter_types.iter() {
@@ -863,12 +898,12 @@ impl Writer {
                 let ty = &ir_module.types[var.ty];
 
                 let pointer_id =
-                    self.get_pointer_id(&ir_module.types, var.ty, StorageClass::Function);
+                    self.get_pointer_id(&ir_module.types, var.ty, spirv::StorageClass::Function);
 
                 let mut instruction = Instruction::new(Op::Variable);
                 instruction.set_type(pointer_id);
                 instruction.set_result(id);
-                instruction.add_operand(StorageClass::Function as u32);
+                instruction.add_operand(spirv::StorageClass::Function as u32);
                 (id, &ty.inner)
             }
             _ => unimplemented!("{:?}", expression),
@@ -936,7 +971,7 @@ impl Writer {
 
         if self.writer_flags.contains(WriterFlags::DEBUG) {
             self.debugs
-                .push(self.instruction_source(SourceLanguage::GLSL, 450));
+                .push(self.instruction_source(spirv::SourceLanguage::GLSL, 450));
         }
 
         for (handle, function) in ir_module.functions.iter() {
@@ -1035,17 +1070,17 @@ mod tests {
         let mut writer = create_writer();
 
         assert_eq!(writer.capabilities.len(), 0);
-        writer.try_add_capabilities(&[Capability::Shader]);
+        writer.try_add_capabilities(&[spirv::Capability::Shader]);
         assert_eq!(writer.capabilities.len(), 1);
 
-        writer.try_add_capabilities(&[Capability::Shader]);
+        writer.try_add_capabilities(&[spirv::Capability::Shader]);
         assert_eq!(writer.capabilities.len(), 1);
     }
 
     #[test]
     fn test_instruction_capability() {
         let writer = create_writer();
-        let instruction = writer.instruction_capability(Capability::Shader);
+        let instruction = writer.instruction_capability(spirv::Capability::Shader);
         let mut output = vec![];
 
         let requirements = SpecRequirements {

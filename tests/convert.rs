@@ -1,6 +1,3 @@
-#[cfg(feature = "glsl")]
-use spirv::ExecutionModel;
-
 fn load_test_data(name: &str) -> String {
     let path = format!("{}/test-data/{}", env!("CARGO_MANIFEST_DIR"), name);
     std::fs::read_to_string(path).unwrap()
@@ -12,9 +9,9 @@ fn load_wgsl(name: &str) -> naga::Module {
 }
 
 #[cfg(feature = "glsl")]
-fn load_glsl(name: &str, entry: &str, exec: ExecutionModel) -> naga::Module {
+fn load_glsl(name: &str, entry: &str, stage: naga::ShaderStage) -> naga::Module {
     let input = load_test_data(name);
-    naga::front::glsl::parse_str(&input, entry.to_owned(), exec).unwrap()
+    naga::front::glsl::parse_str(&input, entry.to_owned(), stage).unwrap()
 }
 
 #[test]
@@ -94,7 +91,11 @@ fn convert_boids() {
 #[test]
 #[ignore]
 fn convert_phong_lighting() {
-    let module = load_glsl("glsl_phong_lighting.frag", "main", ExecutionModel::Fragment);
+    let module = load_glsl(
+        "glsl_phong_lighting.frag",
+        "main",
+        naga::ShaderStage::Fragment,
+    );
     naga::proc::Validator::new().validate(&module).unwrap();
 
     let header = naga::Header {

@@ -142,7 +142,7 @@ pub enum Error<'a> {
     UnknownStorageClass(&'a str),
     UnknownDecoration(&'a str),
     UnknownBuiltin(&'a str),
-    UnknownPipelineStage(&'a str),
+    UnknownShaderStage(&'a str),
     UnknownIdent(&'a str),
     UnknownType(&'a str),
     UnknownFunction(&'a str),
@@ -387,31 +387,35 @@ impl Parser {
         }
     }
 
-    fn get_storage_class(word: &str) -> Result<spirv::StorageClass, Error<'_>> {
+    fn get_storage_class(word: &str) -> Result<crate::StorageClass, Error<'_>> {
         match word {
-            "in" => Ok(spirv::StorageClass::Input),
-            "out" => Ok(spirv::StorageClass::Output),
-            "uniform" => Ok(spirv::StorageClass::Uniform),
-            "storage_buffer" => Ok(spirv::StorageClass::StorageBuffer),
+            "in" => Ok(crate::StorageClass::Input),
+            "out" => Ok(crate::StorageClass::Output),
+            "uniform" => Ok(crate::StorageClass::Uniform),
+            "storage_buffer" => Ok(crate::StorageClass::StorageBuffer),
             _ => Err(Error::UnknownStorageClass(word)),
         }
     }
 
-    fn get_built_in(word: &str) -> Result<spirv::BuiltIn, Error<'_>> {
+    fn get_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
         match word {
-            "position" => Ok(spirv::BuiltIn::Position),
-            "vertex_idx" => Ok(spirv::BuiltIn::VertexId),
-            "global_invocation_id" => Ok(spirv::BuiltIn::GlobalInvocationId),
+            // vertex
+            "position" => Ok(crate::BuiltIn::Position),
+            "vertex_idx" => Ok(crate::BuiltIn::VertexIndex),
+            "instance_idx" => Ok(crate::BuiltIn::InstanceIndex),
+            // compute
+            "global_invocation_id" => Ok(crate::BuiltIn::GlobalInvocationId),
+            "local_invocation_id" => Ok(crate::BuiltIn::LocalInvocationId),
             _ => Err(Error::UnknownBuiltin(word)),
         }
     }
 
-    fn get_execution_model(word: &str) -> Result<spirv::ExecutionModel, Error<'_>> {
+    fn get_shader_stage(word: &str) -> Result<crate::ShaderStage, Error<'_>> {
         match word {
-            "vertex" => Ok(spirv::ExecutionModel::Vertex),
-            "fragment" => Ok(spirv::ExecutionModel::Fragment),
-            "compute" => Ok(spirv::ExecutionModel::GLCompute),
-            _ => Err(Error::UnknownPipelineStage(word)),
+            "vertex" => Ok(crate::ShaderStage::Vertex),
+            "fragment" => Ok(crate::ShaderStage::Fragment),
+            "compute" => Ok(crate::ShaderStage::Compute),
+            _ => Err(Error::UnknownShaderStage(word)),
         }
     }
 
@@ -903,7 +907,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         type_arena: &mut Arena<crate::Type>,
         const_arena: &mut Arena<crate::Constant>,
-    ) -> Result<(&'a str, Option<spirv::StorageClass>, Handle<crate::Type>), Error<'a>> {
+    ) -> Result<(&'a str, Option<crate::StorageClass>, Handle<crate::Type>), Error<'a>> {
         self.scopes.push(Scope::VariableDecl);
         let mut class = None;
         if lexer.skip(Token::Paren('<')) {
@@ -1276,7 +1280,6 @@ impl Parser {
 
         let fun = crate::Function {
             name: Some(fun_name.to_owned()),
-            control: spirv::FunctionControl::empty(),
             parameter_types,
             return_type,
             global_usage,
@@ -1385,11 +1388,11 @@ impl Parser {
                         Some(c) => c,
                         None => match binding {
                             Some(crate::Binding::BuiltIn(builtin)) => match builtin {
-                                spirv::BuiltIn::GlobalInvocationId => spirv::StorageClass::Input,
-                                spirv::BuiltIn::Position => spirv::StorageClass::Output,
+                                crate::BuiltIn::GlobalInvocationId => crate::StorageClass::Input,
+                                crate::BuiltIn::Position => crate::StorageClass::Output,
                                 _ => unimplemented!(),
                             },
-                            _ => spirv::StorageClass::Private,
+                            _ => crate::StorageClass::Private,
                         },
                     },
                     binding: binding.take(),
@@ -1402,7 +1405,7 @@ impl Parser {
                 self.parse_function_decl(lexer, module, &lookup_global_expression)?;
             }
             Token::Word("entry_point") => {
-                let exec_model = Self::get_execution_model(lexer.next_ident()?)?;
+                let stage = Self::get_shader_stage(lexer.next_ident()?)?;
                 let export_name = if lexer.skip(Token::Word("as")) {
                     match lexer.next() {
                         Token::String(name) => Some(name),
@@ -1420,7 +1423,7 @@ impl Parser {
                     .find(|(_, fun)| fun.name.as_deref() == Some(fun_ident))
                     .ok_or(Error::UnknownFunction(fun_ident))?;
                 module.entry_points.push(crate::EntryPoint {
-                    exec_model,
+                    stage,
                     name: export_name.unwrap_or(fun_ident).to_owned(),
                     function: fun_handle,
                 });

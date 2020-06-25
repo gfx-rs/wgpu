@@ -1,6 +1,5 @@
-use crate::{Arena, ImageFlags, ScalarKind, Type, TypeInner, VectorSize};
+use crate::{Arena, ImageDimension, ImageFlags, ScalarKind, Type, TypeInner, VectorSize};
 use glsl::syntax::{BinaryOp, TypeSpecifierNonArray};
-use spirv::Dim;
 
 pub fn glsl_to_spirv_binary_op(op: BinaryOp) -> crate::BinaryOperator {
     match op {
@@ -253,21 +252,34 @@ pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray, types: &mut Arena<Type>) ->
                 });
 
                 let (dim, flags) = match &ty_name.0[(t_pos + 7)..] {
-                    "1D" => (Dim::Dim1D, ImageFlags::SAMPLED),
-                    "2D" => (Dim::Dim2D, ImageFlags::SAMPLED),
-                    "3D" => (Dim::Dim3D, ImageFlags::SAMPLED),
-                    "1DArray" => (Dim::Dim1D, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
-                    "2DArray" => (Dim::Dim2D, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
-                    "3DArray" => (Dim::Dim3D, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
-                    "2DMS" => (Dim::Dim2D, ImageFlags::SAMPLED | ImageFlags::MULTISAMPLED),
+                    "1D" => (ImageDimension::D1, ImageFlags::SAMPLED),
+                    "2D" => (ImageDimension::D2, ImageFlags::SAMPLED),
+                    "3D" => (ImageDimension::D3, ImageFlags::SAMPLED),
+                    "1DArray" => (
+                        ImageDimension::D1,
+                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
+                    ),
+                    "2DArray" => (
+                        ImageDimension::D2,
+                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
+                    ),
+                    "3DArray" => (
+                        ImageDimension::D3,
+                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
+                    ),
+                    "2DMS" => (
+                        ImageDimension::D2,
+                        ImageFlags::SAMPLED | ImageFlags::MULTISAMPLED,
+                    ),
                     "2DMSArray" => (
-                        Dim::Dim2D,
+                        ImageDimension::D2,
                         ImageFlags::SAMPLED | ImageFlags::ARRAYED | ImageFlags::MULTISAMPLED,
                     ),
-                    "2DRect" => (Dim::DimRect, ImageFlags::SAMPLED),
-                    "Cube" => (Dim::DimCube, ImageFlags::SAMPLED),
-                    "CubeArray" => (Dim::DimCube, ImageFlags::SAMPLED | ImageFlags::ARRAYED),
-                    "Buffer" => (Dim::DimBuffer, ImageFlags::SAMPLED),
+                    "Cube" => (ImageDimension::Cube, ImageFlags::SAMPLED),
+                    "CubeArray" => (
+                        ImageDimension::Cube,
+                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
+                    ),
                     _ => panic!(),
                 };
 

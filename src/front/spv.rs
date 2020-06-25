@@ -35,8 +35,8 @@ pub enum Error {
     UnsupportedType(Handle<crate::Type>),
     UnsupportedExecutionModel(u32),
     UnsupportedStorageClass(u32),
-    UnsupportedFunctionControl(u32),
-    UnsupportedDim(u32),
+    UnsupportedImageDim(u32),
+    UnsupportedBuiltIn(u32),
     InvalidParameter(spirv::Op),
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
@@ -120,8 +120,29 @@ fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, Error> {
     }
 }
 
-fn map_storage_class(word: spirv::Word) -> Result<spirv::StorageClass, Error> {
-    spirv::StorageClass::from_u32(word).ok_or(Error::UnsupportedStorageClass(word))
+fn map_storage_class(word: spirv::Word) -> Result<crate::StorageClass, Error> {
+    use spirv::StorageClass as Sc;
+    match Sc::from_u32(word) {
+        Some(Sc::UniformConstant) => Ok(crate::StorageClass::Constant),
+        Some(Sc::Function) => Ok(crate::StorageClass::Function),
+        Some(Sc::Input) => Ok(crate::StorageClass::Input),
+        Some(Sc::Output) => Ok(crate::StorageClass::Output),
+        Some(Sc::Private) => Ok(crate::StorageClass::Private),
+        Some(Sc::StorageBuffer) => Ok(crate::StorageClass::StorageBuffer),
+        Some(Sc::Uniform) => Ok(crate::StorageClass::Uniform),
+        Some(Sc::Workgroup) => Ok(crate::StorageClass::WorkGroup),
+        _ => Err(Error::UnsupportedStorageClass(word)),
+    }
+}
+
+fn map_image_dim(word: spirv::Word) -> Result<crate::ImageDimension, Error> {
+    match spirv::Dim::from_u32(word) {
+        Some(spirv::Dim::Dim1D) => Ok(crate::ImageDimension::D1),
+        Some(spirv::Dim::Dim2D) => Ok(crate::ImageDimension::D2),
+        Some(spirv::Dim::Dim3D) => Ok(crate::ImageDimension::D3),
+        Some(spirv::Dim::DimCube) => Ok(crate::ImageDimension::Cube),
+        _ => Err(Error::UnsupportedImageDim(word)),
+    }
 }
 
 type MemberIndex = u32;
@@ -134,7 +155,7 @@ struct Block {
 #[derive(Debug, Default)]
 struct Decoration {
     name: Option<String>,
-    built_in: Option<spirv::BuiltIn>,
+    built_in: Option<crate::BuiltIn>,
     location: Option<spirv::Word>,
     desc_set: Option<spirv::Word>,
     desc_index: Option<spirv::Word>,
@@ -299,13 +320,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         log::trace!("\t\t{:?}", dec_typed);
         match dec_typed {
             spirv::Decoration::BuiltIn => {
+                use spirv::BuiltIn as Bi;
                 inst.expect(base_words + 2)?;
                 let raw = self.next()?;
-                let built_in = spirv::BuiltIn::from_u32(raw);
-                if built_in.is_none() {
-                    log::warn!("Unknown built in {:?}", raw);
-                }
-                dec.built_in = built_in;
+                dec.built_in = Some(match spirv::BuiltIn::from_u32(raw) {
+                    Some(Bi::BaseInstance) => crate::BuiltIn::BaseInstance,
+                    Some(Bi::BaseVertex) => crate::BuiltIn::BaseVertex,
+                    Some(Bi::ClipDistance) => crate::BuiltIn::ClipDistance,
+                    Some(Bi::InstanceIndex) => crate::BuiltIn::InstanceIndex,
+                    Some(Bi::Position) => crate::BuiltIn::Position,
+                    Some(Bi::VertexIndex) => crate::BuiltIn::VertexIndex,
+                    // fragment
+                    Some(Bi::PointSize) => crate::BuiltIn::PointSize,
+                    Some(Bi::FragCoord) => crate::BuiltIn::FragCoord,
+                    Some(Bi::FrontFacing) => crate::BuiltIn::FrontFacing,
+                    Some(Bi::SampleId) => crate::BuiltIn::SampleIndex,
+                    Some(Bi::FragDepth) => crate::BuiltIn::FragDepth,
+                    // compute
+                    Some(Bi::GlobalInvocationId) => crate::BuiltIn::GlobalInvocationId,
+                    Some(Bi::LocalInvocationId) => crate::BuiltIn::LocalInvocationId,
+                    Some(Bi::LocalInvocationIndex) => crate::BuiltIn::LocalInvocationIndex,
+                    Some(Bi::WorkgroupId) => crate::BuiltIn::WorkGroupId,
+                    _ => return Err(Error::UnsupportedBuiltIn(raw)),
+                });
             }
             spirv::Decoration::Location => {
                 inst.expect(base_words + 2)?;
@@ -822,7 +859,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         module.entry_points.reserve(entry_points.len());
         for raw in entry_points {
             module.entry_points.push(crate::EntryPoint {
-                exec_model: raw.exec_model,
+                stage: match raw.exec_model {
+                    spirv::ExecutionModel::Vertex => crate::ShaderStage::Vertex,
+                    spirv::ExecutionModel::Fragment => crate::ShaderStage::Fragment,
+                    spirv::ExecutionModel::GLCompute => crate::ShaderStage::Compute,
+                    other => return Err(Error::UnsupportedExecutionModel(other as u32)),
+                },
                 name: raw.name,
                 function: *self.lookup_function.lookup(raw.function_id)?,
             });
@@ -1301,7 +1343,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
         let inner = crate::TypeInner::Image {
             base: self.lookup_type.lookup(sample_type_id)?.handle,
-            dim: spirv::Dim::from_u32(dim).ok_or(Error::UnsupportedDim(dim))?,
+            dim: map_image_dim(dim)?,
             flags,
         };
         self.lookup_type.insert(
@@ -1488,11 +1530,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let binding = match module.types[lookup_type.handle].inner {
             crate::TypeInner::Pointer {
                 base,
-                class: spirv::StorageClass::Input,
+                class: crate::StorageClass::Input,
             }
             | crate::TypeInner::Pointer {
                 base,
-                class: spirv::StorageClass::Output,
+                class: crate::StorageClass::Output,
             } => {
                 match module.types[base].inner {
                     crate::TypeInner::Struct { ref members } => {
@@ -1540,7 +1582,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(5)?;
         let result_type = self.next()?;
         let fun_id = self.next()?;
-        let fun_control = self.next()?;
+        let _fun_control = self.next()?;
         let fun_type = self.next()?;
         let mut fun = {
             let ft = self.lookup_function_type.lookup(fun_type)?;
@@ -1549,8 +1591,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
             crate::Function {
                 name: self.future_decor.remove(&fun_id).and_then(|dec| dec.name),
-                control: spirv::FunctionControl::from_bits(fun_control)
-                    .ok_or(Error::UnsupportedFunctionControl(fun_control))?,
                 parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
                 return_type: if self.lookup_void_type.contains(&result_type) {
                     None

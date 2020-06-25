@@ -1,5 +1,6 @@
 #[cfg(feature = "glsl")]
 pub mod glsl;
+#[cfg(feature = "spirv")]
 pub mod spv;
 pub mod wgsl;
 
