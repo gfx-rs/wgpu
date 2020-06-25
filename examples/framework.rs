@@ -1,4 +1,4 @@
-use futures::{task::{LocalSpawn}, executor::{block_on, LocalPool}};
+use futures::task::LocalSpawn;
 #[cfg(not(target_arch = "wasm32"))]
 use std::time::{Duration, Instant};
 use winit::{
@@ -54,7 +54,18 @@ pub trait Example: 'static + Sized {
     );
 }
 
-pub fn run<E: Example>(title: &str) {
+struct Setup {
+    window: winit::window::Window,
+    event_loop: EventLoop<()>,
+    instance: wgpu::Instance,
+    size: winit::dpi::PhysicalSize<u32>,
+    surface: wgpu::Surface,
+    adapter: wgpu::Adapter,
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+}
+
+async fn setup<E: Example>(title: &str) -> Setup {
     let event_loop = EventLoop::new();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title(title);
@@ -65,6 +76,67 @@ pub fn run<E: Example>(title: &str) {
     }
     let window = builder.build(&event_loop).unwrap();
 
+    log::info!("Initializing the surface...");
+
+    let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
+    let (size, surface) = unsafe {
+        let size = window.inner_size();
+        let surface = instance.create_surface(&window);
+        (size, surface)
+    };
+
+    let (needed_extensions, unsafe_extensions) = E::needed_extensions();
+
+    let adapter = instance
+        .request_adapter(
+            &wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::Default,
+                compatible_surface: Some(&surface),
+            },
+            unsafe_extensions,
+        )
+        .await
+        .unwrap();
+
+    let adapter_extensions = adapter.extensions();
+
+    let trace_dir = std::env::var("WGPU_TRACE");
+    let (device, queue) = adapter
+        .request_device(
+            &wgpu::DeviceDescriptor {
+                extensions: adapter_extensions & needed_extensions,
+                limits: wgpu::Limits::default(),
+                shader_validation: true,
+            },
+            trace_dir.ok().as_ref().map(std::path::Path::new),
+        )
+        .await
+        .unwrap();
+
+    Setup {
+        window,
+        event_loop,
+        instance,
+        size,
+        surface,
+        adapter,
+        device,
+        queue,
+    }
+}
+
+fn start<E: Example>(
+    Setup {
+        window,
+        event_loop,
+        instance,
+        size,
+        surface,
+        adapter,
+        device,
+        queue,
+    }: Setup,
+) {
     #[cfg(not(target_arch = "wasm32"))]
     let (mut pool, spawner) = {
         env_logger::init();
@@ -75,10 +147,11 @@ pub fn run<E: Example>(title: &str) {
             wgpu::util::initialize_default_subscriber(chrome_tracing_dir.ok());
         };
 
-        let local_pool = LocalPool::new();
+        let local_pool = futures::executor::LocalPool::new();
         let spawner = local_pool.spawner();
         (local_pool, spawner)
     };
+
     #[cfg(target_arch = "wasm32")]
     let spawner = {
         use futures::{future::LocalFutureObj, task::SpawnError};
@@ -108,47 +181,6 @@ pub fn run<E: Example>(title: &str) {
 
         WebSpawner {}
     };
-
-    log::info!("Initializing the surface...");
-
-    let (size, surface, instance, adapter, device, queue) = block_on(async {
-        let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
-        let (size, surface) = unsafe {
-            let size = window.inner_size();
-            let surface = instance.create_surface(&window);
-            (size, surface)
-        };
-
-        let (needed_extensions, unsafe_extensions) = E::needed_extensions();
-
-        let adapter = instance
-            .request_adapter(
-                &wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::Default,
-                    compatible_surface: Some(&surface),
-                },
-                unsafe_extensions,
-            )
-            .await
-            .unwrap();
-
-        let adapter_extensions = adapter.extensions();
-
-        let trace_dir = std::env::var("WGPU_TRACE");
-        let (device, queue) = adapter
-            .request_device(
-                &wgpu::DeviceDescriptor {
-                    extensions: adapter_extensions & needed_extensions,
-                    limits: wgpu::Limits::default(),
-                    shader_validation: true,
-                },
-                trace_dir.ok().as_ref().map(std::path::Path::new),
-            )
-            .await
-            .unwrap();
-
-        (size, surface, instance, adapter, device, queue)
-    });
 
     let mut sc_desc = wgpu::SwapChainDescriptor {
         usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
@@ -241,6 +273,21 @@ pub fn run<E: Example>(title: &str) {
             }
             _ => {}
         }
+    });
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn run<E: Example>(title: &str) {
+    let setup = futures::executor::block_on(setup::<E>(title));
+    start::<E>(setup);
+}
+
+#[cfg(target_arch = "wasm32")]
+pub fn run<E: Example>(title: &str) {
+    let title = title.to_owned();
+    wasm_bindgen_futures::spawn_local(async move {
+        let setup = setup::<E>(&title).await;
+        start::<E>(setup);
     });
 }
 
