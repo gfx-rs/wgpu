@@ -1,8 +1,6 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
-extern crate rand;
-
 #[path = "../framework.rs"]
 mod framework;
 
@@ -31,7 +29,7 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
         _queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>) {
+    ) -> Self {
         // load (and compile) shaders and create shader modules
 
         let boids_module = device.create_shader_module(wgpu::include_spirv!("boids.comp.spv"));
@@ -221,18 +219,15 @@ impl framework::Example for Example {
 
         // returns Example struct and No encoder commands
 
-        (
-            Example {
-                particle_bind_groups,
-                particle_buffers,
-                vertices_buffer,
-                compute_pipeline,
-                render_pipeline,
-                work_group_count,
-                frame_num: 0,
-            },
-            None,
-        )
+        Example {
+            particle_bind_groups,
+            particle_buffers,
+            vertices_buffer,
+            compute_pipeline,
+            render_pipeline,
+            work_group_count,
+            frame_num: 0,
+        }
     }
 
     /// update is called for any WindowEvent not handled by the framework
@@ -256,8 +251,9 @@ impl framework::Example for Example {
         &mut self,
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-    ) -> wgpu::CommandBuffer {
+        queue: &wgpu::Queue,
+        _spawner: &impl futures::task::LocalSpawn,
+    ) {
         // create render pass descriptor
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -298,7 +294,7 @@ impl framework::Example for Example {
         self.frame_num += 1;
 
         // done
-        command_encoder.finish()
+        queue.submit(Some(command_encoder.finish()));
     }
 }
 

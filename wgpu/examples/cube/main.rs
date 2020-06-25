@@ -116,7 +116,7 @@ impl framework::Example for Example {
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-    ) -> (Self, Option<wgpu::CommandBuffer>) {
+    ) -> Self {
         use std::mem;
 
         // Create the vertex and index buffers
@@ -287,15 +287,14 @@ impl framework::Example for Example {
         });
 
         // Done
-        let this = Example {
+        Example {
             vertex_buf,
             index_buf,
             index_count: index_data.len(),
             bind_group,
             uniform_buf,
             pipeline,
-        };
-        (this, None)
+        }
     }
 
     fn update(&mut self, _event: winit::event::WindowEvent) {
@@ -317,8 +316,9 @@ impl framework::Example for Example {
         &mut self,
         frame: &wgpu::SwapChainTexture,
         device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-    ) -> wgpu::CommandBuffer {
+        queue: &wgpu::Queue,
+        _spawner: &impl futures::task::LocalSpawn,
+    ) {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
@@ -348,7 +348,7 @@ impl framework::Example for Example {
             rpass.draw_indexed(0..self.index_count as u32, 0, 0..1);
         }
 
-        encoder.finish()
+        queue.submit(Some(encoder.finish()));
     }
 }
 

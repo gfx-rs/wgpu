@@ -1433,7 +1433,7 @@ impl Buffer {
     }
 }
 
-impl BufferSlice<'_> {
+impl<'a> BufferSlice<'a> {
     //TODO: fn slice(&self) -> Self
 
     /// Map the buffer. Buffer is ready to map once the future is resolved.
@@ -1473,7 +1473,7 @@ impl BufferSlice<'_> {
 
     /// Synchronously and immediately map a buffer for reading. If the buffer is not immediately mappable
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
-    pub fn get_mapped_range(&self) -> BufferView {
+    pub fn get_mapped_range(&self) -> BufferView<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = Context::buffer_get_mapped_range(
             &*self.buffer.context,
@@ -1485,7 +1485,7 @@ impl BufferSlice<'_> {
 
     /// Synchronously and immediately map a buffer for writing. If the buffer is not immediately mappable
     /// through [`BufferDescriptor::mapped_at_creation`] or [`BufferSlice::map_async`], will panic.
-    pub fn get_mapped_range_mut(&self) -> BufferViewMut {
+    pub fn get_mapped_range_mut(&self) -> BufferViewMut<'a> {
         let end = self.buffer.map_context.lock().add(self.offset, self.size);
         let data = Context::buffer_get_mapped_range_mut(
             &*self.buffer.context,
