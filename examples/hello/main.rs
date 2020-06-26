@@ -6,7 +6,7 @@ async fn run() {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
             },
-            unsafe { wgpu::UnsafeExtensions::allow() },
+            unsafe { wgpu::UnsafeFeatures::allow() },
         )
         .await
         .unwrap();

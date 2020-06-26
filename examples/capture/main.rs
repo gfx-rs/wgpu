@@ -24,14 +24,17 @@ async fn run(png_output_path: &str) {
     create_png(png_output_path, device, buffer, &buffer_dimensions).await;
 }
 
-async fn create_red_image_with_dimensions(width: usize, height: usize) -> (Device, Buffer, BufferDimensions) {
+async fn create_red_image_with_dimensions(
+    width: usize,
+    height: usize,
+) -> (Device, Buffer, BufferDimensions) {
     let adapter = wgpu::Instance::new(wgpu::BackendBit::PRIMARY)
         .request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
             },
-            wgpu::UnsafeExtensions::disallow(),
+            wgpu::UnsafeFeatures::disallow(),
         )
         .await
         .unwrap();
@@ -39,7 +42,7 @@ async fn create_red_image_with_dimensions(width: usize, height: usize) -> (Devic
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions::empty(),
+                features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
                 shader_validation: true,
             },
@@ -119,8 +122,13 @@ async fn create_red_image_with_dimensions(width: usize, height: usize) -> (Devic
     (device, output_buffer, buffer_dimensions)
 }
 
-async fn create_png(png_output_path: &str, device: Device, output_buffer: Buffer, buffer_dimensions: &BufferDimensions) {
-// Note that we're not calling `.await` here.
+async fn create_png(
+    png_output_path: &str,
+    device: Device,
+    output_buffer: Buffer,
+    buffer_dimensions: &BufferDimensions,
+) {
+    // Note that we're not calling `.await` here.
     let buffer_slice = output_buffer.slice(..);
     let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
 
@@ -151,7 +159,9 @@ async fn create_png(png_output_path: &str, device: Device, output_buffer: Buffer
 
         // from the padded_buffer we write just the unpadded bytes into the image
         for chunk in padded_buffer.chunks(buffer_dimensions.padded_bytes_per_row) {
-            png_writer.write(&chunk[..buffer_dimensions.unpadded_bytes_per_row]).unwrap();
+            png_writer
+                .write(&chunk[..buffer_dimensions.unpadded_bytes_per_row])
+                .unwrap();
         }
         png_writer.finish().unwrap();
 
@@ -177,24 +187,28 @@ impl BufferDimensions {
         let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT as usize;
         let padded_bytes_per_row_padding = (align - unpadded_bytes_per_row % align) % align;
         let padded_bytes_per_row = unpadded_bytes_per_row + padded_bytes_per_row_padding;
-        Self { width, height, unpadded_bytes_per_row, padded_bytes_per_row }
+        Self {
+            width,
+            height,
+            unpadded_bytes_per_row,
+            padded_bytes_per_row,
+        }
     }
 }
 
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
-        {
-            env_logger::init();
-            futures::executor::block_on(run("red.png"));
-        }
+    {
+        env_logger::init();
+        futures::executor::block_on(run("red.png"));
+    }
     #[cfg(target_arch = "wasm32")]
-        {
-            std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-            console_log::init().expect("could not initialize logger");
-            wasm_bindgen_futures::spawn_local(run("red.png"));
-        }
+    {
+        std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+        console_log::init().expect("could not initialize logger");
+        wasm_bindgen_futures::spawn_local(run("red.png"));
+    }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -207,25 +221,30 @@ mod tests {
     }
 
     async fn assert_generated_data_matches_expected() {
-        let (device, output_buffer, dimensions) = create_red_image_with_dimensions(100usize, 200usize).await;
+        let (device, output_buffer, dimensions) =
+            create_red_image_with_dimensions(100usize, 200usize).await;
         let buffer_slice = output_buffer.slice(..);
         let buffer_future = buffer_slice.map_async(wgpu::MapMode::Read);
         device.poll(wgpu::Maintain::Wait);
-        buffer_future.await.expect("failed to map buffer slice for capture test");
+        buffer_future
+            .await
+            .expect("failed to map buffer slice for capture test");
         let padded_buffer = buffer_slice.get_mapped_range();
-        let expected_buffer_size = dimensions.padded_bytes_per_row*dimensions.height;
-        assert_eq!(padded_buffer.len(),expected_buffer_size);
+        let expected_buffer_size = dimensions.padded_bytes_per_row * dimensions.height;
+        assert_eq!(padded_buffer.len(), expected_buffer_size);
         assert_that_content_is_all_red(&dimensions, padded_buffer);
     }
 
     fn assert_that_content_is_all_red(dimensions: &BufferDimensions, padded_buffer: BufferView) {
         let red = [0xFFu8, 0, 0, 0xFFu8];
         let single_rgba = 4;
-        padded_buffer.chunks(dimensions.padded_bytes_per_row)
+        padded_buffer
+            .chunks(dimensions.padded_bytes_per_row)
             .map(|padded_buffer_row| &padded_buffer_row[..dimensions.unpadded_bytes_per_row])
-            .for_each(|unpadded_row|
-                unpadded_row.chunks(single_rgba)
+            .for_each(|unpadded_row| {
+                unpadded_row
+                    .chunks(single_rgba)
                     .for_each(|chunk| assert_eq!(chunk, &red))
-            );
+            });
     }
 }
