@@ -22,16 +22,15 @@ use parking_lot::Mutex;
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
     AddressMode, Backend, BackendBit, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
-    BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage,
-    Capabilities, Color, ColorStateDescriptor, ColorWrite, CommandBufferDescriptor,
-    CompareFunction, CullMode, DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset,
-    Extensions, Extent3d, FilterMode, FrontFace, IndexFormat, InputStepMode, Limits, Origin3d,
-    PowerPreference, PresentMode, PrimitiveTopology, RasterizationStateDescriptor,
-    RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage, StencilOperation,
-    StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
-    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
-    TextureViewDimension, UnsafeExtensions, VertexAttributeDescriptor, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage, Color,
+    ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
+    DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extent3d, Features, FilterMode,
+    FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PowerPreference, PresentMode,
+    PrimitiveTopology, RasterizationStateDescriptor, RenderBundleEncoderDescriptor, ShaderLocation,
+    ShaderStage, StencilOperation, StencilStateFaceDescriptor, SwapChainDescriptor,
+    SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension,
+    TextureFormat, TextureUsage, TextureViewDimension, UnsafeFeatures, VertexAttributeDescriptor,
+    VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -143,7 +142,7 @@ trait Context: Sized {
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-        unsafe_extensions: UnsafeExtensions,
+        unsafe_extensions: UnsafeFeatures,
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
         &self,
@@ -151,13 +150,11 @@ trait Context: Sized {
         desc: &DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture;
-    fn adapter_extensions(&self, adapter: &Self::AdapterId) -> Extensions;
+    fn adapter_features(&self, adapter: &Self::AdapterId) -> Features;
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits;
-    fn adapter_capabilities(&self, adapter: &Self::AdapterId) -> Capabilities;
 
-    fn device_extensions(&self, device: &Self::DeviceId) -> Extensions;
+    fn device_features(&self, device: &Self::DeviceId) -> Features;
     fn device_limits(&self, device: &Self::DeviceId) -> Limits;
-    fn device_capabilities(&self, device: &Self::DeviceId) -> Capabilities;
     fn device_create_swap_chain(
         &self,
         device: &Self::DeviceId,
@@ -1016,13 +1013,13 @@ impl Instance {
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enumerate_adapters(
         &self,
-        unsafe_extensions: UnsafeExtensions,
+        unsafe_features: UnsafeFeatures,
         backends: BackendBit,
     ) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
             .enumerate_adapters(
-                unsafe_extensions,
+                unsafe_features,
                 wgc::instance::AdapterInputs::Mask(backends, |_| PhantomData),
             )
             .into_iter()
@@ -1078,11 +1075,11 @@ impl Instance {
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-        unsafe_extensions: UnsafeExtensions,
+        unsafe_features: UnsafeFeatures,
     ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
         self.context
-            .instance_request_adapter(options, unsafe_extensions)
+            .instance_request_adapter(options, unsafe_features)
             .map(|option| option.map(|id| Adapter { context, id }))
     }
 }
@@ -1093,8 +1090,8 @@ impl Adapter {
     ///
     /// # Panics
     ///
-    /// - Extensions specified by `desc` are not supported by this adapter.
-    /// - Unsafe extensions were requested but enabled when requesting the adapter.
+    /// - Features specified by `desc` are not supported by this adapter.
+    /// - Unsafe features were requested but not enabled when requesting the adapter.
     /// - Limits requested exceed the values provided by the adapter.
     /// - Adapter does not support all features wgpu requires to safely operate.
     pub fn request_device(
@@ -1119,12 +1116,12 @@ impl Adapter {
         })
     }
 
-    /// List all extensions that are supported with this adapter.
+    /// List all features that are supported with this adapter.
     ///
-    /// Extensions must be explicitly requested in [`Adapter::request_device`] in order
+    /// Features must be explicitly requested in [`Adapter::request_device`] in order
     /// to use them.
-    pub fn extensions(&self) -> Extensions {
-        Context::adapter_extensions(&*self.context, &self.id)
+    pub fn features(&self) -> Features {
+        Context::adapter_features(&*self.context, &self.id)
     }
 
     /// List the "best" limits that are supported by this adapter.
@@ -1133,11 +1130,6 @@ impl Adapter {
     /// the values that you are allowed to use.
     pub fn limits(&self) -> Limits {
         Context::adapter_limits(&*self.context, &self.id)
-    }
-
-    /// List all capabilities that may be used wth this adapter.
-    pub fn capabilities(&self) -> Capabilities {
-        Context::adapter_capabilities(&*self.context, &self.id)
     }
 
     /// Get info about the adapter itself.
@@ -1156,11 +1148,11 @@ impl Device {
         Context::device_poll(&*self.context, &self.id, maintain);
     }
 
-    /// List all extensions that may be used with this device.
+    /// List all features that may be used with this device.
     ///
-    /// Functions may panic if you use unsupported extensions.
-    pub fn extensions(&self) -> Extensions {
-        Context::device_extensions(&*self.context, &self.id)
+    /// Functions may panic if you use unsupported features.
+    pub fn features(&self) -> Features {
+        Context::device_features(&*self.context, &self.id)
     }
 
     /// List all limits that were requested of this device.
@@ -1168,13 +1160,6 @@ impl Device {
     /// If any of these limits are exceeded, functions may panic.
     pub fn limits(&self) -> Limits {
         Context::device_limits(&*self.context, &self.id)
-    }
-
-    /// List all capabilities that may be used wth this device.
-    ///
-    /// Functions may panic if you use unsupported capabilities.
-    pub fn capabilities(&self) -> Capabilities {
-        Context::device_capabilities(&*self.context, &self.id)
     }
 
     /// Creates a shader module from either SPIR-V or WGSL source code.

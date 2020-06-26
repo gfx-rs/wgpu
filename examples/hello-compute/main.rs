@@ -29,7 +29,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: None,
             },
-            wgpu::UnsafeExtensions::disallow(),
+            wgpu::UnsafeFeatures::disallow(),
         )
         .await
         .unwrap();
@@ -37,7 +37,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions::empty(),
+                features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
                 shader_validation: true,
             },

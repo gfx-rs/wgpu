@@ -85,10 +85,13 @@ struct Example {
 }
 
 impl framework::Example for Example {
-    fn needed_extensions() -> (wgpu::Extensions, wgpu::UnsafeExtensions) {
+    fn needed_features() -> (wgpu::Features, wgpu::UnsafeFeatures) {
         (
-            wgpu::Extensions::BINDING_INDEXING,
-            wgpu::UnsafeExtensions::disallow(),
+            wgpu::Features::UNSIZED_BINDING_ARRAY
+                | wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+                | wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+                | wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
+            wgpu::UnsafeFeatures::disallow(),
         )
     }
     fn init(
@@ -98,22 +101,24 @@ impl framework::Example for Example {
     ) -> Self {
         let mut uniform_workaround = false;
         let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
-        let fs_bytes: Vec<u8> = match device.capabilities() {
-            c if c.contains(wgpu::Capabilities::UNSIZED_BINDING_ARRAY) => {
+        let fs_bytes: Vec<u8> = match device.features() {
+            f if f.contains(wgpu::Features::UNSIZED_BINDING_ARRAY) => {
                 include_bytes!("unsized-non-uniform.frag.spv").to_vec()
             }
-            c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
+            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING) => {
                 include_bytes!("non-uniform.frag.spv").to_vec()
             }
-            c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
+            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING) => {
                 uniform_workaround = true;
                 include_bytes!("uniform.frag.spv").to_vec()
             }
-            c if c.contains(wgpu::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY) => {
+            f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
                 include_bytes!("constant.frag.spv").to_vec()
             }
             _ => {
-                panic!("Graphics adapter does not support any of the capabilities needed for this example");
+                panic!(
+                    "Graphics adapter does not support any of the features needed for this example"
+                );
             }
         };
         let fs_module = device.create_shader_module(wgpu::util::make_spirv(&fs_bytes));

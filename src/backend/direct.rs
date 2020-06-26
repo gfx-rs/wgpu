@@ -1,9 +1,9 @@
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
-    BufferDescriptor, Capabilities, CommandEncoderDescriptor, ComputePipelineDescriptor,
-    Extensions, Limits, LoadOp, MapMode, Operations, PipelineLayoutDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource, SwapChainStatus,
-    TextureDescriptor, TextureViewDescriptor,
+    BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor, Features, Limits,
+    LoadOp, MapMode, Operations, PipelineLayoutDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderModuleSource, SwapChainStatus, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
@@ -365,14 +365,14 @@ impl crate::Context for Context {
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions<'_>,
-        unsafe_extensions: wgt::UnsafeExtensions,
+        unsafe_features: wgt::UnsafeFeatures,
     ) -> Self::RequestAdapterFuture {
         let id = self.pick_adapter(
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
             },
-            unsafe_extensions,
+            unsafe_features,
             wgc::instance::AdapterInputs::Mask(wgt::BackendBit::all(), |_| PhantomData),
         );
         ready(id)
@@ -388,28 +388,20 @@ impl crate::Context for Context {
         ready(Ok((device_id, device_id)))
     }
 
-    fn adapter_extensions(&self, adapter: &Self::AdapterId) -> Extensions {
-        gfx_select!(*adapter => self.adapter_extensions(*adapter))
+    fn adapter_features(&self, adapter: &Self::AdapterId) -> Features {
+        gfx_select!(*adapter => self.adapter_features(*adapter))
     }
 
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits {
         gfx_select!(*adapter => self.adapter_limits(*adapter))
     }
 
-    fn adapter_capabilities(&self, adapter: &Self::AdapterId) -> Capabilities {
-        gfx_select!(*adapter => self.adapter_capabilities(*adapter))
-    }
-
-    fn device_extensions(&self, device: &Self::DeviceId) -> Extensions {
-        gfx_select!(*device => self.device_extensions(*device))
+    fn device_features(&self, device: &Self::DeviceId) -> Features {
+        gfx_select!(*device => self.device_features(*device))
     }
 
     fn device_limits(&self, device: &Self::DeviceId) -> Limits {
         gfx_select!(*device => self.device_limits(*device))
-    }
-
-    fn device_capabilities(&self, device: &Self::DeviceId) -> Capabilities {
-        gfx_select!(*device => self.device_capabilities(*device))
     }
 
     fn device_create_swap_chain(
