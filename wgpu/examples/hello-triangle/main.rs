@@ -14,7 +14,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                 power_preference: wgpu::PowerPreference::Default,
                 compatible_surface: Some(&surface),
             },
-            wgpu::UnsafeExtensions::disallow(),
+            wgpu::UnsafeFeatures::disallow(),
         )
         .await
         .unwrap();
@@ -22,7 +22,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                extensions: wgpu::Extensions::empty(),
+                features: wgpu::Features::empty(),
                 limits: wgpu::Limits::default(),
                 shader_validation: true,
             },

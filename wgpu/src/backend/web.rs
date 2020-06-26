@@ -687,7 +687,7 @@ impl crate::Context for Context {
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions<'_>,
-        _unsafe_extensions: wgt::UnsafeExtensions,
+        _unsafe_extensions: wgt::UnsafeFeatures,
     ) -> Self::RequestAdapterFuture {
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,
@@ -717,9 +717,9 @@ impl crate::Context for Context {
             //Error: Tracing isn't supported on the Web target
         }
         assert!(
-            !desc.extensions.intersects(crate::Extensions::ALL_NATIVE),
+            !desc.features.intersects(crate::Features::ALL_NATIVE),
             "The web backend doesn't support any native extensions. Enabled native extensions: {:?}",
-            desc.extensions & crate::Extensions::ALL_NATIVE
+            desc.features & crate::Features::ALL_NATIVE
         );
         let mut mapped_desc = web_sys::GpuDeviceDescriptor::new();
         // TODO: label, extensions
@@ -733,9 +733,9 @@ impl crate::Context for Context {
         )
     }
 
-    fn adapter_extensions(&self, _adapter: &Self::AdapterId) -> wgt::Extensions {
+    fn adapter_features(&self, _adapter: &Self::AdapterId) -> wgt::Features {
         // TODO: web-sys has no way of getting extensions on adapters
-        wgt::Extensions::empty()
+        wgt::Features::empty()
     }
 
     fn adapter_limits(&self, _adapter: &Self::AdapterId) -> wgt::Limits {
@@ -743,24 +743,14 @@ impl crate::Context for Context {
         wgt::Limits::default()
     }
 
-    fn adapter_capabilities(&self, _adapter: &Self::AdapterId) -> wgt::Capabilities {
-        // TODO: webgpu doesn't support capabilities, so return an empty set of capabilities
-        wgt::Capabilities::default()
-    }
-
-    fn device_extensions(&self, _device: &Self::DeviceId) -> wgt::Extensions {
+    fn device_features(&self, _device: &Self::DeviceId) -> wgt::Features {
         // TODO: web-sys has no way of getting extensions on devices
-        wgt::Extensions::empty()
+        wgt::Features::empty()
     }
 
     fn device_limits(&self, _device: &Self::DeviceId) -> wgt::Limits {
         // TODO: web-sys has a method for getting limits on devices, but it returns Object not GpuLimit
         wgt::Limits::default()
-    }
-
-    fn device_capabilities(&self, _device: &Self::DeviceId) -> wgt::Capabilities {
-        // TODO: webgpu doesn't support capabilities, so return an empty set of capabilities
-        wgt::Capabilities::default()
     }
 
     fn device_create_swap_chain(
