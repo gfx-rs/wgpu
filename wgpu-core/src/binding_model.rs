@@ -20,8 +20,7 @@ use std::borrow::Borrow;
 #[derive(Clone, Debug)]
 pub enum BindGroupLayoutError {
     ConflictBinding(u32),
-    MissingExtension(wgt::Extensions),
-    MissingCapability(wgt::Capabilities),
+    MissingFeature(wgt::Features),
     /// Arrays of bindings can't be 0 elements long
     ZeroCount,
     /// Arrays of bindings unsupported for this type of binding

@@ -196,8 +196,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) hal_limits: hal::Limits,
     pub(crate) private_features: PrivateFeatures,
     limits: wgt::Limits,
-    extensions: wgt::Extensions,
-    capabilities: wgt::Capabilities,
+    features: wgt::Features,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<B>,
@@ -214,7 +213,6 @@ impl<B: GfxBackend> Device<B> {
         hal_limits: hal::Limits,
         private_features: PrivateFeatures,
         desc: &wgt::DeviceDescriptor,
-        capabilities: wgt::Capabilities,
         trace_path: Option<&std::path::Path>,
     ) -> Self {
         let com_allocator = command::CommandAllocator::new(queue_group.family, &raw);
@@ -269,8 +267,7 @@ impl<B: GfxBackend> Device<B> {
             hal_limits,
             private_features,
             limits: desc.limits.clone(),
-            extensions: desc.extensions.clone(),
-            capabilities: capabilities.clone(),
+            features: desc.features.clone(),
             pending_writes: queue::PendingWrites::new(),
         }
     }
@@ -407,8 +404,8 @@ impl<B: GfxBackend> Device<B> {
                 MemoryUsage::Staging { read_back: true }
             } else {
                 let is_native_only = self
-                    .extensions
-                    .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS);
+                    .features
+                    .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS);
                 assert!(
                     is_native_only,
                     "MAP usage can only be combined with the opposite COPY, requested {:?}",
@@ -636,15 +633,15 @@ impl<B: hal::Backend> Device<B> {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn device_extensions<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Extensions {
-        span!(_guard, INFO, "Device::extensions");
+    pub fn device_features<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Features {
+        span!(_guard, INFO, "Device::features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, _) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
 
-        device.extensions
+        device.features
     }
 
     pub fn device_limits<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Limits {
@@ -656,17 +653,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
 
         device.limits.clone()
-    }
-
-    pub fn device_capabilities<B: GfxBackend>(&self, device_id: id::DeviceId) -> wgt::Capabilities {
-        span!(_guard, INFO, "Device::capabilities");
-
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (device_guard, _) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
-
-        device.capabilities
     }
 
     pub fn device_create_buffer<B: GfxBackend>(
@@ -1108,17 +1094,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
 
-        if let Some(clamp) = desc.anisotropy_clamp {
-            assert!(
-                device.extensions.contains(wgt::Extensions::ANISOTROPIC_FILTERING),
-                "Anisotropic clamp may only be used when the anisotropic filtering extension is enabled"
-            );
+        let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
             let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
             assert!(
                 valid_clamp,
                 "Anisotropic clamp must be one of the values: 1, 2, 4, 8, or 16"
             );
-        }
+            if device.private_features.anisotropic_filtering {
+                Some(clamp)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
 
         let info = hal::image::SamplerDesc {
             min_filter: conv::map_filter(desc.min_filter),
@@ -1134,7 +1123,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             comparison: desc.compare.and_then(conv::map_compare_function),
             border: hal::image::PackedColor(0),
             normalized: true,
-            anisotropy_clamp: desc.anisotropy_clamp,
+            anisotropy_clamp: actual_clamp,
         };
 
         let sampler = resource::Sampler {
@@ -1237,11 +1226,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 match binding.ty {
                     wgt::BindingType::SampledTexture { .. } => {
                         if !device
-                            .capabilities
-                            .contains(wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY)
+                            .features
+                            .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY)
                         {
-                            return Err(binding_model::BindGroupLayoutError::MissingCapability(
-                                wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY,
+                            return Err(binding_model::BindGroupLayoutError::MissingFeature(
+                                wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
                             ));
                         }
                     }
@@ -1664,8 +1653,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
                     Br::TextureViewArray(ref bindings_array) => {
                         assert!(
-                            device.capabilities.contains(wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY),
-                            "Capability SAMPLED_TEXTURE_BINDING_ARRAY must be supported to use TextureViewArrays in a bind group"
+                            device.features.contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
+                            "Feature SAMPLED_TEXTURE_BINDING_ARRAY must be enabled to use TextureViewArrays in a bind group"
                         );
 
                         if let Some(count) = decl.count {

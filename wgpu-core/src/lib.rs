@@ -171,6 +171,7 @@ struct Stored<T> {
 #[derive(Clone, Copy, Debug)]
 struct PrivateFeatures {
     shader_validation: bool,
+    anisotropic_filtering: bool,
     texture_d24_s8: bool,
 }
 
