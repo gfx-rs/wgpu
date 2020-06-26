@@ -232,6 +232,7 @@ impl<B: GfxBackend> Device<B> {
                 hal_limits.non_coherent_atom_size as u64,
             )
         };
+        let descriptors = unsafe { DescriptorAllocator::new() };
         #[cfg(not(feature = "trace"))]
         match trace_path {
             Some(_) => log::error!("Feature 'trace' is not enabled"),
@@ -243,7 +244,7 @@ impl<B: GfxBackend> Device<B> {
             adapter_id,
             com_allocator,
             mem_allocator: Mutex::new(heaps),
-            desc_allocator: Mutex::new(DescriptorAllocator::new()),
+            desc_allocator: Mutex::new(descriptors),
             queue_group,
             life_guard: LifeGuard::new(),
             active_submission_index: 0,
@@ -1459,7 +1460,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Err(BindGroupError::BindingsNumMismatch { expected, actual });
         }
 
-        let mut desc_set = unsafe {
+        let mut desc_set = {
             let mut desc_sets = ArrayVec::<[_; 1]>::new();
             device
                 .desc_allocator
