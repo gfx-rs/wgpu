@@ -122,33 +122,37 @@ pub struct Surface {
 #[derive(Debug)]
 pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
-    extensions: wgt::Extensions,
+    features: wgt::Features,
     limits: wgt::Limits,
-    capabilities: wgt::Capabilities,
-    unsafe_extensions: wgt::UnsafeExtensions,
+    unsafe_features: wgt::UnsafeFeatures,
     life_guard: LifeGuard,
 }
 
 impl<B: hal::Backend> Adapter<B> {
-    fn new(raw: hal::adapter::Adapter<B>, unsafe_extensions: wgt::UnsafeExtensions) -> Self {
+    fn new(raw: hal::adapter::Adapter<B>, unsafe_features: wgt::UnsafeFeatures) -> Self {
         span!(_guard, INFO, "Adapter::new");
 
         let adapter_features = raw.physical_device.features();
 
-        let mut extensions = wgt::Extensions::default() | wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS;
-        extensions.set(
-            wgt::Extensions::ANISOTROPIC_FILTERING,
-            adapter_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+        let mut features = wgt::Features::default() | wgt::Features::MAPPABLE_PRIMARY_BUFFERS;
+        features.set(
+            wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
         );
-        extensions.set(
-            wgt::Extensions::BINDING_INDEXING,
-            adapter_features.intersects(
-                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING
-                    | hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-            ),
+        features.set(
+            wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
+            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
         );
-        if unsafe_extensions.allowed() {
-            // Unsafe extensions go here
+        features.set(
+            wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
+            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
+        );
+        features.set(
+            wgt::Features::UNSIZED_BINDING_ARRAY,
+            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
+        );
+        if unsafe_features.allowed() {
+            // Unsafe features go here
         }
 
         let adapter_limits = raw.physical_device.limits();
@@ -159,31 +163,11 @@ impl<B: hal::Backend> Adapter<B> {
             _non_exhaustive: unsafe { wgt::NonExhaustive::new() },
         };
 
-        let mut capabilities = wgt::Capabilities::empty();
-
-        capabilities.set(
-            wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
-        );
-        capabilities.set(
-            wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING,
-            adapter_features.contains(hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
-        );
-        capabilities.set(
-            wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING,
-            adapter_features.contains(hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING),
-        );
-        capabilities.set(
-            wgt::Capabilities::UNSIZED_BINDING_ARRAY,
-            adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
-        );
-
         Adapter {
             raw,
-            extensions,
+            features,
             limits,
-            capabilities,
-            unsafe_extensions,
+            unsafe_features,
             life_guard: LifeGuard::new(),
         }
     }
@@ -310,7 +294,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
     pub fn enumerate_adapters(
         &self,
-        unsafe_extensions: wgt::UnsafeExtensions,
+        unsafe_features: wgt::UnsafeFeatures,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Vec<AdapterId> {
         span!(_guard, INFO, "Instance::enumerate_adapters");
@@ -324,7 +308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if let Some(inst) = instance_field {
                     if let Some(id_backend) = inputs.find(backend) {
                         for raw in inst.enumerate_adapters() {
-                            let adapter = Adapter::new(raw, unsafe_extensions);
+                            let adapter = Adapter::new(raw, unsafe_features);
                             log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
                             adapters.push(backend_hub(self).adapters.register_identity(
                                 id_backend.clone(),
@@ -352,7 +336,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn pick_adapter(
         &self,
         desc: &RequestAdapterOptions,
-        unsafe_extensions: wgt::UnsafeExtensions,
+        unsafe_features: wgt::UnsafeFeatures,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Option<AdapterId> {
         span!(_guard, INFO, "Instance::pick_adapter");
@@ -465,7 +449,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         backends_map! {
             let map = |(info_adapter, id_backend, mut adapters_backend, backend_hub)| {
                 if selected < adapters_backend.len() {
-                    let adapter = Adapter::new(adapters_backend.swap_remove(selected), unsafe_extensions);
+                    let adapter = Adapter::new(adapters_backend.swap_remove(selected), unsafe_features);
                     log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
                     let id = backend_hub(self).adapters.register_identity(
                         id_backend.take().unwrap(),
@@ -508,15 +492,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend())
     }
 
-    pub fn adapter_extensions<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Extensions {
-        span!(_guard, INFO, "Adapter::extensions");
+    pub fn adapter_features<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Features {
+        span!(_guard, INFO, "Adapter::features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
         let adapter = &adapter_guard[adapter_id];
 
-        adapter.extensions
+        adapter.features
     }
 
     pub fn adapter_limits<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Limits {
@@ -528,17 +512,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let adapter = &adapter_guard[adapter_id];
 
         adapter.limits.clone()
-    }
-
-    pub fn adapter_capabilities<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Capabilities {
-        span!(_guard, INFO, "Adapter::capabilities");
-
-        let hub = B::hub(self);
-        let mut token = Token::root();
-        let (adapter_guard, _) = hub.adapters.read(&mut token);
-        let adapter = &adapter_guard[adapter_id];
-
-        adapter.capabilities
     }
 
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
@@ -579,27 +552,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let adapter = &adapter_guard[adapter_id];
             let phd = &adapter.raw.physical_device;
 
-            // Verify all extensions were exposed by the adapter
-            if !adapter.unsafe_extensions.allowed() {
+            // Verify all features  were exposed by the adapter
+            if !adapter.unsafe_features.allowed() {
                 assert!(
-                    !desc.extensions.intersects(wgt::Extensions::ALL_UNSAFE),
-                    "Cannot enable unsafe extensions without passing UnsafeExtensions::allow() when getting an adapter. Enabled unsafe extensions: {:?}",
-                    desc.extensions & wgt::Extensions::ALL_UNSAFE
+                    !desc.features.intersects(wgt::Features::ALL_UNSAFE),
+                    "Cannot enable unsafe features without passing UnsafeFeatures::allow() when getting an adapter. Enabled unsafe extensions: {:?}",
+                    desc.features & wgt::Features::ALL_UNSAFE
                 )
             }
             assert!(
-                adapter.extensions.contains(desc.extensions),
-                "Cannot enable extensions that adapter doesn't support. Unsupported extensions: {:?}",
-                desc.extensions - adapter.extensions
+                adapter.features.contains(desc.features),
+                "Cannot enable features that adapter doesn't support. Unsupported extensions: {:?}",
+                desc.features - adapter.features
             );
 
-            // Verify extension preconditions
+            // Verify feature preconditions
             if desc
-                .extensions
-                .contains(wgt::Extensions::MAPPABLE_PRIMARY_BUFFERS)
+                .features
+                .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
                 && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
             {
-                log::warn!("Extension MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+                log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
             }
 
             let available_features = adapter.raw.physical_device.features();
@@ -607,7 +580,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // Check features that are always needed
             let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
-                | hal::Features::NDC_Y_UP;
+                | hal::Features::NDC_Y_UP
+                | hal::Features::SAMPLER_ANISOTROPY;
             let mut enabled_features = available_features & wishful_features;
             if enabled_features != wishful_features {
                 log::warn!(
@@ -616,46 +590,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
 
-            // Extensions
-            enabled_features.set(
-                hal::Features::SAMPLER_ANISOTROPY,
-                desc.extensions
-                    .contains(wgt::Extensions::ANISOTROPIC_FILTERING),
-            );
-
-            let mut enabled_capabilities = adapter.capabilities & wgt::Capabilities::ALL_BUILT_IN;
-
-            // Capabilities without extension gates
+            // Features
             enabled_features.set(
                 hal::Features::TEXTURE_DESCRIPTOR_ARRAY,
                 adapter
-                    .capabilities
-                    .contains(wgt::Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY),
+                    .features
+                    .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
             );
             enabled_features.set(
                 hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
                 adapter
-                    .capabilities
-                    .contains(wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
+                    .features
+                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
             );
-
-            // Capabilities behind BINDING_INDEXING
-            if desc.extensions.contains(wgt::Extensions::BINDING_INDEXING) {
-                enabled_capabilities
-                    .insert(adapter.capabilities & wgt::Capabilities::ALL_BINDING_INDEXING);
-                enabled_features.set(
-                    hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
-                    adapter
-                        .capabilities
-                        .contains(wgt::Capabilities::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
-                );
-                enabled_features.set(
-                    hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
-                    adapter
-                        .capabilities
-                        .contains(wgt::Capabilities::UNSIZED_BINDING_ARRAY),
-                );
-            }
+            enabled_features.set(
+                hal::Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING,
+                adapter
+                    .features
+                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING),
+            );
+            enabled_features.set(
+                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING,
+                adapter
+                    .features
+                    .contains(wgt::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING),
+            );
+            enabled_features.set(
+                hal::Features::UNSIZED_DESCRIPTOR_ARRAY,
+                adapter
+                    .features
+                    .contains(wgt::Features::UNSIZED_BINDING_ARRAY),
+            );
 
             let family = adapter
                 .raw
@@ -691,6 +656,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             let private_features = PrivateFeatures {
                 shader_validation: desc.shader_validation,
+                anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
                 texture_d24_s8: phd
                     .format_properties(Some(hal::format::Format::D24UnormS8Uint))
                     .optimal_tiling
@@ -708,7 +674,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 limits,
                 private_features,
                 desc,
-                enabled_capabilities,
                 trace_path,
             )
         };

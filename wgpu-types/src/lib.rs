@@ -126,30 +126,17 @@ impl NonExhaustive {
 }
 
 bitflags::bitflags! {
-    /// Extensions to the webgpu standard that are supported by wgpu.
+    /// Features that are not guarenteed to be supported. These are either part of the webgpu standard,
+    /// or are extension features supported by wgpu when targeting native.
     ///
-    /// If you want to use an extension, you need to first verify that the adapter supports
-    /// the extension. If the adapter does not support the extension, requesting a device with it enabled
+    /// If you want to use a feature, you need to first verify that the adapter supports
+    /// the feature. If the adapter does not support the feature, requesting a device with it enabled
     /// will panic.
     #[repr(transparent)]
     #[derive(Default)]
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
-    pub struct Extensions: u64 {
-        /// Allow anisotropic filtering in samplers.
-        ///
-        /// Supported platforms:
-        /// - OpenGL 4.6+ (or 1.2+ with widespread GL_EXT_texture_filter_anisotropic)
-        /// - DX11/12
-        /// - Metal
-        /// - Vulkan
-        ///
-        /// Provided Capabilities:
-        /// - None
-        ///
-        /// This is a native only extension. Support is planned to be added to webgpu,
-        /// but it is not yet implemented.
-        const ANISOTROPIC_FILTERING = 0x0000_0000_0001_0000;
+    pub struct Features: u64 {
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
@@ -160,72 +147,105 @@ bitflags::bitflags! {
         /// Supported platforms:
         /// - All
         ///
-        /// Provided Capabilities:
-        /// - None
+        /// This is a native only feature.
+        const MAPPABLE_PRIMARY_BUFFERS = 0x0000_0000_0001_0000;
+        /// Allows the user to create uniform arrays of sampled textures in shaders:
         ///
-        /// This is a native only extension.
-        const MAPPABLE_PRIMARY_BUFFERS = 0x0000_0000_0002_0000;
-        /// Allows shaders to index arrays of bindings with dynamically non-uniform values:
+        /// eg. `uniform texture2D textures[10]`.
+        ///
+        /// This capability allows them to exist and to be indexed by compile time constant
+        /// values.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const SAMPLED_TEXTURE_BINDING_ARRAY = 0x0000_0000_0002_0000;
+        /// Allows shaders to index sampled texture arrays with dynamically uniform values:
+        ///
+        /// eg. `texture_array[uniform_value]`
+        ///
+        /// This capability means the hardware will also support SAMPLED_TEXTURE_BINDING_ARRAY.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal (with MSL 2.0+ on macOS 10.13+)
+        /// - Vulkan's shaderSampledImageArrayDynamicIndexing feature
+        ///
+        /// This is a native only feature.
+        const SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING = 0x0000_0000_0004_0000;
+        /// Allows shaders to index sampled texture arrays with dynamically non-uniform values:
         ///
         /// eg. `texture_array[vertex_data]`
         ///
-        /// In order to use this extension, the corresponding GLSL extension must be enabled like so:
+        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
         ///
         /// `#extension GL_EXT_nonuniform_qualifier : require`
         ///
         /// HLSL does not need any extension.
         ///
+        /// This capability means the hardware will also support SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+        /// and SAMPLED_TEXTURE_BINDING_ARRAY.
+        ///
         /// Supported platforms:
         /// - DX12
         /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or via VK_EXT_descriptor_indexing)
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
         ///
-        /// Provided Capabilities:
-        /// - [`SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING`]
-        /// - [`UNSIZED_BINDING_ARRAY`]
+        /// This is a native only feature.
+        const SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0008_0000;
+        /// Allows the user to create unsized uniform arrays of bindings:
         ///
-        /// This is a native only extension.
+        /// eg. `uniform texture2D textures[]`.
         ///
-        /// [`SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING`]: struct.Capabilities.html#associatedconstant.SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-        /// [`UNSIZED_BINDING_ARRAY`]: struct.Capabilities.html#associatedconstant.UNSIZED_BINDING_ARRAY
-        const BINDING_INDEXING = 0x0000_0000_0004_0000;
-        /// Extensions which are part of the upstream webgpu standard
+        /// If this capability is supported, SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING is very likely
+        /// to also be supported
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s runtimeDescriptorArray feature
+        ///
+        /// This is a native only feature.
+        const UNSIZED_BINDING_ARRAY = 0x0000_0000_0010_0000;
+        /// Features which are part of the upstream webgpu standard
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
-        /// Extensions that require activating the unsafe extension flag
+        /// Features that require activating the unsafe feature flag
         const ALL_UNSAFE = 0xFFFF_0000_0000_0000;
-        /// Extensions that are only available when targeting native (not web)
+        /// Features that are only available when targeting native (not web)
         const ALL_NATIVE = 0xFFFF_FFFF_FFFF_0000;
     }
 }
 
-/// Marker type signalling if unsafe extensions are allowed to be enabled.
+/// Marker type signalling if unsafe features are allowed to be enabled.
 ///
-/// This doesn't enable any unsafe extensions, but must be set to `allow` if
-/// an unsafe extension is enabled.
+/// This doesn't enable any unsafe features, but must be set to `allow` if
+/// an unsafe features is enabled.
 ///
 /// The safety contract of safe Rust is that it is impossible to cause Undefined Behavior (UB)
-/// from safe Rust. If an extension would allow UB to happen, it must preset an unsafe interface.
-/// Enabling unsafe extensions is therefore an inherently unsafe operation.
+/// from safe Rust. If a feature would allow UB to happen, it must preset an unsafe interface.
+/// Enabling unsafe features is therefore an inherently unsafe operation.
 #[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct UnsafeExtensions {
+pub struct UnsafeFeatures {
     allow_unsafe: bool,
 }
-impl UnsafeExtensions {
-    /// Allow unsafe extensions to be enabled. This is an unsafe function and by calling this
-    /// function, you assert that even with these extensions on, it is impossible to cause UB
+impl UnsafeFeatures {
+    /// Allow unsafe features to be enabled. This is an unsafe function and by calling this
+    /// function, you assert that even with these features on, it is impossible to cause UB
     /// from within safe Rust.
     pub unsafe fn allow() -> Self {
         Self { allow_unsafe: true }
     }
-    /// Disallow unsafe extensions.
+    /// Disallow unsafe features.
     pub fn disallow() -> Self {
         Self {
             allow_unsafe: false,
         }
     }
-    /// Does this marker allow unsafe extensions.
+    /// Does this marker allow unsafe features.
     pub fn allowed(self) -> bool {
         self.allow_unsafe
     }
@@ -263,98 +283,15 @@ impl Default for Limits {
     }
 }
 
-bitflags::bitflags! {
-    /// Capabilities of devices/adapters.
-    ///
-    /// These can be used if they are enabled and will be enabled either automatically, or by the extension
-    /// that provides them.
-    #[repr(transparent)]
-    #[derive(Default)]
-    #[cfg_attr(feature = "trace", derive(Serialize))]
-    #[cfg_attr(feature = "replay", derive(Deserialize))]
-    pub struct Capabilities: u64 {
-        /// Allows the user to create uniform arrays of sampled textures in shaders:
-        ///
-        /// eg. `uniform texture2D textures[10]`.
-        ///
-        /// This capability allows them to exist and to be indexed by compile time constant
-        /// values.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan
-        const SAMPLED_TEXTURE_BINDING_ARRAY = 0x0000_0000_0000_0001;
-        /// Allows shaders to index sampled texture arrays with dynamically uniform values:
-        ///
-        /// eg. `texture_array[uniform_value]`
-        ///
-        /// This capability means the hardware will also support SAMPLED_TEXTURE_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan's shaderSampledImageArrayDynamicIndexing feature
-        const SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING = 0x0000_0000_0000_0002;
-        /// Allows shaders to index sampled texture arrays with dynamically non-uniform values:
-        ///
-        /// eg. `texture_array[vertex_data]`
-        ///
-        /// In order to use this capability, the corresponding GLSL extension must be enabled like so:
-        ///
-        /// `#extension GL_EXT_nonuniform_qualifier : require`
-        ///
-        /// HLSL does not need any extension.
-        ///
-        /// This capability means the hardware will also support SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
-        /// and SAMPLED_TEXTURE_BINDING_ARRAY.
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Metal (with MSL 2.0+ on macOS 10.13+)
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s shaderSampledImageArrayNonUniformIndexing feature)
-        ///
-        /// Provided by the [`BINDING_INDEXING`] extension. This extension must be enabled for this capability
-        /// to be anything but false.
-        ///
-        /// [`BINDING_INDEXING`]: struct.Extensions.html#associatedconstant.BINDING_INDEXING
-        const SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING = 0x0000_0000_0000_0004;
-        /// Allows the user to create unsized uniform arrays of bindings:
-        ///
-        /// eg. `uniform texture2D textures[]`.
-        ///
-        /// If this capability is supported, SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING is very likely
-        /// to also be supported
-        ///
-        /// Supported platforms:
-        /// - DX12
-        /// - Vulkan 1.2+ (or VK_EXT_descriptor_indexing)'s runtimeDescriptorArray feature
-        ///
-        /// Provided by the [`BINDING_INDEXING`] extension. This extension must be enabled for this capability
-        /// to be anything but false.
-        ///
-        /// [`BINDING_INDEXING`]: struct.Extensions.html#associatedconstant.BINDING_INDEXING
-        const UNSIZED_BINDING_ARRAY = 0x0000_0000_0000_0008;
-        /// All capabilities that are not provided by an extension
-        const ALL_BUILT_IN =
-            Self::SAMPLED_TEXTURE_BINDING_ARRAY.bits |
-            Self::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING.bits;
-        /// All capabilities that are provided by the BINDING_INDEXING extension
-        const ALL_BINDING_INDEXING =
-            Self::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING.bits |
-            Self::UNSIZED_BINDING_ARRAY.bits;
-    }
-}
-
 /// Describes a [`Device`].
 #[repr(C)]
 #[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct DeviceDescriptor {
-    /// Extensions that the device should support. If any extension is not supported by
+    /// Features that the device should support. If any feature is not supported by
     /// the adapter, creating a device will panic.
-    pub extensions: Extensions,
+    pub features: Features,
     /// Limits that the device should support. If any limit is "better" than the limit exposed by
     /// the adapter, creating a device will panic.
     pub limits: Limits,
@@ -968,13 +905,13 @@ bitflags::bitflags! {
         /// Allow a buffer to be mapped for reading using [`Buffer::map_async`] + [`Buffer::get_mapped_range`].
         /// This does not include creating a buffer with [`BufferDescriptor::mapped_at_creation`] set.
         ///
-        /// If [`Extensions::MAPPABLE_PRIMARY_BUFFERS`] isn't enabled, the only other usage a buffer
+        /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] isn't enabled, the only other usage a buffer
         /// may have is COPY_DST.
         const MAP_READ = 1;
         /// Allow a buffer to be mapped for writing using [`Buffer::map_async`] + [`Buffer::get_mapped_range_mut`].
         /// This does not include creating a buffer with `mapped_at_creation` set.
         ///
-        /// If [`Extensions::MAPPABLE_PRIMARY_BUFFERS`] extension isn't enabled, the only other usage a buffer
+        /// If [`Features::MAPPABLE_PRIMARY_BUFFERS`] feature isn't enabled, the only other usage a buffer
         /// may have is COPY_SRC.
         const MAP_WRITE = 2;
         /// Allow a buffer to be the source buffer for a [`CommandEncoder::copy_buffer_to_buffer`] or [`CommandEncoder::copy_buffer_to_texture`]
@@ -1461,9 +1398,6 @@ pub struct SamplerDescriptor<L> {
     pub lod_max_clamp: f32,
     /// If this is enabled, this is a comparison sampler using the given comparison function.
     pub compare: Option<CompareFunction>,
-    /// Anisotropic filtering extension must be enabled if this value is
-    /// anything other than 0 or 1.
-    ///
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<u8>,
     /// This struct must be partially constructed from its default
