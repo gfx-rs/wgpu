@@ -252,7 +252,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         });
     }
 
-    pub fn map(&mut self, buffer: id::BufferId, ref_count: RefCount) {
+    pub(crate) fn map(&mut self, buffer: id::BufferId, ref_count: RefCount) {
         self.mapped.push(Stored {
             value: buffer,
             ref_count,

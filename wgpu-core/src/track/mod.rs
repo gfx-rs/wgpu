@@ -195,7 +195,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Remove an id from the tracked map.
-    pub fn remove(&mut self, id: S::Id) -> bool {
+    pub(crate) fn remove(&mut self, id: S::Id) -> bool {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.remove(&index) {
@@ -208,7 +208,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Removes the resource from the tracker if we are holding the last reference.
-    pub fn remove_abandoned(&mut self, id: S::Id) -> bool {
+    pub(crate) fn remove_abandoned(&mut self, id: S::Id) -> bool {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.entry(index) {
@@ -226,7 +226,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Try to optimize the internal representation.
-    pub fn optimize(&mut self) {
+    pub(crate) fn optimize(&mut self) {
         for resource in self.map.values_mut() {
             resource.state.optimize();
         }
@@ -248,7 +248,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Initialize a resource to be used.
     ///
     /// Returns false if the resource is already registered.
-    pub fn init(&mut self, id: S::Id, ref_count: RefCount, state: S) -> Result<(), &S> {
+    pub(crate) fn init(&mut self, id: S::Id, ref_count: RefCount, state: S) -> Result<(), &S> {
         let (index, epoch, backend) = id.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.entry(index) {
@@ -302,7 +302,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Extend the usage of a specified resource.
     ///
     /// Returns conflicting transition as an error.
-    pub fn change_extend(
+    pub(crate) fn change_extend(
         &mut self,
         id: S::Id,
         ref_count: &RefCount,
@@ -315,7 +315,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Replace the usage of a specified resource.
-    pub fn change_replace(
+    pub(crate) fn change_replace(
         &mut self,
         id: S::Id,
         ref_count: &RefCount,
@@ -332,7 +332,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Turn the tracking from the "expand" mode into the "replace" one,
     /// installing the selected usage as the "first".
     /// This is a special operation only used by the render pass attachments.
-    pub fn prepend(
+    pub(crate) fn prepend(
         &mut self,
         id: S::Id,
         ref_count: &RefCount,
@@ -346,7 +346,7 @@ impl<S: ResourceState> ResourceTracker<S> {
 
     /// Merge another tracker into `self` by extending the current states
     /// without any transitions.
-    pub fn merge_extend(&mut self, other: &Self) -> Result<(), PendingTransition<S>> {
+    pub(crate) fn merge_extend(&mut self, other: &Self) -> Result<(), PendingTransition<S>> {
         debug_assert_eq!(self.backend, other.backend);
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
@@ -365,7 +365,7 @@ impl<S: ResourceState> ResourceTracker<S> {
 
     /// Merge another tracker, adding it's transitions to `self`.
     /// Transitions the current usage to the new one.
-    pub fn merge_replace<'a>(&'a mut self, other: &'a Self) -> Drain<PendingTransition<S>> {
+    pub(crate) fn merge_replace<'a>(&'a mut self, other: &'a Self) -> Drain<PendingTransition<S>> {
         for (&index, new) in other.map.iter() {
             match self.map.entry(index) {
                 Entry::Vacant(e) => {
@@ -389,7 +389,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// the last read-only usage, if possible.
     ///
     /// Returns the old usage as an error if there is a conflict.
-    pub fn use_extend<'a, T: 'a + Borrow<RefCount>>(
+    pub(crate) fn use_extend<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,
@@ -406,7 +406,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Combines storage access by 'Id' with the transition that replaces
     /// the last usage with a new one, returning an iterator over these
     /// transitions.
-    pub fn use_replace<'a, T: 'a + Borrow<RefCount>>(
+    pub(crate) fn use_replace<'a, T: 'a + Borrow<RefCount>>(
         &mut self,
         storage: &'a Storage<T, S::Id>,
         id: S::Id,

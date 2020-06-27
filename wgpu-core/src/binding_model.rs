@@ -5,7 +5,7 @@
 use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     track::{TrackerSet, DUMMY_SELECTOR},
-    FastHashMap, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
+    FastHashMap, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -54,7 +54,7 @@ pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
 pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) raw: B::DescriptorSetLayout,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) life_guard: LifeGuard,
+    pub(crate) multi_ref_count: MultiRefCount,
     pub(crate) entries: BindEntryMap,
     pub(crate) desc_counts: DescriptorCounts,
     pub(crate) dynamic_count: usize,

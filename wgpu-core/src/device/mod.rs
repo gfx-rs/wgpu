@@ -8,7 +8,8 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    validation, FastHashMap, LifeGuard, PrivateFeatures, Stored, SubmissionIndex, MAX_BIND_GROUPS,
+    validation, FastHashMap, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
+    MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -1197,22 +1198,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        // TODO: deduplicate the bind group layouts at some level.
-        // We can't do it right here, because in the remote scenario
-        // the client need to know if the same ID can be used, or not.
-        if false {
+        let (device_guard, mut token) = hub.devices.read(&mut token);
+        let device = &device_guard[device_id];
+
+        // If there is an equivalent BGL, just bump the refcount and return it.
+        {
             let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
             let bind_group_layout_id = bgl_guard
                 .iter(device_id.backend())
                 .find(|(_, bgl)| bgl.entries == entry_map);
 
-            if let Some((id, _)) = bind_group_layout_id {
+            if let Some((id, value)) = bind_group_layout_id {
+                value.multi_ref_count.inc();
                 return Ok(id);
             }
         }
-
-        let (device_guard, mut token) = hub.devices.read(&mut token);
-        let device = &device_guard[device_id];
 
         // Validate the count parameter
         for binding in desc
@@ -1275,7 +1275,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
             },
-            life_guard: LifeGuard::new(),
+            multi_ref_count: MultiRefCount::new(),
             entries: entry_map,
             desc_counts: raw_bindings.iter().cloned().collect(),
             dynamic_count: desc
@@ -1309,12 +1309,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_id, ref_count) = {
-            let (mut bind_group_layout_guard, _) = hub.bind_group_layouts.write(&mut token);
-            let layout = &mut bind_group_layout_guard[bind_group_layout_id];
-            (
-                layout.device_id.value,
-                layout.life_guard.ref_count.take().unwrap(),
-            )
+            let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
+            let layout = &bind_group_layout_guard[bind_group_layout_id];
+            match layout.multi_ref_count.dec() {
+                Some(last) => (layout.device_id.value, last),
+                None => return,
+            }
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1378,7 +1378,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .iter()
                     .map(|&id| Stored {
                         value: id,
-                        ref_count: bind_group_layout_guard[id].life_guard.add_ref(),
+                        ref_count: bind_group_layout_guard[id].multi_ref_count.add_ref(),
                     })
                     .collect()
             },
