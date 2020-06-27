@@ -1,3 +1,5 @@
+//! Utility structures and functions.
+
 mod belt;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "subscriber"))]
@@ -9,14 +11,15 @@ pub use belt::StagingBelt;
 #[repr(align(4))]
 pub struct WordAligned<Bytes: ?Sized>(pub Bytes);
 
-/// Treat the given by slice as a SPIR-V module.
+/// Treat the given byte slice as a SPIR-V module.
 ///
-/// # Errors
+/// # Panic
 ///
-/// Returns errors when:
+/// This function panics if:
 ///
-/// - Input length is not divisible by 4
-/// - Input is longer than usize::max_value()
+/// - Input isn't aligned to 4 bytes
+/// - Input length isn't multiple of 4
+/// - Input is longer than [`usize::max_value`]
 /// - SPIR-V magic number is missing from beginning of stream
 pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderModuleSource<'a> {
     const MAGIC_NUMBER: u32 = 0x0723_0203;
