@@ -138,6 +138,61 @@ mod pass_impl {
         ) {
             wgpu_render_pass_draw_indexed_indirect(self, *indirect_buffer, indirect_offset)
         }
+        fn multi_draw_indirect(
+            &mut self,
+            indirect_buffer: &wgc::id::BufferId,
+            indirect_offset: wgt::BufferAddress,
+            count: u32,
+        ) {
+            wgpu_render_pass_multi_draw_indirect(self, *indirect_buffer, indirect_offset, count)
+        }
+        fn multi_draw_indexed_indirect(
+            &mut self,
+            indirect_buffer: &wgc::id::BufferId,
+            indirect_offset: wgt::BufferAddress,
+            count: u32,
+        ) {
+            wgpu_render_pass_multi_draw_indexed_indirect(
+                self,
+                *indirect_buffer,
+                indirect_offset,
+                count,
+            )
+        }
+        fn multi_draw_indirect_count(
+            &mut self,
+            indirect_buffer: &wgc::id::BufferId,
+            indirect_offset: wgt::BufferAddress,
+            count_buffer: &wgc::id::BufferId,
+            count_buffer_offset: wgt::BufferAddress,
+            max_count: u32,
+        ) {
+            wgpu_render_pass_multi_draw_indirect_count(
+                self,
+                *indirect_buffer,
+                indirect_offset,
+                *count_buffer,
+                count_buffer_offset,
+                max_count,
+            )
+        }
+        fn multi_draw_indexed_indirect_count(
+            &mut self,
+            indirect_buffer: &wgc::id::BufferId,
+            indirect_offset: wgt::BufferAddress,
+            count_buffer: &wgc::id::BufferId,
+            count_buffer_offset: wgt::BufferAddress,
+            max_count: u32,
+        ) {
+            wgpu_render_pass_multi_draw_indexed_indirect_count(
+                self,
+                *indirect_buffer,
+                indirect_offset,
+                *count_buffer,
+                count_buffer_offset,
+                max_count,
+            )
+        }
     }
 
     impl crate::RenderPassInner<Context> for wgc::command::RenderPass {
@@ -265,6 +320,42 @@ mod pass_impl {
             indirect_offset: wgt::BufferAddress,
         ) {
             wgpu_render_pass_bundle_indexed_indirect(self, *indirect_buffer, indirect_offset)
+        }
+        fn multi_draw_indirect(
+            &mut self,
+            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_offset: wgt::BufferAddress,
+            _count: u32,
+        ) {
+            unimplemented!()
+        }
+        fn multi_draw_indexed_indirect(
+            &mut self,
+            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_offset: wgt::BufferAddress,
+            _count: u32,
+        ) {
+            unimplemented!()
+        }
+        fn multi_draw_indirect_count(
+            &mut self,
+            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_offset: wgt::BufferAddress,
+            _count_buffer: &wgc::id::BufferId,
+            _count_buffer_offset: wgt::BufferAddress,
+            _max_count: u32,
+        ) {
+            unimplemented!()
+        }
+        fn multi_draw_indexed_indirect_count(
+            &mut self,
+            _indirect_buffer: &wgc::id::BufferId,
+            _indirect_offset: wgt::BufferAddress,
+            _count_buffer: &wgc::id::BufferId,
+            _count_buffer_offset: wgt::BufferAddress,
+            _max_count: u32,
+        ) {
+            unimplemented!()
         }
     }
 }

@@ -164,6 +164,44 @@ impl crate::RenderInner<Context> for RenderPass {
         self.0
             .draw_indexed_indirect_with_f64(&indirect_buffer.0, indirect_offset as f64);
     }
+    fn multi_draw_indirect(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count: u32,
+    ) {
+        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indirect")
+    }
+    fn multi_draw_indexed_indirect(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count: u32,
+    ) {
+        panic!("MULTI_DRAW_INDIRECT feature must be enabled to call multi_draw_indexed_indirect")
+    }
+    fn multi_draw_indirect_count(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count_buffer: &Sendable<web_sys::GpuBuffer>,
+        _count_buffer_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        panic!(
+            "MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indirect_count"
+        )
+    }
+    fn multi_draw_indexed_indirect_count(
+        &mut self,
+        _indirect_buffer: &Sendable<web_sys::GpuBuffer>,
+        _indirect_offset: wgt::BufferAddress,
+        _count_buffer: &Sendable<web_sys::GpuBuffer>,
+        _count_buffer_offset: wgt::BufferAddress,
+        _max_count: u32,
+    ) {
+        panic!("MULTI_DRAW_INDIRECT_COUNT feature must be enabled to call multi_draw_indexed_indirect_count")
+    }
 }
 
 impl crate::RenderPassInner<Context> for RenderPass {
