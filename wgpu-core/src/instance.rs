@@ -581,6 +581,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
                 | hal::Features::NDC_Y_UP
+                | hal::Features::INDEPENDENT_BLENDING
                 | hal::Features::SAMPLER_ANISOTROPY;
             let mut enabled_features = available_features & wishful_features;
             if enabled_features != wishful_features {
