@@ -126,8 +126,10 @@ impl NonExhaustive {
 }
 
 bitflags::bitflags! {
-    /// Features that are not guarenteed to be supported. These are either part of the webgpu standard,
-    /// or are extension features supported by wgpu when targeting native.
+    /// Features that are not guaranteed to be supported.
+    ///
+    /// These are either part of the webgpu standard, or are extension features supported by
+    /// wgpu when targeting native.
     ///
     /// If you want to use a feature, you need to first verify that the adapter supports
     /// the feature. If the adapter does not support the feature, requesting a device with it enabled
@@ -209,6 +211,27 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const UNSIZED_BINDING_ARRAY = 0x0000_0000_0010_0000;
+        /// Allows the user to call [`RenderPass::multi_draw_indirect`] and [`RenderPass::multi_draw_indexed_indirect`].
+        ///
+        /// Allows multiple indirect calls to be dispatched from a single buffer.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Metal
+        /// - Vulkan
+        ///
+        /// This is a native only feature.
+        const MULTI_DRAW_INDIRECT = 0x0000_0000_0020_0000;
+        /// Allows the user to call [`RenderPass::multi_draw_indirect_count`] and [`RenderPass::multi_draw_indexed_indirect_count`].
+        ///
+        /// This allows the use of a buffer containing the actual number of draw calls.
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
+        ///
+        /// This is a native only feature.
+        const MULTI_DRAW_INDIRECT_COUNT = 0x0000_0000_0040_0000;
         /// Features which are part of the upstream webgpu standard
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that require activating the unsafe feature flag

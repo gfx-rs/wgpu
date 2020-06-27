@@ -58,11 +58,11 @@ dependencies = [
 
 [[package]]
 name = "ash"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69daec0742947f33a85931fa3cb0ce5f07929159dcbd1f0cbb5b2912e2978509"
+checksum = "c69a8137596e84c22d57f3da1b5de1d4230b1742a710091c85f4d7ce50f00f38"
 dependencies = [
- "libloading 0.5.2",
+ "libloading 0.6.2",
 ]
 
 [[package]]
@@ -417,9 +417,9 @@ dependencies = [
 
 [[package]]
 name = "gfx-backend-dx12"
-version = "0.5.7"
+version = "0.5.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e1a979a793023717bcaa7511c8cbb449bab550c093737c98674a659a2bbaf73"
+checksum = "05218b5c94539f22ac7d6feb4b2482431b89f6cc897132494701ac48619218d7"
 dependencies = [
  "bitflags",
  "d3d12",
@@ -472,9 +472,9 @@ dependencies = [
 
 [[package]]
 name = "gfx-backend-vulkan"
-version = "0.5.8"
+version = "0.5.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04af900c2597587b35e801e9d3f91fd8078cc06067421a22caa640ad2b1bc53e"
+checksum = "5f2e8bb53e5bea0bfec7035462a75717cd04d733963a225c816339a671ef108b"
 dependencies = [
  "arrayvec",
  "ash",
@@ -502,9 +502,9 @@ dependencies = [
 
 [[package]]
 name = "gfx-hal"
-version = "0.5.2"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f13e8fd6aaa8f50146b9519999432e097da43466749d8863c53409322c705339"
+checksum = "a18534b23d4c262916231511309bc1f307c74cda8dcb68b93a10ca213a22814b"
 dependencies = [
  "bitflags",
  "raw-window-handle",
