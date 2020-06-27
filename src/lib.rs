@@ -1,6 +1,10 @@
-//! A cross-platform graphics and compute library based on WebGPU.
+//! A cross-platform graphics and compute library based on [WebGPU](https://gpuweb.github.io/gpuweb/).
+//!
+//! To start using the API, create an [`Instance`].
 
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu-rs/master/logo.png")]
+
+#![warn(missing_docs)]
 
 mod backend;
 pub mod util;
@@ -343,21 +347,22 @@ trait Context: Sized {
     );
 }
 
-/// Instance of wgpu. First thing you create when using wgpu.
+/// Context for all other wgpu objects. Instance of wgpu.
 ///
-/// An instance sets up the context for all other wgpu objects.
+/// This is the first thing you create when using wgpu.
+/// Its primary use is to create [`Adapter`]s and [`Surface`]s.
 ///
-/// Instances and adapters do not have to be kept alive, only devices.
+/// Does not have to be kept alive.
 pub struct Instance {
     context: Arc<C>,
 }
 
 /// Handle to a physical graphics and/or compute device.
 ///
-/// An `Adapter` can be used to open a connection to the corresponding device on the host system,
-/// yielding a [`Device`] object.
+/// Adapters can be used to open a connection to the corresponding [`Device`]
+/// on the host system by using [`Adapter::request_device`].
 ///
-/// Instances and adapters do not have to be kept alive, only devices.
+/// Does not have to be kept alive.
 pub struct Adapter {
     context: Arc<C>,
     id: <C as Context>::AdapterId,
@@ -375,8 +380,8 @@ pub struct RequestAdapterOptions<'a> {
 
 /// Open connection to a graphics and/or compute device.
 ///
-/// The `Device` is the responsible for the creation of most rendering and compute resources, as
-/// well as exposing [`Queue`] objects.
+/// Responsible for the creation of most rendering and compute resources.
+/// These are then used in commands, which are submitted to a [`Queue`].
 ///
 /// A device may be requested from an adapter with [`Adapter::request_device`].
 pub struct Device {
@@ -590,10 +595,12 @@ impl Drop for ShaderModule {
 /// Source of a shader module.
 pub enum ShaderModuleSource<'a> {
     /// SPIR-V module represented as a slice of words.
-    /// wgpu-rs will try to reflect it and use for validation, but the
-    /// original data is passed to gfx-rs and spirv_cross for translation.
+    ///
+    /// wgpu will attempt to parse and validate it, but the original binary
+    /// is passed to `gfx-rs` and `spirv_cross` for translation.
     SpirV(&'a [u32]),
     /// WGSL module as a string slice.
+    ///
     /// wgpu-rs will parse it and use for validation. It will attempt
     /// to build a SPIR-V module internally and panic otherwise.
     ///
@@ -673,8 +680,8 @@ impl Drop for CommandBuffer {
 
 /// Encodes a series of GPU operations.
 ///
-/// A `CommandEncoder` can record [`RenderPass`]es, [`ComputePass`]es, and transfer operations
-/// between driver-managed resources like [`Buffer`]s and [`Texture`]s.
+/// A command encoder can record [`RenderPass`]es, [`ComputePass`]es,
+/// and transfer operations between driver-managed resources like [`Buffer`]s and [`Texture`]s.
 ///
 /// When finished recording, call [`CommandEncoder::finish`] to obtain a [`CommandBuffer`] which may
 /// be submitted for execution.
@@ -760,7 +767,7 @@ pub enum BindingResource<'a> {
     TextureView(&'a TextureView),
     /// Binding is backed by an array of textures.
     ///
-    /// [`Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
+    /// [`Features::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported to use this feature.
     ///
     /// Corresponds to [`BindingType::SampledTexture`] and [`BindingType::StorageTexture`] with
     /// [`BindGroupLayoutEntry::count`] set to Some.
@@ -901,22 +908,30 @@ pub enum LoadOp<V> {
 /// Pair of load and store operations for an attachment aspect.
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub struct Operations<V> {
+    /// How data should be read through this attachment.
     pub load: LoadOp<V>,
+    /// Whether data will be written to through this attachment.
     pub store: bool,
 }
 
 /// Describes a color attachment to a [`RenderPass`].
 #[derive(Clone)]
 pub struct RenderPassColorAttachmentDescriptor<'a> {
+    /// The view to use as an attachment.
     pub attachment: &'a TextureView,
+    /// The view that will receive the resolved output if multisampling is used.
     pub resolve_target: Option<&'a TextureView>,
+    /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
 /// Describes a depth/stencil attachment to a [`RenderPass`].
 #[derive(Clone)]
 pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
+    /// The view to use as an attachment.
     pub attachment: &'a TextureView,
+    /// What operations will be performed on the depth part of the attachment.
     pub depth_ops: Option<Operations<f32>>,
+    /// What operations will be performed on the stencil part of the attachment.
     pub stencil_ops: Option<Operations<u32>>,
 }
 
@@ -958,22 +973,30 @@ pub type SamplerDescriptor<'a> = SamplerDescriptorBase<Option<&'a str>>;
 
 /// Swap chain image that can be rendered to.
 pub struct SwapChainTexture {
+    /// Accessible view of the frame.
     pub view: TextureView,
     detail: <C as Context>::SwapChainOutputDetail,
 }
 
 /// Result of a successful call to [`SwapChain::get_next_frame`].
 pub struct SwapChainFrame {
+    /// The texture into which the next frame should be rendered.
     pub output: SwapChainTexture,
+    /// `true` if the acquired buffer can still be used for rendering,
+    /// but should be recreated for maximum performance.
     pub suboptimal: bool,
 }
 
 /// Result of an unsuccessful call to [`SwapChain::get_next_frame`].
 #[derive(Debug)]
 pub enum SwapChainError {
+    /// A timeout was encountered while trying to acquire the next frame.
     Timeout,
+    /// The underlying surface has changed, and therefore the swap chain must be updated.
     Outdated,
+    /// The swap chain has been lost and needs to be recreated.
     Lost,
+    /// There is no more memory left to allocate a new frame.
     OutOfMemory,
 }
 
@@ -1001,15 +1024,24 @@ pub struct TextureCopyView<'a> {
 }
 
 impl Instance {
-    /// Create an new instance of wgpu. The `backends` parameter controls
-    /// among which backends wgpu will decide during instantiation.
+    /// Create an new instance of wgpu.
+    ///
+    /// # Arguments
+    ///
+    /// - `backends` - Controls from which [backends][BackendBit] wgpu will choose
+    ///   during instantiation.
     pub fn new(backends: BackendBit) -> Self {
         Instance {
             context: Arc::new(C::init(backends)),
         }
     }
 
-    /// Retrieves all available [`Adapter`]s that match the given backends.
+    /// Retrieves all available [`Adapter`]s that match the given [`BackendBit`].
+    ///
+    /// # Arguments
+    ///
+    /// - `unsafe_features` - Marker for allowing unsafe features.
+    /// - `backends` - Backends from which to enumerate adapters.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn enumerate_adapters(
         &self,
@@ -1027,6 +1059,22 @@ impl Instance {
                 id,
                 context: Arc::clone(&context),
             })
+    }
+
+    /// Retrieves an [`Adapter`] which matches the given [`RequestAdapterOptions`].
+    ///
+    /// Some options are "soft", so treated as non-mandatory. Others are "hard".
+    ///
+    /// If no adapters are found that suffice all the "hard" options, `None` is returned.
+    pub fn request_adapter(
+        &self,
+        options: &RequestAdapterOptions<'_>,
+        unsafe_features: UnsafeFeatures,
+    ) -> impl Future<Output = Option<Adapter>> + Send {
+        let context = Arc::clone(&self.context);
+        self.context
+            .instance_request_adapter(options, unsafe_features)
+            .map(|option| option.map(|id| Adapter { context, id }))
     }
 
     /// Creates a surface from a raw window handle.
@@ -1066,27 +1114,18 @@ impl Instance {
             ),
         }
     }
-
-    /// Retrieves an [`Adapter`] which matches the given options.
-    ///
-    /// Some options are "soft", so treated as non-mandatory. Others are "hard".
-    ///
-    /// If no adapters are found that suffice all the "hard" options, `None` is returned.
-    pub fn request_adapter(
-        &self,
-        options: &RequestAdapterOptions<'_>,
-        unsafe_features: UnsafeFeatures,
-    ) -> impl Future<Output = Option<Adapter>> + Send {
-        let context = Arc::clone(&self.context);
-        self.context
-            .instance_request_adapter(options, unsafe_features)
-            .map(|option| option.map(|id| Adapter { context, id }))
-    }
 }
 
 impl Adapter {
     /// Requests a connection to a physical device, creating a logical device.
-    /// Returns the device together with a queue that executes command buffers.
+    ///
+    /// Returns the [`Device`] together with a [`Queue`] that executes command buffers.
+    ///
+    /// # Arguments
+    ///
+    /// - `desc` - Description of the features and limits requested from the given device.
+    /// - `trace_path` - Can be used for API call tracing, if that feature is
+    ///   enabled in `wgpu-core`.
     ///
     /// # Panics
     ///
@@ -1126,7 +1165,7 @@ impl Adapter {
 
     /// List the "best" limits that are supported by this adapter.
     ///
-    /// Limits must be explicitly requested in [`Adapter::request_device`] in to set
+    /// Limits must be explicitly requested in [`Adapter::request_device`] to set
     /// the values that you are allowed to use.
     pub fn limits(&self) -> Limits {
         Context::adapter_limits(&*self.context, &self.id)
@@ -1811,6 +1850,8 @@ impl<'a> RenderPass<'a> {
             .draw_indexed_indirect(&indirect_buffer.id, indirect_offset);
     }
 
+    /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
+    /// that can be run together.
     pub fn execute_bundles<I: Iterator<Item = &'a RenderBundle>>(&mut self, render_bundles: I) {
         self.id
             .execute_bundles(render_bundles.into_iter().map(|rb| &rb.id))
