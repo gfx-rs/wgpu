@@ -12,13 +12,15 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         .request_adapter(
             &wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::Default,
+                // Request an adapter which can render to our surface
                 compatible_surface: Some(&surface),
             },
             wgpu::UnsafeFeatures::disallow(),
         )
         .await
-        .unwrap();
+        .expect("Failed to find an appropiate adapter");
 
+    // Create the logical device and command queue
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
@@ -29,8 +31,9 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
             None,
         )
         .await
-        .unwrap();
+        .expect("Failed to create device");
 
+    // Load the shaders from disk
     let vs_module = device.create_shader_module(wgpu::include_spirv!("shader.vert.spv"));
     let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
@@ -48,13 +51,8 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
             module: &fs_module,
             entry_point: "main",
         }),
-        rasterization_state: Some(wgpu::RasterizationStateDescriptor {
-            front_face: wgpu::FrontFace::Ccw,
-            cull_mode: wgpu::CullMode::None,
-            depth_bias: 0,
-            depth_bias_slope_scale: 0.0,
-            depth_bias_clamp: 0.0,
-        }),
+        // Use the default rasterizer state: no culling, no depth bias
+        rasterization_state: None,
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
         color_states: &[wgpu::ColorStateDescriptor {
             format: swapchain_format,
@@ -83,7 +81,9 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let mut swap_chain = device.create_swap_chain(&surface, &sc_desc);
 
     event_loop.run(move |event, _, control_flow| {
-        // force ownership by the closure
+        // Have the closure take ownership of the resources.
+        // `event_loop.run` never returns, therefore we must do this to ensure
+        // the resources are properly cleaned up.
         let _ = (
             &instance,
             &adapter,
@@ -98,6 +98,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                 event: WindowEvent::Resized(size),
                 ..
             } => {
+                // Recreate the swap chain with the new size
                 sc_desc.width = size.width;
                 sc_desc.height = size.height;
                 swap_chain = device.create_swap_chain(&surface, &sc_desc);
