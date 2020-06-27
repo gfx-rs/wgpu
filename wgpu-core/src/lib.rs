@@ -89,7 +89,7 @@ impl RefCount {
     /// logic. To use this safely from outside of `Drop::drop`, the calling function must move
     /// `Self` into a `ManuallyDrop`.
     unsafe fn rich_drop_inner(&mut self) -> bool {
-        if self.0.as_ref().fetch_sub(1, Ordering::Relaxed) == 1 {
+        if self.0.as_ref().fetch_sub(1, Ordering::AcqRel) == 1 {
             let _ = Box::from_raw(self.0.as_ptr());
             true
         } else {
@@ -100,7 +100,7 @@ impl RefCount {
 
 impl Clone for RefCount {
     fn clone(&self) -> Self {
-        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Relaxed);
+        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Release);
         assert!(old_size < Self::MAX);
         RefCount(self.0)
     }
@@ -150,7 +150,7 @@ impl MultiRefCount {
     }
 
     fn inc(&self) {
-        unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Relaxed);
+        unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Release);
     }
 
     fn add_ref(&self) -> RefCount {
@@ -159,7 +159,7 @@ impl MultiRefCount {
     }
 
     fn dec(&self) -> Option<RefCount> {
-        match unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::Release) {
+        match unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::AcqRel) {
             0 => unreachable!(),
             1 => Some(self.add_ref()),
             _ => None,
