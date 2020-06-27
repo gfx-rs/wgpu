@@ -73,7 +73,7 @@ pub enum BufferMapAsyncStatus {
 }
 
 #[derive(Debug)]
-pub enum BufferMapState<B: hal::Backend> {
+pub(crate) enum BufferMapState<B: hal::Backend> {
     /// Mapped at creation.
     Init {
         ptr: NonNull<u8>,
@@ -118,7 +118,7 @@ impl BufferMapOperation {
 }
 
 #[derive(Debug)]
-pub struct BufferPendingMapping {
+pub(crate) struct BufferPendingMapping {
     pub sub_range: hal::buffer::SubRange,
     pub op: BufferMapOperation,
     // hold the parent alive while the mapping is active

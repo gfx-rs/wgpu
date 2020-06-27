@@ -62,9 +62,9 @@ type Epoch = u32;
 
 pub type RawString = *const c_char;
 
-//TODO: make it private. Currently used for swapchain creation impl.
+/// Reference count object that is 1:1 with each reference.
 #[derive(Debug)]
-pub struct RefCount(ptr::NonNull<AtomicUsize>);
+struct RefCount(ptr::NonNull<AtomicUsize>);
 
 unsafe impl Send for RefCount {}
 unsafe impl Sync for RefCount {}
@@ -89,7 +89,7 @@ impl RefCount {
     /// logic. To use this safely from outside of `Drop::drop`, the calling function must move
     /// `Self` into a `ManuallyDrop`.
     unsafe fn rich_drop_inner(&mut self) -> bool {
-        if self.0.as_ref().fetch_sub(1, Ordering::Relaxed) == 1 {
+        if self.0.as_ref().fetch_sub(1, Ordering::AcqRel) == 1 {
             let _ = Box::from_raw(self.0.as_ptr());
             true
         } else {
@@ -100,7 +100,7 @@ impl RefCount {
 
 impl Clone for RefCount {
     fn clone(&self) -> Self {
-        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Relaxed);
+        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Release);
         assert!(old_size < Self::MAX);
         RefCount(self.0)
     }
@@ -134,6 +134,46 @@ fn loom() {
             "must drop exactly once"
         );
     });
+}
+
+/// Reference count object that tracks multiple references.
+#[derive(Debug)]
+struct MultiRefCount(ptr::NonNull<AtomicUsize>);
+
+unsafe impl Send for MultiRefCount {}
+unsafe impl Sync for MultiRefCount {}
+
+impl MultiRefCount {
+    fn new() -> Self {
+        let bx = Box::new(AtomicUsize::new(1));
+        MultiRefCount(unsafe { ptr::NonNull::new_unchecked(Box::into_raw(bx)) })
+    }
+
+    fn inc(&self) {
+        unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Release);
+    }
+
+    fn add_ref(&self) -> RefCount {
+        self.inc();
+        RefCount(self.0)
+    }
+
+    fn dec(&self) -> Option<RefCount> {
+        match unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::AcqRel) {
+            0 => unreachable!(),
+            1 => Some(self.add_ref()),
+            _ => None,
+        }
+    }
+}
+
+impl Drop for MultiRefCount {
+    fn drop(&mut self) {
+        // We don't do anything here. We rely on the fact that
+        // `dec` was called before `MultiRefCount` got dropped,
+        // which spawned `RefCount`, which upon deletion would
+        // destroy the Box.
+    }
 }
 
 #[derive(Debug)]
