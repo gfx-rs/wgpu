@@ -123,13 +123,20 @@ pub enum RenderCommand {
         base_vertex: i32,
         first_instance: u32,
     },
-    DrawIndirect {
+    MultiDrawIndirect {
         buffer_id: id::BufferId,
         offset: BufferAddress,
+        /// Count of `None` represents a non-multi call.
+        count: Option<u32>,
+        indexed: bool,
     },
-    DrawIndexedIndirect {
+    MultiDrawIndirectCount {
         buffer_id: id::BufferId,
         offset: BufferAddress,
+        count_buffer_id: id::BufferId,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+        indexed: bool,
     },
     PushDebugGroup {
         color: u32,
@@ -1180,30 +1187,168 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                     }
                 }
-                RenderCommand::DrawIndirect { buffer_id, offset } => {
+                RenderCommand::MultiDrawIndirect {
+                    buffer_id,
+                    offset,
+                    count,
+                    indexed,
+                } => {
                     state.is_ready().unwrap();
+
+                    let name = match (count, indexed) {
+                        (None, false) => "drawIndirect",
+                        (None, true) => "drawIndexedIndirect",
+                        (Some(..), false) => "multiDrawIndirect",
+                        (Some(..), true) => "multiDrawIndexedIndirect",
+                    };
+
+                    let stride = match indexed {
+                        false => 16,
+                        true => 20,
+                    };
+
+                    if count.is_some() {
+                        assert!(
+                            device.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
+                            "The feature MULTI_DRAW_INDIRECT must be enabled to use {}",
+                            name
+                        );
+                    }
 
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
+                    assert!(
+                        buffer.usage.contains(BufferUsage::INDIRECT),
+                        "An invalid {} call has been made. The indirect buffer usage is {:?} which does not contain required usage INDIRECT",
+                        name,
+                        buffer.usage,
+                    );
 
-                    unsafe {
-                        raw.draw_indirect(&buffer.raw, offset, 1, 0);
+                    let actual_count = count.unwrap_or(1);
+
+                    let begin_offset = offset;
+                    let end_offset = offset + stride * actual_count as u64;
+                    assert!(
+                        end_offset <= buffer.size,
+                        "{} with offset {}{} uses bytes {}..{} which overruns indirect buffer of size {}",
+                        name,
+                        offset,
+                        count.map_or_else(String::new, |v| format!(" and count {}", v)),
+                        begin_offset,
+                        end_offset,
+                        buffer.size
+                    );
+
+                    match indexed {
+                        false => unsafe {
+                            raw.draw_indirect(&buffer.raw, offset, actual_count, stride as u32);
+                        },
+                        true => unsafe {
+                            raw.draw_indexed_indirect(
+                                &buffer.raw,
+                                offset,
+                                actual_count,
+                                stride as u32,
+                            );
+                        },
                     }
                 }
-                RenderCommand::DrawIndexedIndirect { buffer_id, offset } => {
+                RenderCommand::MultiDrawIndirectCount {
+                    buffer_id,
+                    offset,
+                    count_buffer_id,
+                    count_buffer_offset,
+                    max_count,
+                    indexed,
+                } => {
                     state.is_ready().unwrap();
+
+                    let name = match indexed {
+                        false => "multiDrawIndirectCount",
+                        true => "multiDrawIndexedIndirectCount",
+                    };
+
+                    let stride = match indexed {
+                        false => 16,
+                        true => 20,
+                    };
+
+                    assert!(
+                        device
+                            .features
+                            .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
+                        "The feature MULTI_DRAW_INDIRECT_COUNT must be enabled to use {}",
+                        name
+                    );
 
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDIRECT), "An invalid drawIndexedIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT", buffer.usage);
+                    assert!(
+                        buffer.usage.contains(BufferUsage::INDIRECT),
+                        "An invalid {} call has been made. The indirect buffer usage is {:?} which does not contain required usage INDIRECT",
+                        name,
+                        buffer.usage
+                    );
+                    let count_buffer = trackers
+                        .buffers
+                        .use_extend(&*buffer_guard, count_buffer_id, (), BufferUse::INDIRECT)
+                        .unwrap();
+                    assert!(
+                        count_buffer.usage.contains(BufferUsage::INDIRECT),
+                        "An invalid {} call has been made. The count buffer usage is {:?} which does not contain required usage INDIRECT",
+                        name,
+                        count_buffer.usage
+                    );
 
-                    unsafe {
-                        raw.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
+                    let begin_offset = offset;
+                    let end_offset = offset + stride * max_count as u64;
+                    assert!(
+                        end_offset <= buffer.size,
+                        "{} with offset {} and max_count {} uses bytes {}..{} which overruns indirect buffer of size {}",
+                        name,
+                        offset,
+                        max_count,
+                        begin_offset,
+                        end_offset,
+                        buffer.size
+                    );
+
+                    let begin_count_offset = count_buffer_offset;
+                    let end_count_offset = count_buffer_offset + 4;
+                    assert!(
+                        end_count_offset <= count_buffer.size,
+                        "{} uses bytes {}..{} which overruns count buffer of size {}",
+                        name,
+                        begin_count_offset,
+                        end_count_offset,
+                        count_buffer.size
+                    );
+
+                    match indexed {
+                        false => unsafe {
+                            raw.draw_indirect_count(
+                                &buffer.raw,
+                                offset,
+                                &count_buffer.raw,
+                                count_buffer_offset,
+                                max_count,
+                                stride as u32,
+                            );
+                        },
+                        true => unsafe {
+                            raw.draw_indexed_indirect_count(
+                                &buffer.raw,
+                                offset,
+                                &count_buffer.raw,
+                                count_buffer_offset,
+                                max_count,
+                                stride as u32,
+                            );
+                        },
                     }
                 }
                 RenderCommand::PushDebugGroup { color, len } => {
@@ -1476,9 +1621,12 @@ pub mod render_ffi {
         offset: BufferAddress,
     ) {
         span!(_guard, DEBUG, "RenderPass::draw_indirect");
-        pass.base
-            .commands
-            .push(RenderCommand::DrawIndirect { buffer_id, offset });
+        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+            buffer_id,
+            offset,
+            count: None,
+            indexed: false,
+        });
     }
 
     #[no_mangle]
@@ -1488,9 +1636,92 @@ pub mod render_ffi {
         offset: BufferAddress,
     ) {
         span!(_guard, DEBUG, "RenderPass::draw_indexed_indirect");
+        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+            buffer_id,
+            offset,
+            count: None,
+            indexed: true,
+        });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_multi_draw_indirect(
+        pass: &mut RenderPass,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        count: u32,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::multi_draw_indirect");
+        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+            buffer_id,
+            offset,
+            count: Some(count),
+            indexed: false,
+        });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_multi_draw_indexed_indirect(
+        pass: &mut RenderPass,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        count: u32,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::multi_draw_indexed_indirect");
+        pass.base.commands.push(RenderCommand::MultiDrawIndirect {
+            buffer_id,
+            offset,
+            count: Some(count),
+            indexed: true,
+        });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_multi_draw_indirect_count(
+        pass: &mut RenderPass,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        count_buffer_id: id::BufferId,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::multi_draw_indirect_count");
         pass.base
             .commands
-            .push(RenderCommand::DrawIndexedIndirect { buffer_id, offset });
+            .push(RenderCommand::MultiDrawIndirectCount {
+                buffer_id,
+                offset,
+                count_buffer_id,
+                count_buffer_offset,
+                max_count,
+                indexed: false,
+            });
+    }
+
+    #[no_mangle]
+    pub extern "C" fn wgpu_render_pass_multi_draw_indexed_indirect_count(
+        pass: &mut RenderPass,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        count_buffer_id: id::BufferId,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        span!(
+            _guard,
+            DEBUG,
+            "RenderPass::multi_draw_indexed_indirect_count"
+        );
+        pass.base
+            .commands
+            .push(RenderCommand::MultiDrawIndirectCount {
+                buffer_id,
+                offset,
+                count_buffer_id,
+                count_buffer_offset,
+                max_count,
+                indexed: true,
+            });
     }
 
     #[no_mangle]

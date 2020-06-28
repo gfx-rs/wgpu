@@ -151,6 +151,14 @@ impl<B: hal::Backend> Adapter<B> {
             wgt::Features::UNSIZED_BINDING_ARRAY,
             adapter_features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY),
         );
+        features.set(
+            wgt::Features::MULTI_DRAW_INDIRECT,
+            adapter_features.contains(hal::Features::MULTI_DRAW_INDIRECT),
+        );
+        features.set(
+            wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
+            adapter_features.contains(hal::Features::DRAW_INDIRECT_COUNT),
+        );
         if unsafe_features.allowed() {
             // Unsafe features go here
         }
@@ -621,6 +629,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 adapter
                     .features
                     .contains(wgt::Features::UNSIZED_BINDING_ARRAY),
+            );
+            enabled_features.set(
+                hal::Features::MULTI_DRAW_INDIRECT,
+                adapter
+                    .features
+                    .contains(wgt::Features::MULTI_DRAW_INDIRECT),
+            );
+            enabled_features.set(
+                hal::Features::DRAW_INDIRECT_COUNT,
+                adapter
+                    .features
+                    .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
             );
 
             let family = adapter

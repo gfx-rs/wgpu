@@ -203,14 +203,26 @@ impl RenderBundle {
                         first_instance..first_instance + instance_count,
                     );
                 }
-                RenderCommand::DrawIndirect { buffer_id, offset } => {
+                RenderCommand::MultiDrawIndirect {
+                    buffer_id,
+                    offset,
+                    count: None,
+                    indexed: false,
+                } => {
                     let buffer = &buffer_guard[buffer_id];
                     comb.draw_indirect(&buffer.raw, offset, 1, 0);
                 }
-                RenderCommand::DrawIndexedIndirect { buffer_id, offset } => {
+                RenderCommand::MultiDrawIndirect {
+                    buffer_id,
+                    offset,
+                    count: None,
+                    indexed: true,
+                } => {
                     let buffer = &buffer_guard[buffer_id];
                     comb.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                 }
+                RenderCommand::MultiDrawIndirect { .. }
+                | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
                 RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                 RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                 RenderCommand::PopDebugGroup => unimplemented!(),
@@ -652,9 +664,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         commands.extend(state.flush_binds());
                         commands.push(command);
                     }
-                    RenderCommand::DrawIndirect {
+                    RenderCommand::MultiDrawIndirect {
                         buffer_id,
                         offset: _,
+                        count: None,
+                        indexed: false,
                     } => {
                         let buffer = state
                             .trackers
@@ -671,9 +685,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         commands.extend(state.flush_binds());
                         commands.push(command);
                     }
-                    RenderCommand::DrawIndexedIndirect {
+                    RenderCommand::MultiDrawIndirect {
                         buffer_id,
                         offset: _,
+                        count: None,
+                        indexed: true,
                     } => {
                         let buffer = state
                             .trackers
@@ -691,6 +707,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         commands.extend(state.flush_binds());
                         commands.push(command);
                     }
+                    RenderCommand::MultiDrawIndirect { .. }
+                    | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
                     RenderCommand::PushDebugGroup { color: _, len: _ } => unimplemented!(),
                     RenderCommand::InsertDebugMarker { color: _, len: _ } => unimplemented!(),
                     RenderCommand::PopDebugGroup => unimplemented!(),
@@ -872,10 +890,12 @@ pub mod bundle_ffi {
         offset: BufferAddress,
     ) {
         span!(_guard, DEBUG, "RenderBundle::draw_indirect");
-        bundle
-            .base
-            .commands
-            .push(RenderCommand::DrawIndirect { buffer_id, offset });
+        bundle.base.commands.push(RenderCommand::MultiDrawIndirect {
+            buffer_id,
+            offset,
+            count: None,
+            indexed: false,
+        });
     }
 
     #[no_mangle]
@@ -885,10 +905,12 @@ pub mod bundle_ffi {
         offset: BufferAddress,
     ) {
         span!(_guard, DEBUG, "RenderBundle::draw_indexed_indirect");
-        bundle
-            .base
-            .commands
-            .push(RenderCommand::DrawIndexedIndirect { buffer_id, offset });
+        bundle.base.commands.push(RenderCommand::MultiDrawIndirect {
+            buffer_id,
+            offset,
+            count: None,
+            indexed: true,
+        });
     }
 
     #[no_mangle]

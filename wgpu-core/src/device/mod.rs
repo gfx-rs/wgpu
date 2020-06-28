@@ -196,8 +196,8 @@ pub struct Device<B: hal::Backend> {
     temp_suspected: life::SuspectedResources,
     pub(crate) hal_limits: hal::Limits,
     pub(crate) private_features: PrivateFeatures,
-    limits: wgt::Limits,
-    features: wgt::Features,
+    pub(crate) limits: wgt::Limits,
+    pub(crate) features: wgt::Features,
     //TODO: move this behind another mutex. This would allow several methods to switch
     // to borrow Device immutably, such as `write_buffer`, `write_texture`, and `buffer_unmap`.
     pending_writes: queue::PendingWrites<B>,
