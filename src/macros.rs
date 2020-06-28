@@ -12,7 +12,7 @@
 /// Offsets are calculated automatically.
 #[macro_export]
 macro_rules! vertex_attr_array {
-    ($($loc:expr => $fmt:ident),*) => {
+    ($($loc:expr => $fmt:ident),* $(,)?) => {
         $crate::vertex_attr_array!([] ; 0; $($loc => $fmt ,)*)
     };
     ([$($t:expr,)*] ; $off:expr ;) => { [$($t,)*] };
