@@ -84,6 +84,34 @@ trait RenderInner<Ctx: Context> {
         indirect_buffer: &Ctx::BufferId,
         indirect_offset: BufferAddress,
     );
+    fn multi_draw_indirect(
+        &mut self,
+        indirect_buffer: &Ctx::BufferId,
+        indirect_offset: BufferAddress,
+        count: u32,
+    );
+    fn multi_draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &Ctx::BufferId,
+        indirect_offset: BufferAddress,
+        count: u32,
+    );
+    fn multi_draw_indirect_count(
+        &mut self,
+        indirect_buffer: &Ctx::BufferId,
+        indirect_offset: BufferAddress,
+        count_buffer: &Ctx::BufferId,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+    );
+    fn multi_draw_indexed_indirect_count(
+        &mut self,
+        indirect_buffer: &Ctx::BufferId,
+        indirect_offset: BufferAddress,
+        count_buffer: &Ctx::BufferId,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+    );
 }
 
 trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
@@ -1848,6 +1876,168 @@ impl<'a> RenderPass<'a> {
     ) {
         self.id
             .draw_indexed_indirect(&indirect_buffer.id, indirect_offset);
+    }
+
+    /// Disptaches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
+    /// `count` draw calls are issued.
+    ///
+    /// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call this function.
+    ///
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndirect {
+    ///     vertex_count: u32, // The number of vertices to draw.
+    ///     instance_count: u32, // The number of instances to draw.
+    ///     base_vertex: u32, // The Index of the first vertex to draw.
+    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    /// }
+    /// ```
+    ///
+    /// These draw structures are expected to be tightly packed.
+    pub fn multi_draw_indirect(
+        &mut self,
+        indirect_buffer: &'a Buffer,
+        indirect_offset: BufferAddress,
+        count: u32,
+    ) {
+        self.id
+            .multi_draw_indirect(&indirect_buffer.id, indirect_offset, count);
+    }
+
+    /// Disptaches multiple draw calls from the active index buffer and the active vertex buffers,
+    /// based on the contents of the `indirect_buffer`. `count` draw calls are issued.
+    ///
+    /// [`Features::MULTI_DRAW_INDIRECT`] must be enabled on the device in order to call this function.
+    ///
+    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
+    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndexedIndirect {
+    ///     vertex_count: u32, // The number of vertices to draw.
+    ///     instance_count: u32, // The number of instances to draw.
+    ///     base_index: u32, // The base index within the index buffer.
+    ///     vertex_offset: i32, // The value added to the vertex index before indexing into the vertex buffer.
+    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    /// }
+    /// ```
+    ///
+    /// These draw structures are expected to be tightly packed.
+    pub fn multi_draw_indexed_indirect(
+        &mut self,
+        indirect_buffer: &'a Buffer,
+        indirect_offset: BufferAddress,
+        count: u32,
+    ) {
+        self.id
+            .multi_draw_indexed_indirect(&indirect_buffer.id, indirect_offset, count);
+    }
+
+    /// Disptaches multiple draw calls from the active vertex buffer(s) based on the contents of the `indirect_buffer`.
+    /// The count buffer is read to determine how many draws to issue.
+    ///
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
+    /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
+    ///
+    /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call this function.
+    ///
+    /// The active vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndirect {
+    ///     vertex_count: u32, // The number of vertices to draw.
+    ///     instance_count: u32, // The number of instances to draw.
+    ///     base_vertex: u32, // The Index of the first vertex to draw.
+    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    /// }
+    /// ```
+    ///
+    /// These draw structures are expected to be tightly packed.
+    ///
+    /// The structure expected in `count_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndirectCount {
+    ///     count: u32, // Number of draw calls to issue.
+    /// }
+    /// ```
+    pub fn multi_draw_indirect_count(
+        &mut self,
+        indirect_buffer: &'a Buffer,
+        indirect_offset: BufferAddress,
+        count_buffer: &'a Buffer,
+        count_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        self.id.multi_draw_indirect_count(
+            &indirect_buffer.id,
+            indirect_offset,
+            &count_buffer.id,
+            count_offset,
+            max_count,
+        );
+    }
+
+    /// Disptaches multiple draw calls from the active index buffer and the active vertex buffers,
+    /// based on the contents of the `indirect_buffer`. The count buffer is read to determine how many draws to issue.
+    ///
+    /// The indirect buffer must be long enough to account for `max_count` draws, however only `count` will
+    /// draws will be read. If `count` is greater than `max_count`, `max_count` will be used.
+    ///
+    /// [`Features::MULTI_DRAW_INDIRECT_COUNT`] must be enabled on the device in order to call this function.
+    ///
+    /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active
+    /// vertex buffers can be set with [`RenderPass::set_vertex_buffer`].
+    ///
+    /// The structure expected in `indirect_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndexedIndirect {
+    ///     vertex_count: u32, // The number of vertices to draw.
+    ///     instance_count: u32, // The number of instances to draw.
+    ///     base_index: u32, // The base index within the index buffer.
+    ///     vertex_offset: i32, // The value added to the vertex index before indexing into the vertex buffer.
+    ///     base_instance: u32, // The instance ID of the first instance to draw.
+    /// }
+    /// ```
+    ///
+    /// These draw structures are expected to be tightly packed.
+    ///
+    /// The structure expected in `count_buffer` is the following:
+    ///
+    /// ```rust
+    /// #[repr(C)]
+    /// struct DrawIndexedIndirectCount {
+    ///     count: u32, // Number of draw calls to issue.
+    /// }
+    /// ```
+    pub fn multi_draw_indexed_indirect_count(
+        &mut self,
+        indirect_buffer: &'a Buffer,
+        indirect_offset: BufferAddress,
+        count_buffer: &'a Buffer,
+        count_offset: BufferAddress,
+        max_count: u32,
+    ) {
+        self.id.multi_draw_indexed_indirect_count(
+            &indirect_buffer.id,
+            indirect_offset,
+            &count_buffer.id,
+            count_offset,
+            max_count,
+        );
     }
 
     /// Execute a [render bundle][RenderBundle], which is a set of pre-recorded commands
