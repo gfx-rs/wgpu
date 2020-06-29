@@ -17,7 +17,7 @@ implicit-link = []
 
 [dependencies]
 bitflags = "1"
-libloading = { version = "0.5", optional = true }
+libloading = { version = "0.6", optional = true }
 
 [dependencies.winapi]
 version = "0.3"

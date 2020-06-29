@@ -55,7 +55,7 @@ pub struct DxgiLib {
 
 #[cfg(feature = "libloading")]
 impl DxgiLib {
-    pub fn new() -> libloading::Result<Self> {
+    pub fn new() -> Result<Self, libloading::Error> {
         libloading::Library::new("dxgi.dll")
             .map(|lib| DxgiLib {
                 lib,
@@ -64,7 +64,7 @@ impl DxgiLib {
 
     pub fn create_factory2(
         &self, flags: FactoryCreationFlags
-    ) -> libloading::Result<D3DResult<Factory4>> {
+    ) -> Result<D3DResult<Factory4>, libloading::Error> {
         type Fun = extern "system" fn(
             winapi::shared::minwindef::UINT,
             winapi::shared::guiddef::REFIID,
@@ -84,7 +84,7 @@ impl DxgiLib {
         Ok((factory, hr))
     }
 
-    pub fn get_debug_interface1(&self) -> libloading::Result<D3DResult<InfoQueue>> {
+    pub fn get_debug_interface1(&self) -> Result<D3DResult<InfoQueue>, libloading::Error> {
         type Fun = extern "system" fn(
             winapi::shared::minwindef::UINT,
             winapi::shared::guiddef::REFIID,
