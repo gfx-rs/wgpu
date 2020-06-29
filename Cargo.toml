@@ -18,6 +18,7 @@ all-features = true
 [features]
 default = []
 trace = ["wgc/trace"]
+replay = ["wgc/replay"]
 subscriber = ["wgc/subscriber"]
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
 vulkan = ["wgc/gfx-backend-vulkan"]
