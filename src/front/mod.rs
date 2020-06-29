@@ -1,3 +1,5 @@
+//! Parsers which load shaders into memory.
+
 #[cfg(feature = "glsl")]
 pub mod glsl;
 #[cfg(feature = "spirv")]

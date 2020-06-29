@@ -73,6 +73,10 @@ impl<T> Handle<T> {
 
 /// An arena holding some kind of component (e.g., type, constant,
 /// instruction, etc.) that can be referenced.
+///
+/// Adding new items to the arena produces a strongly-typed [`Handle`].
+/// The arena can be indexed using the given handle to obtain
+/// a reference to the stored item.
 #[derive(Debug)]
 pub struct Arena<T> {
     /// Values of this arena.
@@ -86,18 +90,23 @@ impl<T> Default for Arena<T> {
 }
 
 impl<T> Arena<T> {
+    /// Create a new arena with no initial capacity allocated.
     pub fn new() -> Self {
         Arena { data: Vec::new() }
     }
 
+    /// Returns the current number of items stored in this arena.
     pub fn len(&self) -> usize {
         self.data.len()
     }
 
+    /// Returns `true` if the arena contains no elements.
     pub fn is_empty(&self) -> bool {
         self.data.is_empty()
     }
 
+    /// Returns an iterator over the items stored in this arena, returning both
+    /// the item's handle and a reference to it.
     pub fn iter(&self) -> impl Iterator<Item = (Handle<T>, &T)> {
         self.data.iter().enumerate().map(|(i, v)| {
             let position = i + 1;

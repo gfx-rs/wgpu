@@ -1,3 +1,6 @@
+//! Front end for consuming [WebGPU Shading Language][wgsl].
+//!
+//! [wgsl]: https://gpuweb.github.io/gpuweb/wgsl.html
 use crate::{
     arena::{Arena, Handle},
     proc::{ResolveError, Typifier},

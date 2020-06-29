@@ -1,3 +1,5 @@
+//! Module processing functionality.
+
 mod interface;
 mod typifier;
 mod validator;

@@ -13,10 +13,12 @@ pub enum ValidationError {
 }
 
 impl Validator {
+    /// Construct a new validator instance.
     pub fn new() -> Self {
         Validator {}
     }
 
+    /// Check the given module to be valid.
     pub fn validate(&mut self, module: &crate::Module) -> Result<(), ValidationError> {
         for (handle, ty) in module.types.iter() {
             use crate::TypeInner as Ti;
