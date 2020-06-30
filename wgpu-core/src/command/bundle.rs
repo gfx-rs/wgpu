@@ -546,7 +546,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .bind_groups
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
                             .unwrap();
-                        assert_eq!(bind_group.dynamic_count, offsets.len());
+                        assert_eq!(bind_group.dynamic_binding_info.len(), offsets.len());
 
                         state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                         state.trackers.merge_extend(&bind_group.used);

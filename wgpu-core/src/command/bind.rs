@@ -84,7 +84,6 @@ impl BindGroupEntry {
                 ref_count: bind_group.life_guard.add_ref(),
             },
         });
-        //TODO: validate the count of dynamic offsets to match the layout
         self.dynamic_offsets.clear();
         self.dynamic_offsets.extend_from_slice(offsets);
 
