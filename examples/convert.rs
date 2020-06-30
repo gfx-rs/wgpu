@@ -29,6 +29,9 @@ fn main() {
         println!("Call with <input> <output>");
         return;
     }
+    #[cfg(any(feature = "glsl", feature = "glsl-new"))]
+    let prefer_glsl_new =
+        !cfg!(feature = "glsl") || env::var("PREFER_GLSL_NEW").unwrap_or_default() == "1";
     let module = match Path::new(&args[1])
         .extension()
         .expect("Input has no extension?")
@@ -44,11 +47,37 @@ fn main() {
             let input = fs::read_to_string(&args[1]).unwrap();
             naga::front::wgsl::parse_str(&input).unwrap()
         }
-        #[cfg(feature = "glsl")]
+        #[cfg(any(feature = "glsl", feature = "glsl-new"))]
         "vert" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Vertex)
-                .unwrap()
+            let mut module: Option<naga::Module> = None;
+            if prefer_glsl_new {
+                #[cfg(feature = "glsl-new")]
+                {
+                    module = Some(
+                        naga::front::glsl_new::parse_str(
+                            &input,
+                            "main".to_string(),
+                            naga::ShaderStage::Vertex,
+                        )
+                        .unwrap(),
+                    )
+                }
+            }
+            if module.is_none() {
+                #[cfg(feature = "glsl")]
+                {
+                    module = Some(
+                        naga::front::glsl::parse_str(
+                            &input,
+                            "main".to_string(),
+                            naga::ShaderStage::Vertex,
+                        )
+                        .unwrap(),
+                    )
+                }
+            }
+            module.unwrap()
         }
         #[cfg(feature = "glsl")]
         "frag" => {

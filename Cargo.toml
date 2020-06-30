@@ -16,9 +16,11 @@ log = "0.4"
 num-traits = "0.2"
 spirv = { package = "spirv_headers", version = "1.4.2", optional = true }
 glsl = { version = "4", optional = true }
+pomelo = { version = "0.1.4", optional = true }
 
 [features]
 glsl_preprocessor = ["glsl"]
+glsl-new = ["pomelo"]
 
 [dev-dependencies]
 env_logger = "0.6"
