@@ -22,7 +22,7 @@ impl crate::D3D12Lib {
         &self,
         adapter: WeakPtr<I>,
         feature_level: crate::FeatureLevel,
-    ) -> libloading::Result<D3DResult<Device>> {
+    ) -> Result<D3DResult<Device>, libloading::Error> {
         type Fun = extern "system" fn(
             *mut winapi::um::unknwnbase::IUnknown,
             winapi::um::d3dcommon::D3D_FEATURE_LEVEL,

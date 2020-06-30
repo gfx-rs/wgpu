@@ -211,7 +211,7 @@ impl crate::D3D12Lib {
         parameters: &[RootParameter],
         static_samplers: &[StaticSampler],
         flags: RootSignatureFlags,
-    ) -> libloading::Result<BlobResult> {
+    ) -> Result<BlobResult, libloading::Error> {
         use winapi::um::d3dcommon::ID3DBlob;
         type Fun = extern "system" fn(
             *const d3d12::D3D12_ROOT_SIGNATURE_DESC,

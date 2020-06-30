@@ -7,7 +7,7 @@ pub type Debug = WeakPtr<d3d12sdklayers::ID3D12Debug>;
 
 #[cfg(feature = "libloading")]
 impl crate::D3D12Lib {
-    pub fn get_debug_interface(&self) -> libloading::Result<crate::D3DResult<Debug>> {
+    pub fn get_debug_interface(&self) -> Result<crate::D3DResult<Debug>, libloading::Error> {
         type Fun = extern "system" fn(
             winapi::shared::guiddef::REFIID,
             *mut *mut winapi::ctypes::c_void,
