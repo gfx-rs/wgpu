@@ -26,7 +26,7 @@ use hal::command::CommandBuffer as _;
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, LoadOp,
     RenderPassColorAttachmentDescriptorBase, RenderPassDepthStencilAttachmentDescriptorBase,
-    StoreOp, TextureUsage, BIND_BUFFER_ALIGNMENT,
+    StoreOp, TextureUsage,
 };
 
 use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, ops::Range, str};
@@ -877,21 +877,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 } => {
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
-                    for off in offsets {
-                        assert_eq!(
-                            *off as BufferAddress % BIND_BUFFER_ALIGNMENT,
-                            0,
-                            "Misaligned dynamic buffer offset: {} does not align with {}",
-                            off,
-                            BIND_BUFFER_ALIGNMENT
-                        );
-                    }
 
                     let bind_group = trackers
                         .bind_groups
                         .use_extend(&*bind_group_guard, bind_group_id, (), ())
                         .unwrap();
-                    assert_eq!(bind_group.dynamic_count, offsets.len());
+                    bind_group.validate_dynamic_bindings(offsets).unwrap();
 
                     trackers.merge_extend(&bind_group.used);
 

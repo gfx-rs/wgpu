@@ -1477,6 +1477,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // Rebind `desc_set` as immutable
         let desc_set = desc_set;
 
+        // TODO: arrayvec/smallvec
+        // Record binding info for dynamic offset validation
+        let mut dynamic_binding_info = Vec::new();
+
         // fill out the descriptors
         let mut used = TrackerSet::new(B::VARIANT);
         {
@@ -1496,17 +1500,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .ok_or(BindGroupError::MissingBindingDeclaration(binding))?;
                 let descriptors: SmallVec<[_; 1]> = match b.resource {
                     Br::Buffer(ref bb) => {
-                        let (pub_usage, internal_use, min_size) = match decl.ty {
+                        let (pub_usage, internal_use, min_size, dynamic) = match decl.ty {
                             wgt::BindingType::UniformBuffer {
-                                dynamic: _,
+                                dynamic,
                                 min_binding_size,
                             } => (
                                 wgt::BufferUsage::UNIFORM,
                                 resource::BufferUse::UNIFORM,
                                 min_binding_size,
+                                dynamic,
                             ),
                             wgt::BindingType::StorageBuffer {
-                                dynamic: _,
+                                dynamic,
                                 min_binding_size,
                                 readonly,
                             } => (
@@ -1517,6 +1522,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     resource::BufferUse::STORAGE_LOAD
                                 },
                                 min_binding_size,
+                                dynamic,
                             ),
                             _ => {
                                 return Err(BindGroupError::WrongBindingType {
@@ -1545,7 +1551,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             buffer.usage,
                             pub_usage
                         );
-                        let bind_size = match bb.size {
+                        let (bind_size, bind_end) = match bb.size {
                             Some(size) => {
                                 let end = bb.offset + size.get();
                                 assert!(
@@ -1554,10 +1560,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     bb.offset..end,
                                     buffer.size
                                 );
-                                size.get()
+                                (size.get(), end)
                             }
-                            None => buffer.size - bb.offset,
+                            None => (buffer.size - bb.offset, buffer.size),
                         };
+
+                        // Record binding info for validating dynamic offsets
+                        if dynamic {
+                            dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {
+                                maximum_dynamic_offset: buffer.size - bind_end,
+                            });
+                        }
+
                         match min_size {
                             Some(non_zero) if non_zero.get() > bind_size => panic!(
                                 "Minimum buffer binding size {} is not respected with size {}",
@@ -1750,7 +1764,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             layout_id: desc.layout,
             life_guard: LifeGuard::new(),
             used,
-            dynamic_count: bind_group_layout.dynamic_count,
+            dynamic_binding_info,
         };
         let ref_count = bind_group.life_guard.add_ref();
 
