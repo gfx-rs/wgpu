@@ -22,10 +22,7 @@ use hal::{
     window::{PresentationSurface as _, Surface as _},
 };
 use parking_lot::{Mutex, MutexGuard};
-use wgt::{
-    BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat,
-    BIND_BUFFER_ALIGNMENT,
-};
+use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
 use std::{
     collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr, slice,
@@ -669,6 +666,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         log::info!("Create buffer {:?} with ID {:?}", desc, id_in);
+
+        if desc.mapped_at_creation {
+            assert_eq!(
+                desc.size % wgt::COPY_BUFFER_ALIGNMENT,
+                0,
+                "Buffers that are mapped at creation have to be aligned to COPY_BUFFER_ALIGNMENT"
+            );
+        }
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
@@ -1535,7 +1540,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
 
                         assert_eq!(
-                            bb.offset % BIND_BUFFER_ALIGNMENT,
+                            bb.offset % wgt::BIND_BUFFER_ALIGNMENT,
                             0,
                             "Buffer offset {} must be a multiple of BIND_BUFFER_ALIGNMENT",
                             bb.offset
@@ -2791,6 +2796,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Read => (wgt::BufferUsage::MAP_READ, resource::BufferUse::MAP_READ),
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
+
+        assert_eq!(range.start % wgt::COPY_BUFFER_ALIGNMENT, 0);
+        assert_eq!(range.end % wgt::COPY_BUFFER_ALIGNMENT, 0);
 
         let (device_id, ref_count) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
