@@ -1,16 +1,25 @@
+use super::parser::Token;
 use std::{fmt, io};
 
 #[derive(Debug)]
 pub enum ErrorKind {
     InvalidInput,
     IoError(io::Error),
+    InvalidToken(Token),
+    EndOfFile,
+    ParserFail,
+    ParserStackOverflow,
 }
 
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorKind::IoError(error) => write!(f, "IO Error {}", error),
             ErrorKind::InvalidInput => write!(f, "InvalidInput"),
+            ErrorKind::IoError(error) => write!(f, "IO Error {}", error),
+            ErrorKind::InvalidToken(token) => write!(f, "Invalid Token {:?}", token),
+            ErrorKind::EndOfFile => write!(f, "Unexpected end of file"),
+            ErrorKind::ParserFail => write!(f, "Parser failed"),
+            ErrorKind::ParserStackOverflow => write!(f, "Parser stack overflow"),
         }
     }
 }

@@ -4,12 +4,26 @@ use pomelo::pomelo;
 pomelo! {
     //%verbose;
     %include {
-        use super::super::token::*;
+        use super::super::{error::ErrorKind, token::*};
         use crate::{Arena, Expression, Function, LocalVariable, Module};
     }
     %token #[derive(Debug)] pub enum Token {};
     %extra_argument Module;
     %extra_token TokenMetadata;
+    %error ErrorKind;
+    %syntax_error {
+        match token {
+            Some(token) => Err(ErrorKind::InvalidToken(token)),
+            None => Err(ErrorKind::EndOfFile),
+        }
+    }
+    %parse_fail {
+        ErrorKind::ParserFail
+    }
+    %stack_overflow {
+        ErrorKind::ParserStackOverflow
+    }
+
     %type Identifier String;
     %type IntConstant i64;
     %type UintConstant u64;
@@ -19,16 +33,6 @@ pomelo! {
     %type String String;
     %type arg_list Vec<String>;
     %type function_definition Function;
-
-    %left Else;
-    %right Assign;
-    %left Or;
-    %left And;
-    %nonassoc Equal NotEqual;
-    %nonassoc Less LessEq Greater GreaterEq;
-    %left Plus Minus;
-    %left Mult Div;
-    %nonassoc Not;
 
     root ::= version_pragma translation_unit;
     version_pragma ::= Version IntConstant Identifier?;

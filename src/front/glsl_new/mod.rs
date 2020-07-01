@@ -1,9 +1,11 @@
-use crate::{Arena, Constant, EntryPoint, Function, GlobalVariable, Header, Module, ShaderStage, Type};
+use crate::{
+    Arena, Constant, EntryPoint, Function, GlobalVariable, Header, Module, ShaderStage, Type,
+};
 
 mod lex;
 use lex::Lexer;
 mod error;
-use error::{ErrorKind, ParseError};
+use error::ParseError;
 mod parser;
 mod token;
 
@@ -26,10 +28,9 @@ pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Modu
     let mut parser = parser::Parser::new(module);
 
     for token in lex {
-        log::debug!("token: {:#?}", token);
-        parser.parse(token).map_err(|_| ErrorKind::InvalidInput)?;
+        parser.parse(token)?;
     }
-    let (_, mut parsed_module) = parser.end_of_input().map_err(|_| ErrorKind::InvalidInput)?;
+    let (_, mut parsed_module) = parser.end_of_input()?;
 
     // find entry point
     let entry_func = parsed_module
