@@ -188,7 +188,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             data_size % wgt::COPY_BUFFER_ALIGNMENT,
             0,
             "Buffer write size {} must be a multiple of {}",
-            buffer_offset,
+            data_size,
             wgt::COPY_BUFFER_ALIGNMENT,
         );
         assert_eq!(
