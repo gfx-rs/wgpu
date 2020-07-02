@@ -3,6 +3,9 @@ use crate::{
 };
 
 mod lex;
+#[cfg(test)]
+mod lex_tests;
+
 use lex::Lexer;
 mod error;
 use error::ParseError;
