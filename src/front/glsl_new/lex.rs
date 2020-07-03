@@ -198,8 +198,7 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                     meta.chars.end = start + 2;
                     (Some(Token::DivAssign(meta)), chars.as_str())
                 }
-                //TODO: line comments
-                // Some('/') => (Token::LineComment, chars.as_str(), start, start + 2),
+                Some('/') => (None, ""),
                 //TODO: multi-line comments
                 // Some('*') => (
                 //     Token::MultiLineCommentOpen,
