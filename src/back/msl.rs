@@ -100,6 +100,15 @@ enum LocationMode {
     Uniform,
 }
 
+fn dim_str(dim: crate::ImageDimension) -> &'static str {
+    match dim {
+        crate::ImageDimension::D1 => "1d",
+        crate::ImageDimension::D2 => "2d",
+        crate::ImageDimension::D3 => "3d",
+        crate::ImageDimension::Cube => "Cube",
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Options<'a> {
     pub binding_map: &'a BindingMap,
@@ -605,6 +614,7 @@ impl<W: Write> Writer<W> {
                 image,
                 sampler,
                 coordinate,
+                depth_ref: None,
             } => {
                 let ty_image = self.put_expression(image, function, module)?;
                 write!(self.out, ".sample(")?;
@@ -616,6 +626,25 @@ impl<W: Write> Writer<W> {
                     crate::TypeInner::Image { base, .. } => Ok(module.borrow_type(base)),
                     ref other => Err(Error::UnexpectedImageType(other.clone())),
                 }
+            }
+            crate::Expression::ImageSample {
+                image,
+                sampler,
+                coordinate,
+                depth_ref: Some(dref),
+            } => {
+                self.put_expression(image, function, module)?;
+                write!(self.out, ".sample_compare(")?;
+                self.put_expression(sampler, function, module)?;
+                write!(self.out, ", ")?;
+                self.put_expression(coordinate, function, module)?;
+                write!(self.out, ", ")?;
+                self.put_expression(dref, function, module)?;
+                write!(self.out, ")")?;
+                Ok(MaybeOwned::Owned(crate::TypeInner::Scalar {
+                    kind: crate::ScalarKind::Float,
+                    width: 4,
+                }))
             }
             crate::Expression::Call {
                 ref name,
@@ -887,11 +916,16 @@ impl<W: Write> Writer<W> {
                 }
                 crate::TypeInner::Image { base, dim, flags } => {
                     let base_name = module.types[base].name.or_index(base);
-                    let dim = match dim {
-                        crate::ImageDimension::D1 => "1d",
-                        crate::ImageDimension::D2 => "2d",
-                        crate::ImageDimension::D3 => "3d",
-                        crate::ImageDimension::Cube => "Cube",
+                    let dim_str = dim_str(dim);
+                    let msaa_str = if flags.contains(crate::ImageFlags::MULTISAMPLED) {
+                        "_ms"
+                    } else {
+                        ""
+                    };
+                    let array_str = if flags.contains(crate::ImageFlags::ARRAYED) {
+                        "_array"
+                    } else {
+                        ""
                     };
                     let access = if flags.contains(crate::ImageFlags::SAMPLED) {
                         if flags.intersects(crate::ImageFlags::CAN_STORE) {
@@ -911,8 +945,17 @@ impl<W: Write> Writer<W> {
                     };
                     write!(
                         self.out,
-                        "typedef texture{}<{}, access::{}> {}",
-                        dim, base_name, access, name
+                        "typedef texture{}{}{}<{}, access::{}> {}",
+                        dim_str, msaa_str, array_str, base_name, access, name
+                    )?;
+                }
+                crate::TypeInner::DepthImage { dim, arrayed } => {
+                    let dim_str = dim_str(dim);
+                    let array_str = if arrayed { "_array" } else { "" };
+                    write!(
+                        self.out,
+                        "typedef depth{}{}<float, access::sample> {}",
+                        dim_str, array_str, name
                     )?;
                 }
                 crate::TypeInner::Sampler { comparison: _ } => {

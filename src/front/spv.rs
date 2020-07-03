@@ -52,6 +52,13 @@ pub enum Error {
     InvalidLoadType(spirv::Word),
     InvalidStoreType(spirv::Word),
     InvalidBinding(spirv::Word),
+    InvalidImageExpression(Handle<crate::Expression>),
+    InvalidSamplerExpression(Handle<crate::Expression>),
+    InvalidSampleImage(Handle<crate::Type>),
+    InvalidSampleSampler(Handle<crate::Type>),
+    InvalidSampleCoordinates(Handle<crate::Type>),
+    InvalidDepthReference(Handle<crate::Type>),
+    InconsistentComparisonSampling(Handle<crate::Type>),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionParameterType(spirv::Word),
     MissingDecoration(spirv::Decoration),
@@ -145,6 +152,49 @@ fn map_image_dim(word: spirv::Word) -> Result<crate::ImageDimension, Error> {
     }
 }
 
+fn map_width(word: spirv::Word) -> Result<crate::Bytes, Error> {
+    (word >> 3) // bits to bytes
+        .try_into()
+        .map_err(|_| Error::InvalidTypeWidth(word))
+}
+
+//TODO: this method may need to be gone, depending on whether
+// WGSL allows treating images and samplers as expressions and pass them around.
+fn reach_global_type(
+    expr_handle: Handle<crate::Expression>,
+    expressions: &Arena<crate::Expression>,
+    globals: &Arena<crate::GlobalVariable>,
+) -> Option<Handle<crate::Type>> {
+    match expressions[expr_handle] {
+        crate::Expression::GlobalVariable(var) => Some(globals[var].ty),
+        _ => None,
+    }
+}
+
+fn check_sample_coordinates(
+    ty: &crate::Type,
+    expect_kind: crate::ScalarKind,
+    dim: crate::ImageDimension,
+    is_array: bool,
+) -> bool {
+    let base_count = match dim {
+        crate::ImageDimension::D1 => 1,
+        crate::ImageDimension::D2 => 2,
+        crate::ImageDimension::D3 | crate::ImageDimension::Cube => 3,
+    };
+    let extra_count = if is_array { 1 } else { 0 };
+    let count = base_count + extra_count;
+    match ty.inner {
+        crate::TypeInner::Scalar { kind, width: _ } => count == 1 && kind == expect_kind,
+        crate::TypeInner::Vector {
+            size,
+            kind,
+            width: _,
+        } => size as u8 == count && kind == expect_kind,
+        _ => false,
+    }
+}
+
 type MemberIndex = u32;
 
 #[derive(Debug, Default)]
@@ -191,6 +241,16 @@ impl Decoration {
             } => Some(crate::Binding::Descriptor { set, binding }),
             _ => None,
         }
+    }
+}
+
+bitflags::bitflags! {
+    /// Flags describing sampling method.
+    pub struct SamplingFlags: u32 {
+        /// Regular sampling.
+        const REGULAR = 0x1;
+        /// Comparison sampling.
+        const COMPARISON = 0x2;
     }
 }
 
@@ -245,8 +305,10 @@ pub struct Parser<I> {
     future_decor: FastHashMap<spirv::Word, Decoration>,
     future_member_decor: FastHashMap<(spirv::Word, MemberIndex), Decoration>,
     lookup_member_type_id: FastHashMap<(spirv::Word, MemberIndex), spirv::Word>,
+    handle_sampling: FastHashMap<Handle<crate::Type>, SamplingFlags>,
     lookup_type: FastHashMap<spirv::Word, LookupType>,
     lookup_void_type: FastHashSet<spirv::Word>,
+    // Lookup for samplers and sampled images, storing flags on how they are used.
     lookup_constant: FastHashMap<spirv::Word, LookupConstant>,
     lookup_variable: FastHashMap<spirv::Word, LookupVariable>,
     lookup_expression: FastHashMap<spirv::Word, LookupExpression>,
@@ -263,6 +325,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             temp_bytes: Vec::new(),
             future_decor: FastHashMap::default(),
             future_member_decor: FastHashMap::default(),
+            handle_sampling: FastHashMap::default(),
             lookup_member_type_id: FastHashMap::default(),
             lookup_type: FastHashMap::default(),
             lookup_void_type: FastHashSet::default(),
@@ -385,6 +448,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         fun: &mut crate::Function,
         type_arena: &Arena<crate::Type>,
         const_arena: &Arena<crate::Constant>,
+        global_arena: &Arena<crate::GlobalVariable>,
     ) -> Result<(), Error> {
         loop {
             use spirv::Op;
@@ -726,23 +790,113 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let coordinate_id = self.next()?;
                     let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
                     let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
-                    let coord_type_lookup = self.lookup_type.lookup(coord_lexp.type_id)?;
-                    match type_arena[coord_type_lookup.handle].inner {
-                        crate::TypeInner::Scalar {
-                            kind: crate::ScalarKind::Float,
-                            ..
+                    let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
+
+                    let sampler_type_handle =
+                        reach_global_type(si_lexp.sampler, &fun.expressions, global_arena)
+                            .ok_or(Error::InvalidSamplerExpression(si_lexp.sampler))?;
+                    let image_type_handle =
+                        reach_global_type(si_lexp.image, &fun.expressions, global_arena)
+                            .ok_or(Error::InvalidImageExpression(si_lexp.image))?;
+                    *self.handle_sampling.get_mut(&sampler_type_handle).unwrap() |=
+                        SamplingFlags::REGULAR;
+                    *self.handle_sampling.get_mut(&image_type_handle).unwrap() |=
+                        SamplingFlags::REGULAR;
+                    match type_arena[sampler_type_handle].inner {
+                        crate::TypeInner::Sampler { comparison: false } => (),
+                        _ => return Err(Error::InvalidSampleSampler(sampler_type_handle)),
+                    };
+                    match type_arena[image_type_handle].inner {
+                        //TODO: compare the result type
+                        crate::TypeInner::Image {
+                            base: _,
+                            dim,
+                            flags,
+                        } if flags
+                            & (crate::ImageFlags::MULTISAMPLED | crate::ImageFlags::SAMPLED)
+                            == crate::ImageFlags::SAMPLED =>
+                        {
+                            if !check_sample_coordinates(
+                                &type_arena[coord_type_handle],
+                                crate::ScalarKind::Float,
+                                dim,
+                                flags.contains(crate::ImageFlags::ARRAYED),
+                            ) {
+                                return Err(Error::InvalidSampleCoordinates(coord_type_handle));
+                            }
                         }
-                        | crate::TypeInner::Vector {
-                            kind: crate::ScalarKind::Float,
-                            ..
-                        } => (),
-                        _ => return Err(Error::UnsupportedType(coord_type_lookup.handle)),
-                    }
-                    //TODO: compare the result type
+                        _ => return Err(Error::InvalidSampleImage(image_type_handle)),
+                    };
+
                     let expr = crate::Expression::ImageSample {
                         image: si_lexp.image,
                         sampler: si_lexp.sampler,
                         coordinate: coord_lexp.handle,
+                        depth_ref: None,
+                    };
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: fun.expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
+                Op::ImageSampleDrefImplicitLod => {
+                    inst.expect_at_least(6)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let sampled_image_id = self.next()?;
+                    let coordinate_id = self.next()?;
+                    let dref_id = self.next()?;
+
+                    let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
+                    let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
+                    let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
+                    let sampler_type_handle =
+                        reach_global_type(si_lexp.sampler, &fun.expressions, global_arena)
+                            .ok_or(Error::InvalidSamplerExpression(si_lexp.sampler))?;
+                    let image_type_handle =
+                        reach_global_type(si_lexp.image, &fun.expressions, global_arena)
+                            .ok_or(Error::InvalidImageExpression(si_lexp.image))?;
+                    *self.handle_sampling.get_mut(&sampler_type_handle).unwrap() |=
+                        SamplingFlags::COMPARISON;
+                    *self.handle_sampling.get_mut(&image_type_handle).unwrap() |=
+                        SamplingFlags::COMPARISON;
+                    match type_arena[sampler_type_handle].inner {
+                        crate::TypeInner::Sampler { comparison: true } => (),
+                        _ => return Err(Error::InvalidSampleSampler(sampler_type_handle)),
+                    };
+                    match type_arena[image_type_handle].inner {
+                        //TODO: compare the result type
+                        crate::TypeInner::DepthImage { dim, arrayed } => {
+                            if !check_sample_coordinates(
+                                &type_arena[coord_type_handle],
+                                crate::ScalarKind::Float,
+                                dim,
+                                arrayed,
+                            ) {
+                                return Err(Error::InvalidSampleCoordinates(coord_type_handle));
+                            }
+                        }
+                        _ => return Err(Error::InvalidSampleImage(image_type_handle)),
+                    };
+
+                    let dref_lexp = self.lookup_expression.lookup(dref_id)?;
+                    let dref_type_handle = self.lookup_type.lookup(dref_lexp.type_id)?.handle;
+                    match type_arena[dref_type_handle].inner {
+                        crate::TypeInner::Scalar {
+                            kind: crate::ScalarKind::Float,
+                            width: _,
+                        } => (),
+                        _ => return Err(Error::InvalidDepthReference(dref_type_handle)),
+                    }
+
+                    let expr = crate::Expression::ImageSample {
+                        image: si_lexp.image,
+                        sampler: si_lexp.sampler,
+                        coordinate: coord_lexp.handle,
+                        depth_ref: Some(dref_lexp.handle),
                     };
                     self.lookup_expression.insert(
                         result_id,
@@ -845,6 +999,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Function => self.parse_function(inst, &mut module),
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
             }?;
+        }
+
+        // Check all the images and samplers to have consistent comparison property.
+        for (handle, flags) in self.handle_sampling.drain() {
+            if !flags.contains(SamplingFlags::COMPARISON) {
+                continue;
+            }
+            if flags == SamplingFlags::all() {
+                return Err(Error::InconsistentComparisonSampling(handle));
+            }
+            let ty = module.types.mutate(handle);
+            match ty.inner {
+                crate::TypeInner::Sampler { ref mut comparison } => {
+                    assert!(!*comparison);
+                    *comparison = true;
+                }
+                crate::TypeInner::Image {
+                    base: _,
+                    dim,
+                    flags,
+                } => {
+                    ty.inner = crate::TypeInner::DepthImage {
+                        dim,
+                        arrayed: flags.contains(crate::ImageFlags::ARRAYED),
+                    };
+                }
+                _ => panic!("Unexpected comparison type {:?}", ty),
+            }
         }
 
         if !self.future_decor.is_empty() {
@@ -1044,9 +1226,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 1 => crate::ScalarKind::Sint,
                 _ => return Err(Error::InvalidSign(sign)),
             },
-            width: width
-                .try_into()
-                .map_err(|_| Error::InvalidTypeWidth(width))?,
+            width: map_width(width)?,
         };
         self.lookup_type.insert(
             id,
@@ -1072,9 +1252,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let width = self.next()?;
         let inner = crate::TypeInner::Scalar {
             kind: crate::ScalarKind::Float,
-            width: width
-                .try_into()
-                .map_err(|_| Error::InvalidTypeWidth(width))?,
+            width: map_width(width)?,
         };
         self.lookup_type.insert(
             id,
@@ -1346,13 +1524,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             dim: map_image_dim(dim)?,
             flags,
         };
+        let handle = module.types.append(crate::Type {
+            name: decor.name,
+            inner,
+        });
+        self.handle_sampling.insert(handle, SamplingFlags::empty());
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: decor.name,
-                    inner,
-                }),
+                handle,
                 base_id: Some(sample_type_id),
             },
         );
@@ -1383,14 +1563,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(2)?;
         let id = self.next()?;
         let decor = self.future_decor.remove(&id).unwrap_or_default();
-        let inner = crate::TypeInner::Sampler { comparison: false }; //TODO!
+        // The comparison bit is temporary, will be overwritten based on the
+        // accumulated sampling flags at the end.
+        let inner = crate::TypeInner::Sampler { comparison: false };
+        let handle = module.types.append(crate::Type {
+            name: decor.name,
+            inner,
+        });
+        self.handle_sampling.insert(handle, SamplingFlags::empty());
         self.lookup_type.insert(
             id,
             LookupType {
-                handle: module.types.append(crate::Type {
-                    name: decor.name,
-                    inner,
-                }),
+                handle,
                 base_id: None,
             },
         );
@@ -1414,7 +1598,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 width,
             } => {
                 let low = self.next()?;
-                let high = if width > 32 {
+                let high = if width > 4 {
                     inst.expect(4)?;
                     self.next()?
                 } else {
@@ -1428,7 +1612,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             } => {
                 use std::cmp::Ordering;
                 let low = self.next()?;
-                let high = match width.cmp(&32) {
+                let high = match width.cmp(&4) {
                     Ordering::Less => return Err(Error::InvalidTypeWidth(u32::from(width))),
                     Ordering::Greater => {
                         inst.expect(4)?;
@@ -1444,8 +1628,8 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             } => {
                 let low = self.next()?;
                 let extended = match width {
-                    32 => f64::from(f32::from_bits(low)),
-                    64 => {
+                    4 => f64::from(f32::from_bits(low)),
+                    8 => {
                         inst.expect(4)?;
                         let high = self.next()?;
                         f64::from_bits((u64::from(high) << 32) | u64::from(low))
@@ -1635,7 +1819,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 spirv::Op::Label => {
                     fun_inst.expect(2)?;
                     let _id = self.next()?;
-                    self.next_block(&mut fun, &module.types, &module.constants)?;
+                    self.next_block(
+                        &mut fun,
+                        &module.types,
+                        &module.constants,
+                        &module.global_variables,
+                    )?;
                 }
                 spirv::Op::FunctionEnd => {
                     fun_inst.expect(1)?;

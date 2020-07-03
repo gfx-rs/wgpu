@@ -26,7 +26,7 @@ impl Validator {
                 Ti::Scalar { kind, width }
                 | Ti::Vector { kind, width, .. }
                 | Ti::Matrix { kind, width, .. } => {
-                    if width != 32 {
+                    if width != 4 {
                         return Err(ValidationError::InvalidTypeWidth(kind, width));
                     }
                 }
@@ -48,7 +48,7 @@ impl Validator {
                         }
                     }
                 }
-                Ti::Image { .. } => {}
+                Ti::Image { .. } | Ti::DepthImage { .. } => {}
                 Ti::Sampler { comparison: _ } => {}
             }
         }

@@ -40,6 +40,15 @@ impl<T> LookupHelper<T> for FastHashMap<Word, crate::Handle<T>> {
     }
 }
 
+fn map_dim(dim: crate::ImageDimension) -> spirv::Dim {
+    match dim {
+        crate::ImageDimension::D1 => spirv::Dim::Dim1D,
+        crate::ImageDimension::D2 => spirv::Dim::Dim2D,
+        crate::ImageDimension::D3 => spirv::Dim::Dim2D,
+        crate::ImageDimension::Cube => spirv::Dim::DimCube,
+    }
+}
+
 #[derive(Debug, PartialEq)]
 struct LookupFunctionType {
     parameter_type_ids: Vec<Word>,
@@ -413,14 +422,14 @@ impl Writer {
         sampled_type_id: Word,
         dim: spirv::Dim,
         flags: ImageFlags,
+        comparison: bool,
     ) -> Instruction {
         let mut instruction = Instruction::new(Op::TypeImage);
         instruction.set_result(id);
         instruction.add_operand(sampled_type_id);
         instruction.add_operand(dim as u32);
 
-        // TODO Add Depth, but how to determine? Not yet in the WGSL spec
-        instruction.add_operand(1);
+        instruction.add_operand(if comparison { 1 } else { 0 });
 
         instruction.add_operand(if flags.contains(crate::ImageFlags::ARRAYED) {
             1
@@ -765,16 +774,24 @@ impl Writer {
             }
             crate::TypeInner::Image { base, dim, flags } => {
                 let type_id = self.get_type_id(arena, base);
-                let dim = match dim {
-                    crate::ImageDimension::D1 => spirv::Dim::Dim1D,
-                    crate::ImageDimension::D2 => spirv::Dim::Dim2D,
-                    crate::ImageDimension::D3 => spirv::Dim::Dim2D,
-                    crate::ImageDimension::Cube => spirv::Dim::DimCube,
-                };
+                let dim = map_dim(dim);
                 self.try_add_capabilities(dim.required_capabilities());
 
-                instruction = self.instruction_type_image(id, type_id, dim, flags);
+                instruction = self.instruction_type_image(id, type_id, dim, flags, false);
                 self.lookup_type.insert(id, base);
+            }
+            crate::TypeInner::DepthImage { dim, arrayed } => {
+                let type_id = 0; //TODO!
+                let dim = map_dim(dim);
+                self.try_add_capabilities(dim.required_capabilities());
+
+                let flags = if arrayed {
+                    crate::ImageFlags::ARRAYED
+                } else {
+                    crate::ImageFlags::empty()
+                };
+                instruction = self.instruction_type_image(id, type_id, dim, flags, true);
+                //self.lookup_type.insert(id, base);
             }
             crate::TypeInner::Sampler { comparison: _ } => {
                 instruction = self.instruction_type_sampler(id);
@@ -845,8 +862,8 @@ impl Writer {
 
                 let instruction = match ty.inner {
                     crate::TypeInner::Scalar { kind: _, width } => match width {
-                        32 => self.instruction_constant(type_id, id, &[val as u32]),
-                        64 => {
+                        4 => self.instruction_constant(type_id, id, &[val as u32]),
+                        8 => {
                             let (low, high) = ((val >> 32) as u32, val as u32);
                             self.instruction_constant(type_id, id, &[low, high])
                         }
@@ -862,8 +879,8 @@ impl Writer {
 
                 let instruction = match ty.inner {
                     crate::TypeInner::Scalar { kind: _, width } => match width {
-                        32 => self.instruction_constant(type_id, id, &[val as u32]),
-                        64 => {
+                        4 => self.instruction_constant(type_id, id, &[val as u32]),
+                        8 => {
                             let (low, high) = ((val >> 32) as u32, val as u32);
                             self.instruction_constant(type_id, id, &[low, high])
                         }
@@ -880,8 +897,8 @@ impl Writer {
 
                 let instruction = match ty.inner {
                     crate::TypeInner::Scalar { kind: _, width } => match width {
-                        32 => self.instruction_constant(type_id, id, &[(val as f32).to_bits()]),
-                        64 => {
+                        4 => self.instruction_constant(type_id, id, &[(val as f32).to_bits()]),
+                        8 => {
                             let bits = f64::to_bits(val);
                             let (low, high) = ((bits >> 32) as u32, bits as u32);
                             self.instruction_constant(type_id, id, &[low, high])

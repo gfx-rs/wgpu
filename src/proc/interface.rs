@@ -34,10 +34,14 @@ impl<'a> Interface<'a> {
                 image,
                 sampler,
                 coordinate,
+                depth_ref,
             } => {
                 self.add_inputs(image);
                 self.add_inputs(sampler);
                 self.add_inputs(coordinate);
+                if let Some(dref) = depth_ref {
+                    self.add_inputs(dref);
+                }
             }
             E::Unary { expr, .. } => {
                 self.add_inputs(expr);

@@ -175,10 +175,7 @@ pub struct Type {
 #[derive(Clone, Debug, PartialEq)]
 pub enum TypeInner {
     /// Number of integral or floating-point kind.
-    Scalar {
-        kind: ScalarKind,
-        width: Bytes,
-    },
+    Scalar { kind: ScalarKind, width: Bytes },
     /// Vector of numbers.
     Vector {
         size: VectorSize,
@@ -204,19 +201,17 @@ pub enum TypeInner {
         stride: Option<NonZeroU32>,
     },
     /// User-defined structure.
-    Struct {
-        members: Vec<StructMember>,
-    },
-    /// Possibly multidimensional array of pixels.
+    Struct { members: Vec<StructMember> },
+    /// Possibly multidimensional array of texels.
     Image {
         base: Handle<Type>,
         dim: ImageDimension,
         flags: ImageFlags,
     },
+    /// Depth-comparison image.
+    DepthImage { dim: ImageDimension, arrayed: bool },
     /// Can be used to sample values from images.
-    Sampler {
-        comparison: bool,
-    },
+    Sampler { comparison: bool },
 }
 
 /// Constant value.
@@ -361,14 +356,13 @@ pub enum Expression {
     /// Reference a local variable.
     LocalVariable(Handle<LocalVariable>),
     /// Load a value indirectly.
-    Load {
-        pointer: Handle<Expression>,
-    },
+    Load { pointer: Handle<Expression> },
     /// Sample a point from an image.
     ImageSample {
         image: Handle<Expression>,
         sampler: Handle<Expression>,
         coordinate: Handle<Expression>,
+        depth_ref: Option<Handle<Expression>>,
     },
     /// Apply an unary operator.
     Unary {
@@ -432,19 +426,14 @@ pub enum Statement {
         default: Block,
     },
     /// Executes a block repeatedly.
-    Loop {
-        body: Block,
-        continuing: Block,
-    },
+    Loop { body: Block, continuing: Block },
     //TODO: move terminator variations into a separate enum?
     /// Exits the loop.
     Break,
     /// Skips execution to the next iteration of the loop.
     Continue,
     /// Returns from the function (possibly with a value).
-    Return {
-        value: Option<Handle<Expression>>,
-    },
+    Return { value: Option<Handle<Expression>> },
     /// Aborts the current shader execution.
     Kill,
     /// Stores a value at an address.

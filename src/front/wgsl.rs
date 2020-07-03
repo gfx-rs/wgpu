@@ -232,12 +232,12 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn next_scalar_generic(&mut self) -> Result<(crate::ScalarKind, u8), Error<'a>> {
+    fn next_scalar_generic(&mut self) -> Result<(crate::ScalarKind, crate::Bytes), Error<'a>> {
         self.expect(Token::Paren('<'))?;
         let pair = match self.next() {
-            Token::Word("f32") => (crate::ScalarKind::Float, 32),
-            Token::Word("i32") => (crate::ScalarKind::Sint, 32),
-            Token::Word("u32") => (crate::ScalarKind::Uint, 32),
+            Token::Word("f32") => (crate::ScalarKind::Float, 4),
+            Token::Word("i32") => (crate::ScalarKind::Sint, 4),
+            Token::Word("u32") => (crate::ScalarKind::Uint, 4),
             other => return Err(Error::Unexpected(other)),
         };
         self.expect(Token::Paren('>'))?;
@@ -524,7 +524,7 @@ impl Parser {
                     specialization: None,
                     inner,
                     ty: Typifier::deduce_type_handle(
-                        crate::TypeInner::Scalar { kind, width: 32 },
+                        crate::TypeInner::Scalar { kind, width: 4 },
                         ctx.types,
                     ),
                 });
@@ -991,15 +991,15 @@ impl Parser {
         let inner = match lexer.next() {
             Token::Word("f32") => crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Float,
-                width: 32,
+                width: 4,
             },
             Token::Word("i32") => crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Sint,
-                width: 32,
+                width: 4,
             },
             Token::Word("u32") => crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Uint,
-                width: 32,
+                width: 4,
             },
             Token::Word("vec2") => {
                 let (kind, width) = lexer.next_scalar_generic()?;

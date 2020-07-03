@@ -139,6 +139,11 @@ impl<T> Arena<T> {
             self.append(value)
         }
     }
+
+    /// Get a mutable reference to an element in the arena.
+    pub fn mutate(&mut self, handle: Handle<T>) -> &mut T {
+        self.data.get_mut(handle.index.get() as usize - 1).unwrap()
+    }
 }
 
 impl<T> std::ops::Index<Handle<T>> for Arena<T> {

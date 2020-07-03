@@ -558,7 +558,7 @@ impl<'a> Parser<'a> {
                                 name: None,
                                 inner: TypeInner::Scalar {
                                     kind: ScalarKind::Sint,
-                                    width: 32,
+                                    width: 4,
                                 },
                             }),
                         }),
@@ -572,7 +572,7 @@ impl<'a> Parser<'a> {
                                 name: None,
                                 inner: TypeInner::Scalar {
                                     kind: ScalarKind::Sint,
-                                    width: 32,
+                                    width: 4,
                                 },
                             }),
                         }),
@@ -586,7 +586,7 @@ impl<'a> Parser<'a> {
                                 name: None,
                                 inner: TypeInner::Scalar {
                                     kind: ScalarKind::Sint,
-                                    width: 32,
+                                    width: 4,
                                 },
                             }),
                         }),
@@ -600,7 +600,7 @@ impl<'a> Parser<'a> {
                                 name: None,
                                 inner: TypeInner::Scalar {
                                     kind: ScalarKind::Sint,
-                                    width: 32,
+                                    width: 4,
                                 },
                             }),
                         }),
@@ -619,7 +619,7 @@ impl<'a> Parser<'a> {
                                 inner: TypeInner::Vector {
                                     size: VectorSize::Quad,
                                     kind: ScalarKind::Float,
-                                    width: 32,
+                                    width: 4,
                                 },
                             }),
                         },
@@ -633,7 +633,7 @@ impl<'a> Parser<'a> {
                                 name: None,
                                 inner: TypeInner::Scalar {
                                     kind: ScalarKind::Float,
-                                    width: 32,
+                                    width: 4,
                                 },
                             }),
                         },
@@ -647,7 +647,7 @@ impl<'a> Parser<'a> {
                                 name: None,
                                 inner: TypeInner::Scalar {
                                     kind: ScalarKind::Float,
-                                    width: 32,
+                                    width: 4,
                                 },
                             }),
                         }),
@@ -684,7 +684,7 @@ impl<'a> Parser<'a> {
                         name: None,
                         inner: TypeInner::Scalar {
                             kind: ScalarKind::Sint,
-                            width: 32,
+                            width: 4,
                         },
                     }),
                 },
@@ -698,7 +698,7 @@ impl<'a> Parser<'a> {
                         name: None,
                         inner: TypeInner::Scalar {
                             kind: ScalarKind::Uint,
-                            width: 32,
+                            width: 4,
                         },
                     }),
                 },
@@ -726,7 +726,7 @@ impl<'a> Parser<'a> {
                         name: None,
                         inner: TypeInner::Scalar {
                             kind: ScalarKind::Float,
-                            width: 32,
+                            width: 4,
                         },
                     }),
                 },
@@ -740,7 +740,7 @@ impl<'a> Parser<'a> {
                         name: None,
                         inner: TypeInner::Scalar {
                             kind: ScalarKind::Float,
-                            width: 64,
+                            width: 8,
                         },
                     }),
                 },
@@ -796,7 +796,7 @@ impl<'a> Parser<'a> {
                                     _ => panic!(),
                                 },
                                 kind: ScalarKind::Float,
-                                width: 32,
+                                width: 4,
                             },
                         }),
                         components: args
@@ -858,6 +858,7 @@ impl<'a> Parser<'a> {
                             image: expressions.append(image),
                             sampler: expressions.append(sampler),
                             coordinate: expressions.append(coordinate),
+                            depth_ref: None, //TODO
                         })
                     }
                     _ => Ok(Expression::Call {
