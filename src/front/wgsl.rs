@@ -93,12 +93,15 @@ mod lex {
                 (Token::Word(word), rest)
             }
             '"' => {
-                let base = chars.as_str();
-                let len = match chars.position(|c| c == '"') {
-                    Some(pos) => pos,
-                    None => return (Token::UnterminatedString, chars.as_str()),
-                };
-                (Token::String(&base[..len]), chars.as_str())
+                let mut iter = chars.as_str().splitn(2, '"');
+
+                // splitn returns an iterator with at least one element, so unwrapping is fine
+                let quote_content = iter.next().unwrap();
+                if let Some(rest) = iter.next() {
+                    (Token::String(quote_content), rest)
+                } else {
+                    (Token::UnterminatedString, quote_content)
+                }
             }
             '-' => {
                 input = chars.as_str();
