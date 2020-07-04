@@ -142,18 +142,15 @@ impl<'a> Parser<'a> {
                         let mut index = 0;
 
                         for field in block.fields {
-                            let binding = field
-                                .qualifier
-                                .and_then(|qualifier| Self::parse_type_qualifier(qualifier).1);
-
                             let ty = self.parse_type(field.ty).unwrap();
 
                             for ident in field.identifiers {
                                 let field_name = ident.ident.0;
+                                let origin = crate::MemberOrigin::Offset(0); //TODO
 
                                 fields.push(StructMember {
                                     name: Some(field_name.clone()),
-                                    binding: binding.clone(),
+                                    origin,
                                     ty: if let Some(array_spec) = ident.array_spec {
                                         self.types.fetch_or_append(Type {
                                             name: None,
@@ -171,7 +168,6 @@ impl<'a> Parser<'a> {
                                     } else {
                                         ty
                                     },
-                                    offset: 0, //TODO
                                 });
 
                                 if name.is_none() {

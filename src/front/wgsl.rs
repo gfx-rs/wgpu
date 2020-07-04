@@ -975,9 +975,8 @@ impl Parser {
             lexer.expect(Token::Separator(';'))?;
             members.push(crate::StructMember {
                 name: Some(name.to_owned()),
-                binding: None,
+                origin: crate::MemberOrigin::Offset(offset),
                 ty,
-                offset,
             });
         }
     }

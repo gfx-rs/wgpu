@@ -833,7 +833,7 @@ impl<W: Write> Writer<W> {
         writeln!(self.out, "using namespace metal;")?;
 
         writeln!(self.out)?;
-        self.write_type_defs(module, options)?;
+        self.write_type_defs(module)?;
 
         writeln!(self.out)?;
         self.write_functions(module, options)?;
@@ -841,7 +841,7 @@ impl<W: Write> Writer<W> {
         Ok(())
     }
 
-    fn write_type_defs(&mut self, module: &crate::Module, options: Options) -> Result<(), Error> {
+    fn write_type_defs(&mut self, module: &crate::Module) -> Result<(), Error> {
         for (handle, ty) in module.types.iter() {
             let name = ty.name.or_index(handle);
             match ty.inner {
@@ -905,10 +905,14 @@ impl<W: Write> Writer<W> {
                         let name = member.name.or_index(MemberIndex(index));
                         let base_name = module.types[member.ty].name.or_index(member.ty);
                         write!(self.out, "\t{} {}", base_name, name)?;
-                        if let Some(ref binding) = member.binding {
-                            let resolved =
-                                options.resolve_binding(binding, LocationMode::Intermediate)?;
-                            resolved.try_fmt_decorated(&mut self.out, "")?;
+                        match member.origin {
+                            crate::MemberOrigin::BuiltIn(built_in) => {
+                                ResolvedBinding::BuiltIn(built_in)
+                                    .try_fmt_decorated(&mut self.out, "")?;
+                            }
+                            crate::MemberOrigin::Offset(_) => {
+                                //TODO
+                            }
                         }
                         writeln!(self.out, ";")?;
                     }
@@ -1043,14 +1047,12 @@ impl<W: Write> Writer<W> {
                             module.types[ty_handle].inner
                         {
                             for (index, member) in members.iter().enumerate() {
-                                if let Some(ref binding @ crate::Binding::Location(_)) =
-                                    member.binding
-                                {
+                                if let crate::MemberOrigin::BuiltIn(built_in) = member.origin {
                                     let name = member.name.or_index(MemberIndex(index));
                                     let ty_name = module.types[member.ty].name.or_index(member.ty);
-                                    let resolved = options.resolve_binding(binding, in_mode)?;
                                     write!(self.out, "\t{} {}", ty_name, name)?;
-                                    resolved.try_fmt_decorated(&mut self.out, ";\n")?;
+                                    ResolvedBinding::BuiltIn(built_in)
+                                        .try_fmt_decorated(&mut self.out, ";\n")?;
                                 }
                             }
                         } else if let Some(ref binding @ crate::Binding::Location(_)) = var.binding
@@ -1092,13 +1094,16 @@ impl<W: Write> Writer<W> {
                             for (index, member) in members.iter().enumerate() {
                                 let name = member.name.or_index(MemberIndex(index));
                                 let ty_name = module.types[member.ty].name.or_index(member.ty);
-                                let binding = member
-                                    .binding
-                                    .as_ref()
-                                    .ok_or(Error::MissingBinding(handle))?;
-                                let resolved = options.resolve_binding(binding, out_mode)?;
-                                write!(self.out, "\t{} {}", ty_name, name)?;
-                                resolved.try_fmt_decorated(&mut self.out, ";\n")?;
+                                match member.origin {
+                                    crate::MemberOrigin::BuiltIn(built_in) => {
+                                        write!(self.out, "\t{} {}", ty_name, name)?;
+                                        ResolvedBinding::BuiltIn(built_in)
+                                            .try_fmt_decorated(&mut self.out, ";\n")?;
+                                    }
+                                    crate::MemberOrigin::Offset(_) => {
+                                        //TODO
+                                    }
+                                }
                             }
                         } else {
                             let tyvar = TypedGlobalVariable {

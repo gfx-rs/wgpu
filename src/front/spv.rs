@@ -40,8 +40,8 @@ pub enum Error {
     InvalidParameter(spirv::Op),
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
-    InvalidDecoration(spirv::Word),
     InvalidId(spirv::Word),
+    InvalidDecoration(spirv::Word),
     InvalidTypeWidth(spirv::Word),
     InvalidSign(spirv::Word),
     InvalidInnerType(spirv::Word),
@@ -240,6 +240,32 @@ impl Decoration {
                 ..
             } => Some(crate::Binding::Descriptor { set, binding }),
             _ => None,
+        }
+    }
+
+    fn get_origin(&self) -> Result<crate::MemberOrigin, Error> {
+        match *self {
+            Decoration {
+                location: Some(_), ..
+            }
+            | Decoration {
+                desc_set: Some(_), ..
+            }
+            | Decoration {
+                desc_index: Some(_),
+                ..
+            } => Err(Error::MissingDecoration(spirv::Decoration::Offset)),
+            Decoration {
+                built_in: Some(built_in),
+                offset: None,
+                ..
+            } => Ok(crate::MemberOrigin::BuiltIn(built_in)),
+            Decoration {
+                built_in: None,
+                offset: Some(offset),
+                ..
+            } => Ok(crate::MemberOrigin::Offset(offset)),
+            _ => Err(Error::MissingDecoration(spirv::Decoration::Offset)),
         }
     }
 }
@@ -981,6 +1007,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Decorate => self.parse_decorate(inst),
                 Op::MemberDecorate => self.parse_member_decorate(inst),
                 Op::TypeVoid => self.parse_type_void(inst),
+                Op::TypeBool => self.parse_type_bool(inst, &mut module),
                 Op::TypeInt => self.parse_type_int(inst, &mut module),
                 Op::TypeFloat => self.parse_type_float(inst, &mut module),
                 Op::TypeVector => self.parse_type_vector(inst, &mut module),
@@ -1009,7 +1036,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             if flags == SamplingFlags::all() {
                 return Err(Error::InconsistentComparisonSampling(handle));
             }
-            let ty = module.types.mutate(handle);
+            let ty = module.types.get_mut(handle);
             match ty.inner {
                 crate::TypeInner::Sampler { ref mut comparison } => {
                     assert!(!*comparison);
@@ -1207,6 +1234,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         inst.expect(2)?;
         let id = self.next()?;
         self.lookup_void_type.insert(id);
+        Ok(())
+    }
+
+    fn parse_type_bool(
+        &mut self,
+        inst: Instruction,
+        module: &mut crate::Module,
+    ) -> Result<(), Error> {
+        self.switch(ModuleState::Type, inst.op)?;
+        inst.expect(2)?;
+        let id = self.next()?;
+        let inner = crate::TypeInner::Scalar {
+            kind: crate::ScalarKind::Bool,
+            width: 1,
+        };
+        self.lookup_type.insert(
+            id,
+            LookupType {
+                handle: module.types.append(crate::Type {
+                    name: self.future_decor.remove(&id).and_then(|dec| dec.name),
+                    inner,
+                }),
+                base_id: None,
+            },
+        );
         Ok(())
     }
 
@@ -1412,7 +1464,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         module: &mut crate::Module,
     ) -> Result<(), Error> {
         self.switch(ModuleState::Type, inst.op)?;
-        inst.expect(4)?;
+        inst.expect(3)?;
         let id = self.next()?;
         let type_id = self.next()?;
 
@@ -1443,6 +1495,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.switch(ModuleState::Type, inst.op)?;
         inst.expect_at_least(2)?;
         let id = self.next()?;
+        let decor = self.future_decor.remove(&id);
+        if let Some(ref decor) = decor {
+            if decor.block.is_some() {
+                // do nothing
+            }
+        }
         let mut members = Vec::with_capacity(inst.wc as usize - 2);
         for i in 0..u32::from(inst.wc) - 2 {
             let type_id = self.next()?;
@@ -1452,23 +1510,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 .future_member_decor
                 .remove(&(id, i))
                 .unwrap_or_default();
-            let binding = decor.get_binding();
+            let origin = decor.get_origin()?;
             members.push(crate::StructMember {
                 name: decor.name,
-                binding,
+                origin,
                 ty,
-                offset: decor
-                    .offset
-                    .ok_or(Error::MissingDecoration(spirv::Decoration::Offset))?,
             });
         }
         let inner = crate::TypeInner::Struct { members };
-        let decor = self.future_decor.remove(&id);
-        if let Some(ref decor) = decor {
-            if decor.block.is_some() {
-                // do nothing
-            }
-        }
         self.lookup_type.insert(
             id,
             LookupType {
@@ -1719,26 +1768,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             | crate::TypeInner::Pointer {
                 base,
                 class: crate::StorageClass::Output,
-            } => {
-                match module.types[base].inner {
-                    crate::TypeInner::Struct { ref members } => {
-                        // we don't expect binding decoration on I/O structs,
-                        // but we do expect them on all of the members
-                        for member in members {
-                            if member.binding.is_none() {
-                                log::warn!(
-                                    "Struct {:?} member {:?} doesn't have a binding",
-                                    base,
-                                    member
-                                );
-                                return Err(Error::InvalidBinding(id));
-                            }
-                        }
-                        None
-                    }
-                    _ => Some(dec.get_binding().ok_or(Error::InvalidBinding(id))?),
-                }
-            }
+            } => match module.types[base].inner {
+                crate::TypeInner::Struct { members: _ } => None,
+                _ => Some(dec.get_binding().ok_or(Error::InvalidBinding(id))?),
+            },
             _ => Some(dec.get_binding().ok_or(Error::InvalidBinding(id))?),
         };
         let var = crate::GlobalVariable {

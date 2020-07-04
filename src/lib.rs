@@ -122,14 +122,22 @@ pub enum ArraySize {
     Dynamic,
 }
 
+/// Describes where a struct member is placed.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MemberOrigin {
+    /// Built-in shader variable.
+    BuiltIn(BuiltIn),
+    /// Offset within the struct.
+    Offset(u32),
+}
+
 /// Member of a user-defined structure.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug, PartialEq)]
 pub struct StructMember {
     pub name: Option<String>,
-    pub binding: Option<Binding>,
+    pub origin: MemberOrigin,
     pub ty: Handle<Type>,
-    pub offset: u32,
 }
 
 /// The number of dimensions an image has.

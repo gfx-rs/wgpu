@@ -26,7 +26,11 @@ impl Validator {
                 Ti::Scalar { kind, width }
                 | Ti::Vector { kind, width, .. }
                 | Ti::Matrix { kind, width, .. } => {
-                    if width != 4 {
+                    let expected = match kind {
+                        crate::ScalarKind::Bool => 1,
+                        _ => 4,
+                    };
+                    if width != expected {
                         return Err(ValidationError::InvalidTypeWidth(kind, width));
                     }
                 }
