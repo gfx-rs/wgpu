@@ -54,7 +54,7 @@ use atomic::{AtomicUsize, Ordering};
 
 use std::{os::raw::c_char, ptr};
 
-const MAX_BIND_GROUPS: usize = 4;
+const MAX_BIND_GROUPS: usize = 8;
 
 type SubmissionIndex = usize;
 type Index = u32;
