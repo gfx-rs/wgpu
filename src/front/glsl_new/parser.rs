@@ -24,6 +24,7 @@ pomelo! {
         ErrorKind::ParserStackOverflow
     }
 
+    %type Unknown char;
     %type Identifier String;
     %type IntConstant i64;
     %type UintConstant u64;

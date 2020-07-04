@@ -107,7 +107,7 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
             }
         }
         'a'..='z' | 'A'..='Z' | '_' => {
-            let (word, rest, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
+            let (word, rest, pos) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
             meta.chars.end = start + pos;
             match word {
                 "void" => (Some(Token::Void(meta)), rest),
@@ -227,7 +227,7 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
         }
         '~' => (Some(Token::Tilde(meta)), chars.as_str()),
         '?' => (Some(Token::Question(meta)), chars.as_str()),
-        _ => (None, chars.as_str()),
+        ch => (Some(Token::Unknown((meta, ch))), chars.as_str()),
     }
 }
 
