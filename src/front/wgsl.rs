@@ -89,7 +89,7 @@ mod lex {
                 (Token::Number(number), rest)
             }
             'a'..='z' | 'A'..='Z' | '_' => {
-                let (word, rest) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
+                let (word, rest) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
                 (Token::Word(word), rest)
             }
             '"' => {
