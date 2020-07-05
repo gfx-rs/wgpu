@@ -7,7 +7,7 @@ use crate::{
     FastHashMap,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
     Separator(char),
     DoubleColon,
@@ -1482,6 +1482,8 @@ pub fn parse_str(source: &str) -> Result<crate::Module, ParseError> {
 
 #[cfg(test)]
 mod tests {
+    use crate::front::wgsl::{Lexer, Token};
+
     #[test]
     fn check_constant_type_scalar_ok() {
         let wgsl = "const a : i32 = 2;";
@@ -1492,5 +1494,30 @@ mod tests {
     fn check_constant_type_scalar_err() {
         let wgsl = "const a : i32 = 2.0;";
         assert!(super::parse_str(wgsl).is_err());
+    }
+
+    #[test]
+    fn check_lexer() {
+        use Token::{End, Number, String, Unknown, Word};
+        let data = vec![
+            ("id123_OK", vec![Word("id123_OK"), End]),
+            ("92No", vec![Number("92"), Word("No"), End]),
+            ("æNoø", vec![Unknown('æ'), Word("No"), Unknown('ø'), End]),
+            ("No¾", vec![Word("No"), Unknown('¾'), End]),
+            ("No好", vec![Word("No"), Unknown('好'), End]),
+            ("\"\u{2}ПЀ\u{0}\"", vec![String("\u{2}ПЀ\u{0}"), End]), // https://github.com/gfx-rs/naga/issues/90
+        ];
+        for (x, expected) in data {
+            let mut lex = Lexer::new(x);
+            let mut results = vec![];
+            loop {
+                let result = lex.next();
+                results.push(result);
+                if result == Token::End {
+                    break;
+                }
+            }
+            assert_eq!(expected, results);
+        }
     }
 }
