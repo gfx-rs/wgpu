@@ -8,6 +8,13 @@ fn load_wgsl(name: &str) -> naga::Module {
     naga::front::wgsl::parse_str(&input).unwrap()
 }
 
+#[cfg(feature = "spirv")]
+fn load_spv(name: &str) -> naga::Module {
+    let path = format!("{}/test-data/spv/{}", env!("CARGO_MANIFEST_DIR"), name);
+    let input = std::fs::read(path).unwrap();
+    naga::front::spv::parse_u8_slice(&input).unwrap()
+}
+
 #[cfg(feature = "glsl")]
 fn load_glsl(name: &str, entry: &str, stage: naga::ShaderStage) -> naga::Module {
     let input = load_test_data(name);
@@ -85,6 +92,16 @@ fn convert_boids() {
         };
         msl::write_string(&module, options).unwrap();
     }
+}
+
+#[cfg(feature = "spirv")]
+#[test]
+fn convert_cube() {
+    let mut validator = naga::proc::Validator::new();
+    let vs = load_spv("cube.vert.spv");
+    validator.validate(&vs).unwrap();
+    let fs = load_spv("cube.frag.spv");
+    validator.validate(&fs).unwrap();
 }
 
 #[cfg(feature = "glsl")]

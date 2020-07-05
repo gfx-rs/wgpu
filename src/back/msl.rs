@@ -18,10 +18,6 @@ use std::fmt::{Display, Error as FmtError, Formatter, Write};
 
 use crate::{arena::Handle, FastHashMap};
 
-/// Expect all the global variables to have a pointer type,
-/// like in SPIR-V.
-const GLOBAL_POINTERS: bool = false;
-
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct BindTarget {
     pub buffer: Option<u8>,
@@ -285,30 +281,12 @@ impl<'a> TypedGlobalVariable<'a> {
             }
             _ => ("", ""),
         };
-        if GLOBAL_POINTERS {
-            let ty = &self.module.types[var.ty];
-            match ty.inner {
-                crate::TypeInner::Pointer { base, class } => {
-                    let ty_handle = match class {
-                        crate::StorageClass::Constant
-                        | crate::StorageClass::Input
-                        | crate::StorageClass::Output
-                        | crate::StorageClass::Uniform => base,
-                        _ => var.ty,
-                    };
-                    let ty_name = self.module.types[ty_handle].name.or_index(ty_handle);
-                    Ok(write!(formatter, "{} {}", ty_name, name)?)
-                }
-                _ => Err(Error::UnexpectedGlobalType(var.ty)),
-            }
-        } else {
-            let ty_name = self.module.types[var.ty].name.or_index(var.ty);
-            Ok(write!(
-                formatter,
-                "{}{}{} {}",
-                space_qualifier, ty_name, reference, name
-            )?)
-        }
+        let ty_name = self.module.types[var.ty].name.or_index(var.ty);
+        Ok(write!(
+            formatter,
+            "{}{}{} {}",
+            space_qualifier, ty_name, reference, name
+        )?)
     }
 }
 
@@ -511,14 +489,7 @@ impl<W: Write> Writer<W> {
                 let inner = &module.types[var.ty].inner;
                 match var.class {
                     crate::StorageClass::Output => {
-                        if GLOBAL_POINTERS {
-                            if let crate::TypeInner::Pointer { base, .. } = *inner {
-                                let base_inner = &module.types[base].inner;
-                                if let crate::TypeInner::Struct { .. } = *base_inner {
-                                    return Ok(MaybeOwned::Borrowed(base_inner));
-                                }
-                            }
-                        } else if let crate::TypeInner::Struct { .. } = *inner {
+                        if let crate::TypeInner::Struct { .. } = *inner {
                             return Ok(MaybeOwned::Borrowed(inner));
                         }
                         write!(self.out, "{}.", OUTPUT_STRUCT_NAME)?;
@@ -1035,14 +1006,7 @@ impl<W: Write> Writer<W> {
                             continue;
                         }
                         // if it's a struct, lift all the built-in contents up to the root
-                        let mut ty_handle = var.ty;
-                        if GLOBAL_POINTERS {
-                            if let crate::TypeInner::Pointer { base, .. } =
-                                module.types[var.ty].inner
-                            {
-                                ty_handle = base;
-                            }
-                        }
+                        let ty_handle = var.ty;
                         if let crate::TypeInner::Struct { ref members } =
                             module.types[ty_handle].inner
                         {
@@ -1080,14 +1044,7 @@ impl<W: Write> Writer<W> {
                             continue;
                         }
                         // if it's a struct, lift all the built-in contents up to the root
-                        let mut ty_handle = var.ty;
-                        if GLOBAL_POINTERS {
-                            if let crate::TypeInner::Pointer { base, .. } =
-                                module.types[var.ty].inner
-                            {
-                                ty_handle = base;
-                            }
-                        }
+                        let ty_handle = var.ty;
                         if let crate::TypeInner::Struct { ref members } =
                             module.types[ty_handle].inner
                         {
