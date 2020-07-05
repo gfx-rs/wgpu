@@ -181,13 +181,10 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                     meta.chars.end = start + 2;
                     (Some(Token::MulAssign(meta)), chars.as_str())
                 }
-                //TODO: multi-line comments
-                // Some('/') => (
-                //     Token::MultiLineCommentClose,
-                //     chars.as_str(),
-                //     start,
-                //     start + 2,
-                // ),
+                Some('/') => {
+                    meta.chars.end = start + 2;
+                    (Some(Token::CommentEnd((meta, ()))), chars.as_str())
+                }
                 _ => (Some(Token::MulAssign(meta)), input),
             }
         }
@@ -199,13 +196,10 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                     (Some(Token::DivAssign(meta)), chars.as_str())
                 }
                 Some('/') => (None, ""),
-                //TODO: multi-line comments
-                // Some('*') => (
-                //     Token::MultiLineCommentOpen,
-                //     chars.as_str(),
-                //     start,
-                //     start + 2,
-                // ),
+                Some('*') => {
+                    meta.chars.end = start + 2;
+                    (Some(Token::CommentStart((meta, ()))), chars.as_str())
+                }
                 _ => (Some(Token::Slash(meta)), input),
             }
         }
@@ -237,6 +231,7 @@ pub struct Lexer<'a> {
     input: String,
     line: usize,
     offset: usize,
+    inside_comment: bool,
 }
 
 impl<'a> Lexer<'a> {
@@ -259,6 +254,7 @@ impl<'a> Lexer<'a> {
             input,
             line,
             offset: 0,
+            inside_comment: false,
         }
     }
 
@@ -274,7 +270,20 @@ impl<'a> Lexer<'a> {
             meta.chars.start += self.offset;
             meta.chars.end += self.offset;
             self.offset += end;
-            Some(token)
+            if !self.inside_comment {
+                match token {
+                    Token::CommentStart(_) => {
+                        self.inside_comment = true;
+                        self.next()
+                    }
+                    _ => Some(token),
+                }
+            } else {
+                if let Token::CommentEnd(_) = token {
+                    self.inside_comment = false;
+                }
+                self.next()
+            }
         } else {
             let (line, input) = self.lines.next()?;
 

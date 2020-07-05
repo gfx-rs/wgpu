@@ -25,6 +25,9 @@ pomelo! {
     }
 
     %type Unknown char;
+    %type CommentStart ();
+    %type CommentEnd ();
+
     %type Identifier String;
     %type IntConstant i64;
     %type UintConstant u64;
