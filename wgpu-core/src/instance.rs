@@ -666,7 +666,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 log::warn!("max_bind_groups limit is missing");
             } else {
                 assert!(
-                    u32::from(limits.max_bound_descriptor_sets) >= desc.limits.max_bind_groups,
+                    u32::from(adapter.limits.max_bind_groups) >= desc.limits.max_bind_groups,
                     "Adapter does not support the requested max_bind_groups"
                 );
             }
