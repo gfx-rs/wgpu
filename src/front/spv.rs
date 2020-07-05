@@ -1062,7 +1062,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     fn make_expression_storage(&mut self) -> Arena<crate::Expression> {
         let mut expressions = Arena::new();
-        assert!(self.lookup_expression.is_empty());
+        #[allow(clippy::panic)]
+        {
+            assert!(self.lookup_expression.is_empty());
+        }
         // register global variables
         for (&id, var) in self.lookup_variable.iter() {
             self.lookup_expression.insert(
@@ -1161,7 +1164,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             let ty = module.types.get_mut(handle);
             match ty.inner {
                 crate::TypeInner::Sampler { ref mut comparison } => {
-                    assert!(!*comparison);
+                    #[allow(clippy::panic)]
+                    {
+                        assert!(!*comparison)
+                    };
                     *comparison = true;
                 }
                 crate::TypeInner::Image {

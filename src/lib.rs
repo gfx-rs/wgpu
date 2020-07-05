@@ -5,6 +5,7 @@
 //! To improve performance and reduce memory usage, most structures are stored
 //! in an [`Arena`], and can be retrieved using the corresponding [`Handle`].
 #![allow(clippy::new_without_default)]
+#![deny(clippy::panic)]
 
 mod arena;
 pub mod back;

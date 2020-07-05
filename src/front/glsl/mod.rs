@@ -1,3 +1,4 @@
+#![allow(clippy::panic)]
 use crate::{
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Constant, ConstantInner, EntryPoint,
     Expression, FastHashMap, Function, GlobalVariable, Handle, Header, LocalVariable, Module,

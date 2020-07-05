@@ -1,4 +1,5 @@
 #![allow(unused_braces)]
+#![allow(clippy::panic)]
 use pomelo::pomelo;
 
 pomelo! {
