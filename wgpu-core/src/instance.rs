@@ -236,7 +236,7 @@ impl Display for RequestDeviceError {
                 features
             ),
             RequestDeviceError::LimitsExceeded => {
-                write!(f, "Adapter does not support the requested max_bind_groups",)
+                write!(f, "Some of the requested limits are not supported",)
             }
         }
     }
