@@ -85,7 +85,6 @@ struct Parser<'a> {
     globals_lookup: FastHashMap<String, Global>,
     constants: Arena<Constant>,
     functions: Arena<Function>,
-    function_lookup: FastHashMap<String, Handle<Function>>,
     shader_stage: ShaderStage,
 }
 
@@ -98,7 +97,6 @@ impl<'a> Parser<'a> {
             globals_lookup: FastHashMap::default(),
             constants: Arena::new(),
             functions: Arena::new(),
-            function_lookup: FastHashMap::default(),
             shader_stage,
         }
     }
@@ -347,7 +345,7 @@ impl<'a> Parser<'a> {
         }
 
         let handle = self.functions.append(Function {
-            name: Some(name.clone()),
+            name: Some(name),
             parameter_types,
             return_type: ty,
             global_usage: vec![],
@@ -355,9 +353,6 @@ impl<'a> Parser<'a> {
             expressions,
             body,
         });
-
-        self.function_lookup.insert(name, handle);
-
         Ok(handle)
     }
 
@@ -859,7 +854,7 @@ impl<'a> Parser<'a> {
                         })
                     }
                     _ => Ok(Expression::Call {
-                        name,
+                        origin: crate::FunctionOrigin::External(name),
                         arguments: args
                             .into_iter()
                             .map(|arg| {
@@ -901,7 +896,6 @@ impl<'a> Parser<'a> {
                         &self.globals,
                         locals,
                         &self.functions,
-                        &self.function_lookup,
                     )
                     .map_err(|e| Error { kind: e.into() })?;
                 let base_type = &self.types[type_handle];

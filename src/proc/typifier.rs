@@ -1,6 +1,6 @@
 use crate::{
     arena::{Arena, Handle},
-    FastHashMap, Type, TypeInner, VectorSize,
+    Type, TypeInner, VectorSize,
 };
 
 pub struct Typifier {
@@ -32,7 +32,6 @@ impl Typifier {
         global_vars: &Arena<crate::GlobalVariable>,
         local_vars: &Arena<crate::LocalVariable>,
         functions: &Arena<crate::Function>,
-        function_lookup: &FastHashMap<String, Handle<crate::Function>>,
     ) -> Result<Handle<crate::Type>, ResolveError> {
         if self.types.len() <= expr_handle.index() {
             for (eh, expr) in expressions.iter().skip(self.types.len()) {
@@ -93,7 +92,6 @@ impl Typifier {
                             global_vars,
                             local_vars,
                             functions,
-                            function_lookup,
                         )?;
 
                         let (kind, width) = match types[image].inner {
@@ -168,7 +166,7 @@ impl Typifier {
                     crate::Expression::CrossProduct(_, _) => unimplemented!(),
                     crate::Expression::Derivative { .. } => unimplemented!(),
                     crate::Expression::Call {
-                        ref name,
+                        origin: crate::FunctionOrigin::External(ref name),
                         ref arguments,
                     } => match name.as_str() {
                         "distance" | "length" | "dot" => {
@@ -184,14 +182,14 @@ impl Typifier {
                         "normalize" | "fclamp" | "max" | "reflect" | "pow" | "clamp" | "mix" => {
                             self.types[arguments[0].index()]
                         }
-                        other => functions[*function_lookup.get(other).ok_or(
-                            ResolveError::FunctionNotDefined {
-                                name: other.to_string(),
-                            },
-                        )?]
+                        _ => return Err(ResolveError::FunctionNotDefined { name: name.clone() }),
+                    },
+                    crate::Expression::Call {
+                        origin: crate::FunctionOrigin::Local(handle),
+                        arguments: _,
+                    } => functions[handle]
                         .return_type
                         .ok_or(ResolveError::FunctionReturnsVoid)?,
-                    },
                 };
                 log::debug!("Resolving {:?} = {:?} : {:?}", eh, expr, ty);
                 self.types.push(ty);

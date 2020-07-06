@@ -330,6 +330,12 @@ struct LookupSampledImage {
     sampler: Handle<crate::Expression>,
 }
 
+struct DeferredFunctionCall {
+    source_handle: Handle<crate::Function>,
+    expr_handle: Handle<crate::Expression>,
+    dst_id: spirv::Word,
+}
+
 pub struct Parser<I> {
     data: I,
     state: ModuleState,
@@ -348,6 +354,7 @@ pub struct Parser<I> {
     lookup_sampled_image: FastHashMap<spirv::Word, LookupSampledImage>,
     lookup_function_type: FastHashMap<spirv::Word, LookupFunctionType>,
     lookup_function: FastHashMap<spirv::Word, Handle<crate::Function>>,
+    deferred_function_calls: Vec<DeferredFunctionCall>,
 }
 
 impl<I: Iterator<Item = u32>> Parser<I> {
@@ -369,6 +376,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             lookup_sampled_image: FastHashMap::default(),
             lookup_function_type: FastHashMap::default(),
             lookup_function: FastHashMap::default(),
+            deferred_function_calls: Vec::new(),
         }
     }
 
@@ -511,6 +519,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         type_arena: &Arena<crate::Type>,
         const_arena: &Arena<crate::Constant>,
         global_arena: &Arena<crate::GlobalVariable>,
+        local_function_calls: &mut FastHashMap<Handle<crate::Expression>, spirv::Word>,
     ) -> Result<(), Error> {
         loop {
             use spirv::Op;
@@ -1016,6 +1025,32 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::FunctionCall => {
+                    inst.expect_at_least(4)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let func_id = self.next()?;
+
+                    let mut arguments = Vec::with_capacity(inst.wc as usize - 4);
+                    for _ in 0..arguments.capacity() {
+                        let arg_id = self.next()?;
+                        arguments.push(self.lookup_expression.lookup(arg_id)?.handle);
+                    }
+                    let expr = crate::Expression::Call {
+                        // will be replaced by `Local()` after all the functions are parsed
+                        origin: crate::FunctionOrigin::External(String::new()),
+                        arguments,
+                    };
+                    let expr_handle = fun.expressions.append(expr);
+                    local_function_calls.insert(expr_handle, func_id);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expr_handle,
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 Op::ExtInst => {
                     inst.expect_at_least(5)?;
                     let result_type_id = self.next()?;
@@ -1043,7 +1078,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         arguments.push(self.lookup_expression.lookup(arg_id)?.handle);
                     }
                     let expr = crate::Expression::Call {
-                        name: name.to_string(),
+                        origin: crate::FunctionOrigin::External(name.to_string()),
                         arguments,
                     };
                     self.lookup_expression.insert(
@@ -1181,6 +1216,22 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     };
                 }
                 _ => panic!("Unexpected comparison type {:?}", ty),
+            }
+        }
+
+        for dfc in self.deferred_function_calls.drain(..) {
+            let dst_handle = *self.lookup_function.lookup(dfc.dst_id)?;
+            match *module
+                .functions
+                .get_mut(dfc.source_handle)
+                .expressions
+                .get_mut(dfc.expr_handle)
+            {
+                crate::Expression::Call {
+                    ref mut origin,
+                    arguments: _,
+                } => *origin = crate::FunctionOrigin::Local(dst_handle),
+                _ => unreachable!(),
             }
         }
 
@@ -1973,6 +2024,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             }
         }
         // read body
+        let mut local_function_calls = FastHashMap::default();
         loop {
             let fun_inst = self.next_inst()?;
             log::debug!("\t\t{:?}", fun_inst.op);
@@ -1985,6 +2037,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         &module.types,
                         &module.constants,
                         &module.global_variables,
+                        &mut local_function_calls,
                     )?;
                 }
                 spirv::Op::FunctionEnd => {
@@ -1998,6 +2051,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         fun.global_usage =
             crate::GlobalUse::scan(&fun.expressions, &fun.body, &module.global_variables);
         let handle = module.functions.append(fun);
+        for (expr_handle, dst_id) in local_function_calls {
+            self.deferred_function_calls.push(DeferredFunctionCall {
+                source_handle: handle,
+                expr_handle,
+                dst_id,
+            });
+        }
+
         self.lookup_function.insert(fun_id, handle);
         self.lookup_expression.clear();
         self.lookup_sampled_image.clear();

@@ -328,7 +328,6 @@ impl<'a> ExpressionContext<'a, '_, '_> {
                 self.global_vars,
                 self.local_vars,
                 &Arena::new(),
-                &FastHashMap::default(),
             )
             .map_err(Error::InvalidResolve)
     }
@@ -548,7 +547,7 @@ impl Parser {
                         arguments.push(arg);
                     }
                     crate::Expression::Call {
-                        name: name.to_owned(),
+                        origin: crate::FunctionOrigin::External(name.to_owned()),
                         arguments,
                     }
                 } else {

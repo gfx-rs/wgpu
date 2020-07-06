@@ -618,7 +618,7 @@ impl<W: Write> Writer<W> {
                 }))
             }
             crate::Expression::Call {
-                ref name,
+                origin: crate::FunctionOrigin::External(ref name),
                 ref arguments,
             } => match name.as_str() {
                 "cos" | "normalize" | "sin" => {

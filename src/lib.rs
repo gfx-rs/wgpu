@@ -338,6 +338,13 @@ pub enum DerivativeAxis {
     Width,
 }
 
+/// Origin of a function to call.
+#[derive(Clone, Debug, PartialEq)]
+pub enum FunctionOrigin {
+    Local(Handle<Function>),
+    External(String),
+}
+
 /// An expression that can be evaluated to obtain a value.
 #[derive(Clone, Debug)]
 pub enum Expression {
@@ -399,9 +406,9 @@ pub enum Expression {
         //modifier,
         expr: Handle<Expression>,
     },
-    /// Call a function defined in this module.
+    /// Call another function.
     Call {
-        name: String,
+        origin: FunctionOrigin,
         arguments: Vec<Handle<Expression>>,
     },
 }
