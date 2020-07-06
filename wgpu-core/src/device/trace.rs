@@ -40,9 +40,17 @@ impl ProgrammableStageDescriptor {
     pub fn new(desc: &crate::pipeline::ProgrammableStageDescriptor) -> Self {
         ProgrammableStageDescriptor {
             module: desc.module,
-            entry_point: unsafe { std::ffi::CStr::from_ptr(desc.entry_point) }
-                .to_string_lossy()
-                .to_string(),
+            entry_point: desc.entry_point.to_string(),
+        }
+    }
+}
+
+#[cfg(feature = "replay")]
+impl ProgrammableStageDescriptor {
+    pub fn to_core(&self) -> crate::pipeline::ProgrammableStageDescriptor {
+        crate::pipeline::ProgrammableStageDescriptor {
+            module: self.module,
+            entry_point: &self.entry_point,
         }
     }
 }
@@ -58,8 +66,8 @@ pub struct ComputePipelineDescriptor {
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexBufferLayoutDescriptor {
-    pub array_stride: wgt::BufferAddress,
+pub struct VertexBufferDescriptor {
+    pub stride: wgt::BufferAddress,
     pub step_mode: wgt::InputStepMode,
     pub attributes: Vec<wgt::VertexAttributeDescriptor>,
 }
@@ -69,7 +77,7 @@ pub struct VertexBufferLayoutDescriptor {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct VertexStateDescriptor {
     pub index_format: wgt::IndexFormat,
-    pub vertex_buffers: Vec<VertexBufferLayoutDescriptor>,
+    pub vertex_buffers: Vec<VertexBufferDescriptor>,
 }
 
 #[derive(Debug)]
