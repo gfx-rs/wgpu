@@ -507,10 +507,10 @@ fn main() {
                 None,
                 wgc::id::TypedId::zip(1, 0, wgt::Backend::Empty)
             ))
+            .expect("Failed to request device")
         }
         _ => panic!("Expected Action::Init"),
     };
-
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
