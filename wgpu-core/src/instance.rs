@@ -223,8 +223,8 @@ impl AdapterInfo {
 pub enum RequestDeviceError {
     /// Unsupported feature extension was requested
     UnsupportedFeature(wgt::Features),
-    /// Adapter doesn't support the amount of requested bind groups
-    LimitsExceeded(u32),
+    /// Requested device limits were exceeded
+    LimitsExceeded,
 }
 
 impl Display for RequestDeviceError {
@@ -235,11 +235,9 @@ impl Display for RequestDeviceError {
                 "Cannot enable features that adapter doesn't support. Unsupported extensions: {:?}",
                 features
             ),
-            RequestDeviceError::LimitsExceeded(max_supported) => write!(
-                f,
-                "Adapter does only support a maximum of {} bind_groups",
-                max_supported
-            ),
+            RequestDeviceError::LimitsExceeded => {
+                write!(f, "Adapter does not support the requested max_bind_groups",)
+            }
         }
     }
 }
@@ -693,9 +691,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 log::warn!("max_bind_groups limit is missing");
             } else {
                 if adapter.limits.max_bind_groups < desc.limits.max_bind_groups {
-                    return Err(RequestDeviceError::LimitsExceeded(
-                        adapter.limits.max_bind_groups,
-                    ));
+                    return Err(RequestDeviceError::LimitsExceeded);
                 }
             }
 
