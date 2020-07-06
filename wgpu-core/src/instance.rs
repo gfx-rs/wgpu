@@ -23,6 +23,7 @@ use hal::{
     window::Surface as _,
     Instance as _,
 };
+use std::fmt::Display;
 
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -213,6 +214,30 @@ impl AdapterInfo {
             device,
             device_type: device_type.into(),
             backend,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+/// Error when requesting a device from the adaptor
+pub enum RequestDeviceError {
+    /// Unsupported feature extension was requested
+    UnsupportedFeature(wgt::Features),
+    /// Requested device limits were exceeded
+    LimitsExceeded,
+}
+
+impl Display for RequestDeviceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match &self {
+            RequestDeviceError::UnsupportedFeature(features) => write!(
+                f,
+                "Cannot enable features that adapter doesn't support. Unsupported extensions: {:?}",
+                features
+            ),
+            RequestDeviceError::LimitsExceeded => {
+                write!(f, "Some of the requested limits are not supported",)
+            }
         }
     }
 }
@@ -550,7 +575,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         desc: &DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
         id_in: Input<G, DeviceId>,
-    ) -> DeviceId {
+    ) -> Result<DeviceId, RequestDeviceError> {
         span!(_guard, INFO, "Adapter::request_device");
 
         let hub = B::hub(self);
@@ -568,11 +593,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     desc.features & wgt::Features::ALL_UNSAFE
                 )
             }
-            assert!(
-                adapter.features.contains(desc.features),
-                "Cannot enable features that adapter doesn't support. Unsupported extensions: {:?}",
-                desc.features - adapter.features
-            );
+            if !adapter.features.contains(desc.features) {
+                return Err(RequestDeviceError::UnsupportedFeature(
+                    desc.features - adapter.features,
+                ));
+            }
 
             // Verify feature preconditions
             if desc
@@ -665,10 +690,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if limits.max_bound_descriptor_sets == 0 {
                 log::warn!("max_bind_groups limit is missing");
             } else {
-                assert!(
-                    desc.limits.max_bind_groups <= adapter.limits.max_bind_groups,
-                    "Adapter does not support the requested max_bind_groups"
-                );
+                if adapter.limits.max_bind_groups < desc.limits.max_bind_groups {
+                    return Err(RequestDeviceError::LimitsExceeded);
+                }
             }
 
             let mem_props = phd.memory_properties();
@@ -699,6 +723,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             )
         };
 
-        hub.devices.register_identity(id_in, device, &mut token)
+        Ok(hub.devices.register_identity(id_in, device, &mut token))
     }
 }
