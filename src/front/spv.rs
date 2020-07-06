@@ -39,6 +39,7 @@ pub enum Error {
     UnsupportedStorageClass(spirv::Word),
     UnsupportedImageDim(spirv::Word),
     UnsupportedBuiltIn(spirv::Word),
+    UnsupportedControlFlow(spirv::Word),
     InvalidParameter(spirv::Op),
     InvalidOperandCount(spirv::Op, u16),
     InvalidOperand,
@@ -336,6 +337,26 @@ struct DeferredFunctionCall {
     dst_id: spirv::Word,
 }
 
+enum Terminator {
+    Return {
+        value: Option<Handle<crate::Expression>>,
+    },
+    Branch {
+        label_id: spirv::Word,
+        condition: Option<Handle<crate::Expression>>,
+    },
+}
+
+struct Assignment {
+    to: Handle<crate::Expression>,
+    value: Handle<crate::Expression>,
+}
+
+struct ControlFlowNode {
+    assignments: Vec<Assignment>,
+    terminator: Terminator,
+}
+
 pub struct Parser<I> {
     data: I,
     state: ModuleState,
@@ -487,7 +508,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     fn parse_expr_binary_op(
         &mut self,
-        fun: &mut crate::Function,
+        expressions: &mut Arena<crate::Expression>,
         op: crate::BinaryOperator,
     ) -> Result<(), Error> {
         let result_type_id = self.next()?;
@@ -506,7 +527,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         self.lookup_expression.insert(
             result_id,
             LookupExpression {
-                handle: fun.expressions.append(expr),
+                handle: expressions.append(expr),
                 type_id: result_type_id,
             },
         );
@@ -515,13 +536,15 @@ impl<I: Iterator<Item = u32>> Parser<I> {
 
     fn next_block(
         &mut self,
-        fun: &mut crate::Function,
+        expressions: &mut Arena<crate::Expression>,
+        local_arena: &mut Arena<crate::LocalVariable>,
         type_arena: &Arena<crate::Type>,
         const_arena: &Arena<crate::Constant>,
         global_arena: &Arena<crate::GlobalVariable>,
         local_function_calls: &mut FastHashMap<Handle<crate::Expression>, spirv::Word>,
-    ) -> Result<(), Error> {
-        loop {
+    ) -> Result<ControlFlowNode, Error> {
+        let mut assignments = Vec::new();
+        let terminator = loop {
             use spirv::Op;
             let inst = self.next_inst()?;
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
@@ -548,7 +571,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         .future_decor
                         .remove(&result_id)
                         .and_then(|decor| decor.name);
-                    let var_handle = fun.local_variables.append(crate::LocalVariable {
+                    let var_handle = local_arena.append(crate::LocalVariable {
                         name,
                         ty: self.lookup_type.lookup(result_type_id)?.handle,
                         init,
@@ -556,8 +579,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun
-                                .expressions
+                            handle: expressions
                                 .append(crate::Expression::LocalVariable(var_handle)),
                             type_id: result_type_id,
                         },
@@ -601,7 +623,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         let type_lookup = self.lookup_type.lookup(acex.type_id)?;
                         acex = match type_arena[type_lookup.handle].inner {
                             crate::TypeInner::Struct { .. } => {
-                                let index = match fun.expressions[index_expr.handle] {
+                                let index = match expressions[index_expr.handle] {
                                     crate::Expression::Constant(const_handle) => {
                                         match const_arena[const_handle].inner {
                                             crate::ConstantInner::Uint(v) => v as u32,
@@ -614,7 +636,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                                     _ => return Err(Error::InvalidAccess(index_expr.handle)),
                                 };
                                 AccessExpression {
-                                    base_handle: fun.expressions.append(
+                                    base_handle: expressions.append(
                                         crate::Expression::AccessIndex {
                                             base: acex.base_handle,
                                             index,
@@ -629,7 +651,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             crate::TypeInner::Array { .. }
                             | crate::TypeInner::Vector { .. }
                             | crate::TypeInner::Matrix { .. } => AccessExpression {
-                                base_handle: fun.expressions.append(crate::Expression::Access {
+                                base_handle: expressions.append(crate::Expression::Access {
                                     base: acex.base_handle,
                                     index: index_expr.handle,
                                 }),
@@ -679,7 +701,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             _ => return Err(Error::UnsupportedType(type_lookup.handle)),
                         };
                         lexp = LookupExpression {
-                            handle: fun.expressions.append(crate::Expression::AccessIndex {
+                            handle: expressions.append(crate::Expression::AccessIndex {
                                 base: lexp.handle,
                                 index,
                             }),
@@ -713,7 +735,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
@@ -742,7 +764,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
@@ -765,23 +787,30 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     if base_type.base_id != Some(value_expr.type_id) {
                         return Err(Error::InvalidStoreType(value_expr.type_id));
                     }
-                    fun.body.push(crate::Statement::Store {
-                        pointer: base_expr.handle,
+                    assignments.push(Assignment {
+                        to: base_expr.handle,
                         value: value_expr.handle,
-                    })
+                    });
                 }
                 Op::Return => {
                     inst.expect(1)?;
-                    fun.body.push(crate::Statement::Return { value: None });
-                    break;
+                    break Terminator::Return { value: None };
+                }
+                Op::Branch => {
+                    inst.expect(2)?;
+                    let label_id = self.next()?;
+                    break Terminator::Branch {
+                        label_id,
+                        condition: None,
+                    };
                 }
                 Op::FSub => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(fun, crate::BinaryOperator::Subtract)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Subtract)?;
                 }
                 Op::FMul => {
                     inst.expect(5)?;
-                    self.parse_expr_binary_op(fun, crate::BinaryOperator::Multiply)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Multiply)?;
                 }
                 Op::VectorTimesScalar => {
                     inst.expect(5)?;
@@ -801,7 +830,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
@@ -822,7 +851,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
@@ -855,10 +884,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
 
                     let sampler_type_handle =
-                        reach_global_type(si_lexp.sampler, &fun.expressions, global_arena)
+                        reach_global_type(si_lexp.sampler, &expressions, global_arena)
                             .ok_or(Error::InvalidSamplerExpression(si_lexp.sampler))?;
                     let image_type_handle =
-                        reach_global_type(si_lexp.image, &fun.expressions, global_arena)
+                        reach_global_type(si_lexp.image, &expressions, global_arena)
                             .ok_or(Error::InvalidImageExpression(si_lexp.image))?;
                     log::debug!(
                         "\t\t\tImage {:?} with sampler {:?}",
@@ -904,7 +933,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
@@ -921,10 +950,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
                     let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
                     let sampler_type_handle =
-                        reach_global_type(si_lexp.sampler, &fun.expressions, global_arena)
+                        reach_global_type(si_lexp.sampler, &expressions, global_arena)
                             .ok_or(Error::InvalidSamplerExpression(si_lexp.sampler))?;
                     let image_type_handle =
-                        reach_global_type(si_lexp.image, &fun.expressions, global_arena)
+                        reach_global_type(si_lexp.image, &expressions, global_arena)
                             .ok_or(Error::InvalidImageExpression(si_lexp.image))?;
                     *self.handle_sampling.get_mut(&sampler_type_handle).unwrap() |=
                         SamplingFlags::COMPARISON;
@@ -968,7 +997,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
@@ -1011,7 +1040,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         } else {
                             return Err(Error::InvalidAccessIndex(index));
                         };
-                        components.push(fun.expressions.append(expr));
+                        components.push(expressions.append(expr));
                     }
                     let expr = crate::Expression::Compose {
                         ty: self.lookup_type.lookup(result_type_id)?.handle,
@@ -1020,7 +1049,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
@@ -1041,7 +1070,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         origin: crate::FunctionOrigin::External(String::new()),
                         arguments,
                     };
-                    let expr_handle = fun.expressions.append(expr);
+                    let expr_handle = expressions.append(expr);
                     local_function_calls.insert(expr_handle, func_id);
                     self.lookup_expression.insert(
                         result_id,
@@ -1084,15 +1113,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
-                            handle: fun.expressions.append(expr),
+                            handle: expressions.append(expr),
                             type_id: result_type_id,
                         },
                     );
                 }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
-        }
-        Ok(())
+        };
+        Ok(ControlFlowNode {
+            assignments,
+            terminator,
+        })
     }
 
     fn make_expression_storage(&mut self) -> Arena<crate::Expression> {
@@ -2025,20 +2057,41 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
         // read body
         let mut local_function_calls = FastHashMap::default();
+        let mut control_flow_graph = FastHashMap::default();
         loop {
             let fun_inst = self.next_inst()?;
             log::debug!("\t\t{:?}", fun_inst.op);
             match fun_inst.op {
                 spirv::Op::Label => {
                     fun_inst.expect(2)?;
-                    let _id = self.next()?;
-                    self.next_block(
-                        &mut fun,
+                    let label_id = self.next()?;
+                    let node = self.next_block(
+                        &mut fun.expressions,
+                        &mut fun.local_variables,
                         &module.types,
                         &module.constants,
                         &module.global_variables,
                         &mut local_function_calls,
                     )?;
+                    // temp until the CFG is fully processed
+                    for assign in node.assignments.iter() {
+                        fun.body.push(crate::Statement::Store {
+                            pointer: assign.to,
+                            value: assign.value,
+                        });
+                    }
+                    match node.terminator {
+                        Terminator::Return { value } => {
+                            fun.body.push(crate::Statement::Return { value });
+                        }
+                        Terminator::Branch {
+                            label_id,
+                            condition,
+                        } => {
+                            let _ = (label_id, condition); //TODO
+                        }
+                    }
+                    control_flow_graph.insert(label_id, node);
                 }
                 spirv::Op::FunctionEnd => {
                     fun_inst.expect(1)?;
