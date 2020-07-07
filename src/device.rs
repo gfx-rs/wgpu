@@ -9,9 +9,9 @@ use winapi::um::d3d12;
 use winapi::Interface;
 use {pso, query, queue};
 use {
-    Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap,
-    Fence, GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature,
-    Shader, TextureAddressMode,
+    Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap, Fence,
+    GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature, Shader,
+    TextureAddressMode,
 };
 
 pub type Device = WeakPtr<d3d12::ID3D12Device>;
@@ -27,7 +27,7 @@ impl crate::D3D12Lib {
             *mut winapi::um::unknwnbase::IUnknown,
             winapi::um::d3dcommon::D3D_FEATURE_LEVEL,
             winapi::shared::guiddef::REFGUID,
-            *mut *mut  winapi::ctypes::c_void,
+            *mut *mut winapi::ctypes::c_void,
         ) -> crate::HRESULT;
 
         let mut device = Device::null();

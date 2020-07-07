@@ -1,7 +1,7 @@
 use com::WeakPtr;
+use winapi::um::d3d12sdklayers;
 #[cfg(any(feature = "libloading", feature = "implicit-link"))]
 use winapi::Interface as _;
-use winapi::um::d3d12sdklayers;
 
 pub type Debug = WeakPtr<d3d12sdklayers::ID3D12Debug>;
 
@@ -16,14 +16,11 @@ impl crate::D3D12Lib {
         let mut debug = Debug::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"D3D12GetDebugInterface")?;
-            func(
-                &d3d12sdklayers::ID3D12Debug::uuidof(),
-                debug.mut_void(),
-            )
+            func(&d3d12sdklayers::ID3D12Debug::uuidof(), debug.mut_void())
         };
 
         Ok((debug, hr))
-     }
+    }
 }
 
 impl Debug {

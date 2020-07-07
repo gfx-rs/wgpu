@@ -2,7 +2,7 @@ use com::WeakPtr;
 use std::ptr;
 use winapi::shared::windef::HWND;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype};
-use winapi::um::{dxgidebug, d3d12};
+use winapi::um::{d3d12, dxgidebug};
 use winapi::Interface;
 use {CommandQueue, D3DResult, Resource, SampleDesc, HRESULT};
 
@@ -56,14 +56,12 @@ pub struct DxgiLib {
 #[cfg(feature = "libloading")]
 impl DxgiLib {
     pub fn new() -> Result<Self, libloading::Error> {
-        libloading::Library::new("dxgi.dll")
-            .map(|lib| DxgiLib {
-                lib,
-            })
+        libloading::Library::new("dxgi.dll").map(|lib| DxgiLib { lib })
     }
 
     pub fn create_factory2(
-        &self, flags: FactoryCreationFlags
+        &self,
+        flags: FactoryCreationFlags,
     ) -> Result<D3DResult<Factory4>, libloading::Error> {
         type Fun = extern "system" fn(
             winapi::shared::minwindef::UINT,
@@ -94,11 +92,7 @@ impl DxgiLib {
         let mut queue = InfoQueue::null();
         let hr = unsafe {
             let func: libloading::Symbol<Fun> = self.lib.get(b"DXGIGetDebugInterface1")?;
-            func(
-                0,
-                &dxgidebug::IDXGIInfoQueue::uuidof(),
-                queue.mut_void(),
-            )
+            func(0, &dxgidebug::IDXGIInfoQueue::uuidof(), queue.mut_void())
         };
         Ok((queue, hr))
     }
