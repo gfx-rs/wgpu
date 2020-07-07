@@ -491,7 +491,6 @@ fn main() {
                         #[cfg(not(feature = "winit"))]
                         compatible_surface: None,
                     },
-                    unsafe { wgt::UnsafeFeatures::allow() },
                     wgc::instance::AdapterInputs::IdSet(
                         &[wgc::id::TypedId::zip(0, 0, backend)],
                         |id| id.backend(),

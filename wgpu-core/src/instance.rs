@@ -125,12 +125,11 @@ pub struct Adapter<B: hal::Backend> {
     pub(crate) raw: hal::adapter::Adapter<B>,
     features: wgt::Features,
     limits: wgt::Limits,
-    unsafe_features: wgt::UnsafeFeatures,
     life_guard: LifeGuard,
 }
 
 impl<B: hal::Backend> Adapter<B> {
-    fn new(raw: hal::adapter::Adapter<B>, unsafe_features: wgt::UnsafeFeatures) -> Self {
+    fn new(raw: hal::adapter::Adapter<B>) -> Self {
         span!(_guard, INFO, "Adapter::new");
 
         let adapter_features = raw.physical_device.features();
@@ -160,9 +159,6 @@ impl<B: hal::Backend> Adapter<B> {
             wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
             adapter_features.contains(hal::Features::DRAW_INDIRECT_COUNT),
         );
-        if unsafe_features.allowed() {
-            // Unsafe features go here
-        }
 
         let adapter_limits = raw.physical_device.limits();
 
@@ -176,7 +172,6 @@ impl<B: hal::Backend> Adapter<B> {
             raw,
             features,
             limits,
-            unsafe_features,
             life_guard: LifeGuard::new(),
         }
     }
@@ -325,11 +320,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         self.surfaces.register_identity(id_in, surface, &mut token)
     }
 
-    pub fn enumerate_adapters(
-        &self,
-        unsafe_features: wgt::UnsafeFeatures,
-        inputs: AdapterInputs<Input<G, AdapterId>>,
-    ) -> Vec<AdapterId> {
+    pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
         span!(_guard, INFO, "Instance::enumerate_adapters");
 
         let instance = &self.instance;
@@ -341,7 +332,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if let Some(inst) = instance_field {
                     if let Some(id_backend) = inputs.find(backend) {
                         for raw in inst.enumerate_adapters() {
-                            let adapter = Adapter::new(raw, unsafe_features);
+                            let adapter = Adapter::new(raw);
                             log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
                             adapters.push(backend_hub(self).adapters.register_identity(
                                 id_backend.clone(),
@@ -369,7 +360,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn pick_adapter(
         &self,
         desc: &RequestAdapterOptions,
-        unsafe_features: wgt::UnsafeFeatures,
         inputs: AdapterInputs<Input<G, AdapterId>>,
     ) -> Option<AdapterId> {
         span!(_guard, INFO, "Instance::pick_adapter");
@@ -482,7 +472,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         backends_map! {
             let map = |(info_adapter, id_backend, mut adapters_backend, backend_hub)| {
                 if selected < adapters_backend.len() {
-                    let adapter = Adapter::new(adapters_backend.swap_remove(selected), unsafe_features);
+                    let adapter = Adapter::new(adapters_backend.swap_remove(selected));
                     log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
                     let id = backend_hub(self).adapters.register_identity(
                         id_backend.take().unwrap(),
@@ -585,14 +575,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let adapter = &adapter_guard[adapter_id];
             let phd = &adapter.raw.physical_device;
 
-            // Verify all features  were exposed by the adapter
-            if !adapter.unsafe_features.allowed() {
-                assert!(
-                    !desc.features.intersects(wgt::Features::ALL_UNSAFE),
-                    "Cannot enable unsafe features without passing UnsafeFeatures::allow() when getting an adapter. Enabled unsafe extensions: {:?}",
-                    desc.features & wgt::Features::ALL_UNSAFE
-                )
-            }
+            // Verify all features were exposed by the adapter
             if !adapter.features.contains(desc.features) {
                 return Err(RequestDeviceError::UnsupportedFeature(
                     desc.features - adapter.features,
