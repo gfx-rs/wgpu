@@ -1,14 +1,12 @@
 //! Graphics command list
 
-use com::WeakPtr;
-use resource::DiscardRegion;
+use crate::{
+    com::WeakPtr, resource::DiscardRegion, CommandAllocator, CpuDescriptor, DescriptorHeap, Format,
+    GpuAddress, GpuDescriptor, IndexCount, InstanceCount, PipelineState, Rect, Resource,
+    RootSignature, VertexCount, VertexOffset, WorkGroupCount, HRESULT,
+};
 use std::{mem, ptr};
 use winapi::um::d3d12;
-use {
-    CommandAllocator, CpuDescriptor, DescriptorHeap, Format, GpuAddress, GpuDescriptor, IndexCount,
-    InstanceCount, PipelineState, Rect, Resource, RootSignature, VertexCount, VertexOffset,
-    WorkGroupCount, HRESULT,
-};
 
 #[repr(u32)]
 #[derive(Clone, Copy)]

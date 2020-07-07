@@ -1,10 +1,11 @@
-extern crate winapi;
 #[macro_use]
 extern crate bitflags;
 
 use std::ffi::CStr;
-use winapi::shared::dxgiformat;
-use winapi::um::{d3d12, d3dcommon};
+use winapi::{
+    shared::dxgiformat,
+    um::{d3d12, d3dcommon},
+};
 
 mod com;
 mod command_allocator;

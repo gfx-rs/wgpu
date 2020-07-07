@@ -1,18 +1,16 @@
 //! Device
 
-use com::WeakPtr;
-use command_list::{CmdListType, CommandSignature, IndirectArgument};
-use descriptor::{CpuDescriptor, DescriptorHeapFlags, DescriptorHeapType, RenderTargetViewDesc};
-use heap::{Heap, HeapFlags, HeapProperties};
-use std::ops::Range;
-use winapi::um::d3d12;
-use winapi::Interface;
-use {pso, query, queue};
-use {
-    Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap, Fence,
-    GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature, Shader,
-    TextureAddressMode,
+use crate::{
+    com::WeakPtr,
+    command_list::{CmdListType, CommandSignature, IndirectArgument},
+    descriptor::{CpuDescriptor, DescriptorHeapFlags, DescriptorHeapType, RenderTargetViewDesc},
+    heap::{Heap, HeapFlags, HeapProperties},
+    pso, query, queue, Blob, CachedPSO, CommandAllocator, CommandQueue, D3DResult, DescriptorHeap,
+    Fence, GraphicsCommandList, NodeMask, PipelineState, QueryHeap, Resource, RootSignature,
+    Shader, TextureAddressMode,
 };
+use std::ops::Range;
+use winapi::{um::d3d12, Interface};
 
 pub type Device = WeakPtr<d3d12::ID3D12Device>;
 

@@ -1,10 +1,10 @@
-use com::WeakPtr;
+use crate::{com::WeakPtr, CommandQueue, D3DResult, Resource, SampleDesc, HRESULT};
 use std::ptr;
-use winapi::shared::windef::HWND;
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype};
-use winapi::um::{d3d12, dxgidebug};
-use winapi::Interface;
-use {CommandQueue, D3DResult, Resource, SampleDesc, HRESULT};
+use winapi::{
+    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgiformat, dxgitype, windef::HWND},
+    um::{d3d12, dxgidebug},
+    Interface,
+};
 
 bitflags! {
     pub struct FactoryCreationFlags: u32 {

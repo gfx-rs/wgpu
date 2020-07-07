@@ -1,9 +1,6 @@
-use com::WeakPtr;
-use std::mem;
-use std::ops::Range;
-use winapi::shared::dxgiformat;
-use winapi::um::d3d12;
-use {Blob, D3DResult, Error, TextureAddressMode};
+use crate::{com::WeakPtr, Blob, D3DResult, Error, TextureAddressMode};
+use std::{mem, ops::Range};
+use winapi::{shared::dxgiformat, um::d3d12};
 
 pub type CpuDescriptor = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE;
 pub type GpuDescriptor = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE;

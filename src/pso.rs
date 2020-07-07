@@ -1,10 +1,8 @@
 //! Pipeline state
 
-use com::WeakPtr;
-use std::ops::Deref;
-use std::{ffi, ptr};
+use crate::{com::WeakPtr, Blob, D3DResult, Error};
+use std::{ffi, ops::Deref, ptr};
 use winapi::um::{d3d12, d3dcompiler};
-use {Blob, D3DResult, Error};
 
 bitflags! {
     pub struct PipelineStateFlags: u32 {
