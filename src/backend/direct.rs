@@ -456,14 +456,12 @@ impl crate::Context for Context {
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions<'_>,
-        unsafe_features: wgt::UnsafeFeatures,
     ) -> Self::RequestAdapterFuture {
         let id = self.pick_adapter(
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
             },
-            unsafe_features,
             wgc::instance::AdapterInputs::Mask(wgt::BackendBit::all(), |_| PhantomData),
         );
         ready(id)
@@ -475,7 +473,7 @@ impl crate::Context for Context {
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
-        let device_id = gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, trace_dir, PhantomData));
+        let device_id = gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, trace_dir, PhantomData)).unwrap();
         ready(Ok((device_id, device_id)))
     }
 
@@ -611,60 +609,29 @@ impl crate::Context for Context {
         wgc::span!(_guard, TRACE, "Device::create_render_pipeline wrapper");
         use wgc::pipeline as pipe;
 
-        let vertex_entry_point = CString::new(desc.vertex_stage.entry_point).unwrap();
         let vertex_stage = pipe::ProgrammableStageDescriptor {
             module: desc.vertex_stage.module.id,
-            entry_point: vertex_entry_point.as_ptr(),
+            entry_point: desc.vertex_stage.entry_point,
         };
-        let (_fragment_entry_point, fragment_stage) =
-            if let Some(fragment_stage) = &desc.fragment_stage {
-                let fragment_entry_point = CString::new(fragment_stage.entry_point).unwrap();
-                let fragment_stage = pipe::ProgrammableStageDescriptor {
-                    module: fragment_stage.module.id,
-                    entry_point: fragment_entry_point.as_ptr(),
-                };
-                (fragment_entry_point, Some(fragment_stage))
-            } else {
-                (CString::default(), None)
-            };
-
-        let temp_color_states = desc.color_states.to_vec();
-        let temp_vertex_buffers = desc
-            .vertex_state
-            .vertex_buffers
-            .iter()
-            .map(|vbuf| pipe::VertexBufferLayoutDescriptor {
-                array_stride: vbuf.stride,
-                step_mode: vbuf.step_mode,
-                attributes: vbuf.attributes.as_ptr(),
-                attributes_length: vbuf.attributes.len(),
-            })
-            .collect::<Vec<_>>();
+        let fragment_stage =
+            desc.fragment_stage
+                .as_ref()
+                .map(|fs| pipe::ProgrammableStageDescriptor {
+                    module: fs.module.id,
+                    entry_point: fs.entry_point,
+                });
 
         gfx_select!(*device => self.device_create_render_pipeline(
             *device,
             &pipe::RenderPipelineDescriptor {
                 layout: desc.layout.id,
                 vertex_stage,
-                fragment_stage: fragment_stage
-                    .as_ref()
-                    .map_or(ptr::null(), |fs| fs as *const _),
-                rasterization_state: desc
-                    .rasterization_state
-                    .as_ref()
-                    .map_or(ptr::null(), |p| p as *const _),
+                fragment_stage,
+                rasterization_state: desc.rasterization_state.clone(),
                 primitive_topology: desc.primitive_topology,
-                color_states: temp_color_states.as_ptr(),
-                color_states_length: temp_color_states.len(),
-                depth_stencil_state: desc
-                    .depth_stencil_state
-                    .as_ref()
-                    .map_or(ptr::null(), |p| p as *const _),
-                vertex_state: pipe::VertexStateDescriptor {
-                    index_format: desc.vertex_state.index_format,
-                    vertex_buffers: temp_vertex_buffers.as_ptr(),
-                    vertex_buffers_length: temp_vertex_buffers.len(),
-                },
+                color_states: desc.color_states,
+                depth_stencil_state: desc.depth_stencil_state.clone(),
+                vertex_state: desc.vertex_state,
                 sample_count: desc.sample_count,
                 sample_mask: desc.sample_mask,
                 alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
@@ -681,15 +648,13 @@ impl crate::Context for Context {
     ) -> Self::ComputePipelineId {
         use wgc::pipeline as pipe;
 
-        let entry_point = CString::new(desc.compute_stage.entry_point).unwrap();
-
         gfx_select!(*device => self.device_create_compute_pipeline(
             *device,
             &pipe::ComputePipelineDescriptor {
                 layout: desc.layout.id,
                 compute_stage: pipe::ProgrammableStageDescriptor {
                     module: desc.compute_stage.module.id,
-                    entry_point: entry_point.as_ptr(),
+                    entry_point: desc.compute_stage.entry_point,
                 },
             },
             PhantomData

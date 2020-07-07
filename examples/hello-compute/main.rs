@@ -24,13 +24,10 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let adapter = instance
-        .request_adapter(
-            &wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
-                compatible_surface: None,
-            },
-            wgpu::UnsafeFeatures::disallow(),
-        )
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::Default,
+            compatible_surface: None,
+        })
         .await
         .unwrap();
 

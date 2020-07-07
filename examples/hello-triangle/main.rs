@@ -9,14 +9,11 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let instance = wgpu::Instance::new(wgpu::BackendBit::PRIMARY);
     let surface = unsafe { instance.create_surface(&window) };
     let adapter = instance
-        .request_adapter(
-            &wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
-                // Request an adapter which can render to our surface
-                compatible_surface: Some(&surface),
-            },
-            wgpu::UnsafeFeatures::disallow(),
-        )
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::Default,
+            // Request an adapter which can render to our surface
+            compatible_surface: Some(&surface),
+        })
         .await
         .expect("Failed to find an appropiate adapter");
 
