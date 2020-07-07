@@ -114,7 +114,7 @@ impl From<Backend> for BackendBit {
 /// }
 /// ```
 #[doc(hidden)]
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct NonExhaustive(());
@@ -252,12 +252,28 @@ bitflags::bitflags! {
 ///
 /// See also: https://gpuweb.github.io/gpuweb/#dictdef-gpulimits
 #[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Limits {
     /// Amount of bind groups that can be attached to a pipeline at the same time. Defaults to 4. Higher is "better".
     pub max_bind_groups: u32,
+    /// Amount of uniform buffer bindings that can be dynamic in a single pipeline. Defaults to 8. Higher is "better".
+    pub max_dynamic_uniform_buffers_per_pipeline_layout: u32,
+    /// Amount of storage buffer bindings that can be dynamic in a single pipeline. Defaults to 4. Higher is "better".
+    pub max_dynamic_storage_buffers_per_pipeline_layout: u32,
+    /// Amount of sampled textures visible in a single shader stage. Defaults to 16. Higher is "better".
+    pub max_sampled_textures_per_shader_stage: u32,
+    /// Amount of samplers visible in a single shader stage. Defaults to 16. Higher is "better".
+    pub max_samplers_per_shader_stage: u32,
+    /// Amount of storage buffers visible in a single shader stage. Defaults to 4. Higher is "better".
+    pub max_storage_buffers_per_shader_stage: u32,
+    /// Amount of storage textures visible in a single shader stage. Defaults to 4. Higher is "better".
+    pub max_storage_textures_per_shader_stage: u32,
+    /// Amount of uniform buffers visible in a single shader stage. Defaults to 12. Higher is "better".
+    pub max_uniform_buffers_per_shader_stage: u32,
+    /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 16384. Higher is "better".
+    pub max_uniform_buffer_binding_size: u32,
     /// This struct must be partially constructed from its default.
     pub _non_exhaustive: NonExhaustive,
 }
@@ -266,6 +282,14 @@ impl Default for Limits {
     fn default() -> Self {
         Limits {
             max_bind_groups: 4,
+            max_dynamic_uniform_buffers_per_pipeline_layout: 8,
+            max_dynamic_storage_buffers_per_pipeline_layout: 4,
+            max_sampled_textures_per_shader_stage: 16,
+            max_samplers_per_shader_stage: 16,
+            max_storage_buffers_per_shader_stage: 4,
+            max_storage_textures_per_shader_stage: 4,
+            max_uniform_buffers_per_shader_stage: 12,
+            max_uniform_buffer_binding_size: 16384,
             _non_exhaustive: unsafe { NonExhaustive::new() },
         }
     }
