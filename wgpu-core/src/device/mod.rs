@@ -2062,44 +2062,37 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             sc as u8
         };
 
-        let color_states =
-            unsafe { slice::from_raw_parts(desc.color_states, desc.color_states_length) };
-        let depth_stencil_state = unsafe { desc.depth_stencil_state.as_ref() };
+        let color_states = desc.color_states;
+        let depth_stencil_state = desc.depth_stencil_state.as_ref();
 
-        let rasterization_state = unsafe { desc.rasterization_state.as_ref() }.cloned();
+        let rasterization_state = desc.rasterization_state.as_ref();
         let rasterizer = conv::map_rasterization_state_descriptor(
-            &rasterization_state.clone().unwrap_or_default(),
+            &rasterization_state.cloned().unwrap_or_default(),
         );
 
         let mut interface = validation::StageInterface::default();
         let mut validated_stages = wgt::ShaderStage::empty();
 
-        let desc_vbs = unsafe {
-            slice::from_raw_parts(
-                desc.vertex_state.vertex_buffers,
-                desc.vertex_state.vertex_buffers_length,
-            )
-        };
+        let desc_vbs = desc.vertex_state.vertex_buffers;
         let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
         let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
         let mut attributes = Vec::new();
         for (i, vb_state) in desc_vbs.iter().enumerate() {
             vertex_strides
                 .alloc()
-                .init((vb_state.array_stride, vb_state.step_mode));
-            if vb_state.attributes_length == 0 {
+                .init((vb_state.stride, vb_state.step_mode));
+            if vb_state.attributes.is_empty() {
                 continue;
             }
             vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
                 binding: i as u32,
-                stride: vb_state.array_stride as u32,
+                stride: vb_state.stride as u32,
                 rate: match vb_state.step_mode {
                     InputStepMode::Vertex => hal::pso::VertexInputRate::Vertex,
                     InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
                 },
             });
-            let desc_atts =
-                unsafe { slice::from_raw_parts(vb_state.attributes, vb_state.attributes_length) };
+            let desc_atts = vb_state.attributes;
             for attribute in desc_atts {
                 if attribute.offset >= 0x10000000 {
                     return Err(
@@ -2213,11 +2206,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let vertex = {
-                let entry_point_name =
-                    unsafe { ffi::CStr::from_ptr(desc.vertex_stage.entry_point) }
-                        .to_str()
-                        .to_owned()
-                        .unwrap();
+                let entry_point_name = desc.vertex_stage.entry_point;
 
                 let shader_module = &shader_module_guard[desc.vertex_stage.module];
 
@@ -2241,12 +2230,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             };
 
-            let fragment = match unsafe { desc.fragment_stage.as_ref() } {
+            let fragment = match &desc.fragment_stage {
                 Some(stage) => {
-                    let entry_point_name = unsafe { ffi::CStr::from_ptr(stage.entry_point) }
-                        .to_str()
-                        .to_owned()
-                        .unwrap();
+                    let entry_point_name = stage.entry_point;
 
                     let shader_module = &shader_module_guard[stage.module];
 
@@ -2344,7 +2330,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             attachments: AttachmentData {
                 colors: color_states.iter().map(|state| state.format).collect(),
                 resolves: ArrayVec::new(),
-                depth_stencil: depth_stencil_state.map(|state| state.format),
+                depth_stencil: depth_stencil_state
+                    .as_ref()
+                    .map(|state| state.format.clone()),
             },
             sample_count: samples,
         };
@@ -2355,7 +2343,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 flags |= pipeline::PipelineFlags::BLEND_COLOR;
             }
         }
-        if let Some(ds) = depth_stencil_state {
+        if let Some(ds) = depth_stencil_state.as_ref() {
             if ds.needs_stencil_reference() {
                 flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
             }
@@ -2392,25 +2380,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 desc: trace::RenderPipelineDescriptor {
                     layout: desc.layout,
                     vertex_stage: trace::ProgrammableStageDescriptor::new(&desc.vertex_stage),
-                    fragment_stage: unsafe { desc.fragment_stage.as_ref() }
+                    fragment_stage: desc
+                        .fragment_stage
+                        .as_ref()
                         .map(trace::ProgrammableStageDescriptor::new),
                     primitive_topology: desc.primitive_topology,
-                    rasterization_state,
+                    rasterization_state: rasterization_state.cloned(),
                     color_states: color_states.to_vec(),
                     depth_stencil_state: depth_stencil_state.cloned(),
                     vertex_state: trace::VertexStateDescriptor {
                         index_format: desc.vertex_state.index_format,
                         vertex_buffers: desc_vbs
                             .iter()
-                            .map(|vbl| trace::VertexBufferLayoutDescriptor {
-                                array_stride: vbl.array_stride,
+                            .map(|vbl| trace::VertexBufferDescriptor {
+                                stride: vbl.stride,
                                 step_mode: vbl.step_mode,
-                                attributes: unsafe {
-                                    slice::from_raw_parts(vbl.attributes, vbl.attributes_length)
-                                }
-                                .iter()
-                                .cloned()
-                                .collect(),
+                                attributes: vbl.attributes.to_owned(),
                             })
                             .collect(),
                     },
@@ -2475,10 +2460,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
-            let entry_point_name = unsafe { ffi::CStr::from_ptr(pipeline_stage.entry_point) }
-                .to_str()
-                .to_owned()
-                .unwrap();
+            let entry_point_name = pipeline_stage.entry_point;
 
             let shader_module = &shader_module_guard[pipeline_stage.module];
 

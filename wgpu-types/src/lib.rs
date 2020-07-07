@@ -813,6 +813,26 @@ pub struct VertexAttributeDescriptor {
     pub shader_location: ShaderLocation,
 }
 
+/// Describes how the vertex buffer is interpreted.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct VertexBufferDescriptor<'a> {
+    /// The stride, in bytes, between elements of this buffer.
+    pub stride: BufferAddress,
+    /// How often this vertex buffer is "stepped" forward.
+    pub step_mode: InputStepMode,
+    /// The list of attributes which comprise a single vertex.
+    pub attributes: &'a [VertexAttributeDescriptor],
+}
+
+/// Describes vertex input state for a render pipeline.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub struct VertexStateDescriptor<'a> {
+    /// The format of any index buffers used with this pipeline.
+    pub index_format: IndexFormat,
+    /// The format of any vertex buffers used with this pipeline.
+    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
+}
+
 /// Vertex Format for a Vertex Attribute (input).
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]

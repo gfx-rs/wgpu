@@ -6,30 +6,13 @@ use crate::{
     device::RenderPassContext,
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
-    LifeGuard, RawString, RefCount, Stored,
+    LifeGuard, RefCount, Stored,
 };
 use std::borrow::Borrow;
 use wgt::{
     BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, IndexFormat, InputStepMode,
-    PrimitiveTopology, RasterizationStateDescriptor, VertexAttributeDescriptor,
+    PrimitiveTopology, RasterizationStateDescriptor, VertexStateDescriptor,
 };
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct VertexBufferLayoutDescriptor {
-    pub array_stride: BufferAddress,
-    pub step_mode: InputStepMode,
-    pub attributes: *const VertexAttributeDescriptor,
-    pub attributes_length: usize,
-}
-
-#[repr(C)]
-#[derive(Debug)]
-pub struct VertexStateDescriptor {
-    pub index_format: IndexFormat,
-    pub vertex_buffers: *const VertexBufferLayoutDescriptor,
-    pub vertex_buffers_length: usize,
-}
 
 #[repr(C)]
 #[derive(Debug)]
@@ -46,18 +29,17 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) module: Option<naga::Module>,
 }
 
-#[repr(C)]
 #[derive(Debug)]
-pub struct ProgrammableStageDescriptor {
+pub struct ProgrammableStageDescriptor<'a> {
     pub module: ShaderModuleId,
-    pub entry_point: RawString,
+    pub entry_point: &'a str,
 }
 
 #[repr(C)]
 #[derive(Debug)]
-pub struct ComputePipelineDescriptor {
+pub struct ComputePipelineDescriptor<'a> {
     pub layout: PipelineLayoutId,
-    pub compute_stage: ProgrammableStageDescriptor,
+    pub compute_stage: ProgrammableStageDescriptor<'a>,
 }
 
 #[derive(Clone, Debug)]
@@ -79,18 +61,16 @@ impl<B: hal::Backend> Borrow<RefCount> for ComputePipeline<B> {
     }
 }
 
-#[repr(C)]
 #[derive(Debug)]
-pub struct RenderPipelineDescriptor {
+pub struct RenderPipelineDescriptor<'a> {
     pub layout: PipelineLayoutId,
-    pub vertex_stage: ProgrammableStageDescriptor,
-    pub fragment_stage: *const ProgrammableStageDescriptor,
+    pub vertex_stage: ProgrammableStageDescriptor<'a>,
+    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
     pub primitive_topology: PrimitiveTopology,
-    pub rasterization_state: *const RasterizationStateDescriptor,
-    pub color_states: *const ColorStateDescriptor,
-    pub color_states_length: usize,
-    pub depth_stencil_state: *const DepthStencilStateDescriptor,
-    pub vertex_state: VertexStateDescriptor,
+    pub rasterization_state: Option<RasterizationStateDescriptor>,
+    pub color_states: &'a [ColorStateDescriptor],
+    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
+    pub vertex_state: VertexStateDescriptor<'a>,
     pub sample_count: u32,
     pub sample_mask: u32,
     pub alpha_to_coverage_enabled: bool,

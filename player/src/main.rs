@@ -55,25 +55,6 @@ impl Label {
     }
 }
 
-struct OwnedProgrammableStage {
-    desc: wgc::pipeline::ProgrammableStageDescriptor,
-    #[allow(dead_code)]
-    entry_point: CString,
-}
-
-impl From<trace::ProgrammableStageDescriptor> for OwnedProgrammableStage {
-    fn from(stage: trace::ProgrammableStageDescriptor) -> Self {
-        let entry_point = CString::new(stage.entry_point.as_str()).unwrap();
-        OwnedProgrammableStage {
-            desc: wgc::pipeline::ProgrammableStageDescriptor {
-                module: stage.module,
-                entry_point: entry_point.as_ptr(),
-            },
-            entry_point,
-        }
-    }
-}
-
 #[derive(Debug)]
 struct IdentityPassThrough<I>(PhantomData<I>);
 
@@ -311,13 +292,13 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.shader_module_destroy::<B>(id);
             }
             A::CreateComputePipeline { id, desc } => {
-                let cs_stage = OwnedProgrammableStage::from(desc.compute_stage);
+                let compute_stage = desc.compute_stage.to_core();
                 self.device_maintain_ids::<B>(device);
                 self.device_create_compute_pipeline::<B>(
                     device,
                     &wgc::pipeline::ComputePipelineDescriptor {
                         layout: desc.layout,
-                        compute_stage: cs_stage.desc,
+                        compute_stage,
                     },
                     id,
                 )
@@ -327,17 +308,16 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.compute_pipeline_destroy::<B>(id);
             }
             A::CreateRenderPipeline { id, desc } => {
-                let vs_stage = OwnedProgrammableStage::from(desc.vertex_stage);
-                let fs_stage = desc.fragment_stage.map(OwnedProgrammableStage::from);
+                let vertex_stage = desc.vertex_stage.to_core();
+                let fragment_stage = desc.fragment_stage.as_ref().map(|fs| fs.to_core());
                 let vertex_buffers = desc
                     .vertex_state
                     .vertex_buffers
                     .iter()
-                    .map(|vb| wgc::pipeline::VertexBufferLayoutDescriptor {
-                        array_stride: vb.array_stride,
+                    .map(|vb| wgt::VertexBufferDescriptor {
+                        stride: vb.stride,
                         step_mode: vb.step_mode,
-                        attributes: vb.attributes.as_ptr(),
-                        attributes_length: vb.attributes.len(),
+                        attributes: &vb.attributes,
                     })
                     .collect::<Vec<_>>();
                 self.device_maintain_ids::<B>(device);
@@ -345,23 +325,15 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     device,
                     &wgc::pipeline::RenderPipelineDescriptor {
                         layout: desc.layout,
-                        vertex_stage: vs_stage.desc,
-                        fragment_stage: fs_stage.as_ref().map_or(ptr::null(), |s| &s.desc),
+                        vertex_stage,
+                        fragment_stage,
                         primitive_topology: desc.primitive_topology,
-                        rasterization_state: desc
-                            .rasterization_state
-                            .as_ref()
-                            .map_or(ptr::null(), |rs| rs),
-                        color_states: desc.color_states.as_ptr(),
-                        color_states_length: desc.color_states.len(),
-                        depth_stencil_state: desc
-                            .depth_stencil_state
-                            .as_ref()
-                            .map_or(ptr::null(), |ds| ds),
-                        vertex_state: wgc::pipeline::VertexStateDescriptor {
+                        rasterization_state: desc.rasterization_state,
+                        color_states: &desc.color_states,
+                        depth_stencil_state: desc.depth_stencil_state,
+                        vertex_state: wgt::VertexStateDescriptor {
                             index_format: desc.vertex_state.index_format,
-                            vertex_buffers: vertex_buffers.as_ptr(),
-                            vertex_buffers_length: vertex_buffers.len(),
+                            vertex_buffers: &vertex_buffers,
                         },
                         sample_count: desc.sample_count,
                         sample_mask: desc.sample_mask,
