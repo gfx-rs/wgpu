@@ -157,6 +157,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
+                    assert!(
+                        (index as u32) < cmb.limits.max_bind_groups,
+                        "Bind group index {0} is out of range 0..{1} provided by requested max_bind_group limit {1}",
+                        index,
+                        cmb.limits.max_bind_groups
+                    );
+
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
