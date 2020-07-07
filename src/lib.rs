@@ -3,7 +3,6 @@
 //! To start using the API, create an [`Instance`].
 
 #![doc(html_logo_url = "https://raw.githubusercontent.com/gfx-rs/wgpu-rs/master/logo.png")]
-
 #![warn(missing_docs)]
 
 mod backend;
@@ -33,8 +32,9 @@ pub use wgt::{
     PrimitiveTopology, RasterizationStateDescriptor, RenderBundleEncoderDescriptor, ShaderLocation,
     ShaderStage, StencilOperation, StencilStateFaceDescriptor, SwapChainDescriptor,
     SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension,
-    TextureFormat, TextureUsage, TextureViewDimension, UnsafeFeatures, VertexAttributeDescriptor,
-    VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor,
+    VertexBufferDescriptor, VertexFormat, VertexStateDescriptor, BIND_BUFFER_ALIGNMENT,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -174,7 +174,6 @@ trait Context: Sized {
     fn instance_request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-        unsafe_extensions: UnsafeFeatures,
     ) -> Self::RequestAdapterFuture;
     fn adapter_request_device(
         &self,
@@ -846,30 +845,6 @@ pub struct ProgrammableStageDescriptor<'a> {
     pub entry_point: &'a str,
 }
 
-/// Describes vertex input state for a render pipeline.
-#[derive(Clone, Debug)]
-pub struct VertexStateDescriptor<'a> {
-    /// The format of any index buffers used with this pipeline.
-    pub index_format: IndexFormat,
-
-    /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
-}
-
-/// Describes how the vertex buffer is interpreted.
-#[derive(Clone, Debug)]
-pub struct VertexBufferDescriptor<'a> {
-    /// The stride, in bytes, between elements of this buffer.
-    pub stride: BufferAddress,
-
-    /// How often this vertex buffer is "stepped" forward. Can be per-vertex
-    /// or per-instance.
-    pub step_mode: InputStepMode,
-
-    /// The list of attributes which comprise a single vertex, this can be made with [`vertex_attr_array`].
-    pub attributes: &'a [VertexAttributeDescriptor],
-}
-
 /// Describes a render (graphics) pipeline.
 #[derive(Clone)]
 pub struct RenderPipelineDescriptor<'a> {
@@ -1068,20 +1043,14 @@ impl Instance {
     ///
     /// # Arguments
     ///
-    /// - `unsafe_features` - Marker for allowing unsafe features.
     /// - `backends` - Backends from which to enumerate adapters.
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn enumerate_adapters(
-        &self,
-        unsafe_features: UnsafeFeatures,
-        backends: BackendBit,
-    ) -> impl Iterator<Item = Adapter> {
+    pub fn enumerate_adapters(&self, backends: BackendBit) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
-            .enumerate_adapters(
-                unsafe_features,
-                wgc::instance::AdapterInputs::Mask(backends, |_| PhantomData),
-            )
+            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
+                PhantomData
+            }))
             .into_iter()
             .map(move |id| crate::Adapter {
                 id,
@@ -1097,11 +1066,10 @@ impl Instance {
     pub fn request_adapter(
         &self,
         options: &RequestAdapterOptions<'_>,
-        unsafe_features: UnsafeFeatures,
     ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
         self.context
-            .instance_request_adapter(options, unsafe_features)
+            .instance_request_adapter(options)
             .map(|option| option.map(|id| Adapter { context, id }))
     }
 

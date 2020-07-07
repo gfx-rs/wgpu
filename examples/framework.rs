@@ -30,8 +30,8 @@ pub enum ShaderStage {
 }
 
 pub trait Example: 'static + Sized {
-    fn needed_features() -> (wgpu::Features, wgpu::UnsafeFeatures) {
-        (wgpu::Features::empty(), wgt::UnsafeFeatures::disallow())
+    fn needed_features() -> wgpu::Features {
+        wgpu::Features::empty()
     }
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
@@ -85,16 +85,13 @@ async fn setup<E: Example>(title: &str) -> Setup {
         (size, surface)
     };
 
-    let (needed_features, unsafe_extensions) = E::needed_features();
+    let needed_features = E::needed_features();
 
     let adapter = instance
-        .request_adapter(
-            &wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::Default,
-                compatible_surface: Some(&surface),
-            },
-            unsafe_extensions,
-        )
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::Default,
+            compatible_surface: Some(&surface),
+        })
         .await
         .unwrap();
 
