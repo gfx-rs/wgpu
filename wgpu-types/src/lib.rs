@@ -234,43 +234,8 @@ bitflags::bitflags! {
         const MULTI_DRAW_INDIRECT_COUNT = 0x0000_0000_0040_0000;
         /// Features which are part of the upstream webgpu standard
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
-        /// Features that require activating the unsafe feature flag
-        const ALL_UNSAFE = 0xFFFF_0000_0000_0000;
         /// Features that are only available when targeting native (not web)
         const ALL_NATIVE = 0xFFFF_FFFF_FFFF_0000;
-    }
-}
-
-/// Marker type signalling if unsafe features are allowed to be enabled.
-///
-/// This doesn't enable any unsafe features, but must be set to `allow` if
-/// an unsafe features is enabled.
-///
-/// The safety contract of safe Rust is that it is impossible to cause Undefined Behavior (UB)
-/// from safe Rust. If a feature would allow UB to happen, it must preset an unsafe interface.
-/// Enabling unsafe features is therefore an inherently unsafe operation.
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct UnsafeFeatures {
-    allow_unsafe: bool,
-}
-impl UnsafeFeatures {
-    /// Allow unsafe features to be enabled. This is an unsafe function and by calling this
-    /// function, you assert that even with these features on, it is impossible to cause UB
-    /// from within safe Rust.
-    pub unsafe fn allow() -> Self {
-        Self { allow_unsafe: true }
-    }
-    /// Disallow unsafe features.
-    pub fn disallow() -> Self {
-        Self {
-            allow_unsafe: false,
-        }
-    }
-    /// Does this marker allow unsafe features.
-    pub fn allowed(self) -> bool {
-        self.allow_unsafe
     }
 }
 
