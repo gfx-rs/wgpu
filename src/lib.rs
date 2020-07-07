@@ -1,10 +1,11 @@
-extern crate winapi;
 #[macro_use]
 extern crate bitflags;
 
 use std::ffi::CStr;
-use winapi::shared::dxgiformat;
-use winapi::um::{d3d12, d3dcommon};
+use winapi::{
+    shared::dxgiformat,
+    um::{d3d12, d3dcommon},
+};
 
 mod com;
 mod command_allocator;
@@ -93,9 +94,6 @@ pub struct D3D12Lib {
 #[cfg(feature = "libloading")]
 impl D3D12Lib {
     pub fn new() -> Result<Self, libloading::Error> {
-        libloading::Library::new("d3d12.dll")
-            .map(|lib| D3D12Lib {
-                lib,
-            })
+        libloading::Library::new("d3d12.dll").map(|lib| D3D12Lib { lib })
     }
 }

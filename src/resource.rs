@@ -1,10 +1,8 @@
 //! GPU Resource
 
-use com::WeakPtr;
-use std::ops::Range;
-use std::ptr;
+use crate::{com::WeakPtr, D3DResult, Rect};
+use std::{ops::Range, ptr};
 use winapi::um::d3d12;
-use {D3DResult, Rect};
 
 pub type Subresource = u32;
 

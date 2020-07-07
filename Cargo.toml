@@ -1,6 +1,6 @@
 [package]
 name = "d3d12"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
 	"msiglreith <m.siglreith@gmail.com>",
 	"Dzmitry Malyshau <kvarkus@gmail.com>",
@@ -10,7 +10,8 @@ repository = "https://github.com/gfx-rs/d3d12-rs"
 keywords = ["windows", "graphics"]
 license = "MIT OR Apache-2.0"
 documentation = "https://docs.rs/d3d12"
-categories = ["memory-management"]
+categories = ["api-bindings", "graphics", "memory-management", "os::windows-apis"]
+edition = "2018"
 
 [features]
 implicit-link = []

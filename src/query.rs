@@ -1,4 +1,4 @@
-use com::WeakPtr;
+use crate::com::WeakPtr;
 use winapi::um::d3d12;
 
 #[repr(u32)]

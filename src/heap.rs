@@ -1,4 +1,4 @@
-use com::WeakPtr;
+use crate::com::WeakPtr;
 use winapi::um::d3d12;
 
 pub type Heap = WeakPtr<d3d12::ID3D12Heap>;
