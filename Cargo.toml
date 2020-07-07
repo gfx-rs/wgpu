@@ -1,6 +1,6 @@
 [package]
 name = "d3d12"
-version = "0.3.0"
+version = "0.3.1"
 authors = [
 	"msiglreith <m.siglreith@gmail.com>",
 	"Dzmitry Malyshau <kvarkus@gmail.com>",
