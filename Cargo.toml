@@ -27,14 +27,14 @@ vulkan = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "cfd21d4913f8cbed84ebbd0af54bae69f4426a64"
+rev = "01cf22c25adef14ee296af8d827fad3760a70a45"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "cfd21d4913f8cbed84ebbd0af54bae69f4426a64"
+rev = "01cf22c25adef14ee296af8d827fad3760a70a45"
 
 [dependencies]
 arrayvec = "0.5"
@@ -71,6 +71,10 @@ test = true
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
 
+[patch."https://github.com/gfx-rs/gfx-extras"]
+#gfx-descriptor = { version = "0.1.0", path = "../gfx-extras/gfx-descriptor" }
+#gfx-memory = { version = "0.1.0", path = "../gfx-extras/gfx-memory" }
+
 [patch.crates-io]
 #gfx-hal = { version = "0.5.0", path = "../gfx/src/hal" }
 #gfx-backend-empty = { version = "0.5.0", path = "../gfx/src/backend/empty" }
@@ -78,8 +82,6 @@ test = true
 #gfx-backend-dx12 = { version = "0.5.0", path = "../gfx/src/backend/dx12" }
 #gfx-backend-dx11 = { version = "0.5.0", path = "../gfx/src/backend/dx11" }
 #gfx-backend-metal = { version = "0.5.0", path = "../gfx/src/backend/metal" }
-#gfx-descriptor = { version = "0.1.0", path = "../gfx-extras/gfx-descriptor" }
-#gfx-memory = { version = "0.1.0", path = "../gfx-extras/gfx-memory" }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
