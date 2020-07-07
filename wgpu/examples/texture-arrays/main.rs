@@ -85,14 +85,11 @@ struct Example {
 }
 
 impl framework::Example for Example {
-    fn needed_features() -> (wgpu::Features, wgpu::UnsafeFeatures) {
-        (
-            wgpu::Features::UNSIZED_BINDING_ARRAY
-                | wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
-                | wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
-                | wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
-            wgpu::UnsafeFeatures::disallow(),
-        )
+    fn needed_features() -> wgpu::Features {
+        wgpu::Features::UNSIZED_BINDING_ARRAY
+            | wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
+            | wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
+            | wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY
     }
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,

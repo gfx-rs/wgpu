@@ -725,7 +725,6 @@ impl crate::Context for Context {
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions<'_>,
-        _unsafe_extensions: wgt::UnsafeFeatures,
     ) -> Self::RequestAdapterFuture {
         //TODO: support this check, return `None` if the flag is not set.
         // It's not trivial, since we need the Future logic to have this check,
