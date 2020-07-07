@@ -47,11 +47,11 @@ rev = "a9228d2aed38c71388489a95817238ff98198fa3"
 
 [dependencies.gfx-descriptor]
 git = "https://github.com/gfx-rs/gfx-extras"
-rev = "6387d81773e29be2220cb15186ceb875ed88303b"
+rev = "473a4cdc63463e7986707507c4a7f6a3a767e329"
 
 [dependencies.gfx-memory]
 git = "https://github.com/gfx-rs/gfx-extras"
-rev = "6387d81773e29be2220cb15186ceb875ed88303b"
+rev = "473a4cdc63463e7986707507c4a7f6a3a767e329"
 
 [dependencies.wgt]
 path = "../wgpu-types"
