@@ -1589,6 +1589,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             None => (buffer.size - bb.offset, buffer.size),
                         };
 
+                        if pub_usage == wgt::BufferUsage::UNIFORM
+                            && (device.limits.max_uniform_buffer_binding_size as u64) < bind_size
+                        {
+                            return Err(BindGroupError::UniformBufferRangeTooLarge);
+                        }
+
                         // Record binding info for validating dynamic offsets
                         if dynamic {
                             dynamic_binding_info.push(binding_model::BindGroupDynamicBindingData {

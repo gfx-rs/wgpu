@@ -48,6 +48,8 @@ pub enum BindGroupError {
     /// The given sampler is/is not a comparison sampler,
     /// while the layout type indicates otherwise.
     WrongSamplerComparison,
+    /// Uniform buffer binding range exceeds [`wgt::Limits::max_uniform_buffer_binding_size`] limit
+    UniformBufferRangeTooLarge,
 }
 
 #[derive(Clone, Debug)]
