@@ -1274,6 +1274,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw_layout
         };
 
+        let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
+        desc.bindings
+            .iter()
+            .for_each(|b| count_validator.add_binding(b));
+        // If a single bind group layout violates limits, the pipeline layout is definitely
+        // going to violate limits too, lets catch it now.
+        count_validator
+            .validate(&device.limits)
+            .map_err(binding_model::BindGroupLayoutError::TooManyBindings)?;
+
         let layout = binding_model::BindGroupLayout {
             raw,
             device_id: Stored {
@@ -1288,6 +1298,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .iter()
                 .filter(|b| b.has_dynamic_offset())
                 .count(),
+            count_validator,
         };
 
         let id = hub
@@ -1357,8 +1368,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         // TODO: push constants
+        let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
         let pipeline_layout = {
             let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
+            for &id in bind_group_layout_ids {
+                let bind_group_layout = &bind_group_layout_guard[id];
+                count_validator.merge(&bind_group_layout.count_validator);
+            }
             let descriptor_set_layouts = bind_group_layout_ids
                 .iter()
                 .map(|&id| &bind_group_layout_guard[id].raw);
@@ -1369,6 +1385,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             .unwrap()
         };
+        count_validator
+            .validate(&device.limits)
+            .map_err(binding_model::PipelineLayoutError::TooManyBindings)?;
 
         let layout = binding_model::PipelineLayout {
             raw: pipeline_layout,
