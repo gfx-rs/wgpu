@@ -5,11 +5,12 @@ use pomelo::pomelo;
 pomelo! {
     //%verbose;
     %include {
-        use super::super::{error::ErrorKind, token::*};
-        use crate::{Arena, Expression, Function, LocalVariable, Module};
+        use super::super::{error::ErrorKind, token::*, ast::*};
+        use crate::{Arena, Expression, Function, LocalVariable};
     }
     %token #[derive(Debug)] pub enum Token {};
-    %extra_argument Module;
+    %parser pub struct Parser<'a> {};
+    %extra_argument &'a mut Program;
     %extra_token TokenMetadata;
     %error ErrorKind;
     %syntax_error {
@@ -176,7 +177,13 @@ pomelo! {
     translation_unit ::= external_declaration;
     translation_unit ::= translation_unit external_declaration;
 
-    external_declaration ::= function_definition(f) { extra.functions.append(f); }
+    external_declaration ::= function_definition(f) {
+        let name = f.name.clone();
+        let handle = extra.functions.append(f);
+        if let Some(name) = name {
+            extra.lookup_function.insert(name, handle);
+        }
+    }
 
     function_definition ::= function_prototype compound_statement_no_new_scope {
         Function {
