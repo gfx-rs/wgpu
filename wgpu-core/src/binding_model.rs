@@ -25,6 +25,8 @@ pub enum BindGroupLayoutError {
     ZeroCount,
     /// Arrays of bindings unsupported for this type of binding
     ArrayUnsupported,
+    /// Bindings go over binding count limits
+    TooManyBindings(BindingTypeMaxCountError),
 }
 
 #[derive(Clone, Debug)]
@@ -46,6 +48,173 @@ pub enum BindGroupError {
     /// The given sampler is/is not a comparison sampler,
     /// while the layout type indicates otherwise.
     WrongSamplerComparison,
+    /// Uniform buffer binding range exceeds [`wgt::Limits::max_uniform_buffer_binding_size`] limit
+    UniformBufferRangeTooLarge,
+}
+
+#[derive(Clone, Debug)]
+pub struct BindingTypeMaxCountError {
+    pub kind: BindingTypeMaxCountErrorKind,
+    pub stage: wgt::ShaderStage,
+    pub count: u32,
+}
+
+#[derive(Clone, Debug)]
+pub enum BindingTypeMaxCountErrorKind {
+    DynamicUniformBuffers,
+    DynamicStorageBuffers,
+    SampledTextures,
+    Samplers,
+    StorageBuffers,
+    StorageTextures,
+    UniformBuffers,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct PerStageBindingTypeCounter {
+    vertex: u32,
+    fragment: u32,
+    compute: u32,
+}
+impl PerStageBindingTypeCounter {
+    pub(crate) fn add(&mut self, stage: wgt::ShaderStage, count: u32) {
+        if stage.contains(wgt::ShaderStage::VERTEX) {
+            self.vertex += count;
+        }
+        if stage.contains(wgt::ShaderStage::FRAGMENT) {
+            self.fragment += count;
+        }
+        if stage.contains(wgt::ShaderStage::COMPUTE) {
+            self.compute += count;
+        }
+    }
+
+    pub(crate) fn max(&self) -> (wgt::ShaderStage, u32) {
+        let max_value = self.vertex.max(self.fragment.max(self.compute));
+        let mut stage = wgt::ShaderStage::NONE;
+        if max_value == self.vertex {
+            stage |= wgt::ShaderStage::VERTEX
+        }
+        if max_value == self.fragment {
+            stage |= wgt::ShaderStage::FRAGMENT
+        }
+        if max_value == self.compute {
+            stage |= wgt::ShaderStage::COMPUTE
+        }
+        (stage, max_value)
+    }
+
+    pub(crate) fn merge(&mut self, other: &Self) {
+        self.vertex = self.vertex.max(other.vertex);
+        self.fragment = self.fragment.max(other.fragment);
+        self.compute = self.compute.max(other.compute);
+    }
+
+    pub(crate) fn validate(
+        &self,
+        limit: u32,
+        kind: BindingTypeMaxCountErrorKind,
+    ) -> Result<(), BindingTypeMaxCountError> {
+        let (stage, count) = self.max();
+        if limit < count {
+            Err(BindingTypeMaxCountError { kind, stage, count })
+        } else {
+            Ok(())
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct BindingTypeMaxCountValidator {
+    dynamic_uniform_buffers: u32,
+    dynamic_storage_buffers: u32,
+    sampled_textures: PerStageBindingTypeCounter,
+    samplers: PerStageBindingTypeCounter,
+    storage_buffers: PerStageBindingTypeCounter,
+    storage_textures: PerStageBindingTypeCounter,
+    uniform_buffers: PerStageBindingTypeCounter,
+}
+
+impl BindingTypeMaxCountValidator {
+    pub(crate) fn add_binding(&mut self, binding: &wgt::BindGroupLayoutEntry) {
+        let count = binding.count.unwrap_or(1);
+        match binding.ty {
+            wgt::BindingType::UniformBuffer { dynamic, .. } => {
+                self.uniform_buffers.add(binding.visibility, count);
+                if dynamic {
+                    self.dynamic_uniform_buffers += count;
+                }
+            }
+            wgt::BindingType::StorageBuffer { dynamic, .. } => {
+                self.storage_textures.add(binding.visibility, count);
+                if dynamic {
+                    self.dynamic_storage_buffers += count;
+                }
+            }
+            wgt::BindingType::Sampler { .. } => {
+                self.samplers.add(binding.visibility, count);
+            }
+            wgt::BindingType::SampledTexture { .. } => {
+                self.sampled_textures.add(binding.visibility, count);
+            }
+            wgt::BindingType::StorageTexture { .. } => {
+                self.storage_textures.add(binding.visibility, count);
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    pub(crate) fn merge(&mut self, other: &Self) {
+        self.dynamic_uniform_buffers += other.dynamic_uniform_buffers;
+        self.dynamic_storage_buffers += other.dynamic_storage_buffers;
+        self.sampled_textures.merge(&other.sampled_textures);
+        self.samplers.merge(&other.samplers);
+        self.storage_buffers.merge(&other.storage_buffers);
+        self.storage_textures.merge(&other.storage_textures);
+        self.uniform_buffers.merge(&other.uniform_buffers);
+    }
+
+    pub(crate) fn validate(&self, limits: &wgt::Limits) -> Result<(), BindingTypeMaxCountError> {
+        if limits.max_dynamic_uniform_buffers_per_pipeline_layout < self.dynamic_uniform_buffers {
+            return Err(BindingTypeMaxCountError {
+                kind: BindingTypeMaxCountErrorKind::DynamicUniformBuffers,
+                stage: wgt::ShaderStage::NONE,
+                count: self.dynamic_uniform_buffers,
+            });
+        }
+        if limits.max_dynamic_storage_buffers_per_pipeline_layout < self.dynamic_storage_buffers {
+            return Err(BindingTypeMaxCountError {
+                kind: BindingTypeMaxCountErrorKind::DynamicStorageBuffers,
+                stage: wgt::ShaderStage::NONE,
+                count: self.dynamic_storage_buffers,
+            });
+        }
+        self.sampled_textures.validate(
+            limits.max_sampled_textures_per_shader_stage,
+            BindingTypeMaxCountErrorKind::SampledTextures,
+        )?;
+        self.storage_buffers.validate(
+            limits.max_storage_buffers_per_shader_stage,
+            BindingTypeMaxCountErrorKind::StorageBuffers,
+        )?;
+        self.samplers.validate(
+            limits.max_samplers_per_shader_stage,
+            BindingTypeMaxCountErrorKind::Samplers,
+        )?;
+        self.storage_buffers.validate(
+            limits.max_storage_buffers_per_shader_stage,
+            BindingTypeMaxCountErrorKind::StorageBuffers,
+        )?;
+        self.storage_textures.validate(
+            limits.max_storage_textures_per_shader_stage,
+            BindingTypeMaxCountErrorKind::StorageTextures,
+        )?;
+        self.uniform_buffers.validate(
+            limits.max_uniform_buffers_per_shader_stage,
+            BindingTypeMaxCountErrorKind::UniformBuffers,
+        )?;
+        Ok(())
+    }
 }
 
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
@@ -58,6 +227,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) entries: BindEntryMap,
     pub(crate) desc_counts: DescriptorCounts,
     pub(crate) dynamic_count: usize,
+    pub(crate) count_validator: BindingTypeMaxCountValidator,
 }
 
 #[repr(C)]
@@ -70,6 +240,7 @@ pub struct PipelineLayoutDescriptor {
 #[derive(Clone, Debug)]
 pub enum PipelineLayoutError {
     TooManyGroups(usize),
+    TooManyBindings(BindingTypeMaxCountError),
 }
 
 #[derive(Debug)]
