@@ -16,7 +16,7 @@ use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekPoke, Poke};
 use wgt::{BufferAddress, BufferUsage, DynamicOffset, BIND_BUFFER_ALIGNMENT};
 
-use std::iter;
+use std::{iter, str};
 
 #[derive(Debug, PartialEq)]
 enum PipelineState {
@@ -38,7 +38,26 @@ enum ComputeCommand {
         buffer_id: id::BufferId,
         offset: BufferAddress,
     },
+    PushDebugGroup {
+        color: u32,
+        len: usize,
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
+        phantom_marker: PhantomSlice<u8>,
+    },
+    PopDebugGroup,
+    InsertDebugMarker {
+        color: u32,
+        len: usize,
+        #[cfg_attr(any(feature = "trace", feature = "replay"), serde(skip))]
+        phantom_marker: PhantomSlice<u8>,
+    },
     End,
+}
+
+#[derive(Debug)]
+struct State {
+    binder: Binder,
+    debug_scope_depth: u32,
 }
 
 impl Default for ComputeCommand {
@@ -78,7 +97,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
         let cmb = &mut cmb_guard[encoder_id];
         let raw = cmb.raw.last_mut().unwrap();
-        let mut binder = Binder::new(cmb.limits.max_bind_groups);
 
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
         let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -87,6 +105,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut pipeline_state = PipelineState::Required;
+
+        let mut state = State {
+            binder: Binder::new(cmb.limits.max_bind_groups),
+            debug_scope_depth: 0,
+        };
 
         let mut peeker = raw_data.as_ptr();
         let raw_data_end = unsafe { raw_data.as_ptr().add(raw_data.len()) };
@@ -142,9 +165,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         &*texture_guard,
                     );
 
-                    if let Some((pipeline_layout_id, follow_ups)) =
-                        binder.provide_entry(index as usize, bind_group_id, bind_group, offsets)
-                    {
+                    if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
+                        index as usize,
+                        bind_group_id,
+                        bind_group,
+                        offsets,
+                    ) {
                         let bind_groups = iter::once(bind_group.raw.raw()).chain(
                             follow_ups
                                 .clone()
@@ -176,13 +202,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     // Rebind resources
-                    if binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
+                    if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
                         let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
-                        binder.pipeline_layout_id = Some(pipeline.layout_id.value);
-                        binder.reset_expectations(pipeline_layout.bind_group_layout_ids.len());
+                        state.binder.pipeline_layout_id = Some(pipeline.layout_id.value);
+                        state
+                            .binder
+                            .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
                         let mut is_compatible = true;
 
-                        for (index, (entry, bgl_id)) in binder
+                        for (index, (entry, bgl_id)) in state
+                            .binder
                             .entries
                             .iter_mut()
                             .zip(&pipeline_layout.bind_group_layout_ids)
@@ -243,6 +272,39 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         raw.dispatch_indirect(&src_buffer.raw, offset);
                     }
                 }
+                ComputeCommand::PushDebugGroup {
+                    color,
+                    len,
+                    phantom_marker,
+                } => unsafe {
+                    state.debug_scope_depth += 1;
+
+                    let (new_peeker, label) =
+                        { phantom_marker.decode_unaligned(peeker, len, raw_data_end) };
+                    peeker = new_peeker;
+
+                    raw.begin_debug_marker(str::from_utf8(label).unwrap(), color)
+                },
+                ComputeCommand::PopDebugGroup => unsafe {
+                    assert_ne!(
+                        state.debug_scope_depth, 0,
+                        "Can't pop debug group, because number of pushed debug groups is zero!"
+                    );
+                    state.debug_scope_depth -= 1;
+
+                    raw.end_debug_marker()
+                },
+                ComputeCommand::InsertDebugMarker {
+                    color,
+                    len,
+                    phantom_marker,
+                } => unsafe {
+                    let (new_peeker, label) =
+                        { phantom_marker.decode_unaligned(peeker, len, raw_data_end) };
+                    peeker = new_peeker;
+
+                    raw.insert_debug_marker(str::from_utf8(label).unwrap(), color)
+                },
                 ComputeCommand::End => break,
             }
         }
@@ -255,7 +317,7 @@ pub mod compute_ffi {
         ComputeCommand,
     };
     use crate::{id, RawString};
-    use std::{convert::TryInto, slice};
+    use std::{convert::TryInto, ffi, slice};
     use wgt::{BufferAddress, DynamicOffset};
 
     /// # Safety
@@ -309,21 +371,40 @@ pub mod compute_ffi {
     }
 
     #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_push_debug_group(_pass: &mut RawPass, _label: RawString) {
-        //TODO
-    }
-
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_pop_debug_group(_pass: &mut RawPass) {
-        //TODO
-    }
-
-    #[no_mangle]
-    pub extern "C" fn wgpu_compute_pass_insert_debug_marker(
-        _pass: &mut RawPass,
-        _label: RawString,
+    pub unsafe extern "C" fn wgpu_compute_pass_push_debug_group(
+        pass: &mut RawPass,
+        label: RawString,
+        color: u32,
     ) {
-        //TODO
+        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+
+        pass.encode(&ComputeCommand::PushDebugGroup {
+            color,
+            len: bytes.len(),
+            phantom_marker: PhantomSlice::default(),
+        });
+        pass.encode_slice(bytes);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_pop_debug_group(pass: &mut RawPass) {
+        pass.encode(&ComputeCommand::PopDebugGroup);
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_insert_debug_marker(
+        pass: &mut RawPass,
+        label: RawString,
+        color: u32,
+    ) {
+        let bytes = ffi::CStr::from_ptr(label).to_bytes();
+
+        pass.encode(&ComputeCommand::InsertDebugMarker {
+            color,
+            len: bytes.len(),
+            phantom_marker: PhantomSlice::default(),
+        });
+        pass.encode_slice(bytes);
     }
 
     #[no_mangle]

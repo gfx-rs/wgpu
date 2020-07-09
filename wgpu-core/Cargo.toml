@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.5.5"
+version = "0.5.6"
 authors = [
 	"Dzmitry Malyshau <kvark@mozilla.com>",
 	"Joshua Groves <josh@joshgroves.com>",
