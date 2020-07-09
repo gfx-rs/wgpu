@@ -33,6 +33,9 @@ pub trait Example: 'static + Sized {
     fn needed_features() -> wgpu::Features {
         wgpu::Features::empty()
     }
+    fn needed_limits() -> wgpu::Limits {
+        wgpu::Limits::default()
+    }
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
@@ -97,12 +100,14 @@ async fn setup<E: Example>(title: &str) -> Setup {
 
     let adapter_features = adapter.features();
 
+    let needed_limits = E::needed_limits();
+
     let trace_dir = std::env::var("WGPU_TRACE");
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
                 features: adapter_features & needed_features,
-                limits: wgpu::Limits::default(),
+                limits: needed_limits,
                 shader_validation: true,
             },
             trace_dir.ok().as_ref().map(std::path::Path::new),

@@ -71,6 +71,9 @@ impl crate::ComputePassInner<Context> for ComputePass {
                 offsets.len() as u32,
             );
     }
+    fn set_push_constants(&mut self, _offset: u32, _data: &[u32]) {
+        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
+    }
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         self.0.dispatch_with_y_and_z(x, y, z);
     }
@@ -128,6 +131,9 @@ impl crate::RenderInner<Context> for RenderPass {
             offset as f64,
             size.expect("TODO").get() as f64,
         );
+    }
+    fn set_push_constants(&mut self, _stages: wgt::ShaderStage, _offset: u32, _data: &[u32]) {
+        panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
         self.0
