@@ -29,12 +29,13 @@ pub use wgt::{
     ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
     DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extent3d, Features, FilterMode,
     FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PowerPreference, PresentMode,
-    PrimitiveTopology, RasterizationStateDescriptor, RenderBundleEncoderDescriptor, ShaderLocation,
-    ShaderStage, StencilOperation, StencilStateFaceDescriptor, SwapChainDescriptor,
-    SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension,
-    TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor,
-    VertexBufferDescriptor, VertexFormat, VertexStateDescriptor, BIND_BUFFER_ALIGNMENT,
-    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor,
+    RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage, StencilOperation,
+    StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
+    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
+    TextureViewDimension, VertexAttributeDescriptor, VertexBufferDescriptor, VertexFormat,
+    VertexStateDescriptor, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
+    COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -47,6 +48,7 @@ trait ComputePassInner<Ctx: Context> {
         bind_group: &Ctx::BindGroupId,
         offsets: &[DynamicOffset],
     );
+    fn set_push_constants(&mut self, offset: u32, data: &[u32]);
     fn dispatch(&mut self, x: u32, y: u32, z: u32);
     fn dispatch_indirect(
         &mut self,
@@ -76,6 +78,7 @@ trait RenderInner<Ctx: Context> {
         offset: BufferAddress,
         size: Option<BufferSize>,
     );
+    fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]);
     fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>);
     fn draw_indexed(&mut self, indices: Range<u32>, base_vertex: i32, instances: Range<u32>);
     fn draw_indirect(&mut self, indirect_buffer: &Ctx::BufferId, indirect_offset: BufferAddress);
@@ -857,6 +860,10 @@ pub use wgt::TextureViewDescriptor as TextureViewDescriptorBase;
 /// Describes a [`TextureView`].
 pub type TextureViewDescriptor<'a> = TextureViewDescriptorBase<Option<&'a str>>;
 
+pub use wgt::PipelineLayoutDescriptor as PipelineLayoutDescriptorBase;
+/// Describes a [`PipelineLayout`].
+pub type PipelineLayoutDescriptor<'a> = PipelineLayoutDescriptorBase<'a, &'a BindGroupLayout>;
+
 pub use wgt::SamplerDescriptor as SamplerDescriptorBase;
 /// Describes a [`Sampler`].
 pub type SamplerDescriptor<'a> = SamplerDescriptorBase<Option<&'a str>>;
@@ -869,10 +876,6 @@ pub use wgt::BindGroupDescriptor as BindGroupDescriptorBase;
 /// Describes a group of bindings and the resources to be bound.
 pub type BindGroupDescriptor<'a> =
     BindGroupDescriptorBase<'a, &'a BindGroupLayout, BindGroupEntry<'a>>;
-
-pub use wgt::PipelineLayoutDescriptor as PipelineLayoutDescriptorBase;
-/// Describes a pipeline layout.
-pub type PipelineLayoutDescriptor<'a> = PipelineLayoutDescriptorBase<'a, &'a BindGroupLayout>;
 
 pub use wgt::ProgrammableStageDescriptor as ProgrammableStageDescriptorBase;
 /// Describes a programmable pipeline stage.
@@ -1921,6 +1924,41 @@ impl<'a> RenderPass<'a> {
     }
 }
 
+/// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
+impl<'a> RenderPass<'a> {
+    /// Set push constant data.
+    ///
+    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    ///
+    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
+    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
+    /// of 4..16.
+    ///
+    /// For each byte in the range of push constant data written, the union of the stages of all push constant
+    /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
+    /// so here are some examples:
+    ///
+    /// ```text
+    /// For the given ranges:
+    /// - 0..4 Vertex
+    /// - 4..8 Fragment
+    /// ```
+    ///
+    /// You would need to upload this in two set_push_constants calls. First for the `Vertex` range, second for the `Fragment` range.
+    ///
+    /// ```text
+    /// For the given ranges:
+    /// - 0..8  Vertex
+    /// - 4..12 Fragment
+    /// ```
+    ///
+    /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
+    /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &'a [u32]) {
+        self.id.set_push_constants(stages, offset, data);
+    }
+}
+
 impl<'a> Drop for RenderPass<'a> {
     fn drop(&mut self) {
         if !thread::panicking() {
@@ -1964,6 +2002,20 @@ impl<'a> ComputePass<'a> {
         indirect_offset: BufferAddress,
     ) {
         ComputePassInner::dispatch_indirect(&mut self.id, &indirect_buffer.id, indirect_offset);
+    }
+}
+
+/// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
+impl<'a> ComputePass<'a> {
+    /// Set push constant data.
+    ///
+    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    ///
+    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
+    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
+    /// of 4..16.
+    pub fn set_push_constants(&mut self, offset: u32, data: &'a [u32]) {
+        self.id.set_push_constants(offset, data);
     }
 }
 
@@ -2098,6 +2150,41 @@ impl<'a> RenderBundleEncoder<'a> {
     ) {
         self.id
             .draw_indexed_indirect(&indirect_buffer.id, indirect_offset);
+    }
+}
+
+/// [`Features::PUSH_CONSTANTS`] must be enabled on the device in order to call these functions.
+impl<'a> RenderBundleEncoder<'a> {
+    /// Set push constant data.
+    ///
+    /// Offset is measured in bytes, but must be a multiple of [`PUSH_CONSTANT_ALIGNMENT`].
+    ///
+    /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
+    /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
+    /// of 4..16.
+    ///
+    /// For each byte in the range of push constant data written, the union of the stages of all push constant
+    /// ranges that covers that byte must be exactly `stages`. There's no good way of explaining this simply,
+    /// so here are some examples:
+    ///
+    /// ```text
+    /// For the given ranges:
+    /// - 0..4 Vertex
+    /// - 4..8 Fragment
+    /// ```
+    ///
+    /// You would need to upload this in two set_push_constants calls. First for the `Vertex` range, second for the `Fragment` range.
+    ///
+    /// ```text
+    /// For the given ranges:
+    /// - 0..8  Vertex
+    /// - 4..12 Fragment
+    /// ```
+    ///
+    /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
+    /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &'a [u32]) {
+        self.id.set_push_constants(stages, offset, data);
     }
 }
 

@@ -33,6 +33,7 @@ pub type Context = wgc::hub::Global<wgc::hub::IdentityManagerFactory>;
 mod pass_impl {
     use super::Context;
     use smallvec::SmallVec;
+    use std::convert::TryInto;
     use std::ops::Range;
     use wgc::command::{bundle_ffi::*, compute_ffi::*, render_ffi::*};
 
@@ -53,6 +54,18 @@ mod pass_impl {
                     *bind_group,
                     offsets.as_ptr(),
                     offsets.len(),
+                )
+            }
+        }
+        fn set_push_constants(&mut self, offset: u32, data: &[u32]) {
+            unsafe {
+                wgpu_compute_pass_set_push_constant(
+                    self,
+                    offset,
+                    (data.len() * std::mem::size_of::<u32>())
+                        .try_into()
+                        .unwrap(),
+                    data.as_ptr(),
                 )
             }
         }
@@ -104,6 +117,19 @@ mod pass_impl {
             size: Option<wgt::BufferSize>,
         ) {
             wgpu_render_pass_set_vertex_buffer(self, slot, *buffer, offset, size)
+        }
+        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
+            unsafe {
+                wgpu_render_pass_set_push_constants(
+                    self,
+                    stages,
+                    offset,
+                    (data.len() * std::mem::size_of::<u32>())
+                        .try_into()
+                        .unwrap(),
+                    data.as_ptr(),
+                )
+            }
         }
         fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
             wgpu_render_pass_draw(
@@ -287,6 +313,20 @@ mod pass_impl {
             size: Option<wgt::BufferSize>,
         ) {
             wgpu_render_bundle_set_vertex_buffer(self, slot, *buffer, offset, size)
+        }
+
+        fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
+            unsafe {
+                wgpu_render_bundle_set_push_constants(
+                    self,
+                    stages,
+                    offset,
+                    (data.len() * std::mem::size_of::<u32>())
+                        .try_into()
+                        .unwrap(),
+                    data.as_ptr(),
+                )
+            }
         }
         fn draw(&mut self, vertices: Range<u32>, instances: Range<u32>) {
             wgpu_render_bundle_draw(
@@ -583,17 +623,27 @@ impl crate::Context for Context {
         desc: &PipelineLayoutDescriptor,
     ) -> Self::PipelineLayoutId {
         wgc::span!(_guard, TRACE, "Device::create_pipeline_layout wrapper");
-        //TODO: avoid allocation here
+
+        // Limit is always less or equal to wgc::MAX_BIND_GROUPS, so this is always right
+        // Guards following ArrayVec
+        assert!(
+            desc.bind_group_layouts.len() <= wgc::MAX_BIND_GROUPS,
+            "Bind group layout count {} exceeds device bind group limit {}",
+            desc.bind_group_layouts.len(),
+            wgc::MAX_BIND_GROUPS
+        );
+
         let temp_layouts = desc
             .bind_group_layouts
             .iter()
             .map(|bgl| bgl.id)
-            .collect::<Vec<_>>();
+            .collect::<ArrayVec<[_; wgc::MAX_BIND_GROUPS]>>();
 
         gfx_select!(*device => self.device_create_pipeline_layout(
             *device,
-            &wgc::binding_model::PipelineLayoutDescriptor {
+            &wgt::PipelineLayoutDescriptor {
                 bind_group_layouts: &temp_layouts,
+                push_constant_ranges: &desc.push_constant_ranges,
             },
             PhantomData
         ))

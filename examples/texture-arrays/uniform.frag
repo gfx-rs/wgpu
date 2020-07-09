@@ -6,7 +6,7 @@ layout(location = 0) out vec4 o_Color;
 
 layout(set = 0, binding = 0) uniform texture2D u_Textures[2];
 layout(set = 0, binding = 1) uniform sampler u_Sampler;
-layout(set = 1, binding = 0) uniform Uniforms {
+layout(push_constant) uniform Uniforms {
     int u_Index;  // dynamically uniform
 };
 

@@ -36,6 +36,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[],
+        push_constant_ranges: &[],
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
