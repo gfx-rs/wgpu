@@ -351,7 +351,7 @@ impl framework::Example for Example {
         let water_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Water Bind Group Layout"),
-                bindings: &[
+                entries: &[
                     // Uniform variables such as projection/view.
                     wgpu::BindGroupLayoutEntry::new(
                         0,
@@ -395,7 +395,7 @@ impl framework::Example for Example {
         let terrain_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Terrain Bind Group Layout"),
-                bindings: &[
+                entries: &[
                     // Regular uniform variables like view/projection.
                     wgpu::BindGroupLayoutEntry::new(
                         0,
