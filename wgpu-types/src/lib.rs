@@ -1762,6 +1762,6 @@ pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
     pub label: Option<&'a str>,
 
-    /// Array of bindings in this BindGroupLayout
-    pub bindings: &'a [BindGroupLayoutEntry],
+    /// Array of entries in this BindGroupLayout
+    pub entries: &'a [BindGroupLayoutEntry],
 }
