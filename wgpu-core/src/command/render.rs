@@ -107,6 +107,15 @@ pub enum RenderCommand {
         depth_max: f32,
     },
     SetScissor(Rect<u32>),
+    SetPushConstant {
+        stages: wgt::ShaderStage,
+        offset: u32,
+        size_bytes: u32,
+        /// None means there is no data and the data should be an array of zeros.
+        ///
+        /// Facilitates clears in renderbundles which explicitly do their clears.
+        values_offset: Option<u32>,
+    },
     Draw {
         vertex_count: u32,
         instance_count: u32,
@@ -174,12 +183,13 @@ impl fmt::Debug for RenderPass {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "RenderPass {{ encoder_id: {:?}, color_targets: {:?}, depth_stencil_target: {:?}, data: {:?} commands and {:?} dynamic offsets }}",
+            "RenderPass {{ encoder_id: {:?}, color_targets: {:?}, depth_stencil_target: {:?}, data: {:?} commands, {:?} dynamic offsets, and {:?} push constant u32s }}",
             self.parent_id,
             self.color_targets,
             self.depth_stencil_target,
             self.base.commands.len(),
-            self.base.dynamic_offsets.len()
+            self.base.dynamic_offsets.len(),
+            self.base.push_constant_data.len(),
         )
     }
 }
@@ -976,6 +986,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }
                         }
+
+                        // Clear push constant ranges
+                        let non_overlapping = super::bind::compute_nonoverlapping_ranges(
+                            &pipeline_layout.push_constant_ranges,
+                        );
+                        for range in non_overlapping {
+                            let offset = range.range.start;
+                            let size_bytes = range.range.end - offset;
+                            super::push_constant_clear(
+                                offset,
+                                size_bytes,
+                                |clear_offset, clear_data| unsafe {
+                                    raw.push_graphics_constants(
+                                        &pipeline_layout.raw,
+                                        conv::map_shader_stage_flags(range.stages),
+                                        clear_offset,
+                                        clear_data,
+                                    );
+                                },
+                            );
+                        }
                     }
 
                     // Rebind index buffer if the index format has changed with the pipeline switch
@@ -1110,6 +1141,38 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 depth: depth_min..depth_max,
                             }),
                         );
+                    }
+                }
+                RenderCommand::SetPushConstant {
+                    stages,
+                    offset,
+                    size_bytes,
+                    values_offset,
+                } => {
+                    let values_offset = values_offset
+                        .expect("values_offset of None is only for internal use in renderbundles");
+
+                    let end_offset_bytes = offset + size_bytes;
+                    let values_end_offset = (values_offset + size_bytes / 4) as usize;
+                    let data_slice =
+                        &base.push_constant_data[(values_offset as usize)..values_end_offset];
+
+                    let pipeline_layout = &pipeline_layout_guard[state
+                        .binder
+                        .pipeline_layout_id
+                        .expect("Must have a pipeline bound to use push constants")];
+
+                    pipeline_layout
+                        .validate_push_constant_ranges(stages, offset, end_offset_bytes)
+                        .unwrap();
+
+                    unsafe {
+                        raw.push_graphics_constants(
+                            &pipeline_layout.raw,
+                            conv::map_shader_stage_flags(stages),
+                            offset,
+                            data_slice,
+                        )
                     }
                 }
                 RenderCommand::SetScissor(ref rect) => {
@@ -1571,6 +1634,28 @@ pub mod render_ffi {
         pass.base
             .commands
             .push(RenderCommand::SetScissor(Rect { x, y, w, h }));
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_pass_set_push_constants(
+        pass: &mut RenderPass,
+        stages: wgt::ShaderStage,
+        offset: u32,
+        size_bytes: u32,
+        data: *const u32,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::set_push_constants");
+        let data_slice = slice::from_raw_parts(data, (size_bytes / 4) as usize);
+        let value_offset = pass.base.push_constant_data.len().try_into().expect(
+            "Ran out of push constant space. Don't set 4gb of push constants per RenderPass.",
+        );
+        pass.base.push_constant_data.extend_from_slice(data_slice);
+        pass.base.commands.push(RenderCommand::SetPushConstant {
+            stages,
+            offset,
+            size_bytes,
+            values_offset: Some(value_offset),
+        });
     }
 
     #[no_mangle]

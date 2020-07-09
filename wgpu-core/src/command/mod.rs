@@ -29,6 +29,8 @@ use hal::command::CommandBuffer as _;
 
 use std::thread::ThreadId;
 
+const PUSH_CONSTANT_CLEAR_ARRAY: &[u32] = &[0_u32; 64];
+
 #[derive(Debug)]
 pub struct CommandBuffer<B: hal::Backend> {
     pub(crate) raw: Vec<B::CommandBuffer>,
@@ -89,6 +91,7 @@ pub struct BasePassRef<'a, C> {
     pub commands: &'a [C],
     pub dynamic_offsets: &'a [wgt::DynamicOffset],
     pub string_data: &'a [u8],
+    pub push_constant_data: &'a [u32],
 }
 
 #[doc(hidden)]
@@ -105,6 +108,7 @@ pub struct BasePass<C> {
     pub commands: Vec<C>,
     pub dynamic_offsets: Vec<wgt::DynamicOffset>,
     pub string_data: Vec<u8>,
+    pub push_constant_data: Vec<u32>,
 }
 
 impl<C: Clone> BasePass<C> {
@@ -113,6 +117,7 @@ impl<C: Clone> BasePass<C> {
             commands: Vec::new(),
             dynamic_offsets: Vec::new(),
             string_data: Vec::new(),
+            push_constant_data: Vec::new(),
         }
     }
 
@@ -122,6 +127,7 @@ impl<C: Clone> BasePass<C> {
             commands: base.commands.to_vec(),
             dynamic_offsets: base.dynamic_offsets.to_vec(),
             string_data: base.string_data.to_vec(),
+            push_constant_data: base.push_constant_data.to_vec(),
         }
     }
 
@@ -130,6 +136,7 @@ impl<C: Clone> BasePass<C> {
             commands: &self.commands,
             dynamic_offsets: &self.dynamic_offsets,
             string_data: &self.string_data,
+            push_constant_data: &self.push_constant_data,
         }
     }
 }
@@ -213,5 +220,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         unsafe {
             cmb_raw.end_debug_marker();
         }
+    }
+}
+
+fn push_constant_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)
+where
+    PushFn: FnMut(u32, &[u32]),
+{
+    let mut count_words = 0_u32;
+    let size_words = size_bytes / 4;
+    while count_words < size_words {
+        let count_bytes = count_words * 4;
+        let size_to_write_words =
+            (size_words - count_words).min(PUSH_CONSTANT_CLEAR_ARRAY.len() as u32);
+
+        push_fn(
+            offset + count_bytes,
+            &PUSH_CONSTANT_CLEAR_ARRAY[0..size_to_write_words as usize],
+        );
+
+        count_words += size_to_write_words;
     }
 }

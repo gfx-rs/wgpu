@@ -36,6 +36,11 @@ pub enum ComputeCommand {
         bind_group_id: id::BindGroupId,
     },
     SetPipeline(id::ComputePipelineId),
+    SetPushConstant {
+        offset: u32,
+        size_bytes: u32,
+        values_offset: u32,
+    },
     Dispatch([u32; 3]),
     DispatchIndirect {
         buffer_id: id::BufferId,
@@ -257,7 +262,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }
                         }
+
+                        // Clear push constant ranges
+                        let non_overlapping = super::bind::compute_nonoverlapping_ranges(
+                            &pipeline_layout.push_constant_ranges,
+                        );
+                        for range in non_overlapping {
+                            let offset = range.range.start;
+                            let size_bytes = range.range.end - offset;
+                            super::push_constant_clear(
+                                offset,
+                                size_bytes,
+                                |clear_offset, clear_data| unsafe {
+                                    raw.push_compute_constants(
+                                        &pipeline_layout.raw,
+                                        clear_offset,
+                                        clear_data,
+                                    );
+                                },
+                            );
+                        }
                     }
+                }
+                ComputeCommand::SetPushConstant {
+                    offset,
+                    size_bytes,
+                    values_offset,
+                } => {
+                    let end_offset_bytes = offset + size_bytes;
+                    let values_end_offset = (values_offset + size_bytes / 4) as usize;
+                    let data_slice =
+                        &base.push_constant_data[(values_offset as usize)..values_end_offset];
+
+                    let pipeline_layout = &pipeline_layout_guard[state
+                        .binder
+                        .pipeline_layout_id
+                        .expect("Must have a pipeline bound to use push constants")];
+
+                    pipeline_layout
+                        .validate_push_constant_ranges(
+                            wgt::ShaderStage::COMPUTE,
+                            offset,
+                            end_offset_bytes,
+                        )
+                        .unwrap();
+
+                    unsafe { raw.push_compute_constants(&pipeline_layout.raw, offset, data_slice) }
                 }
                 ComputeCommand::Dispatch(groups) => {
                     assert_eq!(
@@ -363,6 +413,26 @@ pub mod compute_ffi {
         pass.base
             .commands
             .push(ComputeCommand::SetPipeline(pipeline_id));
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_compute_pass_set_push_constant(
+        pass: &mut ComputePass,
+        offset: u32,
+        size_bytes: u32,
+        data: *const u32,
+    ) {
+        span!(_guard, DEBUG, "RenderPass::set_push_constant");
+        let data_slice = slice::from_raw_parts(data, (size_bytes / 4) as usize);
+        let value_offset = pass.base.push_constant_data.len().try_into().expect(
+            "Ran out of push constant space. Don't set 4gb of push constants per ComputePass.",
+        );
+        pass.base.push_constant_data.extend_from_slice(data_slice);
+        pass.base.commands.push(ComputeCommand::SetPushConstant {
+            offset,
+            size_bytes,
+            values_offset: value_offset,
+        });
     }
 
     #[no_mangle]
