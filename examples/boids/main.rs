@@ -57,7 +57,7 @@ impl framework::Example for Example {
 
         let compute_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[
+                entries: &[
                     wgpu::BindGroupLayoutEntry::new(
                         0,
                         wgpu::ShaderStage::COMPUTE,

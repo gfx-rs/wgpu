@@ -827,7 +827,7 @@ impl crate::Context for Context {
         use web_sys::GpuBindingType as bt;
 
         let mapped_bindings = desc
-            .bindings
+            .entries
             .iter()
             .map(|bind| {
                 let mapped_type = match bind.ty {
