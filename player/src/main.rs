@@ -108,18 +108,20 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     dst,
                     dst_offset,
                     size,
-                } => self.command_encoder_copy_buffer_to_buffer::<B>(
-                    encoder, src, src_offset, dst, dst_offset, size,
-                ),
-                trace::Command::CopyBufferToTexture { src, dst, size } => {
-                    self.command_encoder_copy_buffer_to_texture::<B>(encoder, &src, &dst, &size)
-                }
-                trace::Command::CopyTextureToBuffer { src, dst, size } => {
-                    self.command_encoder_copy_texture_to_buffer::<B>(encoder, &src, &dst, &size)
-                }
-                trace::Command::CopyTextureToTexture { src, dst, size } => {
-                    self.command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
-                }
+                } => self
+                    .command_encoder_copy_buffer_to_buffer::<B>(
+                        encoder, src, src_offset, dst, dst_offset, size,
+                    )
+                    .unwrap(),
+                trace::Command::CopyBufferToTexture { src, dst, size } => self
+                    .command_encoder_copy_buffer_to_texture::<B>(encoder, &src, &dst, &size)
+                    .unwrap(),
+                trace::Command::CopyTextureToBuffer { src, dst, size } => self
+                    .command_encoder_copy_texture_to_buffer::<B>(encoder, &src, &dst, &size)
+                    .unwrap(),
+                trace::Command::CopyTextureToTexture { src, dst, size } => self
+                    .command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
+                    .unwrap(),
                 trace::Command::RunComputePass { base } => {
                     self.command_encoder_run_compute_pass_impl::<B>(encoder, base.as_ref());
                 }

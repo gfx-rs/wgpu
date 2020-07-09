@@ -280,7 +280,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             data.len() as wgt::BufferAddress,
             bytes_per_texel as wgt::BufferAddress,
             size,
-        );
+        )
+        .unwrap();
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
@@ -329,7 +330,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             "Write texture usage {:?} must contain flag COPY_DST",
             dst.usage
         );
-        crate::command::validate_texture_copy_range(destination, dst.kind, size);
+        crate::command::validate_texture_copy_range(destination, dst.kind, size).unwrap();
 
         dst.life_guard.use_at(device.active_submission_index + 1);
 
