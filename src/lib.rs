@@ -1485,6 +1485,35 @@ impl<'a> RenderPass<'a> {
         }
     }
 
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        unsafe {
+            wgn::wgpu_render_pass_insert_debug_marker(
+                self.id.as_mut().unwrap(),
+                label.as_ptr() as *const i8,
+                0,
+            );
+        }
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        unsafe {
+            wgn::wgpu_render_pass_push_debug_group(
+                self.id.as_mut().unwrap(),
+                label.as_ptr() as *const i8,
+                0,
+            );
+        }
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        unsafe {
+            wgn::wgpu_render_pass_pop_debug_group(self.id.as_mut().unwrap());
+        }
+    }
+
     /// Draws indexed primitives using the active index buffer and the active vertex buffers.
     ///
     /// The active index buffer can be set with [`RenderPass::set_index_buffer`], while the active

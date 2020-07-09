@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.5.0"
+version = "0.5.1"
 authors = [
     "Dzmitry Malyshau <kvark@mozilla.com>",
     "Joshua Groves <josh@joshgroves.com>",
@@ -30,7 +30,7 @@ version = "0.5"
 
 [dependencies.wgc]
 package = "wgpu-core"
-version = "0.5"
+version = "0.5.6"
 #git = "https://github.com/gfx-rs/wgpu"
 
 [dependencies.wgt]
