@@ -162,46 +162,39 @@ impl<B: hal::Backend> Adapter<B> {
 
         let adapter_limits = raw.physical_device.limits();
 
-        let default_limits = wgt::Limits::default();
+        let mut limits = wgt::Limits::default();
 
         // All these casts to u32 are safe as the underlying vulkan types are u32s.
         // If another backend provides larger limits than u32, we need to clamp them to u32::MAX.
         // TODO: fix all gfx-hal backends to produce limits we care about, and remove .max
-        let limits = wgt::Limits {
-            max_bind_groups: (adapter_limits.max_bound_descriptor_sets as u32)
-                .min(MAX_BIND_GROUPS as u32)
-                .max(default_limits.max_bind_groups),
-            max_dynamic_uniform_buffers_per_pipeline_layout: (adapter_limits
-                .max_descriptor_set_uniform_buffers_dynamic
-                as u32)
-                .max(default_limits.max_dynamic_uniform_buffers_per_pipeline_layout),
-            max_dynamic_storage_buffers_per_pipeline_layout: (adapter_limits
-                .max_descriptor_set_storage_buffers_dynamic
-                as u32)
-                .max(default_limits.max_dynamic_storage_buffers_per_pipeline_layout),
-            max_sampled_textures_per_shader_stage: (adapter_limits
-                .max_per_stage_descriptor_sampled_images
-                as u32)
-                .max(default_limits.max_sampled_textures_per_shader_stage),
-            max_samplers_per_shader_stage: (adapter_limits.max_per_stage_descriptor_samplers
-                as u32)
-                .max(default_limits.max_samplers_per_shader_stage),
-            max_storage_buffers_per_shader_stage: (adapter_limits
-                .max_per_stage_descriptor_storage_buffers
-                as u32)
-                .max(default_limits.max_storage_buffers_per_shader_stage),
-            max_storage_textures_per_shader_stage: (adapter_limits
-                .max_per_stage_descriptor_storage_images
-                as u32)
-                .max(default_limits.max_storage_textures_per_shader_stage),
-            max_uniform_buffers_per_shader_stage: (adapter_limits
-                .max_per_stage_descriptor_uniform_buffers
-                as u32)
-                .max(default_limits.max_uniform_buffers_per_shader_stage),
-            max_uniform_buffer_binding_size: (adapter_limits.max_uniform_buffer_range as u32)
-                .max(default_limits.max_uniform_buffer_binding_size),
-            _non_exhaustive: unsafe { wgt::NonExhaustive::new() },
-        };
+        limits.max_bind_groups = (adapter_limits.max_bound_descriptor_sets as u32)
+            .min(MAX_BIND_GROUPS as u32)
+            .max(limits.max_bind_groups);
+        limits.max_dynamic_uniform_buffers_per_pipeline_layout =
+            (adapter_limits.max_descriptor_set_uniform_buffers_dynamic as u32)
+                .max(limits.max_dynamic_uniform_buffers_per_pipeline_layout);
+        limits.max_dynamic_storage_buffers_per_pipeline_layout =
+            (adapter_limits.max_descriptor_set_storage_buffers_dynamic as u32)
+                .max(limits.max_dynamic_storage_buffers_per_pipeline_layout);
+        limits.max_sampled_textures_per_shader_stage =
+            (adapter_limits.max_per_stage_descriptor_sampled_images as u32)
+                .max(limits.max_sampled_textures_per_shader_stage);
+
+        limits.max_samplers_per_shader_stage = (adapter_limits.max_per_stage_descriptor_samplers
+            as u32)
+            .max(limits.max_samplers_per_shader_stage);
+        limits.max_storage_buffers_per_shader_stage =
+            (adapter_limits.max_per_stage_descriptor_storage_buffers as u32)
+                .max(limits.max_storage_buffers_per_shader_stage);
+
+        limits.max_storage_textures_per_shader_stage =
+            (adapter_limits.max_per_stage_descriptor_storage_images as u32)
+                .max(limits.max_storage_textures_per_shader_stage);
+        limits.max_uniform_buffers_per_shader_stage =
+            (adapter_limits.max_per_stage_descriptor_uniform_buffers as u32)
+                .max(limits.max_uniform_buffers_per_shader_stage);
+        limits.max_uniform_buffer_binding_size = (adapter_limits.max_uniform_buffer_range as u32)
+            .max(limits.max_uniform_buffer_binding_size);
 
         Adapter {
             raw,

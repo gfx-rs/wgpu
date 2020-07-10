@@ -101,30 +101,6 @@ impl From<Backend> for BackendBit {
     }
 }
 
-/// This type is not to be constructed by any users of wgpu. If you construct this type, any semver
-/// guarantees made by wgpu are invalidated and a non-breaking change may break your code.
-///
-/// If you are here trying to construct it, the solution is to use partial construction with the
-/// default:
-///
-/// ```ignore
-/// let limits = Limits {
-///     max_bind_groups: 2,
-///     ..Limits::default()
-/// }
-/// ```
-#[doc(hidden)]
-#[derive(Debug, Copy, Clone, Default, Eq, PartialEq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct NonExhaustive(());
-
-impl NonExhaustive {
-    pub unsafe fn new() -> Self {
-        Self(())
-    }
-}
-
 bitflags::bitflags! {
     /// Features that are not guaranteed to be supported.
     ///
@@ -253,6 +229,7 @@ bitflags::bitflags! {
 /// See also: https://gpuweb.github.io/gpuweb/#dictdef-gpulimits
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[non_exhaustive]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Limits {
@@ -274,8 +251,6 @@ pub struct Limits {
     pub max_uniform_buffers_per_shader_stage: u32,
     /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 16384. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
-    /// This struct must be partially constructed from its default.
-    pub _non_exhaustive: NonExhaustive,
 }
 
 impl Default for Limits {
@@ -290,7 +265,6 @@ impl Default for Limits {
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_uniform_buffer_binding_size: 16384,
-            _non_exhaustive: unsafe { NonExhaustive::new() },
         }
     }
 }
@@ -1407,6 +1381,7 @@ impl Default for FilterMode {
 
 /// Describes a [`Sampler`]
 #[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct SamplerDescriptor<L> {
@@ -1432,8 +1407,6 @@ pub struct SamplerDescriptor<L> {
     pub compare: Option<CompareFunction>,
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<u8>,
-    /// This struct must be partially constructed from its default
-    pub _non_exhaustive: NonExhaustive,
 }
 
 impl<L: Default> Default for SamplerDescriptor<L> {
@@ -1450,7 +1423,6 @@ impl<L: Default> Default for SamplerDescriptor<L> {
             lod_max_clamp: std::f32::MAX,
             compare: Default::default(),
             anisotropy_clamp: Default::default(),
-            _non_exhaustive: Default::default(),
         }
     }
 }
@@ -1469,7 +1441,6 @@ impl<L> SamplerDescriptor<L> {
             lod_max_clamp: self.lod_max_clamp,
             compare: self.compare,
             anisotropy_clamp: self.anisotropy_clamp,
-            _non_exhaustive: self._non_exhaustive,
         }
     }
 }
@@ -1715,6 +1686,7 @@ pub enum BindingType {
 
 /// Describes a single binding inside a bind group.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupLayoutEntry {
@@ -1731,9 +1703,6 @@ pub struct BindGroupLayoutEntry {
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
     pub count: Option<u32>,
-    /// This struct should be partially initalized using the default method, but binding, visibility,
-    /// and ty should be set.
-    pub _non_exhaustive: NonExhaustive,
 }
 
 impl BindGroupLayoutEntry {
@@ -1743,7 +1712,6 @@ impl BindGroupLayoutEntry {
             visibility,
             ty,
             count: None,
-            _non_exhaustive: unsafe { NonExhaustive::new() },
         }
     }
 
