@@ -63,6 +63,8 @@ pub enum ErrorKind {
     EOL,
     #[error("End of file")]
     EOF,
+    #[error("Non constant expression encountered where a constant expression was expected")]
+    NonConstantExpr,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -83,6 +85,7 @@ struct Parser<'a> {
     types: Arena<Type>,
     globals: Arena<GlobalVariable>,
     globals_lookup: FastHashMap<String, Global>,
+    globals_constants: FastHashMap<String, Handle<Constant>>,
     constants: Arena<Constant>,
     functions: Arena<Function>,
     shader_stage: ShaderStage,
@@ -95,6 +98,7 @@ impl<'a> Parser<'a> {
             types: Arena::new(),
             globals: Arena::new(),
             globals_lookup: FastHashMap::default(),
+            globals_constants: FastHashMap::default(),
             constants: Arena::new(),
             functions: Arena::new(),
             shader_stage,
@@ -107,6 +111,10 @@ impl<'a> Parser<'a> {
         //println!("{:#?}", ast);
 
         let mut entry_point = None;
+        let parameter_lookup = FastHashMap::default();
+        let mut locals = Arena::<LocalVariable>::new();
+        let mut locals_map = FastHashMap::default();
+        let mut expressions = Arena::<Expression>::new();
 
         for declaration in ast {
             match declaration {
@@ -125,9 +133,32 @@ impl<'a> Parser<'a> {
                     }
                 }
                 ExternalDeclaration::Declaration(decl) => match decl {
-                    Declaration::InitDeclaratorList(init) => {
-                        let handle = self.parse_global(init);
+                    Declaration::InitDeclaratorList(mut init) => {
+                        // Get initializer out for lifetime reasons. Maybe self.parse_global needs
+                        // to take a reference and clone what it needs?
+                        let mut initializer = None;
+                        std::mem::swap(&mut initializer, &mut init.head.initializer);
+
+                        let handle = self.parse_global(init.head)?;
                         let name = self.globals[handle].name.clone().unwrap();
+                        if let Some(initializer) = initializer {
+                            match initializer {
+                                Initializer::Simple(expr) => {
+                                    let expr = self.parse_expression(
+                                        *expr,
+                                        &mut expressions,
+                                        &mut locals,
+                                        &mut locals_map,
+                                        &parameter_lookup,
+                                    )?;
+                                    let handle = expressions.append(expr);
+                                    let val = self.eval_const_expr(handle, &expressions)?;
+                                    self.globals_constants.insert(name.clone(), val);
+                                }
+                                _ => todo!(),
+                            }
+                        }
+
                         self.globals_lookup.insert(name, Global::Variable(handle));
                     }
                     Declaration::Block(block) => {
@@ -151,16 +182,12 @@ impl<'a> Parser<'a> {
                                     name: Some(field_name.clone()),
                                     origin,
                                     ty: if let Some(array_spec) = ident.array_spec {
+                                        let size = self.parse_array_size(array_spec)?;
                                         self.types.fetch_or_append(Type {
                                             name: None,
                                             inner: TypeInner::Array {
                                                 base: ty,
-                                                size: match array_spec {
-                                                    ArraySpecifier::Unsized => ArraySize::Dynamic,
-                                                    ArraySpecifier::ExplicitlySized(_expr) => {
-                                                        unimplemented!()
-                                                    }
-                                                },
+                                                size,
                                                 stride: None,
                                             },
                                         })
@@ -184,14 +211,12 @@ impl<'a> Parser<'a> {
                                 inner: TypeInner::Struct { members: fields },
                             });
 
+                            let size = self.parse_array_size(array_spec)?;
                             self.types.fetch_or_append(Type {
                                 name: None,
                                 inner: TypeInner::Array {
                                     base,
-                                    size: match array_spec {
-                                        ArraySpecifier::Unsized => ArraySize::Dynamic,
-                                        ArraySpecifier::ExplicitlySized(_expr) => unimplemented!(),
-                                    },
+                                    size,
                                     stride: None,
                                 },
                             })
@@ -259,18 +284,16 @@ impl<'a> Parser<'a> {
                 FunctionParameterDeclaration::Named(_ /* TODO */, decl) => {
                     let ty = self.parse_type(decl.ty).unwrap();
 
-                    let ty = if let Some(specifier) = decl.ident.array_spec {
-                        match specifier {
-                            ArraySpecifier::Unsized => self.types.fetch_or_append(Type {
-                                name: None,
-                                inner: TypeInner::Array {
-                                    base: ty,
-                                    size: ArraySize::Dynamic,
-                                    stride: None,
-                                },
-                            }),
-                            ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
-                        }
+                    let ty = if let Some(array_spec) = decl.ident.array_spec {
+                        let size = self.parse_array_size(array_spec)?;
+                        self.types.fetch_or_append(Type {
+                            name: None,
+                            inner: TypeInner::Array {
+                                base: ty,
+                                size,
+                                stride: None,
+                            },
+                        })
                     } else {
                         ty
                     };
@@ -303,12 +326,7 @@ impl<'a> Parser<'a> {
                         }
                         _ => unimplemented!(),
                     },
-                    SimpleStatement::Expression(expr) => {
-                        let expr = match expr {
-                            Some(expr) => expr,
-                            None => continue,
-                        };
-
+                    SimpleStatement::Expression(Some(expr)) => {
                         body.push(self.parse_statement(
                             expr,
                             &mut expressions,
@@ -317,6 +335,7 @@ impl<'a> Parser<'a> {
                             &parameter_lookup,
                         )?);
                     }
+                    SimpleStatement::Expression(None) => (),
                     SimpleStatement::Selection(_) => unimplemented!(),
                     SimpleStatement::Switch(_) => unimplemented!(),
                     SimpleStatement::CaseLabel(_) => unimplemented!(),
@@ -368,18 +387,16 @@ impl<'a> Parser<'a> {
         let ty = {
             let ty = self.parse_type(init.head.ty.ty).unwrap();
 
-            if let Some(specifier) = init.head.array_specifier {
-                match specifier {
-                    ArraySpecifier::Unsized => self.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Array {
-                            base: ty,
-                            size: ArraySize::Dynamic,
-                            stride: None,
-                        },
-                    }),
-                    ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
-                }
+            if let Some(array_spec) = init.head.array_specifier {
+                let size = self.parse_array_size(array_spec)?;
+                self.types.fetch_or_append(Type {
+                    name: None,
+                    inner: TypeInner::Array {
+                        base: ty,
+                        size,
+                        stride: None,
+                    },
+                })
             } else {
                 ty
             }
@@ -980,19 +997,17 @@ impl<'a> Parser<'a> {
     fn parse_type(&mut self, ty: TypeSpecifier) -> Option<Handle<Type>> {
         let base_ty = helpers::glsl_to_spirv_type(ty.ty, &mut self.types)?;
 
-        let ty = if let Some(specifier) = ty.array_specifier {
+        let ty = if let Some(array_spec) = ty.array_specifier {
             let handle = self.types.fetch_or_append(Type {
                 name: None,
                 inner: base_ty,
             });
+            let size = self.parse_array_size(array_spec).unwrap();
 
-            match specifier {
-                ArraySpecifier::Unsized => TypeInner::Array {
-                    base: handle,
-                    size: ArraySize::Dynamic,
-                    stride: None,
-                },
-                ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
+            TypeInner::Array {
+                base: handle,
+                size,
+                stride: None,
             }
         } else {
             base_ty
@@ -1004,41 +1019,143 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn parse_global(&mut self, init: InitDeclaratorList) -> Handle<GlobalVariable> {
-        let name = init.head.name.map(|d| d.0);
+    fn parse_global(&mut self, head: SingleDeclaration) -> Result<Handle<GlobalVariable>, Error> {
+        let name = head.name.map(|d| d.0);
         let ty = {
-            let ty = self.parse_type(init.head.ty.ty).unwrap();
+            let ty = self.parse_type(head.ty.ty).unwrap();
 
-            if let Some(specifier) = init.head.array_specifier {
-                match specifier {
-                    ArraySpecifier::Unsized => self.types.fetch_or_append(Type {
-                        name: None,
-                        inner: TypeInner::Array {
-                            base: ty,
-                            size: ArraySize::Dynamic,
-                            stride: None,
-                        },
-                    }),
-                    ArraySpecifier::ExplicitlySized(_) => unimplemented!(),
-                }
+            if let Some(array_spec) = head.array_specifier {
+                let size = self.parse_array_size(array_spec)?;
+                self.types.fetch_or_append(Type {
+                    name: None,
+                    inner: TypeInner::Array {
+                        base: ty,
+                        size,
+                        stride: None,
+                    },
+                })
             } else {
                 ty
             }
         };
 
-        let (class, binding) = init
-            .head
+        let (class, binding) = head
             .ty
             .qualifier
             .map(Self::parse_type_qualifier)
             .unwrap_or((StorageClass::Private, None));
 
-        self.globals.append(GlobalVariable {
+        Ok(self.globals.append(GlobalVariable {
             name,
             class,
             binding,
             ty,
-        })
+        }))
+    }
+
+    /// https://www.khronos.org/opengl/wiki/Core_Language_(GLSL)#Constant_expression
+    pub fn eval_const_expr(
+        &mut self,
+        expr: Handle<Expression>,
+        expressions: &Arena<Expression>,
+    ) -> Result<Handle<Constant>, Error> {
+        match &expressions[expr] {
+            Expression::Constant(handle) => Ok(*handle),
+            Expression::Call { .. } => todo!(),
+            Expression::GlobalVariable(handle) => {
+                let name = self.globals[*handle].name.as_ref().unwrap();
+                if let Some(handle) = self.globals_constants.get(name) {
+                    Ok(*handle)
+                } else {
+                    todo!("Global const error")
+                }
+            }
+            Expression::Binary { left, right, op } => {
+                let left = self.eval_const_expr(*left, expressions)?;
+                let right = self.eval_const_expr(*right, expressions)?;
+                let inner: ConstantInner;
+                let ty;
+                match op {
+                    BinaryOperator::Add => {
+                        match (&self.constants[left].inner, &self.constants[right].inner) {
+                            (ConstantInner::Sint(left), ConstantInner::Sint(right)) => {
+                                inner = ConstantInner::Sint(left + right);
+                                ty = self.types.fetch_or_append(Type {
+                                    name: None,
+                                    inner: TypeInner::Scalar {
+                                        kind: ScalarKind::Sint,
+                                        width: 4,
+                                    },
+                                })
+                            }
+                            (ConstantInner::Uint(left), ConstantInner::Uint(right)) => {
+                                inner = ConstantInner::Uint(left + right);
+                                ty = self.types.fetch_or_append(Type {
+                                    name: None,
+                                    inner: TypeInner::Scalar {
+                                        kind: ScalarKind::Uint,
+                                        width: 4,
+                                    },
+                                })
+                            }
+                            (ConstantInner::Float(left), ConstantInner::Float(right)) => {
+                                inner = ConstantInner::Float(left + right);
+                                ty = self.types.fetch_or_append(Type {
+                                    name: None,
+                                    inner: TypeInner::Scalar {
+                                        kind: ScalarKind::Float,
+                                        width: 4,
+                                    },
+                                })
+                            }
+                            _ => todo!(),
+                        }
+                    }
+
+                    _ => todo!(),
+                }
+                Ok(self.constants.fetch_or_append(Constant {
+                    name: None,
+                    specialization: None,
+                    inner,
+                    ty,
+                }))
+            }
+            expr => todo!("Const eval for {:?}", expr),
+        }
+    }
+
+    pub fn parse_array_size(&mut self, array_spec: ArraySpecifier) -> Result<ArraySize, Error> {
+        let parameter_lookup = FastHashMap::default();
+        let mut locals = Arena::<LocalVariable>::new();
+        let mut locals_map = FastHashMap::default();
+        let mut expressions = Arena::<Expression>::new();
+        let size = match array_spec {
+            ArraySpecifier::Unsized => ArraySize::Dynamic,
+            ArraySpecifier::ExplicitlySized(expr) => {
+                let expr = self.parse_expression(
+                    *expr,
+                    &mut expressions,
+                    &mut locals,
+                    &mut locals_map,
+                    &parameter_lookup,
+                )?;
+                let handle = expressions.append(expr);
+
+                let const_handle = self.eval_const_expr(handle, &expressions)?;
+
+                match &self.constants[const_handle].inner {
+                    ConstantInner::Sint(val) => ArraySize::Static(*val as u32),
+                    ConstantInner::Uint(val) => ArraySize::Static(*val as u32),
+                    val => panic!(
+                        "Array size must be an integral constant expression, got: {:?}",
+                        val
+                    ),
+                }
+            }
+        };
+
+        Ok(size)
     }
 
     fn parse_type_qualifier(qualifier: TypeQualifier) -> (StorageClass, Option<Binding>) {

@@ -123,3 +123,14 @@ fn convert_phong_lighting() {
     let mut w = naga::back::spv::Writer::new(&header, writer_flags);
     w.write(&module);
 }
+
+#[cfg(feature = "glsl")]
+#[test]
+fn constant_expressions() {
+    let module = load_glsl(
+        "glsl_constant_expression.vert",
+        "main",
+        naga::ShaderStage::Fragment,
+    );
+    naga::proc::Validator::new().validate(&module).unwrap();
+}
