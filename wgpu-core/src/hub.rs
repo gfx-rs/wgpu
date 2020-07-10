@@ -76,8 +76,9 @@ impl IdentityManager {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug)]
-pub enum Element<T> {
+enum Element<T> {
     Vacant,
     Occupied(T, Epoch),
     Error,
@@ -96,12 +97,12 @@ impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
     fn index(&self, id: I) -> &T {
         let (index, epoch, _) = id.unzip();
         let (ref value, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref v, ref w) => (v, w),
+            Element::Occupied(ref v, epoch) => (v, epoch),
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            _ => unreachable!(),
+            Element::Error => panic!("{}[{}] is in error state", self.kind, index),
         };
         assert_eq!(
-            epoch, *storage_epoch,
+            epoch, storage_epoch,
             "{}[{}] is no longer alive",
             self.kind, index
         );
@@ -113,12 +114,12 @@ impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
     fn index_mut(&mut self, id: I) -> &mut T {
         let (index, epoch, _) = id.unzip();
         let (value, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref mut v, ref w) => (v, w),
+            Element::Occupied(ref mut v, epoch) => (v, epoch),
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            _ => unreachable!(),
+            Element::Error => panic!("{}[{}] is in error state", self.kind, index),
         };
         assert_eq!(
-            epoch, *storage_epoch,
+            epoch, storage_epoch,
             "{}[{}] is no longer alive",
             self.kind, index
         );
@@ -131,32 +132,29 @@ impl<T, I: TypedId> Storage<T, I> {
         let (index, epoch, _) = id.unzip();
         match self.map[index as usize] {
             Element::Occupied(_, storage_epoch) => epoch == storage_epoch,
-            Element::Vacant => false,
-            _ => unreachable!(),
+            _ => false,
         }
     }
 
-    pub fn insert(&mut self, id: I, value: T) -> Element<T> {
+    pub fn insert(&mut self, id: I, value: T) {
         let (index, epoch, _) = id.unzip();
-        let len = self.map.len();
-        if len <= index as usize {
-            self.map
-                .resize_with(index as usize - len + 1, || Element::Vacant);
+        if let Some(diff) = (index as usize).checked_sub(self.map.len()) {
+            self.map.resize_with(diff + 1, || Element::Vacant);
         }
-        std::mem::replace(
+        match std::mem::replace(
             &mut self.map[index as usize],
             Element::Occupied(value, epoch),
-        )
+        ) {
+            Element::Vacant => {}
+            _ => panic!("Id slot already occupied"),
+        }
     }
 
     pub fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
-        let element = if index as usize == self.map.len() - 1 {
-            self.map.pop().unwrap()
-        } else {
+        if let Element::Occupied(value, storage_epoch) =
             std::mem::replace(&mut self.map[index as usize], Element::Vacant)
-        };
-        if let Element::Occupied(value, storage_epoch) = element {
+        {
             assert_eq!(epoch, storage_epoch);
             Some(value)
         } else {
@@ -168,13 +166,11 @@ impl<T, I: TypedId> Storage<T, I> {
         self.map
             .iter()
             .enumerate()
-            .filter_map(move |(index, x)| {
-                let w = if let Element::Occupied(ref value, ref storage_epoch) = x {
-                    Some((I::zip(index as Index, *storage_epoch, backend), value))
-                } else {
-                    None
-                };
-                w
+            .filter_map(move |(index, x)| match *x {
+                Element::Occupied(ref value, storage_epoch) => {
+                    Some((I::zip(index as Index, storage_epoch, backend), value))
+                }
+                _ => None,
             })
             .into_iter()
     }
@@ -382,11 +378,7 @@ impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
 impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         debug_assert_eq!(id.unzip().2, self.backend);
-        let old = self.data.write().insert(id, value);
-        match old {
-            Element::Vacant => {}
-            _ => panic!("Id slot not vacant"),
-        }
+        self.data.write().insert(id, value);
     }
 
     pub fn read<'a, A: Access<T>>(
@@ -485,15 +477,15 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             }
         }
 
-        self.samplers.data.write().map.drain(..).for_each(|x| {
-            if let Element::Occupied(sampler, _) = x {
+        for element in self.samplers.data.write().map.drain(..) {
+            if let Element::Occupied(sampler, _) = element {
                 unsafe {
                     devices[sampler.device_id.value]
                         .raw
                         .destroy_sampler(sampler.raw);
                 }
             }
-        });
+        }
         {
             let textures = self.textures.data.read();
             for element in self.texture_views.data.write().map.drain(..) {
@@ -511,101 +503,71 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             }
         }
 
-        self.textures.data.write().map.drain(..).for_each(|x| {
-            if let Element::Occupied(texture, _) = x {
+        for element in self.textures.data.write().map.drain(..) {
+            if let Element::Occupied(texture, _) = element {
                 devices[texture.device_id.value].destroy_texture(texture);
             }
-        });
-        self.buffers.data.write().map.drain(..).for_each(|x| {
-            if let Element::Occupied(buffer, _) = x {
+        }
+        for element in self.buffers.data.write().map.drain(..) {
+            if let Element::Occupied(buffer, _) = element {
                 //TODO: unmap if needed
                 devices[buffer.device_id.value].destroy_buffer(buffer);
             }
-        });
-        self.command_buffers
-            .data
-            .write()
-            .map
-            .drain(..)
-            .for_each(|x| {
-                if let Element::Occupied(command_buffer, _) = x {
-                    devices[command_buffer.device_id.value]
-                        .com_allocator
-                        .after_submit(command_buffer, 0);
-                }
-            });
-        self.bind_groups.data.write().map.drain(..).for_each(|x| {
-            if let Element::Occupied(bind_group, _) = x {
+        }
+        for element in self.command_buffers.data.write().map.drain(..) {
+            if let Element::Occupied(command_buffer, _) = element {
+                devices[command_buffer.device_id.value]
+                    .com_allocator
+                    .after_submit(command_buffer, 0);
+            }
+        }
+        for element in self.bind_groups.data.write().map.drain(..) {
+            if let Element::Occupied(bind_group, _) = element {
                 let device = &devices[bind_group.device_id.value];
                 device.destroy_bind_group(bind_group);
             }
-        });
+        }
 
-        self.shader_modules
-            .data
-            .write()
-            .map
-            .drain(..)
-            .for_each(|x| {
-                if let Element::Occupied(module, _) = x {
-                    let device = &devices[module.device_id.value];
-                    unsafe {
-                        device.raw.destroy_shader_module(module.raw);
-                    }
+        for element in self.shader_modules.data.write().map.drain(..) {
+            if let Element::Occupied(module, _) = element {
+                let device = &devices[module.device_id.value];
+                unsafe {
+                    device.raw.destroy_shader_module(module.raw);
                 }
-            });
-        self.bind_group_layouts
-            .data
-            .write()
-            .map
-            .drain(..)
-            .for_each(|x| {
-                if let Element::Occupied(bgl, _) = x {
-                    let device = &devices[bgl.device_id.value];
-                    unsafe {
-                        device.raw.destroy_descriptor_set_layout(bgl.raw);
-                    }
+            }
+        }
+        for element in self.bind_group_layouts.data.write().map.drain(..) {
+            if let Element::Occupied(bgl, _) = element {
+                let device = &devices[bgl.device_id.value];
+                unsafe {
+                    device.raw.destroy_descriptor_set_layout(bgl.raw);
                 }
-            });
-        self.pipeline_layouts
-            .data
-            .write()
-            .map
-            .drain(..)
-            .for_each(|x| {
-                if let Element::Occupied(pipeline_layout, _) = x {
-                    let device = &devices[pipeline_layout.device_id.value];
-                    unsafe {
-                        device.raw.destroy_pipeline_layout(pipeline_layout.raw);
-                    }
+            }
+        }
+        for element in self.pipeline_layouts.data.write().map.drain(..) {
+            if let Element::Occupied(pipeline_layout, _) = element {
+                let device = &devices[pipeline_layout.device_id.value];
+                unsafe {
+                    device.raw.destroy_pipeline_layout(pipeline_layout.raw);
                 }
-            });
-        self.compute_pipelines
-            .data
-            .write()
-            .map
-            .drain(..)
-            .for_each(|x| {
-                if let Element::Occupied(pipeline, _) = x {
-                    let device = &devices[pipeline.device_id.value];
-                    unsafe {
-                        device.raw.destroy_compute_pipeline(pipeline.raw);
-                    }
+            }
+        }
+        for element in self.compute_pipelines.data.write().map.drain(..) {
+            if let Element::Occupied(pipeline, _) = element {
+                let device = &devices[pipeline.device_id.value];
+                unsafe {
+                    device.raw.destroy_compute_pipeline(pipeline.raw);
                 }
-            });
-        self.render_pipelines
-            .data
-            .write()
-            .map
-            .drain(..)
-            .for_each(|x| {
-                if let Element::Occupied(pipeline, _) = x {
-                    let device = &devices[pipeline.device_id.value];
-                    unsafe {
-                        device.raw.destroy_graphics_pipeline(pipeline.raw);
-                    }
+            }
+        }
+        for element in self.render_pipelines.data.write().map.drain(..) {
+            if let Element::Occupied(pipeline, _) = element {
+                let device = &devices[pipeline.device_id.value];
+                unsafe {
+                    device.raw.destroy_graphics_pipeline(pipeline.raw);
                 }
-            });
+            }
+        }
 
         for (index, element) in self.swap_chains.data.write().map.drain(..).enumerate() {
             if let Element::Occupied(swap_chain, epoch) = element {
@@ -619,11 +581,11 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
             }
         }
 
-        devices.map.drain(..).for_each(|x| {
-            if let Element::Occupied(device, _) = x {
+        for element in devices.map.drain(..) {
+            if let Element::Occupied(device, _) = element {
                 device.dispose();
             }
-        });
+        }
     }
 }
 
