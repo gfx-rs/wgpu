@@ -130,3 +130,30 @@ pub unsafe extern "C" fn wgpu_compute_pass_end_pass(pass_id: id::ComputePassId) 
 pub unsafe extern "C" fn wgpu_compute_pass_destroy(pass: *mut core::command::RawPass) {
     let _ = Box::from_raw(pass).into_vec();
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_push_debug_group(
+    command_encoder_id: id::CommandEncoderId,
+    label: core::RawString,
+    _color: u32,
+) {
+    let string = std::ffi::CStr::from_ptr(label).to_string_lossy();
+    gfx_select!(command_encoder_id => GLOBAL.command_encoder_push_debug_group(command_encoder_id, &string));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_pop_debug_group(
+    command_encoder_id: id::CommandEncoderId,
+) {
+    gfx_select!(command_encoder_id => GLOBAL.command_encoder_pop_debug_group(command_encoder_id));
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_command_encoder_insert_debug_marker(
+    command_encoder_id: id::CommandEncoderId,
+    label: core::RawString,
+    _color: u32,
+) {
+    let string = std::ffi::CStr::from_ptr(label).to_string_lossy();
+    gfx_select!(command_encoder_id => GLOBAL.command_encoder_insert_debug_marker(command_encoder_id, &string));
+}

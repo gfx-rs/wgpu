@@ -2,7 +2,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-/* Generated with cbindgen:0.14.1 */
+/* Generated with cbindgen:0.14.3 */
 
 /* DO NOT MODIFY THIS MANUALLY! This file was generated using cbindgen.
  * To generate this file:
@@ -416,9 +416,9 @@ typedef struct {
   uint32_t todo;
 } WGPUCommandBufferDescriptor;
 
-typedef WGPURawPass *WGPUComputePassId;
-
 typedef const char *WGPURawString;
+
+typedef WGPURawPass *WGPUComputePassId;
 
 typedef uint32_t WGPUDynamicOffset;
 
@@ -794,6 +794,16 @@ void wgpu_command_encoder_destroy(WGPUCommandEncoderId command_encoder_id);
 WGPUCommandBufferId wgpu_command_encoder_finish(WGPUCommandEncoderId encoder_id,
                                                 const WGPUCommandBufferDescriptor *desc);
 
+void wgpu_command_encoder_insert_debug_marker(WGPUCommandEncoderId command_encoder_id,
+                                              WGPURawString label,
+                                              uint32_t _color);
+
+void wgpu_command_encoder_pop_debug_group(WGPUCommandEncoderId command_encoder_id);
+
+void wgpu_command_encoder_push_debug_group(WGPUCommandEncoderId command_encoder_id,
+                                           WGPURawString label,
+                                           uint32_t _color);
+
 void wgpu_compute_pass_destroy(WGPURawPass *pass);
 
 void wgpu_compute_pass_dispatch(WGPURawPass *pass,
@@ -809,11 +819,11 @@ void wgpu_compute_pass_end_pass(WGPUComputePassId pass_id);
 
 const uint8_t *wgpu_compute_pass_finish(WGPURawPass *pass, uintptr_t *length);
 
-void wgpu_compute_pass_insert_debug_marker(WGPURawPass *_pass, WGPURawString _label);
+void wgpu_compute_pass_insert_debug_marker(WGPURawPass *pass, WGPURawString label, uint32_t color);
 
-void wgpu_compute_pass_pop_debug_group(WGPURawPass *_pass);
+void wgpu_compute_pass_pop_debug_group(WGPURawPass *pass);
 
-void wgpu_compute_pass_push_debug_group(WGPURawPass *_pass, WGPURawString _label);
+void wgpu_compute_pass_push_debug_group(WGPURawPass *pass, WGPURawString label, uint32_t color);
 
 /**
  * # Safety
@@ -934,11 +944,11 @@ void wgpu_render_pass_execute_bundles(WGPURawPass *_pass,
 
 const uint8_t *wgpu_render_pass_finish(WGPURawPass *pass, uintptr_t *length);
 
-void wgpu_render_pass_insert_debug_marker(WGPURawPass *_pass, WGPURawString _label);
+void wgpu_render_pass_insert_debug_marker(WGPURawPass *pass, WGPURawString label, uint32_t color);
 
-void wgpu_render_pass_pop_debug_group(WGPURawPass *_pass);
+void wgpu_render_pass_pop_debug_group(WGPURawPass *pass);
 
-void wgpu_render_pass_push_debug_group(WGPURawPass *_pass, WGPURawString _label);
+void wgpu_render_pass_push_debug_group(WGPURawPass *pass, WGPURawString label, uint32_t color);
 
 /**
  * # Safety
