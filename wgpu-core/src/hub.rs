@@ -140,9 +140,8 @@ impl<T, I: TypedId> Storage<T, I> {
         let (index, epoch, _) = id.unzip();
         let len = self.map.len();
         if len <= index as usize {
-            for _ in 0..index as usize - len + 1 {
-                self.map.push(Element::Vacant);
-            }
+            self.map
+                .resize_with(index as usize - len + 1, || Element::Vacant);
         }
         std::mem::replace(
             &mut self.map[index as usize],
