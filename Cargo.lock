@@ -653,7 +653,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "wgpu-core"
-version = "0.5.5"
+version = "0.5.6"
 dependencies = [
  "arrayvec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "battery 0.7.5 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -679,7 +679,7 @@ dependencies = [
 
 [[package]]
 name = "wgpu-native"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "arrayvec 0.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "lazy_static 1.4.0 (registry+https://github.com/rust-lang/crates.io-index)",
@@ -687,7 +687,7 @@ dependencies = [
  "objc 0.2.7 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "raw-window-handle 0.3.3 (registry+https://github.com/rust-lang/crates.io-index)",
- "wgpu-core 0.5.5",
+ "wgpu-core 0.5.6",
  "wgpu-types 0.5.1",
 ]
 
@@ -697,7 +697,7 @@ version = "0.1.0"
 dependencies = [
  "log 0.4.8 (registry+https://github.com/rust-lang/crates.io-index)",
  "parking_lot 0.10.0 (registry+https://github.com/rust-lang/crates.io-index)",
- "wgpu-core 0.5.5",
+ "wgpu-core 0.5.6",
  "wgpu-types 0.5.1",
 ]
 
