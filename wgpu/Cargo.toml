@@ -73,7 +73,7 @@ test = true
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 env_logger = "0.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
