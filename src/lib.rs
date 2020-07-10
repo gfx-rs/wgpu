@@ -1337,6 +1337,37 @@ impl CommandEncoder {
             copy_size,
         );
     }
+
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        let cstring = CString::new(label).unwrap();
+        unsafe {
+            wgn::wgpu_command_encoder_insert_debug_marker(
+                self.id,
+                cstring.as_ptr(),
+                0,
+            )
+        };
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        let cstring = CString::new(label).unwrap();
+        unsafe {
+            wgn::wgpu_command_encoder_push_debug_group(
+                self.id,
+                cstring.as_ptr(),
+                0,
+            )
+        };
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        unsafe {
+            wgn::wgpu_command_encoder_pop_debug_group(self.id)
+        };
+    }
 }
 
 impl<'a> RenderPass<'a> {
@@ -1487,10 +1518,11 @@ impl<'a> RenderPass<'a> {
 
     /// Inserts debug marker.
     pub fn insert_debug_marker(&mut self, label: &str) {
+        let cstring = CString::new(label).unwrap();
         unsafe {
             wgn::wgpu_render_pass_insert_debug_marker(
                 self.id.as_mut().unwrap(),
-                label.as_ptr() as *const i8,
+                cstring.as_ptr(),
                 0,
             );
         }
@@ -1498,10 +1530,11 @@ impl<'a> RenderPass<'a> {
 
     /// Start record commands and group it into debug marker group.
     pub fn push_debug_group(&mut self, label: &str) {
+        let cstring = CString::new(label).unwrap();
         unsafe {
             wgn::wgpu_render_pass_push_debug_group(
                 self.id.as_mut().unwrap(),
-                label.as_ptr() as *const i8,
+                cstring.as_ptr(),
                 0,
             );
         }
@@ -1600,6 +1633,37 @@ impl<'a> ComputePass<'a> {
                 self.id.as_mut().unwrap(),
                 pipeline.id,
             );
+        }
+    }
+
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        let cstring = CString::new(label).unwrap();
+        unsafe {
+            wgn::wgpu_compute_pass_insert_debug_marker(
+                self.id.as_mut().unwrap(),
+                cstring.as_ptr(),
+                0,
+            );
+        }
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        let cstring = CString::new(label).unwrap();
+        unsafe {
+            wgn::wgpu_compute_pass_push_debug_group(
+                self.id.as_mut().unwrap(),
+                cstring.as_ptr(),
+                0,
+            );
+        }
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        unsafe {
+            wgn::wgpu_compute_pass_pop_debug_group(self.id.as_mut().unwrap());
         }
     }
 

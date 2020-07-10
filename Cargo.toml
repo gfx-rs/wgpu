@@ -1,6 +1,6 @@
 [package]
 name = "wgpu"
-version = "0.5.1"
+version = "0.5.2"
 authors = [
     "Dzmitry Malyshau <kvark@mozilla.com>",
     "Joshua Groves <josh@joshgroves.com>",
@@ -25,7 +25,7 @@ vulkan = ["wgn/vulkan-portability"]
 
 [dependencies.wgn]
 package = "wgpu-native"
-version = "0.5"
+version = "0.5.1"
 #git = "https://github.com/gfx-rs/wgpu"
 
 [dependencies.wgc]
@@ -60,7 +60,7 @@ name="hello-compute"
 path="examples/hello-compute/main.rs"
 test = true
 
-#[patch.crates-io]
+[patch.crates-io]
 #wgpu-types = { version = "0.5.0", path = "../wgpu/wgpu-types" }
 #wgpu-core = { version = "0.5.0", path = "../wgpu/wgpu-core" }
 #wgpu-native = { version = "0.5.0", path = "../wgpu/wgpu-native" }
