@@ -39,7 +39,6 @@ spirv_headers = { version = "1.4.2" }
 thread-id = { version = "3", optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 tracing-subscriber =  { version = "0.2", optional = true }
-vec_map = "0.8.1"
 
 [dependencies.naga]
 git = "https://github.com/gfx-rs/naga"
