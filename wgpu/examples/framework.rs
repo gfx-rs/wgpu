@@ -237,6 +237,7 @@ fn start<E: Example>(
                 sc_desc.width = size.width;
                 sc_desc.height = size.height;
                 example.resize(&sc_desc, &device, &queue);
+                swap_chain = device.create_swap_chain(&surface, &sc_desc);
             }
             event::Event::WindowEvent { event, .. } => match event {
                 WindowEvent::KeyboardInput {
