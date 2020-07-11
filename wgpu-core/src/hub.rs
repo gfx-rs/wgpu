@@ -152,6 +152,9 @@ impl<T, I: TypedId> Storage<T, I> {
 
     pub fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
+        if index as usize >= self.map.len() {
+            return None;
+        }
         if let Element::Occupied(value, storage_epoch) =
             std::mem::replace(&mut self.map[index as usize], Element::Vacant)
         {
