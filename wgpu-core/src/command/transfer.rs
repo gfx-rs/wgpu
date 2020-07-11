@@ -16,8 +16,9 @@ use crate::{
 use hal::command::CommandBuffer as _;
 use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureDataLayout, TextureUsage};
 
-use std::convert::TryInto as _;
 use std::iter;
+
+type Result = std::result::Result<(), TransferError>;
 
 pub(crate) const BITS_PER_BYTE: u32 = 8;
 
@@ -38,6 +39,40 @@ pub struct TextureCopyView {
     pub texture: TextureId,
     pub mip_level: u32,
     pub origin: Origin3d,
+}
+
+/// Error encountered while attempting a data transfer.
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub enum TransferError {
+    /// The source buffer/texture is missing the `COPY_SRC` usage flag.
+    MissingCopySrcUsageFlag,
+    /// The destination buffer/texture is missing the `COPY_DST` usage flag.
+    MissingCopyDstUsageFlag,
+    /// Copy would end up overruning the bounds of the destination buffer/texture.
+    BufferOverrun,
+    /// Buffer offset is not aligned to block size.
+    UnalignedBufferOffset,
+    /// Copy size is not a multiple of block size.
+    UnalignedCopySize,
+    /// Copy width is not a multiple of block size.
+    UnalignedCopyWidth,
+    /// Copy height is not a multiple of block size.
+    UnalignedCopyHeight,
+    /// Bytes per row is not a multiple of the required alignment.
+    UnalignedBytesPerRow,
+    /// Number of rows per image is not a multiple of the required alignment.
+    UnalignedRowsPerImage,
+    /// Number of bytes per row is less than the number of bytes in a complete row.
+    InvalidBytesPerRow,
+    /// Copy size is invalid.
+    ///
+    /// This can happen if the image is 1D and the copy height and depth
+    /// are not both set to 1.
+    InvalidCopySize,
+    /// Number of rows per image is invalid.
+    InvalidRowsPerImage,
+    /// The source and destination layers have different aspects.
+    MismatchedAspects,
 }
 
 impl TextureCopyView {
@@ -90,7 +125,7 @@ pub(crate) fn validate_linear_texture_data(
     buffer_size: BufferAddress,
     bytes_per_texel: BufferAddress,
     copy_size: &Extent3d,
-) {
+) -> Result {
     // Convert all inputs to BufferAddress (u64) to prevent overflow issues
     let copy_width = copy_size.width as BufferAddress;
     let copy_height = copy_size.height as BufferAddress;
@@ -105,27 +140,15 @@ pub(crate) fn validate_linear_texture_data(
     let block_height: BufferAddress = 1;
     let block_size = bytes_per_texel;
 
-    assert_eq!(
-        copy_width % block_width,
-        0,
-        "Copy width {} must be a multiple of texture block width {}",
-        copy_size.width,
-        block_width,
-    );
-    assert_eq!(
-        copy_height % block_height,
-        0,
-        "Copy height {} must be a multiple of texture block height {}",
-        copy_size.height,
-        block_height,
-    );
-    assert_eq!(
-        rows_per_image % block_height,
-        0,
-        "Rows per image {} must be a multiple of image format block height {}",
-        rows_per_image,
-        block_height,
-    );
+    if copy_width % block_width != 0 {
+        return Err(TransferError::UnalignedCopyWidth);
+    }
+    if copy_height % block_height != 0 {
+        return Err(TransferError::UnalignedCopyHeight);
+    }
+    if rows_per_image % block_height != 0 {
+        return Err(TransferError::UnalignedRowsPerImage);
+    }
 
     let bytes_in_a_complete_row = block_size * copy_width / block_width;
     let required_bytes_in_copy = if copy_width == 0 || copy_height == 0 || copy_depth == 0 {
@@ -143,45 +166,22 @@ pub(crate) fn validate_linear_texture_data(
         bytes_per_image * (copy_depth - 1) + bytes_in_last_slice
     };
 
-    if rows_per_image != 0 {
-        assert!(
-            rows_per_image >= copy_height,
-            "Rows per image {} must be greater or equal to copy_extent.height {}",
-            rows_per_image,
-            copy_height
-        )
+    if rows_per_image != 0 && rows_per_image < copy_height {
+        return Err(TransferError::InvalidRowsPerImage);
     }
-    assert!(
-        offset + required_bytes_in_copy <= buffer_size,
-        "Texture copy using buffer indices {}..{} would overrun buffer of size {}",
-        offset,
-        offset + required_bytes_in_copy,
-        buffer_size
-    );
-    assert_eq!(
-        offset % block_size,
-        0,
-        "Buffer offset {} must be a multiple of image format block size {}",
-        offset,
-        block_size,
-    );
-    if copy_height > 1 {
-        assert!(
-            bytes_per_row >= bytes_in_a_complete_row,
-            "Bytes per row {} must be at least the size of {} {}-byte texel blocks ({})",
-            bytes_per_row,
-            copy_width / block_width,
-            block_size,
-            bytes_in_a_complete_row,
-        )
+    if offset + required_bytes_in_copy > buffer_size {
+        return Err(TransferError::BufferOverrun);
     }
-    if copy_depth > 1 {
-        assert_ne!(
-            rows_per_image, 0,
-            "Rows per image {} must be set to a non zero value when copy depth > 1 ({})",
-            rows_per_image, copy_depth,
-        )
+    if offset % block_size != 0 {
+        return Err(TransferError::UnalignedBufferOffset);
     }
+    if copy_height > 1 && bytes_per_row < bytes_in_a_complete_row {
+        return Err(TransferError::InvalidBytesPerRow);
+    }
+    if copy_depth > 1 && rows_per_image == 0 {
+        return Err(TransferError::InvalidRowsPerImage);
+    }
+    Ok(())
 }
 
 /// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
@@ -189,26 +189,17 @@ pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &TextureCopyView,
     texture_dimension: hal::image::Kind,
     copy_size: &Extent3d,
-) {
+) -> Result {
     // TODO: Once compressed textures are supported, these needs to be fixed
     let block_width: u32 = 1;
     let block_height: u32 = 1;
 
-    let mut extent = texture_dimension.level_extent(
-        texture_copy_view
-            .mip_level
-            .try_into()
-            .expect("Mip level must be < 256"),
-    );
+    let mut extent = texture_dimension.level_extent(texture_copy_view.mip_level as u8);
     match texture_dimension {
         hal::image::Kind::D1(..) => {
-            assert_eq!(
-                (copy_size.height, copy_size.depth),
-                (1, 1),
-                "Copies with 1D textures must have height and depth of 1. Currently: ({}, {})",
-                copy_size.height,
-                copy_size.depth,
-            );
+            if (copy_size.height, copy_size.depth) != (1, 1) {
+                return Err(TransferError::InvalidCopySize);
+            }
         }
         hal::image::Kind::D2(_, _, array_layers, _) => {
             extent.depth = array_layers as u32;
@@ -217,44 +208,25 @@ pub(crate) fn validate_texture_copy_range(
     };
 
     let x_copy_max = texture_copy_view.origin.x + copy_size.width;
-    assert!(
-        x_copy_max <= extent.width,
-        "Texture copy with X range {}..{} overruns texture width {}",
-        texture_copy_view.origin.x,
-        x_copy_max,
-        extent.width,
-    );
+    if x_copy_max > extent.width {
+        return Err(TransferError::BufferOverrun);
+    }
     let y_copy_max = texture_copy_view.origin.y + copy_size.height;
-    assert!(
-        y_copy_max <= extent.height,
-        "Texture copy with Y range {}..{} overruns texture height {}",
-        texture_copy_view.origin.y,
-        y_copy_max,
-        extent.height,
-    );
+    if y_copy_max > extent.height {
+        return Err(TransferError::BufferOverrun);
+    }
     let z_copy_max = texture_copy_view.origin.z + copy_size.depth;
-    assert!(
-        z_copy_max <= extent.depth,
-        "Texture copy with Z range {}..{} overruns texture depth {}",
-        texture_copy_view.origin.z,
-        z_copy_max,
-        extent.depth,
-    );
+    if z_copy_max > extent.depth {
+        return Err(TransferError::BufferOverrun);
+    }
 
-    assert_eq!(
-        copy_size.width % block_width,
-        0,
-        "Copy width {} must be a multiple of texture block width {}",
-        copy_size.width,
-        block_width,
-    );
-    assert_eq!(
-        copy_size.height % block_height,
-        0,
-        "Copy height {} must be a multiple of texture block height {}",
-        copy_size.height,
-        block_height,
-    );
+    if copy_size.width % block_width != 0 {
+        return Err(TransferError::UnalignedCopyWidth);
+    }
+    if copy_size.height % block_height != 0 {
+        return Err(TransferError::UnalignedCopyHeight);
+    }
+    Ok(())
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -266,7 +238,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         destination: BufferId,
         destination_offset: BufferAddress,
         size: BufferAddress,
-    ) {
+    ) -> Result {
         span!(_guard, INFO, "CommandEncoder::copy_buffer_to_buffer");
 
         let hub = B::hub(self);
@@ -293,71 +265,45 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if size == 0 {
             log::trace!("Ignoring copy_buffer_to_buffer of size 0");
-            return;
+            return Ok(());
         }
 
         let (src_buffer, src_pending) =
             cmb.trackers
                 .buffers
                 .use_replace(&*buffer_guard, source, (), BufferUse::COPY_SRC);
-        assert!(
-            src_buffer.usage.contains(BufferUsage::COPY_SRC),
-            "Source buffer usage {:?} must contain usage flag COPY_SRC",
-            src_buffer.usage
-        );
+        if !src_buffer.usage.contains(BufferUsage::COPY_SRC) {
+            return Err(TransferError::MissingCopySrcUsageFlag);
+        }
         barriers.extend(src_pending.map(|pending| pending.into_hal(src_buffer)));
 
         let (dst_buffer, dst_pending) =
             cmb.trackers
                 .buffers
                 .use_replace(&*buffer_guard, destination, (), BufferUse::COPY_DST);
-        assert!(
-            dst_buffer.usage.contains(BufferUsage::COPY_DST),
-            "Destination buffer usage {:?} must contain usage flag COPY_DST",
-            dst_buffer.usage
-        );
+        if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
+            return Err(TransferError::MissingCopyDstUsageFlag);
+        }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_buffer)));
 
-        assert_eq!(
-            size % wgt::COPY_BUFFER_ALIGNMENT,
-            0,
-            "Buffer copy size {} must be a multiple of {}",
-            size,
-            wgt::COPY_BUFFER_ALIGNMENT,
-        );
-        assert_eq!(
-            source_offset % wgt::COPY_BUFFER_ALIGNMENT,
-            0,
-            "Buffer source offset {} must be a multiple of {}",
-            source_offset,
-            wgt::COPY_BUFFER_ALIGNMENT,
-        );
-        assert_eq!(
-            destination_offset % wgt::COPY_BUFFER_ALIGNMENT,
-            0,
-            "Buffer destination offset {} must be a multiple of {}",
-            destination_offset,
-            wgt::COPY_BUFFER_ALIGNMENT,
-        );
+        if size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedCopySize);
+        }
+        if source_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedBufferOffset);
+        }
+        if destination_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(TransferError::UnalignedBufferOffset);
+        }
 
-        let source_start_offset = source_offset;
         let source_end_offset = source_offset + size;
-        let destination_start_offset = destination_offset;
         let destination_end_offset = destination_offset + size;
-        assert!(
-            source_end_offset <= src_buffer.size,
-            "Buffer to buffer copy with indices {}..{} overruns source buffer of size {}",
-            source_start_offset,
-            source_end_offset,
-            src_buffer.size
-        );
-        assert!(
-            destination_end_offset <= dst_buffer.size,
-            "Buffer to buffer copy with indices {}..{} overruns destination buffer of size {}",
-            destination_start_offset,
-            destination_end_offset,
-            dst_buffer.size
-        );
+        if source_end_offset > src_buffer.size {
+            return Err(TransferError::BufferOverrun);
+        }
+        if destination_end_offset > dst_buffer.size {
+            return Err(TransferError::BufferOverrun);
+        }
 
         let region = hal::command::BufferCopy {
             src: source_offset,
@@ -373,6 +319,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             cmb_raw.copy_buffer(&src_buffer.raw, &dst_buffer.raw, iter::once(region));
         }
+        Ok(())
     }
 
     pub fn command_encoder_copy_buffer_to_texture<B: GfxBackend>(
@@ -381,7 +328,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         source: &BufferCopyView,
         destination: &TextureCopyView,
         copy_size: &Extent3d,
-    ) {
+    ) -> Result {
         span!(_guard, INFO, "CommandEncoder::copy_buffer_to_texture");
 
         let hub = B::hub(self);
@@ -404,7 +351,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
             log::trace!("Ignoring copy_buffer_to_texture of size 0");
-            return;
+            return Ok(());
         }
 
         let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
@@ -413,7 +360,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (),
             BufferUse::COPY_SRC,
         );
-        assert!(src_buffer.usage.contains(BufferUsage::COPY_SRC));
+        if !src_buffer.usage.contains(BufferUsage::COPY_SRC) {
+            return Err(TransferError::MissingCopySrcUsageFlag);
+        }
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 
         let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
@@ -422,28 +371,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_range,
             TextureUse::COPY_DST,
         );
-        assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
+        if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
+            return Err(TransferError::MissingCopyDstUsageFlag);
+        }
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
+        let bytes_per_row_alignment = wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
         let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        assert_eq!(wgt::COPY_BYTES_PER_ROW_ALIGNMENT % bytes_per_texel, 0);
-        assert_eq!(
-            source.layout.bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
-            0,
-            "Source bytes per row ({}) must be a multiple of {}",
-            source.layout.bytes_per_row,
-            wgt::COPY_BYTES_PER_ROW_ALIGNMENT
-        );
-        validate_texture_copy_range(destination, dst_texture.kind, copy_size);
+        let src_bytes_per_row = source.layout.bytes_per_row;
+        if bytes_per_row_alignment % bytes_per_texel != 0 {
+            return Err(TransferError::UnalignedBytesPerRow);
+        }
+        if src_bytes_per_row % bytes_per_row_alignment != 0 {
+            return Err(TransferError::UnalignedBytesPerRow);
+        }
+        validate_texture_copy_range(destination, dst_texture.kind, copy_size)?;
         validate_linear_texture_data(
             &source.layout,
             src_buffer.size,
             bytes_per_texel as BufferAddress,
             copy_size,
-        );
+        )?;
 
         let buffer_width = source.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
@@ -468,6 +419,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 iter::once(region),
             );
         }
+        Ok(())
     }
 
     pub fn command_encoder_copy_texture_to_buffer<B: GfxBackend>(
@@ -476,7 +428,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         source: &TextureCopyView,
         destination: &BufferCopyView,
         copy_size: &Extent3d,
-    ) {
+    ) -> Result {
         span!(_guard, INFO, "CommandEncoder::copy_texture_to_buffer");
 
         let hub = B::hub(self);
@@ -499,7 +451,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
             log::trace!("Ignoring copy_texture_to_buffer of size 0");
-            return;
+            return Ok(());
         }
 
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
@@ -508,11 +460,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             src_range,
             TextureUse::COPY_SRC,
         );
-        assert!(
-            src_texture.usage.contains(TextureUsage::COPY_SRC),
-            "Source texture usage ({:?}) must contain usage flag COPY_SRC",
-            src_texture.usage
-        );
+        if !src_texture.usage.contains(TextureUsage::COPY_SRC) {
+            return Err(TransferError::MissingCopySrcUsageFlag);
+        }
         let src_barriers = src_pending.map(|pending| pending.into_hal(src_texture));
 
         let (dst_buffer, dst_barriers) = cmb.trackers.buffers.use_replace(
@@ -521,32 +471,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             (),
             BufferUse::COPY_DST,
         );
-        assert!(
-            dst_buffer.usage.contains(BufferUsage::COPY_DST),
-            "Destination buffer usage {:?} must contain usage flag COPY_DST",
-            dst_buffer.usage
-        );
+        if !dst_buffer.usage.contains(BufferUsage::COPY_DST) {
+            return Err(TransferError::MissingCopyDstUsageFlag);
+        }
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
 
+        let bytes_per_row_alignment = wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
         let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        assert_eq!(wgt::COPY_BYTES_PER_ROW_ALIGNMENT % bytes_per_texel, 0);
-        assert_eq!(
-            destination.layout.bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
-            0,
-            "Destination bytes per row ({}) must be a multiple of {}",
-            destination.layout.bytes_per_row,
-            wgt::COPY_BYTES_PER_ROW_ALIGNMENT
-        );
-        validate_texture_copy_range(source, src_texture.kind, copy_size);
+        let dst_bytes_per_row = destination.layout.bytes_per_row;
+        if bytes_per_row_alignment % bytes_per_texel != 0 {
+            return Err(TransferError::UnalignedBytesPerRow);
+        }
+        if dst_bytes_per_row % bytes_per_row_alignment != 0 {
+            return Err(TransferError::UnalignedBytesPerRow);
+        }
+        validate_texture_copy_range(source, src_texture.kind, copy_size)?;
         validate_linear_texture_data(
             &destination.layout,
             dst_buffer.size,
             bytes_per_texel as BufferAddress,
             copy_size,
-        );
+        )?;
 
         let buffer_width = destination.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
@@ -571,6 +519,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 iter::once(region),
             );
         }
+        Ok(())
     }
 
     pub fn command_encoder_copy_texture_to_texture<B: GfxBackend>(
@@ -579,7 +528,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         source: &TextureCopyView,
         destination: &TextureCopyView,
         copy_size: &Extent3d,
-    ) {
+    ) -> Result {
         span!(_guard, INFO, "CommandEncoder::copy_texture_to_texture");
 
         let hub = B::hub(self);
@@ -594,7 +543,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut barriers = Vec::new();
         let (src_layers, src_range, src_offset) = source.to_hal(&*texture_guard);
         let (dst_layers, dst_range, dst_offset) = destination.to_hal(&*texture_guard);
-        assert_eq!(src_layers.aspects, dst_layers.aspects);
+        if src_layers.aspects != dst_layers.aspects {
+            return Err(TransferError::MismatchedAspects);
+        }
 
         #[cfg(feature = "trace")]
         match cmb.commands {
@@ -608,7 +559,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
             log::trace!("Ignoring copy_texture_to_texture of size 0");
-            return;
+            return Ok(());
         }
 
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
@@ -617,11 +568,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             src_range,
             TextureUse::COPY_SRC,
         );
-        assert!(
-            src_texture.usage.contains(TextureUsage::COPY_SRC),
-            "Source texture usage {:?} must contain usage flag COPY_SRC",
-            src_texture.usage
-        );
+        if !src_texture.usage.contains(TextureUsage::COPY_SRC) {
+            return Err(TransferError::MissingCopySrcUsageFlag);
+        }
         barriers.extend(src_pending.map(|pending| pending.into_hal(src_texture)));
 
         let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
@@ -630,16 +579,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             dst_range,
             TextureUse::COPY_DST,
         );
-        assert!(
-            dst_texture.usage.contains(TextureUsage::COPY_DST),
-            "Destination texture usage {:?} must contain usage flag COPY_DST",
-            dst_texture.usage
-        );
+        if !dst_texture.usage.contains(TextureUsage::COPY_DST) {
+            return Err(TransferError::MissingCopyDstUsageFlag);
+        }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
-        assert_eq!(src_texture.dimension, dst_texture.dimension);
-        validate_texture_copy_range(source, src_texture.kind, copy_size);
-        validate_texture_copy_range(destination, dst_texture.kind, copy_size);
+        validate_texture_copy_range(source, src_texture.kind, copy_size)?;
+        validate_texture_copy_range(destination, dst_texture.kind, copy_size)?;
 
         let region = hal::command::ImageCopy {
             src_subresource: src_layers,
@@ -663,5 +609,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 iter::once(region),
             );
         }
+        Ok(())
     }
 }
