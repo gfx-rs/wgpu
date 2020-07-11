@@ -138,8 +138,8 @@ impl<T, I: TypedId> Storage<T, I> {
 
     pub fn insert(&mut self, id: I, value: T) {
         let (index, epoch, _) = id.unzip();
-        if let Some(diff) = (index as usize).checked_sub(self.map.len()) {
-            self.map.resize_with(diff + 1, || Element::Vacant);
+        if index as usize >= self.map.len() {
+            self.map.resize_with(index as usize + 1, || Element::Vacant);
         }
         match std::mem::replace(
             &mut self.map[index as usize],
