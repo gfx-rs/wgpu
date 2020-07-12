@@ -111,7 +111,6 @@ pub fn map_binding_type(binding: &wgt::BindGroupLayoutEntry) -> hal::pso::Descri
                 read_only: readonly,
             },
         },
-        _ => unreachable!(),
     }
 }
 
