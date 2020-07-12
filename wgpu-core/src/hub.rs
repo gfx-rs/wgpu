@@ -76,17 +76,15 @@ impl IdentityManager {
     }
 }
 
-#[allow(dead_code)]
 #[derive(Debug)]
 enum Element<T> {
     Vacant,
     Occupied(T, Epoch),
-    Error,
+    Error(Epoch),
 }
 
 #[derive(Debug)]
 pub struct Storage<T, I: TypedId> {
-    //TODO: consider concurrent hashmap?
     map: Vec<Element<T>>,
     kind: &'static str,
     _phantom: PhantomData<I>,
@@ -99,7 +97,7 @@ impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
         let (ref value, storage_epoch) = match self.map[index as usize] {
             Element::Occupied(ref v, epoch) => (v, epoch),
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error => panic!("{}[{}] is in error state", self.kind, index),
+            Element::Error(_) => panic!("{}[{}] is in error state", self.kind, index),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -116,7 +114,7 @@ impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
         let (value, storage_epoch) = match self.map[index as usize] {
             Element::Occupied(ref mut v, epoch) => (v, epoch),
             Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error => panic!("{}[{}] is in error state", self.kind, index),
+            Element::Error(_) => panic!("{}[{}] is in error state", self.kind, index),
         };
         assert_eq!(
             epoch, storage_epoch,
@@ -128,34 +126,41 @@ impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
 }
 
 impl<T, I: TypedId> Storage<T, I> {
-    pub fn contains(&self, id: I) -> bool {
+    pub(crate) fn contains(&self, id: I) -> bool {
         let (index, epoch, _) = id.unzip();
         match self.map[index as usize] {
-            Element::Occupied(_, storage_epoch) => epoch == storage_epoch,
-            _ => false,
+            Element::Vacant => false,
+            Element::Occupied(_, storage_epoch) | Element::Error(storage_epoch) => {
+                epoch == storage_epoch
+            }
         }
     }
 
-    pub fn insert(&mut self, id: I, value: T) {
-        let (index, epoch, _) = id.unzip();
-        if index as usize >= self.map.len() {
-            self.map.resize_with(index as usize + 1, || Element::Vacant);
+    fn insert_impl(&mut self, index: usize, element: Element<T>) {
+        if index >= self.map.len() {
+            self.map.resize_with(index + 1, || Element::Vacant);
         }
-        match std::mem::replace(
-            &mut self.map[index as usize],
-            Element::Occupied(value, epoch),
-        ) {
+        match std::mem::replace(&mut self.map[index], element) {
             Element::Vacant => {}
-            _ => panic!("Id slot already occupied"),
+            _ => panic!("Index {:?} is already occupied", index),
         }
     }
 
-    pub fn remove(&mut self, id: I) -> Option<T> {
+    pub(crate) fn insert(&mut self, id: I, value: T) {
+        let (index, epoch, _) = id.unzip();
+        self.insert_impl(index as usize, Element::Occupied(value, epoch))
+    }
+
+    pub(crate) fn insert_error(&mut self, id: I) {
+        let (index, epoch, _) = id.unzip();
+        self.insert_impl(index as usize, Element::Error(epoch))
+    }
+
+    pub(crate) fn remove(&mut self, id: I) -> Option<T> {
         let (index, epoch, _) = id.unzip();
         if index as usize >= self.map.len() {
-            return None;
-        }
-        if let Element::Occupied(value, storage_epoch) =
+            None
+        } else if let Element::Occupied(value, storage_epoch) =
             std::mem::replace(&mut self.map[index as usize], Element::Vacant)
         {
             assert_eq!(epoch, storage_epoch);
@@ -165,7 +170,7 @@ impl<T, I: TypedId> Storage<T, I> {
         }
     }
 
-    pub fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
+    pub(crate) fn iter(&self, backend: Backend) -> impl Iterator<Item = (I, &T)> {
         self.map
             .iter()
             .enumerate()
@@ -379,19 +384,19 @@ impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
 }
 
 impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
+    pub(crate) fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         debug_assert_eq!(id.unzip().2, self.backend);
         self.data.write().insert(id, value);
     }
 
-    pub fn read<'a, A: Access<T>>(
+    pub(crate) fn read<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockReadGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.read(), Token::new())
     }
 
-    pub fn write<'a, A: Access<T>>(
+    pub(crate) fn write<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
@@ -400,7 +405,7 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
 }
 
 impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub fn register_identity<A: Access<T>>(
+    pub(crate) fn register_identity<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         value: T,
@@ -411,7 +416,18 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         id
     }
 
-    pub fn unregister<'a, A: Access<T>>(
+    pub(crate) fn register_error<A: Access<T>>(
+        &self,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
+        _token: &mut Token<A>,
+    ) -> I {
+        let id = self.identity.process(id_in, self.backend);
+        debug_assert_eq!(id.unzip().2, self.backend);
+        self.data.write().insert_error(id);
+        id
+    }
+
+    pub(crate) fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
         _token: &'a mut Token<A>,
@@ -422,7 +438,7 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         (value, Token::new())
     }
 
-    pub fn free_id(&self, id: I) {
+    pub(crate) fn free_id(&self, id: I) {
         self.identity.free(id)
     }
 }
