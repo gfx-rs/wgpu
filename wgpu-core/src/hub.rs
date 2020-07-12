@@ -384,19 +384,19 @@ impl<T, I: TypedId, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
 }
 
 impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub(crate) fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
+    pub fn register<A: Access<T>>(&self, id: I, value: T, _token: &mut Token<A>) {
         debug_assert_eq!(id.unzip().2, self.backend);
         self.data.write().insert(id, value);
     }
 
-    pub(crate) fn read<'a, A: Access<T>>(
+    pub fn read<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockReadGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.read(), Token::new())
     }
 
-    pub(crate) fn write<'a, A: Access<T>>(
+    pub fn write<'a, A: Access<T>>(
         &'a self,
         _token: &'a mut Token<A>,
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
@@ -405,7 +405,7 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
 }
 
 impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub(crate) fn register_identity<A: Access<T>>(
+    pub fn register_identity<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         value: T,
@@ -416,7 +416,7 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         id
     }
 
-    pub(crate) fn register_error<A: Access<T>>(
+    pub fn register_error<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         _token: &mut Token<A>,
@@ -427,7 +427,7 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         id
     }
 
-    pub(crate) fn unregister<'a, A: Access<T>>(
+    pub fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
         _token: &'a mut Token<A>,
@@ -438,7 +438,7 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         (value, Token::new())
     }
 
-    pub(crate) fn free_id(&self, id: I) {
+    pub fn free_id(&self, id: I) {
         self.identity.free(id)
     }
 }
