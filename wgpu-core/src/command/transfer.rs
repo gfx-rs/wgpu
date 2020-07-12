@@ -14,7 +14,7 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
-use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureDataLayout, TextureUsage};
+use wgt::{BufferAddress, BufferUsage, Extent3d, TextureDataLayout, TextureUsage};
 
 use std::iter;
 
@@ -22,24 +22,9 @@ type Result = std::result::Result<(), TransferError>;
 
 pub(crate) const BITS_PER_BYTE: u32 = 8;
 
-#[repr(C)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct BufferCopyView {
-    pub buffer: BufferId,
-    pub layout: TextureDataLayout,
-}
+pub type BufferCopyView = wgt::BufferCopyView<BufferId>;
 
-#[repr(C)]
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct TextureCopyView {
-    pub texture: TextureId,
-    pub mip_level: u32,
-    pub origin: Origin3d,
-}
+pub type TextureCopyView = wgt::TextureCopyView<TextureId>;
 
 /// Error encountered while attempting a data transfer.
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -75,48 +60,46 @@ pub enum TransferError {
     MismatchedAspects,
 }
 
-impl TextureCopyView {
-    //TODO: we currently access each texture twice for a transfer,
-    // once only to get the aspect flags, which is unfortunate.
-    pub(crate) fn to_hal<B: hal::Backend>(
-        &self,
-        texture_guard: &Storage<Texture<B>, TextureId>,
-    ) -> (
-        hal::image::SubresourceLayers,
-        hal::image::SubresourceRange,
-        hal::image::Offset,
-    ) {
-        let texture = &texture_guard[self.texture];
-        let aspects = texture.full_range.aspects;
-        let level = self.mip_level as hal::image::Level;
-        let (layer, z) = match texture.dimension {
-            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-                (self.origin.z as hal::image::Layer, 0)
-            }
-            wgt::TextureDimension::D3 => (0, self.origin.z as i32),
-        };
+//TODO: we currently access each texture twice for a transfer,
+// once only to get the aspect flags, which is unfortunate.
+pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
+    view: &TextureCopyView,
+    texture_guard: &Storage<Texture<B>, TextureId>,
+) -> (
+    hal::image::SubresourceLayers,
+    hal::image::SubresourceRange,
+    hal::image::Offset,
+) {
+    let texture = &texture_guard[view.texture];
+    let aspects = texture.full_range.aspects;
+    let level = view.mip_level as hal::image::Level;
+    let (layer, z) = match texture.dimension {
+        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+            (view.origin.z as hal::image::Layer, 0)
+        }
+        wgt::TextureDimension::D3 => (0, view.origin.z as i32),
+    };
 
-        // TODO: Can't satisfy clippy here unless we modify
-        // `hal::image::SubresourceRange` in gfx to use `std::ops::RangeBounds`.
-        #[allow(clippy::range_plus_one)]
-        (
-            hal::image::SubresourceLayers {
-                aspects,
-                level: self.mip_level as hal::image::Level,
-                layers: layer..layer + 1,
-            },
-            hal::image::SubresourceRange {
-                aspects,
-                levels: level..level + 1,
-                layers: layer..layer + 1,
-            },
-            hal::image::Offset {
-                x: self.origin.x as i32,
-                y: self.origin.y as i32,
-                z,
-            },
-        )
-    }
+    // TODO: Can't satisfy clippy here unless we modify
+    // `hal::image::SubresourceRange` in gfx to use `std::ops::RangeBounds`.
+    #[allow(clippy::range_plus_one)]
+    (
+        hal::image::SubresourceLayers {
+            aspects,
+            level: view.mip_level as hal::image::Level,
+            layers: layer..layer + 1,
+        },
+        hal::image::SubresourceRange {
+            aspects,
+            levels: level..level + 1,
+            layers: layer..layer + 1,
+        },
+        hal::image::Offset {
+            x: view.origin.x as i32,
+            y: view.origin.y as i32,
+            z,
+        },
+    )
 }
 
 /// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
@@ -337,7 +320,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb = &mut cmb_guard[command_encoder_id];
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (dst_layers, dst_range, dst_offset) = destination.to_hal(&*texture_guard);
+        let (dst_layers, dst_range, dst_offset) =
+            texture_copy_view_to_hal(destination, &*texture_guard);
 
         #[cfg(feature = "trace")]
         match cmb.commands {
@@ -437,7 +421,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb = &mut cmb_guard[command_encoder_id];
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (src_layers, src_range, src_offset) = source.to_hal(&*texture_guard);
+        let (src_layers, src_range, src_offset) = texture_copy_view_to_hal(source, &*texture_guard);
 
         #[cfg(feature = "trace")]
         match cmb.commands {
@@ -541,8 +525,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // we can't hold both src_pending and dst_pending in scope because they
         // borrow the buffer tracker mutably...
         let mut barriers = Vec::new();
-        let (src_layers, src_range, src_offset) = source.to_hal(&*texture_guard);
-        let (dst_layers, dst_range, dst_offset) = destination.to_hal(&*texture_guard);
+        let (src_layers, src_range, src_offset) = texture_copy_view_to_hal(source, &*texture_guard);
+        let (dst_layers, dst_range, dst_offset) =
+            texture_copy_view_to_hal(destination, &*texture_guard);
         if src_layers.aspects != dst_layers.aspects {
             return Err(TransferError::MismatchedAspects);
         }

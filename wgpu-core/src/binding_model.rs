@@ -229,12 +229,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) count_validator: BindingTypeMaxCountValidator,
 }
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct PipelineLayoutDescriptor {
-    pub bind_group_layouts: *const BindGroupLayoutId,
-    pub bind_group_layouts_length: usize,
-}
+pub type PipelineLayoutDescriptor<'a> = wgt::PipelineLayoutDescriptor<'a, BindGroupLayoutId>;
 
 #[derive(Clone, Debug)]
 pub enum PipelineLayoutError {
@@ -260,7 +255,8 @@ pub struct BufferBinding {
     pub size: Option<wgt::BufferSize>,
 }
 
-// Note: Duplicated in wgpu-rs as BindingResource
+// Note: Duplicated in `wgpu-rs` as `BindingResource`
+// They're different enough that it doesn't make sense to share a common type
 #[derive(Debug)]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
@@ -269,20 +265,10 @@ pub enum BindingResource<'a> {
     TextureViewArray(&'a [TextureViewId]),
 }
 
-// Note: Duplicated in wgpu-rs as Binding
-#[derive(Debug)]
-pub struct BindGroupEntry<'a> {
-    pub binding: u32,
-    pub resource: BindingResource<'a>,
-}
+pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;
 
-// Note: Duplicated in wgpu-rs as BindGroupDescriptor
-#[derive(Debug)]
-pub struct BindGroupDescriptor<'a> {
-    pub label: Option<&'a str>,
-    pub layout: BindGroupLayoutId,
-    pub entries: &'a [BindGroupEntry<'a>],
-}
+pub type BindGroupDescriptor<'a> =
+    wgt::BindGroupDescriptor<'a, BindGroupLayoutId, BindGroupEntry<'a>>;
 
 #[derive(Debug)]
 pub enum BindError {

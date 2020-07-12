@@ -25,23 +25,7 @@ use hal::{
 };
 use std::fmt::Display;
 
-#[repr(C)]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct RequestAdapterOptions {
-    pub power_preference: PowerPreference,
-    pub compatible_surface: Option<SurfaceId>,
-}
-
-impl Default for RequestAdapterOptions {
-    fn default() -> Self {
-        RequestAdapterOptions {
-            power_preference: PowerPreference::Default,
-            compatible_surface: None,
-        }
-    }
-}
+pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 
 #[derive(Debug)]
 pub struct Instance {

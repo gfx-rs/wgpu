@@ -101,6 +101,19 @@ impl From<Backend> for BackendBit {
     }
 }
 
+/// Options for requesting adapter.
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct RequestAdapterOptions<S> {
+    /// Power preference for the adapter.
+    pub power_preference: PowerPreference,
+    /// Surface that is required to be presentable with the requested adapter. This does not
+    /// create the surface, only guarantees that the adapter can present to said surface.
+    pub compatible_surface: Option<S>,
+}
+
 bitflags::bitflags! {
     /// Features that are not guaranteed to be supported.
     ///
@@ -1132,6 +1145,15 @@ pub struct RenderPassDepthStencilAttachmentDescriptorBase<T> {
     pub stencil: PassChannel<u32>,
 }
 
+/// Describes the attachments of a render pass.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RenderPassDescriptor<'a, C, D> {
+    /// The color attachments of the render pass.
+    pub color_attachments: &'a [C],
+    /// The depth and stencil attachment of the render pass, if any.
+    pub depth_stencil_attachment: Option<D>,
+}
+
 /// RGBA double precision color.
 ///
 /// This is not to be used as a generic color type, only for specific wgpu interfaces.
@@ -1443,6 +1465,90 @@ impl<L> SamplerDescriptor<L> {
     }
 }
 
+/// Bindable resource and the slot to bind it to.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BindGroupEntry<R> {
+    /// Slot for which binding provides resource. Corresponds to an entry of the same
+    /// binding index in the [`BindGroupLayoutDescriptor`].
+    pub binding: u32,
+    /// Resource to attach to the binding
+    pub resource: R,
+}
+
+/// Describes a group of bindings and the resources to be bound.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BindGroupDescriptor<'a, L, B> {
+    /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+    /// The [`BindGroupLayout`] that corresponds to this bind group.
+    pub layout: L,
+    /// The resources to bind to this bind group.
+    pub entries: &'a [B],
+}
+
+/// Describes a pipeline layout.
+///
+/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct PipelineLayoutDescriptor<'a, B> {
+    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
+    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
+    pub bind_group_layouts: &'a [B],
+}
+
+/// Describes a programmable pipeline stage.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ProgrammableStageDescriptor<'a, M> {
+    /// The compiled shader module for this stage.
+    pub module: M,
+    /// The name of the entry point in the compiled shader. There must be a function that returns
+    /// void with this name in the shader.
+    pub entry_point: &'a str,
+}
+
+/// Describes a render (graphics) pipeline.
+#[derive(Clone, Debug)]
+pub struct RenderPipelineDescriptor<'a, L, D> {
+    /// The layout of bind groups for this pipeline.
+    pub layout: L,
+    /// The compiled vertex stage and its entry point.
+    pub vertex_stage: D,
+    /// The compiled fragment stage and its entry point, if any.
+    pub fragment_stage: Option<D>,
+    /// The rasterization process for this pipeline.
+    pub rasterization_state: Option<RasterizationStateDescriptor>,
+    /// The primitive topology used to interpret vertices.
+    pub primitive_topology: PrimitiveTopology,
+    /// The effect of draw calls on the color aspect of the output target.
+    pub color_states: &'a [ColorStateDescriptor],
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
+    /// The vertex input state for this pipeline.
+    pub vertex_state: VertexStateDescriptor<'a>,
+    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
+    /// this should be `1`
+    pub sample_count: u32,
+    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
+    /// can be enabled using the value `!0`
+    pub sample_mask: u32,
+    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
+    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
+    /// affected by a primitive.
+    ///
+    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
+    /// is guaranteed to be all 1-s.
+    pub alpha_to_coverage_enabled: bool,
+}
+
+/// Describes a compute pipeline.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ComputePipelineDescriptor<L, D> {
+    /// The layout of bind groups for this pipeline.
+    pub layout: L,
+    /// The compiled compute stage and its entry point.
+    pub compute_stage: D,
+}
+
 /// Describes a [`CommandBuffer`].
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -1728,4 +1834,28 @@ pub struct BindGroupLayoutDescriptor<'a> {
 
     /// Array of entries in this BindGroupLayout
     pub entries: &'a [BindGroupLayoutEntry],
+}
+
+/// View of a buffer which can be used to copy to/from a texture.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct BufferCopyView<B> {
+    /// The buffer to be copied to/from.
+    pub buffer: B,
+    /// The layout of the texture data in this buffer.
+    pub layout: TextureDataLayout,
+}
+
+/// View of a texture which can be used to copy to/from a buffer/texture.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct TextureCopyView<T> {
+    /// The texture to be copied to/from.
+    pub texture: T,
+    /// The target mip level of the texture.
+    pub mip_level: u32,
+    /// The base texel of the texture in the selected `mip_level`.
+    pub origin: Origin3d,
 }
