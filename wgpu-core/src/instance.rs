@@ -200,7 +200,6 @@ impl<B: hal::Backend> Adapter<B> {
                 .max(default_limits.max_uniform_buffers_per_shader_stage),
             max_uniform_buffer_binding_size: (adapter_limits.max_uniform_buffer_range as u32)
                 .max(default_limits.max_uniform_buffer_binding_size),
-            _non_exhaustive: unsafe { wgt::NonExhaustive::new() },
         };
 
         Adapter {
