@@ -3,6 +3,8 @@ use super::{helpers, Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
 use crate::{FastHashMap, FastHashSet, ImageFlags, VectorSize};
 use spirv::{Op, Word};
 
+const BITS_PER_BYTE: u8 = 8;
+
 enum Signedness {
     Unsigned = 0,
     Signed = 1,
@@ -375,18 +377,18 @@ impl Writer {
         instruction
     }
 
-    fn instruction_type_int(&self, id: Word, width: u8, signedness: Signedness) -> Instruction {
+    fn instruction_type_int(&self, id: Word, width: Word, signedness: Signedness) -> Instruction {
         let mut instruction = Instruction::new(Op::TypeInt);
         instruction.set_result(id);
-        instruction.add_operand(width as u32);
+        instruction.add_operand(width);
         instruction.add_operand(signedness as u32);
         instruction
     }
 
-    fn instruction_type_float(&self, id: Word, width: u8) -> Instruction {
+    fn instruction_type_float(&self, id: Word, width: Word) -> Instruction {
         let mut instruction = Instruction::new(Op::TypeFloat);
         instruction.set_result(id);
-        instruction.add_operand(width as u32);
+        instruction.add_operand(width);
         instruction
     }
 
@@ -743,13 +745,19 @@ impl Writer {
         match ty.inner {
             crate::TypeInner::Scalar { kind, width } => {
                 instruction = match kind {
-                    crate::ScalarKind::Sint => {
-                        self.instruction_type_int(id, width, Signedness::Signed)
+                    crate::ScalarKind::Sint => self.instruction_type_int(
+                        id,
+                        (width * BITS_PER_BYTE) as u32,
+                        Signedness::Signed,
+                    ),
+                    crate::ScalarKind::Uint => self.instruction_type_int(
+                        id,
+                        (width * BITS_PER_BYTE) as u32,
+                        Signedness::Unsigned,
+                    ),
+                    crate::ScalarKind::Float => {
+                        self.instruction_type_float(id, (width * BITS_PER_BYTE) as u32)
                     }
-                    crate::ScalarKind::Uint => {
-                        self.instruction_type_int(id, width, Signedness::Unsigned)
-                    }
-                    crate::ScalarKind::Float => self.instruction_type_float(id, width),
                     crate::ScalarKind::Bool => self.instruction_type_bool(id),
                 };
                 self.lookup_type.insert(id, handle);
