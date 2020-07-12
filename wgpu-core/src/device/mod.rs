@@ -1844,6 +1844,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(id)
     }
 
+    pub fn bind_group_error<B: GfxBackend>(
+        &self,
+        id_in: Input<G, id::BindGroupId>,
+    ) -> id::BindGroupId {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        hub.bind_groups.register_error(id_in, &mut token)
+    }
+
     pub fn bind_group_destroy<B: GfxBackend>(&self, bind_group_id: id::BindGroupId) {
         span!(_guard, INFO, "BindGroup::drop");
 
