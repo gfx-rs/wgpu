@@ -442,15 +442,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                         // update submission IDs
                         for id in comb.trackers.buffers.used() {
-                            if let BufferMapState::Waiting(_) = buffer_guard[id].map_state {
-                                panic!("Buffer has a pending mapping.");
-                            }
-                            if !buffer_guard[id].life_guard.use_at(submit_index) {
-                                if let BufferMapState::Active { .. } = buffer_guard[id].map_state {
+                            let buffer = &mut buffer_guard[id];
+                            if !buffer.life_guard.use_at(submit_index) {
+                                if let BufferMapState::Active { .. } = buffer.map_state {
                                     log::warn!("Dropped buffer has a pending mapping.");
-                                    super::unmap_buffer(&device.raw, &mut buffer_guard[id]);
+                                    super::unmap_buffer(&device.raw, buffer);
                                 }
                                 device.temp_suspected.buffers.push(id);
+                            } else {
+                                match buffer.map_state {
+                                    BufferMapState::Idle => (),
+                                    _ => panic!("Buffer {:?} is still mapped", id),
+                                }
                             }
                         }
                         for id in comb.trackers.textures.used() {
