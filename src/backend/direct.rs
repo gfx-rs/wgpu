@@ -570,7 +570,7 @@ impl crate::Context for Context {
             &bm::BindGroupDescriptor {
                 label: desc.label,
                 layout: desc.layout.id,
-                bindings: &bindings,
+                entries: &bindings,
             },
             PhantomData
         ))
@@ -898,6 +898,7 @@ impl crate::Context for Context {
             destination_offset,
             copy_size
         ))
+        .unwrap()
     }
 
     fn command_encoder_copy_buffer_to_texture(
@@ -913,6 +914,7 @@ impl crate::Context for Context {
             &map_texture_copy_view(destination),
             &copy_size
         ))
+        .unwrap()
     }
 
     fn command_encoder_copy_texture_to_buffer(
@@ -928,6 +930,7 @@ impl crate::Context for Context {
             &map_buffer_copy_view(destination),
             &copy_size
         ))
+        .unwrap()
     }
 
     fn command_encoder_copy_texture_to_texture(
@@ -943,6 +946,7 @@ impl crate::Context for Context {
             &map_texture_copy_view(destination),
             &copy_size
         ))
+        .unwrap()
     }
 
     fn command_encoder_begin_compute_pass(

@@ -143,7 +143,7 @@ impl framework::Example for Example {
 
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[wgpu::BindGroupLayoutEntry::new(
+                    entries: &[wgpu::BindGroupLayoutEntry::new(
                         0,
                         wgpu::ShaderStage::FRAGMENT,
                         wgpu::BindingType::UniformBuffer {
@@ -250,7 +250,7 @@ impl framework::Example for Example {
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("bind group layout"),
-            bindings: &[
+            entries: &[
                 wgpu::BindGroupLayoutEntry {
                     count: Some(2),
                     ..wgpu::BindGroupLayoutEntry::new(
