@@ -843,7 +843,6 @@ impl crate::Context for Context {
                         bt::ReadonlyStorageTexture
                     }
                     BindingType::StorageTexture { .. } => bt::WriteonlyStorageTexture,
-                    _ => unreachable!(),
                 };
 
                 assert!(
@@ -904,7 +903,7 @@ impl crate::Context for Context {
         desc: &BindGroupDescriptor,
     ) -> Self::BindGroupId {
         let mapped_entries = desc
-            .bindings
+            .entries
             .iter()
             .map(|binding| {
                 let mapped_resource = match &binding.resource {

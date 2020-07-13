@@ -260,7 +260,7 @@ impl framework::Example for Example {
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &local_bind_group_layout,
-                bindings: &[wgpu::Binding {
+                entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(plane_uniform_buf.slice(..)),
                 }],
@@ -334,7 +334,7 @@ impl framework::Example for Example {
                 index_count: cube_index_data.len(),
                 bind_group: device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &local_bind_group_layout,
-                    bindings: &[wgpu::Binding {
+                    entries: &[wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                     }],
@@ -454,7 +454,7 @@ impl framework::Example for Example {
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
-                bindings: &[wgpu::Binding {
+                entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                 }],
@@ -568,20 +568,20 @@ impl framework::Example for Example {
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
-                bindings: &[
-                    wgpu::Binding {
+                entries: &[
+                    wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
                     },
-                    wgpu::Binding {
+                    wgpu::BindGroupEntry {
                         binding: 1,
                         resource: wgpu::BindingResource::Buffer(light_uniform_buf.slice(..)),
                     },
-                    wgpu::Binding {
+                    wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::TextureView(&shadow_view),
                     },
-                    wgpu::Binding {
+                    wgpu::BindGroupEntry {
                         binding: 3,
                         resource: wgpu::BindingResource::Sampler(&shadow_sampler),
                     },
