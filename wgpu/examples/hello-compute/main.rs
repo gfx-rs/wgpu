@@ -73,7 +73,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
-        bindings: &[wgpu::Binding {
+        entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: wgpu::BindingResource::Buffer(storage_buffer.slice(..)),
         }],

@@ -395,16 +395,6 @@ pub struct Adapter {
     id: <C as Context>::AdapterId,
 }
 
-/// Options for requesting adapter.
-#[derive(Clone)]
-pub struct RequestAdapterOptions<'a> {
-    /// Power preference for the adapter.
-    pub power_preference: PowerPreference,
-    /// Surface that is required to be presentable with the requested adapter. This does not
-    /// create the surface, only guarantees that the adapter can present to said surface.
-    pub compatible_surface: Option<&'a Surface>,
-}
-
 /// Open connection to a graphics and/or compute device.
 ///
 /// Responsible for the creation of most rendering and compute resources.
@@ -801,104 +791,6 @@ pub enum BindingResource<'a> {
     TextureViewArray(&'a [TextureView]),
 }
 
-/// Bindable resource and the slot to bind it to.
-pub struct Binding<'a> {
-    /// Slot for which binding provides resource. Corresponds to an entry of the same
-    /// binding index in the [`BindGroupLayoutDescriptor`].
-    pub binding: u32,
-    /// Resource to attach to the binding
-    pub resource: BindingResource<'a>,
-}
-
-/// Describes a group of bindings and the resources to be bound.
-#[derive(Clone)]
-pub struct BindGroupDescriptor<'a> {
-    /// The [`BindGroupLayout`] that corresponds to this bind group.
-    pub layout: &'a BindGroupLayout,
-
-    /// The resources to bind to this bind group.
-    pub bindings: &'a [Binding<'a>],
-
-    /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
-}
-
-/// Describes a pipeline layout.
-///
-/// A `PipelineLayoutDescriptor` can be passed to [`Device::create_pipeline_layout`] to obtain a
-/// [`PipelineLayout`].
-#[derive(Clone)]
-pub struct PipelineLayoutDescriptor<'a> {
-    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
-    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: &'a [&'a BindGroupLayout],
-}
-
-/// Describes a programmable pipeline stage.
-#[derive(Clone)]
-pub struct ProgrammableStageDescriptor<'a> {
-    /// The compiled shader module for this stage.
-    pub module: &'a ShaderModule,
-
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
-    pub entry_point: &'a str,
-}
-
-/// Describes a render (graphics) pipeline.
-#[derive(Clone)]
-pub struct RenderPipelineDescriptor<'a> {
-    /// The layout of bind groups for this pipeline.
-    pub layout: &'a PipelineLayout,
-
-    /// The compiled vertex stage and its entry point.
-    pub vertex_stage: ProgrammableStageDescriptor<'a>,
-
-    /// The compiled fragment stage and its entry point, if any.
-    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
-
-    /// The rasterization process for this pipeline.
-    pub rasterization_state: Option<RasterizationStateDescriptor>,
-
-    /// The primitive topology used to interpret vertices.
-    pub primitive_topology: PrimitiveTopology,
-
-    /// The effect of draw calls on the color aspect of the output target.
-    pub color_states: &'a [ColorStateDescriptor],
-
-    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
-
-    /// The vertex input state for this pipeline.
-    pub vertex_state: VertexStateDescriptor<'a>,
-
-    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
-    /// this should be `1`
-    pub sample_count: u32,
-
-    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
-    /// can be enabled using the value `!0`
-    pub sample_mask: u32,
-
-    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
-    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
-    /// affected by a primitive.
-    ///
-    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
-    /// is guaranteed to be all 1-s.
-    pub alpha_to_coverage_enabled: bool,
-}
-
-/// Describes a compute pipeline.
-#[derive(Clone)]
-pub struct ComputePipelineDescriptor<'a> {
-    /// The layout of bind groups for this pipeline.
-    pub layout: &'a PipelineLayout,
-
-    /// The compiled compute stage and its entry point.
-    pub compute_stage: ProgrammableStageDescriptor<'a>,
-}
-
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[derive(Clone, Copy, Debug, Hash, PartialEq)]
 pub enum LoadOp<V> {
@@ -927,6 +819,7 @@ pub struct RenderPassColorAttachmentDescriptor<'a> {
     /// What operations will be performed on this color attachment.
     pub ops: Operations<Color>,
 }
+
 /// Describes a depth/stencil attachment to a [`RenderPass`].
 #[derive(Clone)]
 pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
@@ -938,17 +831,11 @@ pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
     pub stencil_ops: Option<Operations<u32>>,
 }
 
-/// Describes the attachments of a [`RenderPass`].
-#[derive(Clone)]
-pub struct RenderPassDescriptor<'a, 'b> {
-    /// The color attachments of the render pass.
-    pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
-
-    /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
-}
-
 // The underlying types are also exported so that documentation shows up for them
+
+pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
+/// Additional information required when requesting an adapter.
+pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
 
 pub use wgt::BufferDescriptor as BufferDescriptorBase;
 /// Describes a [`Buffer`].
@@ -973,6 +860,49 @@ pub type TextureViewDescriptor<'a> = TextureViewDescriptorBase<Option<&'a str>>;
 pub use wgt::SamplerDescriptor as SamplerDescriptorBase;
 /// Describes a [`Sampler`].
 pub type SamplerDescriptor<'a> = SamplerDescriptorBase<Option<&'a str>>;
+
+pub use wgt::BindGroupEntry as BindGroupEntryBase;
+/// Bindable resource and the slot to bind it to.
+pub type BindGroupEntry<'a> = BindGroupEntryBase<BindingResource<'a>>;
+
+pub use wgt::BindGroupDescriptor as BindGroupDescriptorBase;
+/// Describes a group of bindings and the resources to be bound.
+pub type BindGroupDescriptor<'a> =
+    BindGroupDescriptorBase<'a, &'a BindGroupLayout, BindGroupEntry<'a>>;
+
+pub use wgt::PipelineLayoutDescriptor as PipelineLayoutDescriptorBase;
+/// Describes a pipeline layout.
+pub type PipelineLayoutDescriptor<'a> = PipelineLayoutDescriptorBase<'a, &'a BindGroupLayout>;
+
+pub use wgt::ProgrammableStageDescriptor as ProgrammableStageDescriptorBase;
+/// Describes a programmable pipeline stage.
+pub type ProgrammableStageDescriptor<'a> = wgt::ProgrammableStageDescriptor<'a, &'a ShaderModule>;
+
+pub use wgt::RenderPassDescriptor as RenderPassDescriptorBase;
+/// Describes the attachments of a [`RenderPass`];
+pub type RenderPassDescriptor<'a, 'b> = RenderPassDescriptorBase<
+    'b,
+    RenderPassColorAttachmentDescriptor<'a>,
+    RenderPassDepthStencilAttachmentDescriptor<'a>,
+>;
+
+pub use wgt::RenderPipelineDescriptor as RenderPipelineDescriptorBase;
+/// Describes a render (graphics) pipeline.
+pub type RenderPipelineDescriptor<'a> =
+    RenderPipelineDescriptorBase<'a, &'a PipelineLayout, ProgrammableStageDescriptor<'a>>;
+
+pub use ComputePipelineDescriptor as ComputePipelineDescriptorBase;
+/// Describes a compute pipeline.
+pub type ComputePipelineDescriptor<'a> =
+    wgt::ComputePipelineDescriptor<&'a PipelineLayout, ProgrammableStageDescriptor<'a>>;
+
+pub use wgt::BufferCopyView as BufferCopyViewBase;
+/// View of a buffer which can be used to copy to/from a texture.
+pub type BufferCopyView<'a> = BufferCopyViewBase<&'a Buffer>;
+
+pub use wgt::TextureCopyView as TextureCopyViewBase;
+/// View of a texture which can be used to copy to/from a buffer/texture.
+pub type TextureCopyView<'a> = TextureCopyViewBase<&'a Texture>;
 
 /// Swap chain image that can be rendered to.
 pub struct SwapChainTexture {
@@ -1001,29 +931,6 @@ pub enum SwapChainError {
     Lost,
     /// There is no more memory left to allocate a new frame.
     OutOfMemory,
-}
-
-/// View of a buffer which can be used to copy to/from a texture.
-#[derive(Clone)]
-pub struct BufferCopyView<'a> {
-    /// The buffer to be copied to/from.
-    pub buffer: &'a Buffer,
-
-    /// The layout of the texture data in this buffer.
-    pub layout: TextureDataLayout,
-}
-
-/// View of a texture which can be used to copy to/from a buffer/texture.
-#[derive(Clone)]
-pub struct TextureCopyView<'a> {
-    /// The texture to be copied to/from.
-    pub texture: &'a Texture,
-
-    /// The target mip level of the texture.
-    pub mip_level: u32,
-
-    /// The base texel of the texture in the selected `mip_level`.
-    pub origin: Origin3d,
 }
 
 impl Instance {
@@ -1065,7 +972,7 @@ impl Instance {
     /// If no adapters are found that suffice all the "hard" options, `None` is returned.
     pub fn request_adapter(
         &self,
-        options: &RequestAdapterOptions<'_>,
+        options: &RequestAdapterOptions,
     ) -> impl Future<Output = Option<Adapter>> + Send {
         let context = Arc::clone(&self.context);
         self.context

@@ -156,7 +156,7 @@ impl framework::Example for Example {
 
             let bind_group0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
-                bindings: &[wgpu::Binding {
+                entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(buffer0.slice(..)),
                 }],
@@ -165,7 +165,7 @@ impl framework::Example for Example {
 
             let bind_group1 = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
-                bindings: &[wgpu::Binding {
+                entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(buffer1.slice(..)),
                 }],
@@ -272,15 +272,15 @@ impl framework::Example for Example {
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            bindings: &[
-                wgpu::Binding {
+            entries: &[
+                wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureViewArray(&[
                         red_texture_view,
                         green_texture_view,
                     ]),
                 },
-                wgpu::Binding {
+                wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
