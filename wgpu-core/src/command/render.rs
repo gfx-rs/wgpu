@@ -58,11 +58,8 @@ fn is_depth_stencil_read_only(
     true
 }
 
-#[derive(Debug)]
-pub struct RenderPassDescriptor<'a> {
-    pub color_attachments: &'a [ColorAttachmentDescriptor],
-    pub depth_stencil_attachment: Option<&'a DepthStencilAttachmentDescriptor>,
-}
+pub type RenderPassDescriptor<'a> =
+    wgt::RenderPassDescriptor<'a, ColorAttachmentDescriptor, &'a DepthStencilAttachmentDescriptor>;
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]

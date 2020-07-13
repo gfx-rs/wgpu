@@ -248,7 +248,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
         let device = &mut device_guard[queue_id];
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (image_layers, image_range, image_offset) = destination.to_hal(&*texture_guard);
+        let (image_layers, image_range, image_offset) =
+            crate::command::texture_copy_view_to_hal(destination, &*texture_guard);
 
         #[cfg(feature = "trace")]
         match device.trace {

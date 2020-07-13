@@ -9,10 +9,7 @@ use crate::{
     LifeGuard, RefCount, Stored,
 };
 use std::borrow::Borrow;
-use wgt::{
-    BufferAddress, ColorStateDescriptor, DepthStencilStateDescriptor, IndexFormat, InputStepMode,
-    PrimitiveTopology, RasterizationStateDescriptor, VertexStateDescriptor,
-};
+use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
 #[repr(C)]
 #[derive(Debug)]
@@ -29,18 +26,10 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) module: Option<naga::Module>,
 }
 
-#[derive(Debug)]
-pub struct ProgrammableStageDescriptor<'a> {
-    pub module: ShaderModuleId,
-    pub entry_point: &'a str,
-}
+pub type ProgrammableStageDescriptor<'a> = wgt::ProgrammableStageDescriptor<'a, ShaderModuleId>;
 
-#[repr(C)]
-#[derive(Debug)]
-pub struct ComputePipelineDescriptor<'a> {
-    pub layout: PipelineLayoutId,
-    pub compute_stage: ProgrammableStageDescriptor<'a>,
-}
+pub type ComputePipelineDescriptor<'a> =
+    wgt::ComputePipelineDescriptor<PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
 #[derive(Clone, Debug)]
 pub enum ComputePipelineError {
@@ -61,20 +50,8 @@ impl<B: hal::Backend> Borrow<RefCount> for ComputePipeline<B> {
     }
 }
 
-#[derive(Debug)]
-pub struct RenderPipelineDescriptor<'a> {
-    pub layout: PipelineLayoutId,
-    pub vertex_stage: ProgrammableStageDescriptor<'a>,
-    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
-    pub primitive_topology: PrimitiveTopology,
-    pub rasterization_state: Option<RasterizationStateDescriptor>,
-    pub color_states: &'a [ColorStateDescriptor],
-    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
-    pub vertex_state: VertexStateDescriptor<'a>,
-    pub sample_count: u32,
-    pub sample_mask: u32,
-    pub alpha_to_coverage_enabled: bool,
-}
+pub type RenderPipelineDescriptor<'a> =
+    wgt::RenderPipelineDescriptor<'a, PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
 #[derive(Clone, Debug)]
 pub enum RenderPipelineError {

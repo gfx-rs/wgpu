@@ -24,8 +24,10 @@ use hal::{
 use parking_lot::{Mutex, MutexGuard};
 use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
+#[cfg(feature = "trace")]
+use std::slice;
 use std::{
-    collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr, slice,
+    collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr,
     sync::atomic::Ordering,
 };
 
@@ -1357,13 +1359,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let bind_group_layout_ids = unsafe {
-            slice::from_raw_parts(desc.bind_group_layouts, desc.bind_group_layouts_length)
-        };
+        let bind_group_layout_ids = desc.bind_group_layouts;
 
-        if desc.bind_group_layouts_length > (device.limits.max_bind_groups as usize) {
+        if bind_group_layout_ids.len() > (device.limits.max_bind_groups as usize) {
             return Err(binding_model::PipelineLayoutError::TooManyGroups(
-                desc.bind_group_layouts_length,
+                bind_group_layout_ids.len(),
             ));
         }
 
