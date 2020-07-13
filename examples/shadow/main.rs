@@ -442,6 +442,7 @@ impl framework::Example for Example {
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                push_constant_ranges: &[],
             });
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -553,6 +554,7 @@ impl framework::Example for Example {
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                push_constant_ranges: &[],
             });
 
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
