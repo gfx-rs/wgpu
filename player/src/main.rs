@@ -13,6 +13,7 @@
 use wgc::device::trace;
 
 use std::{
+    collections::HashMap,
     ffi::CString,
     fmt::Debug,
     fs,
@@ -79,6 +80,12 @@ impl<I: Clone + Debug + wgc::id::TypedId> wgc::hub::IdentityHandlerFactory<I>
 }
 impl wgc::hub::GlobalIdentityHandlerFactory for IdentityPassThroughFactory {}
 
+struct SwapChainData {
+    their_view: Option<wgc::id::TextureViewId>,
+    our_view: wgc::id::TextureViewId,
+    bind_group: wgc::id::BindGroupId,
+}
+
 trait GlobalExt {
     fn encode_commands<B: wgc::hub::GfxBackend>(
         &self,
@@ -91,7 +98,17 @@ trait GlobalExt {
         action: trace::Action,
         dir: &PathBuf,
         comb_manager: &mut wgc::hub::IdentityManager,
+        present_bgl: wgc::id::BindGroupLayoutId,
+        swap_chain_map: &mut HashMap<wgc::id::SwapChainId, SwapChainData>,
     );
+    #[cfg(feature = "winit")]
+    fn present<B: wgc::hub::GfxBackend>(
+        &self,
+        device: wgc::id::DeviceId,
+        swap_chain: wgc::id::SwapChainId,
+        data: &SwapChainData,
+        comb_manager: &mut wgc::hub::IdentityManager,
+    ) -> bool;
 }
 
 impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
@@ -148,13 +165,53 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
         action: trace::Action,
         dir: &PathBuf,
         comb_manager: &mut wgc::hub::IdentityManager,
+        present_bgl: wgc::id::BindGroupLayoutId,
+        swap_chain_map: &mut HashMap<wgc::id::SwapChainId, SwapChainData>,
     ) {
         use wgc::device::trace::Action as A;
         match action {
             A::Init { .. } => panic!("Unexpected Action::Init: has to be the first action only"),
-            A::CreateSwapChain { .. } | A::PresentSwapChain(_) => {
-                panic!("Unexpected SwapChain action: winit feature is not enabled")
+            A::CreateSwapChain { id, desc } => {
+                let texture = self.device_create_texture::<B>(
+                    device,
+                    &wgt::TextureDescriptor {
+                        label: Some("SwapChain"),
+                        size: wgt::Extent3d {
+                            width: desc.width,
+                            height: desc.height,
+                            depth: 1,
+                        },
+                        mip_level_count: 1,
+                        sample_count: 1,
+                        dimension: wgt::TextureDimension::D2,
+                        format: desc.format,
+                        usage: desc.usage,
+                    },
+                );
+                let view = self.texture_create_view::<B>(texture, None);
+                let bind_group = self
+                    .device_create_bind_group::<B>(
+                        device,
+                        &wgc::binding_model::BindGroupDescriptor {
+                            label: Some("SwapChain"),
+                            layout: present_bgl,
+                            entries: &[wgc::binding_model::BindGroupEntry {
+                                binding: 0,
+                                resource: wgc::binding_model::BindingResource::TextureView(view),
+                            }],
+                        },
+                    )
+                    .unwrap();
+                swap_chain_map.insert(
+                    id,
+                    SwapChainData {
+                        their_view: None,
+                        our_view: view,
+                        bind_group,
+                    },
+                );
             }
+            A::PresentSwapChain(_) => unreachable!(),
             A::CreateBuffer { id, desc } => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
@@ -196,11 +253,7 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.sampler_destroy::<B>(id);
             }
             A::GetSwapChainTexture { id, parent_id } => {
-                if let Some(id) = id {
-                    self.swap_chain_get_next_texture::<B>(parent_id, id)
-                        .view_id
-                        .unwrap();
-                }
+                swap_chain_map.get_mut(&parent_id).unwrap().their_view = id;
             }
             A::CreateBindGroupLayout {
                 id,
@@ -410,6 +463,54 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             }
         }
     }
+
+    #[cfg(feature = "winit")]
+    fn present<B: wgc::hub::GfxBackend>(
+        &self,
+        device: wgc::id::DeviceId,
+        swap_chain: wgc::id::SwapChainId,
+        data: &SwapChainData,
+        comb_manager: &mut wgc::hub::IdentityManager,
+    ) -> bool {
+        let frame = match data.their_view {
+            Some(id) => self.swap_chain_get_next_texture::<B>(swap_chain, id),
+            None => return false,
+        };
+        let attachment = match frame.view_id {
+            Some(id) => id,
+            None => return false,
+        };
+        let command_encoder = self.device_create_command_encoder::<B>(
+            device,
+            &wgt::CommandEncoderDescriptor { label: ptr::null() },
+            comb_manager.alloc(device.backend()),
+        );
+        let render_pass = wgc::command::RenderPass::new(
+            command_encoder,
+            wgc::command::RenderPassDescriptor {
+                color_attachments: &[wgc::command::ColorAttachmentDescriptor {
+                    attachment,
+                    resolve_target: None,
+                    channel: wgt::PassChannel {
+                        load_op: wgt::LoadOp::Clear,
+                        clear_value: wgt::Color::BLACK,
+                        store_op: wgt::StoreOp::Store,
+                        read_only: false,
+                    },
+                }],
+                depth_stencil_attachment: None,
+            },
+        );
+        self.command_encoder_run_render_pass::<B>(command_encoder, &render_pass);
+        let command_buffer = self.command_encoder_finish::<B>(
+            command_encoder,
+            &wgt::CommandBufferDescriptor { todo: 0 },
+        );
+        self.queue_submit::<B>(device, &[command_buffer]);
+        self.swap_chain_present::<B>(swap_chain);
+
+        true
+    }
 }
 
 fn main() {
@@ -452,6 +553,7 @@ fn main() {
     let global =
         wgc::hub::Global::new("player", IdentityPassThroughFactory, wgt::BackendBit::all());
     let mut command_buffer_id_manager = wgc::hub::IdentityManager::default();
+    let mut swap_chain_map = HashMap::<wgc::id::SwapChainId, SwapChainData>::new();
 
     #[cfg(feature = "winit")]
     let surface =
@@ -488,6 +590,23 @@ fn main() {
         }
         _ => panic!("Expected Action::Init"),
     };
+
+    let present_bgl = gfx_select!(device => global.device_create_bind_group_layout(device, &wgt::BindGroupLayoutDescriptor {
+        label: Some("SwapChain"),
+        entries: &[
+            wgt::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgt::ShaderStage::FRAGMENT,
+                ty: wgt::BindingType::SampledTexture {
+                    dimension: wgt::TextureViewDimension::D2,
+                    component_type: wgt::TextureComponentType::Float,
+                    multisampled: false,
+                },
+                count: None,
+            },
+        ],
+    }));
+
     log::info!("Executing actions");
     #[cfg(not(feature = "winit"))]
     {
@@ -495,7 +614,7 @@ fn main() {
         rd.start_frame_capture(ptr::null(), ptr::null());
 
         while let Some(action) = actions.pop() {
-            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager, present_bgl, &mut swap_chain_map));
         }
 
         #[cfg(feature = "renderdoc")]
@@ -509,6 +628,9 @@ fn main() {
             event_loop::ControlFlow,
         };
 
+        let swap_chain =
+            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+
         let mut frame_count = 0;
         event_loop.run(move |event, _, control_flow| {
             *control_flow = ControlFlow::Poll;
@@ -521,20 +643,41 @@ fn main() {
                         Some(trace::Action::CreateSwapChain { id, desc }) => {
                             log::info!("Initializing the swapchain");
                             assert_eq!(id.to_surface_id(), surface);
-                            window.set_inner_size(winit::dpi::PhysicalSize::new(
-                                desc.width,
-                                desc.height,
-                            ));
-                            gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
+                            let texture = gfx_select!(device => global.device_create_texture(device, &wgt::TextureDescriptor {
+                                label: Some("SwapChain"),
+                                size: wgt::Extent3d { width: desc.width, height: desc.height, depth: 1 },
+                                mip_level_count: 1,
+                                sample_count: 1,
+                                dimension: wgt::TextureDimension::D2,
+                                format: desc.format,
+                                usage: desc.usage,
+                            }));
+                            let view = gfx_select!(device => global.texture_create_view(texture, None));
+                            let bind_group = gfx_select!(device => global.device_create_bind_group(device, &wgt::BindGroupDescriptor {
+                                label: Some("SwapChain"),
+                                entries: &[
+                                    wgt::BindGroupEntry {
+                                        binding: 0,
+                                        resource: wgt::BindingResource::TextureView(view),
+                                    },
+                                ],
+                            }));
+                            swap_chain_map.insert(id, SwapChainData {
+                                their_view: None,
+                                our_view: view,
+                                bind_group,
+                            });
                         }
                         Some(trace::Action::PresentSwapChain(id)) => {
                             frame_count += 1;
                             log::debug!("Presenting frame {}", frame_count);
-                            gfx_select!(device => global.swap_chain_present(id));
+                            if !gfx_select!(device => global.present(device, swap_chain, &swap_chain_map[id], &mut command_buffer_id_manager)) {
+                                log::warn!("\tfailed");
+                            }
                             break;
                         }
                         Some(action) => {
-                            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager));
+                            gfx_select!(device => global.process(device, action, &dir, &mut command_buffer_id_manager, present_bgl, &mut swap_chain_map));
                         }
                         None => break,
                     }
