@@ -273,6 +273,7 @@ impl Display for RequestDeviceError {
 }
 
 /// Supported physical device types.
+#[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
