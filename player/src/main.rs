@@ -517,13 +517,16 @@ fn main() {
                 }
                 Event::RedrawRequested(_) => loop {
                     match actions.pop() {
-                        Some(trace::Action::CreateSwapChain { id, desc }) => {
+                        Some(trace::Action::CreateSwapChain { id, mut desc }) => {
                             log::info!("Initializing the swapchain");
                             assert_eq!(id.to_surface_id(), surface);
-                            window.set_inner_size(winit::dpi::PhysicalSize::new(
-                                desc.width,
-                                desc.height,
-                            ));
+                            // Overwrite the size with whataver our window has.
+                            // We can't reliably control it, anyway...
+                            // This is fine because swapchain size is non-observable,
+                            // since you can only render into it.
+                            let size = window.inner_size();
+                            desc.width = size.width;
+                            desc.height = size.height;
                             gfx_select!(device => global.device_create_swap_chain(device, surface, &desc));
                         }
                         Some(trace::Action::PresentSwapChain(id)) => {
