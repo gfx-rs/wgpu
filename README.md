@@ -81,25 +81,7 @@ For now, the shaders can be compiled to SPIR-V by running `make`, which requires
 
 ## Friends
 
-Shout out to the following projects that work best with wgpu-rs:
-
-- [wgpu_glyph](https://github.com/hecrj/wgpu_glyph) - for your text-y rendering needs
-- [coffee](https://github.com/hecrj/coffee) - a whole 2D engine
-- [iced](https://github.com/hecrj/iced) - a cross-platform GUI library
-- [rgx](https://github.com/cloudhead/rgx) - a 2D graphics library
-- [imgui-wgpu](https://github.com/Yatekii/imgui-wgpu-rs) - Dear ImGui interfacing
-- [pixels](https://github.com/parasyte/pixels) - the easiest way to create a hardware-accelerated pixel frame buffer
-- [kas](https://github.com/dhardy/kas) - toolKit Abstraction System
-- [oxidator](https://github.com/Ruddle/oxidator) - RTS game engine
-- [nannou](https://github.com/nannou-org/nannou) - a creative coding framework
-- [harmony](https://github.com/StarArawn/harmony) - a modern 2D/3D engine
-- [wgpu-pbr](https://github.com/tedsta/wgpu-pbr) - realtime PBR renderer for games
-
-Also, libraries that have support for wgpu-rs:
-
-- [conrod](https://github.com/PistonDevelopers/conrod) - shader-based UI
-- [grr-2d](https://github.com/norse-rs/grr-2d) - experimental 2D renderer
-- [lyon](https://github.com/nical/lyon) - a path tessellation library
+See [our wiki](https://github.com/gfx-rs/wgpu-rs/wiki/Applications) for the list of libraries and applications using `wgpu`.
 
 ## Development
 
