@@ -242,7 +242,7 @@ impl framework::Example for Example {
 
         let local_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                bindings: &[wgpu::BindGroupLayoutEntry::new(
+                entries: &[wgpu::BindGroupLayoutEntry::new(
                     0,
                     wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     wgpu::BindingType::UniformBuffer {
@@ -430,7 +430,7 @@ impl framework::Example for Example {
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[wgpu::BindGroupLayoutEntry::new(
+                    entries: &[wgpu::BindGroupLayoutEntry::new(
                         0, // global
                         wgpu::ShaderStage::VERTEX,
                         wgpu::BindingType::UniformBuffer {
@@ -513,7 +513,7 @@ impl framework::Example for Example {
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    bindings: &[
+                    entries: &[
                         wgpu::BindGroupLayoutEntry::new(
                             0, // global
                             wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
