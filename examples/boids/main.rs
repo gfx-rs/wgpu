@@ -193,16 +193,16 @@ impl framework::Example for Example {
         for i in 0..2 {
             particle_bind_groups.push(device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &compute_bind_group_layout,
-                bindings: &[
-                    wgpu::Binding {
+                entries: &[
+                    wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(sim_param_buffer.slice(..)),
                     },
-                    wgpu::Binding {
+                    wgpu::BindGroupEntry {
                         binding: 1,
                         resource: wgpu::BindingResource::Buffer(particle_buffers[i].slice(..)),
                     },
-                    wgpu::Binding {
+                    wgpu::BindGroupEntry {
                         binding: 2,
                         resource: wgpu::BindingResource::Buffer(
                             particle_buffers[(i + 1) % 2].slice(..), // bind to opposite buffer

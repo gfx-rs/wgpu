@@ -455,7 +455,7 @@ impl crate::Context for Context {
 
     fn instance_request_adapter(
         &self,
-        options: &crate::RequestAdapterOptions<'_>,
+        options: &crate::RequestAdapterOptions,
     ) -> Self::RequestAdapterFuture {
         let id = self.pick_adapter(
             &wgc::instance::RequestAdapterOptions {
@@ -536,12 +536,12 @@ impl crate::Context for Context {
         use wgc::binding_model as bm;
 
         let texture_view_arena: Arena<wgc::id::TextureViewId> = Arena::new();
-        let bindings = desc
-            .bindings
+        let entries = desc
+            .entries
             .iter()
-            .map(|binding| bm::BindGroupEntry {
-                binding: binding.binding,
-                resource: match binding.resource {
+            .map(|entry| bm::BindGroupEntry {
+                binding: entry.binding,
+                resource: match entry.resource {
                     BindingResource::Buffer(ref buffer_slice) => {
                         bm::BindingResource::Buffer(bm::BufferBinding {
                             buffer_id: buffer_slice.buffer.id,
@@ -570,7 +570,7 @@ impl crate::Context for Context {
             &bm::BindGroupDescriptor {
                 label: desc.label,
                 layout: desc.layout.id,
-                entries: &bindings,
+                entries: &entries,
             },
             PhantomData
         ))
@@ -593,8 +593,7 @@ impl crate::Context for Context {
         gfx_select!(*device => self.device_create_pipeline_layout(
             *device,
             &wgc::binding_model::PipelineLayoutDescriptor {
-                bind_group_layouts: temp_layouts.as_ptr(),
-                bind_group_layouts_length: temp_layouts.len(),
+                bind_group_layouts: &temp_layouts,
             },
             PhantomData
         ))

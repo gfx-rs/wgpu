@@ -231,24 +231,24 @@ impl Example {
 
         let water_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: water_bind_group_layout,
-            bindings: &[
-                wgpu::Binding {
+            entries: &[
+                wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(water_uniforms.slice(..)),
                 },
-                wgpu::Binding {
+                wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(
                         &reflection_texture.create_default_view(),
                     ),
                 },
-                wgpu::Binding {
+                wgpu::BindGroupEntry {
                     binding: 2,
                     resource: wgpu::BindingResource::TextureView(
                         &draw_depth_buffer.create_default_view(),
                     ),
                 },
-                wgpu::Binding {
+                wgpu::BindGroupEntry {
                     binding: 3,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
@@ -457,7 +457,7 @@ impl framework::Example for Example {
 
         let terrain_normal_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &terrain_bind_group_layout,
-            bindings: &[wgpu::Binding {
+            entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(terrain_normal_uniform_buf.slice(..)),
             }],
@@ -465,7 +465,7 @@ impl framework::Example for Example {
         });
         let terrain_flipped_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &terrain_bind_group_layout,
-            bindings: &[wgpu::Binding {
+            entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(terrain_flipped_uniform_buf.slice(..)),
             }],
