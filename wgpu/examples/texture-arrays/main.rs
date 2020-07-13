@@ -23,12 +23,6 @@ struct Uniform {
 unsafe impl Pod for Uniform {}
 unsafe impl Zeroable for Uniform {}
 
-struct UniformWorkaroundData {
-    bind_group_layout: wgpu::BindGroupLayout,
-    bind_group0: wgpu::BindGroup,
-    bind_group1: wgpu::BindGroup,
-}
-
 fn vertex(pos: [i8; 2], tc: [i8; 2], index: i8) -> Vertex {
     Vertex {
         _pos: [pos[0] as f32, pos[1] as f32],
@@ -81,7 +75,7 @@ struct Example {
     bind_group: wgpu::BindGroup,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
-    uniform_workaround_data: Option<UniformWorkaroundData>,
+    uniform_workaround: bool,
 }
 
 impl framework::Example for Example {
@@ -90,6 +84,13 @@ impl framework::Example for Example {
             | wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
             | wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY
+            | wgpu::Features::PUSH_CONSTANTS
+    }
+    fn needed_limits() -> wgpu::Limits {
+        wgpu::Limits {
+            max_push_constant_size: 4,
+            ..wgpu::Limits::default()
+        }
     }
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
@@ -130,56 +131,6 @@ impl framework::Example for Example {
         let index_data = create_indices();
         let index_buffer = device
             .create_buffer_with_data(bytemuck::cast_slice(&index_data), wgpu::BufferUsage::INDEX);
-
-        let uniform_workaround_data = if uniform_workaround {
-            let buffer0 = device.create_buffer_with_data(
-                &bytemuck::cast_slice(&[Uniform { index: 0 }]),
-                wgpu::BufferUsage::UNIFORM,
-            );
-            let buffer1 = device.create_buffer_with_data(
-                &bytemuck::cast_slice(&[Uniform { index: 1 }]),
-                wgpu::BufferUsage::UNIFORM,
-            );
-
-            let bind_group_layout =
-                device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry::new(
-                        0,
-                        wgpu::ShaderStage::FRAGMENT,
-                        wgpu::BindingType::UniformBuffer {
-                            dynamic: false,
-                            min_binding_size: None,
-                        },
-                    )],
-                    label: Some("uniform workaround bind group layout"),
-                });
-
-            let bind_group0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(buffer0.slice(..)),
-                }],
-                label: Some("uniform workaround bind group 0"),
-            });
-
-            let bind_group1 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(buffer1.slice(..)),
-                }],
-                label: Some("uniform workaround bind group 1"),
-            });
-
-            Some(UniformWorkaroundData {
-                bind_group_layout,
-                bind_group0,
-                bind_group1,
-            })
-        } else {
-            None
-        };
 
         let red_texture_data = create_texture_data(Color::RED);
         let green_texture_data = create_texture_data(Color::GREEN);
@@ -289,13 +240,18 @@ impl framework::Example for Example {
             label: Some("bind group"),
         });
 
-        let pipeline_layout = if let Some(ref workaround) = uniform_workaround_data {
+        let pipeline_layout = if uniform_workaround {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[&bind_group_layout, &workaround.bind_group_layout],
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[wgpu::PushConstantRange {
+                    stages: wgpu::ShaderStage::FRAGMENT,
+                    range: 0..4,
+                }],
             })
         } else {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
             })
         };
 
@@ -342,7 +298,7 @@ impl framework::Example for Example {
             index_buffer,
             bind_group,
             pipeline,
-            uniform_workaround_data,
+            uniform_workaround,
         }
     }
     fn resize(
@@ -378,14 +334,28 @@ impl framework::Example for Example {
             }],
             depth_stencil_attachment: None,
         });
+
+        let uniform_workaround_data = if self.uniform_workaround {
+            Some([Uniform { index: 0 }, Uniform { index: 1 }])
+        } else {
+            None
+        };
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..));
-        if let Some(ref workaround) = self.uniform_workaround_data {
-            rpass.set_bind_group(1, &workaround.bind_group0, &[]);
+        if let Some(ref data) = uniform_workaround_data {
+            rpass.set_push_constants(
+                wgpu::ShaderStage::FRAGMENT,
+                0,
+                bytemuck::cast_slice(&data[0..1]),
+            );
             rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_bind_group(1, &workaround.bind_group1, &[]);
+            rpass.set_push_constants(
+                wgpu::ShaderStage::FRAGMENT,
+                0,
+                bytemuck::cast_slice(&data[1..2]),
+            );
             rpass.draw_indexed(6..12, 0, 0..1);
         } else {
             rpass.draw_indexed(0..12, 0, 0..1);

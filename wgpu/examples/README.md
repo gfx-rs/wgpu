@@ -5,7 +5,7 @@ For the simplest examples without using any helping code (see `framework.rs` her
   - `hello-triangle` for graphics and presentation
   - `hello-compute` for pure computing
 
-Notably, `capture` example show rendering without a surface/window. It reads back the contents and saves them to a file.
+Notably, `capture` example shows rendering without a surface/window. It reads back the contents and saves them to a file.
 
 All framework-based examples render to the window.
 
@@ -32,6 +32,7 @@ All framework-based examples render to the window.
 | compute passes         | :star: |        |        |           |        |        |                |        |
 | optional extensions    |        |        |        |           |        |        | :star:         |        |
 | - binding indexing     |        |        |        |           |        |        | :star:         |        |
+| - push constants       |        |        |        |           |        |        | :star:         |        |
 | WGSL shaders           |        |        |        |           |        |        |                |        |
 
 ## Hacking

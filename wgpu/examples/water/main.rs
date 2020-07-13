@@ -414,11 +414,13 @@ impl framework::Example for Example {
         let water_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&water_bind_group_layout],
+                push_constant_ranges: &[],
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 bind_group_layouts: &[&terrain_bind_group_layout],
+                push_constant_ranges: &[],
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {

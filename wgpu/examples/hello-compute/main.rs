@@ -81,6 +81,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
         bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
     });
 
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
