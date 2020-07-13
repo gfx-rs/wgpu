@@ -39,7 +39,7 @@
 use crate::{
     command::{BasePass, RenderCommand},
     conv,
-    device::{AttachmentData, Label, RenderPassContext, MAX_VERTEX_BUFFERS},
+    device::{AttachmentData, Label, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Storage, Token},
     id,
     resource::BufferUse,
@@ -178,6 +178,41 @@ impl RenderBundle {
                         size: size.map(|s| s.get()),
                     };
                     comb.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
+                }
+                RenderCommand::SetPushConstant {
+                    stages,
+                    offset,
+                    size_bytes,
+                    values_offset,
+                } => {
+                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id
+                        .expect("Must have a pipeline bound to use push constants")];
+
+                    if let Some(values_offset) = values_offset {
+                        let values_end_offset = (values_offset + size_bytes / 4) as usize;
+                        let data_slice = &self.base.push_constant_data
+                            [(values_offset as usize)..values_end_offset];
+
+                        comb.push_graphics_constants(
+                            &pipeline_layout.raw,
+                            conv::map_shader_stage_flags(stages),
+                            offset,
+                            &data_slice,
+                        )
+                    } else {
+                        super::push_constant_clear(
+                            offset,
+                            size_bytes,
+                            |clear_offset, clear_data| {
+                                comb.push_graphics_constants(
+                                    &pipeline_layout.raw,
+                                    conv::map_shader_stage_flags(stages),
+                                    clear_offset,
+                                    clear_data,
+                                );
+                            },
+                        );
+                    }
                 }
                 RenderCommand::Draw {
                     vertex_count,
@@ -373,11 +408,36 @@ impl BindState {
 }
 
 #[derive(Debug)]
+struct PushConstantState {
+    ranges: ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT]>,
+    is_dirty: bool,
+}
+impl PushConstantState {
+    fn new() -> Self {
+        Self {
+            ranges: ArrayVec::new(),
+            is_dirty: false,
+        }
+    }
+
+    fn set_push_constants(&mut self, new_ranges: &[wgt::PushConstantRange]) -> bool {
+        if &*self.ranges != new_ranges {
+            self.ranges = new_ranges.iter().cloned().collect();
+            self.is_dirty = true;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Debug)]
 struct State {
     trackers: TrackerSet,
     index: IndexState,
     vertex: ArrayVec<[VertexState; MAX_VERTEX_BUFFERS]>,
     bind: ArrayVec<[BindState; MAX_BIND_GROUPS]>,
+    push_constant_ranges: PushConstantState,
     raw_dynamic_offsets: Vec<wgt::DynamicOffset>,
     flat_dynamic_offsets: Vec<wgt::DynamicOffset>,
     used_bind_groups: usize,
@@ -431,6 +491,7 @@ impl State {
         index_format: wgt::IndexFormat,
         vertex_strides: &[(wgt::BufferAddress, wgt::InputStepMode)],
         layout_ids: &[Stored<id::BindGroupLayoutId>],
+        push_constant_layouts: &[wgt::PushConstantRange],
     ) {
         self.index.set_format(index_format);
         for (vs, &(stride, step_mode)) in self.vertex.iter_mut().zip(vertex_strides) {
@@ -440,17 +501,47 @@ impl State {
                 vs.is_dirty = true;
             }
         }
+
+        let push_constants_changed = self
+            .push_constant_ranges
+            .set_push_constants(push_constant_layouts);
+
         self.used_bind_groups = layout_ids.len();
-        let invalid_from = self
-            .bind
-            .iter()
-            .zip(layout_ids)
-            .position(|(bs, layout_id)| match bs.bind_group {
-                Some((_, bgl_id)) => bgl_id != layout_id.value,
-                None => false,
-            });
+        let invalid_from = if push_constants_changed {
+            Some(0)
+        } else {
+            self.bind
+                .iter()
+                .zip(layout_ids)
+                .position(|(bs, layout_id)| match bs.bind_group {
+                    Some((_, bgl_id)) => bgl_id != layout_id.value,
+                    None => false,
+                })
+        };
         if let Some(slot) = invalid_from {
             self.invalidate_group_from(slot);
+        }
+    }
+
+    fn flush_push_constants(&mut self) -> Option<impl Iterator<Item = RenderCommand>> {
+        let is_dirty = self.push_constant_ranges.is_dirty;
+
+        if is_dirty {
+            let nonoverlapping_ranges =
+                super::bind::compute_nonoverlapping_ranges(&self.push_constant_ranges.ranges);
+
+            Some(
+                nonoverlapping_ranges
+                    .into_iter()
+                    .map(|range| RenderCommand::SetPushConstant {
+                        stages: range.stages,
+                        offset: range.range.start,
+                        size_bytes: range.range.end - range.range.start,
+                        values_offset: None,
+                    }),
+            )
+        } else {
+            None
         }
     }
 
@@ -514,12 +605,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .map(|_| VertexState::new())
                     .collect(),
                 bind: (0..MAX_BIND_GROUPS).map(|_| BindState::new()).collect(),
+                push_constant_ranges: PushConstantState::new(),
                 raw_dynamic_offsets: Vec::new(),
                 flat_dynamic_offsets: Vec::new(),
                 used_bind_groups: 0,
             };
             let mut commands = Vec::new();
             let mut base = bundle_encoder.base.as_ref();
+            let mut pipeline_layout_id = None::<id::PipelineLayoutId>;
 
             for &command in base.commands {
                 match command {
@@ -572,13 +665,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         //TODO: check read-only depth
 
                         let layout = &pipeline_layout_guard[pipeline.layout_id.value];
+                        pipeline_layout_id = Some(pipeline.layout_id.value);
 
                         state.set_pipeline(
                             pipeline.index_format,
                             &pipeline.vertex_strides,
                             &layout.bind_group_layout_ids,
+                            &layout.push_constant_ranges,
                         );
                         commands.push(command);
+                        if let Some(iter) = state.flush_push_constants() {
+                            commands.extend(iter)
+                        }
                     }
                     RenderCommand::SetIndexBuffer {
                         buffer_id,
@@ -620,6 +718,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             None => buffer.size,
                         };
                         state.vertex[slot as usize].set_buffer(buffer_id, offset..end);
+                    }
+                    RenderCommand::SetPushConstant {
+                        stages,
+                        offset,
+                        size_bytes,
+                        values_offset: _,
+                    } => {
+                        let end_offset = offset + size_bytes;
+
+                        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id
+                            .expect("Must have a pipeline bound to use push constants")];
+
+                        pipeline_layout
+                            .validate_push_constant_ranges(stages, offset, end_offset)
+                            .unwrap();
+
+                        commands.push(command);
                     }
                     RenderCommand::Draw {
                         vertex_count,
@@ -737,6 +852,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     commands,
                     dynamic_offsets: state.flat_dynamic_offsets,
                     string_data: Vec::new(),
+                    push_constant_data: Vec::new(),
                 },
                 device_id: Stored {
                     value: bundle_encoder.parent_id,
@@ -851,6 +967,28 @@ pub mod bundle_ffi {
             buffer_id,
             offset,
             size,
+        });
+    }
+
+    #[no_mangle]
+    pub unsafe extern "C" fn wgpu_render_bundle_set_push_constants(
+        pass: &mut RenderBundleEncoder,
+        stages: wgt::ShaderStage,
+        offset: u32,
+        size_bytes: u32,
+        data: *const u32,
+    ) {
+        span!(_guard, DEBUG, "RenderBundle::set_push_constants");
+        let data_slice = slice::from_raw_parts(data, (size_bytes / 4) as usize);
+        let value_offset = pass.base.push_constant_data.len().try_into().expect(
+            "Ran out of push constant space. Don't set 4gb of push constants per RenderBundle.",
+        );
+        pass.base.push_constant_data.extend_from_slice(data_slice);
+        pass.base.commands.push(RenderCommand::SetPushConstant {
+            stages,
+            offset,
+            size_bytes,
+            values_offset: Some(value_offset),
         });
     }
 

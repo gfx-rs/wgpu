@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    device::SHADER_STAGE_COUNT,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     track::{TrackerSet, DUMMY_SELECTOR},
     FastHashMap, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
@@ -229,12 +230,23 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) count_validator: BindingTypeMaxCountValidator,
 }
 
-pub type PipelineLayoutDescriptor<'a> = wgt::PipelineLayoutDescriptor<'a, BindGroupLayoutId>;
-
 #[derive(Clone, Debug)]
 pub enum PipelineLayoutError {
     TooManyGroups(usize),
     TooManyBindings(BindingTypeMaxCountError),
+    PushConstantRangeTooLarge { index: usize },
+    MoreThanOnePushConstantRangePerStage { index: usize },
+    MisalignedPushConstantRange { index: usize },
+    MissingFeature(wgt::Features),
+}
+
+#[derive(Clone, Debug)]
+pub enum PushConstantUploadError {
+    TooLarge,
+    PartialRangeMatch,
+    MissingStages,
+    UnmatchedStages,
+    Unaligned,
 }
 
 #[derive(Debug)]
@@ -243,6 +255,102 @@ pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) bind_group_layout_ids: ArrayVec<[Stored<BindGroupLayoutId>; MAX_BIND_GROUPS]>,
+    pub(crate) push_constant_ranges: ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT]>,
+}
+
+impl<B: hal::Backend> PipelineLayout<B> {
+    /// Validate push constants match up with expected ranges.
+    pub(crate) fn validate_push_constant_ranges(
+        &self,
+        stages: wgt::ShaderStage,
+        offset: u32,
+        end_offset: u32,
+    ) -> Result<(), PushConstantUploadError> {
+        // Don't need to validate size against the push constant size limit here,
+        // as push constant ranges are already validated to be within bounds,
+        // and we validate that they are within the ranges.
+
+        if offset % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
+            log::error!(
+                "Provided push constant offset {} must be aligned to {}",
+                offset,
+                wgt::PUSH_CONSTANT_ALIGNMENT
+            );
+            return Err(PushConstantUploadError::Unaligned);
+        }
+
+        // Push constant validation looks very complicated on the surface, but
+        // the problem can be range-reduced pretty well.
+        //
+        // Push constants require (summarized from the vulkan spec):
+        // 1. For each byte in the range and for each shader stage in stageFlags,
+        //    there must be a push constant range in the layout that includes that
+        //    byte and that stage.
+        // 2. For each byte in the range and for each push constant range that overlaps that byte,
+        //    `stage` must include all stages in that push constant range’s `stage`.
+        //
+        // However there are some additional constraints that help us:
+        // 3. All push constant ranges are the only range that can access that stage.
+        //    i.e. if one range has VERTEX, no other range has VERTEX
+        //
+        // Therefore we can simplify the checks in the following ways:
+        // - Because 3 guarantees that the push constant range has a unique stage,
+        //   when we check for 1, we can simply check that our entire updated range
+        //   is within a push constant range. i.e. our range for a specific stage cannot
+        //   intersect more than one push constant range.
+        let mut used_stages = wgt::ShaderStage::NONE;
+        for (idx, range) in self.push_constant_ranges.iter().enumerate() {
+            // contains not intersects due to 2
+            if stages.contains(range.stages) {
+                if !(range.range.start <= offset && end_offset <= range.range.end) {
+                    log::error!(
+                        "Provided push constant with indices {}..{} overruns matching push constant range (index {}) with stage(s) {:?} and indices {}..{}",
+                        offset,
+                        end_offset,
+                        idx,
+                        range.stages,
+                        range.range.start,
+                        range.range.end,
+                    );
+                    return Err(PushConstantUploadError::TooLarge);
+                }
+                used_stages |= range.stages;
+            } else if stages.intersects(range.stages) {
+                // Will be caught by used stages check below, but we can do this because of 1
+                // and is more helpful to the user.
+                log::error!(
+                    "Provided push constant is for stage(s) {:?}, stage with a partial match found at index {} with stage(s) {:?}, however push constants must be complete matches.",
+                    stages,
+                    idx,
+                    range.stages,
+                );
+                return Err(PushConstantUploadError::PartialRangeMatch);
+            }
+
+            // The push constant range intersects range we are uploading
+            if offset < range.range.end && range.range.start < end_offset {
+                // But requires stages we don't provide
+                if !stages.contains(range.stages) {
+                    log::error!(
+                        "Provided push constant is for stage(s) {:?}, but intersects a push constant range (at index {}) with stage(s) {:?}. Push constants must provide the stages for all ranges they intersect.",
+                        stages,
+                        idx,
+                        range.stages,
+                    );
+                    return Err(PushConstantUploadError::MissingStages);
+                }
+            }
+        }
+        if used_stages != stages {
+            log::error!(
+                "Provided push constant is for stage(s) {:?}, however the pipeline layout has no push constant range for the stage(s) {:?}.",
+                stages,
+                stages - used_stages
+            );
+            return Err(PushConstantUploadError::UnmatchedStages);
+        }
+        Ok(())
+    }
 }
 
 #[repr(C)]

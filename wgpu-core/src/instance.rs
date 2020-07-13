@@ -25,6 +25,12 @@ use hal::{
 };
 use std::fmt::Display;
 
+/// Size that is guaranteed to be available in push constants.
+///
+/// This is needed because non-vulkan backends might not
+/// provide a push-constant size limit.
+const MIN_PUSH_CONSTANT_SIZE: u32 = 128;
+
 pub type RequestAdapterOptions = wgt::RequestAdapterOptions<SurfaceId>;
 
 #[derive(Debug)]
@@ -118,7 +124,9 @@ impl<B: hal::Backend> Adapter<B> {
 
         let adapter_features = raw.physical_device.features();
 
-        let mut features = wgt::Features::default() | wgt::Features::MAPPABLE_PRIMARY_BUFFERS;
+        let mut features = wgt::Features::default()
+            | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
+            | wgt::Features::PUSH_CONSTANTS;
         features.set(
             wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
             adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
@@ -184,6 +192,8 @@ impl<B: hal::Backend> Adapter<B> {
                 .max(default_limits.max_uniform_buffers_per_shader_stage),
             max_uniform_buffer_binding_size: (adapter_limits.max_uniform_buffer_range as u32)
                 .max(default_limits.max_uniform_buffer_binding_size),
+            max_push_constant_size: (adapter_limits.max_push_constants_size as u32)
+                .max(MIN_PUSH_CONSTANT_SIZE), // As an extension, the default is always 0, so define a separate minimum.
         };
 
         Adapter {

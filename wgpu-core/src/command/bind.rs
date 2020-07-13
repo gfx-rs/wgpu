@@ -4,6 +4,7 @@
 
 use crate::{
     binding_model::BindGroup,
+    device::SHADER_STAGE_COUNT,
     hub::GfxBackend,
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId},
     Stored, MAX_BIND_GROUPS,
@@ -212,4 +213,54 @@ impl Binder {
             .position(|entry| !entry.is_valid())
             .unwrap_or_else(|| self.entries.len())
     }
+}
+
+struct PushConstantChange {
+    stages: wgt::ShaderStage,
+    offset: u32,
+    enable: bool,
+}
+
+/// Break up possibly overlapping push constant ranges into a set of non-overlapping ranges
+/// which contain all the stage flags of the original ranges. This allows us to zero out (or write any value)
+/// to every possible value.
+pub fn compute_nonoverlapping_ranges(
+    ranges: &[wgt::PushConstantRange],
+) -> ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT * 2]> {
+    if ranges.is_empty() {
+        return ArrayVec::new();
+    }
+    debug_assert!(ranges.len() <= SHADER_STAGE_COUNT);
+
+    let mut breaks: ArrayVec<[PushConstantChange; SHADER_STAGE_COUNT * 2]> = ArrayVec::new();
+    for range in ranges {
+        breaks.push(PushConstantChange {
+            stages: range.stages,
+            offset: range.range.start,
+            enable: true,
+        });
+        breaks.push(PushConstantChange {
+            stages: range.stages,
+            offset: range.range.end,
+            enable: false,
+        });
+    }
+    breaks.sort_unstable_by_key(|change| change.offset);
+
+    let mut output_ranges = ArrayVec::new();
+    let mut position = 0_u32;
+    let mut stages = wgt::ShaderStage::NONE;
+
+    for bk in breaks {
+        if bk.offset - position > 0 && !stages.is_empty() {
+            output_ranges.push(wgt::PushConstantRange {
+                stages,
+                range: position..bk.offset,
+            })
+        }
+        position = bk.offset;
+        stages.set(bk.stages, bk.enable);
+    }
+
+    output_ranges
 }

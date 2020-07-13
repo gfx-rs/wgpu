@@ -166,6 +166,7 @@ pub enum Action {
     CreatePipelineLayout {
         id: id::PipelineLayoutId,
         bind_group_layouts: Vec<id::BindGroupLayoutId>,
+        push_constant_ranges: Vec<wgt::PushConstantRange>,
     },
     DestroyPipelineLayout(id::PipelineLayoutId),
     CreateBindGroup {

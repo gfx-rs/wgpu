@@ -24,8 +24,6 @@ use hal::{
 use parking_lot::{Mutex, MutexGuard};
 use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
-#[cfg(feature = "trace")]
-use std::slice;
 use std::{
     collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr,
     sync::atomic::Ordering,
@@ -58,6 +56,7 @@ pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: usize = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_ANISOTROPY: u8 = 16;
+pub const SHADER_STAGE_COUNT: usize = 3;
 
 pub fn all_buffer_stages() -> hal::pso::PipelineStage {
     use hal::pso::PipelineStage as Ps;
@@ -1349,7 +1348,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_pipeline_layout<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &binding_model::PipelineLayoutDescriptor,
+        desc: &wgt::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
         id_in: Input<G, id::PipelineLayoutId>,
     ) -> Result<id::PipelineLayoutId, binding_model::PipelineLayoutError> {
         span!(_guard, INFO, "Device::create_pipeline_layout");
@@ -1359,29 +1358,97 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let bind_group_layout_ids = desc.bind_group_layouts;
-
-        if bind_group_layout_ids.len() > (device.limits.max_bind_groups as usize) {
+        if desc.bind_group_layouts.len() > (device.limits.max_bind_groups as usize) {
+            log::error!(
+                "Bind group layout count {} exceeds device bind group limit {}",
+                desc.bind_group_layouts.len(),
+                device.limits.max_bind_groups
+            );
             return Err(binding_model::PipelineLayoutError::TooManyGroups(
-                bind_group_layout_ids.len(),
+                desc.bind_group_layouts.len(),
             ));
         }
 
-        // TODO: push constants
+        if !desc.push_constant_ranges.is_empty()
+            && !device.features.contains(wgt::Features::PUSH_CONSTANTS)
+        {
+            return Err(binding_model::PipelineLayoutError::MissingFeature(
+                wgt::Features::PUSH_CONSTANTS,
+            ));
+        }
+        let mut used_stages = wgt::ShaderStage::empty();
+        for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
+            if pc.stages.intersects(used_stages) {
+                log::error!(
+                    "Push constant range (index {}) provides for stage(s) {:?} but there exists another range that provides stage(s) {:?}. Each stage may only be provided by one range.",
+                    index,
+                    pc.stages,
+                    pc.stages & used_stages,
+                );
+                return Err(
+                    binding_model::PipelineLayoutError::MoreThanOnePushConstantRangePerStage {
+                        index,
+                    },
+                );
+            }
+            used_stages |= pc.stages;
+
+            if device.limits.max_push_constant_size < pc.range.end {
+                log::error!(
+                    "Push constant range (index {}) has range {}..{} which exceeds device push constant size limit 0..{}",
+                    index,
+                    pc.range.start,
+                    pc.range.end,
+                    device.limits.max_push_constant_size
+                );
+                return Err(
+                    binding_model::PipelineLayoutError::PushConstantRangeTooLarge { index },
+                );
+            }
+
+            if pc.range.start % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
+                log::error!(
+                    "Push constant range (index {}) start {} must be aligned to {}",
+                    index,
+                    pc.range.start,
+                    wgt::PUSH_CONSTANT_ALIGNMENT
+                );
+                return Err(
+                    binding_model::PipelineLayoutError::MisalignedPushConstantRange { index },
+                );
+            }
+            if pc.range.end % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
+                log::error!(
+                    "Push constant range (index {}) end {} must be aligned to {}",
+                    index,
+                    pc.range.end,
+                    wgt::PUSH_CONSTANT_ALIGNMENT
+                );
+                return Err(
+                    binding_model::PipelineLayoutError::MisalignedPushConstantRange { index },
+                );
+            }
+        }
+
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
         let pipeline_layout = {
             let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
-            for &id in bind_group_layout_ids {
+            for &id in desc.bind_group_layouts {
                 let bind_group_layout = &bind_group_layout_guard[id];
                 count_validator.merge(&bind_group_layout.count_validator);
             }
-            let descriptor_set_layouts = bind_group_layout_ids
+            let descriptor_set_layouts = desc
+                .bind_group_layouts
                 .iter()
                 .map(|&id| &bind_group_layout_guard[id].raw);
+            let push_constants = desc
+                .push_constant_ranges
+                .iter()
+                .map(|pc| (conv::map_shader_stage_flags(pc.stages), pc.range.clone()));
             unsafe {
                 device
                     .raw
-                    .create_pipeline_layout(descriptor_set_layouts, &[])
+                    .create_pipeline_layout(descriptor_set_layouts, push_constants)
             }
             .unwrap()
         };
@@ -1398,7 +1465,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             life_guard: LifeGuard::new(),
             bind_group_layout_ids: {
                 let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
-                bind_group_layout_ids
+                desc.bind_group_layouts
                     .iter()
                     .map(|&id| Stored {
                         value: id,
@@ -1406,6 +1473,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     })
                     .collect()
             },
+            push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
         };
 
         let id = hub
@@ -1415,7 +1483,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout {
                 id,
-                bind_group_layouts: bind_group_layout_ids.to_owned(),
+                bind_group_layouts: desc.bind_group_layouts.to_owned(),
+                push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
             }),
             None => (),
         };
@@ -1952,7 +2021,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref trace) => {
                 let mut trace = trace.lock();
                 let data = trace.make_binary("spv", unsafe {
-                    slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
+                    std::slice::from_raw_parts(spv.as_ptr() as *const u8, spv.len() * 4)
                 });
                 trace.add(trace::Action::CreateShaderModule { id, data });
             }
@@ -2908,7 +2977,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Some(ref trace) => {
                         let mut trace = trace.lock();
                         let data = trace.make_binary("bin", unsafe {
-                            slice::from_raw_parts(ptr.as_ptr(), buffer.size as usize)
+                            std::slice::from_raw_parts(ptr.as_ptr(), buffer.size as usize)
                         });
                         trace.add(trace::Action::WriteBuffer {
                             id: buffer_id,
@@ -2970,7 +3039,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let mut trace = trace.lock();
                             let size = sub_range.size_to(buffer.size);
                             let data = trace.make_binary("bin", unsafe {
-                                slice::from_raw_parts(ptr.as_ptr(), size as usize)
+                                std::slice::from_raw_parts(ptr.as_ptr(), size as usize)
                             });
                             trace.add(trace::Action::WriteBuffer {
                                 id: buffer_id,

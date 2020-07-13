@@ -10,6 +10,7 @@
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+use std::ops::Range;
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -26,6 +27,8 @@ pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// Buffer to buffer copy offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
+/// Alignment all push constants need
+pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
 
 /// Backends supported by wgpu.
 #[repr(u8)]
@@ -215,15 +218,32 @@ bitflags::bitflags! {
         ///
         /// This allows the use of a buffer containing the actual number of draw calls.
         ///
+        /// A block of push constants can be declared with `layout(push_constant) uniform Name {..}` in shaders.
+        ///
         /// Supported platforms:
         /// - DX12
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
         ///
         /// This is a native only feature.
         const MULTI_DRAW_INDIRECT_COUNT = 0x0000_0000_0040_0000;
-        /// Features which are part of the upstream webgpu standard
+        /// Allows the use of push constants: small, fast bits of memory that can be updated
+        /// inside a [`RenderPass`].
+        ///
+        /// Allows the user to call [`RenderPass::set_push_constants`], provide a non-empty array
+        /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_push_constant_size`].
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal
+        /// - DX11 (emulated with uniforms)
+        /// - OpenGL (emulated with uniforms)
+        ///
+        /// This is a native only feature.
+        const PUSH_CONSTANTS = 0x0000_0000_0080_0000;
+        /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
-        /// Features that are only available when targeting native (not web)
+        /// Features that are only available when targeting native (not web).
         const ALL_NATIVE = 0xFFFF_FFFF_FFFF_0000;
     }
 }
@@ -263,6 +283,16 @@ pub struct Limits {
     pub max_uniform_buffers_per_shader_stage: u32,
     /// Maximum size in bytes of a binding to a uniform buffer. Defaults to 16384. Higher is "better".
     pub max_uniform_buffer_binding_size: u32,
+    /// Amount of storage available for push constants in bytes. Defaults to 0. Higher is "better".
+    /// Requesting more than 0 during device creation requires [`Features::PUSH_CONSTANTS`] to be enabled.
+    ///
+    /// Expect the size to be:
+    /// - Vulkan: 128-256 bytes
+    /// - DX12: 256 bytes
+    /// - Metal: 4096 bytes
+    /// - DX11 & OpenGL don't natively support push constants, and are emulated with uniforms,
+    ///   so this number is less useful.
+    pub max_push_constant_size: u32,
 }
 
 impl Default for Limits {
@@ -277,6 +307,7 @@ impl Default for Limits {
             max_storage_textures_per_shader_stage: 4,
             max_uniform_buffers_per_shader_stage: 12,
             max_uniform_buffer_binding_size: 16384,
+            max_push_constant_size: 0,
         }
     }
 }
@@ -305,8 +336,7 @@ bitflags::bitflags! {
     ///
     /// `ShaderStage::VERTEX | ShaderStage::FRAGMENT`
     #[repr(transparent)]
-    #[cfg_attr(feature = "trace", derive(Serialize))]
-    #[cfg_attr(feature = "replay", derive(Deserialize))]
+    #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
     pub struct ShaderStage: u32 {
         /// Binding is not visible from any shader stage
         const NONE = 0;
@@ -1494,6 +1524,25 @@ pub struct PipelineLayoutDescriptor<'a, B> {
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [B],
+    /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
+    /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
+    /// uniform block.
+    ///
+    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
+    pub push_constant_ranges: &'a [PushConstantRange],
+}
+
+/// A range of push constant memory to pass to a shader stage.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct PushConstantRange {
+    /// Stage push constant range is visible from. Each stage can only be served by at most one range.
+    /// One range can serve multiple stages however.
+    pub stages: ShaderStage,
+    /// Range in push constant memory to use for the stage. Must be less than [`Limits::max_push_constant_size`].
+    /// Start and end must be aligned to the 4s.
+    pub range: Range<u32>,
 }
 
 /// Describes a programmable pipeline stage.

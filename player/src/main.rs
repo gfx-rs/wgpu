@@ -223,12 +223,14 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             A::CreatePipelineLayout {
                 id,
                 bind_group_layouts,
+                push_constant_ranges,
             } => {
                 self.device_maintain_ids::<B>(device);
                 self.device_create_pipeline_layout::<B>(
                     device,
-                    &wgc::binding_model::PipelineLayoutDescriptor {
+                    &wgt::PipelineLayoutDescriptor {
                         bind_group_layouts: &bind_group_layouts,
+                        push_constant_ranges: &push_constant_ranges,
                     },
                     id,
                 )
