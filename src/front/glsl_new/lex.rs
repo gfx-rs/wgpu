@@ -206,7 +206,7 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
         '#' => {
             input = chars.as_str();
             let (word, rest, pos) = consume_any(input, |c| c.is_alphanumeric() || c == '_');
-            meta.chars.end = start + pos;
+            meta.chars.end = start + 1 + pos;
             match word {
                 "version" => (Some(Token::Version(meta)), rest),
                 _ => (None, input),

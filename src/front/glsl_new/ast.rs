@@ -23,9 +23,7 @@ impl Program {
 
 #[derive(Debug)]
 pub enum Profile {
-    // Compatibility,
     Core,
-    // Es,
 }
 
 #[derive(Debug)]

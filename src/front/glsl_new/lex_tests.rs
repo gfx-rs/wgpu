@@ -136,3 +136,25 @@ fn glsl_lex_identifier() {
         "Unknown((TokenMetadata { line: 0, chars: 25..26 }, \'好\'))"
     );
 }
+
+#[test]
+fn glsl_lex_version() {
+    let source = "#version 890 core";
+    let lex = Lexer::new(source);
+    let tokens: Vec<Token> = lex.collect();
+    assert_eq!(tokens.len(), 3);
+
+    let mut iter = tokens.iter();
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Version(TokenMetadata { line: 0, chars: 0..8 })"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "IntConstant((TokenMetadata { line: 0, chars: 9..12 }, 890))"
+    );
+    assert_eq!(
+        format!("{:?}", iter.next().unwrap()),
+        "Identifier((TokenMetadata { line: 0, chars: 13..17 }, \"core\"))"
+    );
+}

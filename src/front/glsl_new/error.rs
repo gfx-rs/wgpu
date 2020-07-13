@@ -1,12 +1,15 @@
 use super::parser::Token;
+use super::token::TokenMetadata;
 use std::{fmt, io};
 
 #[derive(Debug)]
 pub enum ErrorKind {
-    InvalidInput,
-    IoError(io::Error),
-    InvalidToken(Token),
     EndOfFile,
+    InvalidInput,
+    InvalidProfile(TokenMetadata, String),
+    InvalidToken(Token),
+    InvalidVersion(TokenMetadata, i64),
+    IoError(io::Error),
     ParserFail,
     ParserStackOverflow,
 }
@@ -14,10 +17,16 @@ pub enum ErrorKind {
 impl fmt::Display for ErrorKind {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            ErrorKind::InvalidInput => write!(f, "InvalidInput"),
-            ErrorKind::IoError(error) => write!(f, "IO Error {}", error),
-            ErrorKind::InvalidToken(token) => write!(f, "Invalid Token {:?}", token),
             ErrorKind::EndOfFile => write!(f, "Unexpected end of file"),
+            ErrorKind::InvalidInput => write!(f, "InvalidInput"),
+            ErrorKind::InvalidProfile(meta, val) => {
+                write!(f, "Invalid profile {} at {:?}", val, meta)
+            }
+            ErrorKind::InvalidToken(token) => write!(f, "Invalid Token {:?}", token),
+            ErrorKind::InvalidVersion(meta, val) => {
+                write!(f, "Invalid version {} at {:?}", val, meta)
+            }
+            ErrorKind::IoError(error) => write!(f, "IO Error {}", error),
             ErrorKind::ParserFail => write!(f, "Parser failed"),
             ErrorKind::ParserStackOverflow => write!(f, "Parser stack overflow"),
         }

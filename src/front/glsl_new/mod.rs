@@ -11,6 +11,8 @@ use lex::Lexer;
 mod error;
 use error::ParseError;
 mod parser;
+#[cfg(test)]
+mod parser_tests;
 mod token;
 
 pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Module, ParseError> {
