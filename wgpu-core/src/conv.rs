@@ -2,7 +2,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{resource, PrivateFeatures};
+use crate::{
+    command::{LoadOp, PassChannel, StoreOp},
+    resource, PrivateFeatures,
+};
 
 pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
@@ -572,15 +575,15 @@ pub(crate) fn map_texture_state(
     (access, layout)
 }
 
-pub fn map_load_store_ops<V>(channel: &wgt::PassChannel<V>) -> hal::pass::AttachmentOps {
+pub fn map_load_store_ops<V>(channel: &PassChannel<V>) -> hal::pass::AttachmentOps {
     hal::pass::AttachmentOps {
         load: match channel.load_op {
-            wgt::LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
-            wgt::LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
+            LoadOp::Clear => hal::pass::AttachmentLoadOp::Clear,
+            LoadOp::Load => hal::pass::AttachmentLoadOp::Load,
         },
         store: match channel.store_op {
-            wgt::StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
-            wgt::StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
+            StoreOp::Clear => hal::pass::AttachmentStoreOp::DontCare, //TODO!
+            StoreOp::Store => hal::pass::AttachmentStoreOp::Store,
         },
     }
 }

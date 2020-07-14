@@ -24,16 +24,85 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use wgt::{
-    BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, LoadOp,
-    RenderPassColorAttachmentDescriptorBase, RenderPassDepthStencilAttachmentDescriptorBase,
-    StoreOp, TextureUsage,
+    BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
 };
+
+#[cfg(any(feature = "serial-pass", feature = "replay"))]
+use serde::Deserialize;
+#[cfg(any(feature = "serial-pass", feature = "trace"))]
+use serde::Serialize;
 
 use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, ops::Range, str};
 
-pub type ColorAttachmentDescriptor = RenderPassColorAttachmentDescriptorBase<id::TextureViewId>;
-pub type DepthStencilAttachmentDescriptor =
-    RenderPassDepthStencilAttachmentDescriptorBase<id::TextureViewId>;
+/// Operation to perform to the output attachment at the start of a renderpass.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+pub enum LoadOp {
+    /// Clear the output attachment with the clear color. Clearing is faster than loading.
+    Clear = 0,
+    /// Do not clear output attachment.
+    Load = 1,
+}
+
+/// Operation to perform to the output attachment at the end of a renderpass.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+pub enum StoreOp {
+    /// Clear the render target. If you don't care about the contents of the target, this can be faster.
+    Clear = 0,
+    /// Store the result of the renderpass.
+    Store = 1,
+}
+
+/// Describes an individual channel within a render pass, such as color, depth, or stencil.
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+pub struct PassChannel<V> {
+    /// Operation to perform to the output attachment at the start of a renderpass. This must be clear if it
+    /// is the first renderpass rendering to a swap chain image.
+    pub load_op: LoadOp,
+    /// Operation to perform to the output attachment at the end of a renderpass.
+    pub store_op: StoreOp,
+    /// If load_op is [`LoadOp::Clear`], the attachement will be cleared to this color.
+    pub clear_value: V,
+    /// If true, the relevant channel is not changed by a renderpass, and the corresponding attachment
+    /// can be used inside the pass by other read-only usages.
+    pub read_only: bool,
+}
+
+/// Describes a color attachment to a render pass.
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+pub struct ColorAttachmentDescriptor {
+    /// The view to use as an attachment.
+    pub attachment: id::TextureViewId,
+    /// The view that will receive the resolved output if multisampling is used.
+    pub resolve_target: Option<id::TextureViewId>,
+    /// What operations will be performed on this color attachment.
+    pub channel: PassChannel<Color>,
+}
+
+/// Describes a depth/stencil attachment to a render pass.
+#[repr(C)]
+#[derive(Clone, Debug)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
+pub struct DepthStencilAttachmentDescriptor {
+    /// The view to use as an attachment.
+    pub attachment: id::TextureViewId,
+    /// What operations will be performed on the depth part of the attachment.
+    pub depth: PassChannel<f32>,
+    /// What operations will be performed on the stencil part of the attachment.
+    pub stencil: PassChannel<u32>,
+}
 
 fn is_depth_stencil_read_only(
     desc: &DepthStencilAttachmentDescriptor,
@@ -62,7 +131,8 @@ pub type RenderPassDescriptor<'a> =
     wgt::RenderPassDescriptor<'a, ColorAttachmentDescriptor, &'a DepthStencilAttachmentDescriptor>;
 
 #[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct Rect<T> {
     pub x: T,
     pub y: T,
@@ -72,14 +142,8 @@ pub struct Rect<T> {
 
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "trace"),
-    derive(serde::Serialize)
-)]
-#[cfg_attr(
-    any(feature = "serial-pass", feature = "replay"),
-    derive(serde::Deserialize)
-)]
+#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
+#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub enum RenderCommand {
     SetBindGroup {
         index: u8,
@@ -156,7 +220,7 @@ pub enum RenderCommand {
     ExecuteBundle(id::RenderBundleId),
 }
 
-#[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
+#[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
 pub struct RenderPass {
     base: BasePass<RenderCommand>,
     parent_id: id::CommandEncoderId,
