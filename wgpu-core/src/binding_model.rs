@@ -378,7 +378,7 @@ pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;
 pub type BindGroupDescriptor<'a> =
     wgt::BindGroupDescriptor<'a, BindGroupLayoutId, BindGroupEntry<'a>>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum BindError {
     /// Number of dynamic offsets doesn't match the number of dynamic bindings
     /// in the bind group layout.

@@ -37,6 +37,7 @@
 !*/
 
 use crate::{
+    binding_model::PushConstantUploadError,
     command::{BasePass, RenderCommand},
     conv,
     device::{AttachmentData, Label, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT},
@@ -62,9 +63,9 @@ impl RenderBundleEncoder {
         desc: &wgt::RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
-    ) -> Self {
+    ) -> Result<Self, InvalidSampleCountError> {
         span!(_guard, INFO, "RenderBundleEncoder::new");
-        RenderBundleEncoder {
+        Ok(RenderBundleEncoder {
             base: base.unwrap_or_else(BasePass::new),
             parent_id,
             context: RenderPassContext {
@@ -75,17 +76,23 @@ impl RenderBundleEncoder {
                 },
                 sample_count: {
                     let sc = desc.sample_count;
-                    assert!(sc != 0 && sc <= 32 && conv::is_power_of_two(sc));
+                    if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
+                        return Err(InvalidSampleCountError);
+                    }
                     sc as u8
                 },
             },
-        }
+        })
     }
 
     pub fn parent(&self) -> id::DeviceId {
         self.parent_id
     }
 }
+
+/// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
+#[derive(Copy, Clone, Debug)]
+pub struct InvalidSampleCountError;
 
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
@@ -120,7 +127,7 @@ impl RenderBundle {
         bind_group_guard: &Storage<crate::binding_model::BindGroup<B>, id::BindGroupId>,
         pipeline_guard: &Storage<crate::pipeline::RenderPipeline<B>, id::RenderPipelineId>,
         buffer_guard: &Storage<crate::resource::Buffer<B>, id::BufferId>,
-    ) {
+    ) -> Result<(), RenderCommandError> {
         use hal::command::CommandBuffer as _;
 
         let mut offsets = self.base.dynamic_offsets.as_slice();
@@ -185,8 +192,9 @@ impl RenderBundle {
                     size_bytes,
                     values_offset,
                 } => {
-                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id
-                        .expect("Must have a pipeline bound to use push constants")];
+                    let pipeline_layout_id =
+                        pipeline_layout_id.ok_or(RenderCommandError::UnboundPipeline)?;
+                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                     if let Some(values_offset) = values_offset {
                         let values_end_offset = (values_offset + size_bytes / 4) as usize;
@@ -268,6 +276,7 @@ impl RenderBundle {
                 | RenderCommand::SetScissor(_) => unreachable!(),
             }
         }
+        Ok(())
     }
 }
 
@@ -579,13 +588,50 @@ impl State {
     }
 }
 
+/// Error encountered when encoding a render command.
+#[derive(Clone, Debug)]
+pub enum RenderCommandError {
+    /// A bind group index is greater than the device's requested `max_bind_group` limit.
+    BindGroupIndexOutOfRange,
+    /// A dynamic buffer offset is not a multiple of the required buffer alignment.
+    UnalignedBufferOffset,
+    /// The number of buffer offsets does not match the number of dynamic bindings.
+    WrongBufferOffsetCount,
+    /// The pipeline is incompatible with the render pass.
+    ///
+    /// Either:
+    /// - The render pipeline output formats and sample counts do not match render pass attachment formats.
+    /// - The pipeline is not compatible with the depth-stencil read-only render pass.
+    IncompatiblePipeline,
+    /// The provided buffer does not have the required usage.
+    InvalidBufferUsage,
+    /// The provided texture does not have the required usage.
+    InvalidTextureUsage,
+    /// A pipeline must be bound.
+    UnboundPipeline,
+    /// There was an error with the push constants.
+    PushConstantUploadError(PushConstantUploadError),
+    /// Vertex extends beyond limit.
+    VertexBeyondLimit,
+    /// Instance extends beyond limit.
+    InstanceBeyondLimit,
+    /// Index extends beyond limit.
+    IndexBeyondLimit,
+}
+
+impl From<PushConstantUploadError> for RenderCommandError {
+    fn from(error: PushConstantUploadError) -> Self {
+        Self::PushConstantUploadError(error)
+    }
+}
+
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn render_bundle_encoder_finish<B: GfxBackend>(
         &self,
         bundle_encoder: RenderBundleEncoder,
         desc: &wgt::RenderBundleDescriptor<Label>,
         id_in: Input<G, id::RenderBundleId>,
-    ) -> id::RenderBundleId {
+    ) -> Result<id::RenderBundleId, RenderCommandError> {
         span!(_guard, INFO, "RenderBundleEncoder::finish");
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -621,24 +667,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         num_dynamic_offsets,
                         bind_group_id,
                     } => {
-                        assert!(
-                            (index as u32) < device.limits.max_bind_groups,
-                            "Bind group index {0} is out of range 0..{1} provided by requested max_bind_group limit {1}",
-                            index,
-                            device.limits.max_bind_groups
-                        );
+                        if (index as u32) >= device.limits.max_bind_groups {
+                            return Err(RenderCommandError::BindGroupIndexOutOfRange);
+                        }
 
                         let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                         base.dynamic_offsets =
                             &base.dynamic_offsets[num_dynamic_offsets as usize..];
-                        for off in offsets {
-                            assert_eq!(
-                                *off as wgt::BufferAddress % wgt::BIND_BUFFER_ALIGNMENT,
-                                0,
-                                "Misaligned dynamic buffer offset: {} does not align with {}",
-                                off,
-                                wgt::BIND_BUFFER_ALIGNMENT
-                            );
+                        // Check for misaligned offsets.
+                        if offsets
+                            .iter()
+                            .map(|offset| *offset as wgt::BufferAddress)
+                            .any(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
+                        {
+                            return Err(RenderCommandError::UnalignedBufferOffset);
                         }
 
                         let bind_group = state
@@ -646,7 +688,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .bind_groups
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
                             .unwrap();
-                        assert_eq!(bind_group.dynamic_binding_info.len(), offsets.len());
+                        if bind_group.dynamic_binding_info.len() != offsets.len() {
+                            return Err(RenderCommandError::WrongBufferOffsetCount);
+                        }
 
                         state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
                         state.trackers.merge_extend(&bind_group.used);
@@ -658,10 +702,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .use_extend(&*pipeline_guard, pipeline_id, (), ())
                             .unwrap();
 
-                        assert!(
-                            bundle_encoder.context.compatible(&pipeline.pass_context),
-                            "The render pipeline output formats and sample counts do not match render pass attachment formats!"
-                        );
+                        if !bundle_encoder.context.compatible(&pipeline.pass_context) {
+                            return Err(RenderCommandError::IncompatiblePipeline);
+                        }
                         //TODO: check read-only depth
 
                         let layout = &pipeline_layout_guard[pipeline.layout_id.value];
@@ -688,7 +731,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                             .unwrap();
-                        assert!(buffer.usage.contains(wgt::BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
+                        if !buffer.usage.contains(wgt::BufferUsage::INDEX) {
+                            return Err(RenderCommandError::InvalidBufferUsage);
+                        }
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -707,11 +752,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
                             .unwrap();
-                        assert!(
-                            buffer.usage.contains(wgt::BufferUsage::VERTEX),
-                            "An invalid setVertexBuffer call has been made. The buffer usage is {:?} which does not contain required usage VERTEX",
-                            buffer.usage
-                        );
+                        if !buffer.usage.contains(wgt::BufferUsage::VERTEX) {
+                            return Err(RenderCommandError::InvalidBufferUsage);
+                        }
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -727,12 +770,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let end_offset = offset + size_bytes;
 
-                        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id
-                            .expect("Must have a pipeline bound to use push constants")];
+                        let pipeline_layout_id =
+                            pipeline_layout_id.ok_or(RenderCommandError::UnboundPipeline)?;
+                        let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                         pipeline_layout
-                            .validate_push_constant_ranges(stages, offset, end_offset)
-                            .unwrap();
+                            .validate_push_constant_ranges(stages, offset, end_offset)?;
 
                         commands.push(command);
                     }
@@ -743,18 +786,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_instance,
                     } => {
                         let (vertex_limit, instance_limit) = state.vertex_limits();
-                        assert!(
-                            first_vertex + vertex_count <= vertex_limit,
-                            "Vertex {} extends beyond limit {}",
-                            first_vertex + vertex_count,
-                            vertex_limit
-                        );
-                        assert!(
-                            first_instance + instance_count <= instance_limit,
-                            "Instance {} extends beyond limit {}",
-                            first_instance + instance_count,
-                            instance_limit
-                        );
+                        if first_vertex + vertex_count > vertex_limit {
+                            return Err(RenderCommandError::VertexBeyondLimit);
+                        }
+                        if first_instance + instance_count > instance_limit {
+                            return Err(RenderCommandError::InstanceBeyondLimit);
+                        }
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
                         commands.push(command);
@@ -769,18 +806,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         //TODO: validate that base_vertex + max_index() is within the provided range
                         let (_, instance_limit) = state.vertex_limits();
                         let index_limit = state.index.limit();
-                        assert!(
-                            first_index + index_count <= index_limit,
-                            "Index {} extends beyond limit {}",
-                            first_index + index_count,
-                            index_limit
-                        );
-                        assert!(
-                            first_instance + instance_count <= instance_limit,
-                            "Instance {} extends beyond limit {}",
-                            first_instance + instance_count,
-                            instance_limit
-                        );
+                        if first_index + index_count > index_limit {
+                            return Err(RenderCommandError::IndexBeyondLimit);
+                        }
+                        if first_instance + instance_count > instance_limit {
+                            return Err(RenderCommandError::InstanceBeyondLimit);
+                        }
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -797,11 +828,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                             .unwrap();
-                        assert!(
-                            buffer.usage.contains(wgt::BufferUsage::INDIRECT),
-                            "An invalid drawIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT",
-                            buffer.usage
-                        );
+                        if !buffer.usage.contains(wgt::BufferUsage::INDIRECT) {
+                            return Err(RenderCommandError::InvalidBufferUsage);
+                        }
 
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -818,11 +847,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                             .unwrap();
-                        assert!(
-                            buffer.usage.contains(wgt::BufferUsage::INDIRECT),
-                            "An invalid drawIndexedIndirect call has been made. The buffer usage is {:?} which does not contain required usage INDIRECT",
-                            buffer.usage
-                        );
+                        if !buffer.usage.contains(wgt::BufferUsage::INDIRECT) {
+                            return Err(RenderCommandError::InvalidBufferUsage);
+                        }
 
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
@@ -890,7 +917,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .bundles
             .init(id, ref_count, PhantomData)
             .unwrap();
-        id
+        Ok(id)
     }
 }
 
