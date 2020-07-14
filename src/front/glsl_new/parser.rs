@@ -6,7 +6,8 @@ pomelo! {
     //%verbose;
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
-        use crate::{Arena, Expression, Function, LocalVariable};
+        use crate::{Arena, Expression, Function, Handle, LocalVariable, ScalarKind,
+            Type, TypeInner, VectorSize};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -38,7 +39,17 @@ pomelo! {
     %type DoubleConstant f64;
     %type String String;
     %type arg_list Vec<String>;
+
+    %type function_prototype Function;
+    %type function_declarator Function;
+    %type function_header Function;
+
     %type function_definition Function;
+
+    %type fully_specified_type Option<Handle<Type>>;
+    %type type_specifier Option<Handle<Type>>;
+    %type type_specifier_nonarray Option<Type>;
+
 
     root ::= version_pragma translation_unit;
     version_pragma ::= Version IntConstant(V) Identifier?(P) {
@@ -178,16 +189,44 @@ pomelo! {
 
 
     // function
-    function_prototype ::= function_declarator RightParen;
+    function_prototype ::= function_declarator(f) RightParen {f}
     function_declarator ::= function_header;
-    function_header ::= fully_specified_type Identifier LeftParen;
+    function_header ::= fully_specified_type(t) Identifier(n) LeftParen {
+        Function {
+            name: Some(n.1),
+            parameter_types: vec![],
+            return_type: t,
+            global_usage: vec![],
+            local_variables: Arena::<LocalVariable>::new(),
+            expressions: Arena::<Expression>::new(),
+            body: vec![],
+        }
+    }
 
     // type
     fully_specified_type ::= type_specifier;
-    type_specifier ::= type_specifier_nonarray;
+    type_specifier ::= type_specifier_nonarray(t) {
+        t.map(|t| {
+            let name = t.name.clone();
+            let handle = extra.types.fetch_or_append(t);
+            if let Some(name) = name {
+                extra.lookup_type.insert(name, handle);
+            }
+            handle
+        })
+    }
 
-    type_specifier_nonarray ::= Void;
-    type_specifier_nonarray ::= Vec4;
+    type_specifier_nonarray ::= Void { None }
+    type_specifier_nonarray ::= Vec4 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Quad,
+                kind: ScalarKind::Float,
+                width: 16,
+            }
+        })
+    }
     //TODO: remaining types
 
     // misc
@@ -202,16 +241,8 @@ pomelo! {
         }
     }
 
-    function_definition ::= function_prototype compound_statement_no_new_scope {
-        Function {
-            name: Some(String::from("main")),
-            parameter_types: vec![],
-            return_type: None,
-            global_usage: vec![],
-            local_variables: Arena::<LocalVariable>::new(),
-            expressions: Arena::<Expression>::new(),
-            body: vec![],
-        }
+    function_definition ::= function_prototype(f) compound_statement_no_new_scope {
+        f
     };
 }
 
