@@ -110,29 +110,52 @@ struct State {
 
 #[derive(Clone, Debug)]
 pub enum ComputePassError {
-    /// A bind group index is greater than the device's requested `max_bind_group` limit.
-    BindGroupIndexOutOfRange,
-    /// A pipeline must be bound.
+    BindGroupIndexOutOfRange {
+        index: u8,
+        max: u32,
+    },
     UnboundPipeline,
-    /// The provided buffer does not have the required usage.
-    InvalidBufferUsage,
-    /// Can't pop debug group, because number of pushed debug groups is zero.
+    InvalidBufferUsage {
+        actual: BufferUsage,
+        expected: BufferUsage,
+    },
     InvalidPopDebugGroup,
-    /// An error encountered while validating dynamic bindings.
-    BindError(BindError),
-    /// There was an error with the push constants.
-    PushConstantUploadError(PushConstantUploadError),
+    Bind(BindError),
+    PushConstants(PushConstantUploadError),
 }
 
 impl From<PushConstantUploadError> for ComputePassError {
     fn from(error: PushConstantUploadError) -> Self {
-        Self::PushConstantUploadError(error)
+        Self::PushConstants(error)
     }
 }
 
 impl From<BindError> for ComputePassError {
     fn from(error: BindError) -> Self {
-        Self::BindError(error)
+        Self::Bind(error)
+    }
+}
+
+impl fmt::Display for ComputePassError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::BindGroupIndexOutOfRange { index, max } => write!(
+                f,
+                "bind group index {} is greater than the device's requested `max_bind_group` limit {}",
+                index,
+                max,
+            ),
+            Self::UnboundPipeline => write!(f, "a compute pipeline must be bound"),
+            Self::InvalidBufferUsage { actual, expected } => write!(
+                f,
+                "buffer usage is {:?} which does not contain required usage {:?}",
+                actual,
+                expected,
+            ),
+            Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
+            Self::Bind(error) => write!(f, "{}", error),
+            Self::PushConstants(error) => write!(f, "{}", error),
+        }
     }
 }
 
@@ -191,8 +214,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    if (index as u32) >= cmb.limits.max_bind_groups {
-                        return Err(ComputePassError::BindGroupIndexOutOfRange);
+                    let max_bind_groups = cmb.limits.max_bind_groups;
+                    if (index as u32) >= max_bind_groups {
+                        return Err(ComputePassError::BindGroupIndexOutOfRange {
+                            index,
+                            max: max_bind_groups,
+                        });
                     }
 
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
@@ -354,7 +381,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         (),
                         BufferUse::INDIRECT,
                     );
-                    assert!(src_buffer.usage.contains(BufferUsage::INDIRECT));
+                    if !src_buffer.usage.contains(BufferUsage::INDIRECT) {
+                        return Err(ComputePassError::InvalidBufferUsage {
+                            actual: src_buffer.usage,
+                            expected: BufferUsage::INDIRECT,
+                        });
+                    }
 
                     let barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 
