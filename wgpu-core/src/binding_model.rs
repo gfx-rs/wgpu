@@ -147,7 +147,7 @@ impl BindingTypeMaxCountValidator {
                 }
             }
             wgt::BindingType::StorageBuffer { dynamic, .. } => {
-                self.storage_textures.add(binding.visibility, count);
+                self.storage_buffers.add(binding.visibility, count);
                 if dynamic {
                     self.dynamic_storage_buffers += count;
                 }
