@@ -123,7 +123,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     .command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
                     .unwrap(),
                 trace::Command::RunComputePass { base } => {
-                    self.command_encoder_run_compute_pass_impl::<B>(encoder, base.as_ref());
+                    self.command_encoder_run_compute_pass_impl::<B>(encoder, base.as_ref())
+                        .unwrap();
                 }
                 trace::Command::RunRenderPass {
                     base,
@@ -135,7 +136,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                         base.as_ref(),
                         &target_colors,
                         target_depth_stencil.as_ref(),
-                    );
+                    )
+                    .unwrap();
                 }
             }
         }
@@ -364,14 +366,16 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     },
                     device,
                     Some(base),
-                );
+                )
+                .unwrap();
                 self.render_bundle_encoder_finish::<B>(
                     bundle,
                     &wgt::RenderBundleDescriptor {
                         label: label.as_ptr(),
                     },
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyRenderBundle(id) => {
                 self.render_bundle_destroy::<B>(id);

@@ -2120,10 +2120,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         desc: &wgt::RenderBundleEncoderDescriptor,
-    ) -> id::RenderBundleEncoderId {
+    ) -> Result<id::RenderBundleEncoderId, command::CreateRenderBundleError> {
         span!(_guard, INFO, "Device::create_render_bundle_encoder");
         let encoder = command::RenderBundleEncoder::new(desc, device_id, None);
-        Box::into_raw(Box::new(encoder))
+        encoder.map(|encoder| Box::into_raw(Box::new(encoder)))
     }
 
     pub fn render_bundle_destroy<B: GfxBackend>(&self, render_bundle_id: id::RenderBundleId) {

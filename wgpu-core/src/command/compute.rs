@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    binding_model::{BindError, PushConstantUploadError},
     command::{
         bind::{Binder, LayoutChange},
         BasePass, BasePassRef, CommandBuffer,
@@ -107,6 +108,57 @@ struct State {
     debug_scope_depth: u32,
 }
 
+#[derive(Clone, Debug)]
+pub enum ComputePassError {
+    BindGroupIndexOutOfRange {
+        index: u8,
+        max: u32,
+    },
+    UnboundPipeline,
+    MissingBufferUsage {
+        actual: BufferUsage,
+        expected: BufferUsage,
+    },
+    InvalidPopDebugGroup,
+    Bind(BindError),
+    PushConstants(PushConstantUploadError),
+}
+
+impl From<PushConstantUploadError> for ComputePassError {
+    fn from(error: PushConstantUploadError) -> Self {
+        Self::PushConstants(error)
+    }
+}
+
+impl From<BindError> for ComputePassError {
+    fn from(error: BindError) -> Self {
+        Self::Bind(error)
+    }
+}
+
+impl fmt::Display for ComputePassError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::BindGroupIndexOutOfRange { index, max } => write!(
+                f,
+                "bind group index {} is greater than the device's requested `max_bind_group` limit {}",
+                index,
+                max,
+            ),
+            Self::UnboundPipeline => write!(f, "a compute pipeline must be bound"),
+            Self::MissingBufferUsage { actual, expected } => write!(
+                f,
+                "buffer usage is {:?} which does not contain required usage {:?}",
+                actual,
+                expected,
+            ),
+            Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
+            Self::Bind(error) => write!(f, "{}", error),
+            Self::PushConstants(error) => write!(f, "{}", error),
+        }
+    }
+}
+
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -114,7 +166,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         pass: &ComputePass,
-    ) {
+    ) -> Result<(), ComputePassError> {
         self.command_encoder_run_compute_pass_impl::<B>(encoder_id, pass.base.as_ref())
     }
 
@@ -123,7 +175,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         mut base: BasePassRef<ComputeCommand>,
-    ) {
+    ) -> Result<(), ComputePassError> {
         span!(_guard, INFO, "CommandEncoder::run_compute_pass");
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -162,12 +214,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    assert!(
-                        (index as u32) < cmb.limits.max_bind_groups,
-                        "Bind group index {0} is out of range 0..{1} provided by requested max_bind_group limit {1}",
-                        index,
-                        cmb.limits.max_bind_groups
-                    );
+                    let max_bind_groups = cmb.limits.max_bind_groups;
+                    if (index as u32) >= max_bind_groups {
+                        return Err(ComputePassError::BindGroupIndexOutOfRange {
+                            index,
+                            max: max_bind_groups,
+                        });
+                    }
 
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
@@ -177,7 +230,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .bind_groups
                         .use_extend(&*bind_group_guard, bind_group_id, (), ())
                         .unwrap();
-                    bind_group.validate_dynamic_bindings(offsets).unwrap();
+                    bind_group.validate_dynamic_bindings(offsets)?;
 
                     log::trace!(
                         "Encoding barriers on binding of {:?} to {:?}",
@@ -294,10 +347,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let data_slice =
                         &base.push_constant_data[(values_offset as usize)..values_end_offset];
 
-                    let pipeline_layout = &pipeline_layout_guard[state
+                    let pipeline_layout_id = state
                         .binder
                         .pipeline_layout_id
-                        .expect("Must have a pipeline bound to use push constants")];
+                        .ok_or(ComputePassError::UnboundPipeline)?;
+                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                     pipeline_layout
                         .validate_push_constant_ranges(
@@ -305,33 +359,34 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             offset,
                             end_offset_bytes,
                         )
-                        .unwrap();
+                        .map_err(ComputePassError::from)?;
 
                     unsafe { raw.push_compute_constants(&pipeline_layout.raw, offset, data_slice) }
                 }
                 ComputeCommand::Dispatch(groups) => {
-                    assert_eq!(
-                        state.pipeline,
-                        PipelineState::Set,
-                        "Dispatch DEBUG: Pipeline is missing"
-                    );
+                    if state.pipeline != PipelineState::Set {
+                        return Err(ComputePassError::UnboundPipeline);
+                    }
                     unsafe {
                         raw.dispatch(groups);
                     }
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
-                    assert_eq!(
-                        state.pipeline,
-                        PipelineState::Set,
-                        "Dispatch DEBUG: Pipeline is missing"
-                    );
+                    if state.pipeline != PipelineState::Set {
+                        return Err(ComputePassError::UnboundPipeline);
+                    }
                     let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
                         &*buffer_guard,
                         buffer_id,
                         (),
                         BufferUse::INDIRECT,
                     );
-                    assert!(src_buffer.usage.contains(BufferUsage::INDIRECT));
+                    if !src_buffer.usage.contains(BufferUsage::INDIRECT) {
+                        return Err(ComputePassError::MissingBufferUsage {
+                            actual: src_buffer.usage,
+                            expected: BufferUsage::INDIRECT,
+                        });
+                    }
 
                     let barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 
@@ -354,10 +409,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base.string_data = &base.string_data[len..];
                 }
                 ComputeCommand::PopDebugGroup => {
-                    assert_ne!(
-                        state.debug_scope_depth, 0,
-                        "Can't pop debug group, because number of pushed debug groups is zero!"
-                    );
+                    if state.debug_scope_depth == 0 {
+                        return Err(ComputePassError::InvalidPopDebugGroup);
+                    }
                     state.debug_scope_depth -= 1;
                     unsafe {
                         raw.end_debug_marker();
@@ -370,6 +424,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
         }
+
+        Ok(())
     }
 }
 

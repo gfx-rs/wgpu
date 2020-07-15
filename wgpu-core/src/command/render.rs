@@ -3,9 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef,
+        check_buffer_usage, BasePass, BasePassRef, RenderCommandError,
     },
     conv,
     device::{
@@ -107,24 +108,20 @@ pub struct DepthStencilAttachmentDescriptor {
 fn is_depth_stencil_read_only(
     desc: &DepthStencilAttachmentDescriptor,
     aspects: hal::format::Aspects,
-) -> bool {
+) -> Result<bool, RenderPassError> {
     if aspects.contains(hal::format::Aspects::DEPTH) && !desc.depth.read_only {
-        return false;
+        return Ok(false);
     }
-    assert_eq!(
-        (desc.depth.load_op, desc.depth.store_op),
-        (LoadOp::Load, StoreOp::Store),
-        "Unable to clear non-present/read-only depth"
-    );
+    if (desc.depth.load_op, desc.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
+        return Err(RenderPassError::InvalidDepthOps);
+    }
     if aspects.contains(hal::format::Aspects::STENCIL) && !desc.stencil.read_only {
-        return false;
+        return Ok(false);
     }
-    assert_eq!(
-        (desc.stencil.load_op, desc.stencil.store_op),
-        (LoadOp::Load, StoreOp::Store),
-        "Unable to clear non-present/read-only stencil"
-    );
-    true
+    if (desc.stencil.load_op, desc.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
+        return Err(RenderPassError::InvalidStencilOps);
+    }
+    Ok(true)
 }
 
 pub type RenderPassDescriptor<'a> =
@@ -273,8 +270,8 @@ impl OptionalState {
     }
 }
 
-#[derive(PartialEq)]
-enum DrawError {
+#[derive(Clone, Debug, PartialEq)]
+pub enum DrawError {
     MissingBlendColor,
     MissingStencilReference,
     MissingPipeline,
@@ -285,13 +282,13 @@ enum DrawError {
     },
 }
 
-impl fmt::Debug for DrawError {
+impl fmt::Display for DrawError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DrawError::MissingBlendColor => write!(f, "MissingBlendColor. A blend color is required to be set using RenderPass::set_blend_color."),
-            DrawError::MissingStencilReference => write!(f, "MissingStencilReference. A stencil reference is required to be set using RenderPass::set_stencil_reference."),
-            DrawError::MissingPipeline => write!(f, "MissingPipeline. You must first set the render pipeline using RenderPass::set_pipeline."),
-            DrawError::IncompatibleBindGroup { index } => write!(f, "IncompatibleBindGroup. The current render pipeline has a layout which is incompatible with a currently set bind group. They first differ at entry index {}.", index),
+            DrawError::MissingBlendColor => write!(f, "blend color needs to be set"),
+            DrawError::MissingStencilReference => write!(f, "stencil reference needs to be set"),
+            DrawError::MissingPipeline => write!(f, "render pipeline must be set"),
+            DrawError::IncompatibleBindGroup { index } => write!(f, "current render pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {}", index),
         }
     }
 }
@@ -410,6 +407,131 @@ impl State {
     }
 }
 
+/// Error encountered when performing a render pass.
+#[derive(Clone, Debug)]
+pub enum RenderPassError {
+    InvalidSampleCount(u8),
+    InvalidResolveSourceSampleCount,
+    InvalidResolveTargetSampleCount,
+    ExtentStateMismatch {
+        state_extent: hal::image::Extent,
+        view_extent: hal::image::Extent,
+    },
+    SwapChainImageAsDepthStencil,
+    InvalidDepthOps,
+    InvalidStencilOps,
+    SampleCountMismatch {
+        actual: u8,
+        expected: u8,
+    },
+    SwapChainMismatch,
+    InvalidValuesOffset,
+    MissingDeviceFeatures(wgt::Features),
+    IndirectBufferOverrun {
+        offset: u64,
+        count: Option<u32>,
+        begin_offset: u64,
+        end_offset: u64,
+        buffer_size: u64,
+    },
+    IndirectCountBufferOverrun {
+        begin_count_offset: u64,
+        end_count_offset: u64,
+        count_buffer_size: u64,
+    },
+    InvalidPopDebugGroup,
+    IncompatibleRenderBundle,
+    RenderCommand(RenderCommandError),
+    Draw(DrawError),
+    Bind(BindError),
+}
+
+impl From<RenderCommandError> for RenderPassError {
+    fn from(error: RenderCommandError) -> Self {
+        Self::RenderCommand(error)
+    }
+}
+
+impl From<DrawError> for RenderPassError {
+    fn from(error: DrawError) -> Self {
+        Self::Draw(error)
+    }
+}
+
+impl From<BindError> for RenderPassError {
+    fn from(error: BindError) -> Self {
+        Self::Bind(error)
+    }
+}
+
+impl fmt::Display for RenderPassError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidSampleCount(count) => write!(
+                f,
+                "attachment's sample count {} is invalid",
+                count,
+            ),
+            Self::InvalidResolveSourceSampleCount => write!(f, "attachment with resolve target must be multi-sampled"),
+            Self::InvalidResolveTargetSampleCount => write!(f, "resolve target must have a sample count of 1"),
+            Self::ExtentStateMismatch { state_extent, view_extent } => write!(
+                f,
+                "extent state {:?} must match extent from view {:?}",
+                state_extent,
+                view_extent,
+            ),
+            Self::SwapChainImageAsDepthStencil => write!(f, "attempted to use a swap chain image as a depth/stencil attachment"),
+            Self::InvalidDepthOps => write!(f, "unable to clear non-present/read-only depth"),
+            Self::InvalidStencilOps => write!(f, "unable to clear non-present/read-only stencil"),
+            Self::SampleCountMismatch { actual, expected } => write!(
+                f,
+                "all attachments must have the same sample count, found {} != {}",
+                actual,
+                expected,
+            ),
+            Self::SwapChainMismatch => write!(f, "texture view's swap chain must match swap chain in use"),
+            Self::InvalidValuesOffset => write!(f, "setting `values_offset` to be `None` is only for internal use in render bundles"),
+            Self::MissingDeviceFeatures(expected) => write!(
+                f,
+                "required device features not enabled: {:?}",
+                expected,
+            ),
+            Self::IndirectBufferOverrun { offset, count, begin_offset, end_offset, buffer_size } => write!(
+                f,
+                "indirect draw with offset {}{} uses bytes {}..{} which overruns indirect buffer of size {}",
+                offset,
+                count.map_or_else(String::new, |v| format!(" and count {}", v)),
+                begin_offset,
+                end_offset,
+                buffer_size,
+            ),
+            Self::IndirectCountBufferOverrun { begin_count_offset, end_count_offset, count_buffer_size } => write!(
+                f,
+                "indirect draw uses bytes {}..{} which overruns indirect buffer of size {}",
+                begin_count_offset,
+                end_count_offset,
+                count_buffer_size,
+            ),
+            Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
+            Self::IncompatibleRenderBundle => write!(f, "render bundle output formats do not match render pass attachment formats"),
+            Self::RenderCommand(error) => write!(f, "{}", error),
+            Self::Draw(error) => write!(f, "{}", error),
+            Self::Bind(error) => write!(f, "{}", error),
+        }
+    }
+}
+
+fn check_device_features(
+    actual: wgt::Features,
+    expected: wgt::Features,
+) -> Result<(), RenderPassError> {
+    if !actual.contains(expected) {
+        Err(RenderPassError::MissingDeviceFeatures(expected))
+    } else {
+        Ok(())
+    }
+}
+
 // Common routines between render/compute
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -417,7 +539,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         pass: &RenderPass,
-    ) {
+    ) -> Result<(), RenderPassError> {
         self.command_encoder_run_render_pass_impl::<B>(
             encoder_id,
             pass.base.as_ref(),
@@ -433,7 +555,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         mut base: BasePassRef<RenderCommand>,
         color_attachments: &[ColorAttachmentDescriptor],
         depth_stencil_attachment: Option<&DepthStencilAttachmentDescriptor>,
-    ) {
+    ) -> Result<(), RenderPassError> {
         span!(_guard, INFO, "CommandEncoder::run_render_pass");
 
         let hub = B::hub(self);
@@ -488,7 +610,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let context = {
             use hal::device::Device as _;
 
-            let samples_count_limit = device.hal_limits.framebuffer_color_sample_counts;
+            let sample_count_limit = device.hal_limits.framebuffer_color_sample_counts;
             let base_trackers = &cmb.trackers;
 
             let mut extent = None;
@@ -498,10 +620,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .get(0)
                 .map(|at| view_guard[at.attachment].samples)
                 .unwrap_or(1);
-            assert!(
-                sample_count & samples_count_limit != 0,
-                "Attachment sample_count must be supported by physical device limits"
-            );
+            if sample_count & sample_count_limit == 0 {
+                return Err(RenderPassError::InvalidSampleCount(sample_count));
+            }
 
             log::trace!(
                 "Encoding render pass begin in command buffer {:?}",
@@ -515,14 +636,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .use_extend(&*view_guard, at.attachment, (), ())
                             .unwrap();
                         if let Some(ex) = extent {
-                            assert_eq!(ex, view.extent, "Extent state must match extent from view");
+                            if ex != view.extent {
+                                return Err(RenderPassError::ExtentStateMismatch {
+                                    state_extent: ex,
+                                    view_extent: view.extent,
+                                });
+                            }
                         } else {
                             extent = Some(view.extent);
                         }
                         let source_id = match view.inner {
                             TextureViewInner::Native { ref source_id, .. } => source_id,
                             TextureViewInner::SwapChain { .. } => {
-                                panic!("Unexpected depth/stencil use of swapchain image!")
+                                return Err(RenderPassError::SwapChainImageAsDepthStencil)
                             }
                         };
 
@@ -530,7 +656,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let previous_use = base_trackers
                             .textures
                             .query(source_id.value, view.range.clone());
-                        let new_use = if is_depth_stencil_read_only(at, view.range.aspects) {
+                        let new_use = if is_depth_stencil_read_only(at, view.range.aspects)? {
                             is_ds_read_only = true;
                             TextureUse::ATTACHMENT_READ
                         } else {
@@ -573,14 +699,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*view_guard, at.attachment, (), ())
                         .unwrap();
                     if let Some(ex) = extent {
-                        assert_eq!(ex, view.extent, "Extent state must match extent from view");
+                        if ex != view.extent {
+                            return Err(RenderPassError::ExtentStateMismatch {
+                                state_extent: ex,
+                                view_extent: view.extent,
+                            });
+                        }
                     } else {
                         extent = Some(view.extent);
                     }
-                    assert_eq!(
-                        view.samples, sample_count,
-                        "All attachments must have the same sample_count"
-                    );
+                    if view.samples != sample_count {
+                        return Err(RenderPassError::SampleCountMismatch {
+                            actual: view.samples,
+                            expected: sample_count,
+                        });
+                    }
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -607,10 +740,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         TextureViewInner::SwapChain { ref source_id, .. } => {
                             if let Some((ref sc_id, _)) = cmb.used_swap_chain {
-                                assert_eq!(
-                                    source_id.value, sc_id.value,
-                                    "Texture view's swap chain must match swap chain in use"
-                                );
+                                if source_id.value != sc_id.value {
+                                    return Err(RenderPassError::SwapChainMismatch);
+                                }
                             } else {
                                 assert!(used_swap_chain.is_none());
                                 used_swap_chain = Some(source_id.clone());
@@ -643,15 +775,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .views
                         .use_extend(&*view_guard, resolve_target, (), ())
                         .unwrap();
-                    assert_eq!(
-                        extent,
-                        Some(view.extent),
-                        "Extent state must match extent from view"
-                    );
-                    assert_eq!(
-                        view.samples, 1,
-                        "All resolve_targets must have a sample_count of 1"
-                    );
+                    if extent != Some(view.extent) {
+                        return Err(RenderPassError::ExtentStateMismatch {
+                            state_extent: extent.unwrap_or_default(),
+                            view_extent: view.extent,
+                        });
+                    }
+                    if view.samples != 1 {
+                        return Err(RenderPassError::InvalidResolveTargetSampleCount);
+                    }
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -678,10 +810,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                         TextureViewInner::SwapChain { ref source_id, .. } => {
                             if let Some((ref sc_id, _)) = cmb.used_swap_chain {
-                                assert_eq!(
-                                    source_id.value, sc_id.value,
-                                    "Texture view's swap chain must match swap chain in use"
-                                );
+                                if source_id.value != sc_id.value {
+                                    return Err(RenderPassError::SwapChainMismatch);
+                                }
                             } else {
                                 assert!(used_swap_chain.is_none());
                                 used_swap_chain = Some(source_id.clone());
@@ -737,16 +868,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         {
                             let real_attachment_index = match at.resolve_target {
                                 Some(resolve_attachment) => {
-                                    assert_ne!(
-                                        view_guard[at.attachment].samples,
-                                        1,
-                                        "RenderPassColorAttachmentDescriptor's attachment with a resolve_target must be multi-sampled",
-                                    );
-                                    assert_eq!(
-                                        view_guard[resolve_attachment].samples,
-                                        1,
-                                        "RenderPassColorAttachmentDescriptor's resolve_target must not be multi-sampled",
-                                    );
+                                    let attachment_sample_count = view_guard[at.attachment].samples;
+                                    if attachment_sample_count == 1 {
+                                        return Err(
+                                            RenderPassError::InvalidResolveSourceSampleCount,
+                                        );
+                                    }
+                                    if view_guard[resolve_attachment].samples != 1 {
+                                        return Err(
+                                            RenderPassError::InvalidResolveTargetSampleCount,
+                                        );
+                                    }
                                     attachment_index + i
                                 }
                                 None => hal::pass::ATTACHMENT_UNUSED,
@@ -946,12 +1078,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    assert!(
-                        (index as u32) < device.limits.max_bind_groups,
-                        "Bind group index {0} is out of range 0..{1} provided by requested max_bind_group limit {1}",
-                        index,
-                        device.limits.max_bind_groups
-                    );
+                    let max_bind_groups = device.limits.max_bind_groups;
+                    if (index as u32) >= max_bind_groups {
+                        return Err(RenderCommandError::BindGroupIndexOutOfRange {
+                            index,
+                            max: max_bind_groups,
+                        }
+                        .into());
+                    }
 
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
@@ -960,7 +1094,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .bind_groups
                         .use_extend(&*bind_group_guard, bind_group_id, (), ())
                         .unwrap();
-                    bind_group.validate_dynamic_bindings(offsets).unwrap();
+                    bind_group
+                        .validate_dynamic_bindings(offsets)
+                        .map_err(RenderPassError::from)?;
 
                     trackers.merge_extend(&bind_group.used);
 
@@ -995,15 +1131,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
                         .unwrap();
 
-                    assert!(
-                        context.compatible(&pipeline.pass_context),
-                        "The render pipeline output formats and sample count do not match render pass attachment formats!"
-                    );
-                    assert!(
-                        !is_ds_read_only || pipeline.flags.contains(PipelineFlags::DEPTH_STENCIL_READ_ONLY),
-                        "Pipeline {:?} is not compatible with the depth-stencil read-only render pass",
-                        pipeline_id
-                    );
+                    if !context.compatible(&pipeline.pass_context) {
+                        return Err(RenderCommandError::IncompatiblePipeline.into());
+                    }
+                    if is_ds_read_only
+                        && pipeline
+                            .flags
+                            .contains(PipelineFlags::DEPTH_STENCIL_READ_ONLY)
+                    {
+                        return Err(RenderCommandError::IncompatibleReadOnlyDepthStencil.into());
+                    }
 
                     state
                         .blend_color
@@ -1121,7 +1258,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
+                    check_buffer_usage(buffer.usage, BufferUsage::INDEX)?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
@@ -1153,7 +1290,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
                         .unwrap();
-                    assert!(buffer.usage.contains(BufferUsage::VERTEX), "An invalid setVertexBuffer call has been made. The buffer usage is {:?} which does not contain required usage VERTEX", buffer.usage);
+                    check_buffer_usage(buffer.usage, BufferUsage::VERTEX)?;
                     let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
                     state
                         .vertex
@@ -1213,22 +1350,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     size_bytes,
                     values_offset,
                 } => {
-                    let values_offset = values_offset
-                        .expect("values_offset of None is only for internal use in renderbundles");
+                    let values_offset =
+                        values_offset.ok_or(RenderPassError::InvalidValuesOffset)?;
 
                     let end_offset_bytes = offset + size_bytes;
                     let values_end_offset = (values_offset + size_bytes / 4) as usize;
                     let data_slice =
                         &base.push_constant_data[(values_offset as usize)..values_end_offset];
 
-                    let pipeline_layout = &pipeline_layout_guard[state
+                    let pipeline_layout_id = state
                         .binder
                         .pipeline_layout_id
-                        .expect("Must have a pipeline bound to use push constants")];
+                        .ok_or(RenderCommandError::UnboundPipeline)?;
+                    let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                     pipeline_layout
                         .validate_push_constant_ranges(stages, offset, end_offset_bytes)
-                        .unwrap();
+                        .map_err(RenderCommandError::from)?;
 
                     unsafe {
                         raw.push_graphics_constants(
@@ -1257,19 +1395,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     first_vertex,
                     first_instance,
                 } => {
-                    state.is_ready().unwrap();
-                    assert!(
-                        first_vertex + vertex_count <= state.vertex.vertex_limit,
-                        "Vertex {} extends beyond limit {}",
-                        first_vertex + vertex_count,
-                        state.vertex.vertex_limit
-                    );
-                    assert!(
-                        first_instance + instance_count <= state.vertex.instance_limit,
-                        "Instance {} extends beyond limit {}",
-                        first_instance + instance_count,
-                        state.vertex.instance_limit
-                    );
+                    state.is_ready()?;
+                    let last_vertex = first_vertex + vertex_count;
+                    let vertex_limit = state.vertex.vertex_limit;
+                    if last_vertex > vertex_limit {
+                        return Err(RenderCommandError::VertexBeyondLimit {
+                            last_vertex,
+                            vertex_limit,
+                        }
+                        .into());
+                    }
+                    let last_instance = first_instance + instance_count;
+                    let instance_limit = state.vertex.instance_limit;
+                    if last_instance > instance_limit {
+                        return Err(RenderCommandError::InstanceBeyondLimit {
+                            last_instance,
+                            instance_limit,
+                        }
+                        .into());
+                    }
 
                     unsafe {
                         raw.draw(
@@ -1285,21 +1429,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base_vertex,
                     first_instance,
                 } => {
-                    state.is_ready().unwrap();
+                    state.is_ready()?;
 
                     //TODO: validate that base_vertex + max_index() is within the provided range
-                    assert!(
-                        first_index + index_count <= state.index.limit,
-                        "Index {} extends beyond limit {}",
-                        first_index + index_count,
-                        state.index.limit
-                    );
-                    assert!(
-                        first_instance + instance_count <= state.vertex.instance_limit,
-                        "Instance {} extends beyond limit {}",
-                        first_instance + instance_count,
-                        state.vertex.instance_limit
-                    );
+                    let last_index = first_index + index_count;
+                    let index_limit = state.index.limit;
+                    if last_index > index_limit {
+                        return Err(RenderCommandError::IndexBeyondLimit {
+                            last_index,
+                            index_limit,
+                        }
+                        .into());
+                    }
+                    let last_instance = first_instance + instance_count;
+                    let instance_limit = state.vertex.instance_limit;
+                    if last_instance > instance_limit {
+                        return Err(RenderCommandError::InstanceBeyondLimit {
+                            last_instance,
+                            instance_limit,
+                        }
+                        .into());
+                    }
 
                     unsafe {
                         raw.draw_indexed(
@@ -1315,14 +1465,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     count,
                     indexed,
                 } => {
-                    state.is_ready().unwrap();
-
-                    let name = match (count, indexed) {
-                        (None, false) => "drawIndirect",
-                        (None, true) => "drawIndexedIndirect",
-                        (Some(..), false) => "multiDrawIndirect",
-                        (Some(..), true) => "multiDrawIndexedIndirect",
-                    };
+                    state.is_ready()?;
 
                     let stride = match indexed {
                         false => 16,
@@ -1330,38 +1473,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     if count.is_some() {
-                        assert!(
-                            device.features.contains(wgt::Features::MULTI_DRAW_INDIRECT),
-                            "The feature MULTI_DRAW_INDIRECT must be enabled to use {}",
-                            name
-                        );
+                        check_device_features(device.features, wgt::Features::MULTI_DRAW_INDIRECT)?;
                     }
 
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    assert!(
-                        buffer.usage.contains(BufferUsage::INDIRECT),
-                        "An invalid {} call has been made. The indirect buffer usage is {:?} which does not contain required usage INDIRECT",
-                        name,
-                        buffer.usage,
-                    );
+                    check_buffer_usage(buffer.usage, BufferUsage::INDIRECT)?;
 
                     let actual_count = count.unwrap_or(1);
 
                     let begin_offset = offset;
                     let end_offset = offset + stride * actual_count as u64;
-                    assert!(
-                        end_offset <= buffer.size,
-                        "{} with offset {}{} uses bytes {}..{} which overruns indirect buffer of size {}",
-                        name,
-                        offset,
-                        count.map_or_else(String::new, |v| format!(" and count {}", v)),
-                        begin_offset,
-                        end_offset,
-                        buffer.size
-                    );
+                    if end_offset > buffer.size {
+                        return Err(RenderPassError::IndirectBufferOverrun {
+                            offset,
+                            count,
+                            begin_offset,
+                            end_offset,
+                            buffer_size: buffer.size,
+                        });
+                    }
 
                     match indexed {
                         false => unsafe {
@@ -1385,70 +1518,50 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     max_count,
                     indexed,
                 } => {
-                    state.is_ready().unwrap();
-
-                    let name = match indexed {
-                        false => "multiDrawIndirectCount",
-                        true => "multiDrawIndexedIndirectCount",
-                    };
+                    state.is_ready()?;
 
                     let stride = match indexed {
                         false => 16,
                         true => 20,
                     };
 
-                    assert!(
-                        device
-                            .features
-                            .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT),
-                        "The feature MULTI_DRAW_INDIRECT_COUNT must be enabled to use {}",
-                        name
-                    );
+                    check_device_features(
+                        device.features,
+                        wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
+                    )?;
 
                     let buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    assert!(
-                        buffer.usage.contains(BufferUsage::INDIRECT),
-                        "An invalid {} call has been made. The indirect buffer usage is {:?} which does not contain required usage INDIRECT",
-                        name,
-                        buffer.usage
-                    );
+                    check_buffer_usage(buffer.usage, BufferUsage::INDIRECT)?;
                     let count_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, count_buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    assert!(
-                        count_buffer.usage.contains(BufferUsage::INDIRECT),
-                        "An invalid {} call has been made. The count buffer usage is {:?} which does not contain required usage INDIRECT",
-                        name,
-                        count_buffer.usage
-                    );
+                    check_buffer_usage(count_buffer.usage, BufferUsage::INDIRECT)?;
 
                     let begin_offset = offset;
                     let end_offset = offset + stride * max_count as u64;
-                    assert!(
-                        end_offset <= buffer.size,
-                        "{} with offset {} and max_count {} uses bytes {}..{} which overruns indirect buffer of size {}",
-                        name,
-                        offset,
-                        max_count,
-                        begin_offset,
-                        end_offset,
-                        buffer.size
-                    );
+                    if end_offset > buffer.size {
+                        return Err(RenderPassError::IndirectBufferOverrun {
+                            offset,
+                            count: None,
+                            begin_offset,
+                            end_offset,
+                            buffer_size: buffer.size,
+                        });
+                    }
 
                     let begin_count_offset = count_buffer_offset;
                     let end_count_offset = count_buffer_offset + 4;
-                    assert!(
-                        end_count_offset <= count_buffer.size,
-                        "{} uses bytes {}..{} which overruns count buffer of size {}",
-                        name,
-                        begin_count_offset,
-                        end_count_offset,
-                        count_buffer.size
-                    );
+                    if end_count_offset > count_buffer.size {
+                        return Err(RenderPassError::IndirectCountBufferOverrun {
+                            begin_count_offset,
+                            end_count_offset,
+                            count_buffer_size: count_buffer.size,
+                        });
+                    }
 
                     match indexed {
                         false => unsafe {
@@ -1482,10 +1595,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     base.string_data = &base.string_data[len..];
                 }
                 RenderCommand::PopDebugGroup => {
-                    assert_ne!(
-                        state.debug_scope_depth, 0,
-                        "Can't pop debug group, because number of pushed debug groups is zero!"
-                    );
+                    if state.debug_scope_depth == 0 {
+                        return Err(RenderPassError::InvalidPopDebugGroup);
+                    }
                     state.debug_scope_depth -= 1;
                     unsafe {
                         raw.end_debug_marker();
@@ -1503,10 +1615,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*bundle_guard, bundle_id, (), ())
                         .unwrap();
 
-                    assert!(
-                        context.compatible(&bundle.context),
-                        "The render bundle output formats do not match render pass attachment formats!"
-                    );
+                    if !context.compatible(&bundle.context) {
+                        return Err(RenderPassError::IncompatibleRenderBundle);
+                    }
 
                     unsafe {
                         bundle.execute(
@@ -1515,8 +1626,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             &*bind_group_guard,
                             &*pipeline_guard,
                             &*buffer_guard,
-                        )
-                    };
+                        )?;
+                    }
 
                     trackers.merge_extend(&bundle.used);
                     state.reset_bundle();
@@ -1531,11 +1642,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         for ot in output_attachments {
             let texture = &texture_guard[ot.texture_id.value];
-            assert!(
-                texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT),
-                "Texture usage {:?} must contain the usage flag OUTPUT_ATTACHMENT",
-                texture.usage
-            );
+            if !texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT) {
+                return Err(RenderCommandError::InvalidTextureUsage {
+                    actual: texture.usage,
+                    expected: TextureUsage::OUTPUT_ATTACHMENT,
+                }
+                .into());
+            }
 
             // the tracker set of the pass is always in "extend" mode
             trackers
@@ -1575,6 +1688,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             cmb.raw.last_mut().unwrap().finish();
         }
         cmb.raw.push(raw);
+
+        Ok(())
     }
 }
 

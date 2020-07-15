@@ -16,7 +16,8 @@ use gfx_descriptor::{DescriptorCounts, DescriptorSet};
 use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
-use std::borrow::Borrow;
+
+use std::{borrow::Borrow, fmt};
 
 #[derive(Clone, Debug)]
 pub enum BindGroupLayoutError {
@@ -242,11 +243,70 @@ pub enum PipelineLayoutError {
 
 #[derive(Clone, Debug)]
 pub enum PushConstantUploadError {
-    TooLarge,
-    PartialRangeMatch,
-    MissingStages,
-    UnmatchedStages,
-    Unaligned,
+    TooLarge {
+        offset: u32,
+        end_offset: u32,
+        idx: usize,
+        range: wgt::PushConstantRange,
+    },
+    PartialRangeMatch {
+        actual: wgt::ShaderStage,
+        idx: usize,
+        matched: wgt::ShaderStage,
+    },
+    MissingStages {
+        actual: wgt::ShaderStage,
+        idx: usize,
+        missing: wgt::ShaderStage,
+    },
+    UnmatchedStages {
+        actual: wgt::ShaderStage,
+        unmatched: wgt::ShaderStage,
+    },
+    Unaligned(u32),
+}
+
+impl fmt::Display for PushConstantUploadError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::TooLarge { offset, end_offset, idx, range } => write!(
+                f,
+                "provided push constant with indices {}..{} overruns matching push constant range (index {}) with stage(s) {:?} and indices {}..{}",
+                offset,
+                end_offset,
+                idx,
+                range.stages,
+                range.range.start,
+                range.range.end,
+            ),
+            Self::PartialRangeMatch { actual, idx, matched } => write!(
+                f,
+                "provided push constant is for stage(s) {:?}, stage with a partial match found at index {} with stage(s) {:?}, however push constants must be complete matches",
+                actual,
+                idx,
+                matched,
+            ),
+            Self::MissingStages { actual, idx, missing } => write!(
+                f,
+                "provided push constant is for stage(s) {:?}, but intersects a push constant range (at index {}) with stage(s) {:?}. Push constants must provide the stages for all ranges they intersect",
+                actual,
+                idx,
+                missing,
+            ),
+            Self::UnmatchedStages { actual, unmatched } => write!(
+                f,
+                "provided push constant is for stage(s) {:?}, however the pipeline layout has no push constant range for the stage(s) {:?}",
+                actual,
+                unmatched,
+            ),
+            Self::Unaligned(offset) => write!(
+                f,
+                "provided push constant offset {} must be aligned to {}",
+                offset,
+                wgt::PUSH_CONSTANT_ALIGNMENT,
+            )
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -271,12 +331,7 @@ impl<B: hal::Backend> PipelineLayout<B> {
         // and we validate that they are within the ranges.
 
         if offset % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-            log::error!(
-                "Provided push constant offset {} must be aligned to {}",
-                offset,
-                wgt::PUSH_CONSTANT_ALIGNMENT
-            );
-            return Err(PushConstantUploadError::Unaligned);
+            return Err(PushConstantUploadError::Unaligned(offset));
         }
 
         // Push constant validation looks very complicated on the surface, but
@@ -303,51 +358,41 @@ impl<B: hal::Backend> PipelineLayout<B> {
             // contains not intersects due to 2
             if stages.contains(range.stages) {
                 if !(range.range.start <= offset && end_offset <= range.range.end) {
-                    log::error!(
-                        "Provided push constant with indices {}..{} overruns matching push constant range (index {}) with stage(s) {:?} and indices {}..{}",
+                    return Err(PushConstantUploadError::TooLarge {
                         offset,
                         end_offset,
                         idx,
-                        range.stages,
-                        range.range.start,
-                        range.range.end,
-                    );
-                    return Err(PushConstantUploadError::TooLarge);
+                        range: range.clone(),
+                    });
                 }
                 used_stages |= range.stages;
             } else if stages.intersects(range.stages) {
                 // Will be caught by used stages check below, but we can do this because of 1
                 // and is more helpful to the user.
-                log::error!(
-                    "Provided push constant is for stage(s) {:?}, stage with a partial match found at index {} with stage(s) {:?}, however push constants must be complete matches.",
-                    stages,
+                return Err(PushConstantUploadError::PartialRangeMatch {
+                    actual: stages,
                     idx,
-                    range.stages,
-                );
-                return Err(PushConstantUploadError::PartialRangeMatch);
+                    matched: range.stages,
+                });
             }
 
             // The push constant range intersects range we are uploading
             if offset < range.range.end && range.range.start < end_offset {
                 // But requires stages we don't provide
                 if !stages.contains(range.stages) {
-                    log::error!(
-                        "Provided push constant is for stage(s) {:?}, but intersects a push constant range (at index {}) with stage(s) {:?}. Push constants must provide the stages for all ranges they intersect.",
-                        stages,
+                    return Err(PushConstantUploadError::MissingStages {
+                        actual: stages,
                         idx,
-                        range.stages,
-                    );
-                    return Err(PushConstantUploadError::MissingStages);
+                        missing: stages,
+                    });
                 }
             }
         }
         if used_stages != stages {
-            log::error!(
-                "Provided push constant is for stage(s) {:?}, however the pipeline layout has no push constant range for the stage(s) {:?}.",
-                stages,
-                stages - used_stages
-            );
-            return Err(PushConstantUploadError::UnmatchedStages);
+            return Err(PushConstantUploadError::UnmatchedStages {
+                actual: stages,
+                unmatched: stages - used_stages,
+            });
         }
         Ok(())
     }
@@ -378,15 +423,27 @@ pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;
 pub type BindGroupDescriptor<'a> =
     wgt::BindGroupDescriptor<'a, BindGroupLayoutId, BindGroupEntry<'a>>;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum BindError {
-    /// Number of dynamic offsets doesn't match the number of dynamic bindings
-    /// in the bind group layout.
     MismatchedDynamicOffsetCount { actual: usize, expected: usize },
-    /// Expected dynamic binding alignment was not met.
     UnalignedDynamicBinding { idx: usize },
-    /// Dynamic offset would cause buffer overrun.
     DynamicBindingOutOfBounds { idx: usize },
+}
+
+impl fmt::Display for BindError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::MismatchedDynamicOffsetCount { actual, expected } =>
+                write!(
+                    f,
+                    "number of dynamic offsets ({}) doesn't match the number of dynamic bindings in the bind group layout ({})",
+                    actual,
+                    expected,
+                ),
+            Self::UnalignedDynamicBinding { idx } => write!(f, "dynamic binding at index {} is not properly aligned", idx),
+            Self::DynamicBindingOutOfBounds { idx } => write!(f, "dynamic binding at index {} would overrun the buffer", idx),
+        }
+    }
 }
 
 #[derive(Debug)]
