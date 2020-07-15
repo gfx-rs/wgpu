@@ -612,7 +612,7 @@ pub enum RenderCommandError {
     },
     IncompatiblePipeline,
     IncompatibleReadOnlyDepthStencil,
-    InvalidBufferUsage {
+    MissingBufferUsage {
         actual: wgt::BufferUsage,
         expected: wgt::BufferUsage,
     },
@@ -665,7 +665,7 @@ impl fmt::Display for RenderCommandError {
             ),
             Self::IncompatiblePipeline => write!(f, "render pipeline output formats and sample counts do not match render pass attachment formats"),
             Self::IncompatibleReadOnlyDepthStencil => write!(f, "pipeline is not compatible with the depth-stencil read-only render pass"),
-            Self::InvalidBufferUsage { actual, expected } => write!(
+            Self::MissingBufferUsage { actual, expected } => write!(
                 f,
                 "buffer usage is {:?} which does not contain required usage {:?}",
                 actual,
@@ -708,7 +708,7 @@ pub fn check_buffer_usage(
     expected: wgt::BufferUsage,
 ) -> Result<(), RenderCommandError> {
     if !actual.contains(expected) {
-        Err(RenderCommandError::InvalidBufferUsage { actual, expected })
+        Err(RenderCommandError::MissingBufferUsage { actual, expected })
     } else {
         Ok(())
     }

@@ -115,7 +115,7 @@ pub enum ComputePassError {
         max: u32,
     },
     UnboundPipeline,
-    InvalidBufferUsage {
+    MissingBufferUsage {
         actual: BufferUsage,
         expected: BufferUsage,
     },
@@ -146,7 +146,7 @@ impl fmt::Display for ComputePassError {
                 max,
             ),
             Self::UnboundPipeline => write!(f, "a compute pipeline must be bound"),
-            Self::InvalidBufferUsage { actual, expected } => write!(
+            Self::MissingBufferUsage { actual, expected } => write!(
                 f,
                 "buffer usage is {:?} which does not contain required usage {:?}",
                 actual,
@@ -382,7 +382,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         BufferUse::INDIRECT,
                     );
                     if !src_buffer.usage.contains(BufferUsage::INDIRECT) {
-                        return Err(ComputePassError::InvalidBufferUsage {
+                        return Err(ComputePassError::MissingBufferUsage {
                             actual: src_buffer.usage,
                             expected: BufferUsage::INDIRECT,
                         });
