@@ -16,7 +16,8 @@ use gfx_descriptor::{DescriptorCounts, DescriptorSet};
 use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
-use std::borrow::Borrow;
+
+use std::{borrow::Borrow, fmt};
 
 #[derive(Clone, Debug)]
 pub enum BindGroupLayoutError {
@@ -380,13 +381,25 @@ pub type BindGroupDescriptor<'a> =
 
 #[derive(Clone, Debug)]
 pub enum BindError {
-    /// Number of dynamic offsets doesn't match the number of dynamic bindings
-    /// in the bind group layout.
     MismatchedDynamicOffsetCount { actual: usize, expected: usize },
-    /// Expected dynamic binding alignment was not met.
     UnalignedDynamicBinding { idx: usize },
-    /// Dynamic offset would cause buffer overrun.
     DynamicBindingOutOfBounds { idx: usize },
+}
+
+impl fmt::Display for BindError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::MismatchedDynamicOffsetCount { actual, expected } =>
+                write!(
+                    f,
+                    "number of dynamic offsets ({}) doesn't match the number of dynamic bindings in the bind group layout ({})",
+                    actual,
+                    expected,
+                ),
+            Self::UnalignedDynamicBinding { idx } => write!(f, "dynamic binding at index {} is not properly aligned", idx),
+            Self::DynamicBindingOutOfBounds { idx } => write!(f, "dynamic binding at index {} would overrun the buffer", idx),
+        }
+    }
 }
 
 #[derive(Debug)]
