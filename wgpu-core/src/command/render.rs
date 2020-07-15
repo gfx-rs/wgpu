@@ -6,7 +6,7 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, RenderCommandError,
+        check_buffer_usage, BasePass, BasePassRef, RenderCommandError,
     },
     conv,
     device::{
@@ -927,8 +927,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    if (index as u32) >= device.limits.max_bind_groups {
-                        return Err(RenderCommandError::BindGroupIndexOutOfRange.into());
+                    let max_bind_groups = device.limits.max_bind_groups;
+                    if (index as u32) >= max_bind_groups {
+                        return Err(RenderCommandError::BindGroupIndexOutOfRange {
+                            index,
+                            max: max_bind_groups,
+                        }
+                        .into());
                     }
 
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
@@ -983,7 +988,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .flags
                             .contains(PipelineFlags::DEPTH_STENCIL_READ_ONLY)
                     {
-                        return Err(RenderCommandError::IncompatiblePipeline.into());
+                        return Err(RenderCommandError::IncompatibleReadOnlyDepthStencil.into());
                     }
 
                     state
@@ -1102,9 +1107,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                         .unwrap();
-                    if !buffer.usage.contains(wgt::BufferUsage::INDEX) {
-                        return Err(RenderCommandError::InvalidBufferUsage.into());
-                    }
+                    check_buffer_usage(buffer.usage, BufferUsage::INDEX)?;
 
                     let end = match size {
                         Some(s) => offset + s.get(),
@@ -1136,9 +1139,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
                         .unwrap();
-                    if !buffer.usage.contains(wgt::BufferUsage::VERTEX) {
-                        return Err(RenderCommandError::InvalidBufferUsage.into());
-                    }
+                    check_buffer_usage(buffer.usage, BufferUsage::VERTEX)?;
                     let empty_slots = (1 + slot as usize).saturating_sub(state.vertex.inputs.len());
                     state
                         .vertex
@@ -1244,11 +1245,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     first_instance,
                 } => {
                     state.is_ready()?;
-                    if first_vertex + vertex_count > state.vertex.vertex_limit {
-                        return Err(RenderCommandError::VertexBeyondLimit.into());
+                    let last_vertex = first_vertex + vertex_count;
+                    let vertex_limit = state.vertex.vertex_limit;
+                    if last_vertex > vertex_limit {
+                        return Err(RenderCommandError::VertexBeyondLimit {
+                            last_vertex,
+                            vertex_limit,
+                        }
+                        .into());
                     }
-                    if first_instance + instance_count > state.vertex.instance_limit {
-                        return Err(RenderCommandError::InstanceBeyondLimit.into());
+                    let last_instance = first_instance + instance_count;
+                    let instance_limit = state.vertex.instance_limit;
+                    if last_instance > instance_limit {
+                        return Err(RenderCommandError::InstanceBeyondLimit {
+                            last_instance,
+                            instance_limit,
+                        }
+                        .into());
                     }
 
                     unsafe {
@@ -1268,11 +1281,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     state.is_ready()?;
 
                     //TODO: validate that base_vertex + max_index() is within the provided range
-                    if first_index + index_count > state.index.limit {
-                        return Err(RenderCommandError::IndexBeyondLimit.into());
+                    let last_index = first_index + index_count;
+                    let index_limit = state.index.limit;
+                    if last_index > index_limit {
+                        return Err(RenderCommandError::IndexBeyondLimit {
+                            last_index,
+                            index_limit,
+                        }
+                        .into());
                     }
-                    if first_instance + instance_count > state.vertex.instance_limit {
-                        return Err(RenderCommandError::InstanceBeyondLimit.into());
+                    let last_instance = first_instance + instance_count;
+                    let instance_limit = state.vertex.instance_limit;
+                    if last_instance > instance_limit {
+                        return Err(RenderCommandError::InstanceBeyondLimit {
+                            last_instance,
+                            instance_limit,
+                        }
+                        .into());
                     }
 
                     unsafe {
@@ -1308,9 +1333,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    if !buffer.usage.contains(BufferUsage::INDIRECT) {
-                        return Err(RenderCommandError::InvalidBufferUsage.into());
-                    }
+                    check_buffer_usage(buffer.usage, BufferUsage::INDIRECT)?;
 
                     let actual_count = count.unwrap_or(1);
 
@@ -1361,16 +1384,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .buffers
                         .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    if !buffer.usage.contains(BufferUsage::INDIRECT) {
-                        return Err(RenderCommandError::InvalidBufferUsage.into());
-                    }
+                    check_buffer_usage(buffer.usage, BufferUsage::INDIRECT)?;
                     let count_buffer = trackers
                         .buffers
                         .use_extend(&*buffer_guard, count_buffer_id, (), BufferUse::INDIRECT)
                         .unwrap();
-                    if !count_buffer.usage.contains(BufferUsage::INDIRECT) {
-                        return Err(RenderCommandError::InvalidBufferUsage.into());
-                    }
+                    check_buffer_usage(count_buffer.usage, BufferUsage::INDIRECT)?;
 
                     let end_offset = offset + stride * max_count as u64;
                     if end_offset > buffer.size {
@@ -1462,7 +1481,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         for ot in output_attachments {
             let texture = &texture_guard[ot.texture_id.value];
             if !texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT) {
-                return Err(RenderCommandError::InvalidTextureUsage.into());
+                return Err(RenderCommandError::InvalidTextureUsage {
+                    actual: texture.usage,
+                    expected: TextureUsage::OUTPUT_ATTACHMENT,
+                }
+                .into());
             }
 
             // the tracker set of the pass is always in "extend" mode

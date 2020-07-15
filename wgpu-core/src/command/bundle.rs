@@ -601,37 +601,116 @@ impl State {
 /// Error encountered when encoding a render command.
 #[derive(Clone, Debug)]
 pub enum RenderCommandError {
-    /// A bind group index is greater than the device's requested `max_bind_group` limit.
-    BindGroupIndexOutOfRange,
-    /// A dynamic buffer offset is not a multiple of the required buffer alignment.
-    UnalignedBufferOffset,
-    /// The number of buffer offsets does not match the number of dynamic bindings.
-    WrongBufferOffsetCount,
-    /// The pipeline is incompatible with the render pass.
-    ///
-    /// Either:
-    /// - The render pipeline output formats and sample counts do not match render pass attachment formats.
-    /// - The pipeline is not compatible with the depth-stencil read-only render pass.
+    BindGroupIndexOutOfRange {
+        index: u8,
+        max: u32,
+    },
+    UnalignedBufferOffset(u64),
+    InvalidDynamicOffsetCount {
+        actual: usize,
+        expected: usize,
+    },
     IncompatiblePipeline,
-    /// The provided buffer does not have the required usage.
-    InvalidBufferUsage,
-    /// The provided texture does not have the required usage.
-    InvalidTextureUsage,
-    /// A pipeline must be bound.
+    IncompatibleReadOnlyDepthStencil,
+    InvalidBufferUsage {
+        actual: wgt::BufferUsage,
+        expected: wgt::BufferUsage,
+    },
+    InvalidTextureUsage {
+        actual: wgt::TextureUsage,
+        expected: wgt::TextureUsage,
+    },
     UnboundPipeline,
-    /// There was an error with the push constants.
-    PushConstantUploadError(PushConstantUploadError),
-    /// Vertex extends beyond limit.
-    VertexBeyondLimit,
-    /// Instance extends beyond limit.
-    InstanceBeyondLimit,
-    /// Index extends beyond limit.
-    IndexBeyondLimit,
+    PushConstants(PushConstantUploadError),
+    VertexBeyondLimit {
+        last_vertex: u32,
+        vertex_limit: u32,
+    },
+    InstanceBeyondLimit {
+        last_instance: u32,
+        instance_limit: u32,
+    },
+    IndexBeyondLimit {
+        last_index: u32,
+        index_limit: u32,
+    },
 }
 
 impl From<PushConstantUploadError> for RenderCommandError {
     fn from(error: PushConstantUploadError) -> Self {
-        Self::PushConstantUploadError(error)
+        Self::PushConstants(error)
+    }
+}
+
+impl fmt::Display for RenderCommandError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::BindGroupIndexOutOfRange { index, max } => write!(
+                f,
+                "bind group index {} is greater than the device's requested `max_bind_group` limit {}",
+                index,
+                max,
+            ),
+            Self::UnalignedBufferOffset(offset) => write!(
+                f,
+                "dynamic buffer offset {} is not a multiple of the required buffer alignment {}",
+                offset,
+                wgt::BIND_BUFFER_ALIGNMENT,
+            ),
+            Self::InvalidDynamicOffsetCount { actual, expected } => write!(
+                f,
+                "number of buffer offsets ({}) does not match the number of dynamic bindings ({})",
+                actual,
+                expected,
+            ),
+            Self::IncompatiblePipeline => write!(f, "render pipeline output formats and sample counts do not match render pass attachment formats"),
+            Self::IncompatibleReadOnlyDepthStencil => write!(f, "pipeline is not compatible with the depth-stencil read-only render pass"),
+            Self::InvalidBufferUsage { actual, expected } => write!(
+                f,
+                "buffer usage is {:?} which does not contain required usage {:?}",
+                actual,
+                expected,
+            ),
+            Self::InvalidTextureUsage { actual, expected } => write!(
+                f,
+                "texture usage is {:?} which does not contain required usage {:?}",
+                actual,
+                expected,
+            ),
+            Self::UnboundPipeline => write!(f, "a render pipeline must be bound"),
+            Self::PushConstants(error) => write!(f, "{}", error),
+            Self::VertexBeyondLimit { last_vertex, vertex_limit } => write!(
+                f,
+                "vertex {} extends beyond limit {}",
+                last_vertex,
+                vertex_limit,
+            ),
+            Self::InstanceBeyondLimit { last_instance, instance_limit } => write!(
+                f,
+                "instance {} extends beyond limit {}",
+                last_instance,
+                instance_limit,
+            ),
+            Self::IndexBeyondLimit { last_index, index_limit } => write!(
+                f,
+                "index {} extends beyond limit {}",
+                last_index,
+                index_limit,
+            ),
+        }
+    }
+}
+
+/// Checks that the given buffer usage contains the required buffer usage,
+/// returns an error otherwise.
+pub fn check_buffer_usage(
+    actual: wgt::BufferUsage,
+    expected: wgt::BufferUsage,
+) -> Result<(), RenderCommandError> {
+    if !actual.contains(expected) {
+        Err(RenderCommandError::InvalidBufferUsage { actual, expected })
+    } else {
+        Ok(())
     }
 }
 
@@ -677,20 +756,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         num_dynamic_offsets,
                         bind_group_id,
                     } => {
-                        if (index as u32) >= device.limits.max_bind_groups {
-                            return Err(RenderCommandError::BindGroupIndexOutOfRange);
+                        let max_bind_groups = device.limits.max_bind_groups;
+                        if (index as u32) >= max_bind_groups {
+                            return Err(RenderCommandError::BindGroupIndexOutOfRange {
+                                index,
+                                max: max_bind_groups,
+                            });
                         }
 
                         let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                         base.dynamic_offsets =
                             &base.dynamic_offsets[num_dynamic_offsets as usize..];
                         // Check for misaligned offsets.
-                        if offsets
+                        if let Some(offset) = offsets
                             .iter()
                             .map(|offset| *offset as wgt::BufferAddress)
-                            .any(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
+                            .find(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
                         {
-                            return Err(RenderCommandError::UnalignedBufferOffset);
+                            return Err(RenderCommandError::UnalignedBufferOffset(offset));
                         }
 
                         let bind_group = state
@@ -699,7 +782,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
                             .unwrap();
                         if bind_group.dynamic_binding_info.len() != offsets.len() {
-                            return Err(RenderCommandError::WrongBufferOffsetCount);
+                            return Err(RenderCommandError::InvalidDynamicOffsetCount {
+                                actual: offsets.len(),
+                                expected: bind_group.dynamic_binding_info.len(),
+                            });
                         }
 
                         state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
@@ -741,9 +827,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                             .unwrap();
-                        if !buffer.usage.contains(wgt::BufferUsage::INDEX) {
-                            return Err(RenderCommandError::InvalidBufferUsage);
-                        }
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDEX)?;
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -762,9 +846,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
                             .unwrap();
-                        if !buffer.usage.contains(wgt::BufferUsage::VERTEX) {
-                            return Err(RenderCommandError::InvalidBufferUsage);
-                        }
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::VERTEX)?;
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -796,11 +878,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         first_instance,
                     } => {
                         let (vertex_limit, instance_limit) = state.vertex_limits();
-                        if first_vertex + vertex_count > vertex_limit {
-                            return Err(RenderCommandError::VertexBeyondLimit);
+                        let last_vertex = first_vertex + vertex_count;
+                        if last_vertex > vertex_limit {
+                            return Err(RenderCommandError::VertexBeyondLimit {
+                                last_vertex,
+                                vertex_limit,
+                            });
                         }
-                        if first_instance + instance_count > instance_limit {
-                            return Err(RenderCommandError::InstanceBeyondLimit);
+                        let last_instance = first_instance + instance_count;
+                        if last_instance > instance_limit {
+                            return Err(RenderCommandError::InstanceBeyondLimit {
+                                last_instance,
+                                instance_limit,
+                            });
                         }
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -816,11 +906,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         //TODO: validate that base_vertex + max_index() is within the provided range
                         let (_, instance_limit) = state.vertex_limits();
                         let index_limit = state.index.limit();
-                        if first_index + index_count > index_limit {
-                            return Err(RenderCommandError::IndexBeyondLimit);
+                        let last_index = first_index + index_count;
+                        if last_index > index_limit {
+                            return Err(RenderCommandError::IndexBeyondLimit {
+                                last_index,
+                                index_limit,
+                            });
                         }
-                        if first_instance + instance_count > instance_limit {
-                            return Err(RenderCommandError::InstanceBeyondLimit);
+                        let last_instance = first_instance + instance_count;
+                        if last_instance > instance_limit {
+                            return Err(RenderCommandError::InstanceBeyondLimit {
+                                last_instance,
+                                instance_limit,
+                            });
                         }
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
@@ -838,9 +936,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                             .unwrap();
-                        if !buffer.usage.contains(wgt::BufferUsage::INDIRECT) {
-                            return Err(RenderCommandError::InvalidBufferUsage);
-                        }
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)?;
 
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -857,9 +953,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                             .unwrap();
-                        if !buffer.usage.contains(wgt::BufferUsage::INDIRECT) {
-                            return Err(RenderCommandError::InvalidBufferUsage);
-                        }
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)?;
 
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
