@@ -49,7 +49,7 @@ use crate::{
     LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Borrow, iter, marker::PhantomData, ops::Range};
+use std::{borrow::Borrow, fmt, iter, marker::PhantomData, ops::Range};
 
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
@@ -63,7 +63,7 @@ impl RenderBundleEncoder {
         desc: &wgt::RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
-    ) -> Result<Self, InvalidSampleCountError> {
+    ) -> Result<Self, CreateRenderBundleError> {
         span!(_guard, INFO, "RenderBundleEncoder::new");
         Ok(RenderBundleEncoder {
             base: base.unwrap_or_else(BasePass::new),
@@ -77,7 +77,7 @@ impl RenderBundleEncoder {
                 sample_count: {
                     let sc = desc.sample_count;
                     if sc == 0 || sc > 32 || !conv::is_power_of_two(sc) {
-                        return Err(InvalidSampleCountError);
+                        return Err(CreateRenderBundleError::InvalidSampleCount(sc));
                     }
                     sc as u8
                 },
@@ -92,7 +92,17 @@ impl RenderBundleEncoder {
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
 #[derive(Copy, Clone, Debug)]
-pub struct InvalidSampleCountError;
+pub enum CreateRenderBundleError {
+    InvalidSampleCount(u32),
+}
+
+impl fmt::Display for CreateRenderBundleError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidSampleCount(count) => write!(f, "invalid number of samples {}", count),
+        }
+    }
+}
 
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,

@@ -2120,7 +2120,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         desc: &wgt::RenderBundleEncoderDescriptor,
-    ) -> Result<id::RenderBundleEncoderId, command::InvalidSampleCountError> {
+    ) -> Result<id::RenderBundleEncoderId, command::CreateRenderBundleError> {
         span!(_guard, INFO, "Device::create_render_bundle_encoder");
         let encoder = command::RenderBundleEncoder::new(desc, device_id, None);
         encoder.map(|encoder| Box::into_raw(Box::new(encoder)))
