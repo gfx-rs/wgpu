@@ -44,13 +44,13 @@ fn is_depth_stencil_read_only(
         return Ok(false);
     }
     if (desc.depth.load_op, desc.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
-        return Err(RenderPassError::InvalidDepthStencilOps);
+        return Err(RenderPassError::InvalidDepthOps);
     }
     if aspects.contains(hal::format::Aspects::STENCIL) && !desc.stencil.read_only {
         return Ok(false);
     }
     if (desc.stencil.load_op, desc.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
-        return Err(RenderPassError::InvalidDepthStencilOps);
+        return Err(RenderPassError::InvalidStencilOps);
     }
     Ok(true)
 }
@@ -206,7 +206,7 @@ impl OptionalState {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum DrawError {
     MissingBlendColor,
     MissingStencilReference,
@@ -218,13 +218,13 @@ pub enum DrawError {
     },
 }
 
-impl fmt::Debug for DrawError {
+impl fmt::Display for DrawError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DrawError::MissingBlendColor => write!(f, "MissingBlendColor. A blend color is required to be set using RenderPass::set_blend_color."),
-            DrawError::MissingStencilReference => write!(f, "MissingStencilReference. A stencil reference is required to be set using RenderPass::set_stencil_reference."),
-            DrawError::MissingPipeline => write!(f, "MissingPipeline. You must first set the render pipeline using RenderPass::set_pipeline."),
-            DrawError::IncompatibleBindGroup { index } => write!(f, "IncompatibleBindGroup. The current render pipeline has a layout which is incompatible with a currently set bind group. They first differ at entry index {}.", index),
+            DrawError::MissingBlendColor => write!(f, "blend color needs to be set"),
+            DrawError::MissingStencilReference => write!(f, "stencil reference needs to be set"),
+            DrawError::MissingPipeline => write!(f, "render pipeline must be set"),
+            DrawError::IncompatibleBindGroup { index } => write!(f, "current render pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {}", index),
         }
     }
 }
@@ -346,35 +346,39 @@ impl State {
 /// Error encountered when performing a render pass.
 #[derive(Clone, Debug)]
 pub enum RenderPassError {
-    /// Attachment's sample count is not valid.
-    InvalidSampleCount,
-    /// All resolve targets must have a sample count of 1.
+    InvalidSampleCount(u8),
+    InvalidResolveSourceSampleCount,
     InvalidResolveTargetSampleCount,
-    /// Extent state must match extent from view.
-    ExtentStateMismatch,
-    /// Attempted to use a swap chain image as a depth/stencil attachment.
+    ExtentStateMismatch {
+        state_extent: hal::image::Extent,
+        view_extent: hal::image::Extent,
+    },
     SwapChainImageAsDepthStencil,
-    /// Unable to clear non-present/read-only depth/stencil.
-    InvalidDepthStencilOps,
-    /// All attachments must have the same sample count.
-    SampleCountMismatch,
-    /// Texture view's swap chain must match swap chain in use.
+    InvalidDepthOps,
+    InvalidStencilOps,
+    SampleCountMismatch {
+        actual: u8,
+        expected: u8,
+    },
     SwapChainMismatch,
-    /// Setting `values_offset` to be `None` is only for internal use in render bundles.
     InvalidValuesOffset,
-    /// The specified device feature is required for the given command, but is not enabled.
-    MissingDeviceFeature(&'static str),
-    /// Indirect draw command would overrun the bounds of the buffer.
-    IndirectBufferOverrun,
-    /// Can't pop debug group, because number of pushed debug groups is zero.
+    MissingDeviceFeatures(wgt::Features),
+    IndirectBufferOverrun {
+        offset: u64,
+        count: Option<u32>,
+        begin_offset: u64,
+        end_offset: u64,
+        buffer_size: u64,
+    },
+    IndirectCountBufferOverrun {
+        begin_count_offset: u64,
+        end_count_offset: u64,
+        count_buffer_size: u64,
+    },
     InvalidPopDebugGroup,
-    /// The render bundle output formats do not match render pass attachment formats.
     IncompatibleRenderBundle,
-    /// An error encountered while encoding a command.
     RenderCommandError(RenderCommandError),
-    /// An error encountered while handling a draw command.
     DrawError(DrawError),
-    /// An error encountered while validating dynamic bindings.
     BindError(BindError),
 }
 
@@ -393,6 +397,74 @@ impl From<DrawError> for RenderPassError {
 impl From<BindError> for RenderPassError {
     fn from(error: BindError) -> Self {
         Self::BindError(error)
+    }
+}
+
+impl fmt::Display for RenderPassError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::InvalidSampleCount(count) => write!(
+                f,
+                "attachment's sample count {} is invalid",
+                count,
+            ),
+            Self::InvalidResolveSourceSampleCount => write!(f, "attachment with resolve target must be multi-sampled"),
+            Self::InvalidResolveTargetSampleCount => write!(f, "resolve target must have a sample count of 1"),
+            Self::ExtentStateMismatch { state_extent, view_extent } => write!(
+                f,
+                "extent state {:?} must match extent from view {:?}",
+                state_extent,
+                view_extent,
+            ),
+            Self::SwapChainImageAsDepthStencil => write!(f, "attempted to use a swap chain image as a depth/stencil attachment"),
+            Self::InvalidDepthOps => write!(f, "unable to clear non-present/read-only depth"),
+            Self::InvalidStencilOps => write!(f, "unable to clear non-present/read-only stencil"),
+            Self::SampleCountMismatch { actual, expected } => write!(
+                f,
+                "all attachments must have the same sample count, found {} != {}",
+                actual,
+                expected,
+            ),
+            Self::SwapChainMismatch => write!(f, "texture view's swap chain must match swap chain in use"),
+            Self::InvalidValuesOffset => write!(f, "setting `values_offset` to be `None` is only for internal use in render bundles"),
+            Self::MissingDeviceFeatures(expected) => write!(
+                f,
+                "required device features not enabled: {:?}",
+                expected,
+            ),
+            Self::IndirectBufferOverrun { offset, count, begin_offset, end_offset, buffer_size } => write!(
+                f,
+                "indirect draw with offset {}{} uses bytes {}..{} which overruns indirect buffer of size {}",
+                offset,
+                count.map_or_else(String::new, |v| format!(" and count {}", v)),
+                begin_offset,
+                end_offset,
+                buffer_size,
+            ),
+            Self::IndirectCountBufferOverrun { begin_count_offset, end_count_offset, count_buffer_size } => write!(
+                f,
+                "indirect draw uses bytes {}..{} which overruns indirect buffer of size {}",
+                begin_count_offset,
+                end_count_offset,
+                count_buffer_size,
+            ),
+            Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
+            Self::IncompatibleRenderBundle => write!(f, "render bundle output formats do not match render pass attachment formats"),
+            Self::RenderCommandError(error) => write!(f, "{}", error),
+            Self::DrawError(error) => write!(f, "{}", error),
+            Self::BindError(error) => write!(f, "{}", error),
+        }
+    }
+}
+
+fn check_device_features(
+    actual: wgt::Features,
+    expected: wgt::Features,
+) -> Result<(), RenderPassError> {
+    if !actual.contains(expected) {
+        Err(RenderPassError::MissingDeviceFeatures(expected))
+    } else {
+        Ok(())
     }
 }
 
@@ -474,7 +546,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let context = {
             use hal::device::Device as _;
 
-            let samples_count_limit = device.hal_limits.framebuffer_color_sample_counts;
+            let sample_count_limit = device.hal_limits.framebuffer_color_sample_counts;
             let base_trackers = &cmb.trackers;
 
             let mut extent = None;
@@ -484,8 +556,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .get(0)
                 .map(|at| view_guard[at.attachment].samples)
                 .unwrap_or(1);
-            if sample_count & samples_count_limit == 0 {
-                return Err(RenderPassError::InvalidSampleCount);
+            if sample_count & sample_count_limit == 0 {
+                return Err(RenderPassError::InvalidSampleCount(sample_count));
             }
 
             log::trace!(
@@ -501,7 +573,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .unwrap();
                         if let Some(ex) = extent {
                             if ex != view.extent {
-                                return Err(RenderPassError::ExtentStateMismatch);
+                                return Err(RenderPassError::ExtentStateMismatch {
+                                    state_extent: ex,
+                                    view_extent: view.extent,
+                                });
                             }
                         } else {
                             extent = Some(view.extent);
@@ -561,13 +636,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     if let Some(ex) = extent {
                         if ex != view.extent {
-                            return Err(RenderPassError::ExtentStateMismatch);
+                            return Err(RenderPassError::ExtentStateMismatch {
+                                state_extent: ex,
+                                view_extent: view.extent,
+                            });
                         }
                     } else {
                         extent = Some(view.extent);
                     }
                     if view.samples != sample_count {
-                        return Err(RenderPassError::SampleCountMismatch);
+                        return Err(RenderPassError::SampleCountMismatch {
+                            actual: view.samples,
+                            expected: sample_count,
+                        });
                     }
 
                     let layouts = match view.inner {
@@ -631,7 +712,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*view_guard, resolve_target, (), ())
                         .unwrap();
                     if extent != Some(view.extent) {
-                        return Err(RenderPassError::ExtentStateMismatch);
+                        return Err(RenderPassError::ExtentStateMismatch {
+                            state_extent: extent.unwrap_or_default(),
+                            view_extent: view.extent,
+                        });
                     }
                     if view.samples != 1 {
                         return Err(RenderPassError::InvalidResolveTargetSampleCount);
@@ -720,8 +804,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         {
                             let real_attachment_index = match at.resolve_target {
                                 Some(resolve_attachment) => {
-                                    if view_guard[at.attachment].samples == 1 {
-                                        return Err(RenderPassError::InvalidSampleCount);
+                                    let attachment_sample_count = view_guard[at.attachment].samples;
+                                    if attachment_sample_count == 1 {
+                                        return Err(
+                                            RenderPassError::InvalidResolveSourceSampleCount,
+                                        );
                                     }
                                     if view_guard[resolve_attachment].samples != 1 {
                                         return Err(
@@ -1322,11 +1409,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
 
                     if count.is_some() {
-                        if !device.features.contains(wgt::Features::MULTI_DRAW_INDIRECT) {
-                            return Err(RenderPassError::MissingDeviceFeature(
-                                "MULTI_DRAW_INDIRECT",
-                            ));
-                        }
+                        check_device_features(device.features, wgt::Features::MULTI_DRAW_INDIRECT)?;
                     }
 
                     let buffer = trackers
@@ -1337,9 +1420,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     let actual_count = count.unwrap_or(1);
 
+                    let begin_offset = offset;
                     let end_offset = offset + stride * actual_count as u64;
                     if end_offset > buffer.size {
-                        return Err(RenderPassError::IndirectBufferOverrun);
+                        return Err(RenderPassError::IndirectBufferOverrun {
+                            offset,
+                            count,
+                            begin_offset,
+                            end_offset,
+                            buffer_size: buffer.size,
+                        });
                     }
 
                     match indexed {
@@ -1371,14 +1461,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         true => 20,
                     };
 
-                    if !device
-                        .features
-                        .contains(wgt::Features::MULTI_DRAW_INDIRECT_COUNT)
-                    {
-                        return Err(RenderPassError::MissingDeviceFeature(
-                            "MULTI_DRAW_INDIRECT_COUNT",
-                        ));
-                    }
+                    check_device_features(
+                        device.features,
+                        wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
+                    )?;
 
                     let buffer = trackers
                         .buffers
@@ -1391,14 +1477,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     check_buffer_usage(count_buffer.usage, BufferUsage::INDIRECT)?;
 
+                    let begin_offset = offset;
                     let end_offset = offset + stride * max_count as u64;
                     if end_offset > buffer.size {
-                        return Err(RenderPassError::IndirectBufferOverrun);
+                        return Err(RenderPassError::IndirectBufferOverrun {
+                            offset,
+                            count: None,
+                            begin_offset,
+                            end_offset,
+                            buffer_size: buffer.size,
+                        });
                     }
 
+                    let begin_count_offset = count_buffer_offset;
                     let end_count_offset = count_buffer_offset + 4;
                     if end_count_offset > count_buffer.size {
-                        return Err(RenderPassError::IndirectBufferOverrun);
+                        return Err(RenderPassError::IndirectCountBufferOverrun {
+                            begin_count_offset,
+                            end_count_offset,
+                            count_buffer_size: count_buffer.size,
+                        });
                     }
 
                     match indexed {
