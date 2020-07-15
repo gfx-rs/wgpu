@@ -377,26 +377,26 @@ pub enum RenderPassError {
     },
     InvalidPopDebugGroup,
     IncompatibleRenderBundle,
-    RenderCommandError(RenderCommandError),
-    DrawError(DrawError),
-    BindError(BindError),
+    RenderCommand(RenderCommandError),
+    Draw(DrawError),
+    Bind(BindError),
 }
 
 impl From<RenderCommandError> for RenderPassError {
     fn from(error: RenderCommandError) -> Self {
-        Self::RenderCommandError(error)
+        Self::RenderCommand(error)
     }
 }
 
 impl From<DrawError> for RenderPassError {
     fn from(error: DrawError) -> Self {
-        Self::DrawError(error)
+        Self::Draw(error)
     }
 }
 
 impl From<BindError> for RenderPassError {
     fn from(error: BindError) -> Self {
-        Self::BindError(error)
+        Self::Bind(error)
     }
 }
 
@@ -450,9 +450,9 @@ impl fmt::Display for RenderPassError {
             ),
             Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
             Self::IncompatibleRenderBundle => write!(f, "render bundle output formats do not match render pass attachment formats"),
-            Self::RenderCommandError(error) => write!(f, "{}", error),
-            Self::DrawError(error) => write!(f, "{}", error),
-            Self::BindError(error) => write!(f, "{}", error),
+            Self::RenderCommand(error) => write!(f, "{}", error),
+            Self::Draw(error) => write!(f, "{}", error),
+            Self::Bind(error) => write!(f, "{}", error),
         }
     }
 }
