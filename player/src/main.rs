@@ -170,7 +170,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             A::CreateTexture { id, desc } => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
-                self.device_create_texture::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
+                self.device_create_texture::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
+                    .unwrap();
             }
             A::DestroyTexture(id) => {
                 self.texture_destroy::<B>(id);
