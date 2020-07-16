@@ -6,13 +6,13 @@ use crate::{
     binding_model::{BindError, PushConstantUploadError},
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer,
+        check_buffer_usage, BasePass, BasePassRef, CommandBuffer,
     },
     device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::BufferUse,
-    span,
+    span, MissingBufferUsageError,
 };
 
 use hal::command::CommandBuffer as _;
@@ -110,18 +110,18 @@ struct State {
 
 #[derive(Clone, Debug)]
 pub enum ComputePassError {
-    BindGroupIndexOutOfRange {
-        index: u8,
-        max: u32,
-    },
+    BindGroupIndexOutOfRange { index: u8, max: u32 },
     UnboundPipeline,
-    MissingBufferUsage {
-        actual: BufferUsage,
-        expected: BufferUsage,
-    },
+    MissingBufferUsage(MissingBufferUsageError),
     InvalidPopDebugGroup,
     Bind(BindError),
     PushConstants(PushConstantUploadError),
+}
+
+impl From<MissingBufferUsageError> for ComputePassError {
+    fn from(error: MissingBufferUsageError) -> Self {
+        Self::MissingBufferUsage(error)
+    }
 }
 
 impl From<PushConstantUploadError> for ComputePassError {
@@ -146,12 +146,7 @@ impl fmt::Display for ComputePassError {
                 max,
             ),
             Self::UnboundPipeline => write!(f, "a compute pipeline must be bound"),
-            Self::MissingBufferUsage { actual, expected } => write!(
-                f,
-                "buffer usage is {:?} which does not contain required usage {:?}",
-                actual,
-                expected,
-            ),
+            Self::MissingBufferUsage(error) => write!(f, "{}", error),
             Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
             Self::Bind(error) => write!(f, "{}", error),
             Self::PushConstants(error) => write!(f, "{}", error),
@@ -381,12 +376,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         (),
                         BufferUse::INDIRECT,
                     );
-                    if !src_buffer.usage.contains(BufferUsage::INDIRECT) {
-                        return Err(ComputePassError::MissingBufferUsage {
-                            actual: src_buffer.usage,
-                            expected: BufferUsage::INDIRECT,
-                        });
-                    }
+                    check_buffer_usage(src_buffer.usage, BufferUsage::INDIRECT)?;
 
                     let barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 

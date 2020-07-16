@@ -6,7 +6,7 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        check_buffer_usage, BasePass, BasePassRef, RenderCommandError,
+        check_buffer_usage, check_texture_usage, BasePass, BasePassRef, RenderCommandError,
     },
     conv,
     device::{
@@ -19,7 +19,7 @@ use crate::{
     resource::{BufferUse, TextureUse, TextureViewInner},
     span,
     track::TrackerSet,
-    Stored,
+    MissingBufferUsageError, MissingTextureUsageError, Stored,
 };
 
 use arrayvec::ArrayVec;
@@ -449,6 +449,18 @@ pub enum RenderPassError {
 impl From<RenderCommandError> for RenderPassError {
     fn from(error: RenderCommandError) -> Self {
         Self::RenderCommand(error)
+    }
+}
+
+impl From<MissingBufferUsageError> for RenderPassError {
+    fn from(error: MissingBufferUsageError) -> Self {
+        Self::RenderCommand(error.into())
+    }
+}
+
+impl From<MissingTextureUsageError> for RenderPassError {
+    fn from(error: MissingTextureUsageError) -> Self {
+        Self::RenderCommand(error.into())
     }
 }
 
@@ -1642,13 +1654,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         for ot in output_attachments {
             let texture = &texture_guard[ot.texture_id.value];
-            if !texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT) {
-                return Err(RenderCommandError::InvalidTextureUsage {
-                    actual: texture.usage,
-                    expected: TextureUsage::OUTPUT_ATTACHMENT,
-                }
-                .into());
-            }
+            check_texture_usage(texture.usage, TextureUsage::OUTPUT_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             trackers

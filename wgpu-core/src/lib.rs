@@ -44,6 +44,9 @@ mod track;
 mod validation;
 
 pub use hal::pso::read_spirv;
+// These should be exported, since they are part of enum variants
+// which show up in the public API.
+pub use validation::{MissingBufferUsageError, MissingTextureUsageError};
 
 #[cfg(test)]
 use loom::sync::atomic;

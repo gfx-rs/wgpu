@@ -4,6 +4,7 @@
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
 use spirv_headers as spirv;
+use std::fmt;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
 #[derive(Clone, Debug)]
@@ -29,6 +30,38 @@ pub enum BindingError {
     WrongTextureMultisampled,
     /// The comparison flag doesn't match the shader.
     WrongSamplerComparison,
+}
+
+#[derive(Clone, Debug)]
+pub struct MissingBufferUsageError {
+    pub(crate) actual: wgt::BufferUsage,
+    pub(crate) expected: wgt::BufferUsage,
+}
+
+impl fmt::Display for MissingBufferUsageError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "buffer usage is {:?} which does not contain required usage {:?}",
+            self.actual, self.expected,
+        )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MissingTextureUsageError {
+    pub(crate) actual: wgt::TextureUsage,
+    pub(crate) expected: wgt::TextureUsage,
+}
+
+impl fmt::Display for MissingTextureUsageError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "texture usage is {:?} which does not contain required usage {:?}",
+            self.actual, self.expected,
+        )
+    }
 }
 
 #[derive(Clone, Debug)]

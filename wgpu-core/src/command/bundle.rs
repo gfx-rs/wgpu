@@ -46,6 +46,7 @@ use crate::{
     resource::BufferUse,
     span,
     track::TrackerSet,
+    validation::{MissingBufferUsageError, MissingTextureUsageError},
     LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
@@ -612,14 +613,8 @@ pub enum RenderCommandError {
     },
     IncompatiblePipeline,
     IncompatibleReadOnlyDepthStencil,
-    MissingBufferUsage {
-        actual: wgt::BufferUsage,
-        expected: wgt::BufferUsage,
-    },
-    InvalidTextureUsage {
-        actual: wgt::TextureUsage,
-        expected: wgt::TextureUsage,
-    },
+    MissingBufferUsage(MissingBufferUsageError),
+    MissingTextureUsage(MissingTextureUsageError),
     UnboundPipeline,
     PushConstants(PushConstantUploadError),
     VertexBeyondLimit {
@@ -634,6 +629,18 @@ pub enum RenderCommandError {
         last_index: u32,
         index_limit: u32,
     },
+}
+
+impl From<MissingBufferUsageError> for RenderCommandError {
+    fn from(error: MissingBufferUsageError) -> Self {
+        Self::MissingBufferUsage(error)
+    }
+}
+
+impl From<MissingTextureUsageError> for RenderCommandError {
+    fn from(error: MissingTextureUsageError) -> Self {
+        Self::MissingTextureUsage(error)
+    }
 }
 
 impl From<PushConstantUploadError> for RenderCommandError {
@@ -665,18 +672,8 @@ impl fmt::Display for RenderCommandError {
             ),
             Self::IncompatiblePipeline => write!(f, "render pipeline output formats and sample counts do not match render pass attachment formats"),
             Self::IncompatibleReadOnlyDepthStencil => write!(f, "pipeline is not compatible with the depth-stencil read-only render pass"),
-            Self::MissingBufferUsage { actual, expected } => write!(
-                f,
-                "buffer usage is {:?} which does not contain required usage {:?}",
-                actual,
-                expected,
-            ),
-            Self::InvalidTextureUsage { actual, expected } => write!(
-                f,
-                "texture usage is {:?} which does not contain required usage {:?}",
-                actual,
-                expected,
-            ),
+            Self::MissingBufferUsage(error) => write!(f, "{}", error),
+            Self::MissingTextureUsage(error) => write!(f, "{}", error),
             Self::UnboundPipeline => write!(f, "a render pipeline must be bound"),
             Self::PushConstants(error) => write!(f, "{}", error),
             Self::VertexBeyondLimit { last_vertex, vertex_limit } => write!(
@@ -706,9 +703,22 @@ impl fmt::Display for RenderCommandError {
 pub fn check_buffer_usage(
     actual: wgt::BufferUsage,
     expected: wgt::BufferUsage,
-) -> Result<(), RenderCommandError> {
+) -> Result<(), MissingBufferUsageError> {
     if !actual.contains(expected) {
-        Err(RenderCommandError::MissingBufferUsage { actual, expected })
+        Err(MissingBufferUsageError { actual, expected })
+    } else {
+        Ok(())
+    }
+}
+
+/// Checks that the given buffer usage contains the required buffer usage,
+/// returns an error otherwise.
+pub fn check_texture_usage(
+    actual: wgt::TextureUsage,
+    expected: wgt::TextureUsage,
+) -> Result<(), MissingTextureUsageError> {
+    if !actual.contains(expected) {
+        Err(MissingTextureUsageError { actual, expected })
     } else {
         Ok(())
     }
