@@ -203,6 +203,7 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             A::GetSwapChainTexture { id, parent_id } => {
                 if let Some(id) = id {
                     self.swap_chain_get_current_texture_view::<B>(parent_id, id)
+                        .unwrap()
                         .view_id
                         .unwrap();
                 }
