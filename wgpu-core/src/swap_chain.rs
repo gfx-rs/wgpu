@@ -89,7 +89,18 @@ pub struct SwapChainOutput {
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn swap_chain_get_next_texture<B: GfxBackend>(
+    pub fn swap_chain_get_preferred_format<B: GfxBackend>(
+        &self,
+        _swap_chain_id: SwapChainId,
+    ) -> wgt::TextureFormat {
+        span!(_guard, INFO, "SwapChain::get_next_texture");
+        //TODO: we can query the formats like done in `device_create_swapchain`,
+        // but its not clear which format in the list to return.
+        // For now, return `Bgra8UnormSrgb` that we know is supported everywhere.
+        wgt::TextureFormat::Bgra8UnormSrgb
+    }
+
+    pub fn swap_chain_get_current_texture_view<B: GfxBackend>(
         &self,
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
