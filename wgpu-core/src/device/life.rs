@@ -14,10 +14,10 @@ use crate::{
 use copyless::VecHelper as _;
 use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
 use gfx_memory::{Heaps, MemoryBlock};
-use hal::device::Device as _;
+use hal::device::{Device, OomOrDeviceLost};
 use parking_lot::Mutex;
 
-use std::sync::atomic::Ordering;
+use std::{fmt, sync::atomic::Ordering};
 
 const CLEANUP_WAIT_MS: u64 = 5000;
 
@@ -186,6 +186,27 @@ struct ActiveSubmission<B: hal::Backend> {
     mapped: Vec<id::BufferId>,
 }
 
+#[derive(Clone, Debug)]
+pub enum WaitIdleError {
+    OomOrDeviceLost(OomOrDeviceLost),
+    StuckGpu,
+}
+
+impl From<OomOrDeviceLost> for WaitIdleError {
+    fn from(error: OomOrDeviceLost) -> Self {
+        Self::OomOrDeviceLost(error)
+    }
+}
+
+impl fmt::Display for WaitIdleError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::OomOrDeviceLost(error) => write!(f, "{}", error),
+            Self::StuckGpu => write!(f, "GPU got stuck :("),
+        }
+    }
+}
+
 /// A struct responsible for tracking resource lifetimes.
 ///
 /// Here is how host mapping is handled:
@@ -259,7 +280,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         });
     }
 
-    fn wait_idle(&self, device: &B::Device) {
+    fn wait_idle(&self, device: &B::Device) -> Result<(), WaitIdleError> {
         if !self.active.is_empty() {
             log::debug!("Waiting for IDLE...");
             let status = unsafe {
@@ -267,17 +288,22 @@ impl<B: hal::Backend> LifetimeTracker<B> {
                     self.active.iter().map(|a| &a.fence),
                     hal::device::WaitFor::All,
                     CLEANUP_WAIT_MS * 1_000_000,
-                )
+                )?
             };
             log::debug!("...Done");
-            assert_eq!(status, Ok(true), "GPU got stuck :(");
+
+            if status == false {
+                // We timed out while waiting for the fences
+                return Err(WaitIdleError::StuckGpu);
+            }
         }
+        Ok(())
     }
 
     /// Returns the last submission index that is done.
     pub fn triage_submissions(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
         if force_wait {
-            self.wait_idle(device);
+            self.wait_idle(device).unwrap();
         }
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
