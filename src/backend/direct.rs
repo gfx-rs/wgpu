@@ -415,17 +415,19 @@ fn map_texture_copy_view(view: crate::TextureCopyView) -> wgc::command::TextureC
     }
 }
 
-fn map_pass_channel<V: Copy + Default>(ops: Option<&Operations<V>>) -> wgt::PassChannel<V> {
+fn map_pass_channel<V: Copy + Default>(
+    ops: Option<&Operations<V>>,
+) -> wgc::command::PassChannel<V> {
     match ops {
         Some(&Operations {
             load: LoadOp::Clear(clear_value),
             store,
-        }) => wgt::PassChannel {
-            load_op: wgt::LoadOp::Clear,
+        }) => wgc::command::PassChannel {
+            load_op: wgc::command::LoadOp::Clear,
             store_op: if store {
-                wgt::StoreOp::Store
+                wgc::command::StoreOp::Store
             } else {
-                wgt::StoreOp::Clear
+                wgc::command::StoreOp::Clear
             },
             clear_value,
             read_only: false,
@@ -433,19 +435,19 @@ fn map_pass_channel<V: Copy + Default>(ops: Option<&Operations<V>>) -> wgt::Pass
         Some(&Operations {
             load: LoadOp::Load,
             store,
-        }) => wgt::PassChannel {
-            load_op: wgt::LoadOp::Load,
+        }) => wgc::command::PassChannel {
+            load_op: wgc::command::LoadOp::Load,
             store_op: if store {
-                wgt::StoreOp::Store
+                wgc::command::StoreOp::Store
             } else {
-                wgt::StoreOp::Clear
+                wgc::command::StoreOp::Clear
             },
             clear_value: V::default(),
             read_only: false,
         },
-        None => wgt::PassChannel {
-            load_op: wgt::LoadOp::Load,
-            store_op: wgt::StoreOp::Store,
+        None => wgc::command::PassChannel {
+            load_op: wgc::command::LoadOp::Load,
+            store_op: wgc::command::StoreOp::Store,
             clear_value: V::default(),
             read_only: true,
         },
@@ -770,7 +772,7 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &wgt::RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId {
-        wgc::command::RenderBundleEncoder::new(desc, *device, None)
+        wgc::command::RenderBundleEncoder::new(desc, *device, None).unwrap()
     }
 
     fn device_drop(&self, device: &Self::DeviceId) {
@@ -1010,7 +1012,7 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::ComputePassId,
     ) {
-        gfx_select!(*encoder => self.command_encoder_run_compute_pass(*encoder, pass));
+        gfx_select!(*encoder => self.command_encoder_run_compute_pass(*encoder, pass)).unwrap()
     }
 
     fn command_encoder_begin_render_pass<'a>(
@@ -1051,7 +1053,7 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::RenderPassId,
     ) {
-        gfx_select!(*encoder => self.command_encoder_run_render_pass(*encoder, pass));
+        gfx_select!(*encoder => self.command_encoder_run_render_pass(*encoder, pass)).unwrap()
     }
 
     fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
@@ -1070,6 +1072,7 @@ impl crate::Context for Context {
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
         ))
+        .unwrap()
     }
 
     fn queue_write_buffer(
