@@ -426,8 +426,8 @@ pub type BindGroupDescriptor<'a> =
 #[derive(Clone, Debug)]
 pub enum BindError {
     MismatchedDynamicOffsetCount { actual: usize, expected: usize },
-    UnalignedDynamicBinding { idx: usize },
-    DynamicBindingOutOfBounds { idx: usize },
+    UnalignedDynamicBinding { idx: usize, offset: u32 },
+    DynamicBindingOutOfBounds { idx: usize, offset: u32, max: u64 },
 }
 
 impl fmt::Display for BindError {
@@ -440,8 +440,20 @@ impl fmt::Display for BindError {
                     actual,
                     expected,
                 ),
-            Self::UnalignedDynamicBinding { idx } => write!(f, "dynamic binding at index {} is not properly aligned", idx),
-            Self::DynamicBindingOutOfBounds { idx } => write!(f, "dynamic binding at index {} would overrun the buffer", idx),
+            Self::UnalignedDynamicBinding { idx, offset } => write!(
+                f,
+                "dynamic binding at index {}: offset {} must be aligned to {}",
+                idx,
+                offset,
+                wgt::BIND_BUFFER_ALIGNMENT,
+            ),
+            Self::DynamicBindingOutOfBounds { idx, offset, max } => write!(
+                f,
+                "dynamic binding at index {} with offset {} would overrun the buffer (limit: {})",
+                idx,
+                offset,
+                max,
+            ),
         }
     }
 }
@@ -468,11 +480,6 @@ impl<B: hal::Backend> BindGroup<B> {
         offsets: &[wgt::DynamicOffset],
     ) -> Result<(), BindError> {
         if self.dynamic_binding_info.len() != offsets.len() {
-            log::error!(
-                "BindGroup has {} dynamic bindings, but {} dynamic offsets were provided",
-                self.dynamic_binding_info.len(),
-                offsets.len()
-            );
             return Err(BindError::MismatchedDynamicOffsetCount {
                 expected: self.dynamic_binding_info.len(),
                 actual: offsets.len(),
@@ -486,23 +493,15 @@ impl<B: hal::Backend> BindGroup<B> {
             .enumerate()
         {
             if offset as wgt::BufferAddress % wgt::BIND_BUFFER_ALIGNMENT != 0 {
-                log::error!(
-                    "Dynamic buffer offset index {}: {} needs to be aligned as a multiple of {}",
-                    idx,
-                    offset,
-                    wgt::BIND_BUFFER_ALIGNMENT
-                );
-                return Err(BindError::UnalignedDynamicBinding { idx });
+                return Err(BindError::UnalignedDynamicBinding { idx, offset });
             }
 
             if offset as wgt::BufferAddress > info.maximum_dynamic_offset {
-                log::error!(
-                    "Dynamic offset index {} with value {} overruns underlying buffer. Dynamic offset must be no more than {}",
+                return Err(BindError::DynamicBindingOutOfBounds {
                     idx,
                     offset,
-                    info.maximum_dynamic_offset,
-                );
-                return Err(BindError::DynamicBindingOutOfBounds { idx });
+                    max: info.maximum_dynamic_offset,
+                });
             }
         }
 
