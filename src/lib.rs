@@ -1254,9 +1254,25 @@ impl Drop for Device {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RequestDeviceError;
 
-/// Error occurred when trying to async map a number.
+impl std::fmt::Display for RequestDeviceError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Requesting a device failed")
+    }
+}
+
+impl std::error::Error for RequestDeviceError {}
+
+/// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BufferAsyncError;
+
+impl std::fmt::Display for BufferAsyncError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error occurred when trying to async map a buffer")
+    }
+}
+
+impl std::error::Error for BufferAsyncError {}
 
 /// Type of buffer mapping.
 #[derive(Debug, Clone, Copy, PartialEq)]
