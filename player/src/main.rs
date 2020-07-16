@@ -161,7 +161,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             A::CreateBuffer { id, desc } => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
-                self.device_create_buffer::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
+                self.device_create_buffer::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
+                    .unwrap();
             }
             A::DestroyBuffer(id) => {
                 self.buffer_destroy::<B>(id);
