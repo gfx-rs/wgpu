@@ -11,6 +11,8 @@ pub mod util;
 mod macros;
 
 use std::{
+    error::Error,
+    fmt::{Debug, Display},
     future::Future,
     marker::PhantomData,
     ops::{Bound, Range, RangeBounds},
@@ -924,7 +926,7 @@ pub struct SwapChainFrame {
 }
 
 /// Result of an unsuccessful call to [`SwapChain::get_next_frame`].
-#[derive(Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SwapChainError {
     /// A timeout was encountered while trying to acquire the next frame.
     Timeout,
@@ -935,6 +937,19 @@ pub enum SwapChainError {
     /// There is no more memory left to allocate a new frame.
     OutOfMemory,
 }
+
+impl Display for SwapChainError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::Timeout => "A timeout was encountered while trying to acquire the next frame",
+            Self::Outdated => "The underlying surface has changed, and therefore the swap chain must be updated",
+            Self::Lost =>  "The swap chain has been lost and needs to be recreated",
+            Self::OutOfMemory => "There is no more memory left to allocate a new frame",
+        })
+    }
+}
+
+impl Error for SwapChainError {}
 
 impl Instance {
     /// Create an new instance of wgpu.
@@ -1254,25 +1269,25 @@ impl Drop for Device {
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RequestDeviceError;
 
-impl std::fmt::Display for RequestDeviceError {
+impl Display for RequestDeviceError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Requesting a device failed")
     }
 }
 
-impl std::error::Error for RequestDeviceError {}
+impl Error for RequestDeviceError {}
 
 /// Error occurred when trying to async map a buffer.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct BufferAsyncError;
 
-impl std::fmt::Display for BufferAsyncError {
+impl Display for BufferAsyncError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "Error occurred when trying to async map a buffer")
     }
 }
 
-impl std::error::Error for BufferAsyncError {}
+impl Error for BufferAsyncError {}
 
 /// Type of buffer mapping.
 #[derive(Debug, Clone, Copy, PartialEq)]
