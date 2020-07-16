@@ -941,6 +941,39 @@ pub enum VertexFormat {
     Int4 = 29,
 }
 
+impl VertexFormat {
+    pub fn size(&self) -> u64 {
+        match self {
+            VertexFormat::Uchar2
+            | VertexFormat::Char2
+            | VertexFormat::Uchar2Norm
+            | VertexFormat::Char2Norm => 2,
+            VertexFormat::Uchar4
+            | VertexFormat::Char4
+            | VertexFormat::Uchar4Norm
+            | VertexFormat::Char4Norm
+            | VertexFormat::Ushort2
+            | VertexFormat::Short2
+            | VertexFormat::Ushort2Norm
+            | VertexFormat::Short2Norm
+            | VertexFormat::Half2
+            | VertexFormat::Float
+            | VertexFormat::Uint
+            | VertexFormat::Int => 4,
+            VertexFormat::Ushort4
+            | VertexFormat::Short4
+            | VertexFormat::Ushort4Norm
+            | VertexFormat::Short4Norm
+            | VertexFormat::Half4
+            | VertexFormat::Float2
+            | VertexFormat::Uint2
+            | VertexFormat::Int2 => 8,
+            VertexFormat::Float3 | VertexFormat::Uint3 | VertexFormat::Int3 => 12,
+            VertexFormat::Float4 | VertexFormat::Uint4 | VertexFormat::Int4 => 16,
+        }
+    }
+}
+
 bitflags::bitflags! {
     /// Different ways that you can use a buffer.
     ///
