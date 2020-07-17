@@ -6,7 +6,7 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        check_buffer_usage, check_texture_usage, BasePass, BasePassRef, RenderCommandError,
+        BasePass, BasePassRef, RenderCommandError,
     },
     conv,
     device::{
@@ -19,6 +19,7 @@ use crate::{
     resource::{BufferUse, TextureUse, TextureViewInner},
     span,
     track::TrackerSet,
+    validation::{check_buffer_usage, check_texture_usage},
     MissingBufferUsageError, MissingTextureUsageError, Stored,
 };
 

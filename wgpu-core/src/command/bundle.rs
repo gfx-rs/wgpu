@@ -46,7 +46,7 @@ use crate::{
     resource::BufferUse,
     span,
     track::TrackerSet,
-    validation::{MissingBufferUsageError, MissingTextureUsageError},
+    validation::{check_buffer_usage, MissingBufferUsageError, MissingTextureUsageError},
     LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
@@ -695,32 +695,6 @@ impl fmt::Display for RenderCommandError {
                 index_limit,
             ),
         }
-    }
-}
-
-/// Checks that the given buffer usage contains the required buffer usage,
-/// returns an error otherwise.
-pub fn check_buffer_usage(
-    actual: wgt::BufferUsage,
-    expected: wgt::BufferUsage,
-) -> Result<(), MissingBufferUsageError> {
-    if !actual.contains(expected) {
-        Err(MissingBufferUsageError { actual, expected })
-    } else {
-        Ok(())
-    }
-}
-
-/// Checks that the given buffer usage contains the required buffer usage,
-/// returns an error otherwise.
-pub fn check_texture_usage(
-    actual: wgt::TextureUsage,
-    expected: wgt::TextureUsage,
-) -> Result<(), MissingTextureUsageError> {
-    if !actual.contains(expected) {
-        Err(MissingTextureUsageError { actual, expected })
-    } else {
-        Ok(())
     }
 }
 

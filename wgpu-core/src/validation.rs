@@ -90,6 +90,32 @@ pub enum StageError {
     },
 }
 
+/// Checks that the given buffer usage contains the required buffer usage,
+/// returns an error otherwise.
+pub fn check_buffer_usage(
+    actual: wgt::BufferUsage,
+    expected: wgt::BufferUsage,
+) -> Result<(), MissingBufferUsageError> {
+    if !actual.contains(expected) {
+        Err(MissingBufferUsageError { actual, expected })
+    } else {
+        Ok(())
+    }
+}
+
+/// Checks that the given buffer usage contains the required buffer usage,
+/// returns an error otherwise.
+pub fn check_texture_usage(
+    actual: wgt::TextureUsage,
+    expected: wgt::TextureUsage,
+) -> Result<(), MissingTextureUsageError> {
+    if !actual.contains(expected) {
+        Err(MissingTextureUsageError { actual, expected })
+    } else {
+        Ok(())
+    }
+}
+
 fn get_aligned_type_size(
     module: &naga::Module,
     handle: naga::Handle<naga::Type>,

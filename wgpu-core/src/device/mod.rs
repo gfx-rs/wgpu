@@ -8,8 +8,9 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    validation, FastHashMap, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
-    MAX_BIND_GROUPS,
+    validation::{self, check_buffer_usage},
+    FastHashMap, LifeGuard, MissingBufferUsageError, MultiRefCount, PrivateFeatures, Stored,
+    SubmissionIndex, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -123,15 +124,43 @@ impl RenderPassContext {
     }
 }
 
-type BufferMapResult = Result<ptr::NonNull<u8>, hal::device::MapError>;
 type BufferMapPendingCallback = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
+
+pub use hal::device::MapError;
+
+#[derive(Clone, Debug)]
+pub enum BufferMapError {
+    MissingBufferUsage(MissingBufferUsageError),
+    MapError(MapError),
+}
+
+impl From<MissingBufferUsageError> for BufferMapError {
+    fn from(error: MissingBufferUsageError) -> Self {
+        Self::MissingBufferUsage(error)
+    }
+}
+
+impl From<MapError> for BufferMapError {
+    fn from(error: MapError) -> Self {
+        Self::MapError(error)
+    }
+}
+
+impl fmt::Display for BufferMapError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::MissingBufferUsage(error) => write!(f, "{}", error),
+            Self::MapError(error) => write!(f, "{}", error),
+        }
+    }
+}
 
 fn map_buffer<B: hal::Backend>(
     raw: &B::Device,
     buffer: &mut resource::Buffer<B>,
     sub_range: hal::buffer::SubRange,
     kind: HostMap,
-) -> BufferMapResult {
+) -> Result<ptr::NonNull<u8>, BufferMapError> {
     let (ptr, segment, needs_sync) = {
         let segment = hal::memory::Segment {
             offset: sub_range.offset,
@@ -780,7 +809,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
-    ) {
+    ) -> Result<(), BufferMapError> {
         span!(_guard, INFO, "Device::set_buffer_sub_data");
 
         let hub = B::hub(self);
@@ -790,11 +819,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(
-            buffer.usage.contains(wgt::BufferUsage::MAP_WRITE),
-            "Buffer usage {:?} must contain usage flag MAP_WRITE",
-            buffer.usage
-        );
+        check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
@@ -812,7 +837,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         };
 
-        match map_buffer(
+        let ptr = map_buffer(
             &device.raw,
             &mut buffer,
             hal::buffer::SubRange {
@@ -820,17 +845,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: Some(data.len() as BufferAddress),
             },
             HostMap::Write,
-        ) {
-            Ok(ptr) => unsafe {
-                ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
-            },
-            Err(e) => {
-                log::error!("failed to map a buffer: {:?}", e);
-                return;
-            }
+        )?;
+
+        unsafe {
+            ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
         }
 
         unmap_buffer(&device.raw, buffer);
+
+        Ok(())
     }
 
     pub fn device_get_buffer_sub_data<B: GfxBackend>(
@@ -839,7 +862,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &mut [u8],
-    ) {
+    ) -> Result<(), BufferMapError> {
         span!(_guard, INFO, "Device::get_buffer_sub_data");
 
         let hub = B::hub(self);
@@ -849,14 +872,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(
-            buffer.usage.contains(wgt::BufferUsage::MAP_READ),
-            "Buffer usage {:?} must contain usage flag MAP_READ",
-            buffer.usage
-        );
+        check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        match map_buffer(
+        let ptr = map_buffer(
             &device.raw,
             &mut buffer,
             hal::buffer::SubRange {
@@ -864,17 +883,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: Some(data.len() as BufferAddress),
             },
             HostMap::Read,
-        ) {
-            Ok(ptr) => unsafe {
-                ptr::copy_nonoverlapping(ptr.as_ptr(), data.as_mut_ptr(), data.len());
-            },
-            Err(e) => {
-                log::error!("failed to map a buffer: {:?}", e);
-                return;
-            }
+        )?;
+
+        unsafe {
+            ptr::copy_nonoverlapping(ptr.as_ptr(), data.as_mut_ptr(), data.len());
         }
 
         unmap_buffer(&device.raw, buffer);
+
+        Ok(())
     }
 
     pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: id::BufferId) {

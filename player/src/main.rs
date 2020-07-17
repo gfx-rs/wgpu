@@ -396,7 +396,8 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     self.queue_write_buffer::<B>(device, id, range.start, &bin);
                 } else {
                     self.device_wait_for_buffer::<B>(device, id);
-                    self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
+                    self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size])
+                        .unwrap();
                 }
             }
             A::WriteTexture {

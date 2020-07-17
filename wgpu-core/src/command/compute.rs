@@ -6,13 +6,15 @@ use crate::{
     binding_model::{BindError, PushConstantUploadError},
     command::{
         bind::{Binder, LayoutChange},
-        check_buffer_usage, BasePass, BasePassRef, CommandBuffer,
+        BasePass, BasePassRef, CommandBuffer,
     },
     device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::BufferUse,
-    span, MissingBufferUsageError,
+    span,
+    validation::check_buffer_usage,
+    MissingBufferUsageError,
 };
 
 use hal::command::CommandBuffer as _;
