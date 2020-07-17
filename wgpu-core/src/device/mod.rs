@@ -128,33 +128,6 @@ type BufferMapPendingCallback = (resource::BufferMapOperation, resource::BufferM
 
 pub use hal::device::MapError;
 
-#[derive(Clone, Debug)]
-pub enum BufferMapError {
-    MissingBufferUsage(MissingBufferUsageError),
-    MapError(MapError),
-}
-
-impl From<MissingBufferUsageError> for BufferMapError {
-    fn from(error: MissingBufferUsageError) -> Self {
-        Self::MissingBufferUsage(error)
-    }
-}
-
-impl From<MapError> for BufferMapError {
-    fn from(error: MapError) -> Self {
-        Self::MapError(error)
-    }
-}
-
-impl fmt::Display for BufferMapError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::MissingBufferUsage(error) => write!(f, "{}", error),
-            Self::MapError(error) => write!(f, "{}", error),
-        }
-    }
-}
-
 fn map_buffer<B: hal::Backend>(
     raw: &B::Device,
     buffer: &mut resource::Buffer<B>,
@@ -2880,7 +2853,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
-    ) {
+    ) -> Result<(), BufferMapError> {
         span!(_guard, INFO, "Device::buffer_map_async");
 
         let hub = B::hub(self);
@@ -2891,26 +2864,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
-        assert_eq!(range.start % wgt::COPY_BUFFER_ALIGNMENT, 0);
-        assert_eq!(range.end % wgt::COPY_BUFFER_ALIGNMENT, 0);
+        if range.start % wgt::COPY_BUFFER_ALIGNMENT != 0
+            || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
+        {
+            return Err(BufferMapError::UnalignedRange);
+        }
 
         let (device_id, ref_count) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
-            assert!(
-                buffer.usage.contains(pub_usage),
-                "Buffer usage {:?} must contain usage flag(s) {:?}",
-                buffer.usage,
-                pub_usage
-            );
+            check_buffer_usage(buffer.usage, pub_usage)?;
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
-                    panic!("Buffer already mapped")
+                    return Err(BufferMapError::AlreadyMapped);
                 }
                 resource::BufferMapState::Waiting(_) => {
                     op.call_error();
-                    return;
+                    return Ok(());
                 }
                 resource::BufferMapState::Idle => {
                     resource::BufferMapState::Waiting(resource::BufferPendingMapping {
@@ -2936,6 +2907,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .change_replace(buffer_id, &ref_count, (), internal_use);
 
         device.lock_life(&mut token).map(buffer_id, ref_count);
+
+        Ok(())
     }
 
     pub fn buffer_get_mapped_range<B: GfxBackend>(
@@ -2963,7 +2936,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
     }
 
-    pub fn buffer_unmap<B: GfxBackend>(&self, buffer_id: id::BufferId) {
+    pub fn buffer_unmap<B: GfxBackend>(
+        &self,
+        buffer_id: id::BufferId,
+    ) -> Result<(), BufferUnmapError> {
         span!(_guard, INFO, "Device::buffer_unmap");
 
         let hub = B::hub(self);
@@ -3033,7 +3009,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .consume_temp(stage_buffer, stage_memory);
             }
             resource::BufferMapState::Idle => {
-                log::error!("Buffer is not mapped");
+                return Err(BufferUnmapError::NotMapped);
             }
             resource::BufferMapState::Waiting(_) => {}
             resource::BufferMapState::Active {
@@ -3064,6 +3040,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unmap_buffer(&device.raw, buffer);
             }
         }
+
+        Ok(())
     }
 }
 
@@ -3105,6 +3083,54 @@ impl fmt::Display for CreateTextureError {
                 count,
                 MAX_MIP_LEVELS,
             ),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum BufferMapError {
+    MissingBufferUsage(MissingBufferUsageError),
+    MapError(MapError),
+    UnalignedRange,
+    AlreadyMapped,
+}
+
+impl From<MissingBufferUsageError> for BufferMapError {
+    fn from(error: MissingBufferUsageError) -> Self {
+        Self::MissingBufferUsage(error)
+    }
+}
+
+impl From<MapError> for BufferMapError {
+    fn from(error: MapError) -> Self {
+        Self::MapError(error)
+    }
+}
+
+impl fmt::Display for BufferMapError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::MissingBufferUsage(error) => write!(f, "{}", error),
+            Self::MapError(error) => write!(f, "{}", error),
+            Self::UnalignedRange => write!(
+                f,
+                "buffer map range is not aligned to {}",
+                wgt::COPY_BUFFER_ALIGNMENT,
+            ),
+            Self::AlreadyMapped => write!(f, "buffer is already mapped"),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum BufferUnmapError {
+    NotMapped,
+}
+
+impl fmt::Display for BufferUnmapError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::NotMapped => write!(f, "buffer is not mapped"),
         }
     }
 }
