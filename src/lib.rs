@@ -1985,7 +1985,7 @@ impl<'a> RenderPass<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &'a [u32]) {
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }
@@ -2045,7 +2045,7 @@ impl<'a> ComputePass<'a> {
     /// Data size must be a multiple of 4 and must be aligned to the 4s, so we take an array of u32.
     /// For example, with an offset of 4 and an array of `[u32; 3]`, that will write to the range
     /// of 4..16.
-    pub fn set_push_constants(&mut self, offset: u32, data: &'a [u32]) {
+    pub fn set_push_constants(&mut self, offset: u32, data: &[u32]) {
         self.id.set_push_constants(offset, data);
     }
 }
@@ -2214,7 +2214,7 @@ impl<'a> RenderBundleEncoder<'a> {
     ///
     /// You would need to upload this in three set_push_constants calls. First for the `Vertex` only range 0..4, second
     /// for the `Vertex | Fragment` range 4..8, third for the `Fragment` range 8..12.
-    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &'a [u32]) {
+    pub fn set_push_constants(&mut self, stages: wgt::ShaderStage, offset: u32, data: &[u32]) {
         self.id.set_push_constants(stages, offset, data);
     }
 }
