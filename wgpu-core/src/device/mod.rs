@@ -2916,7 +2916,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         _size: Option<BufferSize>,
-    ) -> *mut u8 {
+    ) -> Result<*mut u8, BufferNotMappedError> {
         span!(_guard, INFO, "Device::buffer_get_mapped_range");
 
         let hub = B::hub(self);
@@ -2927,11 +2927,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match buffer.map_state {
             resource::BufferMapState::Init { ptr, .. }
             | resource::BufferMapState::Active { ptr, .. } => unsafe {
-                ptr.as_ptr().offset(offset as isize)
+                Ok(ptr.as_ptr().offset(offset as isize))
             },
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
-                log::error!("Buffer is not mapped");
-                ptr::null_mut()
+                Err(BufferNotMappedError)
             }
         }
     }
@@ -2939,7 +2938,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn buffer_unmap<B: GfxBackend>(
         &self,
         buffer_id: id::BufferId,
-    ) -> Result<(), BufferUnmapError> {
+    ) -> Result<(), BufferNotMappedError> {
         span!(_guard, INFO, "Device::buffer_unmap");
 
         let hub = B::hub(self);
@@ -3009,7 +3008,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .consume_temp(stage_buffer, stage_memory);
             }
             resource::BufferMapState::Idle => {
-                return Err(BufferUnmapError::NotMapped);
+                return Err(BufferNotMappedError);
             }
             resource::BufferMapState::Waiting(_) => {}
             resource::BufferMapState::Active {
@@ -3123,14 +3122,10 @@ impl fmt::Display for BufferMapError {
 }
 
 #[derive(Clone, Debug)]
-pub enum BufferUnmapError {
-    NotMapped,
-}
+pub struct BufferNotMappedError;
 
-impl fmt::Display for BufferUnmapError {
+impl fmt::Display for BufferNotMappedError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::NotMapped => write!(f, "buffer is not mapped"),
-        }
+        write!(f, "buffer is not mapped")
     }
 }
