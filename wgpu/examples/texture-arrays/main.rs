@@ -335,27 +335,14 @@ impl framework::Example for Example {
             depth_stencil_attachment: None,
         });
 
-        let uniform_workaround_data = if self.uniform_workaround {
-            Some([Uniform { index: 0 }, Uniform { index: 1 }])
-        } else {
-            None
-        };
         rpass.set_pipeline(&self.pipeline);
         rpass.set_bind_group(0, &self.bind_group, &[]);
         rpass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
         rpass.set_index_buffer(self.index_buffer.slice(..));
-        if let Some(ref data) = uniform_workaround_data {
-            rpass.set_push_constants(
-                wgpu::ShaderStage::FRAGMENT,
-                0,
-                bytemuck::cast_slice(&data[0..1]),
-            );
+        if self.uniform_workaround {
+            rpass.set_push_constants(wgpu::ShaderStage::FRAGMENT, 0, bytemuck::cast_slice(&[0]));
             rpass.draw_indexed(0..6, 0, 0..1);
-            rpass.set_push_constants(
-                wgpu::ShaderStage::FRAGMENT,
-                0,
-                bytemuck::cast_slice(&data[1..2]),
-            );
+            rpass.set_push_constants(wgpu::ShaderStage::FRAGMENT, 0, bytemuck::cast_slice(&[1]));
             rpass.draw_indexed(6..12, 0, 0..1);
         } else {
             rpass.draw_indexed(0..12, 0, 0..1);
