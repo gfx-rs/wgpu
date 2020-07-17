@@ -1134,10 +1134,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if !context.compatible(&pipeline.pass_context) {
                         return Err(RenderCommandError::IncompatiblePipeline.into());
                     }
-                    if is_ds_read_only
-                        && pipeline
-                            .flags
-                            .contains(PipelineFlags::DEPTH_STENCIL_READ_ONLY)
+                    if pipeline
+                        .flags
+                        .contains(PipelineFlags::DEPTH_STENCIL_READ_ONLY)
+                        && !is_ds_read_only
                     {
                         return Err(RenderCommandError::IncompatibleReadOnlyDepthStencil.into());
                     }
