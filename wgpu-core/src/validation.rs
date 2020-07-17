@@ -4,53 +4,55 @@
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
 use spirv_headers as spirv;
+use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum BindingError {
-    /// The binding is missing from the pipeline layout.
+    #[error("binding is missing from the pipeline layout")]
     Missing,
-    /// The visibility flags don't include the shader stage.
+    #[error("visibility flags don't include the shader stage")]
     Invisible,
-    /// The load/store access flags don't match the shader.
+    #[error("load/store access flags {0:?} don't match the shader")]
     WrongUsage(naga::GlobalUse),
-    /// The type on the shader side does not match the pipeline binding.
+    #[error("type on the shader side does not match the pipeline binding")]
     WrongType,
-    /// The size of a buffer structure, added to one element of an unbound array,
-    /// if it's the last field, ended up greater than the given `min_binding_size`.
+    #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
     WrongBufferSize(wgt::BufferAddress),
-    /// The view dimension doesn't match the shader.
+    #[error("view dimension {dim:?} (is array: {is_array}) doesn't match the shader")]
     WrongTextureViewDimension { dim: spirv::Dim, is_array: bool },
-    /// The component type of a sampled texture doesn't match the shader.
+    #[error("component type {0:?} of a sampled texture doesn't match the shader")]
     WrongTextureComponentType(Option<naga::ScalarKind>),
-    /// Texture sampling capability doesn't match the shader.
+    #[error("texture sampling capability doesn't match the shader")]
     WrongTextureSampled,
-    /// The multisampled flag doesn't match the shader.
+    #[error("multisampled flag doesn't match the shader")]
     WrongTextureMultisampled,
-    /// The comparison flag doesn't match the shader.
+    #[error("comparison flag doesn't match the shader")]
     WrongSamplerComparison,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum InputError {
-    /// The input is not provided by the earlier stage in the pipeline.
+    #[error("input is not provided by the earlier stage in the pipeline")]
     Missing,
-    /// The input type is not compatible with the provided.
+    #[error("input type is not compatible with the provided")]
     WrongType,
 }
 
 /// Errors produced when validating a programmable stage of a pipeline.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum StageError {
-    /// Unable to find an entry point matching the specified execution model.
+    #[error("unable to find an entry point matching the {0:?} execution model")]
     MissingEntryPoint(spirv::ExecutionModel),
-    /// Error matching a global binding against the pipeline layout.
+    #[error("error matching global binding at index {binding} in set {set} against the pipeline layout: {error}")]
     Binding {
         set: u32,
         binding: u32,
         error: BindingError,
     },
-    /// Error matching the stage input against the previous stage outputs.
+    #[error(
+        "error matching the stage input at {location} against the previous stage outputs: {error}"
+    )]
     Input {
         location: wgt::ShaderLocation,
         error: InputError,
