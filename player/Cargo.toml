@@ -12,11 +12,6 @@ keywords = ["graphics"]
 license = "MPL-2.0"
 publish = false
 
-[lib]
-
-[[bin]]
-name = "play"
-
 [features]
 
 [dependencies]

@@ -1,17 +1,6 @@
 (
 	backends: (bits: 0x7),
 	tests: [
-		(
-			path: "buffer-copy.ron",
-			features: (bits: 0x0),
-			expectations: [
-				(
-					name: "basic",
-					buffer: (index: 0, epoch: 1),
-					offset: 0,
-					data: [0x00, 0x00, 0x80, 0xBF],
-				)
-			],
-		),
+		"buffer-copy.ron",
 	],
 )
