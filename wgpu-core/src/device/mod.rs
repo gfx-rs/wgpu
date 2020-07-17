@@ -3,12 +3,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model::{self, BindGroupError},
+    binding_model::{self, CreateBindGroupError},
     command, conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    validation::{self, check_buffer_usage},
+    validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, LifeGuard, MissingBufferUsageError, MultiRefCount, PrivateFeatures, Stored,
     SubmissionIndex, MAX_BIND_GROUPS,
 };
@@ -1503,7 +1503,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
-    ) -> Result<id::BindGroupId, BindGroupError> {
+    ) -> Result<id::BindGroupId, CreateBindGroupError> {
         use crate::binding_model::BindingResource as Br;
 
         span!(_guard, INFO, "Device::create_bind_group");
@@ -1521,7 +1521,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let actual = desc.entries.len();
         let expected = bind_group_layout.entries.len();
         if actual != expected {
-            return Err(BindGroupError::BindingsNumMismatch { expected, actual });
+            return Err(CreateBindGroupError::BindingsNumMismatch { expected, actual });
         }
 
         let mut desc_set = {
@@ -1572,7 +1572,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let decl = bind_group_layout
                     .entries
                     .get(&binding)
-                    .ok_or(BindGroupError::MissingBindingDeclaration(binding))?;
+                    .ok_or(CreateBindGroupError::MissingBindingDeclaration(binding))?;
                 let descriptors: SmallVec<[_; 1]> = match entry.resource {
                     Br::Buffer(ref bb) => {
                         let (pub_usage, internal_use, min_size, dynamic) = match decl.ty {
@@ -1600,7 +1600,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 dynamic,
                             ),
                             _ => {
-                                return Err(BindGroupError::WrongBindingType {
+                                return Err(CreateBindGroupError::WrongBindingType {
                                     binding,
                                     actual: decl.ty.clone(),
                                     expected:
@@ -1609,23 +1609,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         };
 
-                        assert_eq!(
-                            bb.offset % wgt::BIND_BUFFER_ALIGNMENT,
-                            0,
-                            "Buffer offset {} must be a multiple of BIND_BUFFER_ALIGNMENT",
-                            bb.offset
-                        );
+                        if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
+                            return Err(CreateBindGroupError::UnalignedBufferOffset(bb.offset));
+                        }
 
                         let buffer = used
                             .buffers
                             .use_extend(&*buffer_guard, bb.buffer_id, (), internal_use)
                             .unwrap();
-                        assert!(
-                            buffer.usage.contains(pub_usage),
-                            "Buffer usage {:?} must contain usage flag(s) {:?}",
-                            buffer.usage,
-                            pub_usage
-                        );
+                        check_buffer_usage(buffer.usage, pub_usage)?;
                         let (bind_size, bind_end) = match bb.size {
                             Some(size) => {
                                 let end = bb.offset + size.get();
@@ -1643,7 +1635,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if pub_usage == wgt::BufferUsage::UNIFORM
                             && (device.limits.max_uniform_buffer_binding_size as u64) < bind_size
                         {
-                            return Err(BindGroupError::UniformBufferRangeTooLarge);
+                            return Err(CreateBindGroupError::UniformBufferRangeTooLarge);
                         }
 
                         // Record binding info for validating dynamic offsets
@@ -1678,13 +1670,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                                 // Check the actual sampler to also (not) be a comparison sampler
                                 if sampler.comparison != comparison {
-                                    return Err(BindGroupError::WrongSamplerComparison);
+                                    return Err(CreateBindGroupError::WrongSamplerComparison);
                                 }
 
                                 SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
                             }
                             _ => {
-                                return Err(BindGroupError::WrongBindingType {
+                                return Err(CreateBindGroupError::WrongBindingType {
                                     binding,
                                     actual: decl.ty.clone(),
                                     expected: "Sampler",
@@ -1710,7 +1702,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     resource::TextureUse::STORAGE_STORE
                                 },
                             ),
-                            _ => return Err(BindGroupError::WrongBindingType {
+                            _ => return Err(CreateBindGroupError::WrongBindingType {
                                 binding,
                                 actual: decl.ty.clone(),
                                 expected: "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture"
@@ -1732,18 +1724,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         internal_use,
                                     )
                                     .unwrap();
-                                assert!(
-                                    texture.usage.contains(pub_usage),
-                                    "Texture usage {:?} must contain usage flag(s) {:?}",
-                                    texture.usage,
-                                    pub_usage
-                                );
+                                check_texture_usage(texture.usage, pub_usage)?;
                                 let image_layout =
                                     conv::map_texture_state(internal_use, view.range.aspects).1;
                                 SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
                             }
                             resource::TextureViewInner::SwapChain { .. } => {
-                                panic!("Unable to create a bind group with a swap chain image")
+                                return Err(CreateBindGroupError::SwapChainImage)
                             }
                         }
                     }
@@ -1772,7 +1759,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
                             }
                             _ => {
-                                return Err(BindGroupError::WrongBindingType {
+                                return Err(CreateBindGroupError::WrongBindingType {
                                     binding,
                                     actual: decl.ty.clone(),
                                     expected: "SampledTextureArray",
@@ -1802,25 +1789,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                                 internal_use,
                                             )
                                             .unwrap();
-                                        assert!(
-                                            texture.usage.contains(pub_usage),
-                                            "Texture usage {:?} must contain usage flag(s) {:?}",
-                                            texture.usage,
-                                            pub_usage
-                                        );
+                                        check_texture_usage(texture.usage, pub_usage)?;
                                         let image_layout = conv::map_texture_state(
                                             internal_use,
                                             view.range.aspects,
                                         )
                                         .1;
-                                        hal::pso::Descriptor::Image(raw, image_layout)
+                                        Ok(hal::pso::Descriptor::Image(raw, image_layout))
                                     }
-                                    resource::TextureViewInner::SwapChain { .. } => panic!(
-                                        "Unable to create a bind group with a swap chain image"
-                                    ),
+                                    resource::TextureViewInner::SwapChain { .. } => {
+                                        Err(CreateBindGroupError::SwapChainImage)
+                                    }
                                 }
                             })
-                            .collect()
+                            .collect::<Result<_, _>>()?
                     }
                 };
                 writes.alloc().init(hal::pso::DescriptorSetWrite {

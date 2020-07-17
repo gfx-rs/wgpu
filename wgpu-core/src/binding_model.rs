@@ -6,7 +6,8 @@ use crate::{
     device::SHADER_STAGE_COUNT,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     track::{TrackerSet, DUMMY_SELECTOR},
-    FastHashMap, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
+    FastHashMap, LifeGuard, MissingBufferUsageError, MissingTextureUsageError, MultiRefCount,
+    RefCount, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -23,42 +24,111 @@ use std::{borrow::Borrow, fmt};
 pub enum BindGroupLayoutError {
     ConflictBinding(u32),
     MissingFeature(wgt::Features),
-    /// Arrays of bindings can't be 0 elements long
     ZeroCount,
-    /// Arrays of bindings unsupported for this type of binding
     ArrayUnsupported,
-    /// Bindings go over binding count limits
     TooManyBindings(BindingTypeMaxCountError),
 }
 
+impl fmt::Display for BindGroupLayoutError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::ConflictBinding(index) => write!(f, "conflicting binding at index {}", index,),
+            Self::MissingFeature(feature) => {
+                write!(f, "required device feature is missing: {:?}", feature,)
+            }
+            Self::ZeroCount => write!(f, "arrays of bindings can't be 0 elements long"),
+            Self::ArrayUnsupported => {
+                write!(f, "arrays of bindings unsupported for this type of binding")
+            }
+            Self::TooManyBindings(error) => write!(f, "{}", error),
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
-pub enum BindGroupError {
-    /// Number of bindings in bind group descriptor does not match
-    /// the number of bindings defined in the bind group layout.
-    BindingsNumMismatch { actual: usize, expected: usize },
-    /// Unable to find a corresponding declaration for the given binding,
+pub enum CreateBindGroupError {
+    BindingsNumMismatch {
+        actual: usize,
+        expected: usize,
+    },
     MissingBindingDeclaration(u32),
-    /// The given binding has a different type than the one in the layout.
+    MissingBufferUsage(MissingBufferUsageError),
+    MissingTextureUsage(MissingTextureUsageError),
+    SwapChainImage,
     WrongBindingType {
-        // Index of the binding
         binding: u32,
-        // The type given to the function
         actual: wgt::BindingType,
-        // Human-readable description of expected types
         expected: &'static str,
     },
-    /// The given sampler is/is not a comparison sampler,
-    /// while the layout type indicates otherwise.
     WrongSamplerComparison,
-    /// Uniform buffer binding range exceeds [`wgt::Limits::max_uniform_buffer_binding_size`] limit
+    UnalignedBufferOffset(u64),
     UniformBufferRangeTooLarge,
 }
 
+impl From<MissingBufferUsageError> for CreateBindGroupError {
+    fn from(error: MissingBufferUsageError) -> Self {
+        Self::MissingBufferUsage(error)
+    }
+}
+
+impl From<MissingTextureUsageError> for CreateBindGroupError {
+    fn from(error: MissingTextureUsageError) -> Self {
+        Self::MissingTextureUsage(error)
+    }
+}
+
+impl fmt::Display for CreateBindGroupError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::BindingsNumMismatch { actual, expected } => write!(
+                f,
+                "number of bindings in bind group descriptor ({}) does not match the number of bindings defined in the bind group layout ({})",
+                actual,
+                expected,
+            ),
+            Self::MissingBindingDeclaration(index) => write!(
+                f,
+                "unable to find a corresponding declaration for binding {}",
+                index,
+            ),
+            Self::MissingBufferUsage(error) => write!(f, "{}", error),
+            Self::MissingTextureUsage(error) => write!(f, "{}", error),
+            Self::SwapChainImage => write!(f, "attempted to use swap chain image as part of bind group"),
+            Self::WrongBindingType { binding, actual, expected } => write!(
+                f,
+                "binding {} has a different type ({:?}) than the one in the layout ({})",
+                binding,
+                actual,
+                expected,
+            ),
+            Self::WrongSamplerComparison => write!(f, "the given sampler is/is not a comparison sampler, while the layout type indicates otherwise"),
+            Self::UnalignedBufferOffset(offset) => write!(
+                f,
+                "buffer offset {} must be a multiple of {}",
+                offset,
+                wgt::BIND_BUFFER_ALIGNMENT,
+            ),
+            Self::UniformBufferRangeTooLarge => write!(f, "uniform buffer binding range exceeds `max_uniform_buffer_binding_size` limit"),
+        }
+    }
+}
+
+/// Bindings go over binding count limits
 #[derive(Clone, Debug)]
 pub struct BindingTypeMaxCountError {
     pub kind: BindingTypeMaxCountErrorKind,
     pub stage: wgt::ShaderStage,
     pub count: u32,
+}
+
+impl fmt::Display for BindingTypeMaxCountError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "too many bindings of type {:?} in stage {:?}, limit is {}",
+            self.kind, self.stage, self.count,
+        )
+    }
 }
 
 #[derive(Clone, Debug)]
