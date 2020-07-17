@@ -12,6 +12,11 @@ keywords = ["graphics"]
 license = "MPL-2.0"
 publish = false
 
+[lib]
+
+[[bin]]
+name = "play"
+
 [features]
 
 [dependencies]
@@ -36,3 +41,6 @@ features = ["replay", "raw-window-handle"]
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
 gfx-backend-vulkan = { version = "0.5", features = ["x11"] }
+
+[dev-dependencies]
+serde = "1"

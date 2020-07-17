@@ -1,0 +1,23 @@
+[
+    CreateBuffer(
+        id: Id(0, 1, Empty),
+        desc: (
+            label: "",
+            size: 16,
+            usage: (
+                bits: 41,
+            ),
+            mapped_at_creation: false,
+        ),
+    ),
+    WriteBuffer(
+        id: Id(0, 1, Empty),
+        data: "data1.bin",
+        range: (
+            start: 0,
+            end: 16,
+        ),
+        queued: true,
+    ),
+    Submit(1, []),
+]
