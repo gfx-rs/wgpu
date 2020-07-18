@@ -26,6 +26,7 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
+use thiserror::Error;
 
 use std::thread::ThreadId;
 
@@ -141,12 +142,18 @@ impl<C: Clone> BasePass<C> {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum CommandEncoderFinishError {
+    #[error("command buffer must be recording")]
+    NotRecording,
+}
+
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor,
-    ) -> id::CommandBufferId {
+    ) -> Result<id::CommandBufferId, CommandEncoderFinishError> {
         span!(_guard, INFO, "CommandEncoder::finish");
 
         let hub = B::hub(self);
@@ -155,7 +162,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         //TODO: actually close the last recorded command buffer
         let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
         let comb = &mut comb_guard[encoder_id];
-        assert!(comb.is_recording, "Command buffer must be recording");
+        if !comb.is_recording {
+            return Err(CommandEncoderFinishError::NotRecording);
+        }
         comb.is_recording = false;
         // stop tracking the swapchain image, if used
         if let Some((ref sc_id, _)) = comb.used_swap_chain {
@@ -166,7 +175,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             comb.trackers.views.remove(view_id.value);
         }
         log::trace!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
-        encoder_id
+        Ok(encoder_id)
     }
 
     pub fn command_encoder_push_debug_group<B: GfxBackend>(

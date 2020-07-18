@@ -136,6 +136,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
         }
         self.command_encoder_finish::<B>(encoder, &wgt::CommandBufferDescriptor { todo: 0 })
+            .unwrap()
     }
 
     fn process<B: wgc::hub::GfxBackend>(
