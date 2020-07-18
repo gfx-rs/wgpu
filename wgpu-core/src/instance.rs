@@ -23,7 +23,7 @@ use hal::{
     window::Surface as _,
     Instance as _,
 };
-use std::fmt::Display;
+use thiserror::Error;
 
 /// Size that is guaranteed to be available in push constants.
 ///
@@ -241,28 +241,17 @@ impl AdapterInfo {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq)]
 /// Error when requesting a device from the adaptor
 pub enum RequestDeviceError {
-    /// Unsupported feature extension was requested
+    #[error("unsupported features were requested: {0:?}")]
     UnsupportedFeature(wgt::Features),
-    /// Requested device limits were exceeded
+    #[error("device has no queue supporting graphics")]
+    NoGraphicsQueue,
+    #[error(transparent)]
+    DeviceCreationError(#[from] hal::device::CreationError),
+    #[error("some of the requested device limits are not supported")]
     LimitsExceeded,
-}
-
-impl Display for RequestDeviceError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match &self {
-            RequestDeviceError::UnsupportedFeature(features) => write!(
-                f,
-                "Cannot enable features that adapter doesn't support. Unsupported extensions: {:?}",
-                features
-            ),
-            RequestDeviceError::LimitsExceeded => {
-                write!(f, "Some of the requested limits are not supported",)
-            }
-        }
-    }
 }
 
 /// Supported physical device types.
@@ -685,8 +674,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .queue_families
                 .iter()
                 .find(|family| family.queue_type().supports_graphics())
-                .unwrap();
-            let mut gpu = unsafe { phd.open(&[(family, &[1.0])], enabled_features).unwrap() };
+                .ok_or(RequestDeviceError::NoGraphicsQueue)?;
+            let mut gpu = unsafe { phd.open(&[(family, &[1.0])], enabled_features)? };
 
             let limits = phd.limits();
             assert_eq!(
