@@ -13,9 +13,11 @@ use crate::{
     id,
     resource::BufferUse,
     span,
+    validation::{check_buffer_usage, MissingBufferUsageError},
 };
 
 use hal::command::CommandBuffer as _;
+use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage};
 
 use std::{fmt, iter, str};
@@ -108,55 +110,20 @@ struct State {
     debug_scope_depth: u32,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum ComputePassError {
-    BindGroupIndexOutOfRange {
-        index: u8,
-        max: u32,
-    },
+    #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
+    BindGroupIndexOutOfRange { index: u8, max: u32 },
+    #[error("a compute pipeline must be bound")]
     UnboundPipeline,
-    MissingBufferUsage {
-        actual: BufferUsage,
-        expected: BufferUsage,
-    },
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
-    Bind(BindError),
-    PushConstants(PushConstantUploadError),
-}
-
-impl From<PushConstantUploadError> for ComputePassError {
-    fn from(error: PushConstantUploadError) -> Self {
-        Self::PushConstants(error)
-    }
-}
-
-impl From<BindError> for ComputePassError {
-    fn from(error: BindError) -> Self {
-        Self::Bind(error)
-    }
-}
-
-impl fmt::Display for ComputePassError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::BindGroupIndexOutOfRange { index, max } => write!(
-                f,
-                "bind group index {} is greater than the device's requested `max_bind_group` limit {}",
-                index,
-                max,
-            ),
-            Self::UnboundPipeline => write!(f, "a compute pipeline must be bound"),
-            Self::MissingBufferUsage { actual, expected } => write!(
-                f,
-                "buffer usage is {:?} which does not contain required usage {:?}",
-                actual,
-                expected,
-            ),
-            Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
-            Self::Bind(error) => write!(f, "{}", error),
-            Self::PushConstants(error) => write!(f, "{}", error),
-        }
-    }
+    #[error(transparent)]
+    Bind(#[from] BindError),
+    #[error(transparent)]
+    PushConstants(#[from] PushConstantUploadError),
 }
 
 // Common routines between render/compute
@@ -381,12 +348,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         (),
                         BufferUse::INDIRECT,
                     );
-                    if !src_buffer.usage.contains(BufferUsage::INDIRECT) {
-                        return Err(ComputePassError::MissingBufferUsage {
-                            actual: src_buffer.usage,
-                            expected: BufferUsage::INDIRECT,
-                        });
-                    }
+                    check_buffer_usage(src_buffer.usage, BufferUsage::INDIRECT)?;
 
                     let barriers = src_pending.map(|pending| pending.into_hal(src_buffer));
 

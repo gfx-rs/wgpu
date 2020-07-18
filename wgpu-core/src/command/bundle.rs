@@ -46,10 +46,12 @@ use crate::{
     resource::BufferUse,
     span,
     track::TrackerSet,
+    validation::{check_buffer_usage, MissingBufferUsageError, MissingTextureUsageError},
     LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Borrow, fmt, iter, marker::PhantomData, ops::Range};
+use std::{borrow::Borrow, iter, marker::PhantomData, ops::Range};
+use thiserror::Error;
 
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
@@ -91,17 +93,10 @@ impl RenderBundleEncoder {
 }
 
 /// Error type returned from `RenderBundleEncoder::new` if the sample count is invalid.
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum CreateRenderBundleError {
+    #[error("invalid number of samples {0}")]
     InvalidSampleCount(u32),
-}
-
-impl fmt::Display for CreateRenderBundleError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::InvalidSampleCount(count) => write!(f, "invalid number of samples {}", count),
-        }
-    }
 }
 
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
@@ -599,119 +594,38 @@ impl State {
 }
 
 /// Error encountered when encoding a render command.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum RenderCommandError {
-    BindGroupIndexOutOfRange {
-        index: u8,
-        max: u32,
-    },
+    #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
+    BindGroupIndexOutOfRange { index: u8, max: u32 },
+    #[error(
+        "dynamic buffer offset {0} is not a multiple of the required buffer alignment {}",
+        wgt::BIND_BUFFER_ALIGNMENT
+    )]
     UnalignedBufferOffset(u64),
-    InvalidDynamicOffsetCount {
-        actual: usize,
-        expected: usize,
-    },
+    #[error("number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
+    InvalidDynamicOffsetCount { actual: usize, expected: usize },
+    #[error("render pipeline output formats and sample counts do not match render pass attachment formats")]
     IncompatiblePipeline,
+    #[error("pipeline is not compatible with the depth-stencil read-only render pass")]
     IncompatibleReadOnlyDepthStencil,
-    MissingBufferUsage {
-        actual: wgt::BufferUsage,
-        expected: wgt::BufferUsage,
-    },
-    InvalidTextureUsage {
-        actual: wgt::TextureUsage,
-        expected: wgt::TextureUsage,
-    },
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error(transparent)]
+    MissingTextureUsage(#[from] MissingTextureUsageError),
+    #[error("a render pipeline must be bound")]
     UnboundPipeline,
-    PushConstants(PushConstantUploadError),
-    VertexBeyondLimit {
-        last_vertex: u32,
-        vertex_limit: u32,
-    },
+    #[error(transparent)]
+    PushConstants(#[from] PushConstantUploadError),
+    #[error("vertex {last_vertex} extends beyond limit {vertex_limit}")]
+    VertexBeyondLimit { last_vertex: u32, vertex_limit: u32 },
+    #[error("instance {last_instance} extends beyond limit {instance_limit}")]
     InstanceBeyondLimit {
         last_instance: u32,
         instance_limit: u32,
     },
-    IndexBeyondLimit {
-        last_index: u32,
-        index_limit: u32,
-    },
-}
-
-impl From<PushConstantUploadError> for RenderCommandError {
-    fn from(error: PushConstantUploadError) -> Self {
-        Self::PushConstants(error)
-    }
-}
-
-impl fmt::Display for RenderCommandError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::BindGroupIndexOutOfRange { index, max } => write!(
-                f,
-                "bind group index {} is greater than the device's requested `max_bind_group` limit {}",
-                index,
-                max,
-            ),
-            Self::UnalignedBufferOffset(offset) => write!(
-                f,
-                "dynamic buffer offset {} is not a multiple of the required buffer alignment {}",
-                offset,
-                wgt::BIND_BUFFER_ALIGNMENT,
-            ),
-            Self::InvalidDynamicOffsetCount { actual, expected } => write!(
-                f,
-                "number of buffer offsets ({}) does not match the number of dynamic bindings ({})",
-                actual,
-                expected,
-            ),
-            Self::IncompatiblePipeline => write!(f, "render pipeline output formats and sample counts do not match render pass attachment formats"),
-            Self::IncompatibleReadOnlyDepthStencil => write!(f, "pipeline is not compatible with the depth-stencil read-only render pass"),
-            Self::MissingBufferUsage { actual, expected } => write!(
-                f,
-                "buffer usage is {:?} which does not contain required usage {:?}",
-                actual,
-                expected,
-            ),
-            Self::InvalidTextureUsage { actual, expected } => write!(
-                f,
-                "texture usage is {:?} which does not contain required usage {:?}",
-                actual,
-                expected,
-            ),
-            Self::UnboundPipeline => write!(f, "a render pipeline must be bound"),
-            Self::PushConstants(error) => write!(f, "{}", error),
-            Self::VertexBeyondLimit { last_vertex, vertex_limit } => write!(
-                f,
-                "vertex {} extends beyond limit {}",
-                last_vertex,
-                vertex_limit,
-            ),
-            Self::InstanceBeyondLimit { last_instance, instance_limit } => write!(
-                f,
-                "instance {} extends beyond limit {}",
-                last_instance,
-                instance_limit,
-            ),
-            Self::IndexBeyondLimit { last_index, index_limit } => write!(
-                f,
-                "index {} extends beyond limit {}",
-                last_index,
-                index_limit,
-            ),
-        }
-    }
-}
-
-/// Checks that the given buffer usage contains the required buffer usage,
-/// returns an error otherwise.
-pub fn check_buffer_usage(
-    actual: wgt::BufferUsage,
-    expected: wgt::BufferUsage,
-) -> Result<(), RenderCommandError> {
-    if !actual.contains(expected) {
-        Err(RenderCommandError::MissingBufferUsage { actual, expected })
-    } else {
-        Ok(())
-    }
+    #[error("index {last_index} extends beyond limit {index_limit}")]
+    IndexBeyondLimit { last_index: u32, index_limit: u32 },
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {

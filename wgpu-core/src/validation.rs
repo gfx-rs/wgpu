@@ -8,6 +8,46 @@ use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
 #[derive(Clone, Debug, Error)]
+#[error("buffer usage is {actual:?} which does not contain required usage {expected:?}")]
+pub struct MissingBufferUsageError {
+    pub(crate) actual: wgt::BufferUsage,
+    pub(crate) expected: wgt::BufferUsage,
+}
+
+/// Checks that the given buffer usage contains the required buffer usage,
+/// returns an error otherwise.
+pub fn check_buffer_usage(
+    actual: wgt::BufferUsage,
+    expected: wgt::BufferUsage,
+) -> Result<(), MissingBufferUsageError> {
+    if !actual.contains(expected) {
+        Err(MissingBufferUsageError { actual, expected })
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("texture usage is {actual:?} which does not contain required usage {expected:?}")]
+pub struct MissingTextureUsageError {
+    pub(crate) actual: wgt::TextureUsage,
+    pub(crate) expected: wgt::TextureUsage,
+}
+
+/// Checks that the given texture usage contains the required texture usage,
+/// returns an error otherwise.
+pub fn check_texture_usage(
+    actual: wgt::TextureUsage,
+    expected: wgt::TextureUsage,
+) -> Result<(), MissingTextureUsageError> {
+    if !actual.contains(expected) {
+        Err(MissingTextureUsageError { actual, expected })
+    } else {
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Error)]
 pub enum BindingError {
     #[error("binding is missing from the pipeline layout")]
     Missing,

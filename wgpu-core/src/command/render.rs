@@ -6,7 +6,7 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        check_buffer_usage, BasePass, BasePassRef, RenderCommandError,
+        BasePass, BasePassRef, RenderCommandError,
     },
     conv,
     device::{
@@ -19,11 +19,15 @@ use crate::{
     resource::{BufferUse, TextureUse, TextureViewInner},
     span,
     track::TrackerSet,
+    validation::{
+        check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
+    },
     Stored,
 };
 
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
+use thiserror::Error;
 use wgt::{
     BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
 };
@@ -270,27 +274,20 @@ impl OptionalState {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Error, PartialEq)]
 pub enum DrawError {
+    #[error("blend color needs to be set")]
     MissingBlendColor,
+    #[error("stencil reference needs to be set")]
     MissingStencilReference,
+    #[error("render pipeline must be set")]
     MissingPipeline,
+    #[error("current render pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {index}")]
     IncompatibleBindGroup {
         index: u32,
         //expected: BindGroupLayoutId,
         //provided: Option<(BindGroupLayoutId, BindGroupId)>,
     },
-}
-
-impl fmt::Display for DrawError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            DrawError::MissingBlendColor => write!(f, "blend color needs to be set"),
-            DrawError::MissingStencilReference => write!(f, "stencil reference needs to be set"),
-            DrawError::MissingPipeline => write!(f, "render pipeline must be set"),
-            DrawError::IncompatibleBindGroup { index } => write!(f, "current render pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {}", index),
-        }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -408,25 +405,34 @@ impl State {
 }
 
 /// Error encountered when performing a render pass.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum RenderPassError {
+    #[error("attachment's sample count {0} is invalid")]
     InvalidSampleCount(u8),
+    #[error("attachment with resolve target must be multi-sampled")]
     InvalidResolveSourceSampleCount,
+    #[error("resolve target must have a sample count of 1")]
     InvalidResolveTargetSampleCount,
+    #[error("extent state {state_extent:?} must match extent from view {view_extent:?}")]
     ExtentStateMismatch {
         state_extent: hal::image::Extent,
         view_extent: hal::image::Extent,
     },
+    #[error("attempted to use a swap chain image as a depth/stencil attachment")]
     SwapChainImageAsDepthStencil,
+    #[error("unable to clear non-present/read-only depth")]
     InvalidDepthOps,
+    #[error("unable to clear non-present/read-only stencil")]
     InvalidStencilOps,
-    SampleCountMismatch {
-        actual: u8,
-        expected: u8,
-    },
+    #[error("all attachments must have the same sample count, found {actual} != {expected}")]
+    SampleCountMismatch { actual: u8, expected: u8 },
+    #[error("texture view's swap chain must match swap chain in use")]
     SwapChainMismatch,
+    #[error("setting `values_offset` to be `None` is only for internal use in render bundles")]
     InvalidValuesOffset,
+    #[error("required device features not enabled: {0:?}")]
     MissingDeviceFeatures(wgt::Features),
+    #[error("indirect draw with offset {offset}{} uses bytes {begin_offset}..{end_offset} which overruns indirect buffer of size {buffer_size}", count.map_or_else(String::new, |v| format!(" and count {}", v)))]
     IndirectBufferOverrun {
         offset: u64,
         count: Option<u32>,
@@ -434,90 +440,33 @@ pub enum RenderPassError {
         end_offset: u64,
         buffer_size: u64,
     },
+    #[error("indirect draw uses bytes {begin_count_offset}..{end_count_offset} which overruns indirect buffer of size {count_buffer_size}")]
     IndirectCountBufferOverrun {
         begin_count_offset: u64,
         end_count_offset: u64,
         count_buffer_size: u64,
     },
+    #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
+    #[error("render bundle output formats do not match render pass attachment formats")]
     IncompatibleRenderBundle,
-    RenderCommand(RenderCommandError),
-    Draw(DrawError),
-    Bind(BindError),
+    #[error(transparent)]
+    RenderCommand(#[from] RenderCommandError),
+    #[error(transparent)]
+    Draw(#[from] DrawError),
+    #[error(transparent)]
+    Bind(#[from] BindError),
 }
 
-impl From<RenderCommandError> for RenderPassError {
-    fn from(error: RenderCommandError) -> Self {
-        Self::RenderCommand(error)
+impl From<MissingBufferUsageError> for RenderPassError {
+    fn from(error: MissingBufferUsageError) -> Self {
+        Self::RenderCommand(error.into())
     }
 }
 
-impl From<DrawError> for RenderPassError {
-    fn from(error: DrawError) -> Self {
-        Self::Draw(error)
-    }
-}
-
-impl From<BindError> for RenderPassError {
-    fn from(error: BindError) -> Self {
-        Self::Bind(error)
-    }
-}
-
-impl fmt::Display for RenderPassError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::InvalidSampleCount(count) => write!(
-                f,
-                "attachment's sample count {} is invalid",
-                count,
-            ),
-            Self::InvalidResolveSourceSampleCount => write!(f, "attachment with resolve target must be multi-sampled"),
-            Self::InvalidResolveTargetSampleCount => write!(f, "resolve target must have a sample count of 1"),
-            Self::ExtentStateMismatch { state_extent, view_extent } => write!(
-                f,
-                "extent state {:?} must match extent from view {:?}",
-                state_extent,
-                view_extent,
-            ),
-            Self::SwapChainImageAsDepthStencil => write!(f, "attempted to use a swap chain image as a depth/stencil attachment"),
-            Self::InvalidDepthOps => write!(f, "unable to clear non-present/read-only depth"),
-            Self::InvalidStencilOps => write!(f, "unable to clear non-present/read-only stencil"),
-            Self::SampleCountMismatch { actual, expected } => write!(
-                f,
-                "all attachments must have the same sample count, found {} != {}",
-                actual,
-                expected,
-            ),
-            Self::SwapChainMismatch => write!(f, "texture view's swap chain must match swap chain in use"),
-            Self::InvalidValuesOffset => write!(f, "setting `values_offset` to be `None` is only for internal use in render bundles"),
-            Self::MissingDeviceFeatures(expected) => write!(
-                f,
-                "required device features not enabled: {:?}",
-                expected,
-            ),
-            Self::IndirectBufferOverrun { offset, count, begin_offset, end_offset, buffer_size } => write!(
-                f,
-                "indirect draw with offset {}{} uses bytes {}..{} which overruns indirect buffer of size {}",
-                offset,
-                count.map_or_else(String::new, |v| format!(" and count {}", v)),
-                begin_offset,
-                end_offset,
-                buffer_size,
-            ),
-            Self::IndirectCountBufferOverrun { begin_count_offset, end_count_offset, count_buffer_size } => write!(
-                f,
-                "indirect draw uses bytes {}..{} which overruns indirect buffer of size {}",
-                begin_count_offset,
-                end_count_offset,
-                count_buffer_size,
-            ),
-            Self::InvalidPopDebugGroup => write!(f, "cannot pop debug group, because number of pushed debug groups is zero"),
-            Self::IncompatibleRenderBundle => write!(f, "render bundle output formats do not match render pass attachment formats"),
-            Self::RenderCommand(error) => write!(f, "{}", error),
-            Self::Draw(error) => write!(f, "{}", error),
-            Self::Bind(error) => write!(f, "{}", error),
-        }
+impl From<MissingTextureUsageError> for RenderPassError {
+    fn from(error: MissingTextureUsageError) -> Self {
+        Self::RenderCommand(error.into())
     }
 }
 
@@ -1642,13 +1591,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         for ot in output_attachments {
             let texture = &texture_guard[ot.texture_id.value];
-            if !texture.usage.contains(TextureUsage::OUTPUT_ATTACHMENT) {
-                return Err(RenderCommandError::InvalidTextureUsage {
-                    actual: texture.usage,
-                    expected: TextureUsage::OUTPUT_ATTACHMENT,
-                }
-                .into());
-            }
+            check_texture_usage(texture.usage, TextureUsage::OUTPUT_ATTACHMENT)?;
 
             // the tracker set of the pass is always in "extend" mode
             trackers
