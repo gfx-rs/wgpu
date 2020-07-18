@@ -17,28 +17,31 @@ use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
 
-use std::{borrow::Borrow, fmt};
+use std::{borrow::Borrow, ops::Range};
 
-#[derive(Clone, Debug)]
+use thiserror::Error;
+
+#[derive(Clone, Debug, Error)]
 pub enum BindGroupLayoutError {
+    #[error("conflicting binding at index {0}")]
     ConflictBinding(u32),
+    #[error("required device feature is missing: {0:?}")]
     MissingFeature(wgt::Features),
-    /// Arrays of bindings can't be 0 elements long
+    #[error("arrays of bindings can't be 0 elements long")]
     ZeroCount,
-    /// Arrays of bindings unsupported for this type of binding
+    #[error("arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
-    /// Bindings go over binding count limits
+    #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
 }
 
-#[derive(Clone, Debug)]
-pub enum BindGroupError {
-    /// Number of bindings in bind group descriptor does not match
-    /// the number of bindings defined in the bind group layout.
+#[derive(Clone, Debug, Error)]
+pub enum CreateBindGroupError {
+    #[error("number of bindings in bind group descriptor ({actual}) does not match the number of bindings defined in the bind group layout ({expected})")]
     BindingsNumMismatch { actual: usize, expected: usize },
-    /// Unable to find a corresponding declaration for the given binding,
+    #[error("unable to find a corresponding declaration for the given binding {0}")]
     MissingBindingDeclaration(u32),
-    /// The given binding has a different type than the one in the layout.
+    #[error("binding {binding} has a different type ({actual:?}) than the one in the layout ({expected:?})")]
     WrongBindingType {
         // Index of the binding
         binding: u32,
@@ -47,14 +50,14 @@ pub enum BindGroupError {
         // Human-readable description of expected types
         expected: &'static str,
     },
-    /// The given sampler is/is not a comparison sampler,
-    /// while the layout type indicates otherwise.
+    #[error("the given sampler is/is not a comparison sampler, while the layout type indicates otherwise")]
     WrongSamplerComparison,
-    /// Uniform buffer binding range exceeds [`wgt::Limits::max_uniform_buffer_binding_size`] limit
+    #[error("uniform buffer binding range exceeds `max_uniform_buffer_binding_size` limit")]
     UniformBufferRangeTooLarge,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
+#[error("too many bindings of type {kind:?} in stage {stage:?}, limit is {count}")]
 pub struct BindingTypeMaxCountError {
     pub kind: BindingTypeMaxCountErrorKind,
     pub stage: wgt::ShaderStage,
@@ -78,6 +81,7 @@ pub(crate) struct PerStageBindingTypeCounter {
     fragment: u32,
     compute: u32,
 }
+
 impl PerStageBindingTypeCounter {
     pub(crate) fn add(&mut self, stage: wgt::ShaderStage, count: u32) {
         if stage.contains(wgt::ShaderStage::VERTEX) {
@@ -231,82 +235,64 @@ pub struct BindGroupLayout<B: hal::Backend> {
     pub(crate) count_validator: BindingTypeMaxCountValidator,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum PipelineLayoutError {
-    TooManyGroups(usize),
+    #[error("bind group layout count {actual} exceeds device bind group limit {max}")]
+    TooManyGroups { actual: usize, max: usize },
+    #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
-    PushConstantRangeTooLarge { index: usize },
-    MoreThanOnePushConstantRangePerStage { index: usize },
-    MisalignedPushConstantRange { index: usize },
+    #[error("push constant at index {index} has range {}..{} which exceeds device push constant size limit 0..{max}", range.start, range.end)]
+    PushConstantRangeTooLarge {
+        index: usize,
+        range: Range<u32>,
+        max: u32,
+    },
+    #[error("push constant range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
+    MoreThanOnePushConstantRangePerStage {
+        index: usize,
+        provided: wgt::ShaderStage,
+        intersected: wgt::ShaderStage,
+    },
+    #[error(
+        "push constant at index {index} has range bound {bound} not aligned to {}",
+        wgt::PUSH_CONSTANT_ALIGNMENT
+    )]
+    MisalignedPushConstantRange { index: usize, bound: u32 },
+    #[error("device does not have required feature: {0:?}")]
     MissingFeature(wgt::Features),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum PushConstantUploadError {
+    #[error("provided push constant with indices {offset}..{end_offset} overruns matching push constant range at index {idx}, with stage(s) {:?} and indices {:?}", range.stages, range.range)]
     TooLarge {
         offset: u32,
         end_offset: u32,
         idx: usize,
         range: wgt::PushConstantRange,
     },
+    #[error("provided push constant is for stage(s) {actual:?}, stage with a partial match found at index {idx} with stage(s) {matched:?}, however push constants must be complete matches")]
     PartialRangeMatch {
         actual: wgt::ShaderStage,
         idx: usize,
         matched: wgt::ShaderStage,
     },
+    #[error("provided push constant is for stage(s) {actual:?}, but intersects a push constant range (at index {idx}) with stage(s) {missing:?}. Push constants must provide the stages for all ranges they intersect")]
     MissingStages {
         actual: wgt::ShaderStage,
         idx: usize,
         missing: wgt::ShaderStage,
     },
+    #[error("provided push constant is for stage(s) {actual:?}, however the pipeline layout has no push constant range for the stage(s) {unmatched:?}")]
     UnmatchedStages {
         actual: wgt::ShaderStage,
         unmatched: wgt::ShaderStage,
     },
+    #[error(
+        "provided push constant offset {0} must be aligned to {}",
+        wgt::PUSH_CONSTANT_ALIGNMENT
+    )]
     Unaligned(u32),
-}
-
-impl fmt::Display for PushConstantUploadError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::TooLarge { offset, end_offset, idx, range } => write!(
-                f,
-                "provided push constant with indices {}..{} overruns matching push constant range (index {}) with stage(s) {:?} and indices {}..{}",
-                offset,
-                end_offset,
-                idx,
-                range.stages,
-                range.range.start,
-                range.range.end,
-            ),
-            Self::PartialRangeMatch { actual, idx, matched } => write!(
-                f,
-                "provided push constant is for stage(s) {:?}, stage with a partial match found at index {} with stage(s) {:?}, however push constants must be complete matches",
-                actual,
-                idx,
-                matched,
-            ),
-            Self::MissingStages { actual, idx, missing } => write!(
-                f,
-                "provided push constant is for stage(s) {:?}, but intersects a push constant range (at index {}) with stage(s) {:?}. Push constants must provide the stages for all ranges they intersect",
-                actual,
-                idx,
-                missing,
-            ),
-            Self::UnmatchedStages { actual, unmatched } => write!(
-                f,
-                "provided push constant is for stage(s) {:?}, however the pipeline layout has no push constant range for the stage(s) {:?}",
-                actual,
-                unmatched,
-            ),
-            Self::Unaligned(offset) => write!(
-                f,
-                "provided push constant offset {} must be aligned to {}",
-                offset,
-                wgt::PUSH_CONSTANT_ALIGNMENT,
-            )
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -423,27 +409,14 @@ pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;
 pub type BindGroupDescriptor<'a> =
     wgt::BindGroupDescriptor<'a, BindGroupLayoutId, BindGroupEntry<'a>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum BindError {
+    #[error("number of dynamic offsets ({actual}) doesn't match the number of dynamic bindings in the bind group layout ({expected})")]
     MismatchedDynamicOffsetCount { actual: usize, expected: usize },
+    #[error("dynamic binding at index {idx} is not properly aligned")]
     UnalignedDynamicBinding { idx: usize },
+    #[error("dynamic binding at index {idx} would overrun the buffer")]
     DynamicBindingOutOfBounds { idx: usize },
-}
-
-impl fmt::Display for BindError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::MismatchedDynamicOffsetCount { actual, expected } =>
-                write!(
-                    f,
-                    "number of dynamic offsets ({}) doesn't match the number of dynamic bindings in the bind group layout ({})",
-                    actual,
-                    expected,
-                ),
-            Self::UnalignedDynamicBinding { idx } => write!(f, "dynamic binding at index {} is not properly aligned", idx),
-            Self::DynamicBindingOutOfBounds { idx } => write!(f, "dynamic binding at index {} would overrun the buffer", idx),
-        }
-    }
 }
 
 #[derive(Debug)]

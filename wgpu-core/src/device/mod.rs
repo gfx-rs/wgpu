@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model::{self, BindGroupError},
+    binding_model::{self, CreateBindGroupError, PipelineLayoutError},
     command, conv,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, span, swap_chain,
@@ -1350,7 +1350,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
         id_in: Input<G, id::PipelineLayoutId>,
-    ) -> Result<id::PipelineLayoutId, binding_model::PipelineLayoutError> {
+    ) -> Result<id::PipelineLayoutId, PipelineLayoutError> {
         span!(_guard, INFO, "Device::create_pipeline_layout");
 
         let hub = B::hub(self);
@@ -1358,75 +1358,53 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        if desc.bind_group_layouts.len() > (device.limits.max_bind_groups as usize) {
-            log::error!(
-                "Bind group layout count {} exceeds device bind group limit {}",
-                desc.bind_group_layouts.len(),
-                device.limits.max_bind_groups
-            );
-            return Err(binding_model::PipelineLayoutError::TooManyGroups(
-                desc.bind_group_layouts.len(),
-            ));
+        let bind_group_layouts_count = desc.bind_group_layouts.len();
+        let device_max_bind_groups = device.limits.max_bind_groups as usize;
+        if bind_group_layouts_count > device_max_bind_groups {
+            return Err(PipelineLayoutError::TooManyGroups {
+                actual: bind_group_layouts_count,
+                max: device_max_bind_groups,
+            });
         }
 
         if !desc.push_constant_ranges.is_empty()
             && !device.features.contains(wgt::Features::PUSH_CONSTANTS)
         {
-            return Err(binding_model::PipelineLayoutError::MissingFeature(
+            return Err(PipelineLayoutError::MissingFeature(
                 wgt::Features::PUSH_CONSTANTS,
             ));
         }
         let mut used_stages = wgt::ShaderStage::empty();
         for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
-                log::error!(
-                    "Push constant range (index {}) provides for stage(s) {:?} but there exists another range that provides stage(s) {:?}. Each stage may only be provided by one range.",
+                return Err(PipelineLayoutError::MoreThanOnePushConstantRangePerStage {
                     index,
-                    pc.stages,
-                    pc.stages & used_stages,
-                );
-                return Err(
-                    binding_model::PipelineLayoutError::MoreThanOnePushConstantRangePerStage {
-                        index,
-                    },
-                );
+                    provided: pc.stages,
+                    intersected: pc.stages & used_stages,
+                });
             }
             used_stages |= pc.stages;
 
-            if device.limits.max_push_constant_size < pc.range.end {
-                log::error!(
-                    "Push constant range (index {}) has range {}..{} which exceeds device push constant size limit 0..{}",
+            let device_max_pc_size = device.limits.max_push_constant_size;
+            if device_max_pc_size < pc.range.end {
+                return Err(PipelineLayoutError::PushConstantRangeTooLarge {
                     index,
-                    pc.range.start,
-                    pc.range.end,
-                    device.limits.max_push_constant_size
-                );
-                return Err(
-                    binding_model::PipelineLayoutError::PushConstantRangeTooLarge { index },
-                );
+                    range: pc.range.clone(),
+                    max: device_max_pc_size,
+                });
             }
 
             if pc.range.start % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                log::error!(
-                    "Push constant range (index {}) start {} must be aligned to {}",
+                return Err(PipelineLayoutError::MisalignedPushConstantRange {
                     index,
-                    pc.range.start,
-                    wgt::PUSH_CONSTANT_ALIGNMENT
-                );
-                return Err(
-                    binding_model::PipelineLayoutError::MisalignedPushConstantRange { index },
-                );
+                    bound: pc.range.start,
+                });
             }
             if pc.range.end % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                log::error!(
-                    "Push constant range (index {}) end {} must be aligned to {}",
+                return Err(PipelineLayoutError::MisalignedPushConstantRange {
                     index,
-                    pc.range.end,
-                    wgt::PUSH_CONSTANT_ALIGNMENT
-                );
-                return Err(
-                    binding_model::PipelineLayoutError::MisalignedPushConstantRange { index },
-                );
+                    bound: pc.range.end,
+                });
             }
         }
 
@@ -1454,7 +1432,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
         count_validator
             .validate(&device.limits)
-            .map_err(binding_model::PipelineLayoutError::TooManyBindings)?;
+            .map_err(PipelineLayoutError::TooManyBindings)?;
 
         let layout = binding_model::PipelineLayout {
             raw: pipeline_layout,
@@ -1521,7 +1499,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &binding_model::BindGroupDescriptor,
         id_in: Input<G, id::BindGroupId>,
-    ) -> Result<id::BindGroupId, BindGroupError> {
+    ) -> Result<id::BindGroupId, CreateBindGroupError> {
         use crate::binding_model::BindingResource as Br;
 
         span!(_guard, INFO, "Device::create_bind_group");
@@ -1539,7 +1517,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let actual = desc.entries.len();
         let expected = bind_group_layout.entries.len();
         if actual != expected {
-            return Err(BindGroupError::BindingsNumMismatch { expected, actual });
+            return Err(CreateBindGroupError::BindingsNumMismatch { expected, actual });
         }
 
         let mut desc_set = {
@@ -1590,7 +1568,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let decl = bind_group_layout
                     .entries
                     .get(&binding)
-                    .ok_or(BindGroupError::MissingBindingDeclaration(binding))?;
+                    .ok_or(CreateBindGroupError::MissingBindingDeclaration(binding))?;
                 let descriptors: SmallVec<[_; 1]> = match entry.resource {
                     Br::Buffer(ref bb) => {
                         let (pub_usage, internal_use, min_size, dynamic) = match decl.ty {
@@ -1618,7 +1596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 dynamic,
                             ),
                             _ => {
-                                return Err(BindGroupError::WrongBindingType {
+                                return Err(CreateBindGroupError::WrongBindingType {
                                     binding,
                                     actual: decl.ty.clone(),
                                     expected:
@@ -1661,7 +1639,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if pub_usage == wgt::BufferUsage::UNIFORM
                             && (device.limits.max_uniform_buffer_binding_size as u64) < bind_size
                         {
-                            return Err(BindGroupError::UniformBufferRangeTooLarge);
+                            return Err(CreateBindGroupError::UniformBufferRangeTooLarge);
                         }
 
                         // Record binding info for validating dynamic offsets
@@ -1696,13 +1674,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                                 // Check the actual sampler to also (not) be a comparison sampler
                                 if sampler.comparison != comparison {
-                                    return Err(BindGroupError::WrongSamplerComparison);
+                                    return Err(CreateBindGroupError::WrongSamplerComparison);
                                 }
 
                                 SmallVec::from([hal::pso::Descriptor::Sampler(&sampler.raw)])
                             }
                             _ => {
-                                return Err(BindGroupError::WrongBindingType {
+                                return Err(CreateBindGroupError::WrongBindingType {
                                     binding,
                                     actual: decl.ty.clone(),
                                     expected: "Sampler",
@@ -1728,7 +1706,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     resource::TextureUse::STORAGE_STORE
                                 },
                             ),
-                            _ => return Err(BindGroupError::WrongBindingType {
+                            _ => return Err(CreateBindGroupError::WrongBindingType {
                                 binding,
                                 actual: decl.ty.clone(),
                                 expected: "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture"
@@ -1790,7 +1768,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 (wgt::TextureUsage::SAMPLED, resource::TextureUse::SAMPLED)
                             }
                             _ => {
-                                return Err(BindGroupError::WrongBindingType {
+                                return Err(CreateBindGroupError::WrongBindingType {
                                     binding,
                                     actual: decl.ty.clone(),
                                     expected: "SampledTextureArray",

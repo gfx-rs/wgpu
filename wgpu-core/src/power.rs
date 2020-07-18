@@ -2,21 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use std::fmt;
+use thiserror::Error;
 
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum Error {
+    #[error("battery status is unsupported on this platform")]
     Unsupported,
+    #[error("battery status retrieval failed: {0}")]
     Error(Box<dyn std::error::Error>),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::Unsupported => write!(f, "Battery status is unsupported on this platform"),
-            Error::Error(err) => write!(f, "Battery status retrieval failed: {}", err),
-        }
-    }
 }
 
 #[cfg(all(

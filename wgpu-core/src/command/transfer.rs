@@ -14,6 +14,7 @@ use crate::{
 };
 
 use hal::command::CommandBuffer as _;
+use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, Extent3d, TextureDataLayout, TextureUsage};
 
 use std::iter;
@@ -27,36 +28,33 @@ pub type BufferCopyView = wgt::BufferCopyView<BufferId>;
 pub type TextureCopyView = wgt::TextureCopyView<TextureId>;
 
 /// Error encountered while attempting a data transfer.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Error, Eq, PartialEq)]
 pub enum TransferError {
-    /// The source buffer/texture is missing the `COPY_SRC` usage flag.
+    #[error("source buffer/texture is missing the `COPY_SRC` usage flag")]
     MissingCopySrcUsageFlag,
-    /// The destination buffer/texture is missing the `COPY_DST` usage flag.
+    #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag,
-    /// Copy would end up overruning the bounds of the destination buffer/texture.
+    #[error("copy would end up overruning the bounds of the destination buffer/texture")]
     BufferOverrun,
-    /// Buffer offset is not aligned to block size.
+    #[error("buffer offset is not aligned to block size")]
     UnalignedBufferOffset,
-    /// Copy size is not a multiple of block size.
+    #[error("copy size is not a multiple of block size")]
     UnalignedCopySize,
-    /// Copy width is not a multiple of block size.
+    #[error("copy width is not a multiple of block size")]
     UnalignedCopyWidth,
-    /// Copy height is not a multiple of block size.
+    #[error("copy height is not a multiple of block size")]
     UnalignedCopyHeight,
-    /// Bytes per row is not a multiple of the required alignment.
+    #[error("bytes per row is not a multiple of the required alignment")]
     UnalignedBytesPerRow,
-    /// Number of rows per image is not a multiple of the required alignment.
+    #[error("number of rows per image is not a multiple of the required alignment")]
     UnalignedRowsPerImage,
-    /// Number of bytes per row is less than the number of bytes in a complete row.
+    #[error("number of bytes per row is less than the number of bytes in a complete row")]
     InvalidBytesPerRow,
-    /// Copy size is invalid.
-    ///
-    /// This can happen if the image is 1D and the copy height and depth
-    /// are not both set to 1.
+    #[error("image is 1D and the copy height and depth are not both set to 1")]
     InvalidCopySize,
-    /// Number of rows per image is invalid.
+    #[error("number of rows per image is invalid")]
     InvalidRowsPerImage,
-    /// The source and destination layers have different aspects.
+    #[error("source and destination layers have different aspects")]
     MismatchedAspects,
 }
 
