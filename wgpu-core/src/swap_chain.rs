@@ -41,7 +41,11 @@ use crate::{
     resource, span, LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
 
-use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
+use hal::{
+    self, device::Device as _, queue::CommandQueue as _, window::PresentError,
+    window::PresentationSurface as _,
+};
+use thiserror::Error;
 use wgt::{SwapChainDescriptor, SwapChainStatus};
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
@@ -104,7 +108,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
-    ) -> SwapChainOutput {
+    ) -> Result<SwapChainOutput, SwapChainError> {
         span!(_guard, INFO, "SwapChain::get_next_texture");
 
         let hub = B::hub(self);
@@ -135,47 +139,49 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ),
         };
 
-        let view_id = image.map(|image| {
-            let view = resource::TextureView {
-                inner: resource::TextureViewInner::SwapChain {
-                    image,
-                    source_id: Stored {
-                        value: swap_chain_id,
-                        ref_count: sc.life_guard.add_ref(),
+        let view_id = match image {
+            Some(image) => {
+                let view = resource::TextureView {
+                    inner: resource::TextureViewInner::SwapChain {
+                        image,
+                        source_id: Stored {
+                            value: swap_chain_id,
+                            ref_count: sc.life_guard.add_ref(),
+                        },
                     },
-                },
-                format: sc.desc.format,
-                extent: hal::image::Extent {
-                    width: sc.desc.width,
-                    height: sc.desc.height,
-                    depth: 1,
-                },
-                samples: 1,
-                range: hal::image::SubresourceRange {
-                    aspects: hal::format::Aspects::COLOR,
-                    layers: 0..1,
-                    levels: 0..1,
-                },
-                life_guard: LifeGuard::new(),
-            };
+                    format: sc.desc.format,
+                    extent: hal::image::Extent {
+                        width: sc.desc.width,
+                        height: sc.desc.height,
+                        depth: 1,
+                    },
+                    samples: 1,
+                    range: hal::image::SubresourceRange {
+                        aspects: hal::format::Aspects::COLOR,
+                        layers: 0..1,
+                        levels: 0..1,
+                    },
+                    life_guard: LifeGuard::new(),
+                };
 
-            let ref_count = view.life_guard.add_ref();
-            let id = hub
-                .texture_views
-                .register_identity(view_id_in, view, &mut token);
+                let ref_count = view.life_guard.add_ref();
+                let id = hub
+                    .texture_views
+                    .register_identity(view_id_in, view, &mut token);
 
-            assert!(
-                sc.acquired_view_id.is_none(),
-                "Swap chain image is already acquired"
-            );
+                if sc.acquired_view_id.is_some() {
+                    return Err(SwapChainError::AlreadyAcquired);
+                }
 
-            sc.acquired_view_id = Some(Stored {
-                value: id,
-                ref_count,
-            });
+                sc.acquired_view_id = Some(Stored {
+                    value: id,
+                    ref_count,
+                });
 
-            id
-        });
+                Some(id)
+            }
+            None => None,
+        };
 
         #[cfg(feature = "trace")]
         match device.trace {
@@ -186,10 +192,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         };
 
-        SwapChainOutput { status, view_id }
+        Ok(SwapChainOutput { status, view_id })
     }
 
-    pub fn swap_chain_present<B: GfxBackend>(&self, swap_chain_id: SwapChainId) {
+    pub fn swap_chain_present<B: GfxBackend>(
+        &self,
+        swap_chain_id: SwapChainId,
+    ) -> Result<(), SwapChainError> {
         span!(_guard, INFO, "SwapChain::present");
 
         let hub = B::hub(self);
@@ -211,24 +220,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let view_id = sc
             .acquired_view_id
             .take()
-            .expect("Swap chain image is not acquired");
+            .ok_or(SwapChainError::AlreadyAcquired)?;
         let (view, _) = hub.texture_views.unregister(view_id.value, &mut token);
         let image = match view.inner {
             resource::TextureViewInner::Native { .. } => unreachable!(),
             resource::TextureViewInner::SwapChain { image, .. } => image,
         };
 
-        let err = {
-            let sem = if sc.active_submission_index > device.last_completed_submission_index() {
-                Some(&sc.semaphore)
-            } else {
-                None
-            };
-            let queue = &mut device.queue_group.queues[0];
-            unsafe { queue.present_surface(B::get_surface_mut(surface), image, sem) }
+        let sem = if sc.active_submission_index > device.last_completed_submission_index() {
+            Some(&sc.semaphore)
+        } else {
+            None
         };
-        if let Err(e) = err {
-            log::warn!("present failed: {:?}", e);
+        let queue = &mut device.queue_group.queues[0];
+        unsafe {
+            queue.present_surface(B::get_surface_mut(surface), image, sem)?;
         }
 
         tracing::debug!(trace = true, "Presented. End of Frame");
@@ -238,5 +244,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device.raw.destroy_framebuffer(fbo);
             }
         }
+
+        Ok(())
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum SwapChainError {
+    #[error("swap chain image is already acquired")]
+    AlreadyAcquired,
+    #[error(transparent)]
+    PresentError(#[from] PresentError),
 }
