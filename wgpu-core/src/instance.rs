@@ -250,10 +250,6 @@ pub enum RequestDeviceError {
     NoGraphicsQueue,
     #[error(transparent)]
     DeviceCreationError(#[from] hal::device::CreationError),
-    #[error("adapter storage buffer offset alignment not compatible with WGPU")]
-    IncompatibleStorageBufferOffsetAlignment,
-    #[error("adapter uniform buffer offset alignment not compatible with WGPU")]
-    IncompatibleUniformBufferOffsetAlignment,
     #[error("some of the requested device limits are not supported")]
     LimitsExceeded,
 }
@@ -682,12 +678,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut gpu = unsafe { phd.open(&[(family, &[1.0])], enabled_features)? };
 
             let limits = phd.limits();
-            if BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment != 0 {
-                return Err(RequestDeviceError::IncompatibleStorageBufferOffsetAlignment);
-            }
-            if BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment != 0 {
-                return Err(RequestDeviceError::IncompatibleUniformBufferOffsetAlignment);
-            }
+            assert_eq!(
+                0,
+                BIND_BUFFER_ALIGNMENT % limits.min_storage_buffer_offset_alignment,
+                "Adapter storage buffer offset alignment not compatible with WGPU"
+            );
+            assert_eq!(
+                0,
+                BIND_BUFFER_ALIGNMENT % limits.min_uniform_buffer_offset_alignment,
+                "Adapter uniform buffer offset alignment not compatible with WGPU"
+            );
             if adapter.limits < desc.limits {
                 return Err(RequestDeviceError::LimitsExceeded);
             }
