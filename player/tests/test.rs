@@ -101,7 +101,7 @@ impl Test {
         }
 
         println!("\t\t\tWaiting...");
-        gfx_select!(device => global.device_poll(device, true));
+        gfx_select!(device => global.device_poll(device, true)).unwrap();
 
         for expect in self.expectations {
             println!("\t\t\tChecking {}", expect.name);

@@ -7,6 +7,7 @@ use crate::device::trace::Action;
 use crate::{
     command::{CommandAllocator, CommandBuffer, TextureCopyView, BITS_PER_BYTE},
     conv,
+    device::WaitIdleError,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     resource::{BufferMapState, BufferUse, TextureUse},
@@ -17,6 +18,7 @@ use gfx_memory::{Block, Heaps, MemoryBlock};
 use hal::{command::CommandBuffer as _, device::Device as _, queue::CommandQueue as _};
 use smallvec::SmallVec;
 use std::iter;
+use thiserror::Error;
 
 struct StagingData<B: hal::Backend> {
     buffer: B::Buffer,
@@ -371,7 +373,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         queue_id: id::QueueId,
         command_buffer_ids: &[id::CommandBufferId],
-    ) {
+    ) -> Result<(), QueueSubmitError> {
         span!(_guard, INFO, "Queue::submit");
 
         let hub = B::hub(self);
@@ -538,7 +540,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .after_submit_internal(comb_raw, submit_index);
             }
 
-            let callbacks = device.maintain(&hub, false, &mut token);
+            let callbacks = device.maintain(&hub, false, &mut token)?;
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
@@ -556,7 +558,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         super::fire_map_callbacks(callbacks);
+
+        Ok(())
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum QueueSubmitError {
+    #[error(transparent)]
+    WaitIdle(#[from] WaitIdleError),
 }
 
 fn get_lowest_common_denom(a: u32, b: u32) -> u32 {

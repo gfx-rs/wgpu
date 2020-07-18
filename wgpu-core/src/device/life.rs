@@ -289,9 +289,13 @@ impl<B: hal::Backend> LifetimeTracker<B> {
     }
 
     /// Returns the last submission index that is done.
-    pub fn triage_submissions(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
+    pub fn triage_submissions(
+        &mut self,
+        device: &B::Device,
+        force_wait: bool,
+    ) -> Result<SubmissionIndex, WaitIdleError> {
         if force_wait {
-            self.wait_idle(device).unwrap();
+            self.wait_idle(device)?;
         }
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
@@ -303,7 +307,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
         } else {
-            return 0;
+            return Ok(0);
         };
 
         for a in self.active.drain(..done_count) {
@@ -315,7 +319,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             }
         }
 
-        last_done
+        Ok(last_done)
     }
 
     pub fn cleanup(

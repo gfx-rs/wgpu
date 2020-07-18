@@ -101,7 +101,7 @@ fn main() {
 
         #[cfg(feature = "renderdoc")]
         rd.end_frame_capture(std::ptr::null(), std::ptr::null());
-        gfx_select!(device => global.device_poll(device, true));
+        gfx_select!(device => global.device_poll(device, true)).unwrap();
     }
     #[cfg(feature = "winit")]
     {

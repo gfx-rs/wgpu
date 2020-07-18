@@ -386,7 +386,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 if queued {
                     self.queue_write_buffer::<B>(device, id, range.start, &bin);
                 } else {
-                    self.device_wait_for_buffer::<B>(device, id);
+                    self.device_wait_for_buffer::<B>(device, id).unwrap();
                     self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
                 }
             }
@@ -406,7 +406,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     comb_manager.alloc(device.backend()),
                 );
                 let comb = self.encode_commands::<B>(encoder, commands);
-                self.queue_submit::<B>(device, &[comb]);
+                self.queue_submit::<B>(device, &[comb]).unwrap();
             }
         }
     }
