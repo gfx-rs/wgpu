@@ -139,8 +139,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ),
         };
 
-        let view_id = image
-            .map(|image| {
+        let view_id = match image {
+            Some(image) => {
                 let view = resource::TextureView {
                     inner: resource::TextureViewInner::SwapChain {
                         image,
@@ -178,9 +178,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     ref_count,
                 });
 
-                Ok(id)
-            })
-            .transpose()?;
+                Some(id)
+            }
+            None => None,
+        };
 
         #[cfg(feature = "trace")]
         match device.trace {
