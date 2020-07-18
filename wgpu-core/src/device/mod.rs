@@ -5,6 +5,7 @@
 use crate::{
     binding_model::{self, CreateBindGroupError, PipelineLayoutError},
     command, conv,
+    device::life::WaitIdleError,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
@@ -295,7 +296,7 @@ impl<B: GfxBackend> Device<B> {
         hub: &Hub<B, G>,
         force_wait: bool,
         token: &mut Token<'token, Self>,
-    ) -> Vec<BufferMapPendingCallback> {
+    ) -> Result<Vec<BufferMapPendingCallback>, WaitIdleError> {
         let mut life_tracker = self.lock_life(token);
 
         life_tracker.triage_suspected(
@@ -307,7 +308,7 @@ impl<B: GfxBackend> Device<B> {
         );
         life_tracker.triage_mapped(hub, token);
         life_tracker.triage_framebuffers(hub, &mut *self.framebuffers.lock(), token);
-        let last_done = life_tracker.triage_submissions(&self.raw, force_wait);
+        let last_done = life_tracker.triage_submissions(&self.raw, force_wait)?;
         let callbacks = life_tracker.handle_mapping(hub, &self.raw, &self.trackers, token);
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
 
@@ -315,7 +316,7 @@ impl<B: GfxBackend> Device<B> {
             .submission_index
             .store(last_done, Ordering::Release);
         self.com_allocator.maintain(&self.raw, last_done);
-        callbacks
+        Ok(callbacks)
     }
 
     fn untrack<'this, 'token: 'this, G: GlobalIdentityHandlerFactory>(
@@ -609,7 +610,9 @@ impl<B: hal::Backend> Device<B> {
     /// Wait for idle and remove resources that we can, before we die.
     pub(crate) fn prepare_to_die(&mut self) {
         let mut life_tracker = self.life_tracker.lock();
-        life_tracker.triage_submissions(&self.raw, true);
+        if let Err(error) = life_tracker.triage_submissions(&self.raw, true) {
+            log::error!("failed to triage submissions: {}", error);
+        }
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
     }
 
@@ -757,7 +760,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         device_id: id::DeviceId,
         buffer_id: id::BufferId,
-    ) {
+    ) -> Result<(), WaitIdleError> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -778,8 +781,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             );
             device
                 .lock_life(&mut token)
-                .triage_submissions(&device.raw, true);
+                .triage_submissions(&device.raw, true)?;
         }
+
+        Ok(())
     }
 
     pub fn device_set_buffer_sub_data<B: GfxBackend>(
@@ -2774,54 +2779,62 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
     }
 
-    pub fn device_poll<B: GfxBackend>(&self, device_id: id::DeviceId, force_wait: bool) {
+    pub fn device_poll<B: GfxBackend>(
+        &self,
+        device_id: id::DeviceId,
+        force_wait: bool,
+    ) -> Result<(), WaitIdleError> {
         span!(_guard, INFO, "Device::poll");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let callbacks = {
             let (device_guard, mut token) = hub.devices.read(&mut token);
-            device_guard[device_id].maintain(&hub, force_wait, &mut token)
+            device_guard[device_id].maintain(&hub, force_wait, &mut token)?
         };
         fire_map_callbacks(callbacks);
+        Ok(())
     }
 
     fn poll_devices<B: GfxBackend>(
         &self,
         force_wait: bool,
         callbacks: &mut Vec<BufferMapPendingCallback>,
-    ) {
+    ) -> Result<(), WaitIdleError> {
         span!(_guard, INFO, "Device::poll_devices");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         for (_, device) in device_guard.iter(B::VARIANT) {
-            let cbs = device.maintain(&hub, force_wait, &mut token);
+            let cbs = device.maintain(&hub, force_wait, &mut token)?;
             callbacks.extend(cbs);
         }
+        Ok(())
     }
 
-    pub fn poll_all_devices(&self, force_wait: bool) {
+    pub fn poll_all_devices(&self, force_wait: bool) -> Result<(), WaitIdleError> {
         use crate::backend;
         let mut callbacks = Vec::new();
 
         backends! {
             #[vulkan] {
-                self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks);
+                self.poll_devices::<backend::Vulkan>(force_wait, &mut callbacks)?;
             }
             #[metal] {
-                self.poll_devices::<backend::Metal>(force_wait, &mut callbacks);
+                self.poll_devices::<backend::Metal>(force_wait, &mut callbacks)?;
             }
             #[dx12] {
-                self.poll_devices::<backend::Dx12>(force_wait, &mut callbacks);
+                self.poll_devices::<backend::Dx12>(force_wait, &mut callbacks)?;
             }
             #[dx11] {
-                self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks);
+                self.poll_devices::<backend::Dx11>(force_wait, &mut callbacks)?;
             }
         }
 
         fire_map_callbacks(callbacks);
+
+        Ok(())
     }
 
     pub fn device_destroy<B: GfxBackend>(&self, device_id: id::DeviceId) {

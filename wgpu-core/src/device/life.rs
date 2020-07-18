@@ -14,8 +14,9 @@ use crate::{
 use copyless::VecHelper as _;
 use gfx_descriptor::{DescriptorAllocator, DescriptorSet};
 use gfx_memory::{Heaps, MemoryBlock};
-use hal::device::Device as _;
+use hal::device::{Device as _, OomOrDeviceLost};
 use parking_lot::Mutex;
+use thiserror::Error;
 
 use std::sync::atomic::Ordering;
 
@@ -186,6 +187,14 @@ struct ActiveSubmission<B: hal::Backend> {
     mapped: Vec<id::BufferId>,
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum WaitIdleError {
+    #[error(transparent)]
+    OomOrDeviceLost(#[from] OomOrDeviceLost),
+    #[error("GPU got stuck :(")]
+    StuckGpu,
+}
+
 /// A struct responsible for tracking resource lifetimes.
 ///
 /// Here is how host mapping is handled:
@@ -259,7 +268,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         });
     }
 
-    fn wait_idle(&self, device: &B::Device) {
+    fn wait_idle(&self, device: &B::Device) -> Result<(), WaitIdleError> {
         if !self.active.is_empty() {
             log::debug!("Waiting for IDLE...");
             let status = unsafe {
@@ -267,17 +276,26 @@ impl<B: hal::Backend> LifetimeTracker<B> {
                     self.active.iter().map(|a| &a.fence),
                     hal::device::WaitFor::All,
                     CLEANUP_WAIT_MS * 1_000_000,
-                )
+                )?
             };
             log::debug!("...Done");
-            assert_eq!(status, Ok(true), "GPU got stuck :(");
+
+            if status == false {
+                // We timed out while waiting for the fences
+                return Err(WaitIdleError::StuckGpu);
+            }
         }
+        Ok(())
     }
 
     /// Returns the last submission index that is done.
-    pub fn triage_submissions(&mut self, device: &B::Device, force_wait: bool) -> SubmissionIndex {
+    pub fn triage_submissions(
+        &mut self,
+        device: &B::Device,
+        force_wait: bool,
+    ) -> Result<SubmissionIndex, WaitIdleError> {
         if force_wait {
-            self.wait_idle(device);
+            self.wait_idle(device)?;
         }
         //TODO: enable when `is_sorted_by_key` is stable
         //debug_assert!(self.active.is_sorted_by_key(|a| a.index));
@@ -289,7 +307,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         let last_done = if done_count != 0 {
             self.active[done_count - 1].index
         } else {
-            return 0;
+            return Ok(0);
         };
 
         for a in self.active.drain(..done_count) {
@@ -301,7 +319,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
             }
         }
 
-        last_done
+        Ok(last_done)
     }
 
     pub fn cleanup(
