@@ -210,7 +210,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     device,
                     &wgt::BindGroupLayoutDescriptor {
                         label: Some(label),
-                        entries,
+                        entries: entries[..].into(),
                     },
                     id,
                 )
@@ -228,8 +228,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_create_pipeline_layout::<B>(
                     device,
                     &wgt::PipelineLayoutDescriptor {
-                        bind_group_layouts: &bind_group_layouts,
-                        push_constant_ranges: &push_constant_ranges,
+                        bind_group_layouts: bind_group_layouts[..].into(),
+                        push_constant_ranges: push_constant_ranges[..].into(),
                     },
                     id,
                 )
@@ -273,7 +273,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     &wgc::binding_model::BindGroupDescriptor {
                         label: Some(&label),
                         layout: layout_id,
-                        entries: &entry_vec,
+                        entries: entry_vec[..].into(),
                     },
                     id,
                 )
@@ -323,7 +323,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .map(|vb| wgt::VertexBufferDescriptor {
                         stride: vb.stride,
                         step_mode: vb.step_mode,
-                        attributes: &vb.attributes,
+                        attributes: vb.attributes[..].into(),
                     })
                     .collect::<Vec<_>>();
                 self.device_maintain_ids::<B>(device);
@@ -335,11 +335,11 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                         fragment_stage,
                         primitive_topology: desc.primitive_topology,
                         rasterization_state: desc.rasterization_state,
-                        color_states: &desc.color_states,
+                        color_states: desc.color_states[..].into(),
                         depth_stencil_state: desc.depth_stencil_state,
                         vertex_state: wgt::VertexStateDescriptor {
                             index_format: desc.vertex_state.index_format,
-                            vertex_buffers: &vertex_buffers,
+                            vertex_buffers: vertex_buffers[..].into(),
                         },
                         sample_count: desc.sample_count,
                         sample_mask: desc.sample_mask,
@@ -357,7 +357,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 let bundle = wgc::command::RenderBundleEncoder::new(
                     &wgt::RenderBundleEncoderDescriptor {
                         label: None,
-                        color_formats: &desc.color_formats,
+                        color_formats: desc.color_formats[..].into(),
                         depth_stencil_format: desc.depth_stencil_format,
                         sample_count: desc.sample_count,
                     },

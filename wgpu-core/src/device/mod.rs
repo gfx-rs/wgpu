@@ -1193,7 +1193,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let hub = B::hub(self);
         let mut entry_map = FastHashMap::default();
-        for entry in desc.entries {
+        for entry in desc.entries.iter() {
             if entry_map.insert(entry.binding, entry.clone()).is_some() {
                 return Err(binding_model::BindGroupLayoutError::ConflictBinding(
                     entry.binding,
@@ -1307,7 +1307,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroupLayout {
                 id,
                 label: desc.label.map_or_else(String::new, str::to_string),
-                entries: desc.entries.to_owned(),
+                entries: desc.entries[..].to_owned(),
             }),
             None => (),
         };
@@ -1408,7 +1408,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
         let pipeline_layout = {
             let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
-            for &id in desc.bind_group_layouts {
+            for &id in desc.bind_group_layouts.iter() {
                 let bind_group_layout = &bind_group_layout_guard[id];
                 count_validator.merge(&bind_group_layout.count_validator);
             }
@@ -1458,7 +1458,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout {
                 id,
-                bind_group_layouts: desc.bind_group_layouts.to_owned(),
+                bind_group_layouts: desc.bind_group_layouts[..].to_owned(),
                 push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
             }),
             None => (),
@@ -1559,7 +1559,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             //TODO: group writes into contiguous sections
             let mut writes = Vec::new();
-            for entry in desc.entries {
+            for entry in desc.entries.iter() {
                 let binding = entry.binding;
                 // Find the corresponding declaration in the layout
                 let decl = bind_group_layout
@@ -2140,7 +2140,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             sc as u8
         };
 
-        let color_states = desc.color_states;
+        let color_states = &desc.color_states;
         let depth_stencil_state = desc.depth_stencil_state.as_ref();
 
         let rasterization_state = desc.rasterization_state.as_ref();
@@ -2151,7 +2151,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut interface = validation::StageInterface::default();
         let mut validated_stages = wgt::ShaderStage::empty();
 
-        let desc_vbs = desc.vertex_state.vertex_buffers;
+        let desc_vbs = &desc.vertex_state.vertex_buffers;
         let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
         let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
         let mut attributes = Vec::new();
@@ -2170,8 +2170,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
                 },
             });
-            let desc_atts = vb_state.attributes;
-            for attribute in desc_atts {
+            let desc_atts = &vb_state.attributes;
+            for attribute in desc_atts.iter() {
                 if attribute.offset >= 0x10000000 {
                     return Err(
                         pipeline::RenderPipelineError::InvalidVertexAttributeOffset {
@@ -2416,7 +2416,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut flags = pipeline::PipelineFlags::empty();
-        for state in color_states {
+        for state in color_states.iter() {
             if state.color_blend.uses_color() | state.alpha_blend.uses_color() {
                 flags |= pipeline::PipelineFlags::BLEND_COLOR;
             }
@@ -2473,7 +2473,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map(|vbl| trace::VertexBufferDescriptor {
                                 stride: vbl.stride,
                                 step_mode: vbl.step_mode,
-                                attributes: vbl.attributes.to_owned(),
+                                attributes: vbl.attributes[..].to_owned(),
                             })
                             .collect(),
                     },

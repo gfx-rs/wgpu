@@ -396,7 +396,7 @@ pub struct BufferBinding {
 
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
     Sampler(SamplerId),
