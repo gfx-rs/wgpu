@@ -69,6 +69,12 @@ struct Setup {
 }
 
 async fn setup<E: Example>(title: &str) -> Setup {
+    #[cfg(not(target_arch = "wasm32"))]
+    env_logger::init();
+
+    #[cfg(target_arch = "wasm32")]
+    console_log::init().expect("could not initialize logger");
+
     let event_loop = EventLoop::new();
     let mut builder = winit::window::WindowBuilder::new();
     builder = builder.with_title(title);
@@ -141,8 +147,6 @@ fn start<E: Example>(
 ) {
     #[cfg(not(target_arch = "wasm32"))]
     let (mut pool, spawner) = {
-        env_logger::init();
-
         #[cfg(feature = "subscriber")]
         {
             let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACING");
@@ -170,7 +174,7 @@ fn start<E: Example>(
         }
 
         std::panic::set_hook(Box::new(console_error_panic_hook::hook));
-        console_log::init().expect("could not initialize logger");
+
         // On wasm, append the canvas to the document body
         web_sys::window()
             .and_then(|win| win.document())
