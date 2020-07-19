@@ -55,7 +55,7 @@ fn own_label(label: &Label) -> String {
 }
 
 pub const MAX_COLOR_TARGETS: usize = 4;
-pub const MAX_MIP_LEVELS: usize = 16;
+pub const MAX_MIP_LEVELS: u32 = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const SHADER_STAGE_COUNT: usize = 3;
@@ -478,7 +478,7 @@ impl<B: GfxBackend> Device<B> {
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
 
-        let mip_level_count = desc.mip_level_count as usize;
+        let mip_level_count = desc.mip_level_count;
         if mip_level_count >= MAX_MIP_LEVELS {
             return Err(CreateTextureError::InvalidMipLevelCount(mip_level_count));
         }
@@ -3055,5 +3055,5 @@ pub enum CreateTextureError {
         "texture descriptor mip level count ({0}) must be less than device max mip levels ({})",
         MAX_MIP_LEVELS
     )]
-    InvalidMipLevelCount(usize),
+    InvalidMipLevelCount(u32),
 }

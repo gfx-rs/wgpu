@@ -14,7 +14,7 @@ type PlaneStates = RangedStates<hal::image::Layer, Unit<TextureUse>>;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct TextureState {
-    mips: ArrayVec<[PlaneStates; MAX_MIP_LEVELS]>,
+    mips: ArrayVec<[PlaneStates; MAX_MIP_LEVELS as usize]>,
     /// True if we have the information about all the subresources here
     full: bool,
 }
