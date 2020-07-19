@@ -42,7 +42,7 @@ use crate::{
 };
 
 use hal::{
-    self, device::Device as _, queue::CommandQueue as _, window::PresentError,
+    self, device::Device as _, queue::CommandQueue as _,
     window::PresentationSurface as _,
 };
 use thiserror::Error;
@@ -129,12 +129,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(err) => (
                 None,
                 match err {
-                    hal::window::AcquireError::OutOfMemory(_) => SwapChainStatus::OutOfMemory,
+                    hal::window::AcquireError::OutOfMemory(_) => return Err(SwapChainError::OutOfMemory),
                     hal::window::AcquireError::NotReady => unreachable!(), // we always set a timeout
                     hal::window::AcquireError::Timeout => SwapChainStatus::Timeout,
                     hal::window::AcquireError::OutOfDate => SwapChainStatus::Outdated,
                     hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
-                    hal::window::AcquireError::DeviceLost(_) => SwapChainStatus::Lost,
+                    hal::window::AcquireError::DeviceLost(_) => return Err(SwapChainError::DeviceLost),
                 },
             ),
         };
@@ -198,7 +198,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn swap_chain_present<B: GfxBackend>(
         &self,
         swap_chain_id: SwapChainId,
-    ) -> Result<(), SwapChainError> {
+    ) -> Result<SwapChainStatus, SwapChainError> {
         span!(_guard, INFO, "SwapChain::present");
 
         let hub = B::hub(self);
@@ -233,9 +233,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None
         };
         let queue = &mut device.queue_group.queues[0];
-        unsafe {
-            queue.present_surface(B::get_surface_mut(surface), image, sem)?;
-        }
+        let result = unsafe { queue.present_surface(B::get_surface_mut(surface), image, sem) };
 
         tracing::debug!(trace = true, "Presented. End of Frame");
 
@@ -245,7 +243,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        Ok(())
+        match result {
+            Ok(None) => Ok(SwapChainStatus::Good),
+            Ok(Some(_)) => Ok(SwapChainStatus::Suboptimal),
+            Err(err) => match err {
+                hal::window::PresentError::OutOfMemory(_) => Err(SwapChainError::OutOfMemory),
+                hal::window::PresentError::OutOfDate => Ok(SwapChainStatus::Outdated),
+                hal::window::PresentError::SurfaceLost(_) => Ok(SwapChainStatus::Lost),
+                hal::window::PresentError::DeviceLost(_) => Err(SwapChainError::DeviceLost),
+            },
+        }
     }
 }
 
@@ -253,6 +260,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 pub enum SwapChainError {
     #[error("swap chain image is already acquired")]
     AlreadyAcquired,
-    #[error(transparent)]
-    PresentError(#[from] PresentError),
+    #[error("Graphics backend is out of memory")]
+    OutOfMemory,
+    #[error("graphics backend device lost")]
+    DeviceLost,
 }
