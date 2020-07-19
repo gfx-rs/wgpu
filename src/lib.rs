@@ -22,10 +22,10 @@ use std::{
 
 use futures::FutureExt as _;
 use parking_lot::Mutex;
-#[cfg(feature = "trace")]
-use serde::Serialize;
 #[cfg(feature = "replay")]
 use serde::Deserialize;
+#[cfg(feature = "trace")]
+use serde::Serialize;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
@@ -278,7 +278,7 @@ trait Context: Sized {
         sub_range: Range<BufferAddress>,
     ) -> &mut [u8];
     fn buffer_unmap(&self, buffer: &Self::BufferId);
-    fn swap_chain_get_next_texture(
+    fn swap_chain_get_current_texture_view(
         &self,
         swap_chain: &Self::SwapChainId,
     ) -> (
@@ -2287,9 +2287,9 @@ impl SwapChain {
     ///
     /// If a SwapChainFrame referencing this surface is alive when the swapchain is recreated,
     /// recreating the swapchain will panic.
-    pub fn get_next_frame(&mut self) -> Result<SwapChainFrame, SwapChainError> {
+    pub fn get_current_frame(&mut self) -> Result<SwapChainFrame, SwapChainError> {
         let (view_id, status, detail) =
-            Context::swap_chain_get_next_texture(&*self.context, &self.id);
+            Context::swap_chain_get_current_texture_view(&*self.context, &self.id);
         let output = view_id.map(|id| SwapChainTexture {
             view: TextureView {
                 context: Arc::clone(&self.context),
@@ -2311,7 +2311,6 @@ impl SwapChain {
             SwapChainStatus::Timeout => Err(SwapChainError::Timeout),
             SwapChainStatus::Outdated => Err(SwapChainError::Outdated),
             SwapChainStatus::Lost => Err(SwapChainError::Lost),
-            SwapChainStatus::OutOfMemory => Err(SwapChainError::OutOfMemory),
         }
     }
 }

@@ -266,12 +266,12 @@ fn start<E: Example>(
                 }
             },
             event::Event::RedrawRequested(_) => {
-                let frame = match swap_chain.get_next_frame() {
+                let frame = match swap_chain.get_current_frame() {
                     Ok(frame) => frame,
                     Err(_) => {
                         swap_chain = device.create_swap_chain(&surface, &sc_desc);
                         swap_chain
-                            .get_next_frame()
+                            .get_current_frame()
                             .expect("Failed to acquire next swap chain texture!")
                     }
                 };
