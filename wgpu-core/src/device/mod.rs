@@ -680,24 +680,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             resource::BufferUse::EMPTY
         } else if desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
             // buffer is mappable, so we are just doing that at start
-            match map_buffer(
+            let ptr = map_buffer(
                 &device.raw,
                 &mut buffer,
                 hal::buffer::SubRange::WHOLE,
                 HostMap::Write,
-            ) {
-                Ok(ptr) => {
-                    buffer.map_state = resource::BufferMapState::Active {
-                        ptr,
-                        sub_range: hal::buffer::SubRange::WHOLE,
-                        host: HostMap::Write,
-                    };
-                }
-                Err(e) => {
-                    // TODO: return error on failure?
-                    log::error!("failed to create buffer in a mapped state: {:?}", e);
-                }
+            )
+            .expect("failed to map buffer on creation");
+
+            buffer.map_state = resource::BufferMapState::Active {
+                ptr,
+                sub_range: hal::buffer::SubRange::WHOLE,
+                host: HostMap::Write,
             };
+
             resource::BufferUse::MAP_WRITE
         } else {
             // buffer needs staging area for initialization only
