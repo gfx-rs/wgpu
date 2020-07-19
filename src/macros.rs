@@ -144,6 +144,6 @@ fn test_vertex_attr_array() {
 #[macro_export]
 macro_rules! include_spirv {
     ($($token:tt)*) => {
-        $crate::util::make_spirv(&$crate::util::WordAligned(*include_bytes!($($token)*)).0)
+        $crate::util::make_spirv(include_bytes!($($token)*))
     };
 }
