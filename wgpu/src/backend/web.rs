@@ -1149,7 +1149,7 @@ impl crate::Context for Context {
         buffer.0.unmap();
     }
 
-    fn swap_chain_get_next_texture(
+    fn swap_chain_get_current_texture_view(
         &self,
         swap_chain: &Self::SwapChainId,
     ) -> (
