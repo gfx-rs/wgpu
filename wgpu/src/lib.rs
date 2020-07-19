@@ -11,6 +11,7 @@ pub mod util;
 mod macros;
 
 use std::{
+    borrow::Cow,
     error::Error,
     fmt::{Debug, Display},
     future::Future,
@@ -620,14 +621,14 @@ pub enum ShaderModuleSource<'a> {
     ///
     /// wgpu will attempt to parse and validate it, but the original binary
     /// is passed to `gfx-rs` and `spirv_cross` for translation.
-    SpirV(&'a [u32]),
+    SpirV(Cow<'a, [u32]>),
     /// WGSL module as a string slice.
     ///
     /// wgpu-rs will parse it and use for validation. It will attempt
     /// to build a SPIR-V module internally and panic otherwise.
     ///
     /// Note: WGSL is not yet supported on the Web.
-    Wgsl(&'a str),
+    Wgsl(Cow<'a, str>),
 }
 
 /// Handle to a pipeline layout.

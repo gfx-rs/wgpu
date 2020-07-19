@@ -815,7 +815,7 @@ impl crate::Context for Context {
     ) -> Self::ShaderModuleId {
         let desc = match source {
             ShaderModuleSource::SpirV(spv) => {
-                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(spv))
+                web_sys::GpuShaderModuleDescriptor::new(&js_sys::Uint32Array::from(&*spv))
             }
             ShaderModuleSource::Wgsl(_code) => {
                 panic!("WGSL is not yet supported by the Web backend")
