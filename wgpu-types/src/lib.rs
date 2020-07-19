@@ -1480,7 +1480,7 @@ where
     [B]: ToOwned<Owned = Vec<B>>,
 {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Option<Cow<'a, str>>,
     /// The [`BindGroupLayout`] that corresponds to this bind group.
     pub layout: L,
     /// The resources to bind to this bind group.
@@ -1526,7 +1526,7 @@ pub struct ProgrammableStageDescriptor<'a, M> {
     pub module: M,
     /// The name of the entry point in the compiled shader. There must be a function that returns
     /// void with this name in the shader.
-    pub entry_point: &'a str,
+    pub entry_point: Cow<'a, str>,
 }
 
 /// Describes a render (graphics) pipeline.
@@ -1586,7 +1586,7 @@ pub struct CommandBufferDescriptor {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct RenderBundleEncoderDescriptor<'a> {
     /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Option<Cow<'a, str>>,
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
     pub color_formats: Cow<'a, [TextureFormat]>,
@@ -1853,7 +1853,7 @@ impl BindGroupLayoutEntry {
 #[derive(Clone, Debug)]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Option<Cow<'a, str>>,
 
     /// Array of entries in this BindGroupLayout
     pub entries: Cow<'a, [BindGroupLayoutEntry]>,

@@ -209,7 +209,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_create_bind_group_layout::<B>(
                     device,
                     &wgt::BindGroupLayoutDescriptor {
-                        label: Some(label),
+                        label: Some(label[..].into()),
                         entries: entries[..].into(),
                     },
                     id,
@@ -271,7 +271,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.device_create_bind_group::<B>(
                     device,
                     &wgc::binding_model::BindGroupDescriptor {
-                        label: Some(&label),
+                        label: Some(label[..].into()),
                         layout: layout_id,
                         entries: entry_vec[..].into(),
                     },

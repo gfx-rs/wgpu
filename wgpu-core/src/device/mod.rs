@@ -1264,7 +1264,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .raw
                 .create_descriptor_set_layout(&raw_bindings, &[])
                 .unwrap();
-            if let Some(label) = desc.label {
+            if let Some(label) = desc.label.as_ref() {
                 device
                     .raw
                     .set_descriptor_set_layout_name(&mut raw_layout, label);
@@ -1306,7 +1306,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroupLayout {
                 id,
-                label: desc.label.map_or_else(String::new, str::to_string),
+                label: desc
+                    .label
+                    .as_ref()
+                    .map_or_else(String::new, |s| s[..].into()),
                 entries: desc.entries[..].to_owned(),
             }),
             None => (),
@@ -1534,7 +1537,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         // Set the descriptor set's label for easier debugging.
-        if let Some(label) = desc.label {
+        if let Some(label) = desc.label.as_ref() {
             unsafe {
                 device
                     .raw
@@ -1854,7 +1857,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroup {
                 id,
-                label: desc.label.map_or_else(String::new, str::to_string),
+                label: desc
+                    .label
+                    .as_ref()
+                    .map_or_else(String::new, |s| s[..].into()),
                 layout_id: desc.layout,
                 entries: desc
                     .entries
@@ -2284,7 +2290,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let vertex = {
-                let entry_point_name = desc.vertex_stage.entry_point;
+                let entry_point_name = &desc.vertex_stage.entry_point;
 
                 let shader_module = &shader_module_guard[desc.vertex_stage.module];
 
@@ -2293,7 +2299,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     interface = validation::check_stage(
                         module,
                         &group_layouts,
-                        entry_point_name,
+                        &entry_point_name,
                         ExecutionModel::Vertex,
                         interface,
                     )
@@ -2302,7 +2308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
 
                 hal::pso::EntryPoint::<B> {
-                    entry: entry_point_name, // TODO
+                    entry: &entry_point_name, // TODO
                     module: &shader_module.raw,
                     specialization: hal::pso::Specialization::EMPTY,
                 }
@@ -2310,7 +2316,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let fragment = match &desc.fragment_stage {
                 Some(stage) => {
-                    let entry_point_name = stage.entry_point;
+                    let entry_point_name = &stage.entry_point;
 
                     let shader_module = &shader_module_guard[stage.module];
 
@@ -2320,7 +2326,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             interface = validation::check_stage(
                                 module,
                                 &group_layouts,
-                                entry_point_name,
+                                &entry_point_name,
                                 ExecutionModel::Fragment,
                                 interface,
                             )
@@ -2332,7 +2338,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     Some(hal::pso::EntryPoint::<B> {
-                        entry: entry_point_name,
+                        entry: &entry_point_name,
                         module: &shader_module.raw,
                         specialization: hal::pso::Specialization::EMPTY,
                     })
@@ -2538,7 +2544,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
-            let entry_point_name = pipeline_stage.entry_point;
+            let entry_point_name = &pipeline_stage.entry_point;
 
             let shader_module = &shader_module_guard[pipeline_stage.module];
 
@@ -2546,7 +2552,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let _ = validation::check_stage(
                     module,
                     &group_layouts,
-                    entry_point_name,
+                    &entry_point_name,
                     ExecutionModel::GLCompute,
                     interface,
                 )
@@ -2554,7 +2560,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let shader = hal::pso::EntryPoint::<B> {
-                entry: entry_point_name, // TODO
+                entry: &entry_point_name, // TODO
                 module: &shader_module.raw,
                 specialization: hal::pso::Specialization::EMPTY,
             };

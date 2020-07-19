@@ -50,7 +50,7 @@ impl ProgrammableStageDescriptor {
     pub fn to_core(&self) -> crate::pipeline::ProgrammableStageDescriptor {
         crate::pipeline::ProgrammableStageDescriptor {
             module: self.module,
-            entry_point: &self.entry_point,
+            entry_point: self.entry_point[..].into(),
         }
     }
 }
