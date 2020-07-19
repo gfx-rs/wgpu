@@ -23,6 +23,7 @@ use hal::{
     window::{PresentationSurface as _, Surface as _},
 };
 use parking_lot::{Mutex, MutexGuard};
+use thiserror::Error;
 use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
 use std::{
@@ -384,7 +385,7 @@ impl<B: GfxBackend> Device<B> {
         self_id: id::DeviceId,
         desc: &wgt::BufferDescriptor<Label>,
         memory_kind: gfx_memory::Kind,
-    ) -> resource::Buffer<B> {
+    ) -> Result<resource::Buffer<B>, CreateBufferError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
         let (mut usage, _memory_properties) = conv::map_buffer_usage(desc.usage);
         if desc.mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
@@ -407,11 +408,9 @@ impl<B: GfxBackend> Device<B> {
                 let is_native_only = self
                     .features
                     .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS);
-                assert!(
-                    is_native_only,
-                    "MAP usage can only be combined with the opposite COPY, requested {:?}",
-                    desc.usage
-                );
+                if !is_native_only {
+                    return Err(CreateBufferError::UsageMismatch(desc.usage));
+                }
                 MemoryUsage::Dynamic {
                     sparse_updates: false,
                 }
@@ -438,7 +437,7 @@ impl<B: GfxBackend> Device<B> {
                 .unwrap()
         };
 
-        resource::Buffer {
+        Ok(resource::Buffer {
             raw: buffer,
             device_id: Stored {
                 value: self_id,
@@ -451,7 +450,7 @@ impl<B: GfxBackend> Device<B> {
             sync_mapped_writes: None,
             map_state: resource::BufferMapState::Idle,
             life_guard: LifeGuard::new(),
-        }
+        })
     }
 
     fn create_texture(
@@ -663,7 +662,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::BufferDescriptor<Label>,
         id_in: Input<G, id::BufferId>,
-    ) -> id::BufferId {
+    ) -> Result<id::BufferId, CreateBufferError> {
         span!(_guard, INFO, "Device::create_buffer");
 
         let hub = B::hub(self);
@@ -671,40 +670,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         log::info!("Create buffer {:?} with ID {:?}", desc, id_in);
 
-        if desc.mapped_at_creation {
-            assert_eq!(
-                desc.size % wgt::COPY_BUFFER_ALIGNMENT,
-                0,
-                "Buffers that are mapped at creation have to be aligned to COPY_BUFFER_ALIGNMENT"
-            );
+        if desc.mapped_at_creation && desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
+            return Err(CreateBufferError::UnalignedSize);
         }
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let mut buffer = device.create_buffer(device_id, desc, gfx_memory::Kind::General);
+        let mut buffer = device.create_buffer(device_id, desc, gfx_memory::Kind::General)?;
         let ref_count = buffer.life_guard.add_ref();
 
         let buffer_use = if !desc.mapped_at_creation {
             resource::BufferUse::EMPTY
         } else if desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
             // buffer is mappable, so we are just doing that at start
-            match map_buffer(
+            let ptr = map_buffer(
                 &device.raw,
                 &mut buffer,
                 hal::buffer::SubRange::WHOLE,
                 HostMap::Write,
-            ) {
-                Ok(ptr) => {
-                    buffer.map_state = resource::BufferMapState::Active {
-                        ptr,
-                        sub_range: hal::buffer::SubRange::WHOLE,
-                        host: HostMap::Write,
-                    };
-                }
-                Err(e) => {
-                    log::error!("failed to create buffer in a mapped state: {:?}", e);
-                }
+            )
+            .expect("failed to map buffer on creation");
+
+            buffer.map_state = resource::BufferMapState::Active {
+                ptr,
+                sub_range: hal::buffer::SubRange::WHOLE,
+                host: HostMap::Write,
             };
+
             resource::BufferUse::MAP_WRITE
         } else {
             // buffer needs staging area for initialization only
@@ -717,7 +709,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     mapped_at_creation: false,
                 },
                 gfx_memory::Kind::Linear,
-            );
+            )?;
             let ptr = stage
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
@@ -752,7 +744,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .buffers
             .init(id, ref_count, BufferState::with_usage(buffer_use))
             .unwrap();
-        id
+        Ok(id)
     }
 
     #[cfg(feature = "replay")]
@@ -3047,4 +3039,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateBufferError {
+    #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
+    UsageMismatch(wgt::BufferUsage),
+    #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
+    UnalignedSize,
 }
