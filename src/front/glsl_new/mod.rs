@@ -30,6 +30,7 @@ pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Modu
     let mut module = Module::generate_empty();
     module.functions = program.functions;
     module.types = program.types;
+    module.constants = program.constants;
 
     // find entry point
     if let Some(entry_handle) = program.lookup_function.get(&entry) {

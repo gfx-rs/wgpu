@@ -6,8 +6,8 @@ pomelo! {
     //%verbose;
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
-        use crate::{Arena, Expression, Function, Handle, LocalVariable, ScalarKind,
-            Type, TypeInner, VectorSize};
+        use crate::{Arena, Constant, ConstantInner, Expression, Function, Handle,
+            LocalVariable, ScalarKind, Type, TypeInner, VectorSize};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -75,7 +75,21 @@ pomelo! {
     variable_identifier ::= Identifier;
 
     primary_expression ::= variable_identifier;
-    primary_expression ::= IntConstant;
+    primary_expression ::= IntConstant(i) {
+        let ty = extra.types.fetch_or_append(Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Sint,
+                width: 4,
+            }
+        });
+        let ch = extra.constants.fetch_or_append(Constant {
+            name: None,
+            specialization: None,
+            ty,
+            inner: ConstantInner::Sint(i.1)
+        });
+    }
     primary_expression ::= UintConstant;
     primary_expression ::= FloatConstant;
     primary_expression ::= BoolConstant;

@@ -1,4 +1,4 @@
-use crate::{Arena, FastHashMap, Function, Handle, Type};
+use crate::{Arena, Constant, FastHashMap, Function, Handle, Type};
 
 #[derive(Debug)]
 pub struct Program {
@@ -9,6 +9,7 @@ pub struct Program {
     pub functions: Arena<Function>,
     pub lookup_type: FastHashMap<String, Handle<Type>>,
     pub types: Arena<Type>,
+    pub constants: Arena<Constant>,
 }
 
 impl Program {
@@ -21,6 +22,7 @@ impl Program {
             functions: Arena::<Function>::new(),
             lookup_type: FastHashMap::default(),
             types: Arena::<Type>::new(),
+            constants: Arena::<Constant>::new(),
         }
     }
 }
