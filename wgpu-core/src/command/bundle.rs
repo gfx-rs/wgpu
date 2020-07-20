@@ -922,7 +922,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let bundle = &bundle_guard[id];
                 trace.lock().add(trace::Action::CreateRenderBundle {
                     id,
-                    desc: trace::RenderBundleDescriptor::new(desc.label, &bundle.context),
+                    desc: trace::new_render_bundle_encoder_descriptor(desc.label, &bundle.context),
                     base: BasePass::from_ref(bundle.base.as_ref()),
                 });
             }

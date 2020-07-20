@@ -209,3 +209,15 @@ where
         }
     }
 }
+
+impl<L> ToStatic for RenderBundleDescriptor<L>
+where
+    L: ToStatic,
+{
+    type Static = RenderBundleDescriptor<L::Static>;
+    fn to_static(&self) -> Self::Static {
+        RenderBundleDescriptor {
+            label: self.label.to_static(),
+        }
+    }
+}

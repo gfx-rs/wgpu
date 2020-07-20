@@ -28,25 +28,18 @@ pub type VertexStateDescriptor = wgt::VertexStateDescriptor<'static>;
 pub type RenderPipelineDescriptor =
     wgt::RenderPipelineDescriptor<'static, id::PipelineLayoutId, ProgrammableStageDescriptor>;
 
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderBundleDescriptor {
-    pub label: String,
-    pub color_formats: Vec<wgt::TextureFormat>,
-    pub depth_stencil_format: Option<wgt::TextureFormat>,
-    pub sample_count: u32,
-}
+pub type RenderBundleEncoderDescriptor = wgt::RenderBundleEncoderDescriptor<'static>;
 
 #[cfg(feature = "trace")]
-impl RenderBundleDescriptor {
-    pub(crate) fn new(label: super::Label, context: &super::RenderPassContext) -> Self {
-        RenderBundleDescriptor {
-            label: super::own_label(&label),
-            color_formats: context.attachments.colors.to_vec(),
-            depth_stencil_format: context.attachments.depth_stencil,
-            sample_count: context.sample_count as u32,
-        }
+pub(crate) fn new_render_bundle_encoder_descriptor(
+    label: super::Label,
+    context: &super::RenderPassContext,
+) -> RenderBundleEncoderDescriptor {
+    RenderBundleEncoderDescriptor {
+        label: Some(super::own_label(&label).into()),
+        color_formats: context.attachments.colors.to_vec().into(),
+        depth_stencil_format: context.attachments.depth_stencil,
+        sample_count: context.sample_count as u32,
     }
 }
 
@@ -124,7 +117,7 @@ pub enum Action {
     DestroyRenderPipeline(id::RenderPipelineId),
     CreateRenderBundle {
         id: id::RenderBundleId,
-        desc: RenderBundleDescriptor,
+        desc: RenderBundleEncoderDescriptor,
         base: crate::command::BasePass<crate::command::RenderCommand>,
     },
     DestroyRenderBundle(id::RenderBundleId),

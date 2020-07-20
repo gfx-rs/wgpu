@@ -256,18 +256,9 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.render_pipeline_destroy::<B>(id);
             }
             A::CreateRenderBundle { id, desc, base } => {
-                let label = Label::new(&desc.label);
-                let bundle = wgc::command::RenderBundleEncoder::new(
-                    &wgt::RenderBundleEncoderDescriptor {
-                        label: None,
-                        color_formats: desc.color_formats[..].into(),
-                        depth_stencil_format: desc.depth_stencil_format,
-                        sample_count: desc.sample_count,
-                    },
-                    device,
-                    Some(base),
-                )
-                .unwrap();
+                let label = Label::new(&desc.label.as_ref().unwrap());
+                let bundle =
+                    wgc::command::RenderBundleEncoder::new(&desc, device, Some(base)).unwrap();
                 self.render_bundle_encoder_finish::<B>(
                     bundle,
                     &wgt::RenderBundleDescriptor {
