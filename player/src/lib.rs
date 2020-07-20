@@ -152,7 +152,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::CreateSwapChain { .. } | A::PresentSwapChain(_) => {
                 panic!("Unexpected SwapChain action: winit feature is not enabled")
             }
-            A::CreateBuffer { id, desc } => {
+            A::CreateBuffer(id, desc) => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
                 self.device_create_buffer::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
@@ -161,7 +161,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyBuffer(id) => {
                 self.buffer_destroy::<B>(id);
             }
-            A::CreateTexture { id, desc } => {
+            A::CreateTexture(id, desc) => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
                 self.device_create_texture::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
@@ -185,7 +185,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyTextureView(id) => {
                 self.texture_view_destroy::<B>(id);
             }
-            A::CreateSampler { id, desc } => {
+            A::CreateSampler(id, desc) => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
                 self.device_create_sampler::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
@@ -201,14 +201,14 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                         .unwrap();
                 }
             }
-            A::CreateBindGroupLayout { id, desc } => {
+            A::CreateBindGroupLayout(id, desc) => {
                 self.device_create_bind_group_layout::<B>(device, &desc, id)
                     .unwrap();
             }
             A::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_destroy::<B>(id);
             }
-            A::CreatePipelineLayout { id, desc } => {
+            A::CreatePipelineLayout(id, desc) => {
                 self.device_maintain_ids::<B>(device);
                 self.device_create_pipeline_layout::<B>(device, &desc, id)
                     .unwrap();
@@ -216,7 +216,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_destroy::<B>(id);
             }
-            A::CreateBindGroup { id, desc } => {
+            A::CreateBindGroup(id, desc) => {
                 self.device_maintain_ids::<B>(device);
                 self.device_create_bind_group::<B>(device, &desc, id)
                     .unwrap();
@@ -239,7 +239,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyShaderModule(id) => {
                 self.shader_module_destroy::<B>(id);
             }
-            A::CreateComputePipeline { id, desc } => {
+            A::CreateComputePipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device);
                 self.device_create_compute_pipeline::<B>(device, &desc, id)
                     .unwrap();
@@ -247,7 +247,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_destroy::<B>(id);
             }
-            A::CreateRenderPipeline { id, desc } => {
+            A::CreateRenderPipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device);
                 self.device_create_render_pipeline::<B>(device, &desc, id)
                     .unwrap();

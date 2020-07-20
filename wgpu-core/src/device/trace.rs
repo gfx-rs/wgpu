@@ -51,15 +51,9 @@ pub enum Action {
         desc: wgt::DeviceDescriptor,
         backend: wgt::Backend,
     },
-    CreateBuffer {
-        id: id::BufferId,
-        desc: wgt::BufferDescriptor<String>,
-    },
+    CreateBuffer(id::BufferId, wgt::BufferDescriptor<String>),
     DestroyBuffer(id::BufferId),
-    CreateTexture {
-        id: id::TextureId,
-        desc: wgt::TextureDescriptor<String>,
-    },
+    CreateTexture(id::TextureId, wgt::TextureDescriptor<String>),
     DestroyTexture(id::TextureId),
     CreateTextureView {
         id: id::TextureViewId,
@@ -67,53 +61,41 @@ pub enum Action {
         desc: Option<wgt::TextureViewDescriptor<String>>,
     },
     DestroyTextureView(id::TextureViewId),
-    CreateSampler {
-        id: id::SamplerId,
-        desc: wgt::SamplerDescriptor<String>,
-    },
+    CreateSampler(id::SamplerId, wgt::SamplerDescriptor<String>),
     DestroySampler(id::SamplerId),
-    CreateSwapChain {
-        id: id::SwapChainId,
-        desc: wgt::SwapChainDescriptor,
-    },
+    CreateSwapChain(id::SwapChainId, wgt::SwapChainDescriptor),
     GetSwapChainTexture {
         id: Option<id::TextureViewId>,
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
-    CreateBindGroupLayout {
-        id: id::BindGroupLayoutId,
-        desc: wgt::BindGroupLayoutDescriptor<'static>,
-    },
+    CreateBindGroupLayout(
+        id::BindGroupLayoutId,
+        wgt::BindGroupLayoutDescriptor<'static>,
+    ),
     DestroyBindGroupLayout(id::BindGroupLayoutId),
-    CreatePipelineLayout {
-        id: id::PipelineLayoutId,
-        desc: wgt::PipelineLayoutDescriptor<'static, id::BindGroupLayoutId>,
-    },
+    CreatePipelineLayout(
+        id::PipelineLayoutId,
+        wgt::PipelineLayoutDescriptor<'static, id::BindGroupLayoutId>,
+    ),
     DestroyPipelineLayout(id::PipelineLayoutId),
-    CreateBindGroup {
-        id: id::BindGroupId,
-        desc: wgt::BindGroupDescriptor<
+    CreateBindGroup(
+        id::BindGroupId,
+        wgt::BindGroupDescriptor<
             'static,
             id::BindGroupLayoutId,
             wgt::BindGroupEntry<BindingResource>,
         >,
-    },
+    ),
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
         id: id::ShaderModuleId,
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),
-    CreateComputePipeline {
-        id: id::ComputePipelineId,
-        desc: ComputePipelineDescriptor,
-    },
+    CreateComputePipeline(id::ComputePipelineId, ComputePipelineDescriptor),
     DestroyComputePipeline(id::ComputePipelineId),
-    CreateRenderPipeline {
-        id: id::RenderPipelineId,
-        desc: RenderPipelineDescriptor,
-    },
+    CreateRenderPipeline(id::RenderPipelineId, RenderPipelineDescriptor),
     DestroyRenderPipeline(id::RenderPipelineId),
     CreateRenderBundle {
         id: id::RenderBundleId,

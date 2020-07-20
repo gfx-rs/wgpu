@@ -733,7 +733,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
                     desc.usage |= wgt::BufferUsage::COPY_DST;
                 }
-                trace.lock().add(trace::Action::CreateBuffer { id, desc })
+                trace.lock().add(trace::Action::CreateBuffer(id, desc))
             }
             None => (),
         };
@@ -923,10 +923,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub.textures.register_identity(id_in, texture, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateTexture {
-                id,
-                desc: desc.map_label(own_label),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateTexture(id, desc.map_label(own_label))),
             None => (),
         };
 
@@ -1145,10 +1144,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateSampler {
-                id,
-                desc: desc.map_label(own_label),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateSampler(id, desc.map_label(own_label))),
             None => (),
         };
 
@@ -1304,10 +1302,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, layout, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroupLayout {
-                id,
-                desc: desc.to_static(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateBindGroupLayout(id, desc.to_static())),
             None => (),
         };
         Ok(id)
@@ -1455,10 +1452,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, layout, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout {
-                id,
-                desc: desc.to_static(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreatePipelineLayout(id, desc.to_static())),
             None => (),
         };
         Ok(id)
@@ -1850,10 +1846,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroup {
-                id,
-                desc: desc.to_static(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateBindGroup(id, desc.to_static())),
             None => (),
         };
 
@@ -2431,10 +2426,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline {
-                id,
-                desc: desc.to_static(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateRenderPipeline(id, desc.to_static())),
             None => (),
         };
         Ok(id)
@@ -2551,10 +2545,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateComputePipeline {
-                id,
-                desc: desc.to_static(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateComputePipeline(id, desc.to_static())),
             None => (),
         };
         Ok(id)
@@ -2680,10 +2673,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(Action::CreateSwapChain {
-                id: sc_id,
-                desc: desc.clone(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(Action::CreateSwapChain(sc_id, desc.clone())),
             None => (),
         };
 
