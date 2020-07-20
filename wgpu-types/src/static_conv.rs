@@ -2,8 +2,8 @@ use super::*;
 
 use std::borrow::Cow;
 
-pub trait ToStatic {
-    type Static: 'static;
+pub trait ToStatic: Clone {
+    type Static: Clone + 'static;
     fn to_static(&self) -> Self::Static;
 }
 
@@ -28,8 +28,6 @@ impl<'a> ToStatic for Cow<'a, str> {
 impl<'a, T> ToStatic for Cow<'a, [T]>
 where
     T: ToStatic,
-    [T]: ToOwned<Owned = Vec<T>>,
-    [T::Static]: ToOwned<Owned = Vec<T::Static>>,
 {
     type Static = Cow<'static, [T::Static]>;
     fn to_static(&self) -> Self::Static {
@@ -51,8 +49,6 @@ impl<L, B> ToStatic for BindGroupDescriptor<'_, L, B>
 where
     B: ToStatic,
     L: ToStatic,
-    [B]: ToOwned<Owned = Vec<B>>,
-    [B::Static]: ToOwned<Owned = Vec<B::Static>>,
 {
     type Static = BindGroupDescriptor<'static, L::Static, B::Static>;
     fn to_static(&self) -> Self::Static {
@@ -69,8 +65,6 @@ impl_to_static!(clone PushConstantRange);
 impl<B> ToStatic for PipelineLayoutDescriptor<'_, B>
 where
     B: ToStatic,
-    [B]: ToOwned<Owned = Vec<B>>,
-    [B::Static]: ToOwned<Owned = Vec<B::Static>>,
 {
     type Static = PipelineLayoutDescriptor<'static, B::Static>;
     fn to_static(&self) -> Self::Static {
@@ -172,8 +166,6 @@ impl<C, D> ToStatic for RenderPassDescriptor<'_, C, D>
 where
     C: ToStatic,
     D: ToStatic,
-    [C]: ToOwned<Owned = Vec<C>>,
-    [C::Static]: ToOwned<Owned = Vec<C::Static>>,
 {
     type Static = RenderPassDescriptor<'static, C::Static, D::Static>;
     fn to_static(&self) -> Self::Static {

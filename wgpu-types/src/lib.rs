@@ -1152,7 +1152,7 @@ pub enum SwapChainStatus {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RenderPassDescriptor<'a, C, D>
 where
-    [C]: ToOwned<Owned = Vec<C>>,
+    C: Clone,
 {
     /// The color attachments of the render pass.
     pub color_attachments: Cow<'a, [C]>,
@@ -1489,7 +1489,7 @@ pub struct BindGroupEntry<R> {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupDescriptor<'a, L, B>
 where
-    [B]: ToOwned<Owned = Vec<B>>,
+    B: Clone,
 {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
     pub label: Option<Cow<'a, str>>,
@@ -1507,7 +1507,7 @@ where
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct PipelineLayoutDescriptor<'a, B>
 where
-    [B]: ToOwned<Owned = Vec<B>>,
+    B: Clone,
 {
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
