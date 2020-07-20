@@ -550,8 +550,8 @@ impl crate::Context for Context {
         source: ShaderModuleSource,
     ) -> Self::ShaderModuleId {
         let desc = match source {
-            ShaderModuleSource::SpirV(spv) => wgc::pipeline::ShaderModuleSource::SpirV(spv),
-            ShaderModuleSource::Wgsl(code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
+            ShaderModuleSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(spv),
+            ShaderModuleSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
         };
         gfx_select!(*device => self.device_create_shader_module(*device, desc, PhantomData))
     }
