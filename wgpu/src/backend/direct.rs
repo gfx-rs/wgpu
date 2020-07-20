@@ -724,6 +724,7 @@ impl crate::Context for Context {
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
         ))
+        .unwrap()
     }
 
     fn device_create_texture(
@@ -737,6 +738,7 @@ impl crate::Context for Context {
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
         ))
+        .unwrap()
     }
 
     fn device_create_sampler(
@@ -777,7 +779,7 @@ impl crate::Context for Context {
 
     fn device_drop(&self, device: &Self::DeviceId) {
         #[cfg(not(target_arch = "wasm32"))]
-        gfx_select!(*device => self.device_poll(*device, true));
+        gfx_select!(*device => self.device_poll(*device, true)).unwrap();
         //TODO: make this work in general
         #[cfg(not(target_arch = "wasm32"))]
         #[cfg(feature = "metal-auto-capture")]
@@ -791,7 +793,8 @@ impl crate::Context for Context {
                 crate::Maintain::Poll => false,
                 crate::Maintain::Wait => true,
             }
-        ));
+        ))
+        .unwrap();
     }
 
     fn buffer_map_async(
@@ -824,7 +827,7 @@ impl crate::Context for Context {
             callback: buffer_map_future_wrapper,
             user_data: completion.to_raw() as _,
         };
-        gfx_select!(*buffer => self.buffer_map_async(*buffer, range, operation));
+        gfx_select!(*buffer => self.buffer_map_async(*buffer, range, operation)).unwrap();
 
         future
     }
@@ -839,7 +842,8 @@ impl crate::Context for Context {
             *buffer,
             sub_range.start,
             wgt::BufferSize::new(size)
-        ));
+        ))
+        .unwrap();
         unsafe { slice::from_raw_parts(ptr, size as usize) }
     }
 
@@ -853,15 +857,16 @@ impl crate::Context for Context {
             *buffer,
             sub_range.start,
             wgt::BufferSize::new(size)
-        ));
+        ))
+        .unwrap();
         unsafe { slice::from_raw_parts_mut(ptr, size as usize) }
     }
 
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
-        gfx_select!(*buffer => self.buffer_unmap(*buffer))
+        gfx_select!(*buffer => self.buffer_unmap(*buffer)).unwrap();
     }
 
-    fn swap_chain_get_next_texture(
+    fn swap_chain_get_current_texture_view(
         &self,
         swap_chain: &Self::SwapChainId,
     ) -> (
@@ -870,7 +875,7 @@ impl crate::Context for Context {
         Self::SwapChainOutputDetail,
     ) {
         let wgc::swap_chain::SwapChainOutput { status, view_id } =
-            gfx_select!(*swap_chain => self.swap_chain_get_next_texture(*swap_chain, PhantomData));
+            gfx_select!(*swap_chain => self.swap_chain_get_current_texture_view(*swap_chain, PhantomData)).unwrap();
 
         (
             view_id,
@@ -882,7 +887,7 @@ impl crate::Context for Context {
     }
 
     fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail) {
-        gfx_select!(*view => self.swap_chain_present(detail.swap_chain_id))
+        gfx_select!(*view => self.swap_chain_present(detail.swap_chain_id)).unwrap();
     }
 
     fn texture_create_view(
@@ -1058,7 +1063,7 @@ impl crate::Context for Context {
 
     fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
         let desc = wgt::CommandBufferDescriptor::default();
-        gfx_select!(*encoder => self.command_encoder_finish(*encoder, &desc))
+        gfx_select!(*encoder => self.command_encoder_finish(*encoder, &desc)).unwrap()
     }
 
     fn render_bundle_encoder_finish(
@@ -1109,7 +1114,7 @@ impl crate::Context for Context {
     ) {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
 
-        gfx_select!(*queue => self.queue_submit(*queue, &temp_command_buffers))
+        gfx_select!(*queue => self.queue_submit(*queue, &temp_command_buffers)).unwrap()
     }
 }
 
