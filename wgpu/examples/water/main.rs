@@ -4,7 +4,7 @@ mod framework;
 mod point_gen;
 
 use cgmath::Point3;
-use std::{iter, mem};
+use std::{borrow::Cow::Borrowed, iter, mem};
 
 ///
 /// Radius of the terrain.
@@ -231,7 +231,7 @@ impl Example {
 
         let water_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: water_bind_group_layout,
-            entries: &[
+            entries: Borrowed(&[
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(water_uniforms.slice(..)),
@@ -252,8 +252,8 @@ impl Example {
                     binding: 3,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
-            ],
-            label: Some("Water Bind Group"),
+            ]),
+            label: Some(Borrowed("Water Bind Group")),
         });
 
         (
@@ -350,8 +350,8 @@ impl framework::Example for Example {
         // Create the bind group layout. This is what our uniforms will look like.
         let water_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Water Bind Group Layout"),
-                entries: &[
+                label: Some(Borrowed("Water Bind Group Layout")),
+                entries: Borrowed(&[
                     // Uniform variables such as projection/view.
                     wgpu::BindGroupLayoutEntry::new(
                         0,
@@ -389,13 +389,13 @@ impl framework::Example for Example {
                         wgpu::ShaderStage::FRAGMENT,
                         wgpu::BindingType::Sampler { comparison: false },
                     ),
-                ],
+                ]),
             });
 
         let terrain_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Terrain Bind Group Layout"),
-                entries: &[
+                label: Some(Borrowed("Terrain Bind Group Layout")),
+                entries: Borrowed(&[
                     // Regular uniform variables like view/projection.
                     wgpu::BindGroupLayoutEntry::new(
                         0,
@@ -407,20 +407,20 @@ impl framework::Example for Example {
                             ),
                         },
                     ),
-                ],
+                ]),
             });
 
         // Create our pipeline layouts.
         let water_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[&water_bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: Borrowed(&[&water_bind_group_layout]),
+                push_constant_ranges: Borrowed(&[]),
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[&terrain_bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: Borrowed(&[&terrain_bind_group_layout]),
+                push_constant_ranges: Borrowed(&[]),
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -459,19 +459,19 @@ impl framework::Example for Example {
 
         let terrain_normal_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &terrain_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
+            entries: Borrowed(&[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(terrain_normal_uniform_buf.slice(..)),
-            }],
-            label: Some("Terrain Normal Bind Group"),
+            }]),
+            label: Some(Borrowed("Terrain Normal Bind Group")),
         });
         let terrain_flipped_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &terrain_bind_group_layout,
-            entries: &[wgpu::BindGroupEntry {
+            entries: Borrowed(&[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: wgpu::BindingResource::Buffer(terrain_flipped_uniform_buf.slice(..)),
-            }],
-            label: Some("Terrain Flipped Bind Group"),
+            }]),
+            label: Some(Borrowed("Terrain Flipped Bind Group")),
         });
 
         // Upload/compile them to GPU code.
@@ -492,11 +492,11 @@ impl framework::Example for Example {
             // Vertex & Fragment shaders
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &water_vs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &water_fs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             }),
             // How the triangles will be rasterized. This is more important
             // for the terrain because of the beneath-the water shot.
@@ -512,7 +512,7 @@ impl framework::Example for Example {
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
             // Describes how the colour will be interpolated
             // and assigned to the output attachment.
-            color_states: &[wgpu::ColorStateDescriptor {
+            color_states: Borrowed(&[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor {
                     src_factor: wgpu::BlendFactor::SrcAlpha,
@@ -525,7 +525,7 @@ impl framework::Example for Example {
                     operation: wgpu::BlendOperation::Max,
                 },
                 write_mask: wgpu::ColorWrite::ALL,
-            }],
+            }]),
             // Describes how us writing to the depth/stencil buffer
             // will work. Since this is water, we need to read from the
             // depth buffer both as a texture in the shader, and as an
@@ -552,11 +552,11 @@ impl framework::Example for Example {
                 // because we duplicate all the data anyway. This is
                 // necessary to achieve the low-poly effect.
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[wgpu::VertexBufferDescriptor {
+                vertex_buffers: Borrowed(&[wgpu::VertexBufferDescriptor {
                     stride: water_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Short2, 1 => Char4],
-                }],
+                    attributes: Borrowed(&wgpu::vertex_attr_array![0 => Short2, 1 => Char4]),
+                }]),
             },
             sample_count: 1,
             sample_mask: !0,
@@ -568,11 +568,11 @@ impl framework::Example for Example {
             layout: &terrain_pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &terrain_vs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &terrain_fs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
@@ -582,12 +582,12 @@ impl framework::Example for Example {
                 depth_bias_clamp: 0.0,
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
+            color_states: Borrowed(&[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 alpha_blend: wgpu::BlendDescriptor::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
-            }],
+            }]),
             depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: true,
@@ -599,11 +599,13 @@ impl framework::Example for Example {
             }),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[wgpu::VertexBufferDescriptor {
+                vertex_buffers: Borrowed(&[wgpu::VertexBufferDescriptor {
                     stride: terrain_vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &wgpu::vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
-                }],
+                    attributes: Borrowed(
+                        &wgpu::vertex_attr_array![0 => Float3, 1 => Float3, 2 => Uchar4Norm],
+                    ),
+                }]),
             },
             sample_count: 1,
             sample_mask: !0,
@@ -718,14 +720,14 @@ impl framework::Example for Example {
         // First pass: render the reflection.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &self.reflect_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(back_color),
                         store: true,
                     },
-                }],
+                }]),
                 // We still need to use the depth buffer here
                 // since the pipeline requires it.
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
@@ -746,14 +748,14 @@ impl framework::Example for Example {
         // depth values, so we must use StoreOp::Store.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(back_color),
                         store: true,
                     },
-                }],
+                }]),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.depth_buffer,
                     depth_ops: Some(wgpu::Operations {
@@ -772,14 +774,14 @@ impl framework::Example for Example {
         // to it, so it cannot be in the same render pass.
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Load,
                         store: true,
                     },
-                }],
+                }]),
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.depth_buffer,
                     depth_ops: None,

@@ -2,6 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
+use std::borrow::Cow::Borrowed;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -134,7 +135,7 @@ impl framework::Example for Example {
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: None,
-            entries: &[
+            entries: Borrowed(&[
                 wgpu::BindGroupLayoutEntry::new(
                     0,
                     wgpu::ShaderStage::VERTEX,
@@ -157,11 +158,11 @@ impl framework::Example for Example {
                     wgpu::ShaderStage::FRAGMENT,
                     wgpu::BindingType::Sampler { comparison: false },
                 ),
-            ],
+            ]),
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: Borrowed(&[&bind_group_layout]),
+            push_constant_ranges: Borrowed(&[]),
         });
 
         // Create the texture
@@ -217,7 +218,7 @@ impl framework::Example for Example {
         // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
-            entries: &[
+            entries: Borrowed(&[
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
@@ -230,7 +231,7 @@ impl framework::Example for Example {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
-            ],
+            ]),
             label: None,
         });
 
@@ -242,11 +243,11 @@ impl framework::Example for Example {
             layout: &pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &fs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
@@ -256,19 +257,19 @@ impl framework::Example for Example {
                 depth_bias_clamp: 0.0,
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
+            color_states: Borrowed(&[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 alpha_blend: wgpu::BlendDescriptor::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
-            }],
+            }]),
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[wgpu::VertexBufferDescriptor {
+                vertex_buffers: Borrowed(&[wgpu::VertexBufferDescriptor {
                     stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: &[
+                    attributes: Borrowed(&[
                         wgpu::VertexAttributeDescriptor {
                             format: wgpu::VertexFormat::Float4,
                             offset: 0,
@@ -279,8 +280,8 @@ impl framework::Example for Example {
                             offset: 4 * 4,
                             shader_location: 1,
                         },
-                    ],
-                }],
+                    ]),
+                }]),
             },
             sample_count: 1,
             sample_mask: !0,
@@ -324,7 +325,7 @@ impl framework::Example for Example {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -336,7 +337,7 @@ impl framework::Example for Example {
                         }),
                         store: true,
                     },
-                }],
+                }]),
                 depth_stencil_attachment: None,
             });
             rpass.push_debug_group("Prepare data for draw.");
