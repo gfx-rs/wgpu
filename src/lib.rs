@@ -22,6 +22,10 @@ use std::{
 
 use futures::FutureExt as _;
 use parking_lot::Mutex;
+#[cfg(feature = "trace")]
+use serde::Serialize;
+#[cfg(feature = "replay")]
+use serde::Deserialize;
 
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
@@ -797,7 +801,9 @@ pub enum BindingResource<'a> {
 }
 
 /// Operation to perform to the output attachment at the start of a renderpass.
-#[derive(Clone, Copy, Debug, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum LoadOp<V> {
     /// Clear with a specified value.
     Clear(V),
@@ -805,13 +811,30 @@ pub enum LoadOp<V> {
     Load,
 }
 
+impl<V: Default> Default for LoadOp<V> {
+    fn default() -> Self {
+        Self::Clear(Default::default())
+    }
+}
+
 /// Pair of load and store operations for an attachment aspect.
-#[derive(Clone, Debug, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct Operations<V> {
     /// How data should be read through this attachment.
     pub load: LoadOp<V>,
     /// Whether data will be written to through this attachment.
     pub store: bool,
+}
+
+impl<V: Default> Default for Operations<V> {
+    fn default() -> Self {
+        Self {
+            load: Default::default(),
+            store: true,
+        }
+    }
 }
 
 /// Describes a color attachment to a [`RenderPass`].

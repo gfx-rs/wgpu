@@ -17,8 +17,8 @@ all-features = true
 
 [features]
 default = []
-trace = ["wgc/trace"]
-replay = ["wgc/replay"]
+trace = ["serde", "wgc/trace"]
+replay = ["serde", "wgc/replay"]
 subscriber = ["wgc/subscriber"]
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
 vulkan = ["wgc/gfx-backend-vulkan"]
@@ -44,6 +44,7 @@ raw-window-handle = "0.3"
 smallvec = "1"
 tracing = { version = "0.1", default-features = false, features = ["std"] }
 typed-arena = "2.0.1"
+serde = { version = "1", features = ["derive"], optional = true }
 
 #Note: we may consider switching this to "dev-dependencies" if users
 # want to opt into X11 explicitly.
