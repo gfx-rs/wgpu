@@ -13,89 +13,20 @@ type FileName = String;
 
 pub const FILE_NAME: &str = "trace.ron";
 
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum BindingResource {
-    Buffer {
-        id: id::BufferId,
-        offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
-    },
-    Sampler(id::SamplerId),
-    TextureView(id::TextureViewId),
-    TextureViewArray(Vec<id::TextureViewId>),
-}
+pub type BindingResource = crate::binding_model::BindingResource<'static>;
 
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ProgrammableStageDescriptor {
-    pub module: id::ShaderModuleId,
-    pub entry_point: String,
-}
+pub type ProgrammableStageDescriptor =
+    wgt::ProgrammableStageDescriptor<'static, id::ShaderModuleId>;
 
-#[cfg(feature = "trace")]
-impl ProgrammableStageDescriptor {
-    pub fn new(desc: &crate::pipeline::ProgrammableStageDescriptor) -> Self {
-        ProgrammableStageDescriptor {
-            module: desc.module,
-            entry_point: desc.entry_point.to_string(),
-        }
-    }
-}
+pub type ComputePipelineDescriptor =
+    wgt::ComputePipelineDescriptor<id::PipelineLayoutId, ProgrammableStageDescriptor>;
 
-#[cfg(feature = "replay")]
-impl ProgrammableStageDescriptor {
-    pub fn to_core(&self) -> crate::pipeline::ProgrammableStageDescriptor {
-        crate::pipeline::ProgrammableStageDescriptor {
-            module: self.module,
-            entry_point: self.entry_point[..].into(),
-        }
-    }
-}
+pub type VertexBufferDescriptor = wgt::VertexBufferDescriptor<'static>;
 
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ComputePipelineDescriptor {
-    pub layout: id::PipelineLayoutId,
-    pub compute_stage: ProgrammableStageDescriptor,
-}
+pub type VertexStateDescriptor = wgt::VertexStateDescriptor<'static>;
 
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexBufferDescriptor {
-    pub stride: wgt::BufferAddress,
-    pub step_mode: wgt::InputStepMode,
-    pub attributes: Vec<wgt::VertexAttributeDescriptor>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexStateDescriptor {
-    pub index_format: wgt::IndexFormat,
-    pub vertex_buffers: Vec<VertexBufferDescriptor>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderPipelineDescriptor {
-    pub layout: id::PipelineLayoutId,
-    pub vertex_stage: ProgrammableStageDescriptor,
-    pub fragment_stage: Option<ProgrammableStageDescriptor>,
-    pub primitive_topology: wgt::PrimitiveTopology,
-    pub rasterization_state: Option<wgt::RasterizationStateDescriptor>,
-    pub color_states: Vec<wgt::ColorStateDescriptor>,
-    pub depth_stencil_state: Option<wgt::DepthStencilStateDescriptor>,
-    pub vertex_state: VertexStateDescriptor,
-    pub sample_count: u32,
-    pub sample_mask: u32,
-    pub alpha_to_coverage_enabled: bool,
-}
+pub type RenderPipelineDescriptor =
+    wgt::RenderPipelineDescriptor<'static, id::PipelineLayoutId, ProgrammableStageDescriptor>;
 
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -159,21 +90,21 @@ pub enum Action {
     PresentSwapChain(id::SwapChainId),
     CreateBindGroupLayout {
         id: id::BindGroupLayoutId,
-        label: String,
-        entries: Vec<wgt::BindGroupLayoutEntry>,
+        desc: wgt::BindGroupLayoutDescriptor<'static>,
     },
     DestroyBindGroupLayout(id::BindGroupLayoutId),
     CreatePipelineLayout {
         id: id::PipelineLayoutId,
-        bind_group_layouts: Vec<id::BindGroupLayoutId>,
-        push_constant_ranges: Vec<wgt::PushConstantRange>,
+        desc: wgt::PipelineLayoutDescriptor<'static, id::BindGroupLayoutId>,
     },
     DestroyPipelineLayout(id::PipelineLayoutId),
     CreateBindGroup {
         id: id::BindGroupId,
-        label: String,
-        layout_id: id::BindGroupLayoutId,
-        entries: std::collections::BTreeMap<u32, BindingResource>,
+        desc: wgt::BindGroupDescriptor<
+            'static,
+            id::BindGroupLayoutId,
+            wgt::BindGroupEntry<BindingResource>,
+        >,
     },
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {

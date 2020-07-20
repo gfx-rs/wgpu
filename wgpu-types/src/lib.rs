@@ -12,6 +12,10 @@
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ops::Range};
 
+mod static_conv;
+
+pub use static_conv::ToStatic;
+
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
@@ -855,6 +859,8 @@ pub struct VertexAttributeDescriptor {
 
 /// Describes how the vertex buffer is interpreted.
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct VertexBufferDescriptor<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub stride: BufferAddress,
@@ -866,6 +872,8 @@ pub struct VertexBufferDescriptor<'a> {
 
 /// Describes vertex input state for a render pipeline.
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct VertexStateDescriptor<'a> {
     /// The format of any index buffers used with this pipeline.
     pub index_format: IndexFormat,
@@ -1465,6 +1473,8 @@ impl<L> SamplerDescriptor<L> {
 
 /// Bindable resource and the slot to bind it to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupEntry<R> {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -1475,6 +1485,8 @@ pub struct BindGroupEntry<R> {
 
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupDescriptor<'a, L, B>
 where
     [B]: ToOwned<Owned = Vec<B>>,
@@ -1491,6 +1503,8 @@ where
 ///
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct PipelineLayoutDescriptor<'a, B>
 where
     [B]: ToOwned<Owned = Vec<B>>,
@@ -1521,6 +1535,8 @@ pub struct PushConstantRange {
 
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ProgrammableStageDescriptor<'a, M> {
     /// The compiled shader module for this stage.
     pub module: M,
@@ -1531,6 +1547,8 @@ pub struct ProgrammableStageDescriptor<'a, M> {
 
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct RenderPipelineDescriptor<'a, L, D> {
     /// The layout of bind groups for this pipeline.
     pub layout: L,
@@ -1565,6 +1583,8 @@ pub struct RenderPipelineDescriptor<'a, L, D> {
 
 /// Describes a compute pipeline.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ComputePipelineDescriptor<L, D> {
     /// The layout of bind groups for this pipeline.
     pub layout: L,
@@ -1851,6 +1871,8 @@ impl BindGroupLayoutEntry {
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
     pub label: Option<Cow<'a, str>>,

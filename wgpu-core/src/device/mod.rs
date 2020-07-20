@@ -24,7 +24,7 @@ use hal::{
 };
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
-use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
+use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat, ToStatic};
 
 use std::{
     collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr,
@@ -1306,11 +1306,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroupLayout {
                 id,
-                label: desc
-                    .label
-                    .as_ref()
-                    .map_or_else(String::new, |s| s[..].into()),
-                entries: desc.entries[..].to_owned(),
+                desc: desc.to_static(),
             }),
             None => (),
         };
@@ -1461,8 +1457,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout {
                 id,
-                bind_group_layouts: desc.bind_group_layouts[..].to_owned(),
-                push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
+                desc: desc.to_static(),
             }),
             None => (),
         };
@@ -1857,30 +1852,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroup {
                 id,
-                label: desc
-                    .label
-                    .as_ref()
-                    .map_or_else(String::new, |s| s[..].into()),
-                layout_id: desc.layout,
-                entries: desc
-                    .entries
-                    .iter()
-                    .map(|entry| {
-                        let res = match entry.resource {
-                            Br::Buffer(ref binding) => trace::BindingResource::Buffer {
-                                id: binding.buffer_id,
-                                offset: binding.offset,
-                                size: binding.size,
-                            },
-                            Br::TextureView(id) => trace::BindingResource::TextureView(id),
-                            Br::Sampler(id) => trace::BindingResource::Sampler(id),
-                            Br::TextureViewArray(ref binding_array) => {
-                                trace::BindingResource::TextureViewArray(binding_array.to_vec())
-                            }
-                        };
-                        (entry.binding, res)
-                    })
-                    .collect(),
+                desc: desc.to_static(),
             }),
             None => (),
         };
@@ -2461,32 +2433,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline {
                 id,
-                desc: trace::RenderPipelineDescriptor {
-                    layout: desc.layout,
-                    vertex_stage: trace::ProgrammableStageDescriptor::new(&desc.vertex_stage),
-                    fragment_stage: desc
-                        .fragment_stage
-                        .as_ref()
-                        .map(trace::ProgrammableStageDescriptor::new),
-                    primitive_topology: desc.primitive_topology,
-                    rasterization_state: rasterization_state.cloned(),
-                    color_states: color_states.to_vec(),
-                    depth_stencil_state: depth_stencil_state.cloned(),
-                    vertex_state: trace::VertexStateDescriptor {
-                        index_format: desc.vertex_state.index_format,
-                        vertex_buffers: desc_vbs
-                            .iter()
-                            .map(|vbl| trace::VertexBufferDescriptor {
-                                stride: vbl.stride,
-                                step_mode: vbl.step_mode,
-                                attributes: vbl.attributes[..].to_owned(),
-                            })
-                            .collect(),
-                    },
-                    sample_count: desc.sample_count,
-                    sample_mask: desc.sample_mask,
-                    alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
-                },
+                desc: desc.to_static(),
             }),
             None => (),
         };
@@ -2606,10 +2553,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateComputePipeline {
                 id,
-                desc: trace::ComputePipelineDescriptor {
-                    layout: desc.layout,
-                    compute_stage: trace::ProgrammableStageDescriptor::new(&desc.compute_stage),
-                },
+                desc: desc.to_static(),
             }),
             None => (),
         };

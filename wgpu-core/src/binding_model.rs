@@ -17,9 +17,13 @@ use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
 
-use std::{borrow::Borrow, ops::Range};
+use std::{
+    borrow::{Borrow, Cow},
+    ops::Range,
+};
 
 use thiserror::Error;
+use wgt::ToStatic;
 
 #[derive(Clone, Debug, Error)]
 pub enum BindGroupLayoutError {
@@ -397,11 +401,27 @@ pub struct BufferBinding {
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
     Sampler(SamplerId),
     TextureView(TextureViewId),
-    TextureViewArray(&'a [TextureViewId]),
+    TextureViewArray(Cow<'a, [TextureViewId]>),
+}
+
+impl ToStatic for BindingResource<'_> {
+    type Static = BindingResource<'static>;
+    fn to_static(&self) -> Self::Static {
+        match *self {
+            BindingResource::Buffer(ref buffer) => BindingResource::Buffer(buffer.clone()),
+            BindingResource::Sampler(id) => BindingResource::Sampler(id),
+            BindingResource::TextureView(id) => BindingResource::TextureView(id),
+            BindingResource::TextureViewArray(ref ids) => {
+                BindingResource::TextureViewArray(ids.to_static())
+            }
+        }
+    }
 }
 
 pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;
