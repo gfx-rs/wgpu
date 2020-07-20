@@ -140,7 +140,7 @@ fn test_vertex_attr_array() {
 
 /// Macro to load a SPIR-V module statically.
 ///
-/// It ensure the word alignment as well as the magic number.
+/// It ensures the word alignment as well as the magic number.
 #[macro_export]
 macro_rules! include_spirv {
     ($($token:tt)*) => {
