@@ -731,7 +731,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
                     desc.usage |= wgt::BufferUsage::COPY_DST;
                 }
-                trace.lock().add(trace::Action::CreateBuffer { id, desc })
+                trace.lock().add(trace::Action::CreateBuffer(id, desc))
             }
             None => (),
         };
@@ -915,10 +915,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub.textures.register_identity(id_in, texture, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateTexture {
-                id,
-                desc: desc.map_label(own_label),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateTexture(id, desc.map_label(own_label))),
             None => (),
         };
 
@@ -1137,10 +1136,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateSampler {
-                id,
-                desc: desc.map_label(own_label),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateSampler(id, desc.map_label(own_label))),
             None => (),
         };
 
@@ -1185,7 +1183,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let hub = B::hub(self);
         let mut entry_map = FastHashMap::default();
-        for entry in desc.entries {
+        for entry in desc.entries.iter() {
             if entry_map.insert(entry.binding, entry.clone()).is_some() {
                 return Err(binding_model::BindGroupLayoutError::ConflictBinding(
                     entry.binding,
@@ -1256,7 +1254,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .raw
                 .create_descriptor_set_layout(&raw_bindings, &[])
                 .unwrap();
-            if let Some(label) = desc.label {
+            if let Some(label) = desc.label.as_ref() {
                 device
                     .raw
                     .set_descriptor_set_layout_name(&mut raw_layout, label);
@@ -1296,11 +1294,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, layout, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroupLayout {
-                id,
-                label: desc.label.map_or_else(String::new, str::to_string),
-                entries: desc.entries.to_owned(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateBindGroupLayout(id, desc.clone())),
             None => (),
         };
         Ok(id)
@@ -1400,7 +1396,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
         let pipeline_layout = {
             let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
-            for &id in desc.bind_group_layouts {
+            for &id in desc.bind_group_layouts.iter() {
                 let bind_group_layout = &bind_group_layout_guard[id];
                 count_validator.merge(&bind_group_layout.count_validator);
             }
@@ -1448,11 +1444,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .register_identity(id_in, layout, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout {
-                id,
-                bind_group_layouts: desc.bind_group_layouts.to_owned(),
-                push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreatePipelineLayout(id, desc.clone())),
             None => (),
         };
         Ok(id)
@@ -1526,7 +1520,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         // Set the descriptor set's label for easier debugging.
-        if let Some(label) = desc.label {
+        if let Some(label) = desc.label.as_ref() {
             unsafe {
                 device
                     .raw
@@ -1551,7 +1545,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             //TODO: group writes into contiguous sections
             let mut writes = Vec::new();
-            for entry in desc.entries {
+            for entry in desc.entries.iter() {
                 let binding = entry.binding;
                 // Find the corresponding declaration in the layout
                 let decl = bind_group_layout
@@ -1844,30 +1838,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateBindGroup {
-                id,
-                label: desc.label.map_or_else(String::new, str::to_string),
-                layout_id: desc.layout,
-                entries: desc
-                    .entries
-                    .iter()
-                    .map(|entry| {
-                        let res = match entry.resource {
-                            Br::Buffer(ref binding) => trace::BindingResource::Buffer {
-                                id: binding.buffer_id,
-                                offset: binding.offset,
-                                size: binding.size,
-                            },
-                            Br::TextureView(id) => trace::BindingResource::TextureView(id),
-                            Br::Sampler(id) => trace::BindingResource::Sampler(id),
-                            Br::TextureViewArray(ref binding_array) => {
-                                trace::BindingResource::TextureViewArray(binding_array.to_vec())
-                            }
-                        };
-                        (entry.binding, res)
-                    })
-                    .collect(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateBindGroup(id, desc.clone())),
             None => (),
         };
 
@@ -2132,7 +2105,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             sc as u8
         };
 
-        let color_states = desc.color_states;
+        let color_states = &desc.color_states;
         let depth_stencil_state = desc.depth_stencil_state.as_ref();
 
         let rasterization_state = desc.rasterization_state.as_ref();
@@ -2143,7 +2116,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut interface = validation::StageInterface::default();
         let mut validated_stages = wgt::ShaderStage::empty();
 
-        let desc_vbs = desc.vertex_state.vertex_buffers;
+        let desc_vbs = &desc.vertex_state.vertex_buffers;
         let mut vertex_strides = Vec::with_capacity(desc_vbs.len());
         let mut vertex_buffers = Vec::with_capacity(desc_vbs.len());
         let mut attributes = Vec::new();
@@ -2162,8 +2135,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     InputStepMode::Instance => hal::pso::VertexInputRate::Instance(1),
                 },
             });
-            let desc_atts = vb_state.attributes;
-            for attribute in desc_atts {
+            let desc_atts = &vb_state.attributes;
+            for attribute in desc_atts.iter() {
                 if attribute.offset >= 0x10000000 {
                     return Err(
                         pipeline::RenderPipelineError::InvalidVertexAttributeOffset {
@@ -2276,7 +2249,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             let vertex = {
-                let entry_point_name = desc.vertex_stage.entry_point;
+                let entry_point_name = &desc.vertex_stage.entry_point;
 
                 let shader_module = &shader_module_guard[desc.vertex_stage.module];
 
@@ -2285,7 +2258,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     interface = validation::check_stage(
                         module,
                         &group_layouts,
-                        entry_point_name,
+                        &entry_point_name,
                         ExecutionModel::Vertex,
                         interface,
                     )
@@ -2294,7 +2267,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
 
                 hal::pso::EntryPoint::<B> {
-                    entry: entry_point_name, // TODO
+                    entry: &entry_point_name, // TODO
                     module: &shader_module.raw,
                     specialization: hal::pso::Specialization::EMPTY,
                 }
@@ -2302,7 +2275,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let fragment = match &desc.fragment_stage {
                 Some(stage) => {
-                    let entry_point_name = stage.entry_point;
+                    let entry_point_name = &stage.entry_point;
 
                     let shader_module = &shader_module_guard[stage.module];
 
@@ -2312,7 +2285,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             interface = validation::check_stage(
                                 module,
                                 &group_layouts,
-                                entry_point_name,
+                                &entry_point_name,
                                 ExecutionModel::Fragment,
                                 interface,
                             )
@@ -2324,7 +2297,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     }
 
                     Some(hal::pso::EntryPoint::<B> {
-                        entry: entry_point_name,
+                        entry: &entry_point_name,
                         module: &shader_module.raw,
                         specialization: hal::pso::Specialization::EMPTY,
                     })
@@ -2408,7 +2381,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut flags = pipeline::PipelineFlags::empty();
-        for state in color_states {
+        for state in color_states.iter() {
             if state.color_blend.uses_color() | state.alpha_blend.uses_color() {
                 flags |= pipeline::PipelineFlags::BLEND_COLOR;
             }
@@ -2445,35 +2418,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline {
-                id,
-                desc: trace::RenderPipelineDescriptor {
-                    layout: desc.layout,
-                    vertex_stage: trace::ProgrammableStageDescriptor::new(&desc.vertex_stage),
-                    fragment_stage: desc
-                        .fragment_stage
-                        .as_ref()
-                        .map(trace::ProgrammableStageDescriptor::new),
-                    primitive_topology: desc.primitive_topology,
-                    rasterization_state: rasterization_state.cloned(),
-                    color_states: color_states.to_vec(),
-                    depth_stencil_state: depth_stencil_state.cloned(),
-                    vertex_state: trace::VertexStateDescriptor {
-                        index_format: desc.vertex_state.index_format,
-                        vertex_buffers: desc_vbs
-                            .iter()
-                            .map(|vbl| trace::VertexBufferDescriptor {
-                                stride: vbl.stride,
-                                step_mode: vbl.step_mode,
-                                attributes: vbl.attributes.to_owned(),
-                            })
-                            .collect(),
-                    },
-                    sample_count: desc.sample_count,
-                    sample_mask: desc.sample_mask,
-                    alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
-                },
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateRenderPipeline(id, desc.clone())),
             None => (),
         };
         Ok(id)
@@ -2530,7 +2477,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let pipeline_stage = &desc.compute_stage;
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
-            let entry_point_name = pipeline_stage.entry_point;
+            let entry_point_name = &pipeline_stage.entry_point;
 
             let shader_module = &shader_module_guard[pipeline_stage.module];
 
@@ -2538,7 +2485,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let _ = validation::check_stage(
                     module,
                     &group_layouts,
-                    entry_point_name,
+                    &entry_point_name,
                     ExecutionModel::GLCompute,
                     interface,
                 )
@@ -2546,7 +2493,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             let shader = hal::pso::EntryPoint::<B> {
-                entry: entry_point_name, // TODO
+                entry: &entry_point_name, // TODO
                 module: &shader_module.raw,
                 specialization: hal::pso::Specialization::EMPTY,
             };
@@ -2590,13 +2537,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateComputePipeline {
-                id,
-                desc: trace::ComputePipelineDescriptor {
-                    layout: desc.layout,
-                    compute_stage: trace::ProgrammableStageDescriptor::new(&desc.compute_stage),
-                },
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateComputePipeline(id, desc.clone())),
             None => (),
         };
         Ok(id)
@@ -2722,10 +2665,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(Action::CreateSwapChain {
-                id: sc_id,
-                desc: desc.clone(),
-            }),
+            Some(ref trace) => trace
+                .lock()
+                .add(Action::CreateSwapChain(sc_id, desc.clone())),
             None => (),
         };
 

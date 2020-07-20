@@ -10,8 +10,8 @@
     ],
     actions: [
         CreateBuffer(
-            id: Id(0, 1, Empty),
-            desc: (
+            Id(0, 1, Empty),
+            (
                 label: "",
                 size: 16,
                 usage: (

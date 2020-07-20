@@ -35,10 +35,10 @@ struct Expectation {
 }
 
 #[derive(serde::Deserialize)]
-struct Test {
+struct Test<'a> {
     features: wgt::Features,
     expectations: Vec<Expectation>,
-    actions: Vec<wgc::device::trace::Action>,
+    actions: Vec<wgc::device::trace::Action<'a>>,
 }
 
 extern "C" fn map_callback(status: wgc::resource::BufferMapAsyncStatus, _user_data: *mut u8) {
@@ -48,7 +48,7 @@ extern "C" fn map_callback(status: wgc::resource::BufferMapAsyncStatus, _user_da
     }
 }
 
-impl Test {
+impl Test<'_> {
     fn load(path: PathBuf, backend: wgt::Backend) -> Self {
         let backend_name = match backend {
             wgt::Backend::Vulkan => "Vulkan",

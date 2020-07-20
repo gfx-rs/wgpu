@@ -10,7 +10,7 @@
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -854,23 +854,27 @@ pub struct VertexAttributeDescriptor {
 }
 
 /// Describes how the vertex buffer is interpreted.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct VertexBufferDescriptor<'a> {
     /// The stride, in bytes, between elements of this buffer.
     pub stride: BufferAddress,
     /// How often this vertex buffer is "stepped" forward.
     pub step_mode: InputStepMode,
     /// The list of attributes which comprise a single vertex.
-    pub attributes: &'a [VertexAttributeDescriptor],
+    pub attributes: Cow<'a, [VertexAttributeDescriptor]>,
 }
 
 /// Describes vertex input state for a render pipeline.
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct VertexStateDescriptor<'a> {
     /// The format of any index buffers used with this pipeline.
     pub index_format: IndexFormat,
     /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
+    pub vertex_buffers: Cow<'a, [VertexBufferDescriptor<'a>]>,
 }
 
 /// Vertex Format for a Vertex Attribute (input).
@@ -1141,9 +1145,9 @@ pub enum SwapChainStatus {
 
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct RenderPassDescriptor<'a, C, D> {
+pub struct RenderPassDescriptor<'a, C: Clone, D> {
     /// The color attachments of the render pass.
-    pub color_attachments: &'a [C],
+    pub color_attachments: Cow<'a, [C]>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<D>,
 }
@@ -1461,6 +1465,8 @@ impl<L> SamplerDescriptor<L> {
 
 /// Bindable resource and the slot to bind it to.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BindGroupEntry<R> {
     /// Slot for which binding provides resource. Corresponds to an entry of the same
     /// binding index in the [`BindGroupLayoutDescriptor`].
@@ -1471,29 +1477,33 @@ pub struct BindGroupEntry<R> {
 
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct BindGroupDescriptor<'a, L, B> {
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BindGroupDescriptor<'a, L, B: Clone> {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Option<Cow<'a, str>>,
     /// The [`BindGroupLayout`] that corresponds to this bind group.
     pub layout: L,
     /// The resources to bind to this bind group.
-    pub entries: &'a [B],
+    pub entries: Cow<'a, [B]>,
 }
 
 /// Describes a pipeline layout.
 ///
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct PipelineLayoutDescriptor<'a, B> {
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct PipelineLayoutDescriptor<'a, B: Clone> {
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: &'a [B],
+    pub bind_group_layouts: Cow<'a, [B]>,
     /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
     /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
     /// uniform block.
     ///
     /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
-    pub push_constant_ranges: &'a [PushConstantRange],
+    pub push_constant_ranges: Cow<'a, [PushConstantRange]>,
 }
 
 /// A range of push constant memory to pass to a shader stage.
@@ -1511,16 +1521,20 @@ pub struct PushConstantRange {
 
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ProgrammableStageDescriptor<'a, M> {
     /// The compiled shader module for this stage.
     pub module: M,
     /// The name of the entry point in the compiled shader. There must be a function that returns
     /// void with this name in the shader.
-    pub entry_point: &'a str,
+    pub entry_point: Cow<'a, str>,
 }
 
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct RenderPipelineDescriptor<'a, L, D> {
     /// The layout of bind groups for this pipeline.
     pub layout: L,
@@ -1533,7 +1547,7 @@ pub struct RenderPipelineDescriptor<'a, L, D> {
     /// The primitive topology used to interpret vertices.
     pub primitive_topology: PrimitiveTopology,
     /// The effect of draw calls on the color aspect of the output target.
-    pub color_states: &'a [ColorStateDescriptor],
+    pub color_states: Cow<'a, [ColorStateDescriptor]>,
     /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
     pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
     /// The vertex input state for this pipeline.
@@ -1555,6 +1569,8 @@ pub struct RenderPipelineDescriptor<'a, L, D> {
 
 /// Describes a compute pipeline.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ComputePipelineDescriptor<L, D> {
     /// The layout of bind groups for this pipeline.
     pub layout: L,
@@ -1574,12 +1590,14 @@ pub struct CommandBufferDescriptor {
 
 /// Describes a [`RenderBundleEncoder`].
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct RenderBundleEncoderDescriptor<'a> {
     /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Option<Cow<'a, str>>,
     /// The formats of the color attachments that this render bundle is capable to rendering to. This
     /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
-    pub color_formats: &'a [TextureFormat],
+    pub color_formats: Cow<'a, [TextureFormat]>,
     /// The formats of the depth attachment that this render bundle is capable to rendering to. This
     /// must match the formats of the depth attachments in the renderpass this render bundle is executed in.
     pub depth_stencil_format: Option<TextureFormat>,
@@ -1841,12 +1859,14 @@ impl BindGroupLayoutEntry {
 
 /// Describes a [`BindGroupLayout`].
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct BindGroupLayoutDescriptor<'a> {
     /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
-    pub label: Option<&'a str>,
+    pub label: Option<Cow<'a, str>>,
 
     /// Array of entries in this BindGroupLayout
-    pub entries: &'a [BindGroupLayoutEntry],
+    pub entries: Cow<'a, [BindGroupLayoutEntry]>,
 }
 
 /// View of a buffer which can be used to copy to/from a texture.

@@ -119,7 +119,7 @@ fn main() {
                 }
                 Event::RedrawRequested(_) => loop {
                     match actions.pop() {
-                        Some(trace::Action::CreateSwapChain { id, desc }) => {
+                        Some(trace::Action::CreateSwapChain(id, desc)) => {
                             log::info!("Initializing the swapchain");
                             assert_eq!(id.to_surface_id(), surface);
                             window.set_inner_size(winit::dpi::PhysicalSize::new(

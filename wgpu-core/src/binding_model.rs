@@ -17,7 +17,10 @@ use serde::Deserialize;
 #[cfg(feature = "trace")]
 use serde::Serialize;
 
-use std::{borrow::Borrow, ops::Range};
+use std::{
+    borrow::{Borrow, Cow},
+    ops::Range,
+};
 
 use thiserror::Error;
 
@@ -396,12 +399,14 @@ pub struct BufferBinding {
 
 // Note: Duplicated in `wgpu-rs` as `BindingResource`
 // They're different enough that it doesn't make sense to share a common type
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum BindingResource<'a> {
     Buffer(BufferBinding),
     Sampler(SamplerId),
     TextureView(TextureViewId),
-    TextureViewArray(&'a [TextureViewId]),
+    TextureViewArray(Cow<'a, [TextureViewId]>),
 }
 
 pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;

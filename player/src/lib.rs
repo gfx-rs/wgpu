@@ -152,7 +152,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::CreateSwapChain { .. } | A::PresentSwapChain(_) => {
                 panic!("Unexpected SwapChain action: winit feature is not enabled")
             }
-            A::CreateBuffer { id, desc } => {
+            A::CreateBuffer(id, desc) => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
                 self.device_create_buffer::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
@@ -161,7 +161,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyBuffer(id) => {
                 self.buffer_destroy::<B>(id);
             }
-            A::CreateTexture { id, desc } => {
+            A::CreateTexture(id, desc) => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
                 self.device_create_texture::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
@@ -186,7 +186,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyTextureView(id) => {
                 self.texture_view_destroy::<B>(id);
             }
-            A::CreateSampler { id, desc } => {
+            A::CreateSampler(id, desc) => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
                 self.device_create_sampler::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
@@ -202,83 +202,25 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                         .unwrap();
                 }
             }
-            A::CreateBindGroupLayout {
-                id,
-                ref label,
-                ref entries,
-            } => {
-                self.device_create_bind_group_layout::<B>(
-                    device,
-                    &wgt::BindGroupLayoutDescriptor {
-                        label: Some(label),
-                        entries,
-                    },
-                    id,
-                )
-                .unwrap();
+            A::CreateBindGroupLayout(id, desc) => {
+                self.device_create_bind_group_layout::<B>(device, &desc, id)
+                    .unwrap();
             }
             A::DestroyBindGroupLayout(id) => {
                 self.bind_group_layout_destroy::<B>(id);
             }
-            A::CreatePipelineLayout {
-                id,
-                bind_group_layouts,
-                push_constant_ranges,
-            } => {
+            A::CreatePipelineLayout(id, desc) => {
                 self.device_maintain_ids::<B>(device);
-                self.device_create_pipeline_layout::<B>(
-                    device,
-                    &wgt::PipelineLayoutDescriptor {
-                        bind_group_layouts: &bind_group_layouts,
-                        push_constant_ranges: &push_constant_ranges,
-                    },
-                    id,
-                )
-                .unwrap();
+                self.device_create_pipeline_layout::<B>(device, &desc, id)
+                    .unwrap();
             }
             A::DestroyPipelineLayout(id) => {
                 self.pipeline_layout_destroy::<B>(id);
             }
-            A::CreateBindGroup {
-                id,
-                label,
-                layout_id,
-                entries,
-            } => {
-                use wgc::binding_model as bm;
-                let entry_vec = entries
-                    .iter()
-                    .map(|(binding, res)| wgc::binding_model::BindGroupEntry {
-                        binding: *binding,
-                        resource: match *res {
-                            trace::BindingResource::Buffer { id, offset, size } => {
-                                bm::BindingResource::Buffer(bm::BufferBinding {
-                                    buffer_id: id,
-                                    offset,
-                                    size,
-                                })
-                            }
-                            trace::BindingResource::Sampler(id) => bm::BindingResource::Sampler(id),
-                            trace::BindingResource::TextureView(id) => {
-                                bm::BindingResource::TextureView(id)
-                            }
-                            trace::BindingResource::TextureViewArray(ref binding_array) => {
-                                bm::BindingResource::TextureViewArray(binding_array)
-                            }
-                        },
-                    })
-                    .collect::<Vec<_>>();
+            A::CreateBindGroup(id, desc) => {
                 self.device_maintain_ids::<B>(device);
-                self.device_create_bind_group::<B>(
-                    device,
-                    &wgc::binding_model::BindGroupDescriptor {
-                        label: Some(&label),
-                        layout: layout_id,
-                        entries: &entry_vec,
-                    },
-                    id,
-                )
-                .unwrap();
+                self.device_create_bind_group::<B>(device, &desc, id)
+                    .unwrap();
             }
             A::DestroyBindGroup(id) => {
                 self.bind_group_destroy::<B>(id);
@@ -298,74 +240,26 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyShaderModule(id) => {
                 self.shader_module_destroy::<B>(id);
             }
-            A::CreateComputePipeline { id, desc } => {
-                let compute_stage = desc.compute_stage.to_core();
+            A::CreateComputePipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device);
-                self.device_create_compute_pipeline::<B>(
-                    device,
-                    &wgc::pipeline::ComputePipelineDescriptor {
-                        layout: desc.layout,
-                        compute_stage,
-                    },
-                    id,
-                )
-                .unwrap();
+                self.device_create_compute_pipeline::<B>(device, &desc, id)
+                    .unwrap();
             }
             A::DestroyComputePipeline(id) => {
                 self.compute_pipeline_destroy::<B>(id);
             }
-            A::CreateRenderPipeline { id, desc } => {
-                let vertex_stage = desc.vertex_stage.to_core();
-                let fragment_stage = desc.fragment_stage.as_ref().map(|fs| fs.to_core());
-                let vertex_buffers = desc
-                    .vertex_state
-                    .vertex_buffers
-                    .iter()
-                    .map(|vb| wgt::VertexBufferDescriptor {
-                        stride: vb.stride,
-                        step_mode: vb.step_mode,
-                        attributes: &vb.attributes,
-                    })
-                    .collect::<Vec<_>>();
+            A::CreateRenderPipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device);
-                self.device_create_render_pipeline::<B>(
-                    device,
-                    &wgc::pipeline::RenderPipelineDescriptor {
-                        layout: desc.layout,
-                        vertex_stage,
-                        fragment_stage,
-                        primitive_topology: desc.primitive_topology,
-                        rasterization_state: desc.rasterization_state,
-                        color_states: &desc.color_states,
-                        depth_stencil_state: desc.depth_stencil_state,
-                        vertex_state: wgt::VertexStateDescriptor {
-                            index_format: desc.vertex_state.index_format,
-                            vertex_buffers: &vertex_buffers,
-                        },
-                        sample_count: desc.sample_count,
-                        sample_mask: desc.sample_mask,
-                        alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
-                    },
-                    id,
-                )
-                .unwrap();
+                self.device_create_render_pipeline::<B>(device, &desc, id)
+                    .unwrap();
             }
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
             }
             A::CreateRenderBundle { id, desc, base } => {
-                let label = Label::new(&desc.label);
-                let bundle = wgc::command::RenderBundleEncoder::new(
-                    &wgt::RenderBundleEncoderDescriptor {
-                        label: None,
-                        color_formats: &desc.color_formats,
-                        depth_stencil_format: desc.depth_stencil_format,
-                        sample_count: desc.sample_count,
-                    },
-                    device,
-                    Some(base),
-                )
-                .unwrap();
+                let label = Label::new(&desc.label.as_ref().unwrap());
+                let bundle =
+                    wgc::command::RenderBundleEncoder::new(&desc, device, Some(base)).unwrap();
                 self.render_bundle_encoder_finish::<B>(
                     bundle,
                     &wgt::RenderBundleDescriptor {

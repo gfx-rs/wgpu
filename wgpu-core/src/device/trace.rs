@@ -13,129 +13,30 @@ type FileName = String;
 
 pub const FILE_NAME: &str = "trace.ron";
 
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum BindingResource {
-    Buffer {
-        id: id::BufferId,
-        offset: wgt::BufferAddress,
-        size: Option<wgt::BufferSize>,
-    },
-    Sampler(id::SamplerId),
-    TextureView(id::TextureViewId),
-    TextureViewArray(Vec<id::TextureViewId>),
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ProgrammableStageDescriptor {
-    pub module: id::ShaderModuleId,
-    pub entry_point: String,
-}
-
 #[cfg(feature = "trace")]
-impl ProgrammableStageDescriptor {
-    pub fn new(desc: &crate::pipeline::ProgrammableStageDescriptor) -> Self {
-        ProgrammableStageDescriptor {
-            module: desc.module,
-            entry_point: desc.entry_point.to_string(),
-        }
-    }
-}
-
-#[cfg(feature = "replay")]
-impl ProgrammableStageDescriptor {
-    pub fn to_core(&self) -> crate::pipeline::ProgrammableStageDescriptor {
-        crate::pipeline::ProgrammableStageDescriptor {
-            module: self.module,
-            entry_point: &self.entry_point,
-        }
+pub(crate) fn new_render_bundle_encoder_descriptor(
+    label: super::Label,
+    context: &super::RenderPassContext,
+) -> wgt::RenderBundleEncoderDescriptor {
+    wgt::RenderBundleEncoderDescriptor {
+        label: Some(super::own_label(&label).into()),
+        color_formats: context.attachments.colors.to_vec().into(),
+        depth_stencil_format: context.attachments.depth_stencil,
+        sample_count: context.sample_count as u32,
     }
 }
 
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ComputePipelineDescriptor {
-    pub layout: id::PipelineLayoutId,
-    pub compute_stage: ProgrammableStageDescriptor,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexBufferDescriptor {
-    pub stride: wgt::BufferAddress,
-    pub step_mode: wgt::InputStepMode,
-    pub attributes: Vec<wgt::VertexAttributeDescriptor>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexStateDescriptor {
-    pub index_format: wgt::IndexFormat,
-    pub vertex_buffers: Vec<VertexBufferDescriptor>,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderPipelineDescriptor {
-    pub layout: id::PipelineLayoutId,
-    pub vertex_stage: ProgrammableStageDescriptor,
-    pub fragment_stage: Option<ProgrammableStageDescriptor>,
-    pub primitive_topology: wgt::PrimitiveTopology,
-    pub rasterization_state: Option<wgt::RasterizationStateDescriptor>,
-    pub color_states: Vec<wgt::ColorStateDescriptor>,
-    pub depth_stencil_state: Option<wgt::DepthStencilStateDescriptor>,
-    pub vertex_state: VertexStateDescriptor,
-    pub sample_count: u32,
-    pub sample_mask: u32,
-    pub alpha_to_coverage_enabled: bool,
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderBundleDescriptor {
-    pub label: String,
-    pub color_formats: Vec<wgt::TextureFormat>,
-    pub depth_stencil_format: Option<wgt::TextureFormat>,
-    pub sample_count: u32,
-}
-
-#[cfg(feature = "trace")]
-impl RenderBundleDescriptor {
-    pub(crate) fn new(label: super::Label, context: &super::RenderPassContext) -> Self {
-        RenderBundleDescriptor {
-            label: super::own_label(&label),
-            color_formats: context.attachments.colors.to_vec(),
-            depth_stencil_format: context.attachments.depth_stencil,
-            sample_count: context.sample_count as u32,
-        }
-    }
-}
-
-#[derive(Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum Action {
+pub enum Action<'a> {
     Init {
         desc: wgt::DeviceDescriptor,
         backend: wgt::Backend,
     },
-    CreateBuffer {
-        id: id::BufferId,
-        desc: wgt::BufferDescriptor<String>,
-    },
+    CreateBuffer(id::BufferId, wgt::BufferDescriptor<String>),
     DestroyBuffer(id::BufferId),
-    CreateTexture {
-        id: id::TextureId,
-        desc: wgt::TextureDescriptor<String>,
-    },
+    CreateTexture(id::TextureId, wgt::TextureDescriptor<String>),
     DestroyTexture(id::TextureId),
     CreateTextureView {
         id: id::TextureViewId,
@@ -143,57 +44,55 @@ pub enum Action {
         desc: Option<wgt::TextureViewDescriptor<String>>,
     },
     DestroyTextureView(id::TextureViewId),
-    CreateSampler {
-        id: id::SamplerId,
-        desc: wgt::SamplerDescriptor<String>,
-    },
+    CreateSampler(id::SamplerId, wgt::SamplerDescriptor<String>),
     DestroySampler(id::SamplerId),
-    CreateSwapChain {
-        id: id::SwapChainId,
-        desc: wgt::SwapChainDescriptor,
-    },
+    CreateSwapChain(id::SwapChainId, wgt::SwapChainDescriptor),
     GetSwapChainTexture {
         id: Option<id::TextureViewId>,
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
-    CreateBindGroupLayout {
-        id: id::BindGroupLayoutId,
-        label: String,
-        entries: Vec<wgt::BindGroupLayoutEntry>,
-    },
+    CreateBindGroupLayout(id::BindGroupLayoutId, wgt::BindGroupLayoutDescriptor<'a>),
     DestroyBindGroupLayout(id::BindGroupLayoutId),
-    CreatePipelineLayout {
-        id: id::PipelineLayoutId,
-        bind_group_layouts: Vec<id::BindGroupLayoutId>,
-        push_constant_ranges: Vec<wgt::PushConstantRange>,
-    },
+    CreatePipelineLayout(
+        id::PipelineLayoutId,
+        wgt::PipelineLayoutDescriptor<'a, id::BindGroupLayoutId>,
+    ),
     DestroyPipelineLayout(id::PipelineLayoutId),
-    CreateBindGroup {
-        id: id::BindGroupId,
-        label: String,
-        layout_id: id::BindGroupLayoutId,
-        entries: std::collections::BTreeMap<u32, BindingResource>,
-    },
+    CreateBindGroup(
+        id::BindGroupId,
+        wgt::BindGroupDescriptor<
+            'a,
+            id::BindGroupLayoutId,
+            wgt::BindGroupEntry<crate::binding_model::BindingResource<'a>>,
+        >,
+    ),
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
         id: id::ShaderModuleId,
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),
-    CreateComputePipeline {
-        id: id::ComputePipelineId,
-        desc: ComputePipelineDescriptor,
-    },
+    CreateComputePipeline(
+        id::ComputePipelineId,
+        wgt::ComputePipelineDescriptor<
+            id::PipelineLayoutId,
+            wgt::ProgrammableStageDescriptor<'a, id::ShaderModuleId>,
+        >,
+    ),
     DestroyComputePipeline(id::ComputePipelineId),
-    CreateRenderPipeline {
-        id: id::RenderPipelineId,
-        desc: RenderPipelineDescriptor,
-    },
+    CreateRenderPipeline(
+        id::RenderPipelineId,
+        wgt::RenderPipelineDescriptor<
+            'a,
+            id::PipelineLayoutId,
+            wgt::ProgrammableStageDescriptor<'a, id::ShaderModuleId>,
+        >,
+    ),
     DestroyRenderPipeline(id::RenderPipelineId),
     CreateRenderBundle {
         id: id::RenderBundleId,
-        desc: RenderBundleDescriptor,
+        desc: wgt::RenderBundleEncoderDescriptor<'a>,
         base: crate::command::BasePass<crate::command::RenderCommand>,
     },
     DestroyRenderBundle(id::RenderBundleId),
