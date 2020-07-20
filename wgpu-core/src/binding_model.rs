@@ -23,7 +23,6 @@ use std::{
 };
 
 use thiserror::Error;
-use wgt::ToStatic;
 
 #[derive(Clone, Debug, Error)]
 pub enum BindGroupLayoutError {
@@ -408,20 +407,6 @@ pub enum BindingResource<'a> {
     Sampler(SamplerId),
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),
-}
-
-impl ToStatic for BindingResource<'_> {
-    type Static = BindingResource<'static>;
-    fn to_static(&self) -> Self::Static {
-        match *self {
-            BindingResource::Buffer(ref buffer) => BindingResource::Buffer(buffer.clone()),
-            BindingResource::Sampler(id) => BindingResource::Sampler(id),
-            BindingResource::TextureView(id) => BindingResource::TextureView(id),
-            BindingResource::TextureViewArray(ref ids) => {
-                BindingResource::TextureViewArray(ids.to_static())
-            }
-        }
-    }
 }
 
 pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;

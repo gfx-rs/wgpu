@@ -13,29 +13,12 @@ type FileName = String;
 
 pub const FILE_NAME: &str = "trace.ron";
 
-pub type BindingResource = crate::binding_model::BindingResource<'static>;
-
-pub type ProgrammableStageDescriptor =
-    wgt::ProgrammableStageDescriptor<'static, id::ShaderModuleId>;
-
-pub type ComputePipelineDescriptor =
-    wgt::ComputePipelineDescriptor<id::PipelineLayoutId, ProgrammableStageDescriptor>;
-
-pub type VertexBufferDescriptor = wgt::VertexBufferDescriptor<'static>;
-
-pub type VertexStateDescriptor = wgt::VertexStateDescriptor<'static>;
-
-pub type RenderPipelineDescriptor =
-    wgt::RenderPipelineDescriptor<'static, id::PipelineLayoutId, ProgrammableStageDescriptor>;
-
-pub type RenderBundleEncoderDescriptor = wgt::RenderBundleEncoderDescriptor<'static>;
-
 #[cfg(feature = "trace")]
 pub(crate) fn new_render_bundle_encoder_descriptor(
     label: super::Label,
     context: &super::RenderPassContext,
-) -> RenderBundleEncoderDescriptor {
-    RenderBundleEncoderDescriptor {
+) -> wgt::RenderBundleEncoderDescriptor {
+    wgt::RenderBundleEncoderDescriptor {
         label: Some(super::own_label(&label).into()),
         color_formats: context.attachments.colors.to_vec().into(),
         depth_stencil_format: context.attachments.depth_stencil,
@@ -46,7 +29,7 @@ pub(crate) fn new_render_bundle_encoder_descriptor(
 #[derive(Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub enum Action {
+pub enum Action<'a> {
     Init {
         desc: wgt::DeviceDescriptor,
         backend: wgt::Backend,
@@ -69,22 +52,19 @@ pub enum Action {
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
-    CreateBindGroupLayout(
-        id::BindGroupLayoutId,
-        wgt::BindGroupLayoutDescriptor<'static>,
-    ),
+    CreateBindGroupLayout(id::BindGroupLayoutId, wgt::BindGroupLayoutDescriptor<'a>),
     DestroyBindGroupLayout(id::BindGroupLayoutId),
     CreatePipelineLayout(
         id::PipelineLayoutId,
-        wgt::PipelineLayoutDescriptor<'static, id::BindGroupLayoutId>,
+        wgt::PipelineLayoutDescriptor<'a, id::BindGroupLayoutId>,
     ),
     DestroyPipelineLayout(id::PipelineLayoutId),
     CreateBindGroup(
         id::BindGroupId,
         wgt::BindGroupDescriptor<
-            'static,
+            'a,
             id::BindGroupLayoutId,
-            wgt::BindGroupEntry<BindingResource>,
+            wgt::BindGroupEntry<crate::binding_model::BindingResource<'a>>,
         >,
     ),
     DestroyBindGroup(id::BindGroupId),
@@ -93,13 +73,26 @@ pub enum Action {
         data: FileName,
     },
     DestroyShaderModule(id::ShaderModuleId),
-    CreateComputePipeline(id::ComputePipelineId, ComputePipelineDescriptor),
+    CreateComputePipeline(
+        id::ComputePipelineId,
+        wgt::ComputePipelineDescriptor<
+            id::PipelineLayoutId,
+            wgt::ProgrammableStageDescriptor<'a, id::ShaderModuleId>,
+        >,
+    ),
     DestroyComputePipeline(id::ComputePipelineId),
-    CreateRenderPipeline(id::RenderPipelineId, RenderPipelineDescriptor),
+    CreateRenderPipeline(
+        id::RenderPipelineId,
+        wgt::RenderPipelineDescriptor<
+            'a,
+            id::PipelineLayoutId,
+            wgt::ProgrammableStageDescriptor<'a, id::ShaderModuleId>,
+        >,
+    ),
     DestroyRenderPipeline(id::RenderPipelineId),
     CreateRenderBundle {
         id: id::RenderBundleId,
-        desc: RenderBundleEncoderDescriptor,
+        desc: wgt::RenderBundleEncoderDescriptor<'a>,
         base: crate::command::BasePass<crate::command::RenderCommand>,
     },
     DestroyRenderBundle(id::RenderBundleId),

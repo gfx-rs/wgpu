@@ -24,7 +24,7 @@ use hal::{
 };
 use parking_lot::{Mutex, MutexGuard};
 use thiserror::Error;
-use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat, ToStatic};
+use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
 use std::{
     collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr,
@@ -1304,7 +1304,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace
                 .lock()
-                .add(trace::Action::CreateBindGroupLayout(id, desc.to_static())),
+                .add(trace::Action::CreateBindGroupLayout(id, desc.clone())),
             None => (),
         };
         Ok(id)
@@ -1454,7 +1454,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace
                 .lock()
-                .add(trace::Action::CreatePipelineLayout(id, desc.to_static())),
+                .add(trace::Action::CreatePipelineLayout(id, desc.clone())),
             None => (),
         };
         Ok(id)
@@ -1848,7 +1848,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace
                 .lock()
-                .add(trace::Action::CreateBindGroup(id, desc.to_static())),
+                .add(trace::Action::CreateBindGroup(id, desc.clone())),
             None => (),
         };
 
@@ -2428,7 +2428,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace
                 .lock()
-                .add(trace::Action::CreateRenderPipeline(id, desc.to_static())),
+                .add(trace::Action::CreateRenderPipeline(id, desc.clone())),
             None => (),
         };
         Ok(id)
@@ -2547,7 +2547,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace
                 .lock()
-                .add(trace::Action::CreateComputePipeline(id, desc.to_static())),
+                .add(trace::Action::CreateComputePipeline(id, desc.clone())),
             None => (),
         };
         Ok(id)

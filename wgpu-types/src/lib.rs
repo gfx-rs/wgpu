@@ -12,10 +12,6 @@
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, ops::Range};
 
-mod static_conv;
-
-pub use static_conv::ToStatic;
-
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.

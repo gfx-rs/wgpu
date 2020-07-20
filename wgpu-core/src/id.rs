@@ -4,7 +4,7 @@
 
 use crate::{Epoch, Index};
 use std::{fmt, marker::PhantomData, num::NonZeroU64};
-use wgt::{Backend, ToStatic};
+use wgt::Backend;
 
 const BACKEND_BITS: usize = 3;
 const EPOCH_MASK: u32 = (1 << (32 - BACKEND_BITS)) - 1;
@@ -97,13 +97,6 @@ impl<T> PartialEq for Id<T> {
 }
 
 impl<T> Eq for Id<T> {}
-
-impl<T: 'static> ToStatic for Id<T> {
-    type Static = Self;
-    fn to_static(&self) -> Self {
-        *self
-    }
-}
 
 pub trait TypedId {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
