@@ -1150,10 +1150,7 @@ pub enum SwapChainStatus {
 
 /// Describes the attachments of a render pass.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct RenderPassDescriptor<'a, C, D>
-where
-    C: Clone,
-{
+pub struct RenderPassDescriptor<'a, C: Clone, D> {
     /// The color attachments of the render pass.
     pub color_attachments: Cow<'a, [C]>,
     /// The depth and stencil attachment of the render pass, if any.
@@ -1487,10 +1484,7 @@ pub struct BindGroupEntry<R> {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupDescriptor<'a, L, B>
-where
-    B: Clone,
-{
+pub struct BindGroupDescriptor<'a, L, B: Clone> {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
     pub label: Option<Cow<'a, str>>,
     /// The [`BindGroupLayout`] that corresponds to this bind group.
@@ -1505,10 +1499,7 @@ where
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct PipelineLayoutDescriptor<'a, B>
-where
-    B: Clone,
-{
+pub struct PipelineLayoutDescriptor<'a, B: Clone> {
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: Cow<'a, [B]>,
