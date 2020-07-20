@@ -322,7 +322,7 @@ fn map_texture_component_type(
 fn map_stage_descriptor(
     desc: &ProgrammableStageDescriptor,
 ) -> web_sys::GpuProgrammableStageDescriptor {
-    web_sys::GpuProgrammableStageDescriptor::new(desc.entry_point, &desc.module.id.0)
+    web_sys::GpuProgrammableStageDescriptor::new(&desc.entry_point, &desc.module.id.0)
 }
 
 fn map_cull_mode(cull_mode: wgt::CullMode) -> web_sys::GpuCullMode {
@@ -910,7 +910,7 @@ impl crate::Context for Context {
             .collect::<js_sys::Array>();
 
         let mut mapped_desc = web_sys::GpuBindGroupLayoutDescriptor::new(&mapped_bindings);
-        if let Some(label) = desc.label {
+        if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
         Sendable(device.0.create_bind_group_layout(&mapped_desc))
@@ -950,7 +950,7 @@ impl crate::Context for Context {
 
         let mut mapped_desc =
             web_sys::GpuBindGroupDescriptor::new(&mapped_entries, &desc.layout.id.0);
-        if let Some(label) = desc.label {
+        if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
         Sendable(device.0.create_bind_group(&mapped_desc))

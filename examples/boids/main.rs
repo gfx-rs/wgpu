@@ -1,6 +1,8 @@
 // Flocking boids example with gpu compute update pass
 // adapted from https://github.com/austinEng/webgpu-samples/blob/master/src/examples/computeBoids.ts
 
+use std::borrow::Cow::Borrowed;
+
 #[path = "../framework.rs"]
 mod framework;
 
@@ -57,7 +59,7 @@ impl framework::Example for Example {
 
         let compute_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
+                entries: Borrowed(&[
                     wgpu::BindGroupLayoutEntry::new(
                         0,
                         wgpu::ShaderStage::COMPUTE,
@@ -84,32 +86,32 @@ impl framework::Example for Example {
                             readonly: false,
                         },
                     ),
-                ],
+                ]),
                 label: None,
             });
         let compute_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[&compute_bind_group_layout],
-                push_constant_ranges: &[],
+                bind_group_layouts: Borrowed(&[&compute_bind_group_layout]),
+                push_constant_ranges: Borrowed(&[]),
             });
 
         // create render pipeline with empty bind group layout
 
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[],
-                push_constant_ranges: &[],
+                bind_group_layouts: Borrowed(&[]),
+                push_constant_ranges: Borrowed(&[]),
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: &render_pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &fs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
@@ -119,27 +121,27 @@ impl framework::Example for Example {
                 depth_bias_clamp: 0.0,
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
+            color_states: Borrowed(&[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 alpha_blend: wgpu::BlendDescriptor::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
-            }],
+            }]),
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[
+                vertex_buffers: Borrowed(&[
                     wgpu::VertexBufferDescriptor {
                         stride: 4 * 4,
                         step_mode: wgpu::InputStepMode::Instance,
-                        attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2],
+                        attributes: Borrowed(&wgpu::vertex_attr_array![0 => Float2, 1 => Float2]),
                     },
                     wgpu::VertexBufferDescriptor {
                         stride: 2 * 4,
                         step_mode: wgpu::InputStepMode::Vertex,
-                        attributes: &wgpu::vertex_attr_array![2 => Float2],
+                        attributes: Borrowed(&wgpu::vertex_attr_array![2 => Float2]),
                     },
-                ],
+                ]),
             },
             sample_count: 1,
             sample_mask: !0,
@@ -152,7 +154,7 @@ impl framework::Example for Example {
             layout: &compute_pipeline_layout,
             compute_stage: wgpu::ProgrammableStageDescriptor {
                 module: &boids_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             },
         });
 
@@ -195,7 +197,7 @@ impl framework::Example for Example {
         for i in 0..2 {
             particle_bind_groups.push(device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &compute_bind_group_layout,
-                entries: &[
+                entries: Borrowed(&[
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(sim_param_buffer.slice(..)),
@@ -210,7 +212,7 @@ impl framework::Example for Example {
                             particle_buffers[(i + 1) % 2].slice(..), // bind to opposite buffer
                         ),
                     },
-                ],
+                ]),
                 label: None,
             }));
         }
@@ -256,16 +258,17 @@ impl framework::Example for Example {
         queue: &wgpu::Queue,
         _spawner: &impl futures::task::LocalSpawn,
     ) {
-        // create render pass descriptor
+        // create render pass descriptor and its color attachments
+        let color_attachments = [wgpu::RenderPassColorAttachmentDescriptor {
+            attachment: &frame.view,
+            resolve_target: None,
+            ops: wgpu::Operations {
+                load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                store: true,
+            },
+        }];
         let render_pass_descriptor = wgpu::RenderPassDescriptor {
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &frame.view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: true,
-                },
-            }],
+            color_attachments: Borrowed(&color_attachments),
             depth_stencil_attachment: None,
         };
 
