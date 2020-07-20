@@ -9,7 +9,8 @@ use crate::{
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    validation, FastHashMap, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
+    validation::{self, check_buffer_usage, MissingBufferUsageError},
+    FastHashMap, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
     MAX_BIND_GROUPS,
 };
 
@@ -125,7 +126,6 @@ impl RenderPassContext {
     }
 }
 
-type BufferMapResult = Result<ptr::NonNull<u8>, hal::device::MapError>;
 type BufferMapPendingCallback = (resource::BufferMapOperation, resource::BufferMapAsyncStatus);
 
 fn map_buffer<B: hal::Backend>(
@@ -133,7 +133,7 @@ fn map_buffer<B: hal::Backend>(
     buffer: &mut resource::Buffer<B>,
     sub_range: hal::buffer::SubRange,
     kind: HostMap,
-) -> BufferMapResult {
+) -> Result<ptr::NonNull<u8>, BufferMapError> {
     let (ptr, segment, needs_sync) = {
         let segment = hal::memory::Segment {
             offset: sub_range.offset,
@@ -783,7 +783,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
-    ) {
+    ) -> Result<(), BufferMapError> {
         span!(_guard, INFO, "Device::set_buffer_sub_data");
 
         let hub = B::hub(self);
@@ -793,11 +793,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(
-            buffer.usage.contains(wgt::BufferUsage::MAP_WRITE),
-            "Buffer usage {:?} must contain usage flag MAP_WRITE",
-            buffer.usage
-        );
+        check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_WRITE)?;
         //assert!(buffer isn't used by the GPU);
 
         #[cfg(feature = "trace")]
@@ -815,7 +811,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         };
 
-        match map_buffer(
+        let ptr = map_buffer(
             &device.raw,
             &mut buffer,
             hal::buffer::SubRange {
@@ -823,17 +819,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: Some(data.len() as BufferAddress),
             },
             HostMap::Write,
-        ) {
-            Ok(ptr) => unsafe {
-                ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
-            },
-            Err(e) => {
-                log::error!("failed to map a buffer: {:?}", e);
-                return;
-            }
+        )?;
+
+        unsafe {
+            ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
         }
 
         unmap_buffer(&device.raw, buffer);
+
+        Ok(())
     }
 
     pub fn device_get_buffer_sub_data<B: GfxBackend>(
@@ -2852,7 +2846,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
-    ) {
+    ) -> Result<(), BufferMapError> {
         span!(_guard, INFO, "Device::buffer_map_async");
 
         let hub = B::hub(self);
@@ -2863,26 +2857,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             HostMap::Write => (wgt::BufferUsage::MAP_WRITE, resource::BufferUse::MAP_WRITE),
         };
 
-        assert_eq!(range.start % wgt::COPY_BUFFER_ALIGNMENT, 0);
-        assert_eq!(range.end % wgt::COPY_BUFFER_ALIGNMENT, 0);
+        if range.start % wgt::COPY_BUFFER_ALIGNMENT != 0
+            || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
+        {
+            return Err(BufferMapError::UnalignedRange);
+        }
 
         let (device_id, ref_count) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
 
-            assert!(
-                buffer.usage.contains(pub_usage),
-                "Buffer usage {:?} must contain usage flag(s) {:?}",
-                buffer.usage,
-                pub_usage
-            );
+            check_buffer_usage(buffer.usage, pub_usage)?;
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
-                    panic!("Buffer already mapped")
+                    return Err(BufferMapError::AlreadyMapped);
                 }
                 resource::BufferMapState::Waiting(_) => {
                     op.call_error();
-                    return;
+                    return Ok(());
                 }
                 resource::BufferMapState::Idle => {
                     resource::BufferMapState::Waiting(resource::BufferPendingMapping {
@@ -2908,6 +2900,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .change_replace(buffer_id, &ref_count, (), internal_use);
 
         device.lock_life(&mut token).map(buffer_id, ref_count);
+
+        Ok(())
     }
 
     pub fn buffer_get_mapped_range<B: GfxBackend>(
@@ -2915,7 +2909,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         _size: Option<BufferSize>,
-    ) -> *mut u8 {
+    ) -> Result<*mut u8, BufferNotMappedError> {
         span!(_guard, INFO, "Device::buffer_get_mapped_range");
 
         let hub = B::hub(self);
@@ -2926,16 +2920,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match buffer.map_state {
             resource::BufferMapState::Init { ptr, .. }
             | resource::BufferMapState::Active { ptr, .. } => unsafe {
-                ptr.as_ptr().offset(offset as isize)
+                Ok(ptr.as_ptr().offset(offset as isize))
             },
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
-                log::error!("Buffer is not mapped");
-                ptr::null_mut()
+                Err(BufferNotMappedError)
             }
         }
     }
 
-    pub fn buffer_unmap<B: GfxBackend>(&self, buffer_id: id::BufferId) {
+    pub fn buffer_unmap<B: GfxBackend>(
+        &self,
+        buffer_id: id::BufferId,
+    ) -> Result<(), BufferNotMappedError> {
         span!(_guard, INFO, "Device::buffer_unmap");
 
         let hub = B::hub(self);
@@ -3005,7 +3001,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .consume_temp(stage_buffer, stage_memory);
             }
             resource::BufferMapState::Idle => {
-                log::error!("Buffer is not mapped");
+                return Err(BufferNotMappedError);
             }
             resource::BufferMapState::Waiting(_) => {}
             resource::BufferMapState::Active {
@@ -3036,6 +3032,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 unmap_buffer(&device.raw, buffer);
             }
         }
+        Ok(())
     }
 }
 
@@ -3057,3 +3054,19 @@ pub enum CreateTextureError {
     )]
     InvalidMipLevelCount(u32),
 }
+
+#[derive(Clone, Debug, Error)]
+pub enum BufferMapError {
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error(transparent)]
+    MapError(#[from] hal::device::MapError),
+    #[error("buffer map range is not aligned to {}", wgt::COPY_BUFFER_ALIGNMENT)]
+    UnalignedRange,
+    #[error("buffer is already mapped")]
+    AlreadyMapped,
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("buffer is not mapped")]
+pub struct BufferNotMappedError;

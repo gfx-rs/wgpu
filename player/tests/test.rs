@@ -97,7 +97,8 @@ impl Test {
                     callback: map_callback,
                     user_data: ptr::null_mut(),
                 }
-            ));
+            ))
+            .unwrap();
         }
 
         println!("\t\t\tWaiting...");
@@ -107,7 +108,8 @@ impl Test {
             println!("\t\t\tChecking {}", expect.name);
             let buffer = wgc::id::TypedId::zip(expect.buffer.index, expect.buffer.epoch, backend);
             let ptr =
-                gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, None));
+                gfx_select!(device => global.buffer_get_mapped_range(buffer, expect.offset, None))
+                    .unwrap();
             let contents = unsafe { slice::from_raw_parts(ptr, expect.data.len()) };
             assert_eq!(&expect.data[..], contents);
         }
