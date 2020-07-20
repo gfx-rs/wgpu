@@ -1137,7 +1137,6 @@ pub enum SwapChainStatus {
     Timeout,
     Outdated,
     Lost,
-    OutOfMemory,
 }
 
 /// Describes the attachments of a render pass.
