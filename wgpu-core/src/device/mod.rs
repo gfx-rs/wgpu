@@ -55,7 +55,7 @@ fn own_label(label: &Label) -> String {
 }
 
 pub const MAX_COLOR_TARGETS: usize = 4;
-pub const MAX_MIP_LEVELS: usize = 16;
+pub const MAX_MIP_LEVELS: u32 = 16;
 pub const MAX_VERTEX_BUFFERS: usize = 16;
 pub const MAX_ANISOTROPY: u8 = 16;
 pub const SHADER_STAGE_COUNT: usize = 3;
@@ -457,18 +457,18 @@ impl<B: GfxBackend> Device<B> {
         &self,
         self_id: id::DeviceId,
         desc: &wgt::TextureDescriptor<Label>,
-    ) -> resource::Texture<B> {
+    ) -> Result<resource::Texture<B>, CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
         // Ensure `D24Plus` textures cannot be copied
         match desc.format {
             TextureFormat::Depth24Plus | TextureFormat::Depth24PlusStencil8 => {
-                assert!(
-                    !desc
-                        .usage
-                        .intersects(wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST),
-                    "D24Plus textures cannot be copied"
-                );
+                if desc
+                    .usage
+                    .intersects(wgt::TextureUsage::COPY_SRC | wgt::TextureUsage::COPY_DST)
+                {
+                    return Err(CreateTextureError::CannotCopyD24Plus);
+                }
             }
             _ => {}
         }
@@ -478,12 +478,10 @@ impl<B: GfxBackend> Device<B> {
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
 
-        assert!(
-            (desc.mip_level_count as usize) < MAX_MIP_LEVELS,
-            "Texture descriptor mip level count ({}) must be less than device max mip levels ({})",
-            desc.mip_level_count,
-            MAX_MIP_LEVELS
-        );
+        let mip_level_count = desc.mip_level_count;
+        if mip_level_count >= MAX_MIP_LEVELS {
+            return Err(CreateTextureError::InvalidMipLevelCount(mip_level_count));
+        }
         let mut view_capabilities = hal::image::ViewCapabilities::empty();
 
         // 2D textures with array layer counts that are multiples of 6 could be cubemaps
@@ -531,7 +529,7 @@ impl<B: GfxBackend> Device<B> {
                 .unwrap()
         };
 
-        resource::Texture {
+        Ok(resource::Texture {
             raw: image,
             device_id: Stored {
                 value: self_id,
@@ -548,7 +546,7 @@ impl<B: GfxBackend> Device<B> {
             },
             memory,
             life_guard: LifeGuard::new(),
-        }
+        })
     }
 
     /// Create a compatible render pass with a given key.
@@ -908,7 +906,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::TextureDescriptor<Label>,
         id_in: Input<G, id::TextureId>,
-    ) -> id::TextureId {
+    ) -> Result<id::TextureId, CreateTextureError> {
         span!(_guard, INFO, "Device::create_texture");
 
         let hub = B::hub(self);
@@ -916,7 +914,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let texture = device.create_texture(device_id, desc);
+        let texture = device.create_texture(device_id, desc)?;
         let range = texture.full_range.clone();
         let ref_count = texture.life_guard.add_ref();
 
@@ -936,7 +934,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .textures
             .init(id, ref_count, TextureState::with_range(&range))
             .unwrap();
-        id
+        Ok(id)
     }
 
     pub fn texture_destroy<B: GfxBackend>(&self, texture_id: id::TextureId) {
@@ -3047,4 +3045,15 @@ pub enum CreateBufferError {
     UsageMismatch(wgt::BufferUsage),
     #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
     UnalignedSize,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateTextureError {
+    #[error("D24Plus textures cannot be copied")]
+    CannotCopyD24Plus,
+    #[error(
+        "texture descriptor mip level count ({0}) must be less than device max mip levels ({})",
+        MAX_MIP_LEVELS
+    )]
+    InvalidMipLevelCount(u32),
 }
