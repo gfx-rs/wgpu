@@ -19,7 +19,7 @@ jobs:
         include:
           - os: macos-10.15
             wasm: false
-            CHECK_COMMAND: cargo check --all-targets
+            CHECK_COMMAND: cargo check --all-targets --features vulkan-portability
             TEST_COMMAND: cargo test --all-targets --no-run
           - os: ubuntu-18.04
             wasm: false
