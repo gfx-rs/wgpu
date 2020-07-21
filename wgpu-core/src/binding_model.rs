@@ -6,6 +6,7 @@ use crate::{
     device::SHADER_STAGE_COUNT,
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     track::{TrackerSet, DUMMY_SELECTOR},
+    validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
 };
 
@@ -25,25 +26,53 @@ use std::{
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
-pub enum BindGroupLayoutError {
+pub enum CreateBindGroupLayoutError {
+    #[error("arrays of bindings unsupported for this type of binding")]
+    ArrayUnsupported,
     #[error("conflicting binding at index {0}")]
     ConflictBinding(u32),
     #[error("required device feature is missing: {0:?}")]
     MissingFeature(wgt::Features),
-    #[error("arrays of bindings can't be 0 elements long")]
-    ZeroCount,
-    #[error("arrays of bindings unsupported for this type of binding")]
-    ArrayUnsupported,
+    #[error("not enough memory left")]
+    OutOfMemory,
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
+    #[error("arrays of bindings can't be 0 elements long")]
+    ZeroCount,
 }
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupError {
+    #[error("binding count declared with {expected} items, but {actual} items were provided")]
+    BindingArrayLengthMismatch { actual: usize, expected: usize },
+    #[error("bound buffer range {range:?} does not fit in buffer of size {size}")]
+    BindingRangeTooLarge {
+        range: Range<wgt::BufferAddress>,
+        size: u64,
+    },
+    #[error("buffer binding size {actual} is less than minimum {min}")]
+    BindingSizeTooSmall { actual: u64, min: u64 },
     #[error("number of bindings in bind group descriptor ({actual}) does not match the number of bindings defined in the bind group layout ({expected})")]
     BindingsNumMismatch { actual: usize, expected: usize },
     #[error("unable to find a corresponding declaration for the given binding {0}")]
     MissingBindingDeclaration(u32),
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error(transparent)]
+    MissingTextureUsage(#[from] MissingTextureUsageError),
+    #[error("required device features not enabled: {0:?}")]
+    MissingFeatures(wgt::Features),
+    #[error("binding declared as a single item, but bind group is using it as an array")]
+    SingleBindingExpected,
+    #[error("unable to create a bind group with a swap chain image")]
+    SwapChainImage,
+    #[error(
+        "buffer offset {0} must be a multiple of {}",
+        wgt::BIND_BUFFER_ALIGNMENT
+    )]
+    UnalignedBufferOffset(wgt::BufferAddress),
+    #[error("uniform buffer binding range exceeds `max_uniform_buffer_binding_size` limit")]
+    UniformBufferRangeTooLarge,
     #[error("binding {binding} has a different type ({actual:?}) than the one in the layout ({expected:?})")]
     WrongBindingType {
         // Index of the binding
@@ -55,8 +84,6 @@ pub enum CreateBindGroupError {
     },
     #[error("the given sampler is/is not a comparison sampler, while the layout type indicates otherwise")]
     WrongSamplerComparison,
-    #[error("uniform buffer binding range exceeds `max_uniform_buffer_binding_size` limit")]
-    UniformBufferRangeTooLarge,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -239,23 +266,7 @@ pub struct BindGroupLayout<B: hal::Backend> {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum PipelineLayoutError {
-    #[error("bind group layout count {actual} exceeds device bind group limit {max}")]
-    TooManyGroups { actual: usize, max: usize },
-    #[error(transparent)]
-    TooManyBindings(BindingTypeMaxCountError),
-    #[error("push constant at index {index} has range {}..{} which exceeds device push constant size limit 0..{max}", range.start, range.end)]
-    PushConstantRangeTooLarge {
-        index: usize,
-        range: Range<u32>,
-        max: u32,
-    },
-    #[error("push constant range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
-    MoreThanOnePushConstantRangePerStage {
-        index: usize,
-        provided: wgt::ShaderStage,
-        intersected: wgt::ShaderStage,
-    },
+pub enum CreatePipelineLayoutError {
     #[error(
         "push constant at index {index} has range bound {bound} not aligned to {}",
         wgt::PUSH_CONSTANT_ALIGNMENT
@@ -263,6 +274,24 @@ pub enum PipelineLayoutError {
     MisalignedPushConstantRange { index: usize, bound: u32 },
     #[error("device does not have required feature: {0:?}")]
     MissingFeature(wgt::Features),
+    #[error("push constant range (index {index}) provides for stage(s) {provided:?} but there exists another range that provides stage(s) {intersected:?}. Each stage may only be provided by one range")]
+    MoreThanOnePushConstantRangePerStage {
+        index: usize,
+        provided: wgt::ShaderStage,
+        intersected: wgt::ShaderStage,
+    },
+    #[error("not enough memory left")]
+    OutOfMemory,
+    #[error("push constant at index {index} has range {}..{} which exceeds device push constant size limit 0..{max}", range.start, range.end)]
+    PushConstantRangeTooLarge {
+        index: usize,
+        range: Range<u32>,
+        max: u32,
+    },
+    #[error(transparent)]
+    TooManyBindings(BindingTypeMaxCountError),
+    #[error("bind group layout count {actual} exceeds device bind group limit {max}")]
+    TooManyGroups { actual: usize, max: usize },
 }
 
 #[derive(Clone, Debug, Error)]

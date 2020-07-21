@@ -3,13 +3,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model::{self, CreateBindGroupError, PipelineLayoutError},
+    binding_model::{self, CreateBindGroupError, CreatePipelineLayoutError},
     command, conv,
     device::life::WaitIdleError,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, Token},
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
-    validation::{self, check_buffer_usage, MissingBufferUsageError},
+    validation::{self, check_buffer_usage, check_texture_usage, MissingBufferUsageError},
     FastHashMap, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
     MAX_BIND_GROUPS,
 };
@@ -131,7 +131,7 @@ fn map_buffer<B: hal::Backend>(
     buffer: &mut resource::Buffer<B>,
     sub_range: hal::buffer::SubRange,
     kind: HostMap,
-) -> Result<ptr::NonNull<u8>, BufferMapError> {
+) -> Result<ptr::NonNull<u8>, BufferAccessError> {
     let (ptr, segment, needs_sync) = {
         let segment = hal::memory::Segment {
             offset: sub_range.offset,
@@ -149,7 +149,7 @@ fn map_buffer<B: hal::Backend>(
     buffer.sync_mapped_writes = match kind {
         HostMap::Read if needs_sync => unsafe {
             raw.invalidate_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
-                .unwrap();
+                .or(Err(BufferAccessError::OutOfMemory))?;
             None
         },
         HostMap::Write if needs_sync => Some(segment),
@@ -158,13 +158,17 @@ fn map_buffer<B: hal::Backend>(
     Ok(ptr)
 }
 
-fn unmap_buffer<B: hal::Backend>(raw: &B::Device, buffer: &mut resource::Buffer<B>) {
+fn unmap_buffer<B: hal::Backend>(
+    raw: &B::Device,
+    buffer: &mut resource::Buffer<B>,
+) -> Result<(), BufferAccessError> {
     if let Some(segment) = buffer.sync_mapped_writes.take() {
         unsafe {
             raw.flush_mapped_memory_ranges(iter::once((buffer.memory.memory(), segment)))
-                .unwrap()
-        };
+                .or(Err(BufferAccessError::OutOfMemory))?;
+        }
     }
+    Ok(())
 }
 
 //Note: this logic is specifically moved out of `handle_mapping()` in order to
@@ -415,7 +419,14 @@ impl<B: GfxBackend> Device<B> {
             }
         };
 
-        let mut buffer = unsafe { self.raw.create_buffer(desc.size.max(1), usage).unwrap() };
+        let mut buffer = unsafe {
+            self.raw
+                .create_buffer(desc.size.max(1), usage)
+                .map_err(|err| match err {
+                    hal::buffer::CreationError::OutOfMemory(_) => CreateBufferError::OutOfMemory,
+                    _ => panic!("failed to create buffer: {}", err),
+                })?
+        };
         if !desc.label.is_null() {
             unsafe {
                 let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
@@ -423,16 +434,18 @@ impl<B: GfxBackend> Device<B> {
             };
         }
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
-        let memory = self
-            .mem_allocator
-            .lock()
-            .allocate(&self.raw, &requirements, mem_usage, memory_kind)
-            .unwrap();
+        let memory =
+            self.mem_allocator
+                .lock()
+                .allocate(&self.raw, &requirements, mem_usage, memory_kind)?;
 
         unsafe {
             self.raw
                 .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
-                .unwrap()
+                .map_err(|err| match err {
+                    hal::device::BindError::OutOfMemory(_) => CreateBufferError::OutOfMemory,
+                    _ => panic!("failed to bind buffer memory: {}", err),
+                })?;
         };
 
         Ok(resource::Buffer {
@@ -501,7 +514,10 @@ impl<B: GfxBackend> Device<B> {
                     usage,
                     view_capabilities,
                 )
-                .unwrap();
+                .map_err(|err| match err {
+                    hal::image::CreationError::OutOfMemory(_) => CreateTextureError::OutOfMemory,
+                    _ => panic!("failed to create texture: {}", err),
+                })?;
             if !desc.label.is_null() {
                 let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
                 self.raw.set_image_name(&mut image, &label);
@@ -510,21 +526,20 @@ impl<B: GfxBackend> Device<B> {
         };
         let requirements = unsafe { self.raw.get_image_requirements(&image) };
 
-        let memory = self
-            .mem_allocator
-            .lock()
-            .allocate(
-                &self.raw,
-                &requirements,
-                gfx_memory::MemoryUsage::Private,
-                gfx_memory::Kind::General,
-            )
-            .unwrap();
+        let memory = self.mem_allocator.lock().allocate(
+            &self.raw,
+            &requirements,
+            gfx_memory::MemoryUsage::Private,
+            gfx_memory::Kind::General,
+        )?;
 
         unsafe {
             self.raw
                 .bind_image_memory(memory.memory(), memory.segment().offset, &mut image)
-                .unwrap()
+                .map_err(|err| match err {
+                    hal::device::BindError::OutOfMemory(_) => CreateTextureError::OutOfMemory,
+                    _ => panic!("failed to bind texture memory: {}", err),
+                })?;
         };
 
         Ok(resource::Texture {
@@ -552,7 +567,10 @@ impl<B: GfxBackend> Device<B> {
     /// This functions doesn't consider the following aspects for compatibility:
     ///  - image layouts
     ///  - resolve attachments
-    fn create_compatible_render_pass(&self, key: &RenderPassKey) -> B::RenderPass {
+    fn create_compatible_render_pass(
+        &self,
+        key: &RenderPassKey,
+    ) -> Result<B::RenderPass, hal::device::OutOfMemory> {
         let mut color_ids = [(0, hal::image::Layout::ColorAttachmentOptimal); MAX_COLOR_TARGETS];
         for i in 0..key.colors.len() {
             color_ids[i].0 = i;
@@ -573,11 +591,7 @@ impl<B: GfxBackend> Device<B> {
         };
         let all = key.all().map(|(at, _)| at);
 
-        unsafe {
-            self.raw
-                .create_render_pass(all, iter::once(subpass), &[])
-                .unwrap()
-        }
+        unsafe { self.raw.create_render_pass(all, iter::once(subpass), &[]) }
     }
 }
 
@@ -684,8 +698,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 &mut buffer,
                 hal::buffer::SubRange::WHOLE,
                 HostMap::Write,
-            )
-            .expect("failed to map buffer on creation");
+            )?;
 
             buffer.map_state = resource::BufferMapState::Active {
                 ptr,
@@ -709,7 +722,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let ptr = stage
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
-                .unwrap()
+                .map_err(BufferAccessError::from)?
                 .ptr();
             buffer.map_state = resource::BufferMapState::Init {
                 ptr,
@@ -781,7 +794,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &[u8],
-    ) -> Result<(), BufferMapError> {
+    ) -> Result<(), BufferAccessError> {
         span!(_guard, INFO, "Device::set_buffer_sub_data");
 
         let hub = B::hub(self);
@@ -823,7 +836,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ptr::copy_nonoverlapping(data.as_ptr(), ptr.as_ptr(), data.len());
         }
 
-        unmap_buffer(&device.raw, buffer);
+        unmap_buffer(&device.raw, buffer)?;
 
         Ok(())
     }
@@ -834,7 +847,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         data: &mut [u8],
-    ) {
+    ) -> Result<(), BufferAccessError> {
         span!(_guard, INFO, "Device::get_buffer_sub_data");
 
         let hub = B::hub(self);
@@ -844,14 +857,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (mut buffer_guard, _) = hub.buffers.write(&mut token);
         let device = &device_guard[device_id];
         let mut buffer = &mut buffer_guard[buffer_id];
-        assert!(
-            buffer.usage.contains(wgt::BufferUsage::MAP_READ),
-            "Buffer usage {:?} must contain usage flag MAP_READ",
-            buffer.usage
-        );
+        check_buffer_usage(buffer.usage, wgt::BufferUsage::MAP_READ)?;
         //assert!(buffer isn't used by the GPU);
 
-        match map_buffer(
+        let ptr = map_buffer(
             &device.raw,
             &mut buffer,
             hal::buffer::SubRange {
@@ -859,17 +868,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size: Some(data.len() as BufferAddress),
             },
             HostMap::Read,
-        ) {
-            Ok(ptr) => unsafe {
-                ptr::copy_nonoverlapping(ptr.as_ptr(), data.as_mut_ptr(), data.len());
-            },
-            Err(e) => {
-                log::error!("failed to map a buffer: {:?}", e);
-                return;
-            }
+        )?;
+
+        unsafe {
+            ptr::copy_nonoverlapping(ptr.as_ptr(), data.as_mut_ptr(), data.len());
         }
 
-        unmap_buffer(&device.raw, buffer);
+        unmap_buffer(&device.raw, buffer)?;
+
+        Ok(())
     }
 
     pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: id::BufferId) {
@@ -953,7 +960,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         texture_id: id::TextureId,
         desc: Option<&wgt::TextureViewDescriptor<Label>>,
         id_in: Input<G, id::TextureViewId>,
-    ) -> id::TextureViewId {
+    ) -> Result<id::TextureViewId, CreateTextureViewError> {
         span!(_guard, INFO, "Texture::create_view");
 
         let hub = B::hub(self);
@@ -1006,7 +1013,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     hal::format::Swizzle::NO,
                     range.clone(),
                 )
-                .unwrap()
+                .or(Err(CreateTextureViewError::OutOfMemory))?
         };
 
         let view = resource::TextureView {
@@ -1042,10 +1049,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .views
             .init(id, ref_count, PhantomData)
             .unwrap();
-        id
+        Ok(id)
     }
 
-    pub fn texture_view_destroy<B: GfxBackend>(&self, texture_view_id: id::TextureViewId) {
+    pub fn texture_view_destroy<B: GfxBackend>(
+        &self,
+        texture_view_id: id::TextureViewId,
+    ) -> Result<(), TextureViewDestroyError> {
         span!(_guard, INFO, "Texture::view_destroy");
 
         let hub = B::hub(self);
@@ -1062,7 +1072,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     texture_guard[source_id.value].device_id.value
                 }
                 resource::TextureViewInner::SwapChain { .. } => {
-                    panic!("Can't destroy a swap chain image")
+                    return Err(TextureViewDestroyError::SwapChainImage)
                 }
             }
         };
@@ -1073,6 +1083,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .suspected_resources
             .texture_views
             .push(texture_view_id);
+        Ok(())
     }
 
     pub fn device_create_sampler<B: GfxBackend>(
@@ -1080,7 +1091,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::SamplerDescriptor<Label>,
         id_in: Input<G, id::SamplerId>,
-    ) -> id::SamplerId {
+    ) -> Result<id::SamplerId, CreateSamplerError> {
         span!(_guard, INFO, "Device::create_sampler");
 
         let hub = B::hub(self);
@@ -1090,10 +1101,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
             let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
-            assert!(
-                valid_clamp,
-                "Anisotropic clamp must be one of the values: 1, 2, 4, 8, or 16"
-            );
+            if !valid_clamp {
+                return Err(CreateSamplerError::InvalidClamp(clamp));
+            }
             if device.private_features.anisotropic_filtering {
                 Some(clamp)
             } else {
@@ -1120,8 +1130,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             anisotropy_clamp: actual_clamp,
         };
 
+        let raw = unsafe {
+            device.raw.create_sampler(&info).map_err(|err| match err {
+                hal::device::AllocationError::OutOfMemory(_) => CreateSamplerError::OutOfMemory,
+                hal::device::AllocationError::TooManyObjects => CreateSamplerError::TooManyObjects,
+            })?
+        };
         let sampler = resource::Sampler {
-            raw: unsafe { device.raw.create_sampler(&info).unwrap() },
+            raw,
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
@@ -1146,7 +1162,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .samplers
             .init(id, ref_count, PhantomData)
             .unwrap();
-        id
+        Ok(id)
     }
 
     pub fn sampler_destroy<B: GfxBackend>(&self, sampler_id: id::SamplerId) {
@@ -1175,7 +1191,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
-    ) -> Result<id::BindGroupLayoutId, binding_model::BindGroupLayoutError> {
+    ) -> Result<id::BindGroupLayoutId, binding_model::CreateBindGroupLayoutError> {
         span!(_guard, INFO, "Device::create_bind_group_layout");
 
         let mut token = Token::root();
@@ -1183,7 +1199,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut entry_map = FastHashMap::default();
         for entry in desc.entries.iter() {
             if entry_map.insert(entry.binding, entry.clone()).is_some() {
-                return Err(binding_model::BindGroupLayoutError::ConflictBinding(
+                return Err(binding_model::CreateBindGroupLayoutError::ConflictBinding(
                     entry.binding,
                 ));
             }
@@ -1214,7 +1230,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         {
             if let Some(count) = binding.count {
                 if count == 0 {
-                    return Err(binding_model::BindGroupLayoutError::ZeroCount);
+                    return Err(binding_model::CreateBindGroupLayoutError::ZeroCount);
                 }
                 match binding.ty {
                     wgt::BindingType::SampledTexture { .. } => {
@@ -1222,12 +1238,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .features
                             .contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY)
                         {
-                            return Err(binding_model::BindGroupLayoutError::MissingFeature(
+                            return Err(binding_model::CreateBindGroupLayoutError::MissingFeature(
                                 wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
                             ));
                         }
                     }
-                    _ => return Err(binding_model::BindGroupLayoutError::ArrayUnsupported),
+                    _ => return Err(binding_model::CreateBindGroupLayoutError::ArrayUnsupported),
                 }
             } else {
                 unreachable!() // programming bug
@@ -1252,7 +1268,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut raw_layout = device
                 .raw
                 .create_descriptor_set_layout(&raw_bindings, &[])
-                .unwrap();
+                .or(Err(binding_model::CreateBindGroupLayoutError::OutOfMemory))?;
             if let Some(label) = desc.label.as_ref() {
                 device
                     .raw
@@ -1269,7 +1285,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // going to violate limits too, lets catch it now.
         count_validator
             .validate(&device.limits)
-            .map_err(binding_model::BindGroupLayoutError::TooManyBindings)?;
+            .map_err(binding_model::CreateBindGroupLayoutError::TooManyBindings)?;
 
         let layout = binding_model::BindGroupLayout {
             raw,
@@ -1329,7 +1345,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
         id_in: Input<G, id::PipelineLayoutId>,
-    ) -> Result<id::PipelineLayoutId, PipelineLayoutError> {
+    ) -> Result<id::PipelineLayoutId, CreatePipelineLayoutError> {
         span!(_guard, INFO, "Device::create_pipeline_layout");
 
         let hub = B::hub(self);
@@ -1340,7 +1356,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let bind_group_layouts_count = desc.bind_group_layouts.len();
         let device_max_bind_groups = device.limits.max_bind_groups as usize;
         if bind_group_layouts_count > device_max_bind_groups {
-            return Err(PipelineLayoutError::TooManyGroups {
+            return Err(CreatePipelineLayoutError::TooManyGroups {
                 actual: bind_group_layouts_count,
                 max: device_max_bind_groups,
             });
@@ -1349,24 +1365,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !desc.push_constant_ranges.is_empty()
             && !device.features.contains(wgt::Features::PUSH_CONSTANTS)
         {
-            return Err(PipelineLayoutError::MissingFeature(
+            return Err(CreatePipelineLayoutError::MissingFeature(
                 wgt::Features::PUSH_CONSTANTS,
             ));
         }
         let mut used_stages = wgt::ShaderStage::empty();
         for (index, pc) in desc.push_constant_ranges.iter().enumerate() {
             if pc.stages.intersects(used_stages) {
-                return Err(PipelineLayoutError::MoreThanOnePushConstantRangePerStage {
-                    index,
-                    provided: pc.stages,
-                    intersected: pc.stages & used_stages,
-                });
+                return Err(
+                    CreatePipelineLayoutError::MoreThanOnePushConstantRangePerStage {
+                        index,
+                        provided: pc.stages,
+                        intersected: pc.stages & used_stages,
+                    },
+                );
             }
             used_stages |= pc.stages;
 
             let device_max_pc_size = device.limits.max_push_constant_size;
             if device_max_pc_size < pc.range.end {
-                return Err(PipelineLayoutError::PushConstantRangeTooLarge {
+                return Err(CreatePipelineLayoutError::PushConstantRangeTooLarge {
                     index,
                     range: pc.range.clone(),
                     max: device_max_pc_size,
@@ -1374,13 +1392,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
 
             if pc.range.start % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(PipelineLayoutError::MisalignedPushConstantRange {
+                return Err(CreatePipelineLayoutError::MisalignedPushConstantRange {
                     index,
                     bound: pc.range.start,
                 });
             }
             if pc.range.end % wgt::PUSH_CONSTANT_ALIGNMENT != 0 {
-                return Err(PipelineLayoutError::MisalignedPushConstantRange {
+                return Err(CreatePipelineLayoutError::MisalignedPushConstantRange {
                     index,
                     bound: pc.range.end,
                 });
@@ -1406,12 +1424,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device
                     .raw
                     .create_pipeline_layout(descriptor_set_layouts, push_constants)
+                    .or(Err(binding_model::CreatePipelineLayoutError::OutOfMemory))?
             }
-            .unwrap()
         };
         count_validator
             .validate(&device.limits)
-            .map_err(PipelineLayoutError::TooManyBindings)?;
+            .map_err(CreatePipelineLayoutError::TooManyBindings)?;
 
         let layout = binding_model::PipelineLayout {
             raw: pipeline_layout,
@@ -1509,7 +1527,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     1,
                     &mut desc_sets,
                 )
-                .unwrap();
+                .expect("failed to allocate descriptor set");
             desc_sets.pop().unwrap()
         };
 
@@ -1582,32 +1600,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             }
                         };
 
-                        assert_eq!(
-                            bb.offset % wgt::BIND_BUFFER_ALIGNMENT,
-                            0,
-                            "Buffer offset {} must be a multiple of BIND_BUFFER_ALIGNMENT",
-                            bb.offset
-                        );
+                        if bb.offset % wgt::BIND_BUFFER_ALIGNMENT != 0 {
+                            return Err(CreateBindGroupError::UnalignedBufferOffset(bb.offset));
+                        }
 
                         let buffer = used
                             .buffers
                             .use_extend(&*buffer_guard, bb.buffer_id, (), internal_use)
                             .unwrap();
-                        assert!(
-                            buffer.usage.contains(pub_usage),
-                            "Buffer usage {:?} must contain usage flag(s) {:?}",
-                            buffer.usage,
-                            pub_usage
-                        );
+                        check_buffer_usage(buffer.usage, pub_usage)?;
                         let (bind_size, bind_end) = match bb.size {
                             Some(size) => {
                                 let end = bb.offset + size.get();
-                                assert!(
-                                    end <= buffer.size,
-                                    "Bound buffer range {:?} does not fit in buffer size {}",
-                                    bb.offset..end,
-                                    buffer.size
-                                );
+                                if end > buffer.size {
+                                    return Err(CreateBindGroupError::BindingRangeTooLarge {
+                                        range: bb.offset..end,
+                                        size: buffer.size,
+                                    });
+                                }
                                 (size.get(), end)
                             }
                             None => (buffer.size - bb.offset, buffer.size),
@@ -1626,13 +1636,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             });
                         }
 
-                        match min_size {
-                            Some(non_zero) if non_zero.get() > bind_size => panic!(
-                                "Minimum buffer binding size {} is not respected with size {}",
-                                non_zero.get(),
-                                bind_size
-                            ),
-                            _ => (),
+                        if let Some(non_zero) = min_size {
+                            let min_size = non_zero.get();
+                            if min_size > bind_size {
+                                return Err(CreateBindGroupError::BindingSizeTooSmall {
+                                    actual: bind_size,
+                                    min: min_size,
+                                });
+                            }
                         }
 
                         let sub_range = hal::buffer::SubRange {
@@ -1705,39 +1716,33 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         internal_use,
                                     )
                                     .unwrap();
-                                assert!(
-                                    texture.usage.contains(pub_usage),
-                                    "Texture usage {:?} must contain usage flag(s) {:?}",
-                                    texture.usage,
-                                    pub_usage
-                                );
+                                check_texture_usage(texture.usage, pub_usage)?;
                                 let image_layout =
                                     conv::map_texture_state(internal_use, view.range.aspects).1;
                                 SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
                             }
                             resource::TextureViewInner::SwapChain { .. } => {
-                                panic!("Unable to create a bind group with a swap chain image")
+                                return Err(CreateBindGroupError::SwapChainImage);
                             }
                         }
                     }
                     Br::TextureViewArray(ref bindings_array) => {
-                        assert!(
-                            device.features.contains(wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY),
-                            "Feature SAMPLED_TEXTURE_BINDING_ARRAY must be enabled to use TextureViewArrays in a bind group"
-                        );
+                        let required_feats = wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY;
+                        if !device.features.contains(required_feats) {
+                            return Err(CreateBindGroupError::MissingFeatures(required_feats));
+                        }
 
                         if let Some(count) = decl.count {
-                            assert_eq!(
-                                count as usize,
-                                bindings_array.len(),
-                                "Binding count declared with {} items, but {} items were provided",
-                                count,
-                                bindings_array.len()
-                            );
+                            let count = count as usize;
+                            let num_bindings = bindings_array.len();
+                            if count != num_bindings {
+                                return Err(CreateBindGroupError::BindingArrayLengthMismatch {
+                                    actual: num_bindings,
+                                    expected: count,
+                                });
+                            }
                         } else {
-                            panic!(
-                                "Binding declared as a single item, but bind group is using it as an array",
-                            );
+                            return Err(CreateBindGroupError::SingleBindingExpected);
                         }
 
                         let (pub_usage, internal_use) = match decl.ty {
@@ -1775,25 +1780,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                                 internal_use,
                                             )
                                             .unwrap();
-                                        assert!(
-                                            texture.usage.contains(pub_usage),
-                                            "Texture usage {:?} must contain usage flag(s) {:?}",
-                                            texture.usage,
-                                            pub_usage
-                                        );
+                                        check_texture_usage(texture.usage, pub_usage)?;
                                         let image_layout = conv::map_texture_state(
                                             internal_use,
                                             view.range.aspects,
                                         )
                                         .1;
-                                        hal::pso::Descriptor::Image(raw, image_layout)
+                                        Ok(hal::pso::Descriptor::Image(raw, image_layout))
                                     }
-                                    resource::TextureViewInner::SwapChain { .. } => panic!(
-                                        "Unable to create a bind group with a swap chain image"
-                                    ),
+                                    resource::TextureViewInner::SwapChain { .. } => {
+                                        return Err(CreateBindGroupError::SwapChainImage)
+                                    }
                                 }
                             })
-                            .collect()
+                            .collect::<Result<_, _>>()?
                     }
                 };
                 writes.alloc().init(hal::pso::DescriptorSetWrite {
@@ -1903,6 +1903,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     naga::front::spv::Parser::new(spv_iter)
                         .parse()
                         .map_err(|err| {
+                            // TODO: eventually, when Naga gets support for all features,
+                            // we want to convert these to a hard error,
                             log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
                             log::warn!("Shader module will not be validated");
                         })
@@ -1913,6 +1915,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 (spv, module)
             }
             pipeline::ShaderModuleSource::Wgsl(code) => {
+                // TODO: refactor the corresponding Naga error to be owned, and then
+                // display it instead of unwrapping
                 let module = naga::front::wgsl::parse_str(&code).unwrap();
                 let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
                 (
@@ -1941,8 +1945,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             naga::proc::Validator::new().validate(module)?;
         }
 
+        let raw = unsafe {
+            device
+                .raw
+                .create_shader_module(&spv)
+                .map_err(|err| match err {
+                    hal::device::ShaderError::OutOfMemory(_) => {
+                        CreateShaderModuleError::OutOfMemory
+                    }
+                    _ => panic!("failed to create shader module: {}", err),
+                })?
+        };
         let shader = pipeline::ShaderModule {
-            raw: unsafe { device.raw.create_shader_module(&spv).unwrap() },
+            raw,
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
@@ -2357,7 +2372,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     main_pass: match render_pass_cache.entry(rp_key) {
                         Entry::Occupied(e) => e.into_mut(),
                         Entry::Vacant(e) => {
-                            let pass = device.create_compatible_render_pass(e.key());
+                            let pass = device
+                                .create_compatible_render_pass(e.key())
+                                .or(Err(pipeline::RenderPipelineError::OutOfMemory))?;
                             e.insert(pass)
                         }
                     },
@@ -2370,7 +2387,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 device
                     .raw
                     .create_graphics_pipeline(&pipeline_desc, None)
-                    .unwrap()
+                    .map_err(|err| match err {
+                        hal::pso::CreationError::OutOfMemory(_) => {
+                            pipeline::RenderPipelineError::OutOfMemory
+                        }
+                        _ => panic!("failed to create graphics pipeline: {}", err),
+                    })?
             };
 
             (pipeline, layout.life_guard.add_ref())
@@ -2517,12 +2539,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 parent,
             };
 
-            let pipeline = unsafe {
-                device
-                    .raw
-                    .create_compute_pipeline(&pipeline_desc, None)
-                    .unwrap()
-            };
+            let pipeline = unsafe { device.raw.create_compute_pipeline(&pipeline_desc, None)? };
             (pipeline, layout.life_guard.add_ref())
         };
 
@@ -2584,7 +2601,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         surface_id: id::SurfaceId,
         desc: &wgt::SwapChainDescriptor,
-    ) -> id::SwapChainId {
+    ) -> Result<id::SwapChainId, CreateSwapChainError> {
         span!(_guard, INFO, "Device::create_swap_chain");
 
         fn validate_swap_chain_descriptor(
@@ -2627,16 +2644,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let surface = &mut surface_guard[surface_id];
 
         let (caps, formats) = {
-            let suf = B::get_surface_mut(surface);
+            let surface = B::get_surface_mut(surface);
             let adapter = &adapter_guard[device.adapter_id.value];
-            assert!(
-                suf.supports_queue_family(&adapter.raw.queue_families[0]),
-                "Surface {:?} doesn't support queue family {:?}",
-                suf,
-                &adapter.raw.queue_families[0]
-            );
-            let formats = suf.supported_formats(&adapter.raw.physical_device);
-            let caps = suf.capabilities(&adapter.raw.physical_device);
+            let queue_family = &adapter.raw.queue_families[0];
+            if !surface.supports_queue_family(queue_family) {
+                return Err(CreateSwapChainError::UnsupportedQueueFamily);
+            }
+            let formats = surface.supported_formats(&adapter.raw.physical_device);
+            let caps = surface.capabilities(&adapter.raw.physical_device);
             (caps, formats)
         };
         let num_frames = swap_chain::DESIRED_NUM_FRAMES
@@ -2645,27 +2660,30 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut config =
             swap_chain::swap_chain_descriptor_to_hal(&desc, num_frames, device.private_features);
         if let Some(formats) = formats {
-            assert!(
-                formats.contains(&config.format),
-                "Requested format {:?} is not in supported list: {:?}",
-                config.format,
-                formats
-            );
+            if !formats.contains(&config.format) {
+                return Err(CreateSwapChainError::UnsupportedFormat {
+                    requested: config.format,
+                    available: formats,
+                });
+            }
         }
         validate_swap_chain_descriptor(&mut config, &caps);
 
         unsafe {
             B::get_surface_mut(surface)
                 .configure_swapchain(&device.raw, config)
-                .unwrap();
+                .map_err(|err| match err {
+                    hal::window::CreationError::OutOfMemory(_) => CreateSwapChainError::OutOfMemory,
+                    hal::window::CreationError::DeviceLost(_) => CreateSwapChainError::DeviceLost,
+                    _ => panic!("failed to configure swap chain on creation: {}", err),
+                })?;
         }
 
         let sc_id = surface_id.to_swap_chain_id(B::VARIANT);
         if let Some(sc) = swap_chain_guard.remove(sc_id) {
-            assert!(
-                sc.acquired_view_id.is_none(),
-                "SwapChainOutput must be dropped before a new SwapChain is made."
-            );
+            if !sc.acquired_view_id.is_none() {
+                return Err(CreateSwapChainError::SwapChainOutputExists);
+            }
             unsafe {
                 device.raw.destroy_semaphore(sc.semaphore);
             }
@@ -2686,13 +2704,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             },
             desc: desc.clone(),
             num_frames,
-            semaphore: device.raw.create_semaphore().unwrap(),
+            semaphore: device
+                .raw
+                .create_semaphore()
+                .or(Err(CreateSwapChainError::OutOfMemory))?,
             acquired_view_id: None,
             acquired_framebuffers: Vec::new(),
             active_submission_index: 0,
         };
         swap_chain_guard.insert(sc_id, swap_chain);
-        sc_id
+        Ok(sc_id)
     }
 
     #[cfg(feature = "replay")]
@@ -2795,7 +2816,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         range: Range<BufferAddress>,
         op: resource::BufferMapOperation,
-    ) -> Result<(), BufferMapError> {
+    ) -> Result<(), BufferAccessError> {
         span!(_guard, INFO, "Device::buffer_map_async");
 
         let hub = B::hub(self);
@@ -2809,7 +2830,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if range.start % wgt::COPY_BUFFER_ALIGNMENT != 0
             || range.end % wgt::COPY_BUFFER_ALIGNMENT != 0
         {
-            return Err(BufferMapError::UnalignedRange);
+            return Err(BufferAccessError::UnalignedRange);
         }
 
         let (device_id, ref_count) = {
@@ -2819,7 +2840,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             check_buffer_usage(buffer.usage, pub_usage)?;
             buffer.map_state = match buffer.map_state {
                 resource::BufferMapState::Init { .. } | resource::BufferMapState::Active { .. } => {
-                    return Err(BufferMapError::AlreadyMapped);
+                    return Err(BufferAccessError::AlreadyMapped);
                 }
                 resource::BufferMapState::Waiting(_) => {
                     op.call_error();
@@ -2858,7 +2879,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         _size: Option<BufferSize>,
-    ) -> Result<*mut u8, BufferNotMappedError> {
+    ) -> Result<*mut u8, BufferAccessError> {
         span!(_guard, INFO, "Device::buffer_get_mapped_range");
 
         let hub = B::hub(self);
@@ -2872,7 +2893,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(ptr.as_ptr().offset(offset as isize))
             },
             resource::BufferMapState::Idle | resource::BufferMapState::Waiting(_) => {
-                Err(BufferNotMappedError)
+                Err(BufferAccessError::NotMapped)
             }
         }
     }
@@ -2880,7 +2901,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn buffer_unmap<B: GfxBackend>(
         &self,
         buffer_id: id::BufferId,
-    ) -> Result<(), BufferNotMappedError> {
+    ) -> Result<(), BufferAccessError> {
         span!(_guard, INFO, "Device::buffer_unmap");
 
         let hub = B::hub(self);
@@ -2950,7 +2971,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .consume_temp(stage_buffer, stage_memory);
             }
             resource::BufferMapState::Idle => {
-                return Err(BufferNotMappedError);
+                return Err(BufferAccessError::NotMapped);
             }
             resource::BufferMapState::Waiting(_) => {}
             resource::BufferMapState::Active {
@@ -2978,7 +2999,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     };
                     let _ = (ptr, sub_range);
                 }
-                unmap_buffer(&device.raw, buffer);
+                unmap_buffer(&device.raw, buffer)?;
             }
         }
         Ok(())
@@ -2987,10 +3008,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBufferError {
-    #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
-    UsageMismatch(wgt::BufferUsage),
+    #[error("failed to map buffer while creating: {0}")]
+    AccessError(#[from] BufferAccessError),
+    #[error(transparent)]
+    HeapsError(#[from] gfx_memory::HeapsError),
+    #[error("not enough memory left")]
+    OutOfMemory,
     #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
     UnalignedSize,
+    #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
+    UsageMismatch(wgt::BufferUsage),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -3002,26 +3029,78 @@ pub enum CreateTextureError {
         MAX_MIP_LEVELS
     )]
     InvalidMipLevelCount(u32),
+    #[error(transparent)]
+    HeapsError(#[from] gfx_memory::HeapsError),
+    #[error("not enough memory left")]
+    OutOfMemory,
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum BufferMapError {
-    #[error(transparent)]
-    MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error(transparent)]
-    MapError(#[from] hal::device::MapError),
-    #[error("buffer map range is not aligned to {}", wgt::COPY_BUFFER_ALIGNMENT)]
-    UnalignedRange,
+pub enum BufferAccessError {
     #[error("buffer is already mapped")]
     AlreadyMapped,
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error("buffer is not mapped")]
+    NotMapped,
+    #[error("not enough memory left")]
+    OutOfMemory,
+    #[error("buffer map range is not aligned to {}", wgt::COPY_BUFFER_ALIGNMENT)]
+    UnalignedRange,
+}
+
+impl From<hal::device::MapError> for BufferAccessError {
+    fn from(error: hal::device::MapError) -> Self {
+        match error {
+            hal::device::MapError::OutOfMemory(_) => Self::OutOfMemory,
+            _ => panic!("failed to map buffer: {}", error),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("buffer is not mapped")]
-pub struct BufferNotMappedError;
+pub enum CreateSamplerError {
+    #[error("invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
+    InvalidClamp(u8),
+    #[error("not enough memory left")]
+    OutOfMemory,
+    #[error("cannot create any more samplers")]
+    TooManyObjects,
+}
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateShaderModuleError {
+    #[error("not enough memory left")]
+    OutOfMemory,
     #[error(transparent)]
     Validation(#[from] naga::proc::ValidationError),
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateSwapChainError {
+    #[error("device has been lost")]
+    DeviceLost,
+    #[error("not enough memory left")]
+    OutOfMemory,
+    #[error("`SwapChainOutput` must be dropped before a new `SwapChain` is made")]
+    SwapChainOutputExists,
+    #[error("surface does not support the adapter's queue family")]
+    UnsupportedQueueFamily,
+    #[error("requested format {requested:?} is not in list of supported formats: {available:?}")]
+    UnsupportedFormat {
+        requested: hal::format::Format,
+        available: Vec<hal::format::Format>,
+    },
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateTextureViewError {
+    #[error("not enough memory left")]
+    OutOfMemory,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum TextureViewDestroyError {
+    #[error("cannot destroy swap chain image")]
+    SwapChainImage,
 }
