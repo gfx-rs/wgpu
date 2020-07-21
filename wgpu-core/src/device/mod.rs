@@ -28,11 +28,9 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
 use std::{
-    collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range, ptr,
-    sync::atomic::Ordering,
+    borrow::Cow, collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range,
+    ptr, sync::atomic::Ordering,
 };
-
-use spirv_headers::ExecutionModel;
 
 mod life;
 mod queue;
@@ -1888,14 +1886,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         source: pipeline::ShaderModuleSource,
         id_in: Input<G, id::ShaderModuleId>,
-    ) -> id::ShaderModuleId {
+    ) -> Result<id::ShaderModuleId, CreateShaderModuleError> {
         span!(_guard, INFO, "Device::create_shader_module");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
-        let spv_owned;
         let spv_flags = if cfg!(debug_assertions) {
             naga::back::spv::WriterFlags::DEBUG
         } else {
@@ -1920,10 +1917,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 (spv, module)
             }
             pipeline::ShaderModuleSource::Wgsl(code) => {
-                let module = naga::front::wgsl::parse_str(code).unwrap();
-                spv_owned = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
+                let module = naga::front::wgsl::parse_str(&code).unwrap();
+                let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
                 (
-                    spv_owned.as_slice(),
+                    Cow::Owned(spv),
                     if device.private_features.shader_validation {
                         Some(module)
                     } else {
@@ -1932,9 +1929,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 )
             }
             pipeline::ShaderModuleSource::Naga(module) => {
-                spv_owned = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
+                let spv = naga::back::spv::Writer::new(&module.header, spv_flags).write(&module);
                 (
-                    spv_owned.as_slice(),
+                    Cow::Owned(spv),
                     if device.private_features.shader_validation {
                         Some(module)
                     } else {
@@ -1944,8 +1941,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         };
 
+        if let Some(ref module) = naga {
+            naga::proc::Validator::new().validate(module)?;
+        }
+
         let shader = pipeline::ShaderModule {
-            raw: unsafe { device.raw.create_shader_module(spv).unwrap() },
+            raw: unsafe { device.raw.create_shader_module(&spv).unwrap() },
             device_id: Stored {
                 value: device_id,
                 ref_count: device.life_guard.add_ref(),
@@ -1967,7 +1968,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
             None => {}
         };
-        id
+        Ok(id)
     }
 
     pub fn shader_module_destroy<B: GfxBackend>(&self, shader_module_id: id::ShaderModuleId) {
@@ -2259,7 +2260,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         module,
                         &group_layouts,
                         &entry_point_name,
-                        ExecutionModel::Vertex,
+                        naga::ShaderStage::Vertex,
                         interface,
                     )
                     .map_err(|error| pipeline::RenderPipelineError::Stage { flag, error })?;
@@ -2286,7 +2287,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 module,
                                 &group_layouts,
                                 &entry_point_name,
-                                ExecutionModel::Fragment,
+                                naga::ShaderStage::Fragment,
                                 interface,
                             )
                             .map_err(|error| {
@@ -2486,7 +2487,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     module,
                     &group_layouts,
                     &entry_point_name,
-                    ExecutionModel::GLCompute,
+                    naga::ShaderStage::Compute,
                     interface,
                 )
                 .map_err(pipeline::ComputePipelineError::Stage)?;
@@ -3012,3 +3013,9 @@ pub enum BufferMapError {
 #[derive(Clone, Debug, Error)]
 #[error("buffer is not mapped")]
 pub struct BufferNotMappedError;
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateShaderModuleError {
+    #[error(transparent)]
+    Validation(#[from] naga::proc::ValidationError),
+}

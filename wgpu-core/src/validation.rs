@@ -3,7 +3,6 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{binding_model::BindEntryMap, FastHashMap};
-use spirv_headers as spirv;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -60,7 +59,10 @@ pub enum BindingError {
     #[error("buffer structure size {0}, added to one element of an unbound array, if it's the last field, ended up greater than the given `min_binding_size`")]
     WrongBufferSize(wgt::BufferAddress),
     #[error("view dimension {dim:?} (is array: {is_array}) doesn't match the shader")]
-    WrongTextureViewDimension { dim: spirv::Dim, is_array: bool },
+    WrongTextureViewDimension {
+        dim: naga::ImageDimension,
+        is_array: bool,
+    },
     #[error("component type {0:?} of a sampled texture doesn't match the shader")]
     WrongTextureComponentType(Option<naga::ScalarKind>),
     #[error("texture sampling capability doesn't match the shader")]
@@ -83,7 +85,7 @@ pub enum InputError {
 #[derive(Clone, Debug, Error)]
 pub enum StageError {
     #[error("unable to find an entry point matching the {0:?} execution model")]
-    MissingEntryPoint(spirv::ExecutionModel),
+    MissingEntryPoint(naga::ShaderStage),
     #[error("error matching global binding at index {binding} in set {set} against the pipeline layout: {error}")]
     Binding {
         set: u32,
@@ -143,7 +145,14 @@ fn get_aligned_type_size(
             None => get_aligned_type_size(module, base, false),
         },
         Ti::Struct { ref members } => members.last().map_or(0, |member| {
-            member.offset as wgt::BufferAddress + get_aligned_type_size(module, member.ty, false)
+            let offset = match member.origin {
+                naga::MemberOrigin::BuiltIn(_) => {
+                    log::error!("Missing offset on a struct member");
+                    0 // TODO: make it a proper error
+                }
+                naga::MemberOrigin::Offset(offset) => offset as wgt::BufferAddress,
+            };
+            offset + get_aligned_type_size(module, member.ty, false)
         }),
         _ => panic!("Unexpected struct field"),
     }
@@ -155,12 +164,7 @@ fn check_binding(
     entry: &BindGroupLayoutEntry,
     usage: naga::GlobalUse,
 ) -> Result<(), BindingError> {
-    let mut ty_inner = &module.types[var.ty].inner;
-    //TODO: change naga's IR to avoid a pointer here
-    if let naga::TypeInner::Pointer { base, class: _ } = *ty_inner {
-        ty_inner = &module.types[base].inner;
-    }
-    let allowed_usage = match *ty_inner {
+    let allowed_usage = match module.types[var.ty].inner {
         naga::TypeInner::Struct { ref members } => {
             let (allowed_usage, min_size) = match entry.ty {
                 BindingType::UniformBuffer {
@@ -224,8 +228,8 @@ fn check_binding(
             };
             if flags.contains(naga::ImageFlags::ARRAYED) {
                 match (dim, view_dimension) {
-                    (spirv::Dim::Dim2D, wgt::TextureViewDimension::D2Array) => (),
-                    (spirv::Dim::DimCube, wgt::TextureViewDimension::CubeArray) => (),
+                    (naga::ImageDimension::D2, wgt::TextureViewDimension::D2Array) => (),
+                    (naga::ImageDimension::Cube, wgt::TextureViewDimension::CubeArray) => (),
                     _ => {
                         return Err(BindingError::WrongTextureViewDimension {
                             dim,
@@ -235,10 +239,10 @@ fn check_binding(
                 }
             } else {
                 match (dim, view_dimension) {
-                    (spirv::Dim::Dim1D, wgt::TextureViewDimension::D1) => (),
-                    (spirv::Dim::Dim2D, wgt::TextureViewDimension::D2) => (),
-                    (spirv::Dim::Dim3D, wgt::TextureViewDimension::D3) => (),
-                    (spirv::Dim::DimCube, wgt::TextureViewDimension::Cube) => (),
+                    (naga::ImageDimension::D1, wgt::TextureViewDimension::D1) => (),
+                    (naga::ImageDimension::D2, wgt::TextureViewDimension::D2) => (),
+                    (naga::ImageDimension::D3, wgt::TextureViewDimension::D3) => (),
+                    (naga::ImageDimension::Cube, wgt::TextureViewDimension::Cube) => (),
                     _ => {
                         return Err(BindingError::WrongTextureViewDimension {
                             dim,
@@ -658,7 +662,7 @@ pub fn check_stage<'a>(
     module: &'a naga::Module,
     group_layouts: &[&BindEntryMap],
     entry_point_name: &str,
-    execution_model: spirv::ExecutionModel,
+    stage: naga::ShaderStage,
     inputs: StageInterface<'a>,
 ) -> Result<StageInterface<'a>, StageError> {
     // Since a shader module can have multiple entry points with the same name,
@@ -666,16 +670,12 @@ pub fn check_stage<'a>(
     let entry_point = module
         .entry_points
         .iter()
-        .find(|entry_point| {
-            entry_point.name == entry_point_name && entry_point.exec_model == execution_model
-        })
-        .ok_or(StageError::MissingEntryPoint(execution_model))?;
-    let stage_bit = match execution_model {
-        spirv::ExecutionModel::Vertex => wgt::ShaderStage::VERTEX,
-        spirv::ExecutionModel::Fragment => wgt::ShaderStage::FRAGMENT,
-        spirv::ExecutionModel::GLCompute => wgt::ShaderStage::COMPUTE,
-        // the entry point wouldn't match otherwise
-        _ => unreachable!(),
+        .find(|entry_point| entry_point.name == entry_point_name && entry_point.stage == stage)
+        .ok_or(StageError::MissingEntryPoint(stage))?;
+    let stage_bit = match stage {
+        naga::ShaderStage::Vertex => wgt::ShaderStage::VERTEX,
+        naga::ShaderStage::Fragment => wgt::ShaderStage::FRAGMENT,
+        naga::ShaderStage::Compute => wgt::ShaderStage::COMPUTE,
     };
 
     let function = &module.functions[entry_point.function];
@@ -707,11 +707,7 @@ pub fn check_stage<'a>(
                 }
             }
             Some(naga::Binding::Location(location)) => {
-                let mut ty = &module.types[var.ty].inner;
-                //TODO: change naga's IR to not have pointer for varyings
-                if let naga::TypeInner::Pointer { base, class: _ } = *ty {
-                    ty = &module.types[base].inner;
-                }
+                let ty = &module.types[var.ty].inner;
                 if usage.contains(naga::GlobalUse::STORE) {
                     outputs.insert(location, MaybeOwned::Borrowed(ty));
                 } else {

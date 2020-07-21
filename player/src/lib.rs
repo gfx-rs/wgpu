@@ -12,7 +12,7 @@
 
 use wgc::device::trace;
 
-use std::{ffi::CString, fmt::Debug, fs, marker::PhantomData, path::Path, ptr};
+use std::{borrow::Cow, ffi::CString, fmt::Debug, fs, marker::PhantomData, path::Path, ptr};
 
 #[macro_export]
 macro_rules! gfx_select {
@@ -226,16 +226,19 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.bind_group_destroy::<B>(id);
             }
             A::CreateShaderModule { id, data } => {
-                let byte_vec = fs::read(dir.join(data)).unwrap();
-                let spv = byte_vec
-                    .chunks(4)
-                    .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
-                    .collect::<Vec<_>>();
-                self.device_create_shader_module::<B>(
-                    device,
-                    wgc::pipeline::ShaderModuleSource::SpirV(&spv),
-                    id,
-                );
+                let source = if data.ends_with(".wgsl") {
+                    let code = fs::read_to_string(dir.join(data)).unwrap();
+                    wgc::pipeline::ShaderModuleSource::Wgsl(Cow::Owned(code))
+                } else {
+                    let byte_vec = fs::read(dir.join(data)).unwrap();
+                    let spv = byte_vec
+                        .chunks(4)
+                        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+                        .collect::<Vec<_>>();
+                    wgc::pipeline::ShaderModuleSource::SpirV(Cow::Owned(spv))
+                };
+                self.device_create_shader_module::<B>(device, source, id)
+                    .unwrap();
             }
             A::DestroyShaderModule(id) => {
                 self.shader_module_destroy::<B>(id);
