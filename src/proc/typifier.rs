@@ -3,11 +3,13 @@ use crate::{
     Type, TypeInner, VectorSize,
 };
 
+use thiserror::Error;
+
 pub struct Typifier {
     types: Vec<Handle<crate::Type>>,
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Clone, Debug, Error)]
 pub enum ResolveError {
     #[error("Invalid index into array")]
     InvalidAccessIndex,
@@ -209,7 +211,8 @@ impl Typifier {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Error)]
+#[error("mismatched constant type {0:?} expected {1:?}")]
 pub struct UnexpectedConstantTypeError(crate::ConstantInner, crate::TypeInner);
 
 pub fn check_constant_types(

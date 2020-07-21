@@ -7,6 +7,8 @@ use crate::{
     FastHashMap,
 };
 
+use thiserror::Error;
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Token<'a> {
     Separator(char),
@@ -136,31 +138,42 @@ mod lex {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum Error<'a> {
+    #[error("unexpected token: {0:?}")]
     Unexpected(Token<'a>),
-    UnexpectedConstantType(crate::proc::UnexpectedConstantTypeError),
+    #[error(transparent)]
+    UnexpectedConstantType(#[from] crate::proc::UnexpectedConstantTypeError),
+    #[error("unable to parse `{0}` as integer: {1}")]
     BadInteger(&'a str, std::num::ParseIntError),
+    #[error("unable to parse `{1}` as float: {1}")]
     BadFloat(&'a str, std::num::ParseFloatError),
+    #[error("bad field accessor `{0}`")]
     BadAccessor(&'a str),
+    #[error(transparent)]
     InvalidResolve(ResolveError),
+    #[error("unknown import: `{0}`")]
     UnknownImport(&'a str),
+    #[error("unknown storage class: `{0}`")]
     UnknownStorageClass(&'a str),
+    #[error("unknown decoration: `{0}`")]
     UnknownDecoration(&'a str),
+    #[error("unknown builtin: `{0}`")]
     UnknownBuiltin(&'a str),
+    #[error("unknown shader stage: `{0}`")]
     UnknownShaderStage(&'a str),
+    #[error("unknown identifier: `{0}`")]
     UnknownIdent(&'a str),
+    #[error("unknown type: `{0}`")]
     UnknownType(&'a str),
+    #[error("unknown function: `{0}`")]
     UnknownFunction(&'a str),
+    #[error("missing offset for structure member `{0}`")]
     MissingMemberOffset(&'a str),
-    MutabilityViolation(&'a str),
+    //MutabilityViolation(&'a str),
+    // TODO: these could be replaced with more detailed errors
+    #[error("other error")]
     Other,
-}
-
-impl<'a> From<crate::proc::UnexpectedConstantTypeError> for Error<'a> {
-    fn from(error: crate::proc::UnexpectedConstantTypeError) -> Self {
-        Error::UnexpectedConstantType(error)
-    }
 }
 
 #[derive(Clone)]
@@ -370,7 +383,8 @@ pub enum Scope {
     GeneralExpr,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Error)]
+#[error("error while parsing WGSL in scopes {scopes:?} at position {pos:?}: {error}")]
 pub struct ParseError<'a> {
     pub error: Error<'a>,
     pub scopes: Vec<Scope>,
