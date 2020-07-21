@@ -1,14 +1,15 @@
 use crate::arena::Handle;
 
+#[derive(Debug)]
 pub struct Validator {}
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, thiserror::Error)]
 pub enum ValidationError {
-    /// The type width is not supported.
+    #[error("The type width is not supported")]
     InvalidTypeWidth(crate::ScalarKind, crate::Bytes),
-    /// A type handle can not be resolved.
+    #[error("The type handle can not be resolved")]
     UnresolvedType(Handle<crate::Type>),
-    /// There are instructions after `return`/`break`/`continue`.
+    #[error("There are instructions after `return`/`break`/`continue`")]
     InvalidControlFlowExitTail,
 }
 
