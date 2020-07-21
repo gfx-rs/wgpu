@@ -635,7 +635,7 @@ pub fn map_rasterization_state_descriptor(
 ) -> hal::pso::Rasterizer {
     use hal::pso;
     pso::Rasterizer {
-        depth_clamping: false,
+        depth_clamping: desc.clamp_depth,
         polygon_mode: pso::PolygonMode::Fill,
         cull_face: match desc.cull_mode {
             wgt::CullMode::None => pso::Face::empty(),

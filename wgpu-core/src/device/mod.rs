@@ -2108,10 +2108,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let color_states = &desc.color_states;
         let depth_stencil_state = desc.depth_stencil_state.as_ref();
 
-        let rasterization_state = desc.rasterization_state.as_ref();
-        let rasterizer = conv::map_rasterization_state_descriptor(
-            &rasterization_state.cloned().unwrap_or_default(),
-        );
+        let rasterization_state = desc
+            .rasterization_state
+            .as_ref()
+            .cloned()
+            .unwrap_or_default();
+        let rasterizer = conv::map_rasterization_state_descriptor(&rasterization_state);
 
         let mut interface = validation::StageInterface::default();
         let mut validated_stages = wgt::ShaderStage::empty();
@@ -2199,6 +2201,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let device = &device_guard[device_id];
+        if rasterization_state.clamp_depth
+            && !device.features.contains(wgt::Features::DEPTH_CLAMPING)
+        {
+            return Err(pipeline::RenderPipelineError::MissingFeature(
+                wgt::Features::DEPTH_CLAMPING,
+            ));
+        }
+
         let (raw_pipeline, layout_ref_count) = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);

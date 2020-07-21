@@ -55,6 +55,7 @@ pub type RenderPipelineDescriptor<'a> =
 
 #[derive(Clone, Debug)]
 pub enum RenderPipelineError {
+    MissingFeature(wgt::Features),
     InvalidVertexAttributeOffset {
         location: wgt::ShaderLocation,
         offset: BufferAddress,
