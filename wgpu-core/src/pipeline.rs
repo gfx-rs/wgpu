@@ -8,14 +8,14 @@ use crate::{
     validation::StageError,
     LifeGuard, RefCount, Stored,
 };
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
 #[repr(C)]
 #[derive(Debug)]
 pub enum ShaderModuleSource<'a> {
-    SpirV(&'a [u32]),
-    Wgsl(&'a str),
+    SpirV(Cow<'a, [u32]>),
+    Wgsl(Cow<'a, str>),
     Naga(naga::Module),
 }
 

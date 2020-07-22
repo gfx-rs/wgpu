@@ -35,6 +35,7 @@
     buffer. Thanks to the "normalized" property, it doesn't track any bind group
     invalidations or index format changes.
 !*/
+#![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
     binding_model::PushConstantUploadError,
