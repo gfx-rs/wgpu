@@ -2,6 +2,7 @@
 mod framework;
 
 use futures::task::{LocalSpawn, LocalSpawnExt};
+use std::borrow::Cow::Borrowed;
 
 const SKYBOX_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
@@ -44,7 +45,7 @@ impl framework::Example for Skybox {
         queue: &wgpu::Queue,
     ) -> Self {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            entries: &[
+            entries: Borrowed(&[
                 wgpu::BindGroupLayoutEntry::new(
                     0,
                     wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
@@ -67,7 +68,7 @@ impl framework::Example for Skybox {
                     wgpu::ShaderStage::FRAGMENT,
                     wgpu::BindingType::Sampler { comparison: false },
                 ),
-            ],
+            ]),
             label: None,
         });
 
@@ -83,8 +84,8 @@ impl framework::Example for Skybox {
         );
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: &[&bind_group_layout],
-            push_constant_ranges: &[],
+            bind_group_layouts: Borrowed(&[&bind_group_layout]),
+            push_constant_ranges: Borrowed(&[]),
         });
 
         // Create the render pipeline
@@ -92,11 +93,11 @@ impl framework::Example for Skybox {
             layout: &pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &fs_module,
-                entry_point: "main",
+                entry_point: Borrowed("main"),
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Cw,
@@ -106,15 +107,15 @@ impl framework::Example for Skybox {
                 depth_bias_clamp: 0.0,
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
+            color_states: Borrowed(&[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 alpha_blend: wgpu::BlendDescriptor::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
-            }],
+            }]),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: &[],
+                vertex_buffers: Borrowed(&[]),
             },
             depth_stencil_state: None,
             sample_count: 1,
@@ -215,7 +216,7 @@ impl framework::Example for Skybox {
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,
-            entries: &[
+            entries: Borrowed(&[
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
@@ -228,7 +229,7 @@ impl framework::Example for Skybox {
                     binding: 2,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
-            ],
+            ]),
             label: None,
         });
 
@@ -284,7 +285,7 @@ impl framework::Example for Skybox {
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -296,7 +297,7 @@ impl framework::Example for Skybox {
                         }),
                         store: true,
                     },
-                }],
+                }]),
                 depth_stencil_attachment: None,
             });
 

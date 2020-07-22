@@ -798,6 +798,7 @@ pub struct Queue {
 
 /// Resource that can be bound to a pipeline.
 #[non_exhaustive]
+#[derive(Clone)]
 pub enum BindingResource<'a> {
     /// Binding is backed by a buffer.
     ///
