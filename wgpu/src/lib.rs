@@ -146,28 +146,28 @@ trait RenderPassInner<Ctx: Context>: RenderInner<Ctx> {
     );
 }
 
-trait Context: Sized {
-    type AdapterId: Send + Sync + 'static;
-    type DeviceId: Send + Sync + 'static;
-    type QueueId: Send + Sync + 'static;
-    type ShaderModuleId: Send + Sync + 'static;
-    type BindGroupLayoutId: Send + Sync + 'static;
-    type BindGroupId: Send + Sync + 'static;
-    type TextureViewId: Send + Sync + 'static;
-    type SamplerId: Send + Sync + 'static;
-    type BufferId: Send + Sync + 'static;
-    type TextureId: Send + Sync + 'static;
-    type PipelineLayoutId: Send + Sync + 'static;
-    type RenderPipelineId: Send + Sync + 'static;
-    type ComputePipelineId: Send + Sync + 'static;
-    type CommandEncoderId;
-    type ComputePassId: ComputePassInner<Self>;
-    type RenderPassId: RenderPassInner<Self>;
-    type CommandBufferId: Send + Sync;
+trait Context: Debug + Send + Sized + Sync {
+    type AdapterId: Debug + Send + Sync + 'static;
+    type DeviceId: Debug + Send + Sync + 'static;
+    type QueueId: Debug + Send + Sync + 'static;
+    type ShaderModuleId: Debug + Send + Sync + 'static;
+    type BindGroupLayoutId: Debug + Send + Sync + 'static;
+    type BindGroupId: Debug + Send + Sync + 'static;
+    type TextureViewId: Debug + Send + Sync + 'static;
+    type SamplerId: Debug + Send + Sync + 'static;
+    type BufferId: Debug + Send + Sync + 'static;
+    type TextureId: Debug + Send + Sync + 'static;
+    type PipelineLayoutId: Debug + Send + Sync + 'static;
+    type RenderPipelineId: Debug + Send + Sync + 'static;
+    type ComputePipelineId: Debug + Send + Sync + 'static;
+    type CommandEncoderId: Debug;
+    type ComputePassId: Debug + ComputePassInner<Self>;
+    type RenderPassId: Debug + RenderPassInner<Self>;
+    type CommandBufferId: Debug + Send + Sync;
     type RenderBundleEncoderId: RenderInner<Self>;
-    type RenderBundleId: Send + Sync + 'static;
-    type SurfaceId: Send + Sync + 'static;
-    type SwapChainId: Send + Sync + 'static;
+    type RenderBundleId: Debug + Send + Sync + 'static;
+    type SurfaceId: Debug + Send + Sync + 'static;
+    type SwapChainId: Debug + Send + Sync + 'static;
 
     type SwapChainOutputDetail: Send;
 
@@ -390,6 +390,7 @@ trait Context: Sized {
 /// Its primary use is to create [`Adapter`]s and [`Surface`]s.
 ///
 /// Does not have to be kept alive.
+#[derive(Debug)]
 pub struct Instance {
     context: Arc<C>,
 }
@@ -400,6 +401,7 @@ pub struct Instance {
 /// on the host system by using [`Adapter::request_device`].
 ///
 /// Does not have to be kept alive.
+#[derive(Debug)]
 pub struct Adapter {
     context: Arc<C>,
     id: <C as Context>::AdapterId,
@@ -411,6 +413,7 @@ pub struct Adapter {
 /// These are then used in commands, which are submitted to a [`Queue`].
 ///
 /// A device may be requested from an adapter with [`Adapter::request_device`].
+#[derive(Debug)]
 pub struct Device {
     context: Arc<C>,
     id: <C as Context>::DeviceId,
@@ -490,6 +493,7 @@ impl MapContext {
 /// Handle to a GPU-accessible buffer.
 ///
 /// Created with [`Device::create_buffer`] or [`Device::create_buffer_with_data`]
+#[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
     id: <C as Context>::BufferId,
@@ -502,7 +506,7 @@ pub struct Buffer {
 /// Created by calling [`Buffer::slice`]. To use the whole buffer, call with unbounded slice:
 ///
 /// `buffer.slice(..)`
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct BufferSlice<'a> {
     buffer: &'a Buffer,
     offset: BufferAddress,
@@ -512,6 +516,7 @@ pub struct BufferSlice<'a> {
 /// Handle to a texture on the GPU.
 ///
 /// Created by calling [`Device::create_texture`]
+#[derive(Debug)]
 pub struct Texture {
     context: Arc<C>,
     id: <C as Context>::TextureId,
@@ -522,6 +527,7 @@ pub struct Texture {
 ///
 /// A `TextureView` object describes a texture and associated metadata needed by a
 /// [`RenderPipeline`] or [`BindGroup`].
+#[derive(Debug)]
 pub struct TextureView {
     context: Arc<C>,
     id: <C as Context>::TextureViewId,
@@ -533,6 +539,7 @@ pub struct TextureView {
 /// A `Sampler` object defines how a pipeline will sample from a [`TextureView`]. Samplers define
 /// image filters (including anisotropy) and address (wrapping) modes, among other things. See
 /// the documentation for [`SamplerDescriptor`] for more information.
+#[derive(Debug)]
 pub struct Sampler {
     context: Arc<C>,
     id: <C as Context>::SamplerId,
@@ -550,6 +557,7 @@ impl Drop for Sampler {
 ///
 /// A `Surface` represents a platform-specific surface (e.g. a window) onto which rendered images may
 /// be presented. A `Surface` may be created with the unsafe function [`Instance::create_surface`].
+#[derive(Debug)]
 pub struct Surface {
     id: <C as Context>::SurfaceId,
 }
@@ -558,6 +566,7 @@ pub struct Surface {
 ///
 /// A `SwapChain` represents the image or series of images that will be presented to a [`Surface`].
 /// A `SwapChain` may be created with [`Device::create_swap_chain`].
+#[derive(Debug)]
 pub struct SwapChain {
     context: Arc<C>,
     id: <C as Context>::SwapChainId,
@@ -569,6 +578,7 @@ pub struct SwapChain {
 /// create a [`BindGroupDescriptor`] object, which in turn can be used to create a [`BindGroup`]
 /// object with [`Device::create_bind_group`]. A series of `BindGroupLayout`s can also be used to
 /// create a [`PipelineLayoutDescriptor`], which can be used to create a [`PipelineLayout`].
+#[derive(Debug)]
 pub struct BindGroupLayout {
     context: Arc<C>,
     id: <C as Context>::BindGroupLayoutId,
@@ -588,6 +598,7 @@ impl Drop for BindGroupLayout {
 /// [`BindGroupLayout`]. It can be created with [`Device::create_bind_group`]. A `BindGroup` can
 /// be bound to a particular [`RenderPass`] with [`RenderPass::set_bind_group`], or to a
 /// [`ComputePass`] with [`ComputePass::set_bind_group`].
+#[derive(Debug)]
 pub struct BindGroup {
     context: Arc<C>,
     id: <C as Context>::BindGroupId,
@@ -606,6 +617,7 @@ impl Drop for BindGroup {
 /// A `ShaderModule` represents a compiled shader module on the GPU. It can be created by passing
 /// valid SPIR-V source code to [`Device::create_shader_module`]. Shader modules are used to define
 /// programmable stages of a pipeline.
+#[derive(Debug)]
 pub struct ShaderModule {
     context: Arc<C>,
     id: <C as Context>::ShaderModuleId,
@@ -638,6 +650,7 @@ pub enum ShaderModuleSource<'a> {
 /// Handle to a pipeline layout.
 ///
 /// A `PipelineLayout` object describes the available binding groups of a pipeline.
+#[derive(Debug)]
 pub struct PipelineLayout {
     context: Arc<C>,
     id: <C as Context>::PipelineLayoutId,
@@ -655,6 +668,7 @@ impl Drop for PipelineLayout {
 ///
 /// A `RenderPipeline` object represents a graphics pipeline and its stages, bindings, vertex
 /// buffers and targets. A `RenderPipeline` may be created with [`Device::create_render_pipeline`].
+#[derive(Debug)]
 pub struct RenderPipeline {
     context: Arc<C>,
     id: <C as Context>::RenderPipelineId,
@@ -672,6 +686,7 @@ impl Drop for RenderPipeline {
 ///
 /// A `ComputePipeline` object represents a compute pipeline and its single shader stage.
 /// A `ComputePipeline` may be created with [`Device::create_compute_pipeline`].
+#[derive(Debug)]
 pub struct ComputePipeline {
     context: Arc<C>,
     id: <C as Context>::ComputePipelineId,
@@ -690,6 +705,7 @@ impl Drop for ComputePipeline {
 /// A `CommandBuffer` represents a complete sequence of commands that may be submitted to a command
 /// queue with [`Queue::submit`]. A `CommandBuffer` is obtained by recording a series of commands to
 /// a [`CommandEncoder`] and then calling [`CommandEncoder::finish`].
+#[derive(Debug)]
 pub struct CommandBuffer {
     context: Arc<C>,
     id: Option<<C as Context>::CommandBufferId>,
@@ -712,6 +728,7 @@ impl Drop for CommandBuffer {
 ///
 /// When finished recording, call [`CommandEncoder::finish`] to obtain a [`CommandBuffer`] which may
 /// be submitted for execution.
+#[derive(Debug)]
 pub struct CommandEncoder {
     context: Arc<C>,
     id: <C as Context>::CommandEncoderId,
@@ -721,12 +738,14 @@ pub struct CommandEncoder {
 }
 
 /// In-progress recording of a render pass.
+#[derive(Debug)]
 pub struct RenderPass<'a> {
     id: <C as Context>::RenderPassId,
     parent: &'a mut CommandEncoder,
 }
 
 /// In-progress recording of a compute pass.
+#[derive(Debug)]
 pub struct ComputePass<'a> {
     id: <C as Context>::ComputePassId,
     parent: &'a mut CommandEncoder,
@@ -753,6 +772,7 @@ pub struct RenderBundleEncoder<'a> {
 /// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
 ///
 /// Executing a [`RenderBundle`] is often more efficient then issuing the underlying commands manually.
+#[derive(Debug)]
 pub struct RenderBundle {
     context: Arc<C>,
     id: <C as Context>::RenderBundleId,
@@ -770,6 +790,7 @@ impl Drop for RenderBundle {
 ///
 /// A `Queue` executes recorded [`CommandBuffer`] objects and provides convenience methods
 /// for writing to [buffers](Queue::write_buffer) and [textures](Queue::write_texture).
+#[derive(Debug)]
 pub struct Queue {
     context: Arc<C>,
     id: <C as Context>::QueueId,
@@ -839,7 +860,7 @@ impl<V: Default> Default for Operations<V> {
 }
 
 /// Describes a color attachment to a [`RenderPass`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderPassColorAttachmentDescriptor<'a> {
     /// The view to use as an attachment.
     pub attachment: &'a TextureView,
@@ -850,7 +871,7 @@ pub struct RenderPassColorAttachmentDescriptor<'a> {
 }
 
 /// Describes a depth/stencil attachment to a [`RenderPass`].
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderPassDepthStencilAttachmentDescriptor<'a> {
     /// The view to use as an attachment.
     pub attachment: &'a TextureView,
@@ -934,6 +955,7 @@ pub use wgt::TextureCopyView as TextureCopyViewBase;
 pub type TextureCopyView<'a> = TextureCopyViewBase<&'a Texture>;
 
 /// Swap chain image that can be rendered to.
+#[derive(Debug)]
 pub struct SwapChainTexture {
     /// Accessible view of the frame.
     pub view: TextureView,
@@ -941,6 +963,7 @@ pub struct SwapChainTexture {
 }
 
 /// Result of a successful call to [`SwapChain::get_next_frame`].
+#[derive(Debug)]
 pub struct SwapChainFrame {
     /// The texture into which the next frame should be rendered.
     pub output: SwapChainTexture,
@@ -997,9 +1020,7 @@ impl Instance {
     pub fn enumerate_adapters(&self, backends: BackendBit) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
-                PhantomData
-            }))
+            .enumerate_adapters(backends)
             .into_iter()
             .map(move |id| crate::Adapter {
                 id,
@@ -1046,21 +1067,7 @@ impl Instance {
         &self,
         layer: *mut std::ffi::c_void,
     ) -> Surface {
-        let surface = wgc::instance::Surface {
-            #[cfg(feature = "vulkan-portability")]
-            vulkan: None, //TODO: create_surface_from_layer ?
-            metal: self.context.instance.metal.as_ref().map(|inst| {
-                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
-            }),
-        };
-
-        crate::Surface {
-            id: self.context.surfaces.register_identity(
-                PhantomData,
-                surface,
-                &mut wgc::hub::Token::root(),
-            ),
-        }
+        self.context.create_surface_from_core_animation_layer(layer)
     }
 }
 
@@ -1122,8 +1129,7 @@ impl Adapter {
     /// Get info about the adapter itself.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_info(&self) -> AdapterInfo {
-        let context = &self.context;
-        wgc::gfx_select!(self.id => context.adapter_get_info(self.id))
+        self.context.adapter_get_info(self.id)
     }
 }
 
@@ -1248,7 +1254,8 @@ impl Device {
             mapped_at_creation: true,
         });
 
-        let range = Context::buffer_get_mapped_range_mut(&*self.context, &buffer.id, 0..padded_size);
+        let range =
+            Context::buffer_get_mapped_range_mut(&*self.context, &buffer.id, 0..padded_size);
         range[0..unpadded_size as usize].copy_from_slice(&data);
         for i in unpadded_size..padded_size {
             range[i as usize] = 0;
@@ -1352,12 +1359,14 @@ fn range_to_offset_size<S: RangeBounds<BufferAddress>>(
 }
 
 /// Read only view into a mapped buffer.
+#[derive(Debug)]
 pub struct BufferView<'a> {
     slice: BufferSlice<'a>,
     data: &'a [u8],
 }
 
 /// Write only view into mapped buffer.
+#[derive(Debug)]
 pub struct BufferViewMut<'a> {
     slice: BufferSlice<'a>,
     data: &'a mut [u8],

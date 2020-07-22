@@ -9,26 +9,52 @@ use crate::{
 use arrayvec::ArrayVec;
 use futures::future::{ready, Ready};
 use smallvec::SmallVec;
-use std::{ffi::CString, marker::PhantomData, ops::Range, ptr, slice};
+use std::{ffi::CString, fmt, marker::PhantomData, ops::Range, ptr, slice};
 use typed_arena::Arena;
 
-macro_rules! gfx_select {
-    ($id:expr => $global:ident.$method:ident( $($param:expr),+ )) => {
-        match $id.backend() {
-            #[cfg(any(not(any(target_os = "ios", target_os = "macos")), feature = "vulkan-portability"))]
-            wgt::Backend::Vulkan => $global.$method::<wgc::backend::Vulkan>( $($param),+ ),
-            #[cfg(any(target_os = "ios", target_os = "macos"))]
-            wgt::Backend::Metal => $global.$method::<wgc::backend::Metal>( $($param),+ ),
-            #[cfg(windows)]
-            wgt::Backend::Dx12 => $global.$method::<wgc::backend::Dx12>( $($param),+ ),
-            #[cfg(windows)]
-            wgt::Backend::Dx11 => $global.$method::<wgc::backend::Dx11>( $($param),+ ),
-            _ => unreachable!()
+pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
+
+impl Context {
+    pub fn adapter_get_info(&self, id: wgc::id::AdapterId) -> wgc::instance::AdapterInfo {
+        let global = &self.0;
+        wgc::gfx_select!(id => global.adapter_get_info(id))
+    }
+
+    pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> Vec<wgc::id::AdapterId> {
+        self.0
+            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
+                PhantomData
+            }))
+    }
+
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub unsafe fn create_surface_from_core_animation_layer(
+        &self,
+        layer: *mut std::ffi::c_void,
+    ) -> crate::Surface {
+        let surface = wgc::instance::Surface {
+            #[cfg(feature = "vulkan-portability")]
+            vulkan: None, //TODO: create_surface_from_layer ?
+            metal: self.0.instance.metal.as_ref().map(|inst| {
+                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
+            }),
+        };
+
+        crate::Surface {
+            id: self.0.surfaces.register_identity(
+                PhantomData,
+                surface,
+                &mut wgc::hub::Token::root(),
+            ),
         }
-    };
+    }
 }
 
-pub type Context = wgc::hub::Global<wgc::hub::IdentityManagerFactory>;
+impl fmt::Debug for Context {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Context").field("type", &"Native").finish()
+    }
+}
 
 mod pass_impl {
     use super::Context;
@@ -485,21 +511,25 @@ impl crate::Context for Context {
     type MapAsyncFuture = native_gpu_future::GpuFuture<Result<(), crate::BufferAsyncError>>;
 
     fn init(backends: wgt::BackendBit) -> Self {
-        wgc::hub::Global::new("wgpu", wgc::hub::IdentityManagerFactory, backends)
+        Self(wgc::hub::Global::new(
+            "wgpu",
+            wgc::hub::IdentityManagerFactory,
+            backends,
+        ))
     }
 
     fn instance_create_surface(
         &self,
         handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Self::SurfaceId {
-        self.instance_create_surface(handle, PhantomData)
+        self.0.instance_create_surface(handle, PhantomData)
     }
 
     fn instance_request_adapter(
         &self,
         options: &crate::RequestAdapterOptions,
     ) -> Self::RequestAdapterFuture {
-        let id = self.pick_adapter(
+        let id = self.0.pick_adapter(
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
@@ -515,24 +545,29 @@ impl crate::Context for Context {
         desc: &crate::DeviceDescriptor,
         trace_dir: Option<&std::path::Path>,
     ) -> Self::RequestDeviceFuture {
-        let device_id = gfx_select!(*adapter => self.adapter_request_device(*adapter, desc, trace_dir, PhantomData)).unwrap();
+        let global = &self.0;
+        let device_id = wgc::gfx_select!(*adapter => global.adapter_request_device(*adapter, desc, trace_dir, PhantomData)).unwrap();
         ready(Ok((device_id, device_id)))
     }
 
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features {
-        gfx_select!(*adapter => self.adapter_features(*adapter))
+        let global = &self.0;
+        wgc::gfx_select!(*adapter => global.adapter_features(*adapter))
     }
 
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits {
-        gfx_select!(*adapter => self.adapter_limits(*adapter))
+        let global = &self.0;
+        wgc::gfx_select!(*adapter => global.adapter_limits(*adapter))
     }
 
     fn device_features(&self, device: &Self::DeviceId) -> Features {
-        gfx_select!(*device => self.device_features(*device))
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_features(*device))
     }
 
     fn device_limits(&self, device: &Self::DeviceId) -> Limits {
-        gfx_select!(*device => self.device_limits(*device))
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_limits(*device))
     }
 
     fn device_create_swap_chain(
@@ -541,7 +576,8 @@ impl crate::Context for Context {
         surface: &Self::SurfaceId,
         desc: &wgt::SwapChainDescriptor,
     ) -> Self::SwapChainId {
-        gfx_select!(*device => self.device_create_swap_chain(*device, *surface, desc))
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_swap_chain(*device, *surface, desc))
     }
 
     fn device_create_shader_module(
@@ -553,7 +589,8 @@ impl crate::Context for Context {
             ShaderModuleSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(spv),
             ShaderModuleSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
         };
-        gfx_select!(*device => self.device_create_shader_module(*device, desc, PhantomData))
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_shader_module(*device, desc, PhantomData))
     }
 
     fn device_create_bind_group_layout(
@@ -561,7 +598,8 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &BindGroupLayoutDescriptor,
     ) -> Self::BindGroupLayoutId {
-        gfx_select!(*device => self.device_create_bind_group_layout(
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_bind_group_layout(
             *device,
             desc,
             PhantomData
@@ -607,7 +645,8 @@ impl crate::Context for Context {
             })
             .collect::<Vec<_>>();
 
-        gfx_select!(*device => self.device_create_bind_group(
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_bind_group(
             *device,
             &bm::BindGroupDescriptor {
                 label: desc.label,
@@ -641,7 +680,8 @@ impl crate::Context for Context {
             .map(|bgl| bgl.id)
             .collect::<ArrayVec<[_; wgc::MAX_BIND_GROUPS]>>();
 
-        gfx_select!(*device => self.device_create_pipeline_layout(
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_pipeline_layout(
             *device,
             &wgt::PipelineLayoutDescriptor {
                 bind_group_layouts: &temp_layouts,
@@ -672,7 +712,8 @@ impl crate::Context for Context {
                     entry_point: fs.entry_point,
                 });
 
-        gfx_select!(*device => self.device_create_render_pipeline(
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_render_pipeline(
             *device,
             &pipe::RenderPipelineDescriptor {
                 layout: desc.layout.id,
@@ -699,7 +740,8 @@ impl crate::Context for Context {
     ) -> Self::ComputePipelineId {
         use wgc::pipeline as pipe;
 
-        gfx_select!(*device => self.device_create_compute_pipeline(
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_compute_pipeline(
             *device,
             &pipe::ComputePipelineDescriptor {
                 layout: desc.layout.id,
@@ -719,7 +761,9 @@ impl crate::Context for Context {
         desc: &BufferDescriptor,
     ) -> Self::BufferId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
-        gfx_select!(*device => self.device_create_buffer(
+
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_buffer(
             *device,
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
@@ -733,7 +777,9 @@ impl crate::Context for Context {
         desc: &TextureDescriptor,
     ) -> Self::TextureId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
-        gfx_select!(*device => self.device_create_texture(
+
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_texture(
             *device,
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
@@ -747,7 +793,9 @@ impl crate::Context for Context {
         desc: &SamplerDescriptor,
     ) -> Self::SamplerId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
-        gfx_select!(*device => self.device_create_sampler(
+
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_sampler(
             *device,
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
@@ -760,7 +808,9 @@ impl crate::Context for Context {
         desc: &CommandEncoderDescriptor,
     ) -> Self::CommandEncoderId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
-        gfx_select!(*device => self.device_create_command_encoder(
+
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_create_command_encoder(
             *device,
             &wgt::CommandEncoderDescriptor {
                 label: owned_label.as_ptr(),
@@ -779,15 +829,22 @@ impl crate::Context for Context {
 
     fn device_drop(&self, device: &Self::DeviceId) {
         #[cfg(not(target_arch = "wasm32"))]
-        gfx_select!(*device => self.device_poll(*device, true)).unwrap();
+        {
+            let global = &self.0;
+            wgc::gfx_select!(*device => global.device_poll(*device, true)).unwrap();
+        }
         //TODO: make this work in general
         #[cfg(not(target_arch = "wasm32"))]
         #[cfg(feature = "metal-auto-capture")]
-        gfx_select!(*device => self.device_destroy(*device));
+        {
+            let global = &self.0;
+            wgc::gfx_select!(*device => global.device_destroy(*device));
+        }
     }
 
     fn device_poll(&self, device: &Self::DeviceId, maintain: crate::Maintain) {
-        gfx_select!(*device => self.device_poll(
+        let global = &self.0;
+        wgc::gfx_select!(*device => global.device_poll(
             *device,
             match maintain {
                 crate::Maintain::Poll => false,
@@ -827,7 +884,9 @@ impl crate::Context for Context {
             callback: buffer_map_future_wrapper,
             user_data: completion.to_raw() as _,
         };
-        gfx_select!(*buffer => self.buffer_map_async(*buffer, range, operation)).unwrap();
+
+        let global = &self.0;
+        wgc::gfx_select!(*buffer => global.buffer_map_async(*buffer, range, operation)).unwrap();
 
         future
     }
@@ -838,7 +897,8 @@ impl crate::Context for Context {
         sub_range: Range<wgt::BufferAddress>,
     ) -> &[u8] {
         let size = sub_range.end - sub_range.start;
-        let ptr = gfx_select!(*buffer => self.buffer_get_mapped_range(
+        let global = &self.0;
+        let ptr = wgc::gfx_select!(*buffer => global.buffer_get_mapped_range(
             *buffer,
             sub_range.start,
             wgt::BufferSize::new(size)
@@ -853,7 +913,8 @@ impl crate::Context for Context {
         sub_range: Range<wgt::BufferAddress>,
     ) -> &mut [u8] {
         let size = sub_range.end - sub_range.start;
-        let ptr = gfx_select!(*buffer => self.buffer_get_mapped_range(
+        let global = &self.0;
+        let ptr = wgc::gfx_select!(*buffer => global.buffer_get_mapped_range(
             *buffer,
             sub_range.start,
             wgt::BufferSize::new(size)
@@ -863,7 +924,8 @@ impl crate::Context for Context {
     }
 
     fn buffer_unmap(&self, buffer: &Self::BufferId) {
-        gfx_select!(*buffer => self.buffer_unmap(*buffer)).unwrap();
+        let global = &self.0;
+        wgc::gfx_select!(*buffer => global.buffer_unmap(*buffer)).unwrap();
     }
 
     fn swap_chain_get_current_texture_view(
@@ -874,8 +936,9 @@ impl crate::Context for Context {
         SwapChainStatus,
         Self::SwapChainOutputDetail,
     ) {
+        let global = &self.0;
         let wgc::swap_chain::SwapChainOutput { status, view_id } =
-            gfx_select!(*swap_chain => self.swap_chain_get_current_texture_view(*swap_chain, PhantomData)).unwrap();
+            wgc::gfx_select!(*swap_chain => global.swap_chain_get_current_texture_view(*swap_chain, PhantomData)).unwrap();
 
         (
             view_id,
@@ -887,7 +950,8 @@ impl crate::Context for Context {
     }
 
     fn swap_chain_present(&self, view: &Self::TextureViewId, detail: &Self::SwapChainOutputDetail) {
-        gfx_select!(*view => self.swap_chain_present(detail.swap_chain_id)).unwrap();
+        let global = &self.0;
+        wgc::gfx_select!(*view => global.swap_chain_present(detail.swap_chain_id)).unwrap();
     }
 
     fn texture_create_view(
@@ -897,44 +961,57 @@ impl crate::Context for Context {
     ) -> Self::TextureViewId {
         let owned_label = OwnedLabel::new(desc.and_then(|d| d.label.as_deref()));
         let descriptor = desc.map(|d| d.map_label(|_| owned_label.as_ptr()));
-        gfx_select!(*texture => self.texture_create_view(*texture, descriptor.as_ref(), PhantomData))
+        let global = &self.0;
+        wgc::gfx_select!(*texture => global.texture_create_view(*texture, descriptor.as_ref(), PhantomData))
     }
 
     fn texture_drop(&self, texture: &Self::TextureId) {
-        gfx_select!(*texture => self.texture_destroy(*texture))
+        let global = &self.0;
+        wgc::gfx_select!(*texture => global.texture_destroy(*texture))
     }
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
-        gfx_select!(*texture_view => self.texture_view_destroy(*texture_view))
+        let global = &self.0;
+        wgc::gfx_select!(*texture_view => global.texture_view_destroy(*texture_view))
     }
     fn sampler_drop(&self, sampler: &Self::SamplerId) {
-        gfx_select!(*sampler => self.sampler_destroy(*sampler))
+        let global = &self.0;
+        wgc::gfx_select!(*sampler => global.sampler_destroy(*sampler))
     }
     fn buffer_drop(&self, buffer: &Self::BufferId) {
-        gfx_select!(*buffer => self.buffer_destroy(*buffer))
+        let global = &self.0;
+        wgc::gfx_select!(*buffer => global.buffer_destroy(*buffer))
     }
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId) {
-        gfx_select!(*bind_group => self.bind_group_destroy(*bind_group))
+        let global = &self.0;
+        wgc::gfx_select!(*bind_group => global.bind_group_destroy(*bind_group))
     }
     fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId) {
-        gfx_select!(*bind_group_layout => self.bind_group_layout_destroy(*bind_group_layout))
+        let global = &self.0;
+        wgc::gfx_select!(*bind_group_layout => global.bind_group_layout_destroy(*bind_group_layout))
     }
     fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId) {
-        gfx_select!(*pipeline_layout => self.pipeline_layout_destroy(*pipeline_layout))
+        let global = &self.0;
+        wgc::gfx_select!(*pipeline_layout => global.pipeline_layout_destroy(*pipeline_layout))
     }
     fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId) {
-        gfx_select!(*shader_module => self.shader_module_destroy(*shader_module))
+        let global = &self.0;
+        wgc::gfx_select!(*shader_module => global.shader_module_destroy(*shader_module))
     }
     fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId) {
-        gfx_select!(*command_buffer => self.command_buffer_destroy(*command_buffer))
+        let global = &self.0;
+        wgc::gfx_select!(*command_buffer => global.command_buffer_destroy(*command_buffer))
     }
     fn render_bundle_drop(&self, render_bundle: &Self::RenderBundleId) {
-        gfx_select!(*render_bundle => self.render_bundle_destroy(*render_bundle))
+        let global = &self.0;
+        wgc::gfx_select!(*render_bundle => global.render_bundle_destroy(*render_bundle))
     }
     fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId) {
-        gfx_select!(*pipeline => self.compute_pipeline_destroy(*pipeline))
+        let global = &self.0;
+        wgc::gfx_select!(*pipeline => global.compute_pipeline_destroy(*pipeline))
     }
     fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId) {
-        gfx_select!(*pipeline => self.render_pipeline_destroy(*pipeline))
+        let global = &self.0;
+        wgc::gfx_select!(*pipeline => global.render_pipeline_destroy(*pipeline))
     }
 
     fn command_encoder_copy_buffer_to_buffer(
@@ -946,7 +1023,8 @@ impl crate::Context for Context {
         destination_offset: wgt::BufferAddress,
         copy_size: wgt::BufferAddress,
     ) {
-        gfx_select!(*encoder => self.command_encoder_copy_buffer_to_buffer(
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_copy_buffer_to_buffer(
             *encoder,
             *source,
             source_offset,
@@ -964,7 +1042,8 @@ impl crate::Context for Context {
         destination: crate::TextureCopyView,
         copy_size: wgt::Extent3d,
     ) {
-        gfx_select!(*encoder => self.command_encoder_copy_buffer_to_texture(
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_copy_buffer_to_texture(
             *encoder,
             &map_buffer_copy_view(source),
             &map_texture_copy_view(destination),
@@ -980,7 +1059,8 @@ impl crate::Context for Context {
         destination: crate::BufferCopyView,
         copy_size: wgt::Extent3d,
     ) {
-        gfx_select!(*encoder => self.command_encoder_copy_texture_to_buffer(
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_copy_texture_to_buffer(
             *encoder,
             &map_texture_copy_view(source),
             &map_buffer_copy_view(destination),
@@ -996,7 +1076,8 @@ impl crate::Context for Context {
         destination: crate::TextureCopyView,
         copy_size: wgt::Extent3d,
     ) {
-        gfx_select!(*encoder => self.command_encoder_copy_texture_to_texture(
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_copy_texture_to_texture(
             *encoder,
             &map_texture_copy_view(source),
             &map_texture_copy_view(destination),
@@ -1017,7 +1098,9 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::ComputePassId,
     ) {
-        gfx_select!(*encoder => self.command_encoder_run_compute_pass(*encoder, pass)).unwrap()
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_run_compute_pass(*encoder, pass))
+            .unwrap()
     }
 
     fn command_encoder_begin_render_pass<'a>(
@@ -1058,12 +1141,15 @@ impl crate::Context for Context {
         encoder: &Self::CommandEncoderId,
         pass: &mut Self::RenderPassId,
     ) {
-        gfx_select!(*encoder => self.command_encoder_run_render_pass(*encoder, pass)).unwrap()
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_run_render_pass(*encoder, pass))
+            .unwrap()
     }
 
     fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId {
         let desc = wgt::CommandBufferDescriptor::default();
-        gfx_select!(*encoder => self.command_encoder_finish(*encoder, &desc)).unwrap()
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_finish(*encoder, &desc)).unwrap()
     }
 
     fn render_bundle_encoder_finish(
@@ -1072,7 +1158,8 @@ impl crate::Context for Context {
         desc: &crate::RenderBundleDescriptor,
     ) -> Self::RenderBundleId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
-        gfx_select!(encoder.parent() => self.render_bundle_encoder_finish(
+        let global = &self.0;
+        wgc::gfx_select!(encoder.parent() => global.render_bundle_encoder_finish(
             encoder,
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
@@ -1087,7 +1174,8 @@ impl crate::Context for Context {
         offset: wgt::BufferAddress,
         data: &[u8],
     ) {
-        gfx_select!(*queue => self.queue_write_buffer(*queue, *buffer, offset, data))
+        let global = &self.0;
+        wgc::gfx_select!(*queue => global.queue_write_buffer(*queue, *buffer, offset, data))
     }
 
     fn queue_write_texture(
@@ -1098,7 +1186,8 @@ impl crate::Context for Context {
         data_layout: wgt::TextureDataLayout,
         size: wgt::Extent3d,
     ) {
-        gfx_select!(*queue => self.queue_write_texture(
+        let global = &self.0;
+        wgc::gfx_select!(*queue => global.queue_write_texture(
             *queue,
             &map_texture_copy_view(texture),
             data,
@@ -1114,7 +1203,8 @@ impl crate::Context for Context {
     ) {
         let temp_command_buffers = command_buffers.collect::<SmallVec<[_; 4]>>();
 
-        gfx_select!(*queue => self.queue_submit(*queue, &temp_command_buffers)).unwrap()
+        let global = &self.0;
+        wgc::gfx_select!(*queue => global.queue_submit(*queue, &temp_command_buffers)).unwrap()
     }
 }
 
