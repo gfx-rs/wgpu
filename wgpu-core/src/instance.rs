@@ -128,6 +128,10 @@ impl<B: hal::Backend> Adapter<B> {
             | wgt::Features::MAPPABLE_PRIMARY_BUFFERS
             | wgt::Features::PUSH_CONSTANTS;
         features.set(
+            wgt::Features::DEPTH_CLAMPING,
+            adapter_features.contains(hal::Features::DEPTH_CLAMP),
+        );
+        features.set(
             wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
             adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
         );

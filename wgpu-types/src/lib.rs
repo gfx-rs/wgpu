@@ -131,6 +131,18 @@ bitflags::bitflags! {
     #[cfg_attr(feature = "trace", derive(Serialize))]
     #[cfg_attr(feature = "replay", derive(Deserialize))]
     pub struct Features: u64 {
+        /// By default, polygon depth is clipped to 0-1 range. Anything outside of that range
+        /// is rejected, and respective fragments are not touched.
+        ///
+        /// With this extension, we can force clamping of the polygon depth to 0-1. That allows
+        /// shadow map occluders to be rendered into a tighter depth range.
+        ///
+        /// Supported platforms:
+        /// - desktops
+        /// - some mobile chips
+        ///
+        /// This is a web and native feature.
+        const DEPTH_CLAMPING = 0x0000_0000_0000_0001;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
@@ -543,6 +555,10 @@ impl Default for CullMode {
 pub struct RasterizationStateDescriptor {
     pub front_face: FrontFace,
     pub cull_mode: CullMode,
+    /// If enabled polygon depth is clamped to 0-1 range instead of being clipped.
+    ///
+    /// Requires `Features::DEPTH_CLAMPING` enabled.
+    pub clamp_depth: bool,
     pub depth_bias: i32,
     pub depth_bias_slope_scale: f32,
     pub depth_bias_clamp: f32,
