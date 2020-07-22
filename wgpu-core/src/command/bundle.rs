@@ -505,7 +505,7 @@ impl State {
         &mut self,
         index_format: wgt::IndexFormat,
         vertex_strides: &[(wgt::BufferAddress, wgt::InputStepMode)],
-        layout_ids: &[Stored<id::BindGroupLayoutId>],
+        layout_ids: &[id::BindGroupLayoutId],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
         self.index.set_format(index_format);
@@ -528,8 +528,8 @@ impl State {
             self.bind
                 .iter()
                 .zip(layout_ids)
-                .position(|(bs, layout_id)| match bs.bind_group {
-                    Some((_, bgl_id)) => bgl_id != layout_id.value,
+                .position(|(bs, &layout_id)| match bs.bind_group {
+                    Some((_, bgl_id)) => bgl_id != layout_id,
                     None => false,
                 })
         };

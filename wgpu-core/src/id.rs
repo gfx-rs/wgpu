@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{Epoch, Index};
-use std::{fmt, marker::PhantomData, num::NonZeroU64};
+use std::{cmp::Ordering, fmt, marker::PhantomData, num::NonZeroU64};
 use wgt::Backend;
 
 const BACKEND_BITS: usize = 3;
@@ -97,6 +97,18 @@ impl<T> PartialEq for Id<T> {
 }
 
 impl<T> Eq for Id<T> {}
+
+impl<T> PartialOrd for Id<T> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.0.partial_cmp(&other.0)
+    }
+}
+
+impl<T> Ord for Id<T> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.0.cmp(&other.0)
+    }
+}
 
 pub trait TypedId {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;
