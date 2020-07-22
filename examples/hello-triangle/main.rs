@@ -1,3 +1,4 @@
+use std::borrow::Cow::Borrowed;
 use winit::{
     event::{Event, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
@@ -35,33 +36,33 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        bind_group_layouts: &[],
-        push_constant_ranges: &[],
+        bind_group_layouts: Borrowed(&[]),
+        push_constant_ranges: Borrowed(&[]),
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
         layout: &pipeline_layout,
         vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vs_module,
-            entry_point: "main",
+            entry_point: Borrowed("main"),
         },
         fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
             module: &fs_module,
-            entry_point: "main",
+            entry_point: Borrowed("main"),
         }),
         // Use the default rasterizer state: no culling, no depth bias
         rasterization_state: None,
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        color_states: &[wgpu::ColorStateDescriptor {
+        color_states: Borrowed(&[wgpu::ColorStateDescriptor {
             format: swapchain_format,
             color_blend: wgpu::BlendDescriptor::REPLACE,
             alpha_blend: wgpu::BlendDescriptor::REPLACE,
             write_mask: wgpu::ColorWrite::ALL,
-        }],
+        }]),
         depth_stencil_state: None,
         vertex_state: wgpu::VertexStateDescriptor {
             index_format: wgpu::IndexFormat::Uint16,
-            vertex_buffers: &[],
+            vertex_buffers: Borrowed(&[]),
         },
         sample_count: 1,
         sample_mask: !0,
@@ -110,14 +111,14 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
                     device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
                 {
                     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                        color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+                        color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
                             attachment: &frame.view,
                             resolve_target: None,
                             ops: wgpu::Operations {
                                 load: wgpu::LoadOp::Clear(wgpu::Color::GREEN),
                                 store: true,
                             },
-                        }],
+                        }]),
                         depth_stencil_attachment: None,
                     });
                     rpass.set_pipeline(&render_pipeline);

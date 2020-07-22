@@ -9,7 +9,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use futures::future::{ready, Ready};
 use smallvec::SmallVec;
-use std::{ffi::CString, fmt, marker::PhantomData, ops::Range, ptr, slice};
+use std::{borrow::Cow::Borrowed, ffi::CString, fmt, marker::PhantomData, ops::Range, ptr, slice};
 use typed_arena::Arena;
 
 pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
@@ -636,10 +636,10 @@ impl crate::Context for Context {
                         bm::BindingResource::TextureView(texture_view.id)
                     }
                     BindingResource::TextureViewArray(texture_view_array) => {
-                        bm::BindingResource::TextureViewArray(
+                        bm::BindingResource::TextureViewArray(Borrowed(
                             texture_view_arena
                                 .alloc_extend(texture_view_array.iter().map(|view| view.id)),
-                        )
+                        ))
                     }
                 },
             })
@@ -649,9 +649,9 @@ impl crate::Context for Context {
         wgc::gfx_select!(*device => global.device_create_bind_group(
             *device,
             &bm::BindGroupDescriptor {
-                label: desc.label,
+                label: desc.label.as_ref().map(|label| Borrowed(&label[..])),
                 layout: desc.layout.id,
-                entries: &entries,
+                entries: Borrowed(&entries),
             },
             PhantomData
         ))
@@ -684,8 +684,8 @@ impl crate::Context for Context {
         wgc::gfx_select!(*device => global.device_create_pipeline_layout(
             *device,
             &wgt::PipelineLayoutDescriptor {
-                bind_group_layouts: &temp_layouts,
-                push_constant_ranges: &desc.push_constant_ranges,
+                bind_group_layouts: Borrowed(&temp_layouts),
+                push_constant_ranges: Borrowed(&desc.push_constant_ranges),
             },
             PhantomData
         ))
@@ -702,15 +702,19 @@ impl crate::Context for Context {
 
         let vertex_stage = pipe::ProgrammableStageDescriptor {
             module: desc.vertex_stage.module.id,
-            entry_point: desc.vertex_stage.entry_point,
+            entry_point: Borrowed(&desc.vertex_stage.entry_point),
         };
         let fragment_stage =
             desc.fragment_stage
                 .as_ref()
                 .map(|fs| pipe::ProgrammableStageDescriptor {
                     module: fs.module.id,
-                    entry_point: fs.entry_point,
+                    entry_point: Borrowed(&fs.entry_point),
                 });
+        let vertex_state = wgt::VertexStateDescriptor {
+            index_format: desc.vertex_state.index_format,
+            vertex_buffers: Borrowed(&desc.vertex_state.vertex_buffers),
+        };
 
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_render_pipeline(
@@ -721,9 +725,9 @@ impl crate::Context for Context {
                 fragment_stage,
                 rasterization_state: desc.rasterization_state.clone(),
                 primitive_topology: desc.primitive_topology,
-                color_states: desc.color_states,
+                color_states: Borrowed(&desc.color_states),
                 depth_stencil_state: desc.depth_stencil_state.clone(),
-                vertex_state: desc.vertex_state,
+                vertex_state: vertex_state,
                 sample_count: desc.sample_count,
                 sample_mask: desc.sample_mask,
                 alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
@@ -747,7 +751,7 @@ impl crate::Context for Context {
                 layout: desc.layout.id,
                 compute_stage: pipe::ProgrammableStageDescriptor {
                     module: desc.compute_stage.module.id,
-                    entry_point: desc.compute_stage.entry_point,
+                    entry_point: Borrowed(&desc.compute_stage.entry_point),
                 },
             },
             PhantomData
@@ -1130,7 +1134,7 @@ impl crate::Context for Context {
         wgc::command::RenderPass::new(
             *encoder,
             wgc::command::RenderPassDescriptor {
-                color_attachments: &colors,
+                color_attachments: Borrowed(&colors),
                 depth_stencil_attachment: depth_stencil.as_ref(),
             },
         )

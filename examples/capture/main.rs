@@ -4,7 +4,7 @@ use std::env;
 /// the added benefit that this method doesn't require a window to be created.
 use std::fs::File;
 use std::io::Write;
-use std::mem::size_of;
+use std::{borrow::Cow::Borrowed, mem::size_of};
 use wgpu::{Buffer, Device};
 
 async fn run(png_output_path: &str) {
@@ -83,14 +83,14 @@ async fn create_red_image_with_dimensions(
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
+            color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &texture.create_default_view(),
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::RED),
                     store: true,
                 },
-            }],
+            }]),
             depth_stencil_attachment: None,
         });
 
