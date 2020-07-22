@@ -54,6 +54,7 @@ use arrayvec::ArrayVec;
 use std::{borrow::Borrow, iter, marker::PhantomData, ops::Range};
 use thiserror::Error;
 
+#[derive(Debug)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
 pub struct RenderBundleEncoder {
     base: BasePass<RenderCommand>,
