@@ -1036,6 +1036,11 @@ impl Instance {
         }
     }
 
+    /// Creates a surface from `CoreAnimationLayer`.
+    ///
+    /// # Safety
+    ///
+    /// - layer must be a valid object to create a surface upon.
     #[cfg(any(target_os = "ios", target_os = "macos"))]
     pub unsafe fn create_surface_from_core_animation_layer(
         &self,
@@ -1043,9 +1048,7 @@ impl Instance {
     ) -> Surface {
         let surface = wgc::instance::Surface {
             #[cfg(feature = "vulkan-portability")]
-            vulkan: self.context.instance.vulkan.as_ref().map(|inst| {
-                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
-            }),
+            vulkan: None, //TODO: create_surface_from_layer ?
             metal: self.context.instance.metal.as_ref().map(|inst| {
                 inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
             }),
