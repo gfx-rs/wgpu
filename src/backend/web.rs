@@ -7,6 +7,7 @@ use crate::{
 
 use futures::FutureExt;
 use std::{
+    fmt,
     future::Future,
     marker::PhantomData,
     ops::Range,
@@ -23,14 +24,26 @@ use wasm_bindgen::prelude::*;
 // type is (for now) harmless.  Eventually wasm32 will support threading, and depending on how this
 // is integrated (or not integrated) with values like those in webgpu, this may become unsound.
 
-#[derive(Debug, Clone)]
+//forse run from integration system
+
+#[derive(Clone, Debug)]
 pub(crate) struct Sendable<T>(T);
 unsafe impl<T> Send for Sendable<T> {}
 unsafe impl<T> Sync for Sendable<T> {}
 
-pub(crate) type Context = Sendable<web_sys::Gpu>;
+pub(crate) struct Context(web_sys::Gpu);
+unsafe impl Send for Context {}
+unsafe impl Sync for Context {}
 
+impl fmt::Debug for Context {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Context").field("type", &"Web").finish()
+    }
+}
+
+#[derive(Debug)]
 pub(crate) struct ComputePass(web_sys::GpuComputePassEncoder);
+#[derive(Debug)]
 pub(crate) struct RenderPass(web_sys::GpuRenderPassEncoder);
 
 // We need to assert that any future we return is Send to match the native API.
@@ -700,7 +713,7 @@ impl crate::Context for Context {
     type MapAsyncFuture = MakeSendFuture<MapFuture<()>>;
 
     fn init(_backends: wgt::BackendBit) -> Self {
-        Sendable(web_sys::window().unwrap().navigator().gpu())
+        Context(web_sys::window().unwrap().navigator().gpu())
     }
 
     fn instance_create_surface(
