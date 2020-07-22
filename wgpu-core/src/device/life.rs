@@ -32,7 +32,7 @@ pub struct SuspectedResources {
     pub(crate) bind_groups: Vec<id::BindGroupId>,
     pub(crate) compute_pipelines: Vec<id::ComputePipelineId>,
     pub(crate) render_pipelines: Vec<id::RenderPipelineId>,
-    pub(crate) bind_group_layouts: Vec<Stored<id::BindGroupLayoutId>>,
+    pub(crate) bind_group_layouts: Vec<id::BindGroupLayoutId>,
     pub(crate) pipeline_layouts: Vec<Stored<id::PipelineLayoutId>>,
     pub(crate) render_bundles: Vec<id::RenderBundleId>,
 }
@@ -524,27 +524,9 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             }
         }
 
-        if !self.suspected_resources.bind_group_layouts.is_empty() {
-            let (mut guard, _) = hub.bind_group_layouts.write(token);
-
-            for Stored {
-                value: id,
-                ref_count,
-            } in self.suspected_resources.bind_group_layouts.drain(..)
-            {
-                //Note: this has to happen after all the suspected pipelines are destroyed
-                if ref_count.load() == 1 {
-                    #[cfg(feature = "trace")]
-                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id)));
-                    hub.bind_group_layouts.free_id(id);
-                    let layout = guard.remove(id).unwrap();
-                    self.free_resources.descriptor_set_layouts.push(layout.raw);
-                }
-            }
-        }
-
         if !self.suspected_resources.pipeline_layouts.is_empty() {
-            let (mut guard, _) = hub.pipeline_layouts.write(token);
+            let (mut guard, mut token) = hub.pipeline_layouts.write(token);
+            let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
 
             for Stored {
                 value: id,
@@ -557,7 +539,28 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyPipelineLayout(id)));
                     hub.pipeline_layouts.free_id(id);
                     let layout = guard.remove(id).unwrap();
+                    for &bgl_id in layout.bind_group_layout_ids.iter() {
+                        bgl_guard[bgl_id].multi_ref_count.dec();
+                    }
                     self.free_resources.pipeline_layouts.push(layout.raw);
+                }
+            }
+        }
+
+        if !self.suspected_resources.bind_group_layouts.is_empty() {
+            self.suspected_resources.bind_group_layouts.sort();
+            self.suspected_resources.bind_group_layouts.dedup();
+            let (mut guard, _) = hub.bind_group_layouts.write(token);
+
+            for id in self.suspected_resources.bind_group_layouts.drain(..) {
+                //Note: this has to happen after all the suspected pipelines are destroyed
+                //Note: nothing else can bump the refcount since the guard is locked exclusively
+                if guard[id].multi_ref_count.is_empty() {
+                    #[cfg(feature = "trace")]
+                    trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id)));
+                    hub.bind_group_layouts.free_id(id);
+                    let layout = guard.remove(id).unwrap();
+                    self.free_resources.descriptor_set_layouts.push(layout.raw);
                 }
             }
         }

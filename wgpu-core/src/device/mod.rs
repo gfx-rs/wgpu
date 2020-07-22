@@ -1193,11 +1193,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
 
         // If there is an equivalent BGL, just bump the refcount and return it.
+        // Warning: this isn't valid logic when `id_in` is provided.
         {
             let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
             let bind_group_layout_id = bgl_guard
                 .iter(device_id.backend())
-                .find(|(_, bgl)| bgl.entries == entry_map);
+                .find(|(_, bgl)| bgl.device_id.value == device_id && bgl.entries == entry_map);
 
             if let Some((id, value)) = bind_group_layout_id {
                 value.multi_ref_count.inc();
@@ -1308,13 +1309,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (device_id, ref_count) = {
+        let device_id = {
             let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
             let layout = &bind_group_layout_guard[bind_group_layout_id];
-            match layout.multi_ref_count.dec() {
-                Some(last) => (layout.device_id.value, last),
-                None => return,
-            }
+            layout.multi_ref_count.dec();
+            layout.device_id.value
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
@@ -1322,10 +1321,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .lock_life(&mut token)
             .suspected_resources
             .bind_group_layouts
-            .push(Stored {
-                value: bind_group_layout_id,
-                ref_count,
-            });
+            .push(bind_group_layout_id);
     }
 
     pub fn device_create_pipeline_layout<B: GfxBackend>(
@@ -1428,9 +1424,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
                 desc.bind_group_layouts
                     .iter()
-                    .map(|&id| Stored {
-                        value: id,
-                        ref_count: bind_group_layout_guard[id].multi_ref_count.add_ref(),
+                    .map(|&id| {
+                        bind_group_layout_guard[id].multi_ref_count.inc();
+                        id
                     })
                     .collect()
             },
@@ -2217,7 +2213,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let group_layouts = layout
                 .bind_group_layout_ids
                 .iter()
-                .map(|id| &bgl_guard[id.value].entries)
+                .map(|&id| &bgl_guard[id].entries)
                 .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
 
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
@@ -2481,7 +2477,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let group_layouts = layout
                 .bind_group_layout_ids
                 .iter()
-                .map(|id| &bgl_guard[id.value].entries)
+                .map(|&id| &bgl_guard[id].entries)
                 .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
 
             let interface = validation::StageInterface::default();

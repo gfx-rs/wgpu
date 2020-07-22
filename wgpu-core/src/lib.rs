@@ -100,7 +100,7 @@ impl RefCount {
 
 impl Clone for RefCount {
     fn clone(&self) -> Self {
-        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Release);
+        let old_size = unsafe { self.0.as_ref() }.fetch_add(1, Ordering::AcqRel);
         assert!(old_size < Self::MAX);
         RefCount(self.0)
     }
@@ -137,6 +137,7 @@ fn loom() {
 }
 
 /// Reference count object that tracks multiple references.
+/// Unlike `RefCount`, it's manually inc()/dec() called.
 #[derive(Debug)]
 struct MultiRefCount(ptr::NonNull<AtomicUsize>);
 
@@ -146,33 +147,26 @@ unsafe impl Sync for MultiRefCount {}
 impl MultiRefCount {
     fn new() -> Self {
         let bx = Box::new(AtomicUsize::new(1));
-        MultiRefCount(unsafe { ptr::NonNull::new_unchecked(Box::into_raw(bx)) })
+        let ptr = Box::into_raw(bx);
+        MultiRefCount(unsafe { ptr::NonNull::new_unchecked(ptr) })
     }
 
     fn inc(&self) {
-        unsafe { self.0.as_ref() }.fetch_add(1, Ordering::Release);
+        unsafe { self.0.as_ref() }.fetch_add(1, Ordering::AcqRel);
     }
 
-    fn add_ref(&self) -> RefCount {
-        self.inc();
-        RefCount(self.0)
+    fn dec(&self) {
+        unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::AcqRel);
     }
 
-    fn dec(&self) -> Option<RefCount> {
-        match unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::AcqRel) {
-            0 => unreachable!(),
-            1 => Some(self.add_ref()),
-            _ => None,
-        }
+    fn is_empty(&self) -> bool {
+        unsafe { self.0.as_ref() }.load(Ordering::Acquire) == 0
     }
 }
 
 impl Drop for MultiRefCount {
     fn drop(&mut self) {
-        // We don't do anything here. We rely on the fact that
-        // `dec` was called before `MultiRefCount` got dropped,
-        // which spawned `RefCount`, which upon deletion would
-        // destroy the Box.
+        let _ = unsafe { Box::from_raw(self.0.as_ptr()) };
     }
 }
 
