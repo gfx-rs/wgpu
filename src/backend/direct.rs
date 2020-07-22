@@ -12,7 +12,43 @@ use smallvec::SmallVec;
 use std::{ffi::CString, fmt, marker::PhantomData, ops::Range, ptr, slice};
 use typed_arena::Arena;
 
-pub struct Context(pub wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
+pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
+
+impl Context {
+    pub fn adapter_get_info(&self, id: wgc::id::AdapterId) -> wgc::instance::AdapterInfo {
+        let global = &self.0;
+        wgc::gfx_select!(id => global.adapter_get_info(id))
+    }
+
+    pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> Vec<wgc::id::AdapterId> {
+        self.0
+            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
+                PhantomData
+            }))
+    }
+
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    pub unsafe fn create_surface_from_core_animation_layer(
+        &self,
+        layer: *mut std::ffi::c_void,
+    ) -> crate::Surface {
+        let surface = wgc::instance::Surface {
+            #[cfg(feature = "vulkan-portability")]
+            vulkan: None, //TODO: create_surface_from_layer ?
+            metal: self.0.instance.metal.as_ref().map(|inst| {
+                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
+            }),
+        };
+
+        crate::Surface {
+            id: self.0.surfaces.register_identity(
+                PhantomData,
+                surface,
+                &mut wgc::hub::Token::root(),
+            ),
+        }
+    }
+}
 
 impl fmt::Debug for Context {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

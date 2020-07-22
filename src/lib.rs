@@ -1020,10 +1020,7 @@ impl Instance {
     pub fn enumerate_adapters(&self, backends: BackendBit) -> impl Iterator<Item = Adapter> {
         let context = Arc::clone(&self.context);
         self.context
-            .0
-            .enumerate_adapters(wgc::instance::AdapterInputs::Mask(backends, |_| {
-                PhantomData
-            }))
+            .enumerate_adapters(backends)
             .into_iter()
             .map(move |id| crate::Adapter {
                 id,
@@ -1070,21 +1067,7 @@ impl Instance {
         &self,
         layer: *mut std::ffi::c_void,
     ) -> Surface {
-        let surface = wgc::instance::Surface {
-            #[cfg(feature = "vulkan-portability")]
-            vulkan: None, //TODO: create_surface_from_layer ?
-            metal: self.context.0.instance.metal.as_ref().map(|inst| {
-                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
-            }),
-        };
-
-        crate::Surface {
-            id: self.context.0.surfaces.register_identity(
-                PhantomData,
-                surface,
-                &mut wgc::hub::Token::root(),
-            ),
-        }
+        self.context.create_surface_from_core_animation_layer(layer)
     }
 }
 
@@ -1146,8 +1129,7 @@ impl Adapter {
     /// Get info about the adapter itself.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn get_info(&self) -> AdapterInfo {
-        let global = &self.context.0;
-        wgc::gfx_select!(self.id => global.adapter_get_info(self.id))
+        self.context.adapter_get_info(self.id)
     }
 }
 
