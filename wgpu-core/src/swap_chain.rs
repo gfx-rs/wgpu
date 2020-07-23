@@ -41,10 +41,7 @@ use crate::{
     resource, span, LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
 
-use hal::{
-    self, device::Device as _, queue::CommandQueue as _,
-    window::PresentationSurface as _,
-};
+use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
 use thiserror::Error;
 use wgt::{SwapChainDescriptor, SwapChainStatus};
 
@@ -129,12 +126,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(err) => (
                 None,
                 match err {
-                    hal::window::AcquireError::OutOfMemory(_) => return Err(SwapChainError::OutOfMemory),
+                    hal::window::AcquireError::OutOfMemory(_) => {
+                        return Err(SwapChainError::OutOfMemory)
+                    }
                     hal::window::AcquireError::NotReady => unreachable!(), // we always set a timeout
                     hal::window::AcquireError::Timeout => SwapChainStatus::Timeout,
                     hal::window::AcquireError::OutOfDate => SwapChainStatus::Outdated,
                     hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
-                    hal::window::AcquireError::DeviceLost(_) => return Err(SwapChainError::DeviceLost),
+                    hal::window::AcquireError::DeviceLost(_) => {
+                        return Err(SwapChainError::DeviceLost)
+                    }
                 },
             ),
         };

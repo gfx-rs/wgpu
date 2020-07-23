@@ -881,18 +881,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         log::info!("Buffer {:?} is dropped", buffer_id);
-        let device_id = {
+        let (ref_count, device_id) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
-            buffer.life_guard.ref_count.take();
-            buffer.device_id.value
+            let ref_count = buffer.life_guard.ref_count.take().unwrap();
+            (ref_count, buffer.device_id.value)
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
             .future_suspected_buffers
-            .push(buffer_id);
+            .push(Stored {
+                value: buffer_id,
+                ref_count,
+            });
     }
 
     pub fn device_create_texture<B: GfxBackend>(
@@ -936,18 +939,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let device_id = {
+        let (ref_count, device_id) = {
             let (mut texture_guard, _) = hub.textures.write(&mut token);
             let texture = &mut texture_guard[texture_id];
-            texture.life_guard.ref_count.take();
-            texture.device_id.value
+            let ref_count = texture.life_guard.ref_count.take().unwrap();
+            (ref_count, texture.device_id.value)
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
         device_guard[device_id]
             .lock_life(&mut token)
             .future_suspected_textures
-            .push(texture_id);
+            .push(Stored {
+                value: texture_id,
+                ref_count,
+            });
     }
 
     pub fn texture_create_view<B: GfxBackend>(
