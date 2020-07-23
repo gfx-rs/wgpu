@@ -6,8 +6,9 @@ pomelo! {
     //%verbose;
     %include {
         use super::super::{error::ErrorKind, token::*, ast::*};
-        use crate::{Arena, Constant, ConstantInner, Expression, Function, Handle,
-            LocalVariable, ScalarKind, Type, TypeInner, VectorSize};
+        use crate::{Arena, Binding, BuiltIn, Constant, ConstantInner, Expression,
+            Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
+            ShaderStage, StorageClass, Type, TypeInner, VectorSize};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -72,7 +73,31 @@ pomelo! {
     };
 
     // expression
-    variable_identifier ::= Identifier;
+    variable_identifier ::= Identifier(v) {
+        if v.1.as_str() == "gl_Position" &&
+            (extra.shader_stage == ShaderStage::Vertex ||
+            extra.shader_stage == ShaderStage::Fragment) {
+            extra.global_variables.fetch_or_append(
+                GlobalVariable {
+                    name: Some(v.1),
+                    class: match extra.shader_stage {
+                        ShaderStage::Vertex => StorageClass::Output,
+                        ShaderStage::Fragment => StorageClass::Input,
+                        _ => StorageClass::Input,
+                    },
+                    binding: Some(Binding::BuiltIn(BuiltIn::Position)),
+                    ty: extra.types.fetch_or_append(Type {
+                        name: None,
+                        inner: TypeInner::Vector {
+                            size: VectorSize::Quad,
+                            kind: ScalarKind::Float,
+                            width: 4,
+                        },
+                    }),
+                },
+            );
+        }
+    }
 
     primary_expression ::= variable_identifier;
     primary_expression ::= IntConstant(i) {
@@ -237,7 +262,7 @@ pomelo! {
             inner: TypeInner::Vector {
                 size: VectorSize::Quad,
                 kind: ScalarKind::Float,
-                width: 16,
+                width: 4,
             }
         })
     }
