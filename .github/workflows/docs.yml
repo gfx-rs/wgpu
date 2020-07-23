@@ -32,6 +32,7 @@ jobs:
         uses: JamesIves/github-pages-deploy-action@releases/v3
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages
           FOLDER: target/doc
+          REPOSITORY_NAME: gfx-rs/wgpu-rs.github.io
+          BRANCH: master
           TARGET_FOLDER: doc 
