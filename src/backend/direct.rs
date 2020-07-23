@@ -578,6 +578,7 @@ impl crate::Context for Context {
     ) -> Self::SwapChainId {
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_swap_chain(*device, *surface, desc))
+            .unwrap()
     }
 
     fn device_create_shader_module(
@@ -805,6 +806,7 @@ impl crate::Context for Context {
             &desc.map_label(|_| owned_label.as_ptr()),
             PhantomData
         ))
+        .unwrap()
     }
 
     fn device_create_command_encoder(
@@ -967,7 +969,7 @@ impl crate::Context for Context {
         let owned_label = OwnedLabel::new(desc.and_then(|d| d.label.as_deref()));
         let descriptor = desc.map(|d| d.map_label(|_| owned_label.as_ptr()));
         let global = &self.0;
-        wgc::gfx_select!(*texture => global.texture_create_view(*texture, descriptor.as_ref(), PhantomData))
+        wgc::gfx_select!(*texture => global.texture_create_view(*texture, descriptor.as_ref(), PhantomData)).unwrap()
     }
 
     fn texture_drop(&self, texture: &Self::TextureId) {
@@ -976,7 +978,7 @@ impl crate::Context for Context {
     }
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
         let global = &self.0;
-        wgc::gfx_select!(*texture_view => global.texture_view_destroy(*texture_view))
+        wgc::gfx_select!(*texture_view => global.texture_view_destroy(*texture_view)).unwrap()
     }
     fn sampler_drop(&self, sampler: &Self::SamplerId) {
         let global = &self.0;
@@ -984,7 +986,7 @@ impl crate::Context for Context {
     }
     fn buffer_drop(&self, buffer: &Self::BufferId) {
         let global = &self.0;
-        wgc::gfx_select!(*buffer => global.buffer_destroy(*buffer))
+        wgc::gfx_select!(*buffer => global.buffer_destroy(*buffer, false))
     }
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId) {
         let global = &self.0;
