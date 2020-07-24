@@ -251,10 +251,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     // Rebind resources
                     if state.binder.pipeline_layout_id != Some(pipeline.layout_id.value) {
                         let pipeline_layout = &pipeline_layout_guard[pipeline.layout_id.value];
-                        state.binder.pipeline_layout_id = Some(pipeline.layout_id.value);
-                        state
-                            .binder
-                            .reset_expectations(pipeline_layout.bind_group_layout_ids.len());
+
+                        state.binder.change_pipeline_layout(
+                            &*pipeline_layout_guard,
+                            pipeline.layout_id.value,
+                        );
+
                         let mut is_compatible = true;
 
                         for (index, (entry, &bgl_id)) in state
