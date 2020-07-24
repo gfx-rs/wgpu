@@ -75,7 +75,7 @@ bitflags::bitflags! {
     pub struct PipelineFlags: u32 {
         const BLEND_COLOR = 1;
         const STENCIL_REFERENCE = 2;
-        const DEPTH_STENCIL_READ_ONLY = 4;
+        const WRITES_DEPTH_STENCIL = 4;
     }
 }
 

@@ -2403,8 +2403,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if ds.needs_stencil_reference() {
                 flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
             }
-            if ds.is_read_only() {
-                flags |= pipeline::PipelineFlags::DEPTH_STENCIL_READ_ONLY;
+            if !ds.is_read_only() {
+                flags |= pipeline::PipelineFlags::WRITES_DEPTH_STENCIL;
             }
         }
 
