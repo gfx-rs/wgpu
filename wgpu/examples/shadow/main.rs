@@ -350,7 +350,7 @@ impl framework::Example for Example {
 
         // Create other resources
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("shadow"),
+            label: Some(Borrowed("shadow")),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -375,7 +375,7 @@ impl framework::Example for Example {
         let mut shadow_target_views = (0..2)
             .map(|i| {
                 Some(shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-                    label: Some("shadow"),
+                    label: Some(Borrowed("shadow")),
                     format: Self::SHADOW_FORMAT,
                     dimension: wgpu::TextureViewDimension::D2,
                     aspect: wgpu::TextureAspect::All,
