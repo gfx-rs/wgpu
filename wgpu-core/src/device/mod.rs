@@ -593,6 +593,17 @@ impl<B: GfxBackend> Device<B> {
 
         unsafe { self.raw.create_render_pass(all, iter::once(subpass), &[]) }
     }
+
+    fn wait_for_submit(&self, submission_index: SubmissionIndex, token: &mut Token<Self>) -> Result<(), WaitIdleError> {
+        if self.last_completed_submission_index() <= submission_index {
+            log::info!("Waiting for submission {:?}", submission_index);
+            self.lock_life(token)
+                .triage_submissions(&self.raw, true)
+                .map(|_| ())
+        } else {
+            Ok(())
+        }
+    }
 }
 
 impl<B: hal::Backend> Device<B> {
@@ -773,19 +784,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .load(Ordering::Acquire)
         };
 
-        let device = &device_guard[device_id];
-        if device.last_completed_submission_index() <= last_submission {
-            log::info!(
-                "Waiting for submission {:?} before accessing buffer {:?}",
-                last_submission,
-                buffer_id
-            );
-            device
-                .lock_life(&mut token)
-                .triage_submissions(&device.raw, true)?;
-        }
-
-        Ok(())
+        device_guard[device_id]
+            .wait_for_submit(last_submission, &mut token)
     }
 
     pub fn device_set_buffer_sub_data<B: GfxBackend>(
@@ -879,28 +879,46 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok(())
     }
 
-    pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: id::BufferId) {
+    pub fn buffer_destroy<B: GfxBackend>(&self, buffer_id: id::BufferId, now: bool) {
         span!(_guard, INFO, "Buffer::drop");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
         log::info!("Buffer {:?} is dropped", buffer_id);
-        let (ref_count, device_id) = {
+        let (ref_count, last_submit_index, device_id) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
             let ref_count = buffer.life_guard.ref_count.take().unwrap();
-            (ref_count, buffer.device_id.value)
+            let last_submit_index = buffer
+                .life_guard
+                .submission_index
+                .load(Ordering::Acquire);
+            (ref_count, last_submit_index, buffer.device_id.value)
         };
 
         let (device_guard, mut token) = hub.devices.read(&mut token);
-        device_guard[device_id]
-            .lock_life(&mut token)
-            .future_suspected_buffers
-            .push(Stored {
-                value: buffer_id,
-                ref_count,
-            });
+        let device = &device_guard[device_id];
+        if now {
+            drop(ref_count);
+            device
+                .lock_life(&mut token)
+                .suspected_resources
+                .buffers
+                .push(buffer_id);
+            match device.wait_for_submit(last_submit_index, &mut token) {
+                Ok(()) => (),
+                Err(e) => log::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
+            }
+        } else {
+            device
+                .lock_life(&mut token)
+                .future_suspected_buffers
+                .push(Stored {
+                    value: buffer_id,
+                    ref_count,
+                });
+        }
     }
 
     pub fn device_create_texture<B: GfxBackend>(
@@ -1215,8 +1233,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = &device_guard[device_id];
 
         // If there is an equivalent BGL, just bump the refcount and return it.
-        // Warning: this isn't valid logic when `id_in` is provided.
-        {
+        // This is only applicable for identity filters that are generating new IDs,
+        // so their inputs are `PhantomData` of size 0.
+        if mem::size_of::<Input<G, id::BindGroupLayoutId>>() == 0 {
             let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
             let bind_group_layout_id = bgl_guard
                 .iter(device_id.backend())
