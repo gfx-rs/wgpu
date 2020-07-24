@@ -80,14 +80,16 @@ struct Example {
 }
 
 impl framework::Example for Example {
-    fn needed_features() -> wgpu::Features {
+    fn optional_features() -> wgpu::Features {
         wgpu::Features::UNSIZED_BINDING_ARRAY
             | wgpu::Features::SAMPLED_TEXTURE_ARRAY_NON_UNIFORM_INDEXING
             | wgpu::Features::SAMPLED_TEXTURE_ARRAY_DYNAMIC_INDEXING
-            | wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY
             | wgpu::Features::PUSH_CONSTANTS
     }
-    fn needed_limits() -> wgpu::Limits {
+    fn required_features() -> wgpu::Features {
+        wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY
+    }
+    fn required_limits() -> wgpu::Limits {
         wgpu::Limits {
             max_push_constant_size: 4,
             ..wgpu::Limits::default()
@@ -114,11 +116,7 @@ impl framework::Example for Example {
             f if f.contains(wgpu::Features::SAMPLED_TEXTURE_BINDING_ARRAY) => {
                 include_bytes!("constant.frag.spv").to_vec()
             }
-            _ => {
-                panic!(
-                    "Graphics adapter does not support any of the features needed for this example"
-                );
-            }
+            _ => unreachable!(),
         };
         let fs_module = device.create_shader_module(wgpu::util::make_spirv(&fs_bytes));
 
