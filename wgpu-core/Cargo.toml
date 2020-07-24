@@ -52,16 +52,16 @@ version = "0.5"
 features = ["peek-poke"]
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
-gfx-backend-metal = { version = "0.5.6" }
-gfx-backend-vulkan = { version = "0.5.11", optional = true }
+gfx-backend-metal = { version = "0.5" }
+gfx-backend-vulkan = { version = "0.5", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
-gfx-backend-vulkan = { version = "0.5.11", features = ["x11"] }
+gfx-backend-vulkan = { version = "0.5", features = ["x11"] }
 
 [target.'cfg(windows)'.dependencies]
 gfx-backend-dx12 = { version = "0.5" }
 gfx-backend-dx11 = { version = "0.5" }
-gfx-backend-vulkan = { version = "0.5.11" }
+gfx-backend-vulkan = { version = "0.5" }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "windows", target_os = "dragonfly", target_os = "freebsd"))'.dependencies]
 battery = { version = "0.7", optional = true }

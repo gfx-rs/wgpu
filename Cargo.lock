@@ -46,11 +46,11 @@ checksum = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
 
 [[package]]
 name = "ash"
-version = "0.31.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c69a8137596e84c22d57f3da1b5de1d4230b1742a710091c85f4d7ce50f00f38"
+checksum = "69daec0742947f33a85931fa3cb0ce5f07929159dcbd1f0cbb5b2912e2978509"
 dependencies = [
- "libloading 0.6.1",
+ "libloading 0.5.2",
 ]
 
 [[package]]
@@ -167,22 +167,22 @@ dependencies = [
  "bitflags",
  "block",
  "core-foundation 0.6.4",
- "core-graphics",
+ "core-graphics 0.17.3",
  "foreign-types",
  "libc",
  "objc",
 ]
 
 [[package]]
-name = "cocoa-foundation"
-version = "0.1.0"
+name = "cocoa"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ade49b65d560ca58c403a479bb396592b155c0185eada742ee323d1d68d6318"
+checksum = "0a4736c86d51bd878b474400d9ec888156f4037015f5d09794fab9f26eab1ad4"
 dependencies = [
  "bitflags",
  "block",
- "core-foundation 0.9.0",
- "core-graphics-types",
+ "core-foundation 0.7.0",
+ "core-graphics 0.19.0",
  "foreign-types",
  "libc",
  "objc",
@@ -206,11 +206,11 @@ dependencies = [
 
 [[package]]
 name = "core-foundation"
-version = "0.9.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b5ed8e7e76c45974e15e41bfa8d5b0483cd90191639e01d8f5f1e606299d3fb"
+checksum = "57d24c7a13c43e870e37c1556b74555437870a04514f7685f5b354e090567171"
 dependencies = [
- "core-foundation-sys 0.8.0",
+ "core-foundation-sys 0.7.0",
  "libc",
 ]
 
@@ -222,9 +222,9 @@ checksum = "e7ca8a5221364ef15ce201e8ed2f609fc312682a8f4e0e3d4aa5879764e0fa3b"
 
 [[package]]
 name = "core-foundation-sys"
-version = "0.8.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a21fa21941700a3cd8fcb4091f361a6a712fac632f85d9f487cc892045d55c6"
+checksum = "b3a71ab494c0b5b860bdc8407ae08978052417070c2ced38573a9157ad75b8ac"
 
 [[package]]
 name = "core-graphics"
@@ -239,13 +239,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "core-graphics-types"
-version = "0.1.0"
+name = "core-graphics"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e92f5d519093a4178296707dbaa3880eae85a5ef5386675f361a1cf25376e93c"
+checksum = "59e78b2e0aaf43f08e7ae0d6bc96895ef72ff0921c7d4ff4762201b2dba376dd"
 dependencies = [
  "bitflags",
- "core-foundation 0.9.0",
+ "core-foundation 0.7.0",
  "foreign-types",
  "libc",
 ]
@@ -258,7 +258,7 @@ checksum = "8dc065219542086f72d1e9f7aadbbab0989e980263695d129d502082d063a9d0"
 dependencies = [
  "cfg-if",
  "core-foundation-sys 0.6.2",
- "core-graphics",
+ "core-graphics 0.17.3",
  "libc",
  "objc",
 ]
@@ -378,18 +378,7 @@ checksum = "3b46e6f0031330a0be08d17820f2dcaaa91cb36710a97a9500cb4f1c36e785c8"
 dependencies = [
  "fxhash",
  "gfx-hal",
- "spirv_cross 0.18.0",
-]
-
-[[package]]
-name = "gfx-auxil"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "67bdbf8e8d6883c70e5a0d7379ad8ab3ac95127a3761306b36122d8f1c177a8e"
-dependencies = [
- "fxhash",
- "gfx-hal",
- "spirv_cross 0.20.0",
+ "spirv_cross",
 ]
 
 [[package]]
@@ -399,7 +388,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b148219292624126f78245e50a9720d95ea149a415ce8ce73ab7014205301b88"
 dependencies = [
  "bitflags",
- "gfx-auxil 0.3.0",
+ "gfx-auxil",
  "gfx-hal",
  "libloading 0.5.2",
  "log",
@@ -407,7 +396,7 @@ dependencies = [
  "range-alloc",
  "raw-window-handle",
  "smallvec",
- "spirv_cross 0.18.0",
+ "spirv_cross",
  "winapi 0.3.8",
  "wio",
 ]
@@ -420,13 +409,13 @@ checksum = "a0e526746379e974501551b08958947e67a81b5ea8cdc717a000cdd72577da05"
 dependencies = [
  "bitflags",
  "d3d12",
- "gfx-auxil 0.3.0",
+ "gfx-auxil",
  "gfx-hal",
  "log",
  "range-alloc",
  "raw-window-handle",
  "smallvec",
- "spirv_cross 0.18.0",
+ "spirv_cross",
  "winapi 0.3.8",
 ]
 
@@ -442,17 +431,18 @@ dependencies = [
 
 [[package]]
 name = "gfx-backend-metal"
-version = "0.5.6"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "92804d20b194de6c84cb4bec14ec6a6dcae9c51f0a9186817fb412a590131ae6"
+checksum = "cfe128c29675b5afc8acdda1dfe096d6abd5e3528059ab0b98bda8215d8beed9"
 dependencies = [
  "arrayvec",
  "bitflags",
  "block",
- "cocoa-foundation",
+ "cocoa 0.20.0",
  "copyless",
+ "core-graphics 0.19.0",
  "foreign-types",
- "gfx-auxil 0.4.0",
+ "gfx-auxil",
  "gfx-hal",
  "lazy_static",
  "log",
@@ -462,20 +452,20 @@ dependencies = [
  "range-alloc",
  "raw-window-handle",
  "smallvec",
- "spirv_cross 0.20.0",
+ "spirv_cross",
  "storage-map",
 ]
 
 [[package]]
 name = "gfx-backend-vulkan"
-version = "0.5.11"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aec9c919cfc236d2c36aaa38609c1906a92f2df99a3c7f53022b01936f98275a"
+checksum = "45ff36feae801fa23d29acd74082603a0145a697a23595757dd4e78828ab33da"
 dependencies = [
  "arrayvec",
  "ash",
  "byteorder",
- "core-graphics-types",
+ "core-graphics 0.19.0",
  "gfx-hal",
  "lazy_static",
  "log",
@@ -499,9 +489,9 @@ dependencies = [
 
 [[package]]
 name = "gfx-hal"
-version = "0.5.3"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a18534b23d4c262916231511309bc1f307c74cda8dcb68b93a10ca213a22814b"
+checksum = "bc96180204064c9493e0fe4a9efeb721e0ac59fe8e1906d0c659142a93114fb1"
 dependencies = [
  "bitflags",
  "raw-window-handle",
@@ -698,13 +688,14 @@ dependencies = [
 
 [[package]]
 name = "metal"
-version = "0.20.0"
+version = "0.18.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c4e8a431536529327e28c9ba6992f2cb0c15d4222f0602a16e6d7695ff3bccf"
+checksum = "e198a0ee42bdbe9ef2c09d0b9426f3b2b47d90d93a4a9b0395c4cea605e92dc0"
 dependencies = [
  "bitflags",
  "block",
- "cocoa-foundation",
+ "cocoa 0.20.0",
+ "core-graphics 0.19.0",
  "foreign-types",
  "log",
  "objc",
@@ -1155,17 +1146,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "spirv_cross"
-version = "0.20.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a33a9478e9c78782dd694d05dee074703a9c4c74b511de742b88a7e8149f1b37"
-dependencies = [
- "cc",
- "js-sys",
- "wasm-bindgen",
-]
-
-[[package]]
 name = "spirv_headers"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1490,9 +1470,9 @@ checksum = "fc53342d3d1a3d57f3949e0692d93d5a8adb7814d8683cef4a09c2b550e94246"
 dependencies = [
  "android_glue",
  "bitflags",
- "cocoa",
+ "cocoa 0.19.1",
  "core-foundation 0.6.4",
- "core-graphics",
+ "core-graphics 0.17.3",
  "core-video-sys",
  "dispatch",
  "instant",
