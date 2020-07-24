@@ -963,7 +963,7 @@ pub struct SwapChainTexture {
     detail: <C as Context>::SwapChainOutputDetail,
 }
 
-/// Result of a successful call to [`SwapChain::get_next_frame`].
+/// Result of a successful call to [`SwapChain::get_current_frame`].
 #[derive(Debug)]
 pub struct SwapChainFrame {
     /// The texture into which the next frame should be rendered.
@@ -973,7 +973,7 @@ pub struct SwapChainFrame {
     pub suboptimal: bool,
 }
 
-/// Result of an unsuccessful call to [`SwapChain::get_next_frame`].
+/// Result of an unsuccessful call to [`SwapChain::get_current_frame`].
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum SwapChainError {
     /// A timeout was encountered while trying to acquire the next frame.
