@@ -661,7 +661,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 impl<G: GlobalIdentityHandlerFactory> Drop for Global<G> {
     fn drop(&mut self) {
         if !thread::panicking() {
-            log::info!("Dropping Global");
+            tracing::info!("Dropping Global");
             let mut surface_guard = self.surfaces.data.write();
 
             // destroy hubs

@@ -1610,7 +1610,6 @@ dependencies = [
  "gfx-descriptor",
  "gfx-hal",
  "gfx-memory",
- "log",
  "loom",
  "naga",
  "parking_lot",
@@ -1621,6 +1620,7 @@ dependencies = [
  "thiserror",
  "thread-id",
  "tracing",
+ "tracing-log",
  "tracing-subscriber",
  "wgpu-types",
 ]

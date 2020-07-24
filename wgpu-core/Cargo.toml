@@ -20,14 +20,13 @@ replay = ["serde", "wgt/replay"]
 # Enable serializable compute/render passes, and bundle encoders.
 serial-pass = ["serde", "wgt/serde", "arrayvec/serde"]
 # Enable chrome-tracing backend and default tracing subscriber
-subscriber = ["thread-id", "tracing-subscriber"]
+subscriber = ["thread-id", "tracing-log", "tracing-subscriber"]
 
 [dependencies]
 arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1"
 fxhash = "0.2"
-log = "0.4"
 hal = { package = "gfx-hal", version = "0.5.3" }
 gfx-backend-empty = "0.5"
 parking_lot = "0.10"
@@ -37,6 +36,7 @@ serde = { version = "1.0", features = ["serde_derive"], optional = true }
 smallvec = "1"
 thread-id = { version = "3", optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-log = { version = "0.1", optional = true }
 tracing-subscriber =  { version = "0.2", optional = true }
 thiserror = "1"
 

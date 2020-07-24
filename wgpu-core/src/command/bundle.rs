@@ -891,7 +891,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
 
-            log::debug!("Render bundle {:?} = {:#?}", id_in, state.trackers);
+            tracing::debug!("Render bundle {:?} = {:#?}", id_in, state.trackers);
             let _ = desc.label; //TODO: actually use
                                 //TODO: check if the device is still alive
             RenderBundle {

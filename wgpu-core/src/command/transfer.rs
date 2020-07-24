@@ -245,7 +245,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if size == 0 {
-            log::trace!("Ignoring copy_buffer_to_buffer of size 0");
+            tracing::trace!("Ignoring copy_buffer_to_buffer of size 0");
             return Ok(());
         }
 
@@ -332,7 +332,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
-            log::trace!("Ignoring copy_buffer_to_texture of size 0");
+            tracing::trace!("Ignoring copy_buffer_to_texture of size 0");
             return Ok(());
         }
 
@@ -432,7 +432,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
-            log::trace!("Ignoring copy_texture_to_buffer of size 0");
+            tracing::trace!("Ignoring copy_texture_to_buffer of size 0");
             return Ok(());
         }
 
@@ -541,7 +541,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if copy_size.width == 0 || copy_size.height == 0 || copy_size.width == 0 {
-            log::trace!("Ignoring copy_texture_to_texture of size 0");
+            tracing::trace!("Ignoring copy_texture_to_texture of size 0");
             return Ok(());
         }
 
