@@ -27,14 +27,14 @@ vulkan-portability = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "6182495102e33ea22c354539aba06ef3bf393751"
+rev = "11b3a95671d096aae2eac0d187be5472b5ab91c0"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "6182495102e33ea22c354539aba06ef3bf393751"
+rev = "11b3a95671d096aae2eac0d187be5472b5ab91c0"
 
 [dependencies]
 arrayvec = "0.5"
@@ -86,9 +86,6 @@ test = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.7"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-env_logger = "0.7"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2.62"
