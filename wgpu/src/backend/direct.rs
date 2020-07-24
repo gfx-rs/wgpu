@@ -586,11 +586,12 @@ impl crate::Context for Context {
         source: ShaderModuleSource,
     ) -> Self::ShaderModuleId {
         let desc = match source {
-            ShaderModuleSource::SpirV(ref spv) => wgc::pipeline::ShaderModuleSource::SpirV(spv),
-            ShaderModuleSource::Wgsl(ref code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
+            ShaderModuleSource::SpirV(spv) => wgc::pipeline::ShaderModuleSource::SpirV(spv),
+            ShaderModuleSource::Wgsl(code) => wgc::pipeline::ShaderModuleSource::Wgsl(code),
         };
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_shader_module(*device, desc, PhantomData))
+            .unwrap()
     }
 
     fn device_create_bind_group_layout(
