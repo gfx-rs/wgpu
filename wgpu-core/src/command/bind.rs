@@ -3,9 +3,9 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    binding_model::BindGroup,
+    binding_model::{BindGroup, PipelineLayout},
     device::SHADER_STAGE_COUNT,
-    hub::GfxBackend,
+    hub::{GfxBackend, Storage},
     id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId},
     Stored, MAX_BIND_GROUPS,
 };
@@ -151,7 +151,25 @@ impl Binder {
         self.entries.clear();
     }
 
-    pub(crate) fn reset_expectations(&mut self, length: usize) {
+    pub(crate) fn change_pipeline_layout<B: GfxBackend>(
+        &mut self,
+        guard: &Storage<PipelineLayout<B>, PipelineLayoutId>,
+        new_id: PipelineLayoutId,
+    ) {
+        let old_id_opt = self.pipeline_layout_id.replace(new_id);
+        let new = &guard[new_id];
+
+        let length = if let Some(old_id) = old_id_opt {
+            let old = &guard[old_id];
+            if old.push_constant_ranges == new.push_constant_ranges {
+                new.bind_group_layout_ids.len()
+            } else {
+                0
+            }
+        } else {
+            0
+        };
+
         for entry in self.entries[length..].iter_mut() {
             entry.expected_layout_id = None;
         }
