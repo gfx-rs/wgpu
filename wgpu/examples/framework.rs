@@ -30,10 +30,13 @@ pub enum ShaderStage {
 }
 
 pub trait Example: 'static + Sized {
-    fn needed_features() -> wgpu::Features {
+    fn optional_features() -> wgpu::Features {
         wgpu::Features::empty()
     }
-    fn needed_limits() -> wgpu::Limits {
+    fn required_features() -> wgpu::Features {
+        wgpu::Features::empty()
+    }
+    fn required_limits() -> wgpu::Limits {
         wgpu::Limits::default()
     }
     fn init(
@@ -94,8 +97,6 @@ async fn setup<E: Example>(title: &str) -> Setup {
         (size, surface)
     };
 
-    let needed_features = E::needed_features();
-
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::Default,
@@ -104,15 +105,22 @@ async fn setup<E: Example>(title: &str) -> Setup {
         .await
         .unwrap();
 
+    let optional_features = E::optional_features();
+    let required_features = E::required_features();
     let adapter_features = adapter.features();
+    assert!(
+        adapter_features.contains(required_features),
+        "Adapter does not support required features for this example: {:?}",
+        required_features - adapter_features
+    );
 
-    let needed_limits = E::needed_limits();
+    let needed_limits = E::required_limits();
 
     let trace_dir = std::env::var("WGPU_TRACE");
     let (device, queue) = adapter
         .request_device(
             &wgpu::DeviceDescriptor {
-                features: adapter_features & needed_features,
+                features: (optional_features & adapter_features) | required_features,
                 limits: needed_limits,
                 shader_validation: true,
             },
