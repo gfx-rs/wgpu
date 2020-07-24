@@ -203,7 +203,7 @@ impl Example {
 }
 
 impl framework::Example for Example {
-    fn needed_features() -> wgpu::Features {
+    fn optional_features() -> wgpu::Features {
         wgpu::Features::DEPTH_CLAMPING
     }
 
