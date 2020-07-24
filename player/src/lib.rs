@@ -147,6 +147,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
         comb_manager: &mut wgc::hub::IdentityManager,
     ) {
         use wgc::device::trace::Action as A;
+        log::info!("action {:?}", action);
         match action {
             A::Init { .. } => panic!("Unexpected Action::Init: has to be the first action only"),
             A::CreateSwapChain { .. } | A::PresentSwapChain(_) => {
@@ -159,7 +160,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
             }
             A::DestroyBuffer(id) => {
-                self.buffer_destroy::<B>(id);
+                self.buffer_destroy::<B>(id, true);
             }
             A::CreateTexture(id, desc) => {
                 let label = Label::new(&desc.label);
