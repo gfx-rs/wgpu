@@ -1052,7 +1052,7 @@ impl crate::Context for Context {
     ) -> Self::BufferId {
         let mut mapped_desc =
             web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
-        if let Some(label) = desc.label {
+        if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
         Sendable(device.0.create_buffer(&mapped_desc))
@@ -1068,7 +1068,7 @@ impl crate::Context for Context {
             &map_extent_3d(desc.size),
             desc.usage.bits(),
         );
-        if let Some(label) = desc.label {
+        if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
         mapped_desc.dimension(map_texture_dimension(desc.dimension));
@@ -1104,7 +1104,7 @@ impl crate::Context for Context {
         desc: &CommandEncoderDescriptor,
     ) -> Self::CommandEncoderId {
         let mut mapped_desc = web_sys::GpuCommandEncoderDescriptor::new();
-        if let Some(label) = desc.label {
+        if let Some(ref label) = desc.label {
             mapped_desc.label(label);
         }
         device

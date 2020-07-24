@@ -150,11 +150,11 @@ impl framework::Example for Example {
             label: None,
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("red"),
+            label: Some(Borrowed("red")),
             ..texture_descriptor
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("green"),
+            label: Some(Borrowed("green")),
             ..texture_descriptor
         });
 
@@ -321,7 +321,7 @@ impl framework::Example for Example {
         _spawner: &impl futures::task::LocalSpawn,
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("primary"),
+            label: Some(Borrowed("primary")),
         });
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {

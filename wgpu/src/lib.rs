@@ -890,23 +890,23 @@ pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
 
 pub use wgt::BufferDescriptor as BufferDescriptorBase;
 /// Describes a [`Buffer`].
-pub type BufferDescriptor<'a> = BufferDescriptorBase<Option<&'a str>>;
+pub type BufferDescriptor<'a> = BufferDescriptorBase<Option<Cow<'a, str>>>;
 
 pub use wgt::CommandEncoderDescriptor as CommandEncoderDescriptorBase;
 /// Describes a [`CommandEncoder`].
-pub type CommandEncoderDescriptor<'a> = CommandEncoderDescriptorBase<Option<&'a str>>;
+pub type CommandEncoderDescriptor<'a> = CommandEncoderDescriptorBase<Option<Cow<'a, str>>>;
 
 pub use wgt::RenderBundleDescriptor as RenderBundleDescriptorBase;
 /// Describes a [`RenderBundle`].
-pub type RenderBundleDescriptor<'a> = RenderBundleDescriptorBase<Option<&'a str>>;
+pub type RenderBundleDescriptor<'a> = RenderBundleDescriptorBase<Option<Cow<'a, str>>>;
 
 pub use wgt::TextureDescriptor as TextureDescriptorBase;
 /// Describes a [`Texture`].
-pub type TextureDescriptor<'a> = TextureDescriptorBase<Option<&'a str>>;
+pub type TextureDescriptor<'a> = TextureDescriptorBase<Option<Cow<'a, str>>>;
 
 pub use wgt::TextureViewDescriptor as TextureViewDescriptorBase;
 /// Describes a [`TextureView`].
-pub type TextureViewDescriptor<'a> = TextureViewDescriptorBase<Option<&'a str>>;
+pub type TextureViewDescriptor<'a> = TextureViewDescriptorBase<Option<Cow<'a, str>>>;
 
 pub use wgt::PipelineLayoutDescriptor as PipelineLayoutDescriptorBase;
 /// Describes a [`PipelineLayout`].
@@ -914,7 +914,7 @@ pub type PipelineLayoutDescriptor<'a> = PipelineLayoutDescriptorBase<'a, &'a Bin
 
 pub use wgt::SamplerDescriptor as SamplerDescriptorBase;
 /// Describes a [`Sampler`].
-pub type SamplerDescriptor<'a> = SamplerDescriptorBase<Option<&'a str>>;
+pub type SamplerDescriptor<'a> = SamplerDescriptorBase<Option<Cow<'a, str>>>;
 
 pub use wgt::BindGroupEntry as BindGroupEntryBase;
 /// Bindable resource and the slot to bind it to.

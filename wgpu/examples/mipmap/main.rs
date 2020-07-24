@@ -141,7 +141,7 @@ impl Example {
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("mip"),
+            label: Some(Borrowed("mip")),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -154,7 +154,7 @@ impl Example {
         let views = (0..mip_count)
             .map(|mip| {
                 texture.create_view(&wgpu::TextureViewDescriptor {
-                    label: Some("mip"),
+                    label: Some(Borrowed("mip")),
                     format: TEXTURE_FORMAT,
                     dimension: wgpu::TextureViewDimension::D2,
                     aspect: wgpu::TextureAspect::All,
