@@ -164,7 +164,7 @@ trait Context: Debug + Send + Sized + Sync {
     type ComputePassId: Debug + ComputePassInner<Self>;
     type RenderPassId: Debug + RenderPassInner<Self>;
     type CommandBufferId: Debug + Send + Sync;
-    type RenderBundleEncoderId: RenderInner<Self>;
+    type RenderBundleEncoderId: Debug + RenderInner<Self>;
     type RenderBundleId: Debug + Send + Sync + 'static;
     type SurfaceId: Debug + Send + Sync + 'static;
     type SwapChainId: Debug + Send + Sync + 'static;
@@ -757,6 +757,7 @@ pub struct ComputePass<'a> {
 /// can be executed onto a [`CommandEncoder`] using [`RenderPass::execute_bundles`].
 ///
 /// Executing a [`RenderBundle`] is often more efficient then issuing the underlying commands manually.
+#[derive(Debug)]
 pub struct RenderBundleEncoder<'a> {
     context: Arc<C>,
     id: <C as Context>::RenderBundleEncoderId,
