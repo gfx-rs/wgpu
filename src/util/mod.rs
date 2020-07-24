@@ -35,8 +35,8 @@ pub fn make_spirv<'a>(data: &'a [u8]) -> super::ShaderModuleSource<'a> {
     // otherwise copy the byte array in an owned vector and use that instead.
     let words = if data.as_ptr().align_offset(align_of::<u32>()) == 0 {
         let (pre, words, post) = unsafe { data.align_to::<u32>() };
-        debug_assert_eq!(pre, &[]);
-        debug_assert_eq!(post, &[]);
+        debug_assert!(pre.is_empty());
+        debug_assert!(post.is_empty());
         Cow::from(words)
     } else {
         let mut words = vec![0u32; data.len() / size_of::<u32>()];
