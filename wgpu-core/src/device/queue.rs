@@ -448,7 +448,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
                                     log::warn!("Dropped buffer has a pending mapping.");
-                                    super::unmap_buffer(&device.raw, buffer);
+                                    super::unmap_buffer(&device.raw, buffer).unwrap();
                                 }
                                 device.temp_suspected.buffers.push(id);
                             } else {

@@ -181,15 +181,17 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     parent_id,
                     desc.map(|d| d.map_label(|_| label.as_ptr())).as_ref(),
                     id,
-                );
+                )
+                .unwrap();
             }
             A::DestroyTextureView(id) => {
-                self.texture_view_destroy::<B>(id);
+                self.texture_view_destroy::<B>(id).unwrap();
             }
             A::CreateSampler(id, desc) => {
                 let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device);
-                self.device_create_sampler::<B>(device, &desc.map_label(|_| label.as_ptr()), id);
+                self.device_create_sampler::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
+                    .unwrap();
             }
             A::DestroySampler(id) => {
                 self.sampler_destroy::<B>(id);

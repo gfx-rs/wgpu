@@ -9,6 +9,7 @@ use crate::{
     LifeGuard, RefCount, Stored,
 };
 use std::borrow::{Borrow, Cow};
+use thiserror::Error;
 use wgt::{BufferAddress, IndexFormat, InputStepMode};
 
 #[repr(C)]
@@ -31,9 +32,12 @@ pub type ProgrammableStageDescriptor<'a> = wgt::ProgrammableStageDescriptor<'a, 
 pub type ComputePipelineDescriptor<'a> =
     wgt::ComputePipelineDescriptor<PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum ComputePipelineError {
+    #[error(transparent)]
     Stage(StageError),
+    #[error(transparent)]
+    HalCreationError(#[from] hal::pso::CreationError),
 }
 
 #[derive(Debug)]
@@ -53,21 +57,26 @@ impl<B: hal::Backend> Borrow<RefCount> for ComputePipeline<B> {
 pub type RenderPipelineDescriptor<'a> =
     wgt::RenderPipelineDescriptor<'a, PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Error)]
 pub enum RenderPipelineError {
-    MissingFeature(wgt::Features),
+    #[error("incompatible output format at index {index}")]
+    IncompatibleOutputFormat { index: u8 },
+    #[error("invalid sample count {0}")]
+    InvalidSampleCount(u32),
+    #[error("vertex attribute at location {location} has invalid offset {offset}")]
     InvalidVertexAttributeOffset {
         location: wgt::ShaderLocation,
         offset: BufferAddress,
     },
+    #[error("missing required device features {0:?}")]
+    MissingFeature(wgt::Features),
+    #[error("not enough memory left")]
+    OutOfMemory,
+    #[error("error in stage {flag:?}: {error}")]
     Stage {
         flag: wgt::ShaderStage,
         error: StageError,
     },
-    IncompatibleOutputFormat {
-        index: u8,
-    },
-    InvalidSampleCount(u32),
 }
 
 bitflags::bitflags! {
