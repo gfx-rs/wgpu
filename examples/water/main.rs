@@ -195,7 +195,7 @@ impl Example {
         };
 
         let reflection_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Reflection Render Texture"),
+            label: Some(Borrowed("Reflection Render Texture")),
             size: texture_extent,
             mip_level_count: 1,
             sample_count: 1,
@@ -207,7 +207,7 @@ impl Example {
         });
 
         let draw_depth_buffer = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("Depth Buffer"),
+            label: Some(Borrowed("Depth Buffer")),
             size: texture_extent,
             mip_level_count: 1,
             sample_count: 1,
@@ -219,7 +219,7 @@ impl Example {
         });
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("Texture Sampler"),
+            label: Some(Borrowed("Texture Sampler")),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -424,21 +424,21 @@ impl framework::Example for Example {
             });
 
         let water_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Water Uniforms"),
+            label: Some(Borrowed("Water Uniforms")),
             size: mem::size_of::<WaterUniforms>() as _,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_normal_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Normal Terrain Uniforms"),
+            label: Some(Borrowed("Normal Terrain Uniforms")),
             size: mem::size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
         });
 
         let terrain_flipped_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Flipped Terrain Uniforms"),
+            label: Some(Borrowed("Flipped Terrain Uniforms")),
             size: mem::size_of::<TerrainUniforms>() as _,
             usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
             mapped_at_creation: false,
@@ -710,7 +710,7 @@ impl framework::Example for Example {
         // The encoder provides a way to turn our instructions here, into
         // a command buffer the GPU can understand.
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("Main Command Encoder"),
+            label: Some(Borrowed("Main Command Encoder")),
         });
 
         // First pass: render the reflection.

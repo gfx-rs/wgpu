@@ -10,7 +10,7 @@
 #[path = "../framework.rs"]
 mod framework;
 
-use std::{borrow::Cow, iter};
+use std::{borrow::Cow::Borrowed, iter};
 
 use bytemuck::{Pod, Zeroable};
 
@@ -53,11 +53,11 @@ impl Example {
             layout: &pipeline_layout,
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: vs_module,
-                entry_point: Cow::Borrowed("main"),
+                entry_point: Borrowed("main"),
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: fs_module,
-                entry_point: Cow::Borrowed("main"),
+                entry_point: Borrowed("main"),
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
@@ -65,7 +65,7 @@ impl Example {
                 ..Default::default()
             }),
             primitive_topology: wgpu::PrimitiveTopology::LineList,
-            color_states: Cow::Borrowed(&[wgpu::ColorStateDescriptor {
+            color_states: Borrowed(&[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 alpha_blend: wgpu::BlendDescriptor::REPLACE,
@@ -74,10 +74,10 @@ impl Example {
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: Cow::Borrowed(&[wgpu::VertexBufferDescriptor {
+                vertex_buffers: Borrowed(&[wgpu::VertexBufferDescriptor {
                     stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: Cow::Borrowed(&wgpu::vertex_attr_array![0 => Float2, 1 => Float4]),
+                    attributes: Borrowed(&wgpu::vertex_attr_array![0 => Float2, 1 => Float4]),
                 }]),
             },
             sample_count,
@@ -87,7 +87,7 @@ impl Example {
         let mut encoder =
             device.create_render_bundle_encoder(&wgpu::RenderBundleEncoderDescriptor {
                 label: None,
-                color_formats: Cow::Borrowed(&[sc_desc.format]),
+                color_formats: Borrowed(&[sc_desc.format]),
                 depth_stencil_format: None,
                 sample_count,
             });
@@ -95,7 +95,7 @@ impl Example {
         encoder.set_vertex_buffer(0, vertex_buffer.slice(..));
         encoder.draw(0..vertex_count, 0..1);
         encoder.finish(&wgpu::RenderBundleDescriptor {
-            label: Some("main"),
+            label: Some(Borrowed("main")),
         })
     }
 
@@ -138,8 +138,8 @@ impl framework::Example for Example {
         let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            bind_group_layouts: Cow::Borrowed(&[]),
-            push_constant_ranges: Cow::Borrowed(&[]),
+            bind_group_layouts: Borrowed(&[]),
+            push_constant_ranges: Borrowed(&[]),
         });
 
         let multisampled_framebuffer =
@@ -274,7 +274,7 @@ impl framework::Example for Example {
 
             encoder
                 .begin_render_pass(&wgpu::RenderPassDescriptor {
-                    color_attachments: Cow::Borrowed(&[rpass_color_attachment]),
+                    color_attachments: Borrowed(&[rpass_color_attachment]),
                     depth_stencil_attachment: None,
                 })
                 .execute_bundles(iter::once(&self.bundle));
