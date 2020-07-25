@@ -1,4 +1,5 @@
 use std::{borrow::Cow::Borrowed, convert::TryInto, str::FromStr};
+use wgpu::util::DeviceExt;
 
 async fn run() {
     let numbers = if std::env::args().len() <= 1 {
@@ -52,9 +53,12 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         mapped_at_creation: false,
     });
 
-    let storage_buffer = device.create_buffer_with_data(
-        bytemuck::cast_slice(&numbers),
-        wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+    let storage_buffer = device.create_buffer_init(
+        &wgpu::util::BufferInitDescriptor {
+            label: Some("Storage Buffer"),
+            contents: bytemuck::cast_slice(&numbers),
+            usage: wgpu::BufferUsage::STORAGE | wgpu::BufferUsage::COPY_DST | wgpu::BufferUsage::COPY_SRC,
+        }
     );
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {

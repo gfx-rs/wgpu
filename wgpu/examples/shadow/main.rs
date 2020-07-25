@@ -4,6 +4,7 @@ use std::{borrow::Cow::Borrowed, iter, mem, num::NonZeroU32, ops::Range, rc::Rc}
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -215,25 +216,37 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let (cube_vertex_data, cube_index_data) = create_cube();
-        let cube_vertex_buf = Rc::new(device.create_buffer_with_data(
-            bytemuck::cast_slice(&cube_vertex_data),
-            wgpu::BufferUsage::VERTEX,
+        let cube_vertex_buf = Rc::new(device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Cubes Vertex Buffer"),
+                contents: bytemuck::cast_slice(&cube_vertex_data),
+                usage: wgpu::BufferUsage::VERTEX,
+            }
         ));
 
-        let cube_index_buf = Rc::new(device.create_buffer_with_data(
-            bytemuck::cast_slice(&cube_index_data),
-            wgpu::BufferUsage::INDEX,
+        let cube_index_buf = Rc::new(device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Cubes Index Buffer"),
+                contents: bytemuck::cast_slice(&cube_index_data),
+                usage: wgpu::BufferUsage::INDEX,
+            }
         ));
 
         let (plane_vertex_data, plane_index_data) = create_plane(7);
-        let plane_vertex_buf = device.create_buffer_with_data(
-            bytemuck::cast_slice(&plane_vertex_data),
-            wgpu::BufferUsage::VERTEX,
+        let plane_vertex_buf = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Plane Vertex Buffer"),
+                contents: bytemuck::cast_slice(&plane_vertex_data),
+                usage: wgpu::BufferUsage::VERTEX,
+            }
         );
 
-        let plane_index_buf = device.create_buffer_with_data(
-            bytemuck::cast_slice(&plane_index_data),
-            wgpu::BufferUsage::INDEX,
+        let plane_index_buf = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Plane Index Buffer"),
+                contents: bytemuck::cast_slice(&plane_index_data),
+                usage: wgpu::BufferUsage::INDEX,
+            }
         );
 
         let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
@@ -568,9 +581,12 @@ impl framework::Example for Example {
                 proj: *mx_total.as_ref(),
                 num_lights: [lights.len() as u32, 0, 0, 0],
             };
-            let uniform_buf = device.create_buffer_with_data(
-                bytemuck::bytes_of(&forward_uniforms),
-                wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            let uniform_buf = device.create_buffer_init(
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("Uniform Buffer"),
+                    contents: bytemuck::bytes_of( &forward_uniforms),
+                    usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+                }
             );
 
             // Create bind group

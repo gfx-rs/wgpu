@@ -13,6 +13,7 @@ mod framework;
 use std::{borrow::Cow::Borrowed, iter};
 
 use bytemuck::{Pod, Zeroable};
+use wgpu::util::DeviceExt;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
@@ -161,9 +162,12 @@ impl framework::Example for Example {
             });
         }
 
-        let vertex_buffer = device.create_buffer_with_data(
-            bytemuck::cast_slice(&vertex_data),
-            wgpu::BufferUsage::VERTEX,
+        let vertex_buffer = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Vertex Buffer"),
+                contents: bytemuck::cast_slice(&vertex_data),
+                usage: wgpu::BufferUsage::VERTEX,
+            }
         );
         let vertex_count = vertex_data.len() as u32;
 
