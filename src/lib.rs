@@ -1241,32 +1241,6 @@ impl Device {
         }
     }
 
-    /// Creates a new buffer, maps it into host-visible memory, copies data from the given slice,
-    /// and finally unmaps it, returning a [`Buffer`].
-    pub fn create_buffer_with_data(&self, data: &[u8], usage: BufferUsage) -> Buffer {
-        let align = COPY_BUFFER_ALIGNMENT;
-        let unpadded_size = data.len() as u64;
-        let padding = (align - unpadded_size % align) % align;
-        let padded_size = unpadded_size + padding;
-
-        let buffer = self.create_buffer(&BufferDescriptor {
-            label: None,
-            size: padded_size,
-            usage,
-            mapped_at_creation: true,
-        });
-
-        let range =
-            Context::buffer_get_mapped_range_mut(&*self.context, &buffer.id, 0..padded_size);
-        range[0..unpadded_size as usize].copy_from_slice(&data);
-        for i in unpadded_size..padded_size {
-            range[i as usize] = 0;
-        }
-
-        buffer.unmap();
-        buffer
-    }
-
     /// Creates a new [`Texture`].
     ///
     /// `desc` specifies the general format of the texture.

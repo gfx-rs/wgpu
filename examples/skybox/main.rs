@@ -3,6 +3,7 @@ mod framework;
 
 use futures::task::{LocalSpawn, LocalSpawnExt};
 use std::borrow::Cow::Borrowed;
+use wgpu::util::DeviceExt;
 
 const SKYBOX_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 
@@ -78,9 +79,12 @@ impl framework::Example for Skybox {
 
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
-        let uniform_buf = device.create_buffer_with_data(
-            bytemuck::cast_slice(&raw_uniforms(&uniforms)),
-            wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        let uniform_buf = device.create_buffer_init(
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("Uniform Buffer"),
+                contents: bytemuck::cast_slice(&raw_uniforms(&uniforms)),
+                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            }
         );
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {

@@ -122,13 +122,13 @@ impl StagingBelt {
             &mut self.encoder,
             device.create_command_encoder(&CommandEncoderDescriptor::default()),
         )
-        .finish()
+            .finish()
     }
 
     /// Recall all of the closed buffers back for re-usal.
     ///
     /// This has to be called after the command buffer produced by `flush` is submitted!
-    pub fn recall(&mut self) -> impl Future<Output = ()> + Send {
+    pub fn recall(&mut self) -> impl Future<Output=()> + Send {
         while let Ok(mut chunk) = self.receiver.try_recv() {
             chunk.offset = 0;
             self.free_chunks.push(chunk);
@@ -143,6 +143,6 @@ impl StagingBelt {
                 .map_async(MapMode::Write)
                 .inspect(move |_| sender.send(chunk).unwrap())
         }))
-        .map(|_| ())
+            .map(|_| ())
     }
 }
