@@ -474,10 +474,15 @@ impl<W: Write> Writer<W> {
                         )?;
                         for (i, &handle) in components.iter().enumerate() {
                             if i != 0 {
-                                write!(self.out, ",")?;
+                                write!(self.out, ", ")?;
                             }
                             self.put_expression(handle, function, module)?;
                         }
+                        write!(self.out, ")")?;
+                    }
+                    crate::TypeInner::Scalar { width: 4, kind } if components.len() == 1 => {
+                        write!(self.out, "{}(", scalar_kind_string(kind))?;
+                        self.put_expression(components[0], function, module)?;
                         write!(self.out, ")")?;
                     }
                     _ => return Err(Error::UnsupportedCompose(ty)),
@@ -540,6 +545,7 @@ impl<W: Write> Writer<W> {
                     crate::BinaryOperator::LessEqual => "<=",
                     crate::BinaryOperator::Greater => "==",
                     crate::BinaryOperator::GreaterEqual => ">=",
+                    crate::BinaryOperator::And => "&",
                     other => return Err(Error::UnsupportedBinaryOp(other)),
                 };
                 //write!(self.out, "(")?;
