@@ -33,7 +33,7 @@ All framework-based examples render to the window.
 | optional extensions    |        |        |        |           |        |        | :star:         |        |
 | - binding indexing     |        |        |        |           |        |        | :star:         |        |
 | - push constants       |        |        |        |           |        |        | :star:         |        |
-| - depth clamping       |        |        |        |           | :star  |        |                |        |
+| - depth clamping       |        |        |        |           | :star: |        |                |        |
 | WGSL shaders           |        |        |        |           |        |        |                |        |
 
 ## Hacking

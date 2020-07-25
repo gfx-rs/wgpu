@@ -12,10 +12,7 @@ wgpu-rs is an idiomatic Rust wrapper over [wgpu-core](https://github.com/gfx-rs/
 
 wgpu-rs can target both the natively supported backends and WASM directly.
 
-## Gallery
-
-![Cube](etc/example-cube.png) ![Shadow](etc/example-shadow.png) ![MipMap](etc/example-mipmap.png) ![Skybox](etc/example-skybox.gif)
-![vange-rs](etc/vange-rs.png) ![Brawl](etc/brawl-attack.gif) ![GLX map](etc/glx-map.png) ![Harmony](etc/harmony-rs.jpg)
+See our [gallery](https://wgpu.rs/#showcase) and the [wiki page](https://github.com/gfx-rs/wgpu-rs/wiki/Applications-and-Libraries) for the list of libraries and applications using `wgpu-rs`.
 
 ## Usage
 
@@ -78,10 +75,6 @@ Currently, shaders in the examples are written in GLSL 4.50 and compiled to SPIR
 In the future [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) will be the shader language for WebGPU, but support is not implemented yet.
 
 For now, the shaders can be compiled to SPIR-V by running `make`, which requires you to have `glslang`s `glslangValidator` binary.
-
-## Friends
-
-See [our wiki](https://github.com/gfx-rs/wgpu-rs/wiki/Applications-and-Libraries) for the list of libraries and applications using `wgpu`.
 
 ## Development
 
