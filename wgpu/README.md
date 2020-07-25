@@ -81,7 +81,7 @@ For now, the shaders can be compiled to SPIR-V by running `make`, which requires
 
 ## Friends
 
-See [our wiki](https://github.com/gfx-rs/wgpu-rs/wiki/Applications) for the list of libraries and applications using `wgpu`.
+See [our wiki](https://github.com/gfx-rs/wgpu-rs/wiki/Applications-and-Libraries) for the list of libraries and applications using `wgpu`.
 
 ## Development
 
