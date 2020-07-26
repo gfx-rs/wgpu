@@ -134,13 +134,8 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        env_logger::init();
-
         #[cfg(feature = "subscriber")]
-        {
-            let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACING");
-            wgpu::util::initialize_default_subscriber(chrome_tracing_dir.ok());
-        };
+        wgpu::util::initialize_default_subscriber(None);
 
         futures::executor::block_on(run());
     }

@@ -72,8 +72,13 @@ struct Setup {
 }
 
 async fn setup<E: Example>(title: &str) -> Setup {
-    #[cfg(not(target_arch = "wasm32"))]
-    env_logger::init();
+    #[cfg(feature = "subscriber")]
+    {
+        let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACE");
+        wgpu::util::initialize_default_subscriber(
+            chrome_tracing_dir.as_ref().map(std::path::Path::new).ok(),
+        );
+    };
 
     #[cfg(target_arch = "wasm32")]
     console_log::init().expect("could not initialize logger");
@@ -155,12 +160,6 @@ fn start<E: Example>(
 ) {
     #[cfg(not(target_arch = "wasm32"))]
     let (mut pool, spawner) = {
-        #[cfg(feature = "subscriber")]
-        {
-            let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACING");
-            wgpu::util::initialize_default_subscriber(chrome_tracing_dir.ok());
-        };
-
         let local_pool = futures::executor::LocalPool::new();
         let spawner = local_pool.spawner();
         (local_pool, spawner)
