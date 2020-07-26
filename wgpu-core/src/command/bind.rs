@@ -187,7 +187,7 @@ impl Binder {
         bind_group: &BindGroup<B>,
         offsets: &[DynamicOffset],
     ) -> Option<(PipelineLayoutId, FollowUpIter<'a>)> {
-        log::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
+        tracing::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
         debug_assert_eq!(B::VARIANT, bind_group_id.backend());
 
         match self.entries[index].provide(bind_group_id, bind_group, offsets) {
@@ -200,7 +200,7 @@ impl Binder {
                     } else {
                         self.entries.len()
                     });
-                    log::trace!("\t\tbinding up to {}", end);
+                    tracing::trace!("\t\tbinding up to {}", end);
                     Some((
                         self.pipeline_layout_id?,
                         FollowUpIter {
@@ -208,7 +208,7 @@ impl Binder {
                         },
                     ))
                 } else {
-                    log::trace!("\t\tskipping above compatible {}", compatible_count);
+                    tracing::trace!("\t\tskipping above compatible {}", compatible_count);
                     None
                 }
             }

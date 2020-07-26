@@ -158,7 +158,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let data_size = data.len() as wgt::BufferAddress;
         if data_size == 0 {
-            log::trace!("Ignoring write_buffer of size 0");
+            tracing::trace!("Ignoring write_buffer of size 0");
             return;
         }
 
@@ -269,7 +269,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if size.width == 0 || size.height == 0 || size.width == 0 {
-            log::trace!("Ignoring write_texture of size 0");
+            tracing::trace!("Ignoring write_texture of size 0");
             return;
         }
 
@@ -447,7 +447,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             let buffer = &mut buffer_guard[id];
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
-                                    log::warn!("Dropped buffer has a pending mapping.");
+                                    tracing::warn!("Dropped buffer has a pending mapping.");
                                     super::unmap_buffer(&device.raw, buffer).unwrap();
                                 }
                                 device.temp_suspected.buffers.push(id);
@@ -497,7 +497,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             transit
                                 .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                         }
-                        log::trace!("Stitching command buffer {:?} before submission", cmb_id);
+                        tracing::trace!("Stitching command buffer {:?} before submission", cmb_id);
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
@@ -511,7 +511,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         comb.raw.insert(0, transit);
                     }
 
-                    log::trace!("Device after submission {}: {:#?}", submit_index, trackers);
+                    tracing::trace!("Device after submission {}: {:#?}", submit_index, trackers);
                 }
 
                 // now prepare the GPU submission

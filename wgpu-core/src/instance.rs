@@ -355,7 +355,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     if let Some(id_backend) = inputs.find(backend) {
                         for raw in inst.enumerate_adapters() {
                             let adapter = Adapter::new(raw);
-                            log::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
+                            tracing::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
                             adapters.push(backend_hub(self).adapters.register_identity(
                                 id_backend.clone(),
                                 adapter,
@@ -450,7 +450,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if device_types.is_empty() {
-            log::warn!("No adapters are available!");
+            tracing::warn!("No adapters are available!");
             return None;
         }
 
@@ -478,7 +478,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Ok(false) => discrete.or(integrated).or(other).or(virt),
                 Ok(true) => integrated.or(discrete).or(other).or(virt),
                 Err(err) => {
-                    log::debug!(
+                    tracing::debug!(
                         "Power info unavailable, preferring integrated gpu ({})",
                         err
                     );
@@ -495,7 +495,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let map = |(info_adapter, id_backend, mut adapters_backend, backend_hub)| {
                 if selected < adapters_backend.len() {
                     let adapter = Adapter::new(adapters_backend.swap_remove(selected));
-                    log::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
+                    tracing::info!("Adapter {} {:?}", info_adapter, adapter.raw.info);
                     let id = backend_hub(self).adapters.register_identity(
                         id_backend.take().unwrap(),
                         adapter,
@@ -523,7 +523,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             id_dx12.take(),
             id_dx11.take(),
         );
-        log::warn!("Some adapters are present, but enumerating them failed!");
+        tracing::warn!("Some adapters are present, but enumerating them failed!");
         None
     }
 
@@ -610,7 +610,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .contains(wgt::Features::MAPPABLE_PRIMARY_BUFFERS)
                 && adapter.raw.info.device_type == hal::adapter::DeviceType::DiscreteGpu
             {
-                log::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
+                tracing::warn!("Feature MAPPABLE_PRIMARY_BUFFERS enabled on a discrete gpu. This is a massive performance footgun and likely not what you wanted");
             }
 
             let available_features = adapter.raw.physical_device.features();
@@ -623,7 +623,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 | hal::Features::SAMPLER_ANISOTROPY;
             let mut enabled_features = available_features & wishful_features;
             if enabled_features != wishful_features {
-                log::warn!(
+                tracing::warn!(
                     "Missing features: {:?}",
                     wishful_features - enabled_features
                 );
@@ -698,7 +698,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mem_props = phd.memory_properties();
             if !desc.shader_validation {
-                log::warn!("Shader validation is disabled");
+                tracing::warn!("Shader validation is disabled");
             }
             let private_features = PrivateFeatures {
                 shader_validation: desc.shader_validation,

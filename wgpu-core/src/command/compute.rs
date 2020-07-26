@@ -199,7 +199,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     bind_group.validate_dynamic_bindings(offsets)?;
 
-                    log::trace!(
+                    tracing::trace!(
                         "Encoding barriers on binding of {:?} to {:?}",
                         bind_group_id,
                         encoder_id

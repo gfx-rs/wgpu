@@ -132,7 +132,7 @@ impl PendingTransition<BufferState> {
         self,
         buf: &'a resource::Buffer<B>,
     ) -> hal::memory::Barrier<'a, B> {
-        log::trace!("\tbuffer -> {:?}", self);
+        tracing::trace!("\tbuffer -> {:?}", self);
         hal::memory::Barrier::Buffer {
             states: conv::map_buffer_state(self.usage.start)
                 ..conv::map_buffer_state(self.usage.end),
@@ -149,7 +149,7 @@ impl PendingTransition<TextureState> {
         self,
         tex: &'a resource::Texture<B>,
     ) -> hal::memory::Barrier<'a, B> {
-        log::trace!("\ttexture -> {:?}", self);
+        tracing::trace!("\ttexture -> {:?}", self);
         let aspects = tex.full_range.aspects;
         hal::memory::Barrier::Image {
             states: conv::map_texture_state(self.usage.start, aspects)

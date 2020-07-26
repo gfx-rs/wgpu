@@ -573,7 +573,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 return Err(RenderPassError::InvalidSampleCount(sample_count));
             }
 
-            log::trace!(
+            tracing::trace!(
                 "Encoding render pass begin in command buffer {:?}",
                 encoder_id
             );
@@ -1584,7 +1584,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        log::trace!("Merging {:?} with the render pass", encoder_id);
+        tracing::trace!("Merging {:?} with the render pass", encoder_id);
         unsafe {
             raw.end_render_pass();
         }

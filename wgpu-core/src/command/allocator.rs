@@ -28,7 +28,7 @@ impl<B: hal::Backend> CommandPool<B> {
         for i in (0..self.pending.len()).rev() {
             if self.pending[i].1 <= last_done_index {
                 let (cmd_buf, index) = self.pending.swap_remove(i);
-                log::trace!(
+                tracing::trace!(
                     "recycling comb submitted in {} when {} is last done",
                     index,
                     last_done_index,
@@ -90,7 +90,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
             .entry(thread_id)
             .or_insert_with(|| CommandPool {
                 raw: unsafe {
-                    log::info!("Starting on thread {:?}", thread_id);
+                    tracing::info!("Starting on thread {:?}", thread_id);
                     device.create_command_pool(
                         self.queue_family,
                         hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
@@ -125,7 +125,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
 impl<B: hal::Backend> CommandAllocator<B> {
     pub fn new(queue_family: hal::queue::QueueFamilyId, device: &B::Device) -> Self {
         let internal_thread_id = thread::current().id();
-        log::info!("Starting on (internal) thread {:?}", internal_thread_id);
+        tracing::info!("Starting on (internal) thread {:?}", internal_thread_id);
         let mut pools = FastHashMap::default();
         pools.insert(
             internal_thread_id,
@@ -213,7 +213,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
             }
         }
         for thread_id in remove_threads {
-            log::info!("Removing from thread {:?}", thread_id);
+            tracing::info!("Removing from thread {:?}", thread_id);
             let mut pool = inner.pools.remove(&thread_id).unwrap();
             unsafe {
                 pool.raw.free(pool.available);
@@ -229,7 +229,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                 pool.recycle(raw);
             }
             if pool.total != pool.available.len() {
-                log::error!(
+                tracing::error!(
                     "Some command buffers are still recorded, only tracking {} / {}",
                     pool.available.len(),
                     pool.total

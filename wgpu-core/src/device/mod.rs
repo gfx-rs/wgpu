@@ -236,7 +236,7 @@ impl<B: GfxBackend> Device<B> {
         let descriptors = unsafe { DescriptorAllocator::new() };
         #[cfg(not(feature = "trace"))]
         match trace_path {
-            Some(_) => log::error!("Feature 'trace' is not enabled"),
+            Some(_) => tracing::error!("Feature 'trace' is not enabled"),
             None => (),
         }
 
@@ -264,7 +264,7 @@ impl<B: GfxBackend> Device<B> {
                     Some(Mutex::new(trace))
                 }
                 Err(e) => {
-                    log::error!("Unable to start a trace in '{:?}': {:?}", path, e);
+                    tracing::error!("Unable to start a trace in '{:?}': {:?}", path, e);
                     None
                 }
             }),
@@ -594,9 +594,13 @@ impl<B: GfxBackend> Device<B> {
         unsafe { self.raw.create_render_pass(all, iter::once(subpass), &[]) }
     }
 
-    fn wait_for_submit(&self, submission_index: SubmissionIndex, token: &mut Token<Self>) -> Result<(), WaitIdleError> {
+    fn wait_for_submit(
+        &self,
+        submission_index: SubmissionIndex,
+        token: &mut Token<Self>,
+    ) -> Result<(), WaitIdleError> {
         if self.last_completed_submission_index() <= submission_index {
-            log::info!("Waiting for submission {:?}", submission_index);
+            tracing::info!("Waiting for submission {:?}", submission_index);
             self.lock_life(token)
                 .triage_submissions(&self.raw, true)
                 .map(|_| ())
@@ -631,7 +635,7 @@ impl<B: hal::Backend> Device<B> {
     pub(crate) fn prepare_to_die(&mut self) {
         let mut life_tracker = self.life_tracker.lock();
         if let Err(error) = life_tracker.triage_submissions(&self.raw, true) {
-            log::error!("failed to triage submissions: {}", error);
+            tracing::error!("failed to triage submissions: {}", error);
         }
         life_tracker.cleanup(&self.raw, &self.mem_allocator, &self.desc_allocator);
     }
@@ -689,7 +693,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        log::info!("Create buffer {:?} with ID {:?}", desc, id_in);
+        tracing::info!("Create buffer {:?} with ID {:?}", desc, id_in);
 
         if desc.mapped_at_creation && desc.size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
             return Err(CreateBufferError::UnalignedSize);
@@ -744,7 +748,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let id = hub.buffers.register_identity(id_in, buffer, &mut token);
-        log::info!("Created buffer {:?} with {:?}", id, desc);
+        tracing::info!("Created buffer {:?} with {:?}", id, desc);
         #[cfg(feature = "trace")]
         match device.trace {
             Some(ref trace) => {
@@ -784,8 +788,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .load(Ordering::Acquire)
         };
 
-        device_guard[device_id]
-            .wait_for_submit(last_submission, &mut token)
+        device_guard[device_id].wait_for_submit(last_submission, &mut token)
     }
 
     pub fn device_set_buffer_sub_data<B: GfxBackend>(
@@ -885,15 +888,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        log::info!("Buffer {:?} is dropped", buffer_id);
+        tracing::info!("Buffer {:?} is dropped", buffer_id);
         let (ref_count, last_submit_index, device_id) = {
             let (mut buffer_guard, _) = hub.buffers.write(&mut token);
             let buffer = &mut buffer_guard[buffer_id];
             let ref_count = buffer.life_guard.ref_count.take().unwrap();
-            let last_submit_index = buffer
-                .life_guard
-                .submission_index
-                .load(Ordering::Acquire);
+            let last_submit_index = buffer.life_guard.submission_index.load(Ordering::Acquire);
             (ref_count, last_submit_index, buffer.device_id.value)
         };
 
@@ -908,7 +908,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .push(buffer_id);
             match device.wait_for_submit(last_submit_index, &mut token) {
                 Ok(()) => (),
-                Err(e) => log::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
+                Err(e) => tracing::error!("Failed to wait for buffer {:?}: {:?}", buffer_id, e),
             }
         } else {
             device
@@ -1850,7 +1850,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub
             .bind_groups
             .register_identity(id_in, bind_group, &mut token);
-        log::debug!(
+        tracing::debug!(
             "Bind group {:?} {:#?}",
             id,
             hub.bind_groups.read(&mut token).0[id].used
@@ -1930,8 +1930,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_err(|err| {
                             // TODO: eventually, when Naga gets support for all features,
                             // we want to convert these to a hard error,
-                            log::warn!("Failed to parse shader SPIR-V code: {:?}", err);
-                            log::warn!("Shader module will not be validated");
+                            tracing::warn!("Failed to parse shader SPIR-V code: {:?}", err);
+                            tracing::warn!("Shader module will not be validated");
                         })
                         .ok()
                 } else {
@@ -2356,7 +2356,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 for (i, state) in color_states.iter().enumerate() {
                     let output = &interface[&(i as wgt::ShaderLocation)];
                     if !validation::check_texture_format(state.format, output) {
-                        log::warn!(
+                        tracing::warn!(
                             "Incompatible fragment output[{}]. Shader: {:?}. Expected: {:?}",
                             i,
                             state.format,
@@ -2640,7 +2640,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 || height < caps.extents.start().height
                 || height > caps.extents.end().height
             {
-                log::warn!(
+                tracing::warn!(
                     "Requested size {}x{} is outside of the supported range: {:?}",
                     width,
                     height,
@@ -2648,7 +2648,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 );
             }
             if !caps.present_modes.contains(config.present_mode) {
-                log::warn!(
+                tracing::warn!(
                     "Surface does not support present mode: {:?}, falling back to {:?}",
                     config.present_mode,
                     hal::window::PresentMode::FIFO
@@ -2657,7 +2657,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        log::info!("creating swap chain {:?}", desc);
+        tracing::info!("creating swap chain {:?}", desc);
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -2882,7 +2882,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     })
                 }
             };
-            log::debug!("Buffer {:?} map state -> Waiting", buffer_id);
+            tracing::debug!("Buffer {:?} map state -> Waiting", buffer_id);
 
             (buffer.device_id.value, buffer.life_guard.add_ref())
         };
@@ -2937,7 +2937,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let buffer = &mut buffer_guard[buffer_id];
         let device = &mut device_guard[buffer.device_id.value];
 
-        log::debug!("Buffer {:?} map state -> Idle", buffer_id);
+        tracing::debug!("Buffer {:?} map state -> Idle", buffer_id);
         match mem::replace(&mut buffer.map_state, resource::BufferMapState::Idle) {
             resource::BufferMapState::Init {
                 ptr,

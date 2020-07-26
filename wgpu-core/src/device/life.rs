@@ -135,12 +135,12 @@ impl<B: hal::Backend> NonReferencedResources<B> {
         if !self.buffers.is_empty() || !self.images.is_empty() {
             let mut heaps = heaps_mutex.lock();
             for (raw, memory) in self.buffers.drain(..) {
-                log::trace!("Buffer {:?} is destroyed with memory {:?}", raw, memory);
+                tracing::trace!("Buffer {:?} is destroyed with memory {:?}", raw, memory);
                 device.destroy_buffer(raw);
                 heaps.free(device, memory);
             }
             for (raw, memory) in self.images.drain(..) {
-                log::trace!("Image {:?} is destroyed with memory {:?}", raw, memory);
+                tracing::trace!("Image {:?} is destroyed with memory {:?}", raw, memory);
                 device.destroy_image(raw);
                 heaps.free(device, memory);
             }
@@ -272,7 +272,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
 
     fn wait_idle(&self, device: &B::Device) -> Result<(), WaitIdleError> {
         if !self.active.is_empty() {
-            log::debug!("Waiting for IDLE...");
+            tracing::debug!("Waiting for IDLE...");
             let status = unsafe {
                 device.wait_for_fences(
                     self.active.iter().map(|a| &a.fence),
@@ -280,7 +280,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
                     CLEANUP_WAIT_MS * 1_000_000,
                 )?
             };
-            log::debug!("...Done");
+            tracing::debug!("...Done");
 
             if status == false {
                 // We timed out while waiting for the fences
@@ -313,7 +313,7 @@ impl<B: hal::Backend> LifetimeTracker<B> {
         };
 
         for a in self.active.drain(..done_count) {
-            log::trace!("Active submission {} is done", a.index);
+            tracing::trace!("Active submission {} is done", a.index);
             self.free_resources.extend(a.last_resources);
             self.ready_to_map.extend(a.mapped);
             unsafe {
@@ -469,7 +469,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyBuffer(id)));
                     hub.buffers.free_id(id);
                     let res = guard.remove(id).unwrap();
-                    log::debug!("Buffer {:?} is detached", id);
+                    tracing::debug!("Buffer {:?} is detached", id);
 
                     let submit_index = res.life_guard.submission_index.load(Ordering::Acquire);
                     self.active
@@ -583,7 +583,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             let buf = &buffer_guard[resource_id];
 
             let submit_index = buf.life_guard.submission_index.load(Ordering::Acquire);
-            log::trace!(
+            tracing::trace!(
                 "Mapping of {:?} at submission {:?} gets assigned to active {:?}",
                 resource_id,
                 submit_index,
@@ -653,7 +653,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             .collect::<FastHashMap<_, _>>();
 
         if !remove_list.is_empty() {
-            log::debug!("Free framebuffers {:?}", remove_list);
+            tracing::debug!("Free framebuffers {:?}", remove_list);
             for (ref key, submit_index) in remove_list {
                 let framebuffer = framebuffers.remove(key).unwrap();
                 self.active
@@ -685,7 +685,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
             if buffer.life_guard.ref_count.is_none() && trackers.buffers.remove_abandoned(buffer_id)
             {
                 buffer.map_state = resource::BufferMapState::Idle;
-                log::debug!("Mapping request is dropped because the buffer is destroyed.");
+                tracing::debug!("Mapping request is dropped because the buffer is destroyed.");
                 hub.buffers.free_id(buffer_id);
                 let buffer = buffer_guard.remove(buffer_id).unwrap();
                 self.free_resources
@@ -700,7 +700,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     _ => panic!("No pending mapping."),
                 };
                 let status = if mapping.sub_range.size.map_or(true, |x| x != 0) {
-                    log::debug!("Buffer {:?} map state -> Active", buffer_id);
+                    tracing::debug!("Buffer {:?} map state -> Active", buffer_id);
                     let host = mapping.op.host;
                     match super::map_buffer(raw, buffer, mapping.sub_range.clone(), host) {
                         Ok(ptr) => {
@@ -712,7 +712,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                             resource::BufferMapAsyncStatus::Success
                         }
                         Err(e) => {
-                            log::error!("Mapping failed {:?}", e);
+                            tracing::error!("Mapping failed {:?}", e);
                             resource::BufferMapAsyncStatus::Error
                         }
                     }
