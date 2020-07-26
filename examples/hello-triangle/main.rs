@@ -141,7 +141,8 @@ fn main() {
     let window = winit::window::Window::new(&event_loop).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
-        env_logger::init();
+        #[cfg(feature = "subscriber")]
+        wgpu::util::initialize_default_subscriber(None);
 
         // Temporarily avoid srgb formats for the swapchain on the web
         futures::executor::block_on(run(event_loop, window, wgpu::TextureFormat::Bgra8UnormSrgb));
