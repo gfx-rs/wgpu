@@ -72,7 +72,7 @@ struct Setup {
 }
 
 async fn setup<E: Example>(title: &str) -> Setup {
-    #[cfg(feature = "subscriber")]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "subscriber"))]
     {
         let chrome_tracing_dir = std::env::var("WGPU_CHROME_TRACE");
         wgpu::util::initialize_default_subscriber(
