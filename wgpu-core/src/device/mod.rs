@@ -948,6 +948,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         };
 
+        let texture_features = conv::texture_features(desc.format);
+        if texture_features != wgt::Features::empty() && !device.features.contains(texture_features)
+        {
+            return Err(CreateTextureError::MissingFeature(
+                texture_features,
+                desc.format,
+            ));
+        }
+
         device
             .trackers
             .lock()
@@ -3088,6 +3097,8 @@ pub enum CreateTextureError {
         MAX_MIP_LEVELS
     )]
     InvalidMipLevelCount(u32),
+    #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
+    MissingFeature(wgt::Features, TextureFormat),
     #[error(transparent)]
     HeapsError(#[from] gfx_memory::HeapsError),
     #[error("not enough memory left")]
