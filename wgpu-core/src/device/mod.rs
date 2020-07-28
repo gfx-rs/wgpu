@@ -998,13 +998,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (format, view_kind, range) = match desc {
             Some(desc) => {
                 let kind = conv::map_texture_view_dimension(desc.dimension);
+                let required_level_count =
+                    desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
+                let required_layer_count =
+                    desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
+                let level_end = texture.full_range.levels.end;
+                let layer_end = texture.full_range.layers.end;
+                if required_level_count > level_end as u32 {
+                    return Err(CreateTextureViewError::InvalidMipLevelCount {
+                        requested: required_level_count,
+                        total: level_end,
+                    });
+                }
+                if required_layer_count > layer_end as u32 {
+                    return Err(CreateTextureViewError::InvalidArrayLayerCount {
+                        requested: required_layer_count,
+                        total: layer_end,
+                    });
+                };
                 let end_level = match desc.level_count {
                     Some(count) => (desc.base_mip_level + count.get()) as u8,
-                    None => texture.full_range.levels.end,
+                    None => level_end,
                 };
                 let end_layer = match desc.array_layer_count {
                     Some(count) => (desc.base_array_layer + count.get()) as u16,
-                    None => texture.full_range.layers.end,
+                    None => layer_end,
                 };
                 let range = hal::image::SubresourceRange {
                     aspects: texture.full_range.aspects,
@@ -3126,6 +3144,12 @@ pub enum CreateSwapChainError {
 pub enum CreateTextureViewError {
     #[error("not enough memory left")]
     OutOfMemory,
+    #[error(
+        "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
+    )]
+    InvalidMipLevelCount { requested: u32, total: u8 },
+    #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
+    InvalidArrayLayerCount { requested: u32, total: u16 },
 }
 
 #[derive(Clone, Debug, Error)]
