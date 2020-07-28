@@ -29,7 +29,7 @@ impl<B: hal::Backend> CommandPool<B> {
             if self.pending[i].1 <= last_done_index {
                 let (cmd_buf, index) = self.pending.swap_remove(i);
                 tracing::trace!(
-                    "recycling comb submitted in {} when {} is last done",
+                    "recycling cmdbuf submitted in {} when {} is last done",
                     index,
                     last_done_index,
                 );

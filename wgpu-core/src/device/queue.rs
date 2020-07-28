@@ -26,7 +26,7 @@ use thiserror::Error;
 struct StagingData<B: hal::Backend> {
     buffer: B::Buffer,
     memory: MemoryBlock<B>,
-    comb: B::CommandBuffer,
+    cmdbuf: B::CommandBuffer,
 }
 
 #[derive(Debug, Default)]
@@ -46,11 +46,11 @@ impl<B: hal::Backend> PendingWrites<B> {
     pub fn dispose(
         self,
         device: &B::Device,
-        com_allocator: &CommandAllocator<B>,
+        cmd_allocator: &CommandAllocator<B>,
         mem_allocator: &mut Heaps<B>,
     ) {
         if let Some(raw) = self.command_buffer {
-            com_allocator.discard_internal(raw);
+            cmd_allocator.discard_internal(raw);
         }
         for (buffer, memory) in self.temp_buffers {
             mem_allocator.free(device, memory);
@@ -66,18 +66,18 @@ impl<B: hal::Backend> PendingWrites<B> {
 
     fn consume(&mut self, stage: StagingData<B>) {
         self.temp_buffers.push((stage.buffer, stage.memory));
-        self.command_buffer = Some(stage.comb);
+        self.command_buffer = Some(stage.cmdbuf);
     }
 }
 
 impl<B: hal::Backend> super::Device<B> {
     pub fn borrow_pending_writes(&mut self) -> &mut B::CommandBuffer {
         if self.pending_writes.command_buffer.is_none() {
-            let mut comb = self.com_allocator.allocate_internal();
+            let mut cmdbuf = self.cmd_allocator.allocate_internal();
             unsafe {
-                comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
             }
-            self.pending_writes.command_buffer = Some(comb);
+            self.pending_writes.command_buffer = Some(cmdbuf);
         }
         self.pending_writes.command_buffer.as_mut().unwrap()
     }
@@ -113,20 +113,20 @@ impl<B: hal::Backend> super::Device<B> {
                 })?;
         }
 
-        let comb = match self.pending_writes.command_buffer.take() {
-            Some(comb) => comb,
+        let cmdbuf = match self.pending_writes.command_buffer.take() {
+            Some(cmdbuf) => cmdbuf,
             None => {
-                let mut comb = self.com_allocator.allocate_internal();
+                let mut cmdbuf = self.cmd_allocator.allocate_internal();
                 unsafe {
-                    comb.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
+                    cmdbuf.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                 }
-                comb
+                cmdbuf
             }
         };
         Ok(StagingData {
             buffer,
             memory,
-            comb,
+            cmdbuf,
         })
     }
 }
@@ -215,7 +215,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             size: data.len() as _,
         };
         unsafe {
-            stage.comb.pipeline_barrier(
+            stage.cmdbuf.pipeline_barrier(
                 super::all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 iter::once(hal::memory::Barrier::Buffer {
@@ -227,7 +227,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .chain(transition.map(|pending| pending.into_hal(dst))),
             );
             stage
-                .comb
+                .cmdbuf
                 .copy_buffer(&stage.buffer, &dst.raw, iter::once(region));
         }
 
@@ -346,7 +346,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             image_extent: conv::map_extent(size, dst.dimension),
         };
         unsafe {
-            stage.comb.pipeline_barrier(
+            stage.cmdbuf.pipeline_barrier(
                 super::all_image_stages() | hal::pso::PipelineStage::HOST
                     ..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
@@ -358,7 +358,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 })
                 .chain(transition.map(|pending| pending.into_hal(dst))),
             );
-            stage.comb.copy_buffer_to_image(
+            stage.cmdbuf.copy_buffer_to_image(
                 &stage.buffer,
                 &dst.raw,
                 hal::image::Layout::TransferDstOptimal,
@@ -420,32 +420,35 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
-                        let comb = &mut command_buffer_guard[cmb_id];
+                        let cmdbuf = &mut command_buffer_guard[cmb_id];
                         #[cfg(feature = "trace")]
                         match device.trace {
                             Some(ref trace) => trace
                                 .lock()
-                                .add(Action::Submit(submit_index, comb.commands.take().unwrap())),
+                                .add(Action::Submit(submit_index, cmdbuf.commands.take().unwrap())),
                             None => (),
                         };
 
-                        if let Some((sc_id, fbo)) = comb.used_swap_chain.take() {
+                        if let Some((sc_id, fbo)) = cmdbuf.used_swap_chain.take() {
                             let sc = &mut swap_chain_guard[sc_id.value];
                             sc.active_submission_index = submit_index;
                             if sc.acquired_view_id.is_none() {
                                 return Err(QueueSubmitError::SwapChainOutputDropped);
                             }
+                            // For each swapchain, we only want to have at most 1 signaled semaphore.
                             if sc.acquired_framebuffers.is_empty() {
+                                // Only add a signal if this is the first time for this swapchain
+                                // to be used in the submission.
                                 signal_swapchain_semaphores.push(sc_id.value);
                             }
                             sc.acquired_framebuffers.push(fbo);
                         }
 
                         // optimize the tracked states
-                        comb.trackers.optimize();
+                        cmdbuf.trackers.optimize();
 
                         // update submission IDs
-                        for id in comb.trackers.buffers.used() {
+                        for id in cmdbuf.trackers.buffers.used() {
                             let buffer = &mut buffer_guard[id];
                             if !buffer.life_guard.use_at(submit_index) {
                                 if let BufferMapState::Active { .. } = buffer.map_state {
@@ -460,42 +463,42 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 }
                             }
                         }
-                        for id in comb.trackers.textures.used() {
+                        for id in cmdbuf.trackers.textures.used() {
                             if !texture_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.textures.push(id);
                             }
                         }
-                        for id in comb.trackers.views.used() {
+                        for id in cmdbuf.trackers.views.used() {
                             if !texture_view_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.texture_views.push(id);
                             }
                         }
-                        for id in comb.trackers.bind_groups.used() {
+                        for id in cmdbuf.trackers.bind_groups.used() {
                             if !bind_group_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.bind_groups.push(id);
                             }
                         }
-                        for id in comb.trackers.samplers.used() {
+                        for id in cmdbuf.trackers.samplers.used() {
                             if !sampler_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.samplers.push(id);
                             }
                         }
-                        for id in comb.trackers.compute_pipes.used() {
+                        for id in cmdbuf.trackers.compute_pipes.used() {
                             if !compute_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.compute_pipelines.push(id);
                             }
                         }
-                        for id in comb.trackers.render_pipes.used() {
+                        for id in cmdbuf.trackers.render_pipes.used() {
                             if !render_pipe_guard[id].life_guard.use_at(submit_index) {
                                 device.temp_suspected.render_pipelines.push(id);
                             }
                         }
 
                         // execute resource transitions
-                        let mut transit = device.com_allocator.extend(comb);
+                        let mut transit = device.cmd_allocator.extend(cmdbuf);
                         unsafe {
                             // the last buffer was open, closing now
-                            comb.raw.last_mut().unwrap().finish();
+                            cmdbuf.raw.last_mut().unwrap().finish();
                             transit
                                 .begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
                         }
@@ -503,14 +506,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         CommandBuffer::insert_barriers(
                             &mut transit,
                             &mut *trackers,
-                            &comb.trackers,
+                            &cmdbuf.trackers,
                             &*buffer_guard,
                             &*texture_guard,
                         );
                         unsafe {
                             transit.finish();
                         }
-                        comb.raw.insert(0, transit);
+                        cmdbuf.raw.insert(0, transit);
                     }
 
                     tracing::trace!("Device after submission {}: {:#?}", submit_index, trackers);
@@ -541,7 +544,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             if let Some(comb_raw) = pending_write_command_buffer {
                 device
-                    .com_allocator
+                    .cmd_allocator
                     .after_submit_internal(comb_raw, submit_index);
             }
 
@@ -556,7 +559,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // finally, return the command buffers to the allocator
             for &cmb_id in command_buffer_ids {
                 let (cmd_buf, _) = hub.command_buffers.unregister(cmb_id, &mut token);
-                device.com_allocator.after_submit(cmd_buf, submit_index);
+                device.cmd_allocator.after_submit(cmd_buf, submit_index);
             }
 
             callbacks

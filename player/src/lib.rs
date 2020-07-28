@@ -311,8 +311,8 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     &wgt::CommandEncoderDescriptor { label: ptr::null() },
                     comb_manager.alloc(device.backend()),
                 );
-                let comb = self.encode_commands::<B>(encoder, commands);
-                self.queue_submit::<B>(device, &[comb]).unwrap();
+                let cmdbuf = self.encode_commands::<B>(encoder, commands);
+                self.queue_submit::<B>(device, &[cmdbuf]).unwrap();
             }
         }
     }

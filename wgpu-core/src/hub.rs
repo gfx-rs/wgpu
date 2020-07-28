@@ -536,7 +536,7 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
         for element in self.command_buffers.data.write().map.drain(..) {
             if let Element::Occupied(command_buffer, _) = element {
                 devices[command_buffer.device_id.value]
-                    .com_allocator
+                    .cmd_allocator
                     .after_submit(command_buffer, 0);
             }
         }

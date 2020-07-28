@@ -184,7 +184,7 @@ pub struct Device<B: hal::Backend> {
     pub(crate) raw: B::Device,
     pub(crate) adapter_id: Stored<id::AdapterId>,
     pub(crate) queue_group: hal::queue::QueueGroup<B>,
-    pub(crate) com_allocator: command::CommandAllocator<B>,
+    pub(crate) cmd_allocator: command::CommandAllocator<B>,
     mem_allocator: Mutex<Heaps<B>>,
     desc_allocator: Mutex<DescriptorAllocator<B>>,
     //Note: The submission index here corresponds to the last submission that is done.
@@ -218,7 +218,7 @@ impl<B: GfxBackend> Device<B> {
         desc: &wgt::DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
     ) -> Self {
-        let com_allocator = command::CommandAllocator::new(queue_group.family, &raw);
+        let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw);
         let heaps = unsafe {
             Heaps::new(
                 &mem_props,
@@ -243,7 +243,7 @@ impl<B: GfxBackend> Device<B> {
         Device {
             raw,
             adapter_id,
-            com_allocator,
+            cmd_allocator,
             mem_allocator: Mutex::new(heaps),
             desc_allocator: Mutex::new(descriptors),
             queue_group,
@@ -318,7 +318,7 @@ impl<B: GfxBackend> Device<B> {
         self.life_guard
             .submission_index
             .store(last_done, Ordering::Release);
-        self.com_allocator.maintain(&self.raw, last_done);
+        self.cmd_allocator.maintain(&self.raw, last_done);
         Ok(callbacks)
     }
 
@@ -644,8 +644,8 @@ impl<B: hal::Backend> Device<B> {
         let mut desc_alloc = self.desc_allocator.into_inner();
         let mut mem_alloc = self.mem_allocator.into_inner();
         self.pending_writes
-            .dispose(&self.raw, &self.com_allocator, &mut mem_alloc);
-        self.com_allocator.destroy(&self.raw);
+            .dispose(&self.raw, &self.cmd_allocator, &mut mem_alloc);
+        self.cmd_allocator.destroy(&self.raw);
         unsafe {
             desc_alloc.clear(&self.raw);
             mem_alloc.clear(&self.raw);
@@ -2047,7 +2047,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ref_count: device.life_guard.add_ref(),
         };
 
-        let mut command_buffer = device.com_allocator.allocate(
+        let mut command_buffer = device.cmd_allocator.allocate(
             dev_stored,
             &device.raw,
             device.limits.clone(),
@@ -2078,14 +2078,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
 
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let comb = {
+        let cmdbuf = {
             let (mut command_buffer_guard, _) = hub.command_buffers.write(&mut token);
             command_buffer_guard.remove(command_encoder_id).unwrap()
         };
 
-        let device = &mut device_guard[comb.device_id.value];
-        device.untrack::<G>(&hub, &comb.trackers, &mut token);
-        device.com_allocator.discard(comb);
+        let device = &mut device_guard[cmdbuf.device_id.value];
+        device.untrack::<G>(&hub, &cmdbuf.trackers, &mut token);
+        device.cmd_allocator.discard(cmdbuf);
     }
 
     pub fn command_buffer_destroy<B: GfxBackend>(&self, command_buffer_id: id::CommandBufferId) {
@@ -2987,14 +2987,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     families: None,
                 };
                 unsafe {
-                    let comb = device.borrow_pending_writes();
-                    comb.pipeline_barrier(
+                    let cmdbuf = device.borrow_pending_writes();
+                    cmdbuf.pipeline_barrier(
                         hal::pso::PipelineStage::HOST..hal::pso::PipelineStage::TRANSFER,
                         hal::memory::Dependencies::empty(),
                         iter::once(transition_src).chain(iter::once(transition_dst)),
                     );
                     if buffer.size > 0 {
-                        comb.copy_buffer(&stage_buffer, &buffer.raw, iter::once(region));
+                        cmdbuf.copy_buffer(&stage_buffer, &buffer.raw, iter::once(region));
                     }
                 }
                 device
