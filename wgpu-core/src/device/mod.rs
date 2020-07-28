@@ -485,7 +485,7 @@ impl<B: GfxBackend> Device<B> {
             _ => {}
         }
 
-        let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count);
+        let kind = conv::map_texture_dimension_size(desc.dimension, desc.size, desc.sample_count)?;
         let format = conv::map_texture_format(desc.format, self.private_features);
         let aspects = format.surface_desc().aspects;
         let usage = conv::map_texture_usage(desc.usage, aspects);
@@ -3063,6 +3063,8 @@ pub enum CreateBufferError {
 pub enum CreateTextureError {
     #[error("D24Plus textures cannot be copied")]
     CannotCopyD24Plus,
+    #[error(transparent)]
+    InvalidDimension(#[from] conv::MapTextureDimensionSizeError),
     #[error(
         "texture descriptor mip level count ({0}) must be less than device max mip levels ({})",
         MAX_MIP_LEVELS
