@@ -579,21 +579,19 @@ pub enum PrepareStageError {
 #[derive(Clone, Debug, Error)]
 pub enum QueueWriteBufferError {
     #[error("write buffer with indices {start}..{end} would overrun buffer of size {size}")]
-    BufferOverrun { start: u64, end: u64, size: u64 },
+    BufferOverrun {
+        start: wgt::BufferAddress,
+        end: wgt::BufferAddress,
+        size: wgt::BufferAddress,
+    },
     #[error(transparent)]
     MissingBufferUsage(#[from] MissingBufferUsageError),
     #[error(transparent)]
     Stage(#[from] PrepareStageError),
-    #[error(
-        "buffer offset {0} must be a multiple of {}",
-        wgt::COPY_BUFFER_ALIGNMENT
-    )]
-    UnalignedBufferOffset(u64),
-    #[error(
-        "buffer write size {0} must be a multiple of {}",
-        wgt::COPY_BUFFER_ALIGNMENT
-    )]
-    UnalignedDataSize(u64),
+    #[error("buffer offset {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
+    UnalignedBufferOffset(wgt::BufferAddress),
+    #[error("buffer write size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
+    UnalignedDataSize(wgt::BufferAddress),
 }
 
 #[derive(Clone, Debug, Error)]

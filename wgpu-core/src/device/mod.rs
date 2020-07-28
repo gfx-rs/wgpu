@@ -1430,13 +1430,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
 
-        let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
-        let pipeline_layout = {
+        let layout = {
+            let mut count_validator = binding_model::BindingTypeMaxCountValidator::default();
             let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
+
+            // validate total resource counts
             for &id in desc.bind_group_layouts.iter() {
                 let bind_group_layout = &bind_group_layout_guard[id];
                 count_validator.merge(&bind_group_layout.count_validator);
             }
+            count_validator
+                .validate(&device.limits)
+                .map_err(CreatePipelineLayoutError::TooManyBindings)?;
+
             let descriptor_set_layouts = desc
                 .bind_group_layouts
                 .iter()
@@ -1445,35 +1451,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .push_constant_ranges
                 .iter()
                 .map(|pc| (conv::map_shader_stage_flags(pc.stages), pc.range.clone()));
-            unsafe {
-                device
-                    .raw
-                    .create_pipeline_layout(descriptor_set_layouts, push_constants)
-                    .or(Err(binding_model::CreatePipelineLayoutError::OutOfMemory))?
-            }
-        };
-        count_validator
-            .validate(&device.limits)
-            .map_err(CreatePipelineLayoutError::TooManyBindings)?;
 
-        let layout = binding_model::PipelineLayout {
-            raw: pipeline_layout,
-            device_id: Stored {
-                value: device_id,
-                ref_count: device.life_guard.add_ref(),
-            },
-            life_guard: LifeGuard::new(),
-            bind_group_layout_ids: {
-                let (bind_group_layout_guard, _) = hub.bind_group_layouts.read(&mut token);
-                desc.bind_group_layouts
+            binding_model::PipelineLayout {
+                raw: unsafe {
+                    device
+                        .raw
+                        .create_pipeline_layout(descriptor_set_layouts, push_constants)
+                        .or(Err(binding_model::CreatePipelineLayoutError::OutOfMemory))?
+                },
+                device_id: Stored {
+                    value: device_id,
+                    ref_count: device.life_guard.add_ref(),
+                },
+                life_guard: LifeGuard::new(),
+                bind_group_layout_ids: desc
+                    .bind_group_layouts
                     .iter()
                     .map(|&id| {
                         bind_group_layout_guard[id].multi_ref_count.inc();
                         id
                     })
-                    .collect()
-            },
-            push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
+                    .collect(),
+                push_constant_ranges: desc.push_constant_ranges.iter().cloned().collect(),
+            }
         };
 
         let id = hub
@@ -2165,6 +2165,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .init((vb_state.stride, vb_state.step_mode));
             if vb_state.attributes.is_empty() {
                 continue;
+            }
+            if vb_state.stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
+                return Err(pipeline::RenderPipelineError::UnalignedVertexStride {
+                    index: i as u32,
+                    stride: vb_state.stride,
+                });
             }
             vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
                 binding: i as u32,
@@ -3070,7 +3076,7 @@ pub enum BufferAccessError {
     NotMapped,
     #[error("not enough memory left")]
     OutOfMemory,
-    #[error("buffer map range is not aligned to {}", wgt::COPY_BUFFER_ALIGNMENT)]
+    #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedRange,
 }
 
