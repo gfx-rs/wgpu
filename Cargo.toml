@@ -27,14 +27,14 @@ vulkan-portability = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "11b3a95671d096aae2eac0d187be5472b5ab91c0"
+rev = "5bd24d50852eb9932535eb258c216a5e4a79808f"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "11b3a95671d096aae2eac0d187be5472b5ab91c0"
+rev = "5bd24d50852eb9932535eb258c216a5e4a79808f"
 
 [dependencies]
 arrayvec = "0.5"
