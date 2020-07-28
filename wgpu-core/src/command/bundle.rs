@@ -126,7 +126,7 @@ impl RenderBundle {
     /// a chance to go through the commands in `render_bundle_encoder_finish`.
     pub(crate) unsafe fn execute<B: GfxBackend>(
         &self,
-        comb: &mut B::CommandBuffer,
+        cmdbuf: &mut B::CommandBuffer,
         pipeline_layout_guard: &Storage<
             crate::binding_model::PipelineLayout<B>,
             id::PipelineLayoutId,
@@ -149,7 +149,7 @@ impl RenderBundle {
                     bind_group_id,
                 } => {
                     let bind_group = &bind_group_guard[bind_group_id];
-                    comb.bind_graphics_descriptor_sets(
+                    cmdbuf.bind_graphics_descriptor_sets(
                         &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
                         index as usize,
                         iter::once(bind_group.raw.raw()),
@@ -159,7 +159,7 @@ impl RenderBundle {
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
                     let pipeline = &pipeline_guard[pipeline_id];
-                    comb.bind_graphics_pipeline(&pipeline.raw);
+                    cmdbuf.bind_graphics_pipeline(&pipeline.raw);
                     index_type = conv::map_index_format(pipeline.index_format);
                     pipeline_layout_id = Some(pipeline.layout_id.value);
                 }
@@ -178,7 +178,7 @@ impl RenderBundle {
                         index_type,
                     };
 
-                    comb.bind_index_buffer(view);
+                    cmdbuf.bind_index_buffer(view);
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -191,7 +191,7 @@ impl RenderBundle {
                         offset,
                         size: size.map(|s| s.get()),
                     };
-                    comb.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
+                    cmdbuf.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
                 }
                 RenderCommand::SetPushConstant {
                     stages,
@@ -208,7 +208,7 @@ impl RenderBundle {
                         let data_slice = &self.base.push_constant_data
                             [(values_offset as usize)..values_end_offset];
 
-                        comb.push_graphics_constants(
+                        cmdbuf.push_graphics_constants(
                             &pipeline_layout.raw,
                             conv::map_shader_stage_flags(stages),
                             offset,
@@ -219,7 +219,7 @@ impl RenderBundle {
                             offset,
                             size_bytes,
                             |clear_offset, clear_data| {
-                                comb.push_graphics_constants(
+                                cmdbuf.push_graphics_constants(
                                     &pipeline_layout.raw,
                                     conv::map_shader_stage_flags(stages),
                                     clear_offset,
@@ -235,7 +235,7 @@ impl RenderBundle {
                     first_vertex,
                     first_instance,
                 } => {
-                    comb.draw(
+                    cmdbuf.draw(
                         first_vertex..first_vertex + vertex_count,
                         first_instance..first_instance + instance_count,
                     );
@@ -247,7 +247,7 @@ impl RenderBundle {
                     base_vertex,
                     first_instance,
                 } => {
-                    comb.draw_indexed(
+                    cmdbuf.draw_indexed(
                         first_index..first_index + index_count,
                         base_vertex,
                         first_instance..first_instance + instance_count,
@@ -260,7 +260,7 @@ impl RenderBundle {
                     indexed: false,
                 } => {
                     let buffer = &buffer_guard[buffer_id];
-                    comb.draw_indirect(&buffer.raw, offset, 1, 0);
+                    cmdbuf.draw_indirect(&buffer.raw, offset, 1, 0);
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -269,7 +269,7 @@ impl RenderBundle {
                     indexed: true,
                 } => {
                     let buffer = &buffer_guard[buffer_id];
-                    comb.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
+                    cmdbuf.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),

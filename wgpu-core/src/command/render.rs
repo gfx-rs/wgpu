@@ -516,7 +516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut trackers = TrackerSet::new(B::VARIANT);
         let cmb = &mut cmb_guard[encoder_id];
         let device = &device_guard[cmb.device_id.value];
-        let mut raw = device.com_allocator.extend(cmb);
+        let mut raw = device.cmd_allocator.extend(cmb);
 
         #[cfg(feature = "trace")]
         match cmb.commands {

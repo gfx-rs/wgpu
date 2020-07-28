@@ -161,20 +161,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         //TODO: actually close the last recorded command buffer
         let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
-        let comb = &mut comb_guard[encoder_id];
-        if !comb.is_recording {
+        let cmdbuf = &mut comb_guard[encoder_id];
+        if !cmdbuf.is_recording {
             return Err(CommandEncoderFinishError::NotRecording);
         }
-        comb.is_recording = false;
+        cmdbuf.is_recording = false;
         // stop tracking the swapchain image, if used
-        if let Some((ref sc_id, _)) = comb.used_swap_chain {
+        if let Some((ref sc_id, _)) = cmdbuf.used_swap_chain {
             let view_id = swap_chain_guard[sc_id.value]
                 .acquired_view_id
                 .as_ref()
                 .expect("Used swap chain frame has already presented");
-            comb.trackers.views.remove(view_id.value);
+            cmdbuf.trackers.views.remove(view_id.value);
         }
-        tracing::trace!("Command buffer {:?} {:#?}", encoder_id, comb.trackers);
+        tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmdbuf.trackers);
         Ok(encoder_id)
     }
 
