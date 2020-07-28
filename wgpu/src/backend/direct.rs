@@ -1183,6 +1183,7 @@ impl crate::Context for Context {
     ) {
         let global = &self.0;
         wgc::gfx_select!(*queue => global.queue_write_buffer(*queue, *buffer, offset, data))
+            .unwrap()
     }
 
     fn queue_write_texture(
@@ -1201,6 +1202,7 @@ impl crate::Context for Context {
             &data_layout,
             &size
         ))
+        .unwrap()
     }
 
     fn queue_submit<I: Iterator<Item = Self::CommandBufferId>>(
