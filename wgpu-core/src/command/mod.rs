@@ -10,6 +10,7 @@ mod render;
 mod transfer;
 
 pub(crate) use self::allocator::CommandAllocator;
+pub use self::allocator::CommandAllocatorError;
 pub use self::bundle::*;
 pub use self::compute::*;
 pub use self::render::*;

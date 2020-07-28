@@ -217,8 +217,9 @@ impl<B: GfxBackend> Device<B> {
         private_features: PrivateFeatures,
         desc: &wgt::DeviceDescriptor,
         trace_path: Option<&std::path::Path>,
-    ) -> Self {
-        let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw);
+    ) -> Result<Self, CreateDeviceError> {
+        let cmd_allocator = command::CommandAllocator::new(queue_group.family, &raw)
+            .or(Err(CreateDeviceError::OutOfMemory))?;
         let heaps = unsafe {
             Heaps::new(
                 &mem_props,
@@ -240,7 +241,7 @@ impl<B: GfxBackend> Device<B> {
             None => (),
         }
 
-        Device {
+        Ok(Device {
             raw,
             adapter_id,
             cmd_allocator,
@@ -273,7 +274,7 @@ impl<B: GfxBackend> Device<B> {
             limits: desc.limits.clone(),
             features: desc.features.clone(),
             pending_writes: queue::PendingWrites::new(),
-        }
+        })
     }
 
     pub(crate) fn last_completed_submission_index(&self) -> SubmissionIndex {
@@ -2031,7 +2032,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &wgt::CommandEncoderDescriptor<Label>,
         id_in: Input<G, id::CommandEncoderId>,
-    ) -> id::CommandEncoderId {
+    ) -> Result<id::CommandEncoderId, command::CommandAllocatorError> {
         span!(_guard, INFO, "Device::create_command_encoder");
 
         let hub = B::hub(self);
@@ -2052,7 +2053,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             device.private_features,
             #[cfg(feature = "trace")]
             device.trace.is_some(),
-        );
+        )?;
 
         unsafe {
             let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
@@ -2065,8 +2066,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             raw_command_buffer.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
         }
 
-        hub.command_buffers
-            .register_identity(id_in, command_buffer, &mut token)
+        let id = hub
+            .command_buffers
+            .register_identity(id_in, command_buffer, &mut token);
+
+        Ok(id)
     }
 
     pub fn command_encoder_destroy<B: GfxBackend>(&self, command_encoder_id: id::CommandEncoderId) {
@@ -3033,6 +3037,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         Ok(())
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateDeviceError {
+    #[error("not enough memory left")]
+    OutOfMemory,
 }
 
 #[derive(Clone, Debug, Error)]

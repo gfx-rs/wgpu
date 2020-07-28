@@ -423,9 +423,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let cmdbuf = &mut command_buffer_guard[cmb_id];
                         #[cfg(feature = "trace")]
                         match device.trace {
-                            Some(ref trace) => trace
-                                .lock()
-                                .add(Action::Submit(submit_index, cmdbuf.commands.take().unwrap())),
+                            Some(ref trace) => trace.lock().add(Action::Submit(
+                                submit_index,
+                                cmdbuf.commands.take().unwrap(),
+                            )),
                             None => (),
                         };
 
