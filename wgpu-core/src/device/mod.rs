@@ -998,15 +998,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (format, view_kind, range) = match desc {
             Some(desc) => {
                 let kind = conv::map_texture_view_dimension(desc.dimension);
-                let end_level = if desc.level_count == 0 {
-                    texture.full_range.levels.end
-                } else {
-                    (desc.base_mip_level + desc.level_count) as u8
+                let end_level = match desc.level_count {
+                    Some(count) => (desc.base_mip_level + count.get()) as u8,
+                    None => texture.full_range.levels.end,
                 };
-                let end_layer = if desc.array_layer_count == 0 {
-                    texture.full_range.layers.end
-                } else {
-                    (desc.base_array_layer + desc.array_layer_count) as u16
+                let end_layer = match desc.array_layer_count {
+                    Some(count) => (desc.base_array_layer + count.get()) as u16,
+                    None => texture.full_range.layers.end,
                 };
                 let range = hal::image::SubresourceRange {
                     aspects: texture.full_range.aspects,

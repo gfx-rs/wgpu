@@ -10,7 +10,7 @@
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ops::Range};
+use std::{borrow::Cow, num::NonZeroU32, ops::Range};
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
@@ -1342,12 +1342,16 @@ pub struct TextureViewDescriptor<L> {
     pub aspect: TextureAspect,
     /// Base mip level.
     pub base_mip_level: u32,
-    /// Mip level count. Must be at least one. base_mip_level + level_count must be less or equal to underlying texture mip count.
-    pub level_count: u32,
+    /// Mip level count.
+    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
+    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
+    pub level_count: Option<NonZeroU32>,
     /// Base array layer.
     pub base_array_layer: u32,
-    /// Layer count. Must be at least one. base_array_layer + array_layer_count must be less or equal to the underlying array count.
-    pub array_layer_count: u32,
+    /// Layer count.
+    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
+    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
+    pub array_layer_count: Option<NonZeroU32>,
 }
 
 impl<L> TextureViewDescriptor<L> {
