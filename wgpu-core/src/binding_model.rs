@@ -66,10 +66,7 @@ pub enum CreateBindGroupError {
     SingleBindingExpected,
     #[error("unable to create a bind group with a swap chain image")]
     SwapChainImage,
-    #[error(
-        "buffer offset {0} must be a multiple of {}",
-        wgt::BIND_BUFFER_ALIGNMENT
-    )]
+    #[error("buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(wgt::BufferAddress),
     #[error("uniform buffer binding range exceeds `max_uniform_buffer_binding_size` limit")]
     UniformBufferRangeTooLarge,
@@ -320,10 +317,7 @@ pub enum PushConstantUploadError {
         actual: wgt::ShaderStage,
         unmatched: wgt::ShaderStage,
     },
-    #[error(
-        "provided push constant offset {0} must be aligned to {}",
-        wgt::PUSH_CONSTANT_ALIGNMENT
-    )]
+    #[error("provided push constant offset {0} does not respect `PUSH_CONSTANT_ALIGNMENT`")]
     Unaligned(u32),
 }
 
@@ -448,8 +442,7 @@ pub enum BindError {
     #[error("number of dynamic offsets ({actual}) doesn't match the number of dynamic bindings in the bind group layout ({expected})")]
     MismatchedDynamicOffsetCount { actual: usize, expected: usize },
     #[error(
-        "dynamic binding at index {idx}: offset {offset} must be aligned to {}",
-        wgt::BIND_BUFFER_ALIGNMENT
+        "dynamic binding at index {idx}: offset {offset} does not respect `BIND_BUFFER_ALIGNMENT`"
     )]
     UnalignedDynamicBinding { idx: usize, offset: u32 },
     #[error("dynamic binding at index {idx} with offset {offset} would overrun the buffer (limit: {max})")]

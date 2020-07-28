@@ -38,15 +38,15 @@ pub enum TransferError {
     BufferOverrun,
     #[error("buffer offset is not aligned to block size")]
     UnalignedBufferOffset,
-    #[error("copy size is not a multiple of block size")]
+    #[error("copy size does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedCopySize,
-    #[error("copy width is not a multiple of block size")]
+    #[error("copy width is not a multiple of block width")]
     UnalignedCopyWidth,
-    #[error("copy height is not a multiple of block size")]
+    #[error("copy height is not a multiple of block height")]
     UnalignedCopyHeight,
-    #[error("bytes per row is not a multiple of the required alignment")]
+    #[error("bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
     UnalignedBytesPerRow,
-    #[error("number of rows per image is not a multiple of the required alignment")]
+    #[error("number of rows per image is not a multiple of block height")]
     UnalignedRowsPerImage,
     #[error("number of bytes per row is less than the number of bytes in a complete row")]
     InvalidBytesPerRow,

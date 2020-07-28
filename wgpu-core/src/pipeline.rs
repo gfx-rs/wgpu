@@ -63,6 +63,8 @@ pub enum RenderPipelineError {
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]
     InvalidSampleCount(u32),
+    #[error("vertex buffer {index} stride {stride} does not respect `VERTEX_STRIDE_ALIGNMENT`")]
+    UnalignedVertexStride { index: u32, stride: BufferAddress },
     #[error("vertex attribute at location {location} has invalid offset {offset}")]
     InvalidVertexAttributeOffset {
         location: wgt::ShaderLocation,

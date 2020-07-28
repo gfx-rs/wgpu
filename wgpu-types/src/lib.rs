@@ -27,6 +27,8 @@ pub const COPY_BYTES_PER_ROW_ALIGNMENT: u32 = 256;
 pub const BIND_BUFFER_ALIGNMENT: BufferAddress = 256;
 /// Buffer to buffer copy offsets and sizes must be aligned to this number.
 pub const COPY_BUFFER_ALIGNMENT: BufferAddress = 4;
+/// Vertex buffer strides have to be aligned to this number.
+pub const VERTEX_STRIDE_ALIGNMENT: BufferAddress = 4;
 /// Alignment all push constants need
 pub const PUSH_CONSTANT_ALIGNMENT: u32 = 4;
 

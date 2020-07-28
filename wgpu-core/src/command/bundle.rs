@@ -600,10 +600,7 @@ impl State {
 pub enum RenderCommandError {
     #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
     BindGroupIndexOutOfRange { index: u8, max: u32 },
-    #[error(
-        "dynamic buffer offset {0} is not a multiple of the required buffer alignment {}",
-        wgt::BIND_BUFFER_ALIGNMENT
-    )]
+    #[error("dynamic buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(u64),
     #[error("number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
     InvalidDynamicOffsetCount { actual: usize, expected: usize },

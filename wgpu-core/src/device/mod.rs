@@ -2166,6 +2166,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if vb_state.attributes.is_empty() {
                 continue;
             }
+            if vb_state.stride % wgt::VERTEX_STRIDE_ALIGNMENT != 0 {
+                return Err(pipeline::RenderPipelineError::UnalignedVertexStride {
+                    index: i as u32,
+                    stride: vb_state.stride,
+                });
+            }
             vertex_buffers.alloc().init(hal::pso::VertexBufferDesc {
                 binding: i as u32,
                 stride: vb_state.stride as u32,
@@ -3070,7 +3076,7 @@ pub enum BufferAccessError {
     NotMapped,
     #[error("not enough memory left")]
     OutOfMemory,
-    #[error("buffer map range is not aligned to {}", wgt::COPY_BUFFER_ALIGNMENT)]
+    #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
     UnalignedRange,
 }
 
