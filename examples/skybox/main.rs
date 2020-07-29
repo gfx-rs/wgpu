@@ -208,9 +208,9 @@ impl framework::Example for Skybox {
             dimension: wgpu::TextureViewDimension::Cube,
             aspect: wgpu::TextureAspect::default(),
             base_mip_level: 0,
-            level_count: 1,
+            level_count: None,
             base_array_layer: 0,
-            array_layer_count: 6,
+            array_layer_count: None,
         });
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &bind_group_layout,

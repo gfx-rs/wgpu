@@ -1195,13 +1195,17 @@ impl crate::Context for Context {
         Sendable(match desc {
             Some(d) => {
                 let mut mapped_desc = web_sys::GpuTextureViewDescriptor::new();
-                mapped_desc.array_layer_count(d.array_layer_count);
-                mapped_desc.aspect(map_texture_aspect(d.aspect));
-                mapped_desc.base_array_layer(d.base_array_layer);
-                mapped_desc.base_mip_level(d.base_mip_level);
                 mapped_desc.dimension(map_texture_view_dimension(d.dimension));
                 mapped_desc.format(map_texture_format(d.format));
-                mapped_desc.mip_level_count(d.level_count);
+                mapped_desc.aspect(map_texture_aspect(d.aspect));
+                mapped_desc.base_array_layer(d.base_array_layer);
+                if let Some(count) = d.array_layer_count {
+                    mapped_desc.array_layer_count(count.get());
+                }
+                mapped_desc.base_mip_level(d.base_mip_level);
+                if let Some(count) = d.level_count {
+                    mapped_desc.mip_level_count(count.get());
+                }
                 // TODO: label
                 texture.0.create_view_with_descriptor(&mapped_desc)
             }
