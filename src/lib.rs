@@ -15,6 +15,17 @@ use std::{ptr, slice};
 pub mod identity;
 pub mod server;
 
+// In WebIDL the "whole size" semantics is zero.
+// Use this function to convert one into another.
+#[no_mangle]
+pub extern "C" fn make_buffer_size(raw_size: u64) -> wgt::BufferSize {
+    if raw_size != 0 {
+        wgt::BufferSize(raw_size)
+    } else {
+        wgt::BufferSize::WHOLE
+    }
+}
+
 #[derive(Debug, Default)]
 struct IdentityHub {
     adapters: IdentityManager,

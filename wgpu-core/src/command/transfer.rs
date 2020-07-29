@@ -7,17 +7,17 @@ use crate::device::trace::Command as TraceCommand;
 use crate::{
     conv,
     device::{all_buffer_stages, all_image_stages},
-    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
+    hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    resource::{BufferUse, TextureUse},
+    resource::{BufferUse, Texture, TextureUse},
 };
 
 use hal::command::CommandBuffer as _;
-use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureUsage};
+use wgt::{BufferAddress, BufferUsage, Extent3d, Origin3d, TextureDataLayout, TextureUsage};
 
 use std::iter;
 
-const BITS_PER_BYTE: u32 = 8;
+pub(crate) const BITS_PER_BYTE: u32 = 8;
 
 #[repr(C)]
 #[derive(Clone, Debug)]
@@ -25,9 +25,7 @@ const BITS_PER_BYTE: u32 = 8;
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct BufferCopyView {
     pub buffer: BufferId,
-    pub offset: BufferAddress,
-    pub bytes_per_row: u32,
-    pub rows_per_image: u32,
+    pub layout: TextureDataLayout,
 }
 
 #[repr(C)]
@@ -37,42 +35,50 @@ pub struct BufferCopyView {
 pub struct TextureCopyView {
     pub texture: TextureId,
     pub mip_level: u32,
-    pub array_layer: u32,
     pub origin: Origin3d,
 }
 
 impl TextureCopyView {
     //TODO: we currently access each texture twice for a transfer,
     // once only to get the aspect flags, which is unfortunate.
-    fn to_selector(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceRange {
+    pub(crate) fn to_hal<B: hal::Backend>(
+        &self,
+        texture_guard: &Storage<Texture<B>, TextureId>,
+    ) -> (
+        hal::image::SubresourceLayers,
+        hal::image::SubresourceRange,
+        hal::image::Offset,
+    ) {
+        let texture = &texture_guard[self.texture];
+        let aspects = texture.full_range.aspects;
         let level = self.mip_level as hal::image::Level;
-        let layer = self.array_layer as hal::image::Layer;
+        let (layer, z) = match texture.dimension {
+            wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
+                (self.origin.z as hal::image::Layer, 0)
+            }
+            wgt::TextureDimension::D3 => (0, self.origin.z as i32),
+        };
 
         // TODO: Can't satisfy clippy here unless we modify
         // `hal::image::SubresourceRange` in gfx to use `std::ops::RangeBounds`.
         #[allow(clippy::range_plus_one)]
-        {
-            hal::image::SubresourceRange {
-                aspects,
-                levels: level..level + 1,
-                layers: layer..layer + 1,
-            }
-        }
-    }
-
-    fn to_sub_layers(&self, aspects: hal::format::Aspects) -> hal::image::SubresourceLayers {
-        let layer = self.array_layer as hal::image::Layer;
-        // TODO: Can't satisfy clippy here unless we modify
-        // `hal::image::SubresourceLayers` in gfx to use
-        // `std::ops::RangeBounds`.
-        #[allow(clippy::range_plus_one)]
-        {
+        (
             hal::image::SubresourceLayers {
                 aspects,
                 level: self.mip_level as hal::image::Level,
                 layers: layer..layer + 1,
-            }
-        }
+            },
+            hal::image::SubresourceRange {
+                aspects,
+                levels: level..level + 1,
+                layers: layer..layer + 1,
+            },
+            hal::image::Offset {
+                x: self.origin.x as i32,
+                y: self.origin.y as i32,
+                z,
+            },
+        )
     }
 }
 
@@ -138,7 +144,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb_raw = cmb.raw.last_mut().unwrap();
         unsafe {
             cmb_raw.pipeline_barrier(
-                all_buffer_stages()..all_buffer_stages(),
+                all_buffer_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 barriers,
             );
@@ -151,7 +157,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_encoder_id: CommandEncoderId,
         source: &BufferCopyView,
         destination: &TextureCopyView,
-        copy_size: Extent3d,
+        copy_size: &Extent3d,
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -159,14 +165,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb = &mut cmb_guard[command_encoder_id];
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let aspects = texture_guard[destination.texture].full_range.aspects;
+        let (dst_layers, dst_range, dst_offset) = destination.to_hal(&*texture_guard);
 
         #[cfg(feature = "trace")]
         match cmb.commands {
             Some(ref mut list) => list.push(TraceCommand::CopyBufferToTexture {
                 src: source.clone(),
                 dst: destination.clone(),
-                size: copy_size,
+                size: *copy_size,
             }),
             None => (),
         }
@@ -183,7 +189,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,
             destination.texture,
-            destination.to_selector(aspects),
+            dst_range,
             TextureUse::COPY_DST,
         );
         assert!(dst_texture.usage.contains(TextureUsage::COPY_DST));
@@ -193,27 +199,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = source.bytes_per_row / bytes_per_texel;
+        assert_eq!(wgt::COPY_BYTES_PER_ROW_ALIGNMENT % bytes_per_texel, 0);
         assert_eq!(
-            source.bytes_per_row % bytes_per_texel,
+            source.layout.bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
             0,
-            "Source bytes per row ({}) must be a multiple of bytes per texel ({})",
-            source.bytes_per_row,
-            bytes_per_texel
+            "Source bytes per row ({}) must be a multiple of {}",
+            source.layout.bytes_per_row,
+            wgt::COPY_BYTES_PER_ROW_ALIGNMENT
         );
+        let buffer_width = source.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
-            buffer_offset: source.offset,
+            buffer_offset: source.layout.offset,
             buffer_width,
-            buffer_height: source.rows_per_image,
-            image_layers: destination.to_sub_layers(aspects),
-            image_offset: conv::map_origin(destination.origin),
-            image_extent: conv::map_extent(copy_size),
+            buffer_height: source.layout.rows_per_image,
+            image_layers: dst_layers,
+            image_offset: dst_offset,
+            image_extent: conv::map_extent(copy_size, dst_texture.dimension),
         };
         let cmb_raw = cmb.raw.last_mut().unwrap();
-        let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             cmb_raw.pipeline_barrier(
-                stages..stages,
+                all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barriers),
             );
@@ -231,7 +237,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_encoder_id: CommandEncoderId,
         source: &TextureCopyView,
         destination: &BufferCopyView,
-        copy_size: Extent3d,
+        copy_size: &Extent3d,
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -239,14 +245,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb = &mut cmb_guard[command_encoder_id];
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let aspects = texture_guard[source.texture].full_range.aspects;
+        let (src_layers, src_range, src_offset) = source.to_hal(&*texture_guard);
 
         #[cfg(feature = "trace")]
         match cmb.commands {
             Some(ref mut list) => list.push(TraceCommand::CopyTextureToBuffer {
                 src: source.clone(),
                 dst: destination.clone(),
-                size: copy_size,
+                size: *copy_size,
             }),
             None => (),
         }
@@ -254,7 +260,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,
             source.texture,
-            source.to_selector(aspects),
+            src_range,
             TextureUse::COPY_SRC,
         );
         assert!(
@@ -281,27 +287,27 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        let buffer_width = destination.bytes_per_row / bytes_per_texel;
+        assert_eq!(wgt::COPY_BYTES_PER_ROW_ALIGNMENT % bytes_per_texel, 0);
         assert_eq!(
-            destination.bytes_per_row % bytes_per_texel,
+            destination.layout.bytes_per_row % wgt::COPY_BYTES_PER_ROW_ALIGNMENT,
             0,
-            "Destination bytes per row ({}) must be a multiple of bytes per texel ({})",
-            destination.bytes_per_row,
-            bytes_per_texel
+            "Destination bytes per row ({}) must be a multiple of {}",
+            destination.layout.bytes_per_row,
+            wgt::COPY_BYTES_PER_ROW_ALIGNMENT
         );
+        let buffer_width = destination.layout.bytes_per_row / bytes_per_texel;
         let region = hal::command::BufferImageCopy {
-            buffer_offset: destination.offset,
+            buffer_offset: destination.layout.offset,
             buffer_width,
-            buffer_height: destination.rows_per_image,
-            image_layers: source.to_sub_layers(aspects),
-            image_offset: conv::map_origin(source.origin),
-            image_extent: conv::map_extent(copy_size),
+            buffer_height: destination.layout.rows_per_image,
+            image_layers: src_layers,
+            image_offset: src_offset,
+            image_extent: conv::map_extent(copy_size, src_texture.dimension),
         };
         let cmb_raw = cmb.raw.last_mut().unwrap();
-        let stages = all_buffer_stages() | all_image_stages();
         unsafe {
             cmb_raw.pipeline_barrier(
-                stages..stages,
+                all_buffer_stages() | all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 src_barriers.chain(dst_barrier),
             );
@@ -319,7 +325,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         command_encoder_id: CommandEncoderId,
         source: &TextureCopyView,
         destination: &TextureCopyView,
-        copy_size: Extent3d,
+        copy_size: &Extent3d,
     ) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -331,15 +337,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // we can't hold both src_pending and dst_pending in scope because they
         // borrow the buffer tracker mutably...
         let mut barriers = Vec::new();
-        let aspects = texture_guard[source.texture].full_range.aspects
-            & texture_guard[destination.texture].full_range.aspects;
+        let (src_layers, src_range, src_offset) = source.to_hal(&*texture_guard);
+        let (dst_layers, dst_range, dst_offset) = destination.to_hal(&*texture_guard);
+        assert_eq!(src_layers.aspects, dst_layers.aspects);
 
         #[cfg(feature = "trace")]
         match cmb.commands {
             Some(ref mut list) => list.push(TraceCommand::CopyTextureToTexture {
                 src: source.clone(),
                 dst: destination.clone(),
-                size: copy_size,
+                size: *copy_size,
             }),
             None => (),
         }
@@ -347,7 +354,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (src_texture, src_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,
             source.texture,
-            source.to_selector(aspects),
+            src_range,
             TextureUse::COPY_SRC,
         );
         assert!(
@@ -360,7 +367,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (dst_texture, dst_pending) = cmb.trackers.textures.use_replace(
             &*texture_guard,
             destination.texture,
-            destination.to_selector(aspects),
+            dst_range,
             TextureUse::COPY_DST,
         );
         assert!(
@@ -370,17 +377,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         );
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
+        assert_eq!(src_texture.dimension, dst_texture.dimension);
         let region = hal::command::ImageCopy {
-            src_subresource: source.to_sub_layers(aspects),
-            src_offset: conv::map_origin(source.origin),
-            dst_subresource: destination.to_sub_layers(aspects),
-            dst_offset: conv::map_origin(destination.origin),
-            extent: conv::map_extent(copy_size),
+            src_subresource: src_layers,
+            src_offset,
+            dst_subresource: dst_layers,
+            dst_offset,
+            extent: conv::map_extent(copy_size, src_texture.dimension),
         };
         let cmb_raw = cmb.raw.last_mut().unwrap();
         unsafe {
             cmb_raw.pipeline_barrier(
-                all_image_stages()..all_image_stages(),
+                all_image_stages()..hal::pso::PipelineStage::TRANSFER,
                 hal::memory::Dependencies::empty(),
                 barriers,
             );

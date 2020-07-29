@@ -5,12 +5,11 @@
 use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
     track::{TrackerSet, DUMMY_SELECTOR},
-    FastHashMap, LifeGuard, RefCount, Stored,
+    FastHashMap, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
 use gfx_descriptor::{DescriptorCounts, DescriptorSet};
-use wgt::{BufferAddress, TextureComponentType};
 
 #[cfg(feature = "replay")]
 use serde::Deserialize;
@@ -44,7 +43,7 @@ pub struct BindGroupLayoutEntry {
     pub multisampled: bool,
     pub has_dynamic_offset: bool,
     pub view_dimension: wgt::TextureViewDimension,
-    pub texture_component_type: TextureComponentType,
+    pub texture_component_type: wgt::TextureComponentType,
     pub storage_texture_format: wgt::TextureFormat,
 }
 
@@ -78,7 +77,7 @@ pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) bind_group_layout_ids: ArrayVec<[Stored<BindGroupLayoutId>; wgt::MAX_BIND_GROUPS]>,
+    pub(crate) bind_group_layout_ids: ArrayVec<[Stored<BindGroupLayoutId>; MAX_BIND_GROUPS]>,
 }
 
 #[repr(C)]
@@ -87,8 +86,8 @@ pub struct PipelineLayout<B: hal::Backend> {
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct BufferBinding {
     pub buffer: BufferId,
-    pub offset: BufferAddress,
-    pub size: BufferAddress,
+    pub offset: wgt::BufferAddress,
+    pub size: wgt::BufferSize,
 }
 
 #[repr(C)]

@@ -908,6 +908,7 @@ name = "player"
 version = "0.1.0"
 dependencies = [
  "env_logger",
+ "gfx-backend-vulkan",
  "log",
  "raw-window-handle",
  "renderdoc",

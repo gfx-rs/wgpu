@@ -7,7 +7,7 @@ use crate::{
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId},
-    power, LifeGuard, Stored,
+    power, LifeGuard, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -18,7 +18,6 @@ use serde::Deserialize;
 use serde::Serialize;
 
 use hal::{
-    self,
     adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
     queue::QueueFamily as _,
     window::Surface as _,
@@ -527,6 +526,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend())
     }
 
+    pub fn adapter_extensions<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Extensions {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = &adapter_guard[adapter_id];
+
+        let features = adapter.raw.physical_device.features();
+
+        wgt::Extensions {
+            anisotropic_filtering: features.contains(hal::Features::SAMPLER_ANISOTROPY),
+        }
+    }
+
+    pub fn adapter_limits<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Limits {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (adapter_guard, _) = hub.adapters.read(&mut token);
+        let adapter = &adapter_guard[adapter_id];
+
+        let limits = adapter.raw.physical_device.limits();
+
+        wgt::Limits {
+            max_bind_groups: (limits.max_bound_descriptor_sets as u32).min(MAX_BIND_GROUPS as u32),
+        }
+    }
+
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
         let hub = B::hub(self);
         let mut token = Token::root();
@@ -560,15 +585,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let (adapter_guard, _) = hub.adapters.read(&mut token);
             let adapter = &adapter_guard[adapter_id];
             let phd = &adapter.raw.physical_device;
+
+            let available_features = adapter.raw.physical_device.features();
+
+            // Check features that are always needed
             let wishful_features = hal::Features::VERTEX_STORES_AND_ATOMICS
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
                 | hal::Features::NDC_Y_UP;
-            let enabled_features = adapter.raw.physical_device.features() & wishful_features;
+            let mut enabled_features = available_features & wishful_features;
             if enabled_features != wishful_features {
                 log::warn!(
                     "Missing features: {:?}",
                     wishful_features - enabled_features
                 );
+            }
+
+            // Check features needed by extensions
+            if desc.extensions.anisotropic_filtering {
+                assert!(
+                    available_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+                    "Missing feature SAMPLER_ANISOTROPY for anisotropic filtering extension"
+                );
+                enabled_features |= hal::Features::SAMPLER_ANISOTROPY;
             }
 
             let family = adapter
@@ -613,7 +651,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 },
                 gpu.queue_groups.swap_remove(0),
                 mem_props,
-                limits.non_coherent_atom_size as u64,
+                limits,
                 supports_texture_d24_s8,
                 desc,
                 trace_path,

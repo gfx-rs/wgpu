@@ -25,9 +25,9 @@ use hal::command::CommandBuffer as _;
 use peek_poke::{Peek, PeekPoke, Poke};
 use smallvec::SmallVec;
 use wgt::{
-    BufferAddress, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode, LoadOp,
-    RenderPassColorAttachmentDescriptorBase, RenderPassDepthStencilAttachmentDescriptorBase,
-    TextureUsage, BIND_BUFFER_ALIGNMENT,
+    BufferAddress, BufferSize, BufferUsage, Color, DynamicOffset, IndexFormat, InputStepMode,
+    LoadOp, RenderPassColorAttachmentDescriptorBase,
+    RenderPassDepthStencilAttachmentDescriptorBase, TextureUsage, BIND_BUFFER_ALIGNMENT,
 };
 
 use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, mem, ops::Range, slice};
@@ -70,13 +70,13 @@ pub enum RenderCommand {
     SetIndexBuffer {
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     },
     SetVertexBuffer {
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     },
     SetBlendColor(Color),
     SetStencilReference(u32),
@@ -307,7 +307,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (adapter_guard, mut token) = hub.adapters.read(&mut token);
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
 
@@ -371,13 +370,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let (context, sample_count) = {
-            use hal::{adapter::PhysicalDevice as _, device::Device as _};
+            use hal::device::Device as _;
 
-            let limits = adapter_guard[device.adapter_id.value]
-                .raw
-                .physical_device
-                .limits();
-            let samples_count_limit = limits.framebuffer_color_sample_counts;
+            let samples_count_limit = device.hal_limits.framebuffer_color_sample_counts;
             let base_trackers = &cmb.trackers;
 
             let mut extent = None;
@@ -1028,8 +1023,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     assert!(buffer.usage.contains(BufferUsage::INDEX), "An invalid setIndexBuffer call has been made. The buffer usage is {:?} which does not contain required usage INDEX", buffer.usage);
 
-                    let end = if size != 0 {
-                        offset + size
+                    let end = if size != BufferSize::WHOLE {
+                        offset + size.0
                     } else {
                         buffer.size
                     };
@@ -1065,15 +1060,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .vertex
                         .inputs
                         .extend(iter::repeat(VertexBufferState::EMPTY).take(empty_slots));
-                    state.vertex.inputs[slot as usize].total_size = if size != 0 {
-                        size
+                    state.vertex.inputs[slot as usize].total_size = if size != BufferSize::WHOLE {
+                        size.0
                     } else {
                         buffer.size - offset
                     };
 
                     let range = hal::buffer::SubRange {
                         offset,
-                        size: if size != 0 { Some(size) } else { None },
+                        size: if size != BufferSize::WHOLE {
+                            Some(size.0)
+                        } else {
+                            None
+                        },
                     };
                     unsafe {
                         raw.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
@@ -1278,7 +1277,7 @@ pub mod render_ffi {
     };
     use crate::{id, RawString};
     use std::{convert::TryInto, slice};
-    use wgt::{BufferAddress, Color, DynamicOffset};
+    use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
 
     /// # Safety
     ///
@@ -1316,7 +1315,7 @@ pub mod render_ffi {
         pass: &mut RawPass,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) {
         pass.encode(&RenderCommand::SetIndexBuffer {
             buffer_id,
@@ -1331,7 +1330,7 @@ pub mod render_ffi {
         slot: u32,
         buffer_id: id::BufferId,
         offset: BufferAddress,
-        size: BufferAddress,
+        size: BufferSize,
     ) {
         pass.encode(&RenderCommand::SetVertexBuffer {
             slot,

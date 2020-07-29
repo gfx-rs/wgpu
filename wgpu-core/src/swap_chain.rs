@@ -42,7 +42,7 @@ use crate::{
 };
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
-use wgt::SwapChainDescriptor;
+use wgt::{SwapChainDescriptor, SwapChainStatus};
 
 const FRAME_TIMEOUT_MS: u64 = 1000;
 pub const DESIRED_NUM_FRAMES: u32 = 3;
@@ -83,12 +83,8 @@ pub(crate) fn swap_chain_descriptor_to_hal(
 #[repr(C)]
 #[derive(Debug)]
 pub struct SwapChainOutput {
+    pub status: SwapChainStatus,
     pub view_id: Option<TextureViewId>,
-}
-
-#[derive(Debug)]
-pub enum SwapChainGetNextTextureError {
-    GpuProcessingTimeout,
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -96,7 +92,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         swap_chain_id: SwapChainId,
         view_id_in: Input<G, TextureViewId>,
-    ) -> Result<SwapChainOutput, SwapChainGetNextTextureError> {
+    ) -> SwapChainOutput {
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -105,76 +101,78 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (device_guard, mut token) = hub.devices.read(&mut token);
         let (mut swap_chain_guard, mut token) = hub.swap_chains.write(&mut token);
         let sc = &mut swap_chain_guard[swap_chain_id];
+        #[cfg_attr(not(feature = "trace"), allow(unused_variables))]
         let device = &device_guard[sc.device_id.value];
 
-        let (image, _) = {
-            let suf = B::get_surface_mut(surface);
-            match unsafe { suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000) } {
-                Ok(surface_image) => surface_image,
-                Err(hal::window::AcquireError::Timeout) => {
-                    return Err(SwapChainGetNextTextureError::GpuProcessingTimeout);
-                }
-                Err(e) => {
-                    log::warn!("acquire_image() failed ({:?}), reconfiguring swapchain", e);
-                    let desc = swap_chain_descriptor_to_hal(
-                        &sc.desc,
-                        sc.num_frames,
-                        device.private_features,
-                    );
-                    unsafe {
-                        suf.configure_swapchain(&device.raw, desc).unwrap();
-                        suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000).unwrap()
-                    }
-                }
-            }
+        let suf = B::get_surface_mut(surface);
+        let (image, status) = match unsafe { suf.acquire_image(FRAME_TIMEOUT_MS * 1_000_000) } {
+            Ok((surface_image, None)) => (Some(surface_image), SwapChainStatus::Good),
+            Ok((surface_image, Some(_))) => (Some(surface_image), SwapChainStatus::Suboptimal),
+            Err(err) => (
+                None,
+                match err {
+                    hal::window::AcquireError::OutOfMemory(_) => SwapChainStatus::OutOfMemory,
+                    hal::window::AcquireError::NotReady => unreachable!(), // we always set a timeout
+                    hal::window::AcquireError::Timeout => SwapChainStatus::Timeout,
+                    hal::window::AcquireError::OutOfDate => SwapChainStatus::Outdated,
+                    hal::window::AcquireError::SurfaceLost(_) => SwapChainStatus::Lost,
+                    hal::window::AcquireError::DeviceLost(_) => SwapChainStatus::Lost,
+                },
+            ),
         };
 
-        let view = resource::TextureView {
-            inner: resource::TextureViewInner::SwapChain {
-                image,
-                source_id: Stored {
-                    value: swap_chain_id,
-                    ref_count: sc.life_guard.add_ref(),
+        let view_id = image.map(|image| {
+            let view = resource::TextureView {
+                inner: resource::TextureViewInner::SwapChain {
+                    image,
+                    source_id: Stored {
+                        value: swap_chain_id,
+                        ref_count: sc.life_guard.add_ref(),
+                    },
                 },
-            },
-            format: sc.desc.format,
-            extent: hal::image::Extent {
-                width: sc.desc.width,
-                height: sc.desc.height,
-                depth: 1,
-            },
-            samples: 1,
-            range: hal::image::SubresourceRange {
-                aspects: hal::format::Aspects::COLOR,
-                layers: 0..1,
-                levels: 0..1,
-            },
-            life_guard: LifeGuard::new(),
-        };
-        let ref_count = view.life_guard.add_ref();
-        let id = hub
-            .texture_views
-            .register_identity(view_id_in, view, &mut token);
+                format: sc.desc.format,
+                extent: hal::image::Extent {
+                    width: sc.desc.width,
+                    height: sc.desc.height,
+                    depth: 1,
+                },
+                samples: 1,
+                range: hal::image::SubresourceRange {
+                    aspects: hal::format::Aspects::COLOR,
+                    layers: 0..1,
+                    levels: 0..1,
+                },
+                life_guard: LifeGuard::new(),
+            };
+
+            let ref_count = view.life_guard.add_ref();
+            let id = hub
+                .texture_views
+                .register_identity(view_id_in, view, &mut token);
+
+            assert!(
+                sc.acquired_view_id.is_none(),
+                "Swap chain image is already acquired"
+            );
+
+            sc.acquired_view_id = Some(Stored {
+                value: id,
+                ref_count,
+            });
+
+            id
+        });
 
         #[cfg(feature = "trace")]
         match device.trace {
             Some(ref trace) => trace.lock().add(Action::GetSwapChainTexture {
-                id,
+                id: view_id,
                 parent_id: swap_chain_id,
             }),
             None => (),
         };
 
-        assert!(
-            sc.acquired_view_id.is_none(),
-            "Swap chain image is already acquired"
-        );
-        sc.acquired_view_id = Some(Stored {
-            value: id,
-            ref_count,
-        });
-
-        Ok(SwapChainOutput { view_id: Some(id) })
+        SwapChainOutput { status, view_id }
     }
 
     pub fn swap_chain_present<B: GfxBackend>(&self, swap_chain_id: SwapChainId) {

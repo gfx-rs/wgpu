@@ -48,6 +48,8 @@ use atomic::{AtomicUsize, Ordering};
 
 use std::{os::raw::c_char, ptr};
 
+const MAX_BIND_GROUPS: usize = 4;
+
 type SubmissionIndex = usize;
 type Index = u32;
 type Epoch = u32;
@@ -192,3 +194,9 @@ macro_rules! gfx_select {
 /// Fast hash map used internally.
 type FastHashMap<K, V> =
     std::collections::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
+
+#[test]
+fn test_default_limits() {
+    let limits = wgt::Limits::default();
+    assert!(limits.max_bind_groups <= MAX_BIND_GROUPS as u32);
+}

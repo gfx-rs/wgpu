@@ -23,7 +23,7 @@ pub enum BindingResource {
     Buffer {
         id: id::BufferId,
         offset: wgt::BufferAddress,
-        size: wgt::BufferAddress,
+        size: wgt::BufferSize,
     },
     Sampler(id::SamplerId),
     TextureView(id::TextureViewId),
@@ -125,7 +125,7 @@ pub enum Action {
         desc: wgt::SwapChainDescriptor,
     },
     GetSwapChainTexture {
-        id: id::TextureViewId,
+        id: Option<id::TextureViewId>,
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
@@ -166,6 +166,13 @@ pub enum Action {
         id: id::BufferId,
         data: FileName,
         range: Range<wgt::BufferAddress>,
+        queued: bool,
+    },
+    WriteTexture {
+        to: TextureCopyView,
+        data: FileName,
+        layout: wgt::TextureDataLayout,
+        size: wgt::Extent3d,
     },
     Submit(crate::SubmissionIndex, Vec<Command>),
 }

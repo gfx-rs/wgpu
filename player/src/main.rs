@@ -131,13 +131,13 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                     encoder, src, src_offset, dst, dst_offset, size,
                 ),
                 trace::Command::CopyBufferToTexture { src, dst, size } => {
-                    self.command_encoder_copy_buffer_to_texture::<B>(encoder, &src, &dst, size)
+                    self.command_encoder_copy_buffer_to_texture::<B>(encoder, &src, &dst, &size)
                 }
                 trace::Command::CopyTextureToBuffer { src, dst, size } => {
-                    self.command_encoder_copy_texture_to_buffer::<B>(encoder, &src, &dst, size)
+                    self.command_encoder_copy_texture_to_buffer::<B>(encoder, &src, &dst, &size)
                 }
                 trace::Command::CopyTextureToTexture { src, dst, size } => {
-                    self.command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, size)
+                    self.command_encoder_copy_texture_to_texture::<B>(encoder, &src, &dst, &size)
                 }
                 trace::Command::RunComputePass {
                     commands,
@@ -247,8 +247,11 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.sampler_destroy::<B>(id);
             }
             A::GetSwapChainTexture { id, parent_id } => {
-                self.swap_chain_get_next_texture::<B>(parent_id, id)
-                    .unwrap();
+                if let Some(id) = id {
+                    self.swap_chain_get_next_texture::<B>(parent_id, id)
+                        .view_id
+                        .unwrap();
+                }
             }
             A::CreateBindGroupLayout { id, label, entries } => {
                 let label = Label::new(&label);
@@ -402,11 +405,29 @@ impl GlobalExt for wgc::hub::Global<IdentityPassThroughFactory> {
             A::DestroyRenderPipeline(id) => {
                 self.render_pipeline_destroy::<B>(id);
             }
-            A::WriteBuffer { id, data, range } => {
+            A::WriteBuffer {
+                id,
+                data,
+                range,
+                queued,
+            } => {
                 let bin = std::fs::read(dir.join(data)).unwrap();
                 let size = (range.end - range.start) as usize;
-                self.device_wait_for_buffer::<B>(device, id);
-                self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
+                if queued {
+                    self.queue_write_buffer::<B>(device, id, range.start, &bin);
+                } else {
+                    self.device_wait_for_buffer::<B>(device, id);
+                    self.device_set_buffer_sub_data::<B>(device, id, range.start, &bin[..size]);
+                }
+            }
+            A::WriteTexture {
+                to,
+                data,
+                layout,
+                size,
+            } => {
+                let bin = std::fs::read(dir.join(data)).unwrap();
+                self.queue_write_texture::<B>(device, &to, &bin, &layout, &size);
             }
             A::Submit(_index, commands) => {
                 let encoder = self.device_create_command_encoder::<B>(
@@ -446,7 +467,7 @@ fn main() {
     log::info!("Found {} actions", actions.len());
 
     #[cfg(feature = "winit")]
-    let mut event_loop = {
+    let event_loop = {
         log::info!("Creating a window");
         EventLoop::new()
     };
@@ -514,7 +535,6 @@ fn main() {
         use winit::{
             event::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent},
             event_loop::ControlFlow,
-            platform::desktop::EventLoopExtDesktop,
         };
 
         let mut frame_count = 0;

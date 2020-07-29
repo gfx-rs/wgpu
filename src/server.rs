@@ -197,7 +197,7 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_buffer(
     self_id: id::CommandEncoderId,
     source: &wgc::command::TextureCopyView,
     destination: &wgc::command::BufferCopyView,
-    size: wgt::Extent3d,
+    size: &wgt::Extent3d,
 ) {
     gfx_select!(self_id => global.command_encoder_copy_texture_to_buffer(self_id, source, destination, size));
 }
@@ -208,7 +208,7 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_buffer_to_texture(
     self_id: id::CommandEncoderId,
     source: &wgc::command::BufferCopyView,
     destination: &wgc::command::TextureCopyView,
-    size: wgt::Extent3d,
+    size: &wgt::Extent3d,
 ) {
     gfx_select!(self_id => global.command_encoder_copy_buffer_to_texture(self_id, source, destination, size));
 }
@@ -219,7 +219,7 @@ pub unsafe extern "C" fn wgpu_server_encoder_copy_texture_to_texture(
     self_id: id::CommandEncoderId,
     source: &wgc::command::TextureCopyView,
     destination: &wgc::command::TextureCopyView,
-    size: wgt::Extent3d,
+    size: &wgt::Extent3d,
 ) {
     gfx_select!(self_id => global.command_encoder_copy_texture_to_texture(self_id, source, destination, size));
 }
@@ -269,6 +269,41 @@ pub unsafe extern "C" fn wgpu_server_queue_submit(
 ) {
     let command_buffers = slice::from_raw_parts(command_buffer_ids, command_buffer_id_length);
     gfx_select!(self_id => global.queue_submit(self_id, command_buffers));
+}
+
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer is
+/// valid for `data_length` elements.
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_server_queue_write_buffer(
+    global: &Global,
+    self_id: id::QueueId,
+    buffer_id: id::BufferId,
+    buffer_offset: wgt::BufferAddress,
+    data: *const u8,
+    data_length: usize,
+) {
+    let data = slice::from_raw_parts(data, data_length);
+    gfx_select!(self_id => global.queue_write_buffer(self_id, buffer_id, buffer_offset, data));
+}
+
+/// # Safety
+///
+/// This function is unsafe as there is no guarantee that the given pointer is
+/// valid for `data_length` elements.
+#[no_mangle]
+pub unsafe extern "C" fn wgpu_server_queue_write_texture(
+    global: &Global,
+    self_id: id::QueueId,
+    destination: &wgc::command::TextureCopyView,
+    data: *const u8,
+    data_length: usize,
+    layout: &wgt::TextureDataLayout,
+    extent: &wgt::Extent3d,
+) {
+    let data = slice::from_raw_parts(data, data_length);
+    gfx_select!(self_id => global.queue_write_texture(self_id, destination, data, layout, extent));
 }
 
 #[no_mangle]

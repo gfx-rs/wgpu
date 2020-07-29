@@ -96,7 +96,8 @@ jobs:
         name: Install latest nightly
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: nightly
+          # temporary due to https://github.com/rust-lang/rust/issues/72467
+          toolchain: nightly-2020-05-01
           override: true
       - if: matrix.channel == 'stable'
         run: rustup component add clippy
