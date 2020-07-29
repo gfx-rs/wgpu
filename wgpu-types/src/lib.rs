@@ -12,6 +12,9 @@
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, num::NonZeroU32, ops::Range};
 
+pub use into_cow::IntoCow;
+mod into_cow;
+
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
@@ -1302,6 +1305,42 @@ impl<L> TextureDescriptor<L> {
             format: self.format,
             usage: self.usage,
         }
+    }
+}
+
+/// Texture descriptor builder methods
+impl<'a> TextureDescriptor<Option<Cow<'a, str>>> {
+    pub fn new(
+        size: Extent3d,
+        dimension: TextureDimension,
+        format: TextureFormat,
+        usage: TextureUsage,
+    ) -> Self {
+        Self {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension,
+            format,
+            usage,
+        }
+    }
+
+    pub fn label<L>(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
+
+    pub fn mip_level_count(&mut self, count: u32) -> &mut Self {
+        // TODO: validate this size is sane
+        self.mip_level_count = count;
+        self
+    }
+
+    pub fn sample_count(&mut self, count: u32) -> &mut Self {
+        self.sample_count = count;
+        self
     }
 }
 
