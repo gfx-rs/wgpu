@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::borrow::Cow::Borrowed;
+use std::{borrow::Cow::Borrowed, num::NonZeroU32};
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
 
@@ -159,9 +159,9 @@ impl Example {
                     dimension: wgpu::TextureViewDimension::D2,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
-                    level_count: 1,
+                    level_count: NonZeroU32::new(1),
                     base_array_layer: 0,
-                    array_layer_count: 1,
+                    array_layer_count: None,
                 })
             })
             .collect::<Vec<_>>();
