@@ -12,6 +12,7 @@ pub enum ErrorKind {
     IoError(io::Error),
     ParserFail,
     ParserStackOverflow,
+    NotImplemented(&'static str),
 }
 
 impl fmt::Display for ErrorKind {
@@ -29,6 +30,7 @@ impl fmt::Display for ErrorKind {
             ErrorKind::IoError(error) => write!(f, "IO Error {}", error),
             ErrorKind::ParserFail => write!(f, "Parser failed"),
             ErrorKind::ParserStackOverflow => write!(f, "Parser stack overflow"),
+            ErrorKind::NotImplemented(msg) => write!(f, "Not implemented: {}", msg),
         }
     }
 }

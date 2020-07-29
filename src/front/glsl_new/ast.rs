@@ -1,4 +1,7 @@
-use crate::{Arena, Constant, FastHashMap, Function, GlobalVariable, Handle, ShaderStage, Type};
+use crate::{
+    Arena, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle, LocalVariable,
+    ShaderStage, Type,
+};
 
 #[derive(Debug)]
 pub struct Program {
@@ -11,6 +14,7 @@ pub struct Program {
     pub types: Arena<Type>,
     pub constants: Arena<Constant>,
     pub global_variables: Arena<GlobalVariable>,
+    pub context: Context,
 }
 
 impl Program {
@@ -25,6 +29,10 @@ impl Program {
             types: Arena::<Type>::new(),
             constants: Arena::<Constant>::new(),
             global_variables: Arena::<GlobalVariable>::new(),
+            context: Context {
+                expressions: Arena::<Expression>::new(),
+                local_variables: Arena::<LocalVariable>::new(),
+            },
         }
     }
 }
@@ -32,4 +40,10 @@ impl Program {
 #[derive(Debug)]
 pub enum Profile {
     Core,
+}
+
+#[derive(Debug)]
+pub struct Context {
+    pub expressions: Arena<Expression>,
+    pub local_variables: Arena<LocalVariable>,
 }
