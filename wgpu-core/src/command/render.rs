@@ -413,6 +413,8 @@ pub enum RenderPassError {
     InvalidResolveSourceSampleCount,
     #[error("resolve target must have a sample count of 1")]
     InvalidResolveTargetSampleCount,
+    #[error("not enough memory left")]
+    OutOfMemory,
     #[error("extent state {state_extent:?} must match extent from view {view_extent:?}")]
     ExtentStateMismatch {
         state_extent: hal::image::Extent,
@@ -885,7 +887,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         device
                             .raw
                             .create_framebuffer(&render_pass, attachments, extent.unwrap())
-                            .unwrap()
+                            .or(Err(RenderPassError::OutOfMemory))?
                     };
                     cmb.used_swap_chain = Some((sc_id, framebuffer));
                     &mut cmb.used_swap_chain.as_mut().unwrap().1
@@ -905,13 +907,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                         }
                                     });
                                 unsafe {
-                                    device.raw.create_framebuffer(
-                                        &render_pass,
-                                        attachments,
-                                        extent.unwrap(),
-                                    )
+                                    device
+                                        .raw
+                                        .create_framebuffer(
+                                            &render_pass,
+                                            attachments,
+                                            extent.unwrap(),
+                                        )
+                                        .or(Err(RenderPassError::OutOfMemory))?
                                 }
-                                .unwrap()
                             };
                             e.insert(fb)
                         }

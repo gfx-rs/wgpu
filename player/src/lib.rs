@@ -306,11 +306,13 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
             }
             A::Submit(_index, commands) => {
-                let encoder = self.device_create_command_encoder::<B>(
-                    device,
-                    &wgt::CommandEncoderDescriptor { label: ptr::null() },
-                    comb_manager.alloc(device.backend()),
-                );
+                let encoder = self
+                    .device_create_command_encoder::<B>(
+                        device,
+                        &wgt::CommandEncoderDescriptor { label: ptr::null() },
+                        comb_manager.alloc(device.backend()),
+                    )
+                    .unwrap();
                 let cmdbuf = self.encode_commands::<B>(encoder, commands);
                 self.queue_submit::<B>(device, &[cmdbuf]).unwrap();
             }

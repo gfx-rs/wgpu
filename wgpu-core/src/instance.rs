@@ -248,14 +248,18 @@ impl AdapterInfo {
 #[derive(Clone, Debug, Error, PartialEq)]
 /// Error when requesting a device from the adaptor
 pub enum RequestDeviceError {
-    #[error("unsupported features were requested: {0:?}")]
-    UnsupportedFeature(wgt::Features),
-    #[error("device has no queue supporting graphics")]
-    NoGraphicsQueue,
-    #[error(transparent)]
-    DeviceCreationError(#[from] hal::device::CreationError),
+    #[error("connection to device was lost during initialization")]
+    DeviceLost,
+    #[error("device initialization failed due to implementation specific errors")]
+    Internal,
     #[error("some of the requested device limits are not supported")]
     LimitsExceeded,
+    #[error("device has no queue supporting graphics")]
+    NoGraphicsQueue,
+    #[error("not enough memory left")]
+    OutOfMemory,
+    #[error("unsupported features were requested: {0:?}")]
+    UnsupportedFeature(wgt::Features),
 }
 
 /// Supported physical device types.
@@ -679,7 +683,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .iter()
                 .find(|family| family.queue_type().supports_graphics())
                 .ok_or(RequestDeviceError::NoGraphicsQueue)?;
-            let mut gpu = unsafe { phd.open(&[(family, &[1.0])], enabled_features)? };
+            let mut gpu =
+                unsafe { phd.open(&[(family, &[1.0])], enabled_features) }.map_err(|err| {
+                    use hal::device::CreationError::*;
+                    match err {
+                        DeviceLost => RequestDeviceError::DeviceLost,
+                        InitializationFailed => RequestDeviceError::Internal,
+                        OutOfMemory(_) => RequestDeviceError::OutOfMemory,
+                        _ => panic!("failed to create `gfx-hal` device: {}", err),
+                    }
+                })?;
 
             let limits = phd.limits();
             assert_eq!(
@@ -722,6 +735,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 desc,
                 trace_path,
             )
+            .or(Err(RequestDeviceError::OutOfMemory))?
         };
 
         Ok(hub.devices.register_identity(id_in, device, &mut token))
