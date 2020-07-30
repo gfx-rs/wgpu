@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::{borrow::Cow::Borrowed, num::NonZeroU32};
+use std::borrow::Cow::Borrowed;
 use wgpu::util::DeviceExt;
 
 const TEXTURE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8UnormSrgb;
@@ -160,7 +160,7 @@ impl Example {
                     dimension: wgpu::TextureViewDimension::D2,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
-                    level_count: NonZeroU32::new(1),
+                    level_count: Some(1),
                     base_array_layer: 0,
                     array_layer_count: None,
                 })
@@ -215,13 +215,11 @@ impl framework::Example for Example {
         // Create the vertex and index buffers
         let vertex_size = mem::size_of::<Vertex>();
         let vertex_data = create_vertices();
-        let vertex_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(&vertex_data),
-                usage: wgpu::BufferUsage::VERTEX,
-            }
-        );
+        let vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(&vertex_data),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
 
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -279,13 +277,11 @@ impl framework::Example for Example {
         let texture_view = texture.create_default_view();
         //Note: we could use queue.write_texture instead, and this is what other
         // examples do, but here we want to show another way to do this.
-        let temp_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Temporary Buffer"),
-                contents: texels.as_slice(),
-                usage: wgpu::BufferUsage::COPY_SRC,
-            }
-        );
+        let temp_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Temporary Buffer"),
+            contents: texels.as_slice(),
+            usage: wgpu::BufferUsage::COPY_SRC,
+        });
         init_encoder.copy_buffer_to_texture(
             wgpu::BufferCopyView {
                 buffer: &temp_buf,
@@ -316,13 +312,11 @@ impl framework::Example for Example {
         });
         let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
         let mx_ref: &[f32; 16] = mx_total.as_ref();
-        let uniform_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Uniform Buffer"),
-                contents: bytemuck::cast_slice(mx_ref),
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            }
-        );
+        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::cast_slice(mx_ref),
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        });
 
         // Create bind group
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
