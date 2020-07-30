@@ -66,6 +66,7 @@ pub enum TransferError {
 // once only to get the aspect flags, which is unfortunate.
 pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
     view: &TextureCopyView,
+    size: &wgt::Extent3d,
     texture_guard: &Storage<Texture<B>, TextureId>,
 ) -> (
     hal::image::SubresourceLayers,
@@ -75,11 +76,13 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
     let texture = &texture_guard[view.texture];
     let aspects = texture.full_range.aspects;
     let level = view.mip_level as hal::image::Level;
-    let (layer, z) = match texture.dimension {
-        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => {
-            (view.origin.z as hal::image::Layer, 0)
-        }
-        wgt::TextureDimension::D3 => (0, view.origin.z as i32),
+    let (layer, layer_count, z) = match texture.dimension {
+        wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
+            view.origin.z as hal::image::Layer,
+            size.depth as hal::image::Layer,
+            0,
+        ),
+        wgt::TextureDimension::D3 => (0, 1, view.origin.z as i32),
     };
 
     // TODO: Can't satisfy clippy here unless we modify
@@ -89,12 +92,12 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
         hal::image::SubresourceLayers {
             aspects,
             level: view.mip_level as hal::image::Level,
-            layers: layer..layer + 1,
+            layers: layer..layer + layer_count,
         },
         hal::image::SubresourceRange {
             aspects,
             levels: level..level + 1,
-            layers: layer..layer + 1,
+            layers: layer..layer + layer_count,
         },
         hal::image::Offset {
             x: view.origin.x as i32,
@@ -329,7 +332,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
         let (dst_layers, dst_range, dst_offset) =
-            texture_copy_view_to_hal(destination, &*texture_guard);
+            texture_copy_view_to_hal(destination, copy_size, &*texture_guard);
 
         #[cfg(feature = "trace")]
         match cmb.commands {
@@ -432,7 +435,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmb = &mut cmb_guard[command_encoder_id];
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (src_layers, src_range, src_offset) = texture_copy_view_to_hal(source, &*texture_guard);
+        let (src_layers, src_range, src_offset) =
+            texture_copy_view_to_hal(source, copy_size, &*texture_guard);
 
         #[cfg(feature = "trace")]
         match cmb.commands {
@@ -539,9 +543,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // we can't hold both src_pending and dst_pending in scope because they
         // borrow the buffer tracker mutably...
         let mut barriers = Vec::new();
-        let (src_layers, src_range, src_offset) = texture_copy_view_to_hal(source, &*texture_guard);
+        let (src_layers, src_range, src_offset) =
+            texture_copy_view_to_hal(source, copy_size, &*texture_guard);
         let (dst_layers, dst_range, dst_offset) =
-            texture_copy_view_to_hal(destination, &*texture_guard);
+            texture_copy_view_to_hal(destination, copy_size, &*texture_guard);
         if src_layers.aspects != dst_layers.aspects {
             return Err(TransferError::MismatchedAspects);
         }
