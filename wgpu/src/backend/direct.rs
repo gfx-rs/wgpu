@@ -10,13 +10,12 @@ use futures::future::{ready, Ready};
 use smallvec::SmallVec;
 use std::{
     borrow::Cow::{self, Borrowed},
+    error::Error,
     ffi::CString,
-    fmt, 
-    marker::PhantomData, 
-    ops::Range, 
-    ptr, 
-    slice, 
-    error::Error
+    fmt,
+    marker::PhantomData,
+    ops::Range,
+    ptr, slice,
 };
 use typed_arena::Arena;
 
@@ -837,6 +836,7 @@ impl crate::Context for Context {
             },
             PhantomData
         ))
+        .unwrap_pretty()
     }
 
     fn device_create_render_bundle_encoder(
