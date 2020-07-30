@@ -5,16 +5,16 @@
 #[cfg(feature = "trace")]
 use crate::device::trace::Action;
 use crate::{
-    command::{CommandAllocator, CommandBuffer, TextureCopyView, BITS_PER_BYTE},
+    command::{
+        texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
+        CommandAllocator, CommandBuffer, TextureCopyView, TransferError, BITS_PER_BYTE,
+    },
     conv,
-    device::WaitIdleError,
+    device::{DeviceError, WaitIdleError},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
-    resource::{BufferMapState, BufferUse, TextureUse},
+    resource::{BufferAccessError, BufferMapState, BufferUse, TextureUse},
     span,
-    validation::{
-        check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
-    },
 };
 
 use gfx_memory::{Block, Heaps, MemoryBlock};
@@ -82,35 +82,33 @@ impl<B: hal::Backend> super::Device<B> {
         self.pending_writes.command_buffer.as_mut().unwrap()
     }
 
-    fn prepare_stage(
-        &mut self,
-        size: wgt::BufferAddress,
-    ) -> Result<StagingData<B>, PrepareStageError> {
+    fn prepare_stage(&mut self, size: wgt::BufferAddress) -> Result<StagingData<B>, DeviceError> {
         let mut buffer = unsafe {
             self.raw
                 .create_buffer(size, hal::buffer::Usage::TRANSFER_SRC)
                 .map_err(|err| match err {
-                    hal::buffer::CreationError::OutOfMemory(_) => PrepareStageError::OutOfMemory,
+                    hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
                     _ => panic!("failed to create staging buffer: {}", err),
                 })?
         };
         //TODO: do we need to transition into HOST_WRITE access first?
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
 
-        let memory = self.mem_allocator.lock().allocate(
-            &self.raw,
-            &requirements,
-            gfx_memory::MemoryUsage::Staging { read_back: false },
-            gfx_memory::Kind::Linear,
-        )?;
+        let memory = self
+            .mem_allocator
+            .lock()
+            .allocate(
+                &self.raw,
+                &requirements,
+                gfx_memory::MemoryUsage::Staging { read_back: false },
+                gfx_memory::Kind::Linear,
+            )
+            .map_err(DeviceError::from_heaps)?;
         unsafe {
             self.raw.set_buffer_name(&mut buffer, "<write_buffer_temp>");
             self.raw
                 .bind_buffer_memory(memory.memory(), memory.segment().offset, &mut buffer)
-                .map_err(|err| match err {
-                    hal::device::BindError::OutOfMemory(_) => PrepareStageError::OutOfMemory,
-                    _ => panic!("failed to bind buffer memory: {}", err),
-                })?;
+                .map_err(DeviceError::from_bind)?;
         }
 
         let cmdbuf = match self.pending_writes.command_buffer.take() {
@@ -131,6 +129,28 @@ impl<B: hal::Backend> super::Device<B> {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum QueueWriteError {
+    #[error(transparent)]
+    Queue(#[from] DeviceError),
+    #[error(transparent)]
+    Transfer(#[from] TransferError),
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum QueueSubmitError {
+    #[error(transparent)]
+    Queue(#[from] DeviceError),
+    #[error("command buffer {0:?} is invalid")]
+    InvalidCommandBuffer(id::CommandBufferId),
+    #[error(transparent)]
+    BufferAccess(#[from] BufferAccessError),
+    #[error("swap chain output was dropped before the command buffer got submitted")]
+    SwapChainOutputDropped,
+    #[error("GPU got stuck :(")]
+    StuckGpu,
+}
+
 //TODO: move out common parts of write_xxx.
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -140,13 +160,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         buffer_id: id::BufferId,
         buffer_offset: wgt::BufferAddress,
         data: &[u8],
-    ) -> Result<(), QueueWriteBufferError> {
+    ) -> Result<(), QueueWriteError> {
         span!(_guard, INFO, "Queue::write_buffer");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = &mut device_guard[queue_id];
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
         let (buffer_guard, _) = hub.buffers.read(&mut token);
 
         #[cfg(feature = "trace")]
@@ -176,7 +198,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
                 .map_err(|err| match err {
-                    hal::device::MapError::OutOfMemory(_) => PrepareStageError::OutOfMemory,
+                    hal::device::MapError::OutOfMemory(_) => DeviceError::OutOfMemory,
                     _ => panic!("failed to map buffer: {}", err),
                 })?;
             unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
@@ -186,27 +208,23 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let mut trackers = device.trackers.lock();
-        let (dst, transition) =
-            trackers
-                .buffers
-                .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST);
-        check_buffer_usage(dst.usage, wgt::BufferUsage::COPY_DST)?;
+        let (dst, transition) = trackers
+            .buffers
+            .use_replace(&*buffer_guard, buffer_id, (), BufferUse::COPY_DST)
+            .map_err(TransferError::InvalidBuffer)?;
+        if !dst.usage.contains(wgt::BufferUsage::COPY_DST) {
+            Err(TransferError::MissingCopyDstUsageFlag)?;
+        }
         dst.life_guard.use_at(device.active_submission_index + 1);
 
         if data_size % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(QueueWriteBufferError::UnalignedDataSize(data_size));
+            Err(TransferError::UnalignedCopySize(data_size))?
         }
         if buffer_offset % wgt::COPY_BUFFER_ALIGNMENT != 0 {
-            return Err(QueueWriteBufferError::UnalignedBufferOffset(buffer_offset));
+            Err(TransferError::UnalignedBufferOffset(buffer_offset))?
         }
-        let destination_start_offset = buffer_offset;
-        let destination_end_offset = buffer_offset + data_size;
-        if destination_end_offset > dst.size {
-            return Err(QueueWriteBufferError::BufferOverrun {
-                start: destination_start_offset,
-                end: destination_end_offset,
-                size: dst.size,
-            });
+        if buffer_offset + data_size > dst.size {
+            Err(TransferError::BufferOverrun)?
         }
 
         let region = hal::command::BufferCopy {
@@ -243,16 +261,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         data: &[u8],
         data_layout: &wgt::TextureDataLayout,
         size: &wgt::Extent3d,
-    ) -> Result<(), QueueWriteTextureError> {
+    ) -> Result<(), QueueWriteError> {
         span!(_guard, INFO, "Queue::write_texture");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (mut device_guard, mut token) = hub.devices.write(&mut token);
-        let device = &mut device_guard[queue_id];
+        let device = device_guard
+            .get_mut(queue_id)
+            .map_err(|_| DeviceError::Invalid)?;
         let (texture_guard, _) = hub.textures.read(&mut token);
         let (image_layers, image_range, image_offset) =
-            crate::command::texture_copy_view_to_hal(destination, size, &*texture_guard);
+            texture_copy_view_to_hal(destination, size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
         match device.trace {
@@ -274,12 +294,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             return Ok(());
         }
 
-        let texture_format = texture_guard[destination.texture].format;
+        let texture_format = texture_guard.get(destination.texture).unwrap().format;
         let bytes_per_block = conv::map_texture_format(texture_format, device.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
-        crate::command::validate_linear_texture_data(
+        validate_linear_texture_data(
             data_layout,
             texture_format,
             data.len() as wgt::BufferAddress,
@@ -302,18 +322,36 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let block_rows_in_copy = (size.depth - 1) * block_rows_per_image + height_blocks;
         let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
         let mut stage = device.prepare_stage(stage_size)?;
+
+        let mut trackers = device.trackers.lock();
+        let (dst, transition) = trackers
+            .textures
+            .use_replace(
+                &*texture_guard,
+                destination.texture,
+                image_range,
+                TextureUse::COPY_DST,
+            )
+            .unwrap();
+
+        if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
+            Err(TransferError::MissingCopyDstUsageFlag)?
+        }
+        validate_texture_copy_range(destination, dst.format, dst.kind, size)?;
+        dst.life_guard.use_at(device.active_submission_index + 1);
+
         {
             let mut mapped = stage
                 .memory
                 .map(&device.raw, hal::memory::Segment::ALL)
                 .map_err(|err| match err {
-                    hal::device::MapError::OutOfMemory(_) => PrepareStageError::OutOfMemory,
+                    hal::device::MapError::OutOfMemory(_) => DeviceError::OutOfMemory,
                     _ => panic!("failed to map staging buffer: {}", err),
                 })?;
             let mapping = unsafe { mapped.write(&device.raw, hal::memory::Segment::ALL) }
                 .expect("failed to get writer to mapped staging buffer");
             if stage_bytes_per_row == data_layout.bytes_per_row {
-                // Unlikely case of the data already being aligned optimally.
+                // Fast path if the data isalready being aligned optimally.
                 mapping.slice[..stage_size as usize].copy_from_slice(data);
             } else {
                 // Copy row by row into the optimal alignment.
@@ -332,18 +370,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
             }
         }
-
-        let mut trackers = device.trackers.lock();
-        let (dst, transition) = trackers.textures.use_replace(
-            &*texture_guard,
-            destination.texture,
-            image_range,
-            TextureUse::COPY_DST,
-        );
-        check_texture_usage(dst.usage, wgt::TextureUsage::COPY_DST)?;
-        crate::command::validate_texture_copy_range(destination, dst.format, dst.kind, size)?;
-
-        dst.life_guard.use_at(device.active_submission_index + 1);
 
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
@@ -391,7 +417,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let callbacks = {
             let mut token = Token::root();
             let (mut device_guard, mut token) = hub.devices.write(&mut token);
-            let device = &mut device_guard[queue_id];
+            let device = device_guard
+                .get_mut(queue_id)
+                .map_err(|_| DeviceError::Invalid)?;
             let pending_write_command_buffer =
                 device
                     .pending_writes
@@ -428,7 +456,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     // finish all the command buffers first
                     for &cmb_id in command_buffer_ids {
-                        let cmdbuf = &mut command_buffer_guard[cmb_id];
+                        let cmdbuf = command_buffer_guard
+                            .get_mut(cmb_id)
+                            .map_err(|_| QueueSubmitError::InvalidCommandBuffer(cmb_id))?;
                         #[cfg(feature = "trace")]
                         match device.trace {
                             Some(ref trace) => trace.lock().add(Action::Submit(
@@ -532,12 +562,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let fence = device
                     .raw
                     .create_fence(false)
-                    .or(Err(QueueSubmitError::OutOfMemory))?;
+                    .or(Err(DeviceError::OutOfMemory))?;
                 let submission = hal::queue::Submission {
                     command_buffers: pending_write_command_buffer.as_ref().into_iter().chain(
                         command_buffer_ids
                             .iter()
-                            .flat_map(|&cmb_id| &command_buffer_guard[cmb_id].raw),
+                            .flat_map(|&cmb_id| &command_buffer_guard.get(cmb_id).unwrap().raw),
                     ),
                     wait_semaphores: Vec::new(),
                     signal_semaphores: signal_swapchain_semaphores
@@ -557,7 +587,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .after_submit_internal(comb_raw, submit_index);
             }
 
-            let callbacks = device.maintain(&hub, false, &mut token)?;
+            let callbacks = match device.maintain(&hub, false, &mut token) {
+                Ok(callbacks) => callbacks,
+                Err(WaitIdleError::Device(err)) => return Err(QueueSubmitError::Queue(err)),
+                Err(WaitIdleError::StuckGpu) => return Err(QueueSubmitError::StuckGpu),
+            };
             super::Device::lock_life_internal(&device.life_tracker, &mut token).track_submission(
                 submit_index,
                 fence,
@@ -578,54 +612,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         Ok(())
     }
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum PrepareStageError {
-    #[error(transparent)]
-    Allocation(#[from] gfx_memory::HeapsError),
-    #[error("not enough memory left")]
-    OutOfMemory,
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum QueueWriteBufferError {
-    #[error("write buffer with indices {start}..{end} would overrun buffer of size {size}")]
-    BufferOverrun {
-        start: wgt::BufferAddress,
-        end: wgt::BufferAddress,
-        size: wgt::BufferAddress,
-    },
-    #[error(transparent)]
-    MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error(transparent)]
-    Stage(#[from] PrepareStageError),
-    #[error("buffer offset {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
-    UnalignedBufferOffset(wgt::BufferAddress),
-    #[error("buffer write size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
-    UnalignedDataSize(wgt::BufferAddress),
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum QueueWriteTextureError {
-    #[error(transparent)]
-    MissingTextureUsage(#[from] MissingTextureUsageError),
-    #[error(transparent)]
-    Stage(#[from] PrepareStageError),
-    #[error(transparent)]
-    Transfer(#[from] crate::command::TransferError),
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum QueueSubmitError {
-    #[error(transparent)]
-    BufferAccess(#[from] super::BufferAccessError),
-    #[error("not enough memory left")]
-    OutOfMemory,
-    #[error("swap chain output was dropped before the command buffer got submitted")]
-    SwapChainOutputDropped,
-    #[error(transparent)]
-    WaitIdle(#[from] WaitIdleError),
 }
 
 fn get_lowest_common_denom(a: u32, b: u32) -> u32 {

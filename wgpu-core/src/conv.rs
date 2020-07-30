@@ -8,7 +8,6 @@ use crate::{
 };
 
 use std::convert::TryInto;
-use thiserror::Error;
 
 pub fn map_buffer_usage(usage: wgt::BufferUsage) -> (hal::buffer::Usage, hal::memory::Properties) {
     use hal::buffer::Usage as U;
@@ -579,54 +578,36 @@ pub fn map_texture_dimension_size(
         depth,
     }: wgt::Extent3d,
     sample_size: u32,
-) -> Result<hal::image::Kind, MapTextureDimensionSizeError> {
+) -> Result<hal::image::Kind, resource::TextureDimensionError> {
     use hal::image::Kind as H;
+    use resource::TextureDimensionError as Tde;
     use wgt::TextureDimension::*;
+
     Ok(match dimension {
         D1 => {
             if height != 1 {
-                return Err(MapTextureDimensionSizeError::InvalidHeight);
+                return Err(Tde::InvalidHeight);
             }
             if sample_size != 1 {
-                return Err(MapTextureDimensionSizeError::InvalidSampleCount(
-                    sample_size,
-                ));
+                return Err(Tde::InvalidSampleCount(sample_size));
             }
-            let layers = depth
-                .try_into()
-                .or(Err(MapTextureDimensionSizeError::TooManyLayers(depth)))?;
+            let layers = depth.try_into().or(Err(Tde::TooManyLayers(depth)))?;
             H::D1(width, layers)
         }
         D2 => {
             if sample_size > 32 || !is_power_of_two(sample_size) {
-                return Err(MapTextureDimensionSizeError::InvalidSampleCount(
-                    sample_size,
-                ));
+                return Err(Tde::InvalidSampleCount(sample_size));
             }
-            let layers = depth
-                .try_into()
-                .or(Err(MapTextureDimensionSizeError::TooManyLayers(depth)))?;
+            let layers = depth.try_into().or(Err(Tde::TooManyLayers(depth)))?;
             H::D2(width, height, layers, sample_size as u8)
         }
         D3 => {
             if sample_size != 1 {
-                return Err(MapTextureDimensionSizeError::InvalidSampleCount(
-                    sample_size,
-                ));
+                return Err(Tde::InvalidSampleCount(sample_size));
             }
             H::D3(width, height, depth)
         }
     })
-}
-
-#[derive(Clone, Debug, Error)]
-pub enum MapTextureDimensionSizeError {
-    #[error("too many layers ({0}) for texture array")]
-    TooManyLayers(u32),
-    #[error("1D textures must have height set to 1")]
-    InvalidHeight,
-    #[error("sample count {0} is invalid")]
-    InvalidSampleCount(u32),
 }
 
 pub fn map_texture_view_dimension(dimension: wgt::TextureViewDimension) -> hal::image::ViewKind {

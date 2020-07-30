@@ -53,8 +53,8 @@ impl<T> From<SerialId> for Id<T> {
 
 impl<T> Id<T> {
     #[cfg(test)]
-    pub(crate) fn dummy() -> Self {
-        Id(NonZeroU64::new(1).unwrap(), PhantomData)
+    pub(crate) fn dummy() -> Valid<Self> {
+        Valid(Id(NonZeroU64::new(1).unwrap(), PhantomData))
     }
 
     pub fn backend(self) -> Backend {
@@ -109,6 +109,14 @@ impl<T> Ord for Id<T> {
         self.0.cmp(&other.0)
     }
 }
+
+/// An internal ID that has been checked to point to
+/// a valid object in the storages.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub(crate) struct Valid<I>(pub I);
 
 pub trait TypedId {
     fn zip(index: Index, epoch: Epoch, backend: Backend) -> Self;

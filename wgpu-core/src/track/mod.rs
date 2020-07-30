@@ -9,13 +9,14 @@ mod texture;
 use crate::{
     conv,
     hub::Storage,
-    id::{self, TypedId},
+    id::{self, TypedId, Valid},
     resource, Epoch, FastHashMap, Index, RefCount,
 };
 
 use std::{
     borrow::Borrow, collections::hash_map::Entry, fmt, marker::PhantomData, ops, vec::Drain,
 };
+use thiserror::Error;
 
 pub(crate) use buffer::BufferState;
 pub(crate) use texture::TextureState;
@@ -45,7 +46,7 @@ impl<U: Copy> Unit<U> {
 
 /// The main trait that abstracts away the tracking logic of
 /// a particular resource type, like a buffer or a texture.
-pub trait ResourceState: Clone + Default {
+pub(crate) trait ResourceState: Clone + Default {
     /// Corresponding `HUB` identifier.
     type Id: Copy + fmt::Debug + TypedId;
     /// A type specifying the sub-resources.
@@ -74,7 +75,7 @@ pub trait ResourceState: Clone + Default {
     /// be done for read-only usages.
     fn change(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         selector: Self::Selector,
         usage: Self::Usage,
         output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -83,7 +84,7 @@ pub trait ResourceState: Clone + Default {
     /// Sets up the first usage of the selected sub-resources.
     fn prepend(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         selector: Self::Selector,
         usage: Self::Usage,
     ) -> Result<(), PendingTransition<Self>>;
@@ -98,7 +99,7 @@ pub trait ResourceState: Clone + Default {
     /// the error is generated (returning the conflict).
     fn merge(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         other: &Self,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>>;
@@ -120,8 +121,8 @@ struct Resource<S> {
 /// transition. User code should be able to generate a pipeline barrier
 /// based on the contents.
 #[derive(Debug, PartialEq)]
-pub struct PendingTransition<S: ResourceState> {
-    pub id: S::Id,
+pub(crate) struct PendingTransition<S: ResourceState> {
+    pub id: Valid<S::Id>,
     pub selector: S::Selector,
     pub usage: ops::Range<S::Usage>,
 }
@@ -164,8 +165,16 @@ impl PendingTransition<TextureState> {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum UseExtendError<U: fmt::Debug> {
+    #[error("resource is invalid")]
+    InvalidResource,
+    #[error("total usage {0:?} is not valid")]
+    Conflict(U),
+}
+
 /// A tracker for all resources of a given type.
-pub struct ResourceTracker<S: ResourceState> {
+pub(crate) struct ResourceTracker<S: ResourceState> {
     /// An association of known resource indices with their tracked states.
     map: FastHashMap<Index, Resource<S>>,
     /// Temporary storage for collecting transitions.
@@ -195,8 +204,8 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Remove an id from the tracked map.
-    pub(crate) fn remove(&mut self, id: S::Id) -> bool {
-        let (index, epoch, backend) = id.unzip();
+    pub(crate) fn remove(&mut self, id: Valid<S::Id>) -> bool {
+        let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.remove(&index) {
             Some(resource) => {
@@ -208,8 +217,8 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Removes the resource from the tracker if we are holding the last reference.
-    pub(crate) fn remove_abandoned(&mut self, id: S::Id) -> bool {
-        let (index, epoch, backend) = id.unzip();
+    pub(crate) fn remove_abandoned(&mut self, id: Valid<S::Id>) -> bool {
+        let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.entry(index) {
             Entry::Occupied(e) => {
@@ -233,11 +242,11 @@ impl<S: ResourceState> ResourceTracker<S> {
     }
 
     /// Return an iterator over used resources keys.
-    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = S::Id> {
+    pub fn used<'a>(&'a self) -> impl 'a + Iterator<Item = Valid<S::Id>> {
         let backend = self.backend;
         self.map
             .iter()
-            .map(move |(&index, resource)| S::Id::zip(index, resource.epoch, backend))
+            .map(move |(&index, resource)| Valid(S::Id::zip(index, resource.epoch, backend)))
     }
 
     /// Clear the tracked contents.
@@ -248,8 +257,13 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Initialize a resource to be used.
     ///
     /// Returns false if the resource is already registered.
-    pub(crate) fn init(&mut self, id: S::Id, ref_count: RefCount, state: S) -> Result<(), &S> {
-        let (index, epoch, backend) = id.unzip();
+    pub(crate) fn init(
+        &mut self,
+        id: Valid<S::Id>,
+        ref_count: RefCount,
+        state: S,
+    ) -> Result<(), &S> {
+        let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         match self.map.entry(index) {
             Entry::Vacant(e) => {
@@ -268,8 +282,8 @@ impl<S: ResourceState> ResourceTracker<S> {
     ///
     /// Returns `Some(Usage)` only if this usage is consistent
     /// across the given selector.
-    pub fn query(&self, id: S::Id, selector: S::Selector) -> Option<S::Usage> {
-        let (index, epoch, backend) = id.unzip();
+    pub fn query(&self, id: Valid<S::Id>, selector: S::Selector) -> Option<S::Usage> {
+        let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(backend, self.backend);
         let res = self.map.get(&index)?;
         assert_eq!(res.epoch, epoch);
@@ -281,10 +295,10 @@ impl<S: ResourceState> ResourceTracker<S> {
     fn get_or_insert<'a>(
         self_backend: wgt::Backend,
         map: &'a mut FastHashMap<Index, Resource<S>>,
-        id: S::Id,
+        id: Valid<S::Id>,
         ref_count: &RefCount,
     ) -> &'a mut Resource<S> {
-        let (index, epoch, backend) = id.unzip();
+        let (index, epoch, backend) = id.0.unzip();
         debug_assert_eq!(self_backend, backend);
         match map.entry(index) {
             Entry::Vacant(e) => e.insert(Resource {
@@ -304,7 +318,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Returns conflicting transition as an error.
     pub(crate) fn change_extend(
         &mut self,
-        id: S::Id,
+        id: Valid<S::Id>,
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
@@ -317,7 +331,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// Replace the usage of a specified resource.
     pub(crate) fn change_replace(
         &mut self,
-        id: S::Id,
+        id: Valid<S::Id>,
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
@@ -334,7 +348,7 @@ impl<S: ResourceState> ResourceTracker<S> {
     /// This is a special operation only used by the render pass attachments.
     pub(crate) fn prepend(
         &mut self,
-        id: S::Id,
+        id: Valid<S::Id>,
         ref_count: &RefCount,
         selector: S::Selector,
         usage: S::Usage,
@@ -355,7 +369,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                 }
                 Entry::Occupied(e) => {
                     assert_eq!(e.get().epoch, new.epoch);
-                    let id = S::Id::zip(index, new.epoch, self.backend);
+                    let id = Valid(S::Id::zip(index, new.epoch, self.backend));
                     e.into_mut().state.merge(id, &new.state, None)?;
                 }
             }
@@ -373,7 +387,7 @@ impl<S: ResourceState> ResourceTracker<S> {
                 }
                 Entry::Occupied(e) => {
                     assert_eq!(e.get().epoch, new.epoch);
-                    let id = S::Id::zip(index, new.epoch, self.backend);
+                    let id = Valid(S::Id::zip(index, new.epoch, self.backend));
                     e.into_mut()
                         .state
                         .merge(id, &new.state, Some(&mut self.temp))
@@ -395,11 +409,13 @@ impl<S: ResourceState> ResourceTracker<S> {
         id: S::Id,
         selector: S::Selector,
         usage: S::Usage,
-    ) -> Result<&'a T, S::Usage> {
-        let item = &storage[id];
-        self.change_extend(id, item.borrow(), selector, usage)
+    ) -> Result<&'a T, UseExtendError<S::Usage>> {
+        let item = storage
+            .get(id)
+            .map_err(|_| UseExtendError::InvalidResource)?;
+        self.change_extend(Valid(id), item.borrow(), selector, usage)
             .map(|()| item)
-            .map_err(|pending| pending.usage.start)
+            .map_err(|pending| UseExtendError::Conflict(pending.usage.end))
     }
 
     /// Use a given resource provided by an `Id` with the specified usage.
@@ -412,10 +428,10 @@ impl<S: ResourceState> ResourceTracker<S> {
         id: S::Id,
         selector: S::Selector,
         usage: S::Usage,
-    ) -> (&'a T, Drain<PendingTransition<S>>) {
-        let item = &storage[id];
-        let drain = self.change_replace(id, item.borrow(), selector, usage);
-        (item, drain)
+    ) -> Result<(&'a T, Drain<PendingTransition<S>>), S::Id> {
+        let item = storage.get(id).map_err(|_| id)?;
+        let drain = self.change_replace(Valid(id), item.borrow(), selector, usage);
+        Ok((item, drain))
     }
 }
 
@@ -430,7 +446,7 @@ impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
 
     fn change(
         &mut self,
-        _id: Self::Id,
+        _id: Valid<Self::Id>,
         _selector: Self::Selector,
         _usage: Self::Usage,
         _output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -440,7 +456,7 @@ impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
 
     fn prepend(
         &mut self,
-        _id: Self::Id,
+        _id: Valid<Self::Id>,
         _selector: Self::Selector,
         _usage: Self::Usage,
     ) -> Result<(), PendingTransition<Self>> {
@@ -449,7 +465,7 @@ impl<I: Copy + fmt::Debug + TypedId> ResourceState for PhantomData<I> {
 
     fn merge(
         &mut self,
-        _id: Self::Id,
+        _id: Valid<Self::Id>,
         _other: &Self,
         _output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {

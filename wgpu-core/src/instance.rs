@@ -6,16 +6,11 @@ use crate::{
     backend,
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
-    id::{AdapterId, DeviceId, SurfaceId},
+    id::{AdapterId, DeviceId, SurfaceId, Valid},
     power, span, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
-
-#[cfg(feature = "replay")]
-use serde::Deserialize;
-#[cfg(feature = "trace")]
-use serde::Serialize;
 
 use hal::{
     adapter::{AdapterInfo as HalAdapterInfo, DeviceType as HalDeviceType, PhysicalDevice as _},
@@ -215,8 +210,8 @@ impl<B: hal::Backend> Adapter<B> {
 
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct AdapterInfo {
     /// Adapter name
     pub name: String,
@@ -252,6 +247,8 @@ impl AdapterInfo {
 #[derive(Clone, Debug, Error, PartialEq)]
 /// Error when requesting a device from the adaptor
 pub enum RequestDeviceError {
+    #[error("parent adapter is invalid")]
+    InvalidAdapter,
     #[error("connection to device was lost during initialization")]
     DeviceLost,
     #[error("device initialization failed due to implementation specific errors")]
@@ -269,8 +266,8 @@ pub enum RequestDeviceError {
 /// Supported physical device types.
 #[repr(u8)]
 #[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub enum DeviceType {
     /// Other.
     Other,
@@ -316,6 +313,18 @@ impl<I: Clone> AdapterInputs<'_, I> {
     }
 }
 
+#[error("adapter is invalid")]
+#[derive(Clone, Debug, Error)]
+pub struct InvalidAdapter;
+
+#[derive(Clone, Debug, Error)]
+pub enum RequestAdapterError {
+    #[error("no suitable adapter found")]
+    NotFound,
+    #[error("surface {0:?} is invalid")]
+    InvalidSurface(SurfaceId),
+}
+
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
     #[cfg(feature = "raw-window-handle")]
     pub fn instance_create_surface(
@@ -347,7 +356,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         };
 
         let mut token = Token::root();
-        self.surfaces.register_identity(id_in, surface, &mut token)
+        let id = self.surfaces.register_identity(id_in, surface, &mut token);
+        id.0
     }
 
     pub fn enumerate_adapters(&self, inputs: AdapterInputs<Input<G, AdapterId>>) -> Vec<AdapterId> {
@@ -360,15 +370,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         backends_map! {
             let map = |(instance_field, backend, backend_info, backend_hub)| {
                 if let Some(inst) = instance_field {
+                    let hub = backend_hub(self);
                     if let Some(id_backend) = inputs.find(backend) {
                         for raw in inst.enumerate_adapters() {
                             let adapter = Adapter::new(raw);
                             tracing::info!("Adapter {} {:?}", backend_info, adapter.raw.info);
-                            adapters.push(backend_hub(self).adapters.register_identity(
+                            let id = hub.adapters.register_identity(
                                 id_backend.clone(),
                                 adapter,
                                 &mut token,
-                            ));
+                            );
+                            adapters.push(id.0);
                         }
                     }
                 }
@@ -387,17 +399,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         adapters
     }
 
-    pub fn pick_adapter(
+    pub fn request_adapter(
         &self,
         desc: &RequestAdapterOptions,
         inputs: AdapterInputs<Input<G, AdapterId>>,
-    ) -> Option<AdapterId> {
+    ) -> Result<AdapterId, RequestAdapterError> {
         span!(_guard, INFO, "Instance::pick_adapter");
 
         let instance = &self.instance;
         let mut token = Token::root();
         let (surface_guard, mut token) = self.surfaces.read(&mut token);
-        let compatible_surface = desc.compatible_surface.map(|id| &surface_guard[id]);
+        let compatible_surface = desc
+            .compatible_surface
+            .map(|id| {
+                surface_guard
+                    .get(id)
+                    .map_err(|_| RequestAdapterError::InvalidSurface(id))
+            })
+            .transpose()?;
         let mut device_types = Vec::new();
 
         let mut id_vulkan = inputs.find(Backend::Vulkan);
@@ -458,8 +477,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         if device_types.is_empty() {
-            tracing::warn!("No adapters are available!");
-            return None;
+            return Err(RequestAdapterError::NotFound);
         }
 
         let (mut integrated, mut discrete, mut virt, mut other) = (None, None, None, None);
@@ -509,7 +527,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         adapter,
                         &mut token,
                     );
-                    return Some(id);
+                    return Ok(id.0);
                 }
                 selected -= adapters_backend.len();
             };
@@ -532,39 +550,52 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             id_dx11.take(),
         );
         tracing::warn!("Some adapters are present, but enumerating them failed!");
-        None
+        Err(RequestAdapterError::NotFound)
     }
 
-    pub fn adapter_get_info<B: GfxBackend>(&self, adapter_id: AdapterId) -> AdapterInfo {
+    pub fn adapter_get_info<B: GfxBackend>(
+        &self,
+        adapter_id: AdapterId,
+    ) -> Result<AdapterInfo, InvalidAdapter> {
         span!(_guard, INFO, "Adapter::get_info");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
-        let adapter = &adapter_guard[adapter_id];
-        AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend())
+        adapter_guard
+            .get(adapter_id)
+            .map(|adapter| AdapterInfo::from_gfx(adapter.raw.info.clone(), adapter_id.backend()))
+            .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_features<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Features {
+    pub fn adapter_features<B: GfxBackend>(
+        &self,
+        adapter_id: AdapterId,
+    ) -> Result<wgt::Features, InvalidAdapter> {
         span!(_guard, INFO, "Adapter::features");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
-        let adapter = &adapter_guard[adapter_id];
-
-        adapter.features
+        adapter_guard
+            .get(adapter_id)
+            .map(|adapter| adapter.features)
+            .map_err(|_| InvalidAdapter)
     }
 
-    pub fn adapter_limits<B: GfxBackend>(&self, adapter_id: AdapterId) -> wgt::Limits {
+    pub fn adapter_limits<B: GfxBackend>(
+        &self,
+        adapter_id: AdapterId,
+    ) -> Result<wgt::Limits, InvalidAdapter> {
         span!(_guard, INFO, "Adapter::limits");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (adapter_guard, _) = hub.adapters.read(&mut token);
-        let adapter = &adapter_guard[adapter_id];
-
-        adapter.limits.clone()
+        adapter_guard
+            .get(adapter_id)
+            .map(|adapter| adapter.limits.clone())
+            .map_err(|_| InvalidAdapter)
     }
 
     pub fn adapter_destroy<B: GfxBackend>(&self, adapter_id: AdapterId) {
@@ -572,18 +603,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         let hub = B::hub(self);
         let mut token = Token::root();
-        let (mut guard, _) = hub.adapters.write(&mut token);
+        let (mut adapter_guard, _) = hub.adapters.write(&mut token);
 
-        if guard[adapter_id]
-            .life_guard
-            .ref_count
-            .take()
-            .unwrap()
-            .load()
-            == 1
-        {
-            hub.adapters.free_id(adapter_id);
-            let _adapter = guard.remove(adapter_id).unwrap();
+        match adapter_guard.get_mut(adapter_id) {
+            Ok(adapter) => {
+                if adapter.life_guard.ref_count.take().unwrap().load() == 1 {
+                    hub.adapters
+                        .unregister_locked(adapter_id, &mut *adapter_guard);
+                }
+            }
+            Err(_) => {
+                hub.adapters.free_id(adapter_id);
+            }
         }
     }
 }
@@ -602,7 +633,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let mut token = Token::root();
         let device = {
             let (adapter_guard, _) = hub.adapters.read(&mut token);
-            let adapter = &adapter_guard[adapter_id];
+            let adapter = adapter_guard
+                .get(adapter_id)
+                .map_err(|_| RequestDeviceError::InvalidAdapter)?;
             let phd = &adapter.raw.physical_device;
 
             // Verify all features were exposed by the adapter
@@ -729,7 +762,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Device::new(
                 gpu.device,
                 Stored {
-                    value: adapter_id,
+                    value: Valid(adapter_id),
                     ref_count: adapter.life_guard.add_ref(),
                 },
                 gpu.queue_groups.swap_remove(0),
@@ -742,6 +775,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .or(Err(RequestDeviceError::OutOfMemory))?
         };
 
-        Ok(hub.devices.register_identity(id_in, device, &mut token))
+        let id = hub.devices.register_identity(id_in, device, &mut token);
+        Ok(id.0)
     }
 }

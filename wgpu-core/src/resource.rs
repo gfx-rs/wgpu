@@ -3,19 +3,22 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    device::DeviceError,
     id::{DeviceId, SwapChainId, TextureId},
     track::DUMMY_SELECTOR,
+    validation::MissingBufferUsageError,
     LifeGuard, RefCount, Stored,
 };
 
 use gfx_memory::MemoryBlock;
+use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, TextureFormat, TextureUsage};
 
 use std::{borrow::Borrow, ptr::NonNull};
 
 bitflags::bitflags! {
     /// The internal enum mirrored from `BufferUsage`. The values don't have to match!
-    pub (crate) struct BufferUse: u32 {
+    pub struct BufferUse: u32 {
         const EMPTY = 0;
         const MAP_READ = 1;
         const MAP_WRITE = 2;
@@ -42,7 +45,7 @@ bitflags::bitflags! {
 
 bitflags::bitflags! {
     /// The internal enum mirrored from `TextureUsage`. The values don't have to match!
-    pub(crate) struct TextureUse: u32 {
+    pub struct TextureUse: u32 {
         const EMPTY = 0;
         const COPY_SRC = 1;
         const COPY_DST = 2;
@@ -117,6 +120,33 @@ impl BufferMapOperation {
     }
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum BufferAccessError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("buffer is invalid")]
+    InvalidBuffer,
+    #[error("buffer is already mapped")]
+    AlreadyMapped,
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error("buffer is not mapped")]
+    NotMapped,
+    #[error("buffer map range does not respect `COPY_BUFFER_ALIGNMENT`")]
+    UnalignedRange,
+}
+
+impl From<hal::device::MapError> for BufferAccessError {
+    fn from(error: hal::device::MapError) -> Self {
+        match error {
+            hal::device::MapError::OutOfMemory(_) => {
+                BufferAccessError::Device(DeviceError::OutOfMemory)
+            }
+            _ => panic!("failed to map buffer: {}", error),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct BufferPendingMapping {
     pub sub_range: hal::buffer::SubRange,
@@ -136,6 +166,18 @@ pub struct Buffer<B: hal::Backend> {
     pub(crate) sync_mapped_writes: Option<hal::memory::Segment>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) map_state: BufferMapState<B>,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateBufferError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("failed to map buffer while creating: {0}")]
+    AccessError(#[from] BufferAccessError),
+    #[error("buffers that are mapped at creation have to be aligned to `COPY_BUFFER_ALIGNMENT`")]
+    UnalignedSize,
+    #[error("`MAP` usage can only be combined with the opposite `COPY`, requested {0:?}")]
+    UsageMismatch(BufferUsage),
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Buffer<B> {
@@ -161,6 +203,30 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) full_range: hal::image::SubresourceRange,
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) life_guard: LifeGuard,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum TextureDimensionError {
+    #[error("too many layers ({0}) for texture array")]
+    TooManyLayers(u32),
+    #[error("1D textures must have height set to 1")]
+    InvalidHeight,
+    #[error("sample count {0} is invalid")]
+    InvalidSampleCount(u32),
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateTextureError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("D24Plus textures cannot be copied")]
+    CannotCopyD24Plus,
+    #[error(transparent)]
+    InvalidDimension(#[from] TextureDimensionError),
+    #[error("texture descriptor mip level count ({0}) must be less than `MAX_MIP_LEVELS`")]
+    InvalidMipLevelCount(u32),
+    #[error("Feature {0:?} must be enabled to create a texture of type {1:?}")]
+    MissingFeature(wgt::Features, TextureFormat),
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
@@ -198,6 +264,26 @@ pub struct TextureView<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum CreateTextureViewError {
+    #[error("parent texture is invalid")]
+    InvalidTexture,
+    #[error("not enough memory left")]
+    OutOfMemory,
+    #[error(
+        "TextureView mip level count + base mip level {requested} must be <= Texture mip level count {total}"
+    )]
+    InvalidMipLevelCount { requested: u32, total: u8 },
+    #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
+    InvalidArrayLayerCount { requested: u32, total: u16 },
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum TextureViewDestroyError {
+    #[error("cannot destroy swap chain image")]
+    SwapChainImage,
+}
+
 impl<B: hal::Backend> Borrow<RefCount> for TextureView<B> {
     fn borrow(&self) -> &RefCount {
         self.life_guard.ref_count.as_ref().unwrap()
@@ -217,6 +303,16 @@ pub struct Sampler<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
     /// `true` if this is a comparison sampler
     pub(crate) comparison: bool,
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum CreateSamplerError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("invalid anisotropic clamp {0}, must be one of 1, 2, 4, 8 or 16")]
+    InvalidClamp(u8),
+    #[error("cannot create any more samplers")]
+    TooManyObjects,
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {

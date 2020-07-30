@@ -155,21 +155,21 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateBuffer(id, desc) => {
                 let label = Label::new(&desc.label);
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_buffer::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
                     .unwrap();
             }
             A::DestroyBuffer(id) => {
-                self.buffer_destroy::<B>(id, true);
+                self.buffer_drop::<B>(id, true);
             }
             A::CreateTexture(id, desc) => {
                 let label = Label::new(&desc.label);
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_texture::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
                     .unwrap();
             }
             A::DestroyTexture(id) => {
-                self.texture_destroy::<B>(id);
+                self.texture_drop::<B>(id);
             }
             A::CreateTextureView {
                 id,
@@ -177,7 +177,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 desc,
             } => {
                 let label = desc.as_ref().map_or(Label(None), |d| Label::new(&d.label));
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.texture_create_view::<B>(
                     parent_id,
                     desc.map(|d| d.map_label(|_| label.as_ptr())).as_ref(),
@@ -186,16 +186,16 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 .unwrap();
             }
             A::DestroyTextureView(id) => {
-                self.texture_view_destroy::<B>(id).unwrap();
+                self.texture_view_drop::<B>(id).unwrap();
             }
             A::CreateSampler(id, desc) => {
                 let label = Label::new(&desc.label);
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_sampler::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
                     .unwrap();
             }
             A::DestroySampler(id) => {
-                self.sampler_destroy::<B>(id);
+                self.sampler_drop::<B>(id);
             }
             A::GetSwapChainTexture { id, parent_id } => {
                 if let Some(id) = id {
@@ -210,23 +210,23 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
             }
             A::DestroyBindGroupLayout(id) => {
-                self.bind_group_layout_destroy::<B>(id);
+                self.bind_group_layout_drop::<B>(id);
             }
             A::CreatePipelineLayout(id, desc) => {
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_pipeline_layout::<B>(device, &desc, id)
                     .unwrap();
             }
             A::DestroyPipelineLayout(id) => {
-                self.pipeline_layout_destroy::<B>(id);
+                self.pipeline_layout_drop::<B>(id);
             }
             A::CreateBindGroup(id, desc) => {
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_bind_group::<B>(device, &desc, id)
                     .unwrap();
             }
             A::DestroyBindGroup(id) => {
-                self.bind_group_destroy::<B>(id);
+                self.bind_group_drop::<B>(id);
             }
             A::CreateShaderModule { id, data } => {
                 let source = if data.ends_with(".wgsl") {
@@ -244,23 +244,23 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                     .unwrap();
             }
             A::DestroyShaderModule(id) => {
-                self.shader_module_destroy::<B>(id);
+                self.shader_module_drop::<B>(id);
             }
             A::CreateComputePipeline(id, desc) => {
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_compute_pipeline::<B>(device, &desc, id)
                     .unwrap();
             }
             A::DestroyComputePipeline(id) => {
-                self.compute_pipeline_destroy::<B>(id);
+                self.compute_pipeline_drop::<B>(id);
             }
             A::CreateRenderPipeline(id, desc) => {
-                self.device_maintain_ids::<B>(device);
+                self.device_maintain_ids::<B>(device).unwrap();
                 self.device_create_render_pipeline::<B>(device, &desc, id)
                     .unwrap();
             }
             A::DestroyRenderPipeline(id) => {
-                self.render_pipeline_destroy::<B>(id);
+                self.render_pipeline_drop::<B>(id);
             }
             A::CreateRenderBundle { id, desc, base } => {
                 let label = Label::new(&desc.label.as_ref().unwrap());
@@ -276,7 +276,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 .unwrap();
             }
             A::DestroyRenderBundle(id) => {
-                self.render_bundle_destroy::<B>(id);
+                self.render_bundle_drop::<B>(id);
             }
             A::WriteBuffer {
                 id,

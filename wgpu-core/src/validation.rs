@@ -84,6 +84,8 @@ pub enum InputError {
 /// Errors produced when validating a programmable stage of a pipeline.
 #[derive(Clone, Debug, Error)]
 pub enum StageError {
+    #[error("shader module is invalid")]
+    InvalidModule,
     #[error("unable to find an entry point matching the {0:?} execution model")]
     MissingEntryPoint(naga::ShaderStage),
     #[error("error matching global binding at index {binding} in set {set} against the pipeline layout: {error}")]

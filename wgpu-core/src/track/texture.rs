@@ -3,7 +3,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{range::RangedStates, PendingTransition, ResourceState, Unit};
-use crate::{device::MAX_MIP_LEVELS, id::TextureId, resource::TextureUse};
+use crate::{
+    device::MAX_MIP_LEVELS,
+    id::{TextureId, Valid},
+    resource::TextureUse,
+};
 
 use arrayvec::ArrayVec;
 
@@ -79,7 +83,7 @@ impl ResourceState for TextureState {
 
     fn change(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         selector: Self::Selector,
         usage: Self::Usage,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -138,7 +142,7 @@ impl ResourceState for TextureState {
 
     fn prepend(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         selector: Self::Selector,
         usage: Self::Usage,
     ) -> Result<(), PendingTransition<Self>> {
@@ -173,7 +177,7 @@ impl ResourceState for TextureState {
 
     fn merge(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         other: &Self,
         mut output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {

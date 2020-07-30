@@ -3,7 +3,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use super::{PendingTransition, ResourceState, Unit};
-use crate::{id::BufferId, resource::BufferUse};
+use crate::{
+    id::{BufferId, Valid},
+    resource::BufferUse,
+};
 
 //TODO: store `hal::buffer::State` here to avoid extra conversions
 pub(crate) type BufferState = Unit<BufferUse>;
@@ -47,7 +50,7 @@ impl ResourceState for BufferState {
 
     fn change(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         _selector: Self::Selector,
         usage: Self::Usage,
         output: Option<&mut Vec<PendingTransition<Self>>>,
@@ -81,7 +84,7 @@ impl ResourceState for BufferState {
 
     fn prepend(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         _selector: Self::Selector,
         usage: Self::Usage,
     ) -> Result<(), PendingTransition<Self>> {
@@ -100,7 +103,7 @@ impl ResourceState for BufferState {
 
     fn merge(
         &mut self,
-        id: Self::Id,
+        id: Valid<Self::Id>,
         other: &Self,
         output: Option<&mut Vec<PendingTransition<Self>>>,
     ) -> Result<(), PendingTransition<Self>> {
