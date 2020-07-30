@@ -5,7 +5,7 @@ use futures::task::{LocalSpawn, LocalSpawnExt};
 use std::borrow::Cow::Borrowed;
 use wgpu::util::DeviceExt;
 
-const SKYBOX_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+const IMAGE_SIZE: u32 = 512;
 
 type Uniform = cgmath::Matrix4<f32>;
 type Uniforms = [Uniform; 2];
@@ -40,6 +40,10 @@ impl Skybox {
 }
 
 impl framework::Example for Skybox {
+    fn optional_features() -> wgpu::Features {
+        wgpu::Features::TEXTURE_COMPRESSION_BC
+    }
+
     fn init(
         sc_desc: &wgpu::SwapChainDescriptor,
         device: &wgpu::Device,
@@ -79,13 +83,11 @@ impl framework::Example for Skybox {
 
         let aspect = sc_desc.width as f32 / sc_desc.height as f32;
         let uniforms = Self::generate_uniforms(aspect);
-        let uniform_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Uniform Buffer"),
-                contents: bytemuck::cast_slice(&raw_uniforms(&uniforms)),
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            }
-        );
+        let uniform_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::cast_slice(&raw_uniforms(&uniforms)),
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             bind_group_layouts: Borrowed(&[&bind_group_layout]),
@@ -136,79 +138,119 @@ impl framework::Example for Skybox {
             ..Default::default()
         });
 
-        let paths: [&'static [u8]; 6] = [
-            &include_bytes!("images/posx.png")[..],
-            &include_bytes!("images/negx.png")[..],
-            &include_bytes!("images/posy.png")[..],
-            &include_bytes!("images/negy.png")[..],
-            &include_bytes!("images/posz.png")[..],
-            &include_bytes!("images/negz.png")[..],
-        ];
+        let device_features = device.features();
 
-        // we set these multiple times, but whatever
-        let (mut image_width, mut image_height) = (0, 0);
-        let faces = paths
-            .iter()
-            .map(|png| {
-                let png = std::io::Cursor::new(png);
-                let decoder = png::Decoder::new(png);
-                let (info, mut reader) = decoder.read_info().expect("can read info");
-                image_width = info.width;
-                image_height = info.height;
-                let mut buf = vec![0; info.buffer_size()];
-                reader.next_frame(&mut buf).expect("can read png frame");
-                buf
-            })
-            .collect::<Vec<_>>();
+        let (skybox_format, single_file) =
+            if device_features.contains(wgt::Features::TEXTURE_COMPRESSION_BC) {
+                (wgpu::TextureFormat::Bc1RgbaUnormSrgb, true)
+            } else {
+                (wgpu::TextureFormat::Rgba8UnormSrgb, false)
+            };
 
         let texture = device.create_texture(&wgpu::TextureDescriptor {
             size: wgpu::Extent3d {
-                width: image_width,
-                height: image_height,
+                width: IMAGE_SIZE,
+                height: IMAGE_SIZE,
                 depth: 6,
             },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
-            format: SKYBOX_FORMAT,
+            format: skybox_format,
             usage: wgpu::TextureUsage::SAMPLED | wgpu::TextureUsage::COPY_DST,
             label: None,
         });
 
-        for (i, image) in faces.iter().enumerate() {
+        if single_file {
             log::debug!(
-                "Copying skybox image {} of size {},{} to gpu",
-                i,
-                image_width,
-                image_height,
+                "Copying BC1 skybox images of size {},{},6 to gpu",
+                IMAGE_SIZE,
+                IMAGE_SIZE,
             );
+
+            let bc1_path: &[u8] = &include_bytes!("images/bc1.dds")[..];
+
+            let mut dds_cursor = std::io::Cursor::new(bc1_path);
+            let dds_file = ddsfile::Dds::read(&mut dds_cursor).unwrap();
+
+            let block_width = 4;
+            let block_size = 8;
+
             queue.write_texture(
                 wgpu::TextureCopyView {
                     texture: &texture,
                     mip_level: 0,
-                    origin: wgpu::Origin3d {
-                        x: 0,
-                        y: 0,
-                        z: i as u32,
-                    },
+                    origin: wgpu::Origin3d::ZERO,
                 },
-                &image,
+                &dds_file.data,
                 wgpu::TextureDataLayout {
                     offset: 0,
-                    bytes_per_row: 4 * image_width,
-                    rows_per_image: 0,
+                    bytes_per_row: block_size * ((IMAGE_SIZE + (block_width - 1)) / block_width),
+                    rows_per_image: IMAGE_SIZE,
                 },
                 wgpu::Extent3d {
-                    width: image_width,
-                    height: image_height,
-                    depth: 1,
+                    width: IMAGE_SIZE,
+                    height: IMAGE_SIZE,
+                    depth: 6,
                 },
             );
+        } else {
+            let paths: [&'static [u8]; 6] = [
+                &include_bytes!("images/posx.png")[..],
+                &include_bytes!("images/negx.png")[..],
+                &include_bytes!("images/posy.png")[..],
+                &include_bytes!("images/negy.png")[..],
+                &include_bytes!("images/posz.png")[..],
+                &include_bytes!("images/negz.png")[..],
+            ];
+
+            let faces = paths
+                .iter()
+                .map(|png| {
+                    let png = std::io::Cursor::new(png);
+                    let decoder = png::Decoder::new(png);
+                    let (info, mut reader) = decoder.read_info().expect("can read info");
+                    let mut buf = vec![0; info.buffer_size()];
+                    reader.next_frame(&mut buf).expect("can read png frame");
+                    buf
+                })
+                .collect::<Vec<_>>();
+
+            for (i, image) in faces.iter().enumerate() {
+                log::debug!(
+                    "Copying skybox image {} of size {},{} to gpu",
+                    i,
+                    IMAGE_SIZE,
+                    IMAGE_SIZE,
+                );
+                queue.write_texture(
+                    wgpu::TextureCopyView {
+                        texture: &texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d {
+                            x: 0,
+                            y: 0,
+                            z: i as u32,
+                        },
+                    },
+                    &image,
+                    wgpu::TextureDataLayout {
+                        offset: 0,
+                        bytes_per_row: 4 * IMAGE_SIZE,
+                        rows_per_image: 0,
+                    },
+                    wgpu::Extent3d {
+                        width: IMAGE_SIZE,
+                        height: IMAGE_SIZE,
+                        depth: 1,
+                    },
+                );
+            }
         }
 
         let texture_view = texture.create_view(&wgpu::TextureViewDescriptor {
             label: None,
-            format: SKYBOX_FORMAT,
+            format: skybox_format,
             dimension: wgpu::TextureViewDimension::Cube,
             aspect: wgpu::TextureAspect::default(),
             base_mip_level: 0,
