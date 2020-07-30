@@ -307,6 +307,7 @@ fn map_texture_format(texture_format: wgt::TextureFormat) -> web_sys::GpuTexture
         TextureFormat::Depth32Float => tf::Depth32float,
         TextureFormat::Depth24Plus => tf::Depth24plus,
         TextureFormat::Depth24PlusStencil8 => tf::Depth24plusStencil8,
+        _ => unimplemented!(),
     }
 }
 
@@ -1201,11 +1202,11 @@ impl crate::Context for Context {
                 mapped_desc.aspect(map_texture_aspect(d.aspect));
                 mapped_desc.base_array_layer(d.base_array_layer);
                 if let Some(count) = d.array_layer_count {
-                    mapped_desc.array_layer_count(count.get());
+                    mapped_desc.array_layer_count(count);
                 }
                 mapped_desc.base_mip_level(d.base_mip_level);
                 if let Some(count) = d.level_count {
-                    mapped_desc.mip_level_count(count.get());
+                    mapped_desc.mip_level_count(count);
                 }
                 // TODO: label
                 texture.0.create_view_with_descriptor(&mapped_desc)
