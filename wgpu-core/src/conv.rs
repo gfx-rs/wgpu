@@ -392,6 +392,141 @@ pub(crate) fn map_texture_format(
                 H::D32SfloatS8Uint
             }
         }
+
+        // BCn compressed formats
+        Tf::Bc1RgbaUnorm => H::Bc1RgbaUnorm,
+        Tf::Bc1RgbaUnormSrgb => H::Bc1RgbaSrgb,
+        Tf::Bc2RgbaUnorm => H::Bc2Unorm,
+        Tf::Bc2RgbaUnormSrgb => H::Bc2Srgb,
+        Tf::Bc3RgbaUnorm => H::Bc3Unorm,
+        Tf::Bc3RgbaUnormSrgb => H::Bc3Srgb,
+        Tf::Bc4RUnorm => H::Bc4Unorm,
+        Tf::Bc4RSnorm => H::Bc4Snorm,
+        Tf::Bc5RgUnorm => H::Bc5Unorm,
+        Tf::Bc5RgSnorm => H::Bc5Snorm,
+        Tf::Bc6hRgbSfloat => H::Bc6hSfloat,
+        Tf::Bc6hRgbUfloat => H::Bc6hUfloat,
+        Tf::Bc7RgbaUnorm => H::Bc7Unorm,
+        Tf::Bc7RgbaUnormSrgb => H::Bc7Srgb,
+    }
+}
+
+pub fn texture_block_size(format: wgt::TextureFormat) -> (u32, u32) {
+    use wgt::TextureFormat as Tf;
+    match format {
+        Tf::R8Unorm
+        | Tf::R8Snorm
+        | Tf::R8Uint
+        | Tf::R8Sint
+        | Tf::R16Uint
+        | Tf::R16Sint
+        | Tf::R16Float
+        | Tf::Rg8Unorm
+        | Tf::Rg8Snorm
+        | Tf::Rg8Uint
+        | Tf::Rg8Sint
+        | Tf::R32Uint
+        | Tf::R32Sint
+        | Tf::R32Float
+        | Tf::Rg16Uint
+        | Tf::Rg16Sint
+        | Tf::Rg16Float
+        | Tf::Rgba8Unorm
+        | Tf::Rgba8UnormSrgb
+        | Tf::Rgba8Snorm
+        | Tf::Rgba8Uint
+        | Tf::Rgba8Sint
+        | Tf::Bgra8Unorm
+        | Tf::Bgra8UnormSrgb
+        | Tf::Rgb10a2Unorm
+        | Tf::Rg11b10Float
+        | Tf::Rg32Uint
+        | Tf::Rg32Sint
+        | Tf::Rg32Float
+        | Tf::Rgba16Uint
+        | Tf::Rgba16Sint
+        | Tf::Rgba16Float
+        | Tf::Rgba32Uint
+        | Tf::Rgba32Sint
+        | Tf::Rgba32Float => (1, 1),
+
+        Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
+            unreachable!("unexpected depth format")
+        }
+
+        Tf::Bc1RgbaUnorm
+        | Tf::Bc1RgbaUnormSrgb
+        | Tf::Bc2RgbaUnorm
+        | Tf::Bc2RgbaUnormSrgb
+        | Tf::Bc3RgbaUnorm
+        | Tf::Bc3RgbaUnormSrgb
+        | Tf::Bc4RUnorm
+        | Tf::Bc4RSnorm
+        | Tf::Bc5RgUnorm
+        | Tf::Bc5RgSnorm
+        | Tf::Bc6hRgbUfloat
+        | Tf::Bc6hRgbSfloat
+        | Tf::Bc7RgbaUnorm
+        | Tf::Bc7RgbaUnormSrgb => (4, 4),
+    }
+}
+
+pub fn texture_features(format: wgt::TextureFormat) -> wgt::Features {
+    use wgt::TextureFormat as Tf;
+    match format {
+        Tf::R8Unorm
+        | Tf::R8Snorm
+        | Tf::R8Uint
+        | Tf::R8Sint
+        | Tf::R16Uint
+        | Tf::R16Sint
+        | Tf::R16Float
+        | Tf::Rg8Unorm
+        | Tf::Rg8Snorm
+        | Tf::Rg8Uint
+        | Tf::Rg8Sint
+        | Tf::R32Uint
+        | Tf::R32Sint
+        | Tf::R32Float
+        | Tf::Rg16Uint
+        | Tf::Rg16Sint
+        | Tf::Rg16Float
+        | Tf::Rgba8Unorm
+        | Tf::Rgba8UnormSrgb
+        | Tf::Rgba8Snorm
+        | Tf::Rgba8Uint
+        | Tf::Rgba8Sint
+        | Tf::Bgra8Unorm
+        | Tf::Bgra8UnormSrgb
+        | Tf::Rgb10a2Unorm
+        | Tf::Rg11b10Float
+        | Tf::Rg32Uint
+        | Tf::Rg32Sint
+        | Tf::Rg32Float
+        | Tf::Rgba16Uint
+        | Tf::Rgba16Sint
+        | Tf::Rgba16Float
+        | Tf::Rgba32Uint
+        | Tf::Rgba32Sint
+        | Tf::Rgba32Float
+        | Tf::Depth32Float
+        | Tf::Depth24Plus
+        | Tf::Depth24PlusStencil8 => wgt::Features::empty(),
+
+        Tf::Bc1RgbaUnorm
+        | Tf::Bc1RgbaUnormSrgb
+        | Tf::Bc2RgbaUnorm
+        | Tf::Bc2RgbaUnormSrgb
+        | Tf::Bc3RgbaUnorm
+        | Tf::Bc3RgbaUnormSrgb
+        | Tf::Bc4RUnorm
+        | Tf::Bc4RSnorm
+        | Tf::Bc5RgUnorm
+        | Tf::Bc5RgSnorm
+        | Tf::Bc6hRgbUfloat
+        | Tf::Bc6hRgbSfloat
+        | Tf::Bc7RgbaUnorm
+        | Tf::Bc7RgbaUnormSrgb => wgt::Features::TEXTURE_COMPRESSION_BC,
     }
 }
 

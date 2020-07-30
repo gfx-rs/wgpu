@@ -275,24 +275,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let texture_format = texture_guard[destination.texture].format;
-        let bytes_per_texel = conv::map_texture_format(texture_format, device.private_features)
+        let bytes_per_block = conv::map_texture_format(texture_format, device.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
         crate::command::validate_linear_texture_data(
             data_layout,
+            texture_format,
             data.len() as wgt::BufferAddress,
-            bytes_per_texel as wgt::BufferAddress,
+            bytes_per_block as wgt::BufferAddress,
             size,
         )?;
+        let (block_width, block_height) = conv::texture_block_size(texture_format);
+        let width_blocks = size.width / block_width;
+        let height_blocks = size.height / block_width;
+
+        let texel_rows_per_image = data_layout.rows_per_image;
+        let block_rows_per_image = data_layout.rows_per_image / block_height;
 
         let bytes_per_row_alignment = get_lowest_common_denom(
             device.hal_limits.optimal_buffer_copy_pitch_alignment as u32,
-            bytes_per_texel,
+            bytes_per_block,
         );
-        let stage_bytes_per_row = align_to(bytes_per_texel * size.width, bytes_per_row_alignment);
-        let stage_size = stage_bytes_per_row as u64
-            * ((size.depth - 1) * data_layout.rows_per_image + size.height) as u64;
+        let stage_bytes_per_row = align_to(bytes_per_block * width_blocks, bytes_per_row_alignment);
+
+        let block_rows_in_copy = (size.depth - 1) * block_rows_per_image + height_blocks;
+        let stage_size = stage_bytes_per_row as u64 * block_rows_in_copy as u64;
         let mut stage = device.prepare_stage(stage_size)?;
         {
             let mut mapped = stage
@@ -312,8 +320,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let copy_bytes_per_row =
                     stage_bytes_per_row.min(data_layout.bytes_per_row) as usize;
                 for layer in 0..size.depth {
-                    let rows_offset = layer * data_layout.rows_per_image;
-                    for row in 0..size.height {
+                    let rows_offset = layer * block_rows_per_image;
+                    for row in 0..height_blocks {
                         let data_offset =
                             (rows_offset + row) as usize * data_layout.bytes_per_row as usize;
                         let stage_offset =
@@ -333,14 +341,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             TextureUse::COPY_DST,
         );
         check_texture_usage(dst.usage, wgt::TextureUsage::COPY_DST)?;
-        crate::command::validate_texture_copy_range(destination, dst.kind, size)?;
+        crate::command::validate_texture_copy_range(destination, dst.format, dst.kind, size)?;
 
         dst.life_guard.use_at(device.active_submission_index + 1);
 
         let region = hal::command::BufferImageCopy {
             buffer_offset: 0,
-            buffer_width: stage_bytes_per_row / bytes_per_texel,
-            buffer_height: data_layout.rows_per_image,
+            buffer_width: (stage_bytes_per_row / bytes_per_block) * block_width,
+            buffer_height: texel_rows_per_image,
             image_layers,
             image_offset,
             image_extent: conv::map_extent(size, dst.dimension),

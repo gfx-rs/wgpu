@@ -647,6 +647,32 @@ fn map_texture_format(format: wgt::TextureFormat) -> naga::TypeInner {
         Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
             panic!("Unexpected depth format")
         }
+        Tf::Bc1RgbaUnorm
+        | Tf::Bc1RgbaUnormSrgb
+        | Tf::Bc2RgbaUnorm
+        | Tf::Bc2RgbaUnormSrgb
+        | Tf::Bc3RgbaUnorm
+        | Tf::Bc3RgbaUnormSrgb
+        | Tf::Bc7RgbaUnorm
+        | Tf::Bc7RgbaUnormSrgb => Ti::Vector {
+            size: Vs::Quad,
+            kind: Sk::Float,
+            width: 8,
+        },
+        Tf::Bc4RUnorm | Tf::Bc4RSnorm => Ti::Scalar {
+            kind: Sk::Float,
+            width: 8,
+        },
+        Tf::Bc5RgUnorm | Tf::Bc5RgSnorm => Ti::Vector {
+            size: Vs::Bi,
+            kind: Sk::Float,
+            width: 8,
+        },
+        Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat => Ti::Vector {
+            size: Vs::Tri,
+            kind: Sk::Float,
+            width: 8,
+        },
     }
 }
 

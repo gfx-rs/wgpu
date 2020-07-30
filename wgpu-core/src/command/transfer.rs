@@ -44,6 +44,10 @@ pub enum TransferError {
     UnalignedCopyWidth,
     #[error("copy height is not a multiple of block height")]
     UnalignedCopyHeight,
+    #[error("copy origin's x component is not a multiple of block width")]
+    UnalignedCopyOriginX,
+    #[error("copy origin's y component is not a multiple of block height")]
+    UnalignedCopyOriginY,
     #[error("bytes per row does not respect `COPY_BYTES_PER_ROW_ALIGNMENT`")]
     UnalignedBytesPerRow,
     #[error("number of rows per image is not a multiple of block height")]
@@ -103,8 +107,9 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
 /// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
 pub(crate) fn validate_linear_texture_data(
     layout: &TextureDataLayout,
+    format: wgt::TextureFormat,
     buffer_size: BufferAddress,
-    bytes_per_texel: BufferAddress,
+    bytes_per_block: BufferAddress,
     copy_size: &Extent3d,
 ) -> Result {
     // Convert all inputs to BufferAddress (u64) to prevent overflow issues
@@ -116,10 +121,10 @@ pub(crate) fn validate_linear_texture_data(
     let rows_per_image = layout.rows_per_image as BufferAddress;
     let bytes_per_row = layout.bytes_per_row as BufferAddress;
 
-    // TODO: Once compressed textures are supported, these needs to be fixed
-    let block_width: BufferAddress = 1;
-    let block_height: BufferAddress = 1;
-    let block_size = bytes_per_texel;
+    let (block_width, block_height) = conv::texture_block_size(format);
+    let block_width = block_width as BufferAddress;
+    let block_height = block_height as BufferAddress;
+    let block_size = bytes_per_block;
 
     if copy_width % block_width != 0 {
         return Err(TransferError::UnalignedCopyWidth);
@@ -168,12 +173,11 @@ pub(crate) fn validate_linear_texture_data(
 /// Function copied with minor modifications from webgpu standard https://gpuweb.github.io/gpuweb/#valid-texture-copy-range
 pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &TextureCopyView,
+    texture_format: wgt::TextureFormat,
     texture_dimension: hal::image::Kind,
     copy_size: &Extent3d,
 ) -> Result {
-    // TODO: Once compressed textures are supported, these needs to be fixed
-    let block_width: u32 = 1;
-    let block_height: u32 = 1;
+    let (block_width, block_height) = conv::texture_block_size(texture_format);
 
     let mut extent = texture_dimension.level_extent(texture_copy_view.mip_level as u8);
     match texture_dimension {
@@ -201,6 +205,12 @@ pub(crate) fn validate_texture_copy_range(
         return Err(TransferError::BufferOverrun);
     }
 
+    if texture_copy_view.origin.x % block_width != 0 {
+        return Err(TransferError::UnalignedCopyOriginX);
+    }
+    if texture_copy_view.origin.y % block_height != 0 {
+        return Err(TransferError::UnalignedCopyOriginY);
+    }
     if copy_size.width % block_width != 0 {
         return Err(TransferError::UnalignedCopyWidth);
     }
@@ -359,26 +369,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_barriers = dst_pending.map(|pending| pending.into_hal(dst_texture));
 
         let bytes_per_row_alignment = wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let bytes_per_texel = conv::map_texture_format(dst_texture.format, cmb.private_features)
+        let bytes_per_block = conv::map_texture_format(dst_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
         let src_bytes_per_row = source.layout.bytes_per_row;
-        if bytes_per_row_alignment % bytes_per_texel != 0 {
+        if bytes_per_row_alignment % bytes_per_block != 0 {
             return Err(TransferError::UnalignedBytesPerRow);
         }
         if src_bytes_per_row % bytes_per_row_alignment != 0 {
             return Err(TransferError::UnalignedBytesPerRow);
         }
-        validate_texture_copy_range(destination, dst_texture.kind, copy_size)?;
+        validate_texture_copy_range(destination, dst_texture.format, dst_texture.kind, copy_size)?;
         validate_linear_texture_data(
             &source.layout,
+            dst_texture.format,
             src_buffer.size,
-            bytes_per_texel as BufferAddress,
+            bytes_per_block as BufferAddress,
             copy_size,
         )?;
 
-        let buffer_width = source.layout.bytes_per_row / bytes_per_texel;
+        let (block_width, _) = conv::texture_block_size(dst_texture.format);
+
+        let buffer_width = (source.layout.bytes_per_row / bytes_per_block) * block_width;
         let region = hal::command::BufferImageCopy {
             buffer_offset: source.layout.offset,
             buffer_width,
@@ -459,26 +472,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let dst_barrier = dst_barriers.map(|pending| pending.into_hal(dst_buffer));
 
         let bytes_per_row_alignment = wgt::COPY_BYTES_PER_ROW_ALIGNMENT;
-        let bytes_per_texel = conv::map_texture_format(src_texture.format, cmb.private_features)
+        let bytes_per_block = conv::map_texture_format(src_texture.format, cmb.private_features)
             .surface_desc()
             .bits as u32
             / BITS_PER_BYTE;
         let dst_bytes_per_row = destination.layout.bytes_per_row;
-        if bytes_per_row_alignment % bytes_per_texel != 0 {
+        if bytes_per_row_alignment % bytes_per_block != 0 {
             return Err(TransferError::UnalignedBytesPerRow);
         }
         if dst_bytes_per_row % bytes_per_row_alignment != 0 {
             return Err(TransferError::UnalignedBytesPerRow);
         }
-        validate_texture_copy_range(source, src_texture.kind, copy_size)?;
+        validate_texture_copy_range(source, src_texture.format, src_texture.kind, copy_size)?;
         validate_linear_texture_data(
             &destination.layout,
+            src_texture.format,
             dst_buffer.size,
-            bytes_per_texel as BufferAddress,
+            bytes_per_block as BufferAddress,
             copy_size,
         )?;
 
-        let buffer_width = destination.layout.bytes_per_row / bytes_per_texel;
+        let (block_width, _) = conv::texture_block_size(src_texture.format);
+
+        let buffer_width = (destination.layout.bytes_per_row / bytes_per_block) * block_width;
         let region = hal::command::BufferImageCopy {
             buffer_offset: destination.layout.offset,
             buffer_width,
@@ -567,8 +583,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
-        validate_texture_copy_range(source, src_texture.kind, copy_size)?;
-        validate_texture_copy_range(destination, dst_texture.kind, copy_size)?;
+        validate_texture_copy_range(source, src_texture.format, src_texture.kind, copy_size)?;
+        validate_texture_copy_range(destination, dst_texture.format, dst_texture.kind, copy_size)?;
 
         let region = hal::command::ImageCopy {
             src_subresource: src_layers,

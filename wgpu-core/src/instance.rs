@@ -132,6 +132,10 @@ impl<B: hal::Backend> Adapter<B> {
             adapter_features.contains(hal::Features::DEPTH_CLAMP),
         );
         features.set(
+            wgt::Features::TEXTURE_COMPRESSION_BC,
+            adapter_features.contains(hal::Features::FORMAT_BC),
+        );
+        features.set(
             wgt::Features::SAMPLED_TEXTURE_BINDING_ARRAY,
             adapter_features.contains(hal::Features::TEXTURE_DESCRIPTOR_ARRAY),
         );

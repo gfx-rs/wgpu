@@ -148,6 +148,17 @@ bitflags::bitflags! {
         ///
         /// This is a web and native feature.
         const DEPTH_CLAMPING = 0x0000_0000_0000_0001;
+        /// Enables BCn family of compressed textures. All BCn textures use 4x4 pixel blocks
+        /// with 8 or 16 bytes per block.
+        ///
+        /// Compressed textures sacrifice some quality in exchange for signifigantly reduced
+        /// bandwidth usage.
+        ///
+        /// Supported Platforms:
+        /// - desktops
+        ///
+        /// This is a web and native feature.
+        const TEXTURE_COMPRESSION_BC = 0x0000_0000_0000_0002;
         /// Webgpu only allows the MAP_READ and MAP_WRITE buffer usage to be matched with
         /// COPY_DST and COPY_SRC respectively. This removes this requirement.
         ///
@@ -634,7 +645,7 @@ pub enum TextureFormat {
     // Packed 32 bit formats
     /// Red, green, blue, and alpha channels. 10 bit integer for RGB channels, 2 bit integer for alpha channel. [0, 1023] ([0, 3] for alpha) converted to/from float [0, 1] in shader.
     Rgb10a2Unorm = 24,
-    /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bti for blue channel. Float in shader.
+    /// Red, green, and blue channels. 11 bit float with no sign bit for RG channels. 10 bit float with no sign bit for blue channel. Float in shader.
     Rg11b10Float = 25,
 
     // Normal 64 bit formats
@@ -666,6 +677,104 @@ pub enum TextureFormat {
     Depth24Plus = 36,
     /// Special depth/stencil format with at least 24 bit integer depth and 8 bits integer stencil.
     Depth24PlusStencil8 = 37,
+
+    // Compressed textures usable with `TEXTURE_COMPRESSION_BC` feature.
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
+    /// [0, 64] ([0, 1] for alpha) converted to/from float [0, 1] in shader.
+    ///
+    /// Also known as DXT1.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc1RgbaUnorm = 38,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 4 color + alpha pallet. 5 bit R + 6 bit G + 5 bit B + 1 bit alpha.
+    /// Srgb-color [0, 64] ([0, 16] for alpha) converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// Also known as DXT1.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc1RgbaUnormSrgb = 39,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
+    /// [0, 64] ([0, 16] for alpha) converted to/from float [0, 1] in shader.
+    ///
+    /// Also known as DXT3.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc2RgbaUnorm = 40,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet. 5 bit R + 6 bit G + 5 bit B + 4 bit alpha.
+    /// Srgb-color [0, 64] ([0, 256] for alpha) converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// Also known as DXT3.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc2RgbaUnormSrgb = 41,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
+    /// [0, 64] ([0, 256] for alpha) converted to/from float [0, 1] in shader.
+    ///
+    /// Also known as DXT5.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc3RgbaUnorm = 42,
+    /// 4x4 block compressed texture. 16 bytes per block (8 bit/px). 4 color pallet + 8 alpha pallet. 5 bit R + 6 bit G + 5 bit B + 8 bit alpha.
+    /// Srgb-color [0, 64] ([0, 256] for alpha) converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// Also known as DXT5.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc3RgbaUnormSrgb = 43,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
+    /// [0, 256] converted to/from float [0, 1] in shader.
+    ///
+    /// Also known as RGTC1.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc4RUnorm = 44,
+    /// 4x4 block compressed texture. 8 bytes per block (4 bit/px). 8 color pallet. 8 bit R.
+    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    ///
+    /// Also known as RGTC1.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc4RSnorm = 45,
+    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
+    /// [0, 256] converted to/from float [0, 1] in shader.
+    ///
+    /// Also known as RGTC2.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc5RgUnorm = 46,
+    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). 8 color red pallet + 8 color green pallet. 8 bit RG.
+    /// [-127, 127] converted to/from float [-1, 1] in shader.
+    ///
+    /// Also known as RGTC2.
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc5RgSnorm = 47,
+    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 16 bit unsigned float RGB. Float in shader.
+    ///
+    /// Also known as BPTC (float).
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc6hRgbUfloat = 48,
+    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 16 bit signed float RGB. Float in shader.
+    ///
+    /// Also known as BPTC (float).
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc6hRgbSfloat = 49,
+    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 8 bit integer RGBA.
+    /// [0, 256] converted to/from float [0, 1] in shader.
+    ///
+    /// Also known as BPTC (unorm).
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc7RgbaUnorm = 50,
+    /// 4x4 block compressed texture. 16 bytes per block (16 bit/px). Variable sized pallet. 8 bit integer RGBA.
+    /// Srgb-color [0, 255] converted to/from linear-color float [0, 1] in shader.
+    ///
+    /// Also known as BPTC (unorm).
+    ///
+    /// [`Features::TEXTURE_COMPRESSION_BC`] must be enabled to use this texture format.
+    Bc7RgbaUnormSrgb = 51,
 }
 
 bitflags::bitflags! {
@@ -1743,7 +1852,21 @@ impl From<TextureFormat> for TextureComponentType {
             | TextureFormat::Rgb10a2Unorm
             | TextureFormat::Depth32Float
             | TextureFormat::Depth24Plus
-            | TextureFormat::Depth24PlusStencil8 => Self::Float,
+            | TextureFormat::Depth24PlusStencil8
+            | TextureFormat::Bc1RgbaUnorm
+            | TextureFormat::Bc1RgbaUnormSrgb
+            | TextureFormat::Bc2RgbaUnorm
+            | TextureFormat::Bc2RgbaUnormSrgb
+            | TextureFormat::Bc3RgbaUnorm
+            | TextureFormat::Bc3RgbaUnormSrgb
+            | TextureFormat::Bc4RUnorm
+            | TextureFormat::Bc4RSnorm
+            | TextureFormat::Bc5RgUnorm
+            | TextureFormat::Bc5RgSnorm
+            | TextureFormat::Bc6hRgbSfloat
+            | TextureFormat::Bc6hRgbUfloat
+            | TextureFormat::Bc7RgbaUnorm
+            | TextureFormat::Bc7RgbaUnormSrgb => Self::Float,
         }
     }
 }
