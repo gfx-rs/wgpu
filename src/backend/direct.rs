@@ -1,15 +1,23 @@
 use crate::{
-    backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor,
-    BindingResource, BufferDescriptor, CommandEncoderDescriptor, ComputePipelineDescriptor,
-    Features, Limits, LoadOp, MapMode, Operations, PipelineLayoutDescriptor,
-    RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource, SwapChainStatus,
-    TextureDescriptor, TextureViewDescriptor,
+    backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
+    CommandEncoderDescriptor, ComputePipelineDescriptor, Features, Limits, LoadOp, MapMode,
+    Operations, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
+    ShaderModuleSource, SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
 use futures::future::{ready, Ready};
 use smallvec::SmallVec;
-use std::{borrow::Cow::Borrowed, error::Error, ffi::CString, fmt, marker::PhantomData, ops::Range, ptr, slice};
+use std::{
+    borrow::Cow::{self, Borrowed},
+    ffi::CString,
+    fmt, 
+    marker::PhantomData, 
+    ops::Range, 
+    ptr, 
+    slice, 
+    error::Error
+};
 use typed_arena::Arena;
 
 pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
@@ -769,7 +777,7 @@ impl crate::Context for Context {
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
-        desc: &BufferDescriptor,
+        desc: &wgt::BufferDescriptor<Option<Cow<'_, str>>>,
     ) -> Self::BufferId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
 

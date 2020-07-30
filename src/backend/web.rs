@@ -1,5 +1,5 @@
 use crate::{
-    BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType, BufferDescriptor,
+    BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource, BindingType,
     CommandEncoderDescriptor, ComputePipelineDescriptor, LoadOp, PipelineLayoutDescriptor,
     ProgrammableStageDescriptor, RenderPipelineDescriptor, SamplerDescriptor, ShaderModuleSource,
     SwapChainStatus, TextureDescriptor, TextureViewDescriptor, TextureViewDimension,
@@ -7,6 +7,7 @@ use crate::{
 
 use futures::FutureExt;
 use std::{
+    borrow::Cow,
     fmt,
     future::Future,
     marker::PhantomData,
@@ -1048,7 +1049,7 @@ impl crate::Context for Context {
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
-        desc: &BufferDescriptor,
+        desc: &wgt::BufferDescriptor<Option<Cow<'_, str>>>,
     ) -> Self::BufferId {
         let mut mapped_desc =
             web_sys::GpuBufferDescriptor::new(desc.size as f64, desc.usage.bits());
