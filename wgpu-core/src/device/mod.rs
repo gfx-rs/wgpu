@@ -1008,32 +1008,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (format, view_kind, range) = match desc {
             Some(desc) => {
                 let kind = conv::map_texture_view_dimension(desc.dimension);
-                let required_level_count =
-                    desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
-                let required_layer_count =
-                    desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
+                let reqd_level_count = desc.base_mip_level + desc.level_count.unwrap_or(1);
+                let reqd_layer_count = desc.base_array_layer + desc.array_layer_count.unwrap_or(1);
                 let level_end = texture.full_range.levels.end;
                 let layer_end = texture.full_range.layers.end;
-                if required_level_count > level_end as u32 {
+                if reqd_level_count > level_end as u32 || reqd_level_count == desc.base_mip_level {
                     return Err(CreateTextureViewError::InvalidMipLevelCount {
-                        requested: required_level_count,
+                        requested: reqd_level_count,
                         total: level_end,
                     });
                 }
-                if required_layer_count > layer_end as u32 {
+                if reqd_layer_count > layer_end as u32 || reqd_layer_count == desc.base_array_layer
+                {
                     return Err(CreateTextureViewError::InvalidArrayLayerCount {
-                        requested: required_layer_count,
+                        requested: reqd_layer_count,
                         total: layer_end,
                     });
                 };
-                let end_level = match desc.level_count {
-                    Some(count) => (desc.base_mip_level + count.get()) as u8,
-                    None => level_end,
-                };
-                let end_layer = match desc.array_layer_count {
-                    Some(count) => (desc.base_array_layer + count.get()) as u16,
-                    None => layer_end,
-                };
+                let end_level = desc
+                    .level_count
+                    .map_or(level_end, |_| reqd_level_count as u8);
+                let end_layer = desc
+                    .array_layer_count
+                    .map_or(layer_end, |_| reqd_layer_count as u16);
                 let range = hal::image::SubresourceRange {
                     aspects: texture.full_range.aspects,
                     levels: desc.base_mip_level as u8..end_level,
