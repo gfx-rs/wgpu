@@ -66,7 +66,7 @@ pub enum TransferError {
 // once only to get the aspect flags, which is unfortunate.
 pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
     view: &TextureCopyView,
-    size: &wgt::Extent3d,
+    size: &Extent3d,
     texture_guard: &Storage<Texture<B>, TextureId>,
 ) -> (
     hal::image::SubresourceLayers,
