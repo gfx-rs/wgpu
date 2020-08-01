@@ -24,7 +24,7 @@ pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
 impl Context {
     pub fn adapter_get_info(&self, id: wgc::id::AdapterId) -> wgc::instance::AdapterInfo {
         let global = &self.0;
-        wgc::gfx_select!(id => global.adapter_get_info(id))
+        wgc::gfx_select!(id => global.adapter_get_info(id)).unwrap_pretty()
     }
 
     pub fn enumerate_adapters(&self, backends: wgt::BackendBit) -> Vec<wgc::id::AdapterId> {
@@ -47,13 +47,11 @@ impl Context {
             }),
         };
 
-        crate::Surface {
-            id: self.0.surfaces.register_identity(
-                PhantomData,
-                surface,
-                &mut wgc::hub::Token::root(),
-            ),
-        }
+        let id = self.0.surfaces.process_id(PhantomData);
+        self.0
+            .surfaces
+            .register(id, surface, &mut wgc::hub::Token::root());
+        crate::Surface { id }
     }
 }
 
@@ -536,14 +534,14 @@ impl crate::Context for Context {
         &self,
         options: &crate::RequestAdapterOptions,
     ) -> Self::RequestAdapterFuture {
-        let id = self.0.pick_adapter(
+        let id = self.0.request_adapter(
             &wgc::instance::RequestAdapterOptions {
                 power_preference: options.power_preference,
                 compatible_surface: options.compatible_surface.map(|surface| surface.id),
             },
             wgc::instance::AdapterInputs::Mask(wgt::BackendBit::all(), |_| PhantomData),
         );
-        ready(id)
+        ready(id.ok())
     }
 
     fn adapter_request_device(
@@ -562,22 +560,22 @@ impl crate::Context for Context {
 
     fn adapter_features(&self, adapter: &Self::AdapterId) -> Features {
         let global = &self.0;
-        wgc::gfx_select!(*adapter => global.adapter_features(*adapter))
+        wgc::gfx_select!(*adapter => global.adapter_features(*adapter)).unwrap_pretty()
     }
 
     fn adapter_limits(&self, adapter: &Self::AdapterId) -> Limits {
         let global = &self.0;
-        wgc::gfx_select!(*adapter => global.adapter_limits(*adapter))
+        wgc::gfx_select!(*adapter => global.adapter_limits(*adapter)).unwrap_pretty()
     }
 
     fn device_features(&self, device: &Self::DeviceId) -> Features {
         let global = &self.0;
-        wgc::gfx_select!(*device => global.device_features(*device))
+        wgc::gfx_select!(*device => global.device_features(*device)).unwrap_pretty()
     }
 
     fn device_limits(&self, device: &Self::DeviceId) -> Limits {
         let global = &self.0;
-        wgc::gfx_select!(*device => global.device_limits(*device))
+        wgc::gfx_select!(*device => global.device_limits(*device)).unwrap_pretty()
     }
 
     fn device_create_swap_chain(
@@ -858,7 +856,7 @@ impl crate::Context for Context {
         #[cfg(feature = "metal-auto-capture")]
         {
             let global = &self.0;
-            wgc::gfx_select!(*device => global.device_destroy(*device));
+            wgc::gfx_select!(*device => global.device_drop(*device));
         }
     }
 
@@ -993,52 +991,51 @@ impl crate::Context for Context {
 
     fn texture_drop(&self, texture: &Self::TextureId) {
         let global = &self.0;
-        wgc::gfx_select!(*texture => global.texture_destroy(*texture))
+        wgc::gfx_select!(*texture => global.texture_drop(*texture))
     }
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId) {
         let global = &self.0;
-        wgc::gfx_select!(*texture_view => global.texture_view_destroy(*texture_view))
-            .unwrap_pretty()
+        wgc::gfx_select!(*texture_view => global.texture_view_drop(*texture_view)).unwrap_pretty()
     }
     fn sampler_drop(&self, sampler: &Self::SamplerId) {
         let global = &self.0;
-        wgc::gfx_select!(*sampler => global.sampler_destroy(*sampler))
+        wgc::gfx_select!(*sampler => global.sampler_drop(*sampler))
     }
     fn buffer_drop(&self, buffer: &Self::BufferId) {
         let global = &self.0;
-        wgc::gfx_select!(*buffer => global.buffer_destroy(*buffer, false))
+        wgc::gfx_select!(*buffer => global.buffer_drop(*buffer, false))
     }
     fn bind_group_drop(&self, bind_group: &Self::BindGroupId) {
         let global = &self.0;
-        wgc::gfx_select!(*bind_group => global.bind_group_destroy(*bind_group))
+        wgc::gfx_select!(*bind_group => global.bind_group_drop(*bind_group))
     }
     fn bind_group_layout_drop(&self, bind_group_layout: &Self::BindGroupLayoutId) {
         let global = &self.0;
-        wgc::gfx_select!(*bind_group_layout => global.bind_group_layout_destroy(*bind_group_layout))
+        wgc::gfx_select!(*bind_group_layout => global.bind_group_layout_drop(*bind_group_layout))
     }
     fn pipeline_layout_drop(&self, pipeline_layout: &Self::PipelineLayoutId) {
         let global = &self.0;
-        wgc::gfx_select!(*pipeline_layout => global.pipeline_layout_destroy(*pipeline_layout))
+        wgc::gfx_select!(*pipeline_layout => global.pipeline_layout_drop(*pipeline_layout))
     }
     fn shader_module_drop(&self, shader_module: &Self::ShaderModuleId) {
         let global = &self.0;
-        wgc::gfx_select!(*shader_module => global.shader_module_destroy(*shader_module))
+        wgc::gfx_select!(*shader_module => global.shader_module_drop(*shader_module))
     }
     fn command_buffer_drop(&self, command_buffer: &Self::CommandBufferId) {
         let global = &self.0;
-        wgc::gfx_select!(*command_buffer => global.command_buffer_destroy(*command_buffer))
+        wgc::gfx_select!(*command_buffer => global.command_buffer_drop(*command_buffer))
     }
     fn render_bundle_drop(&self, render_bundle: &Self::RenderBundleId) {
         let global = &self.0;
-        wgc::gfx_select!(*render_bundle => global.render_bundle_destroy(*render_bundle))
+        wgc::gfx_select!(*render_bundle => global.render_bundle_drop(*render_bundle))
     }
     fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId) {
         let global = &self.0;
-        wgc::gfx_select!(*pipeline => global.compute_pipeline_destroy(*pipeline))
+        wgc::gfx_select!(*pipeline => global.compute_pipeline_drop(*pipeline))
     }
     fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId) {
         let global = &self.0;
-        wgc::gfx_select!(*pipeline => global.render_pipeline_destroy(*pipeline))
+        wgc::gfx_select!(*pipeline => global.render_pipeline_drop(*pipeline))
     }
 
     fn command_encoder_copy_buffer_to_buffer(
