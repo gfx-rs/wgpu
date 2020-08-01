@@ -51,13 +51,11 @@ impl framework::Example for Example {
             0.005,   // rule3Scale
         ]
         .to_vec();
-        let sim_param_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Simulation Parameter Buffer"),
-                contents: bytemuck::cast_slice(&sim_param_data),
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            }
-        );
+        let sim_param_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Simulation Parameter Buffer"),
+            contents: bytemuck::cast_slice(&sim_param_data),
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+        });
 
         // create compute bind layout group and compute pipeline layout
 
@@ -163,13 +161,11 @@ impl framework::Example for Example {
         // buffer for the three 2d triangle vertices of each instance
 
         let vertex_buffer_data = [-0.01f32, -0.02, 0.01, -0.02, 0.00, 0.02];
-        let vertices_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::bytes_of(&vertex_buffer_data),
-                usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
-            }
-        );
+        let vertices_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::bytes_of(&vertex_buffer_data),
+            usage: wgpu::BufferUsage::VERTEX | wgpu::BufferUsage::COPY_DST,
+        });
 
         // buffer for all particles data of type [(posx,posy,velx,vely),...]
 
@@ -188,15 +184,15 @@ impl framework::Example for Example {
         let mut particle_buffers = Vec::<wgpu::Buffer>::new();
         let mut particle_bind_groups = Vec::<wgpu::BindGroup>::new();
         for i in 0..2 {
-            particle_buffers.push(device.create_buffer_init(
-                &wgpu::util::BufferInitDescriptor {
+            particle_buffers.push(
+                device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                     label: Some(&format!("Particle Buffer {}", i)),
                     contents: bytemuck::cast_slice(&initial_particle_data),
                     usage: wgpu::BufferUsage::VERTEX
                         | wgpu::BufferUsage::STORAGE
                         | wgpu::BufferUsage::COPY_DST,
-                }
-            ));
+                }),
+            );
         }
 
         // create two bind groups, one for each buffer as the src

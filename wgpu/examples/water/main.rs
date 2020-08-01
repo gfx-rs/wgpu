@@ -338,21 +338,17 @@ impl framework::Example for Example {
         let terrain_vertices = terrain.make_buffer_data();
 
         // Create the buffers on the GPU to hold the data.
-        let water_vertex_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Water vertices"),
-                contents: bytemuck::cast_slice(&water_vertices),
-                usage: wgpu::BufferUsage::VERTEX,
-            }
-        );
+        let water_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Water vertices"),
+            contents: bytemuck::cast_slice(&water_vertices),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
 
-        let terrain_vertex_buf = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Terrain vertices"),
-                contents: bytemuck::cast_slice(&terrain_vertices),
-                usage: wgpu::BufferUsage::VERTEX,
-            }
-        );
+        let terrain_vertex_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Terrain vertices"),
+            contents: bytemuck::cast_slice(&terrain_vertices),
+            usage: wgpu::BufferUsage::VERTEX,
+        });
 
         // Create the bind group layout. This is what our uniforms will look like.
         let water_bind_group_layout =
