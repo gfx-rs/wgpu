@@ -492,7 +492,7 @@ impl MapContext {
 
 /// Handle to a GPU-accessible buffer.
 ///
-/// Created with [`Device::create_buffer`] or [`Device::create_buffer_with_data`]
+/// Created with [`Device::create_buffer`] or [`Device::create_buffer_init`]
 #[derive(Debug)]
 pub struct Buffer {
     context: Arc<C>,
