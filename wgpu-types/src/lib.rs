@@ -111,7 +111,7 @@ impl From<Backend> for BackendBit {
 
 /// Options for requesting adapter.
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct RequestAdapterOptions<S> {
@@ -120,6 +120,31 @@ pub struct RequestAdapterOptions<S> {
     /// Surface that is required to be presentable with the requested adapter. This does not
     /// create the surface, only guarantees that the adapter can present to said surface.
     pub compatible_surface: Option<S>,
+}
+
+impl<S> RequestAdapterOptions<S> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn power_preference(&mut self, preference: PowerPreference) -> &mut Self {
+        self.power_preference = preference;
+        self
+    }
+
+    pub fn compatible_surface(&mut self, surface: S) -> &mut Self {
+        self.compatible_surface = Some(surface);
+        self
+    }
+}
+
+impl<S> Default for RequestAdapterOptions<S> {
+    fn default() -> Self {
+        Self {
+            power_preference: PowerPreference::default(),
+            compatible_surface: None,
+        }
+    }
 }
 
 bitflags::bitflags! {
@@ -357,6 +382,27 @@ pub struct DeviceDescriptor {
     pub shader_validation: bool,
 }
 
+impl DeviceDescriptor {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn features(&mut self, features: Features) -> &mut Self {
+        self.features = features;
+        self
+    }
+
+    pub fn limits(&mut self, limits: Limits) -> &mut Self {
+        self.limits = limits;
+        self
+    }
+
+    pub fn shader_validation(&mut self) -> &mut Self {
+        self.shader_validation = true;
+        self
+    }
+}
+
 bitflags::bitflags! {
     /// Describes the shader stages that a binding will be visible from.
     ///
@@ -472,6 +518,23 @@ impl BlendDescriptor {
     }
 }
 
+impl BlendDescriptor {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn factors(&mut self, src_factor: BlendFactor, dst_factor: BlendFactor) -> &mut Self {
+        self.src_factor = src_factor;
+        self.dst_factor = dst_factor;
+        self
+    }
+
+    pub fn operation(&mut self, operation: BlendOperation) -> &mut Self {
+        self.operation = operation;
+        self
+    }
+}
+
 impl Default for BlendDescriptor {
     fn default() -> Self {
         BlendDescriptor::REPLACE
@@ -493,6 +556,32 @@ pub struct ColorStateDescriptor {
     pub color_blend: BlendDescriptor,
     /// Mask which enables/disables writes to different color/alpha channel.
     pub write_mask: ColorWrite,
+}
+
+impl ColorStateDescriptor {
+    pub fn new(format: TextureFormat) -> Self {
+        Self {
+            format,
+            alpha_blend: BlendDescriptor::default(),
+            color_blend: BlendDescriptor::default(),
+            write_mask: ColorWrite::default(),
+        }
+    }
+
+    pub fn alpha_blend(&mut self, blend: BlendDescriptor) -> &mut Self {
+        self.alpha_blend = blend;
+        self
+    }
+
+    pub fn color_blend(&mut self, blend: BlendDescriptor) -> &mut Self {
+        self.color_blend = blend;
+        self
+    }
+
+    pub fn write_mask(&mut self, mask: ColorWrite) -> &mut Self {
+        self.write_mask = mask;
+        self
+    }
 }
 
 /// Primitive type the input mesh is composed of.
@@ -578,6 +667,34 @@ pub struct RasterizationStateDescriptor {
     pub depth_bias: i32,
     pub depth_bias_slope_scale: f32,
     pub depth_bias_clamp: f32,
+}
+
+impl RasterizationStateDescriptor {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn front_face(&mut self, front_face: FrontFace) -> &mut Self {
+        self.front_face = front_face;
+        self
+    }
+
+    pub fn cull_mode(&mut self, cull_mode: CullMode) -> &mut Self {
+        self.cull_mode = cull_mode;
+        self
+    }
+
+    pub fn clamp_depth(&mut self) -> &mut Self {
+        self.clamp_depth = true;
+        self
+    }
+
+    pub fn depth_bias(&mut self, bias: i32, slope_scale: f32, clamp: f32) -> &mut Self {
+        self.depth_bias = bias;
+        self.depth_bias_slope_scale = slope_scale;
+        self.depth_bias_clamp = clamp;
+        self
+    }
 }
 
 /// Underlying texture data format.
@@ -828,6 +945,39 @@ pub struct DepthStencilStateDescriptor {
 }
 
 impl DepthStencilStateDescriptor {
+    pub fn new(format: TextureFormat, depth_compare: CompareFunction) -> Self {
+        Self {
+            format,
+            depth_write_enabled: false,
+            depth_compare,
+            stencil_front: StencilStateFaceDescriptor::default(),
+            stencil_back: StencilStateFaceDescriptor::default(),
+            stencil_read_mask: 0,
+            stencil_write_mask: 0,
+        }
+    }
+
+    pub fn depth_write(&mut self) -> &mut Self {
+        self.depth_write_enabled = true;
+        self
+    }
+
+    pub fn stencil_front(&mut self, stencil: StencilStateFaceDescriptor) -> &mut Self {
+        self.stencil_front = stencil;
+        self
+    }
+
+    pub fn stencil_back(&mut self, stencil: StencilStateFaceDescriptor) -> &mut Self {
+        self.stencil_back = stencil;
+        self
+    }
+
+    pub fn stencil_masks(&mut self, read: u32, write: u32) -> &mut Self {
+        self.stencil_read_mask = read;
+        self.stencil_write_mask = write;
+        self
+    }
+
     pub fn needs_stencil_reference(&self) -> bool {
         !self.stencil_front.compare.is_trivial() || !self.stencil_back.compare.is_trivial()
     }
@@ -996,6 +1146,20 @@ pub struct VertexBufferDescriptor<'a> {
     pub attributes: Cow<'a, [VertexAttributeDescriptor]>,
 }
 
+impl<'a> VertexBufferDescriptor<'a> {
+    pub fn new(
+        stride: BufferAddress,
+        step_mode: InputStepMode,
+        attributes: impl IntoCow<'a, [VertexAttributeDescriptor]>,
+    ) -> Self {
+        Self {
+            stride,
+            step_mode,
+            attributes: attributes.into_cow(),
+        }
+    }
+}
+
 /// Describes vertex input state for a render pipeline.
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -1005,6 +1169,20 @@ pub struct VertexStateDescriptor<'a> {
     pub index_format: IndexFormat,
     /// The format of any vertex buffers used with this pipeline.
     pub vertex_buffers: Cow<'a, [VertexBufferDescriptor<'a>]>,
+}
+
+impl<'a> VertexStateDescriptor<'a> {
+    pub fn new(vertex_buffers: impl IntoCow<'a, [VertexBufferDescriptor<'a>]>) -> Self {
+        Self {
+            index_format: IndexFormat::default(),
+            vertex_buffers: vertex_buffers.into_cow(),
+        }
+    }
+
+    pub fn index_format(&mut self, format: IndexFormat) -> &mut Self {
+        self.index_format = format;
+        self
+    }
 }
 
 /// Vertex Format for a Vertex Attribute (input).
@@ -1177,9 +1355,30 @@ impl<L> BufferDescriptor<L> {
     }
 }
 
+impl<'a> BufferDescriptor<Option<Cow<'a, str>>> {
+    pub fn new(usage: BufferUsage, size: BufferAddress) -> Self {
+        BufferDescriptor {
+            label: None,
+            size,
+            usage,
+            mapped_at_creation: false,
+        }
+    }
+
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
+
+    pub fn mapped_at_creation(&mut self) -> &mut Self {
+        self.mapped_at_creation = true;
+        self
+    }
+}
+
 /// Describes a [`CommandEncoder`].
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct CommandEncoderDescriptor<L> {
     /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.
     pub label: L,
@@ -1190,6 +1389,23 @@ impl<L> CommandEncoderDescriptor<L> {
         CommandEncoderDescriptor {
             label: fun(&self.label),
         }
+    }
+}
+
+impl<'a> CommandEncoderDescriptor<Option<Cow<'a, str>>> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
+}
+
+impl<'a> Default for CommandEncoderDescriptor<Option<Cow<'a, str>>> {
+    fn default() -> Self {
+        Self { label: None }
     }
 }
 
@@ -1262,6 +1478,33 @@ pub struct SwapChainDescriptor {
     pub present_mode: PresentMode,
 }
 
+impl SwapChainDescriptor {
+    pub fn new(width: u32, height: u32) -> Self {
+        Self {
+            usage: TextureUsage::OUTPUT_ATTACHMENT,
+            format: TextureFormat::Bgra8UnormSrgb,
+            width,
+            height,
+            present_mode: PresentMode::Fifo,
+        }
+    }
+
+    pub fn usage(&mut self, usage: TextureUsage) -> &mut Self {
+        self.usage = usage;
+        self
+    }
+
+    pub fn format(&mut self, format: TextureFormat) -> &mut Self {
+        self.format = format;
+        self
+    }
+
+    pub fn present_mode(&mut self, present_mode: PresentMode) -> &mut Self {
+        self.present_mode = present_mode;
+        self
+    }
+}
+
 /// Status of the recieved swapchain image.
 #[repr(C)]
 #[derive(Debug)]
@@ -1280,6 +1523,20 @@ pub struct RenderPassDescriptor<'a, C: Clone, D> {
     pub color_attachments: Cow<'a, [C]>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<D>,
+}
+
+impl<'a, C: Clone, D> RenderPassDescriptor<'a, C, D> {
+    pub fn new(color_attachments: impl IntoCow<'a, [C]>) -> Self {
+        Self {
+            color_attachments: color_attachments.into_cow(),
+            depth_stencil_attachment: None,
+        }
+    }
+
+    pub fn depth_stencil_attachment(&mut self, attachment: D) -> &mut Self {
+        self.depth_stencil_attachment = Some(attachment);
+        self
+    }
 }
 
 /// RGBA double precision color.
@@ -1436,7 +1693,7 @@ impl<'a> TextureDescriptor<Option<Cow<'a, str>>> {
         }
     }
 
-    pub fn label<L>(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
         self.label = Some(label.into_cow());
         self
     }
@@ -1502,7 +1759,47 @@ pub struct TextureViewDescriptor<L> {
     pub array_layer_count: Option<u32>,
 }
 
+impl<'a> TextureViewDescriptor<Option<Cow<'a, str>>> {
+    pub fn new(format: TextureFormat, dimension: TextureViewDimension) -> Self {
+        Self {
+            label: None,
+            format,
+            dimension,
+            aspect: TextureAspect::default(),
+            base_mip_level: 0,
+            level_count: None,
+            base_array_layer: 0,
+            array_layer_count: None,
+        }
+    }
+
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
+}
+
 impl<L> TextureViewDescriptor<L> {
+    pub fn base_mip_level(&mut self, base_mip_level: u32) -> &mut Self {
+        self.base_mip_level = base_mip_level;
+        self
+    }
+
+    pub fn level_count(&mut self, level_count: u32) -> &mut Self {
+        self.level_count = Some(level_count);
+        self
+    }
+
+    pub fn base_array_layer(&mut self, base_array_layer: u32) -> &mut Self {
+        self.base_array_layer = base_array_layer;
+        self
+    }
+
+    pub fn array_layer_count(&mut self, array_layer_count: u32) -> &mut Self {
+        self.array_layer_count = Some(array_layer_count);
+        self
+    }
+
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureViewDescriptor<K> {
         TextureViewDescriptor {
             label: fun(&self.label),
@@ -1615,7 +1912,59 @@ impl<L: Default> Default for SamplerDescriptor<L> {
     }
 }
 
+impl<L: Default> SamplerDescriptor<L> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
 impl<L> SamplerDescriptor<L> {
+    pub fn address_mode_u(&mut self, mode: AddressMode) -> &mut Self {
+        self.address_mode_u = mode;
+        self
+    }
+
+    pub fn address_mode_v(&mut self, mode: AddressMode) -> &mut Self {
+        self.address_mode_v = mode;
+        self
+    }
+
+    pub fn address_mode_w(&mut self, mode: AddressMode) -> &mut Self {
+        self.address_mode_w = mode;
+        self
+    }
+
+    pub fn mag_filter(&mut self, mode: FilterMode) -> &mut Self {
+        self.mag_filter = mode;
+        self
+    }
+
+    pub fn min_filter(&mut self, mode: FilterMode) -> &mut Self {
+        self.min_filter = mode;
+        self
+    }
+
+    pub fn lod_min_clamp(&mut self, clamp: f32) -> &mut Self {
+        self.lod_min_clamp = clamp;
+        self
+    }
+
+    pub fn lod_max_clamp(&mut self, clamp: f32) -> &mut Self {
+        self.lod_max_clamp = clamp;
+        self
+    }
+
+    pub fn compare(&mut self, fun: CompareFunction) -> &mut Self {
+        self.compare = Some(fun);
+        self
+    }
+
+    pub fn anisotropy_clamp(&mut self, clamp: u8) -> &mut Self {
+        //TODO check if value is sensible
+        self.anisotropy_clamp = Some(clamp);
+        self
+    }
+
     pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> SamplerDescriptor<K> {
         SamplerDescriptor {
             label: fun(&self.label),
@@ -1645,6 +1994,12 @@ pub struct BindGroupEntry<R> {
     pub resource: R,
 }
 
+impl<R> BindGroupEntry<R> {
+    pub fn new(binding: u32, resource: R) -> Self {
+        Self { binding, resource }
+    }
+}
+
 /// Describes a group of bindings and the resources to be bound.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1656,6 +2011,21 @@ pub struct BindGroupDescriptor<'a, L, B: Clone> {
     pub layout: L,
     /// The resources to bind to this bind group.
     pub entries: Cow<'a, [B]>,
+}
+
+impl<'a, L, B: Clone> BindGroupDescriptor<'a, L, B> {
+    pub fn new(layout: L, entries: impl IntoCow<'a, [B]>) -> Self {
+        Self {
+            label: None,
+            layout,
+            entries: entries.into_cow(),
+        }
+    }
+
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
 }
 
 /// Describes a pipeline layout.
@@ -1676,6 +2046,18 @@ pub struct PipelineLayoutDescriptor<'a, B: Clone> {
     pub push_constant_ranges: Cow<'a, [PushConstantRange]>,
 }
 
+impl<'a, B: Clone> PipelineLayoutDescriptor<'a, B> {
+    pub fn new(
+        bind_group_layouts: impl IntoCow<'a, [B]>,
+        push_constant_ranges: impl IntoCow<'a, [PushConstantRange]>,
+    ) -> Self {
+        Self {
+            bind_group_layouts: bind_group_layouts.into_cow(),
+            push_constant_ranges: push_constant_ranges.into_cow(),
+        }
+    }
+}
+
 /// A range of push constant memory to pass to a shader stage.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -1689,6 +2071,12 @@ pub struct PushConstantRange {
     pub range: Range<u32>,
 }
 
+impl PushConstantRange {
+    pub fn new(stages: ShaderStage, range: Range<u32>) -> Self {
+        Self { stages, range }
+    }
+}
+
 /// Describes a programmable pipeline stage.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -1699,6 +2087,15 @@ pub struct ProgrammableStageDescriptor<'a, M> {
     /// The name of the entry point in the compiled shader. There must be a function that returns
     /// void with this name in the shader.
     pub entry_point: Cow<'a, str>,
+}
+
+impl<'a, M> ProgrammableStageDescriptor<'a, M> {
+    pub fn new(module: M, entry_point: impl IntoCow<'a, str>) -> Self {
+        Self {
+            module,
+            entry_point: entry_point.into_cow(),
+        }
+    }
 }
 
 /// Describes a render (graphics) pipeline.
@@ -1737,6 +2134,60 @@ pub struct RenderPipelineDescriptor<'a, L, D> {
     pub alpha_to_coverage_enabled: bool,
 }
 
+impl<'a, L, D> RenderPipelineDescriptor<'a, L, D> {
+    pub fn new(
+        layout: L,
+        vertex_stage: D,
+        primitive_topology: PrimitiveTopology,
+        color_states: impl IntoCow<'a, [ColorStateDescriptor]>,
+        vertex_state: VertexStateDescriptor<'a>,
+    ) -> Self {
+        Self {
+            layout,
+            vertex_stage,
+            fragment_stage: None,
+            rasterization_state: None,
+            primitive_topology,
+            color_states: color_states.into_cow(),
+            depth_stencil_state: None,
+            vertex_state,
+            sample_count: 1,
+            sample_mask: !0,
+            alpha_to_coverage_enabled: false,
+        }
+    }
+
+    pub fn fragment_stage(&mut self, stage: D) -> &mut Self {
+        self.fragment_stage = Some(stage);
+        self
+    }
+
+    pub fn rasterization_state(&mut self, state: RasterizationStateDescriptor) -> &mut Self {
+        self.rasterization_state = Some(state);
+        self
+    }
+
+    pub fn depth_stencil_state(&mut self, state: DepthStencilStateDescriptor) -> &mut Self {
+        self.depth_stencil_state = Some(state);
+        self
+    }
+
+    pub fn sample_count(&mut self, count: u32) -> &mut Self {
+        self.sample_count = count;
+        self
+    }
+
+    pub fn sample_mask(&mut self, mask: u32) -> &mut Self {
+        self.sample_mask = mask;
+        self
+    }
+
+    pub fn alpha_to_coverage(&mut self) -> &mut Self {
+        self.alpha_to_coverage_enabled = true;
+        self
+    }
+}
+
 /// Describes a compute pipeline.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -1748,6 +2199,15 @@ pub struct ComputePipelineDescriptor<L, D> {
     pub compute_stage: D,
 }
 
+impl<L, D> ComputePipelineDescriptor<L, D> {
+    pub fn new(layout: L, compute_stage: D) -> Self {
+        Self {
+            layout,
+            compute_stage,
+        }
+    }
+}
+
 /// Describes a [`CommandBuffer`].
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
@@ -1756,6 +2216,12 @@ pub struct ComputePipelineDescriptor<L, D> {
 pub struct CommandBufferDescriptor {
     /// Set this member to zero
     pub todo: u32,
+}
+
+impl CommandBufferDescriptor {
+    pub fn new() -> Self {
+        Self::default()
+    }
 }
 
 /// Describes a [`RenderBundleEncoder`].
@@ -1776,9 +2242,35 @@ pub struct RenderBundleEncoderDescriptor<'a> {
     pub sample_count: u32,
 }
 
+impl<'a> RenderBundleEncoderDescriptor<'a> {
+    pub fn new(color_formats: impl IntoCow<'a, [TextureFormat]>) -> Self {
+        Self {
+            label: None,
+            color_formats: color_formats.into_cow(),
+            depth_stencil_format: None,
+            sample_count: 1,
+        }
+    }
+
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
+
+    pub fn depth_stencil_format(&mut self, format: TextureFormat) -> &mut Self {
+        self.depth_stencil_format = Some(format);
+        self
+    }
+
+    pub fn sample_count(&mut self, count: u32) -> &mut Self {
+        self.sample_count = count;
+        self
+    }
+}
+
 /// Describes a [`RenderBundle`].
 #[repr(C)]
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub struct RenderBundleDescriptor<L> {
@@ -1791,6 +2283,23 @@ impl<L> RenderBundleDescriptor<L> {
         RenderBundleDescriptor {
             label: fun(&self.label),
         }
+    }
+}
+
+impl<'a> RenderBundleDescriptor<Option<Cow<'a, str>>> {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
+}
+
+impl<'a> Default for RenderBundleDescriptor<Option<Cow<'a, str>>> {
+    fn default() -> Self {
+        Self { label: None }
     }
 }
 
@@ -1893,6 +2402,26 @@ pub struct TextureDataLayout {
     ///
     /// May be 0 for 2D texture copies.
     pub rows_per_image: u32,
+}
+
+impl TextureDataLayout {
+    pub fn new(bytes_per_row: u32) -> Self {
+        Self {
+            offset: 0,
+            bytes_per_row,
+            rows_per_image: 0,
+        }
+    }
+
+    pub fn offset(&mut self, offset: BufferAddress) -> &mut Self {
+        self.offset = offset;
+        self
+    }
+
+    pub fn rows_per_image(&mut self, rows_per_image: u32) -> &mut Self {
+        self.rows_per_image = rows_per_image;
+        self
+    }
 }
 
 /// Specific type of a binding.
@@ -2032,6 +2561,11 @@ impl BindGroupLayoutEntry {
         }
     }
 
+    pub fn count(&mut self, count: u32) -> &mut Self {
+        self.count = Some(count);
+        self
+    }
+
     pub fn has_dynamic_offset(&self) -> bool {
         match self.ty {
             BindingType::UniformBuffer { dynamic, .. }
@@ -2053,6 +2587,20 @@ pub struct BindGroupLayoutDescriptor<'a> {
     pub entries: Cow<'a, [BindGroupLayoutEntry]>,
 }
 
+impl<'a> BindGroupLayoutDescriptor<'a> {
+    pub fn new(entries: impl IntoCow<'a, [BindGroupLayoutEntry]>) -> Self {
+        Self {
+            label: None,
+            entries: entries.into_cow(),
+        }
+    }
+
+    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+        self.label = Some(label.into_cow());
+        self
+    }
+}
+
 /// View of a buffer which can be used to copy to/from a texture.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -2062,6 +2610,12 @@ pub struct BufferCopyView<B> {
     pub buffer: B,
     /// The layout of the texture data in this buffer.
     pub layout: TextureDataLayout,
+}
+
+impl<B> BufferCopyView<B> {
+    pub fn new(buffer: B, layout: TextureDataLayout) -> Self {
+        Self { buffer, layout }
+    }
 }
 
 /// View of a texture which can be used to copy to/from a buffer/texture.
@@ -2075,4 +2629,19 @@ pub struct TextureCopyView<T> {
     pub mip_level: u32,
     /// The base texel of the texture in the selected `mip_level`.
     pub origin: Origin3d,
+}
+
+impl<T> TextureCopyView<T> {
+    pub fn new(texture: T) -> Self {
+        Self {
+            texture,
+            origin: Origin3d::default(),
+            mip_level: 1,
+        }
+    }
+
+    pub fn mip_level(&mut self, level: u32) -> &mut Self {
+        self.mip_level = level;
+        self
+    }
 }
