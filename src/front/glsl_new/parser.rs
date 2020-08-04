@@ -54,10 +54,10 @@ pomelo! {
     %type expression_statement Statement;
 
     // expressions
-    %type unary_expression Handle<Expression>;
-    %type postfix_expression Handle<Expression>;
-    %type primary_expression Handle<Expression>;
-    %type variable_identifier Handle<Expression>;
+    %type unary_expression ExpressionRule;
+    %type postfix_expression ExpressionRule;
+    %type primary_expression ExpressionRule;
+    %type variable_identifier ExpressionRule;
 
     %type function_call Handle<Expression>;
     %type function_call_generic Handle<Expression>;
@@ -79,9 +79,9 @@ pomelo! {
     %type logical_or_expression Handle<Expression>;
     %type conditional_expression Handle<Expression>;
 
-    %type assignment_expression (Statement, Handle<Expression>);
+    %type assignment_expression ExpressionRule;
     %type assignment_operator BinaryOperator;
-    %type expression Statement;
+    %type expression ExpressionRule;
 
     // types
     %type fully_specified_type Option<Handle<Type>>;
@@ -133,7 +133,10 @@ pomelo! {
                     }),
                 },
             );
-            extra.context.expressions.append(Expression::GlobalVariable(h))
+            ExpressionRule{
+                expression: extra.context.expressions.append(Expression::GlobalVariable(h)),
+                statements: vec![],
+            }
         } else {
             return Err(ErrorKind::NotImplemented("var"))
         }
@@ -154,7 +157,10 @@ pomelo! {
             ty,
             inner: ConstantInner::Sint(i.1)
         });
-        extra.context.expressions.append(Expression::Constant(ch))
+        ExpressionRule {
+            expression: extra.context.expressions.append(Expression::Constant(ch)),
+            statements: vec![],
+        }
     }
     // primary_expression ::= UintConstant;
     // primary_expression ::= FloatConstant;
@@ -167,7 +173,12 @@ pomelo! {
         // TODO
         return Err(ErrorKind::NotImplemented("[]"))
     }
-    postfix_expression ::= function_call;
+    postfix_expression ::= function_call(f) {
+        ExpressionRule{
+            expression: f,
+            statements: vec![],
+        }
+    }
     postfix_expression ::= postfix_expression Dot FieldSelection {
         // TODO
         return Err(ErrorKind::NotImplemented(".field"))
@@ -190,14 +201,16 @@ pomelo! {
     function_call_header_no_parameters ::= function_call_header;
     function_call_header_with_parameters ::= function_call_header(h) assignment_expression(ae) {
         if let Expression::Compose{ty, components} = extra.context.expressions.get_mut(h) {
-            components.push(ae.1);
+            components.push(ae.expression);
+            //TODO: ae.statements
         }
         //TODO: Call
         h
     }
     function_call_header_with_parameters ::= function_call_header_with_parameters(h) Comma assignment_expression(ae) {
         if let Expression::Compose{ty, components} = extra.context.expressions.get_mut(h) {
-            components.push(ae.1);
+            components.push(ae.expression);
+            //TODO: ae.statements
         }
         //TODO: Call
         h
@@ -217,9 +230,10 @@ pomelo! {
             return Err(ErrorKind::NotImplemented("bad type ctor"))
         }
     }
-    function_identifier ::= postfix_expression;
+    function_identifier ::= postfix_expression(e) {e.expression}
 
     unary_expression ::= postfix_expression;
+
     unary_expression ::= IncOp unary_expression {
         // TODO
         return Err(ErrorKind::NotImplemented("++pre"))
@@ -237,15 +251,27 @@ pomelo! {
     unary_operator ::= Dash;
     unary_operator ::= Bang;
     unary_operator ::= Tilde;
-    multiplicative_expression ::= unary_expression;
+    multiplicative_expression ::= unary_expression(e) {e.expression}
     multiplicative_expression ::= multiplicative_expression(left) Star unary_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Multiply, left, right})
+        extra.context.expressions.append(Expression::Binary{
+            op: BinaryOperator::Multiply,
+            left,
+            right: right.expression,
+        })
     }
     multiplicative_expression ::= multiplicative_expression(left) Slash unary_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Divide, left, right})
+        extra.context.expressions.append(Expression::Binary{
+            op: BinaryOperator::Divide,
+            left,
+            right: right.expression
+        })
     }
     multiplicative_expression ::= multiplicative_expression(left) Percent unary_expression(right) {
-        extra.context.expressions.append(Expression::Binary{op: BinaryOperator::Modulo, left, right})
+        extra.context.expressions.append(Expression::Binary{
+            op: BinaryOperator::Modulo,
+            left,
+            right: right.expression,
+        })
     }
     additive_expression ::= multiplicative_expression;
     additive_expression ::= additive_expression(left) Plus multiplicative_expression(right) {
@@ -316,13 +342,23 @@ pomelo! {
     }
 
     assignment_expression ::= conditional_expression(ce) {
-        (Statement::Empty, ce)
+        ExpressionRule{
+            expression: ce,
+            statements: vec![],
+        }
     }
-    assignment_expression ::= unary_expression(pointer) assignment_operator(op) assignment_expression(value) {
+    assignment_expression ::= unary_expression(mut pointer) assignment_operator(op) assignment_expression(value) {
         match op {
-            BinaryOperator::Equal => (Statement::Store{pointer, value: value.1}, pointer),
+            BinaryOperator::Equal => {
+                pointer.statements.extend(value.statements);
+                pointer.statements.push(Statement::Store{
+                    pointer: pointer.expression,
+                    value: value.expression
+                });
+                pointer
+            },
             //TODO: op != Equal
-        _ => {return Err(ErrorKind::NotImplemented("assign op"))}
+            _ => {return Err(ErrorKind::NotImplemented("assign op"))}
         }
     }
 
@@ -338,11 +374,12 @@ pomelo! {
     assignment_operator ::= XorAssign {BinaryOperator::ExclusiveOr}
     assignment_operator ::= OrAssign {BinaryOperator::InclusiveOr}
 
-    expression ::= assignment_expression(ae) {ae.0}
-    expression ::= expression(e) Comma assignment_expression(ae) {
-        match e {
-            Statement::Block(mut b) => { b.push(ae.0); Statement::Block(b) },
-            e => Statement::Block(vec![e, ae.0]),
+    expression ::= assignment_expression;
+    expression ::= expression(e) Comma assignment_expression(mut ae) {
+        ae.statements.extend(e.statements);
+        ExpressionRule{
+            expression: e.expression,
+            statements: ae.statements,
         }
     }
 
@@ -369,7 +406,12 @@ pomelo! {
     statement_list ::= statement_list(mut ss) statement(s) { ss.push(s); ss }
 
     expression_statement ::= Semicolon  {Statement::Empty}
-    expression_statement ::= expression(e) Semicolon  {e}
+    expression_statement ::= expression(mut e) Semicolon {
+        match e.statements.len() {
+            1 => e.statements.remove(0),
+            _ => Statement::Block(e.statements),
+        }
+    }
 
 
 

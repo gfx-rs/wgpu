@@ -1,6 +1,6 @@
 use crate::{
     Arena, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle, LocalVariable,
-    ShaderStage, Type,
+    ShaderStage, Statement, Type,
 };
 
 #[derive(Debug)]
@@ -46,4 +46,10 @@ pub enum Profile {
 pub struct Context {
     pub expressions: Arena<Expression>,
     pub local_variables: Arena<LocalVariable>,
+}
+
+#[derive(Debug)]
+pub struct ExpressionRule {
+    pub expression: Handle<Expression>,
+    pub statements: Vec<Statement>,
 }
