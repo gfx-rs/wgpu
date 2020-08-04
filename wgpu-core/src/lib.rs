@@ -43,8 +43,6 @@ pub mod swap_chain;
 mod track;
 mod validation;
 
-pub use hal::pso::read_spirv;
-
 #[cfg(test)]
 use loom::sync::atomic;
 #[cfg(not(test))]
@@ -198,7 +196,7 @@ impl LifeGuard {
 
 #[derive(Clone, Debug)]
 struct Stored<T> {
-    value: T,
+    value: id::Valid<T>,
     ref_count: RefCount,
 }
 

@@ -3,7 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::RenderPassContext,
+    device::{DeviceError, RenderPassContext},
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
     LifeGuard, RefCount, Stored,
@@ -27,17 +27,27 @@ pub struct ShaderModule<B: hal::Backend> {
     pub(crate) module: Option<naga::Module>,
 }
 
+#[derive(Clone, Debug, Error)]
+pub enum CreateShaderModuleError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error(transparent)]
+    Validation(#[from] naga::proc::ValidationError),
+}
+
 pub type ProgrammableStageDescriptor<'a> = wgt::ProgrammableStageDescriptor<'a, ShaderModuleId>;
 
 pub type ComputePipelineDescriptor<'a> =
     wgt::ComputePipelineDescriptor<PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
 #[derive(Clone, Debug, Error)]
-pub enum ComputePipelineError {
+pub enum CreateComputePipelineError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("pipelie layout is invalid")]
+    InvalidLayout,
     #[error(transparent)]
     Stage(StageError),
-    #[error(transparent)]
-    HalCreationError(#[from] hal::pso::CreationError),
 }
 
 #[derive(Debug)]
@@ -58,7 +68,11 @@ pub type RenderPipelineDescriptor<'a> =
     wgt::RenderPipelineDescriptor<'a, PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
 #[derive(Clone, Debug, Error)]
-pub enum RenderPipelineError {
+pub enum CreateRenderPipelineError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("pipelie layout is invalid")]
+    InvalidLayout,
     #[error("incompatible output format at index {index}")]
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]
@@ -72,8 +86,6 @@ pub enum RenderPipelineError {
     },
     #[error("missing required device features {0:?}")]
     MissingFeature(wgt::Features),
-    #[error("not enough memory left")]
-    OutOfMemory,
     #[error("error in stage {flag:?}: {error}")]
     Stage {
         flag: wgt::ShaderStage,

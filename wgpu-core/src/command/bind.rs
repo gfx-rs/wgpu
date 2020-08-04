@@ -6,7 +6,7 @@ use crate::{
     binding_model::{BindGroup, PipelineLayout},
     device::SHADER_STAGE_COUNT,
     hub::{GfxBackend, Storage},
-    id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId},
+    id::{BindGroupId, BindGroupLayoutId, PipelineLayoutId, Valid},
     Stored, MAX_BIND_GROUPS,
 };
 
@@ -17,15 +17,15 @@ use wgt::DynamicOffset;
 type BindGroupMask = u8;
 
 #[derive(Clone, Debug)]
-pub struct BindGroupPair {
-    layout_id: BindGroupLayoutId,
+pub(super) struct BindGroupPair {
+    layout_id: Valid<BindGroupLayoutId>,
     group_id: Stored<BindGroupId>,
 }
 
 #[derive(Debug)]
-pub enum LayoutChange<'a> {
+pub(super) enum LayoutChange<'a> {
     Unchanged,
-    Match(BindGroupId, &'a [DynamicOffset]),
+    Match(Valid<BindGroupId>, &'a [DynamicOffset]),
     Mismatch,
 }
 
@@ -36,11 +36,11 @@ pub enum Provision {
 }
 
 #[derive(Clone)]
-pub struct FollowUpIter<'a> {
+pub(super) struct FollowUpIter<'a> {
     iter: slice::Iter<'a, BindGroupEntry>,
 }
 impl<'a> Iterator for FollowUpIter<'a> {
-    type Item = (BindGroupId, &'a [DynamicOffset]);
+    type Item = (Valid<BindGroupId>, &'a [DynamicOffset]);
     fn next(&mut self) -> Option<Self::Item> {
         self.iter
             .next()
@@ -49,8 +49,8 @@ impl<'a> Iterator for FollowUpIter<'a> {
 }
 
 #[derive(Clone, Default, Debug)]
-pub struct BindGroupEntry {
-    expected_layout_id: Option<BindGroupLayoutId>,
+pub(super) struct BindGroupEntry {
+    expected_layout_id: Option<Valid<BindGroupLayoutId>>,
     provided: Option<BindGroupPair>,
     dynamic_offsets: Vec<DynamicOffset>,
 }
@@ -58,11 +58,11 @@ pub struct BindGroupEntry {
 impl BindGroupEntry {
     fn provide<B: GfxBackend>(
         &mut self,
-        bind_group_id: BindGroupId,
+        bind_group_id: Valid<BindGroupId>,
         bind_group: &BindGroup<B>,
         offsets: &[DynamicOffset],
     ) -> Provision {
-        debug_assert_eq!(B::VARIANT, bind_group_id.backend());
+        debug_assert_eq!(B::VARIANT, bind_group_id.0.backend());
 
         let was_compatible = match self.provided {
             Some(BindGroupPair {
@@ -91,7 +91,10 @@ impl BindGroupEntry {
         Provision::Changed { was_compatible }
     }
 
-    pub fn expect_layout(&mut self, bind_group_layout_id: BindGroupLayoutId) -> LayoutChange {
+    pub fn expect_layout(
+        &mut self,
+        bind_group_layout_id: Valid<BindGroupLayoutId>,
+    ) -> LayoutChange {
         let some = Some(bind_group_layout_id);
         if self.expected_layout_id != some {
             self.expected_layout_id = some;
@@ -117,7 +120,7 @@ impl BindGroupEntry {
         }
     }
 
-    fn actual_value(&self) -> Option<BindGroupId> {
+    fn actual_value(&self) -> Option<Valid<BindGroupId>> {
         self.expected_layout_id.and_then(|layout_id| {
             self.provided.as_ref().and_then(|pair| {
                 if pair.layout_id == layout_id {
@@ -132,12 +135,12 @@ impl BindGroupEntry {
 
 #[derive(Debug)]
 pub struct Binder {
-    pub(crate) pipeline_layout_id: Option<PipelineLayoutId>, //TODO: strongly `Stored`
-    pub(crate) entries: ArrayVec<[BindGroupEntry; MAX_BIND_GROUPS]>,
+    pub(super) pipeline_layout_id: Option<Valid<PipelineLayoutId>>, //TODO: strongly `Stored`
+    pub(super) entries: ArrayVec<[BindGroupEntry; MAX_BIND_GROUPS]>,
 }
 
 impl Binder {
-    pub(crate) fn new(max_bind_groups: u32) -> Self {
+    pub(super) fn new(max_bind_groups: u32) -> Self {
         Self {
             pipeline_layout_id: None,
             entries: (0..max_bind_groups)
@@ -146,15 +149,15 @@ impl Binder {
         }
     }
 
-    pub(crate) fn reset(&mut self) {
+    pub(super) fn reset(&mut self) {
         self.pipeline_layout_id = None;
         self.entries.clear();
     }
 
-    pub(crate) fn change_pipeline_layout<B: GfxBackend>(
+    pub(super) fn change_pipeline_layout<B: GfxBackend>(
         &mut self,
         guard: &Storage<PipelineLayout<B>, PipelineLayoutId>,
-        new_id: PipelineLayoutId,
+        new_id: Valid<PipelineLayoutId>,
     ) {
         let old_id_opt = self.pipeline_layout_id.replace(new_id);
         let new = &guard[new_id];
@@ -180,15 +183,15 @@ impl Binder {
     /// (i.e. compatible with current expectations). Also returns an iterator
     /// of bind group IDs to be bound with it: those are compatible bind groups
     /// that were previously blocked because the current one was incompatible.
-    pub(crate) fn provide_entry<'a, B: GfxBackend>(
+    pub(super) fn provide_entry<'a, B: GfxBackend>(
         &'a mut self,
         index: usize,
-        bind_group_id: BindGroupId,
+        bind_group_id: Valid<BindGroupId>,
         bind_group: &BindGroup<B>,
         offsets: &[DynamicOffset],
-    ) -> Option<(PipelineLayoutId, FollowUpIter<'a>)> {
+    ) -> Option<(Valid<PipelineLayoutId>, FollowUpIter<'a>)> {
         tracing::trace!("\tBinding [{}] = group {:?}", index, bind_group_id);
-        debug_assert_eq!(B::VARIANT, bind_group_id.backend());
+        debug_assert_eq!(B::VARIANT, bind_group_id.0.backend());
 
         match self.entries[index].provide(bind_group_id, bind_group, offsets) {
             Provision::Unchanged => None,
@@ -215,7 +218,7 @@ impl Binder {
         }
     }
 
-    pub(crate) fn invalid_mask(&self) -> BindGroupMask {
+    pub(super) fn invalid_mask(&self) -> BindGroupMask {
         self.entries.iter().enumerate().fold(0, |mask, (i, entry)| {
             if entry.is_valid() {
                 mask

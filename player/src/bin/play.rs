@@ -67,7 +67,7 @@ fn main() {
         Some(trace::Action::Init { desc, backend }) => {
             log::info!("Initializing the device for backend: {:?}", backend);
             let adapter = global
-                .pick_adapter(
+                .request_adapter(
                     &wgc::instance::RequestAdapterOptions {
                         power_preference: wgt::PowerPreference::Default,
                         #[cfg(feature = "winit")]
@@ -82,7 +82,7 @@ fn main() {
                 )
                 .expect("Unable to find an adapter for selected backend");
 
-            let info = gfx_select!(adapter => global.adapter_get_info(adapter));
+            let info = gfx_select!(adapter => global.adapter_get_info(adapter)).unwrap();
             log::info!("Picked '{}'", info.name);
             gfx_select!(adapter => global.adapter_request_device(
                 adapter,

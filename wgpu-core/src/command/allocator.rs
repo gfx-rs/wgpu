@@ -4,8 +4,8 @@
 
 use super::CommandBuffer;
 use crate::{
-    hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap, PrivateFeatures, Stored,
-    SubmissionIndex,
+    device::DeviceError, hub::GfxBackend, id::DeviceId, track::TrackerSet, FastHashMap,
+    PrivateFeatures, Stored, SubmissionIndex,
 };
 
 use hal::{command::CommandBuffer as _, device::Device as _, pool::CommandPool as _};
@@ -97,7 +97,7 @@ impl<B: GfxBackend> CommandAllocator<B> {
                             self.queue_family,
                             hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
                         )
-                        .or(Err(CommandAllocatorError::OutOfMemory))?
+                        .or(Err(DeviceError::OutOfMemory))?
                 };
                 let pool = CommandPool {
                     raw,
@@ -147,7 +147,7 @@ impl<B: hal::Backend> CommandAllocator<B> {
                             queue_family,
                             hal::pool::CommandPoolCreateFlags::RESET_INDIVIDUAL,
                         )
-                        .or(Err(CommandAllocatorError::OutOfMemory))?
+                        .or(Err(DeviceError::OutOfMemory))?
                 },
                 total: 0,
                 available: Vec::new(),
@@ -256,6 +256,6 @@ impl<B: hal::Backend> CommandAllocator<B> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CommandAllocatorError {
-    #[error("not enough memory left")]
-    OutOfMemory,
+    #[error(transparent)]
+    Device(#[from] DeviceError),
 }

@@ -10,7 +10,7 @@ use crate::{
     id::{
         AdapterId, BindGroupId, BindGroupLayoutId, BufferId, CommandBufferId, ComputePipelineId,
         DeviceId, PipelineLayoutId, RenderBundleId, RenderPipelineId, SamplerId, ShaderModuleId,
-        SurfaceId, SwapChainId, TextureId, TextureViewId, TypedId,
+        SurfaceId, SwapChainId, TextureId, TextureViewId, TypedId, Valid,
     },
     instance::{Adapter, Instance, Surface},
     pipeline::{ComputePipeline, RenderPipeline, ShaderModule},
@@ -83,6 +83,9 @@ enum Element<T> {
     Error(Epoch),
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct InvalidId;
+
 #[derive(Debug)]
 pub struct Storage<T, I: TypedId> {
     map: Vec<Element<T>>,
@@ -90,38 +93,16 @@ pub struct Storage<T, I: TypedId> {
     _phantom: PhantomData<I>,
 }
 
-impl<T, I: TypedId> ops::Index<I> for Storage<T, I> {
+impl<T, I: TypedId> ops::Index<Valid<I>> for Storage<T, I> {
     type Output = T;
-    fn index(&self, id: I) -> &T {
-        let (index, epoch, _) = id.unzip();
-        let (ref value, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref v, epoch) => (v, epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(_) => panic!("{}[{}] is in error state", self.kind, index),
-        };
-        assert_eq!(
-            epoch, storage_epoch,
-            "{}[{}] is no longer alive",
-            self.kind, index
-        );
-        value
+    fn index(&self, id: Valid<I>) -> &T {
+        self.get(id.0).unwrap()
     }
 }
 
-impl<T, I: TypedId> ops::IndexMut<I> for Storage<T, I> {
-    fn index_mut(&mut self, id: I) -> &mut T {
-        let (index, epoch, _) = id.unzip();
-        let (value, storage_epoch) = match self.map[index as usize] {
-            Element::Occupied(ref mut v, epoch) => (v, epoch),
-            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
-            Element::Error(_) => panic!("{}[{}] is in error state", self.kind, index),
-        };
-        assert_eq!(
-            epoch, storage_epoch,
-            "{}[{}] is no longer alive",
-            self.kind, index
-        );
-        value
+impl<T, I: TypedId> ops::IndexMut<Valid<I>> for Storage<T, I> {
+    fn index_mut(&mut self, id: Valid<I>) -> &mut T {
+        self.get_mut(id.0).unwrap()
     }
 }
 
@@ -134,6 +115,40 @@ impl<T, I: TypedId> Storage<T, I> {
                 epoch == storage_epoch
             }
         }
+    }
+
+    /// Get a reference to an item behind a potentially invalid ID.
+    /// Panics if there is an epoch mismatch, or the entry is empty.
+    pub(crate) fn get(&self, id: I) -> Result<&T, InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        let (result, storage_epoch) = match self.map[index as usize] {
+            Element::Occupied(ref v, epoch) => (Ok(v), epoch),
+            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
+            Element::Error(epoch) => (Err(InvalidId), epoch),
+        };
+        assert_eq!(
+            epoch, storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        result
+    }
+
+    /// Get a mutable reference to an item behind a potentially invalid ID.
+    /// Panics if there is an epoch mismatch, or the entry is empty.
+    pub(crate) fn get_mut(&mut self, id: I) -> Result<&mut T, InvalidId> {
+        let (index, epoch, _) = id.unzip();
+        let (result, storage_epoch) = match self.map[index as usize] {
+            Element::Occupied(ref mut v, epoch) => (Ok(v), epoch),
+            Element::Vacant => panic!("{}[{}] does not exist", self.kind, index),
+            Element::Error(epoch) => (Err(InvalidId), epoch),
+        };
+        assert_eq!(
+            epoch, storage_epoch,
+            "{}[{}] is no longer alive",
+            self.kind, index
+        );
+        result
     }
 
     fn insert_impl(&mut self, index: usize, element: Element<T>) {
@@ -402,18 +417,16 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
     ) -> (RwLockWriteGuard<'a, Storage<T, I>>, Token<'a, T>) {
         (self.data.write(), Token::new())
     }
-}
 
-impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
-    pub fn register_identity<A: Access<T>>(
+    pub(crate) fn register_identity<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,
         value: T,
         token: &mut Token<A>,
-    ) -> I {
+    ) -> Valid<I> {
         let id = self.identity.process(id_in, self.backend);
         self.register(id, value, token);
-        id
+        Valid(id)
     }
 
     pub fn register_error<A: Access<T>>(
@@ -427,6 +440,13 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         id
     }
 
+    pub fn unregister_locked(&self, id: I, guard: &mut Storage<T, I>) -> T {
+        let value = guard.remove(id).unwrap();
+        //Note: careful about the order here!
+        self.identity.free(id);
+        value
+    }
+
     pub fn unregister<'a, A: Access<T>>(
         &self,
         id: I,
@@ -436,6 +456,10 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         //Note: careful about the order here!
         self.identity.free(id);
         (value, Token::new())
+    }
+
+    pub fn process_id(&self, id_in: <F::Filter as IdentityHandler<I>>::Input) -> I {
+        self.identity.process(id_in, self.backend)
     }
 
     pub fn free_id(&self, id: I) {
@@ -591,7 +615,9 @@ impl<B: GfxBackend, F: GlobalIdentityHandlerFactory> Hub<B, F> {
         for (index, element) in self.swap_chains.data.write().map.drain(..).enumerate() {
             if let Element::Occupied(swap_chain, epoch) = element {
                 let device = &devices[swap_chain.device_id.value];
-                let surface = &mut surface_guard[TypedId::zip(index as Index, epoch, B::VARIANT)];
+                let surface = surface_guard
+                    .get_mut(TypedId::zip(index as Index, epoch, B::VARIANT))
+                    .unwrap();
                 let suf = B::get_surface_mut(surface);
                 unsafe {
                     device.raw.destroy_semaphore(swap_chain.semaphore);

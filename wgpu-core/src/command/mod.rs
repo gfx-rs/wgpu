@@ -6,6 +6,7 @@ mod allocator;
 mod bind;
 mod bundle;
 mod compute;
+mod draw;
 mod render;
 mod transfer;
 
@@ -13,6 +14,7 @@ pub(crate) use self::allocator::CommandAllocator;
 pub use self::allocator::CommandAllocatorError;
 pub use self::bundle::*;
 pub use self::compute::*;
+pub use self::draw::*;
 pub use self::render::*;
 pub use self::transfer::*;
 
@@ -48,6 +50,17 @@ pub struct CommandBuffer<B: hal::Backend> {
 }
 
 impl<B: GfxBackend> CommandBuffer<B> {
+    fn get_encoder(
+        storage: &mut Storage<Self, id::CommandEncoderId>,
+        id: id::CommandEncoderId,
+    ) -> Result<&mut Self, CommandEncoderError> {
+        match storage.get_mut(id) {
+            Ok(cmd_buf) if cmd_buf.is_recording => Ok(cmd_buf),
+            Ok(_) => Err(CommandEncoderError::NotRecording),
+            Err(_) => Err(CommandEncoderError::Invalid),
+        }
+    }
+
     pub(crate) fn insert_barriers(
         raw: &mut B::CommandBuffer,
         base: &mut TrackerSet,
@@ -144,8 +157,10 @@ impl<C: Clone> BasePass<C> {
 }
 
 #[derive(Clone, Debug, Error)]
-pub enum CommandEncoderFinishError {
-    #[error("command buffer must be recording")]
+pub enum CommandEncoderError {
+    #[error("command encoder is invalid")]
+    Invalid,
+    #[error("command encoder must be active")]
     NotRecording,
 }
 
@@ -154,28 +169,25 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         _desc: &wgt::CommandBufferDescriptor,
-    ) -> Result<id::CommandBufferId, CommandEncoderFinishError> {
+    ) -> Result<id::CommandBufferId, CommandEncoderError> {
         span!(_guard, INFO, "CommandEncoder::finish");
 
         let hub = B::hub(self);
         let mut token = Token::root();
         let (swap_chain_guard, mut token) = hub.swap_chains.read(&mut token);
         //TODO: actually close the last recorded command buffer
-        let (mut comb_guard, _) = hub.command_buffers.write(&mut token);
-        let cmdbuf = &mut comb_guard[encoder_id];
-        if !cmdbuf.is_recording {
-            return Err(CommandEncoderFinishError::NotRecording);
-        }
-        cmdbuf.is_recording = false;
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        cmd_buf.is_recording = false;
         // stop tracking the swapchain image, if used
-        if let Some((ref sc_id, _)) = cmdbuf.used_swap_chain {
+        if let Some((ref sc_id, _)) = cmd_buf.used_swap_chain {
             let view_id = swap_chain_guard[sc_id.value]
                 .acquired_view_id
                 .as_ref()
                 .expect("Used swap chain frame has already presented");
-            cmdbuf.trackers.views.remove(view_id.value);
+            cmd_buf.trackers.views.remove(view_id.value);
         }
-        tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmdbuf.trackers);
+        tracing::trace!("Command buffer {:?} {:#?}", encoder_id, cmd_buf.trackers);
         Ok(encoder_id)
     }
 
@@ -183,54 +195,68 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
-    ) {
+    ) -> Result<(), CommandEncoderError> {
         span!(_guard, DEBUG, "CommandEncoder::push_debug_group");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
-        let cmb = &mut cmb_guard[encoder_id];
-        let cmb_raw = cmb.raw.last_mut().unwrap();
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
             cmb_raw.begin_debug_marker(label, 0);
         }
+        Ok(())
     }
 
     pub fn command_encoder_insert_debug_marker<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
         label: &str,
-    ) {
+    ) -> Result<(), CommandEncoderError> {
         span!(_guard, DEBUG, "CommandEncoder::insert_debug_marker");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
-        let cmb = &mut cmb_guard[encoder_id];
-        let cmb_raw = cmb.raw.last_mut().unwrap();
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
             cmb_raw.insert_debug_marker(label, 0);
         }
+        Ok(())
     }
 
-    pub fn command_encoder_pop_debug_group<B: GfxBackend>(&self, encoder_id: id::CommandEncoderId) {
+    pub fn command_encoder_pop_debug_group<B: GfxBackend>(
+        &self,
+        encoder_id: id::CommandEncoderId,
+    ) -> Result<(), CommandEncoderError> {
         span!(_guard, DEBUG, "CommandEncoder::pop_debug_marker");
 
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (mut cmb_guard, _) = hub.command_buffers.write(&mut token);
-        let cmb = &mut cmb_guard[encoder_id];
-        let cmb_raw = cmb.raw.last_mut().unwrap();
+        let (mut cmd_buf_guard, _) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let cmb_raw = cmd_buf.raw.last_mut().unwrap();
 
         unsafe {
             cmb_raw.end_debug_marker();
         }
+        Ok(())
     }
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum UsageConflict {
+    #[error("buffer {0:?} combined usage is {1:?}")]
+    Buffer(id::BufferId, wgt::BufferUsage),
+    #[error("texture {0:?} combined usage is {1:?}")]
+    Texture(id::TextureId, wgt::TextureUsage),
 }
 
 fn push_constant_clear<PushFn>(offset: u32, size_bytes: u32, mut push_fn: PushFn)

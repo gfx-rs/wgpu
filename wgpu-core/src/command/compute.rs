@@ -6,7 +6,7 @@ use crate::{
     binding_model::{BindError, PushConstantUploadError},
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer,
+        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, UsageConflict,
     },
     device::all_buffer_stages,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
@@ -18,7 +18,7 @@ use crate::{
 
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
-use wgt::{BufferAddress, BufferUsage};
+use wgt::{BufferAddress, BufferUsage, ShaderStage};
 
 use std::{fmt, iter, str};
 
@@ -97,6 +97,44 @@ pub struct ComputePassDescriptor {
     pub todo: u32,
 }
 
+#[derive(Clone, Debug, Error, PartialEq)]
+pub enum DispatchError {
+    #[error("compute pipeline must be set")]
+    MissingPipeline,
+    #[error("current compute pipeline has a layout which is incompatible with a currently set bind group, first differing at entry index {index}")]
+    IncompatibleBindGroup {
+        index: u32,
+        //expected: BindGroupLayoutId,
+        //provided: Option<(BindGroupLayoutId, BindGroupId)>,
+    },
+}
+
+#[derive(Clone, Debug, Error)]
+pub enum ComputePassError {
+    #[error(transparent)]
+    Encoder(#[from] CommandEncoderError),
+    #[error("bind group {0:?} is invalid")]
+    InvalidBindGroup(id::BindGroupId),
+    #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
+    BindGroupIndexOutOfRange { index: u8, max: u32 },
+    #[error("compute pipeline {0:?} is invalid")]
+    InvalidPipeline(id::ComputePipelineId),
+    #[error("indirect buffer {0:?} is invalid")]
+    InvalidIndirectBuffer(id::BufferId),
+    #[error(transparent)]
+    ResourceUsageConflict(UsageConflict),
+    #[error(transparent)]
+    MissingBufferUsage(#[from] MissingBufferUsageError),
+    #[error("cannot pop debug group, because number of pushed debug groups is zero")]
+    InvalidPopDebugGroup,
+    #[error(transparent)]
+    Dispatch(#[from] DispatchError),
+    #[error(transparent)]
+    Bind(#[from] BindError),
+    #[error(transparent)]
+    PushConstants(#[from] PushConstantUploadError),
+}
+
 #[derive(Debug, PartialEq)]
 enum PipelineState {
     Required,
@@ -110,20 +148,21 @@ struct State {
     debug_scope_depth: u32,
 }
 
-#[derive(Clone, Debug, Error)]
-pub enum ComputePassError {
-    #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
-    BindGroupIndexOutOfRange { index: u8, max: u32 },
-    #[error("a compute pipeline must be bound")]
-    UnboundPipeline,
-    #[error(transparent)]
-    MissingBufferUsage(#[from] MissingBufferUsageError),
-    #[error("cannot pop debug group, because number of pushed debug groups is zero")]
-    InvalidPopDebugGroup,
-    #[error(transparent)]
-    Bind(#[from] BindError),
-    #[error(transparent)]
-    PushConstants(#[from] PushConstantUploadError),
+impl State {
+    fn is_ready(&self) -> Result<(), DispatchError> {
+        //TODO: vertex buffers
+        let bind_mask = self.binder.invalid_mask();
+        if bind_mask != 0 {
+            //let (expected, provided) = self.binder.entries[index as usize].info();
+            return Err(DispatchError::IncompatibleBindGroup {
+                index: bind_mask.trailing_zeros(),
+            });
+        }
+        if self.pipeline == PipelineState::Required {
+            return Err(DispatchError::MissingPipeline);
+        }
+        Ok(())
+    }
 }
 
 // Common routines between render/compute
@@ -147,12 +186,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
 
-        let (mut cmb_guard, mut token) = hub.command_buffers.write(&mut token);
-        let cmb = &mut cmb_guard[encoder_id];
-        let raw = cmb.raw.last_mut().unwrap();
+        let (mut cmd_buf_guard, mut token) = hub.command_buffers.write(&mut token);
+        let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, encoder_id)?;
+        let raw = cmd_buf.raw.last_mut().unwrap();
 
         #[cfg(feature = "trace")]
-        match cmb.commands {
+        match cmd_buf.commands {
             Some(ref mut list) => {
                 list.push(crate::device::trace::Command::RunComputePass {
                     base: BasePass::from_ref(base),
@@ -169,7 +208,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (texture_guard, _) = hub.textures.read(&mut token);
 
         let mut state = State {
-            binder: Binder::new(cmb.limits.max_bind_groups),
+            binder: Binder::new(cmd_buf.limits.max_bind_groups),
             pipeline: PipelineState::Required,
             debug_scope_depth: 0,
         };
@@ -181,7 +220,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let max_bind_groups = cmb.limits.max_bind_groups;
+                    let max_bind_groups = cmd_buf.limits.max_bind_groups;
                     if (index as u32) >= max_bind_groups {
                         return Err(ComputePassError::BindGroupIndexOutOfRange {
                             index,
@@ -192,11 +231,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
-                    let bind_group = cmb
+                    let bind_group = cmd_buf
                         .trackers
                         .bind_groups
                         .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                        .unwrap();
+                        .map_err(|_| ComputePassError::InvalidBindGroup(bind_group_id))?;
                     bind_group.validate_dynamic_bindings(offsets)?;
 
                     tracing::trace!(
@@ -206,7 +245,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     );
                     CommandBuffer::insert_barriers(
                         raw,
-                        &mut cmb.trackers,
+                        &mut cmd_buf.trackers,
                         &bind_group.used,
                         &*buffer_guard,
                         &*texture_guard,
@@ -214,7 +253,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     if let Some((pipeline_layout_id, follow_ups)) = state.binder.provide_entry(
                         index as usize,
-                        bind_group_id,
+                        id::Valid(bind_group_id),
                         bind_group,
                         offsets,
                     ) {
@@ -238,11 +277,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 ComputeCommand::SetPipeline(pipeline_id) => {
                     state.pipeline = PipelineState::Set;
-                    let pipeline = cmb
+                    let pipeline = cmd_buf
                         .trackers
                         .compute_pipes
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
-                        .unwrap();
+                        .map_err(|_| ComputePassError::InvalidPipeline(pipeline_id))?;
 
                     unsafe {
                         raw.bind_compute_pipeline(&pipeline.raw);
@@ -319,12 +358,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     let pipeline_layout_id = state
                         .binder
                         .pipeline_layout_id
-                        .ok_or(ComputePassError::UnboundPipeline)?;
+                        //TODO: don't error here, lazily update the push constants
+                        .ok_or(ComputePassError::Dispatch(DispatchError::MissingPipeline))?;
                     let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                     pipeline_layout
                         .validate_push_constant_ranges(
-                            wgt::ShaderStage::COMPUTE,
+                            ShaderStage::COMPUTE,
                             offset,
                             end_offset_bytes,
                         )
@@ -333,23 +373,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     unsafe { raw.push_compute_constants(&pipeline_layout.raw, offset, data_slice) }
                 }
                 ComputeCommand::Dispatch(groups) => {
-                    if state.pipeline != PipelineState::Set {
-                        return Err(ComputePassError::UnboundPipeline);
-                    }
+                    state.is_ready()?;
                     unsafe {
                         raw.dispatch(groups);
                     }
                 }
                 ComputeCommand::DispatchIndirect { buffer_id, offset } => {
-                    if state.pipeline != PipelineState::Set {
-                        return Err(ComputePassError::UnboundPipeline);
-                    }
-                    let (src_buffer, src_pending) = cmb.trackers.buffers.use_replace(
-                        &*buffer_guard,
-                        buffer_id,
-                        (),
-                        BufferUse::INDIRECT,
-                    );
+                    state.is_ready()?;
+
+                    let (src_buffer, src_pending) = cmd_buf
+                        .trackers
+                        .buffers
+                        .use_replace(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
+                        .map_err(ComputePassError::InvalidIndirectBuffer)?;
                     check_buffer_usage(src_buffer.usage, BufferUsage::INDIRECT)?;
 
                     let barriers = src_pending.map(|pending| pending.into_hal(src_buffer));

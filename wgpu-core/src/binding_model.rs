@@ -3,8 +3,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
-    device::SHADER_STAGE_COUNT,
-    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId},
+    device::{DeviceError, SHADER_STAGE_COUNT},
+    id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     track::{TrackerSet, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
     FastHashMap, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
@@ -27,14 +27,14 @@ use thiserror::Error;
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupLayoutError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
     #[error("arrays of bindings unsupported for this type of binding")]
     ArrayUnsupported,
     #[error("conflicting binding at index {0}")]
     ConflictBinding(u32),
     #[error("required device feature is missing: {0:?}")]
     MissingFeature(wgt::Features),
-    #[error("not enough memory left")]
-    OutOfMemory,
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
     #[error("arrays of bindings can't be 0 elements long")]
@@ -43,6 +43,16 @@ pub enum CreateBindGroupLayoutError {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreateBindGroupError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("bind group layout is invalid")]
+    InvalidLayout,
+    #[error("buffer {0:?} is invalid")]
+    InvalidBuffer(BufferId),
+    #[error("texture view {0:?} is invalid")]
+    InvalidTextureView(TextureViewId),
+    #[error("sampler {0:?} is invalid")]
+    InvalidSampler(SamplerId),
     #[error("binding count declared with {expected} items, but {actual} items were provided")]
     BindingArrayLengthMismatch { actual: usize, expected: usize },
     #[error("bound buffer range {range:?} does not fit in buffer of size {size}")]
@@ -264,6 +274,10 @@ pub struct BindGroupLayout<B: hal::Backend> {
 
 #[derive(Clone, Debug, Error)]
 pub enum CreatePipelineLayoutError {
+    #[error(transparent)]
+    Device(#[from] DeviceError),
+    #[error("bind group layout {0:?} is invalid")]
+    InvalidBindGroupLayout(BindGroupLayoutId),
     #[error(
         "push constant at index {index} has range bound {bound} not aligned to {}",
         wgt::PUSH_CONSTANT_ALIGNMENT
@@ -277,8 +291,6 @@ pub enum CreatePipelineLayoutError {
         provided: wgt::ShaderStage,
         intersected: wgt::ShaderStage,
     },
-    #[error("not enough memory left")]
-    OutOfMemory,
     #[error("push constant at index {index} has range {}..{} which exceeds device push constant size limit 0..{max}", range.start, range.end)]
     PushConstantRangeTooLarge {
         index: usize,
@@ -326,7 +338,7 @@ pub struct PipelineLayout<B: hal::Backend> {
     pub(crate) raw: B::PipelineLayout,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) life_guard: LifeGuard,
-    pub(crate) bind_group_layout_ids: ArrayVec<[BindGroupLayoutId; MAX_BIND_GROUPS]>,
+    pub(crate) bind_group_layout_ids: ArrayVec<[Valid<BindGroupLayoutId>; MAX_BIND_GROUPS]>,
     pub(crate) push_constant_ranges: ArrayVec<[wgt::PushConstantRange; SHADER_STAGE_COUNT]>,
 }
 
@@ -459,7 +471,7 @@ pub struct BindGroupDynamicBindingData {
 pub struct BindGroup<B: hal::Backend> {
     pub(crate) raw: DescriptorSet<B>,
     pub(crate) device_id: Stored<DeviceId>,
-    pub(crate) layout_id: BindGroupLayoutId,
+    pub(crate) layout_id: Valid<BindGroupLayoutId>,
     pub(crate) life_guard: LifeGuard,
     pub(crate) used: TrackerSet,
     pub(crate) dynamic_binding_info: Vec<BindGroupDynamicBindingData>,

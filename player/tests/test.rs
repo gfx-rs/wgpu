@@ -141,7 +141,7 @@ impl Corpus {
             if !corpus.backends.contains(backend.into()) {
                 continue;
             }
-            let adapter = match global.pick_adapter(
+            let adapter = match global.request_adapter(
                 &wgc::instance::RequestAdapterOptions {
                     power_preference: wgt::PowerPreference::Default,
                     compatible_surface: None,
@@ -151,12 +151,13 @@ impl Corpus {
                     |id| id.backend(),
                 ),
             ) {
-                Some(adapter) => adapter,
-                None => continue,
+                Ok(adapter) => adapter,
+                Err(_) => continue,
             };
 
             println!("\tBackend {:?}", backend);
-            let supported_features = gfx_select!(adapter => global.adapter_features(adapter));
+            let supported_features =
+                gfx_select!(adapter => global.adapter_features(adapter)).unwrap();
             for test_path in &corpus.tests {
                 println!("\t\tTest '{:?}'", test_path);
                 let test = Test::load(dir.join(test_path), adapter.backend());

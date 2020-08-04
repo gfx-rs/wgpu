@@ -38,16 +38,18 @@
 #![allow(clippy::reversed_empty_ranges)]
 
 use crate::{
-    binding_model::PushConstantUploadError,
-    command::{BasePass, RenderCommand},
+    command::{BasePass, DrawError, RenderCommand, RenderCommandError},
     conv,
-    device::{AttachmentData, Label, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT},
+    device::{
+        AttachmentData, DeviceError, Label, RenderPassContext, MAX_VERTEX_BUFFERS,
+        SHADER_STAGE_COUNT,
+    },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Storage, Token},
     id,
     resource::BufferUse,
     span,
     track::TrackerSet,
-    validation::{check_buffer_usage, MissingBufferUsageError, MissingTextureUsageError},
+    validation::check_buffer_usage,
     LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
@@ -124,9 +126,12 @@ impl RenderBundle {
     /// This is partially duplicating the logic of `command_encoder_run_render_pass`.
     /// However the point of this function is to be lighter, since we already had
     /// a chance to go through the commands in `render_bundle_encoder_finish`.
+    ///
+    /// Note that the function isn't expected to fail.
+    /// All the validation has already been done by this point.
     pub(crate) unsafe fn execute<B: GfxBackend>(
         &self,
-        cmdbuf: &mut B::CommandBuffer,
+        cmd_buf: &mut B::CommandBuffer,
         pipeline_layout_guard: &Storage<
             crate::binding_model::PipelineLayout<B>,
             id::PipelineLayoutId,
@@ -134,12 +139,12 @@ impl RenderBundle {
         bind_group_guard: &Storage<crate::binding_model::BindGroup<B>, id::BindGroupId>,
         pipeline_guard: &Storage<crate::pipeline::RenderPipeline<B>, id::RenderPipelineId>,
         buffer_guard: &Storage<crate::resource::Buffer<B>, id::BufferId>,
-    ) -> Result<(), RenderCommandError> {
+    ) {
         use hal::command::CommandBuffer as _;
 
         let mut offsets = self.base.dynamic_offsets.as_slice();
         let mut index_type = hal::IndexType::U16;
-        let mut pipeline_layout_id = None::<id::PipelineLayoutId>;
+        let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
 
         for command in self.base.commands.iter() {
             match *command {
@@ -148,8 +153,8 @@ impl RenderBundle {
                     num_dynamic_offsets,
                     bind_group_id,
                 } => {
-                    let bind_group = &bind_group_guard[bind_group_id];
-                    cmdbuf.bind_graphics_descriptor_sets(
+                    let bind_group = bind_group_guard.get(bind_group_id).unwrap();
+                    cmd_buf.bind_graphics_descriptor_sets(
                         &pipeline_layout_guard[pipeline_layout_id.unwrap()].raw,
                         index as usize,
                         iter::once(bind_group.raw.raw()),
@@ -158,8 +163,8 @@ impl RenderBundle {
                     offsets = &offsets[num_dynamic_offsets as usize..];
                 }
                 RenderCommand::SetPipeline(pipeline_id) => {
-                    let pipeline = &pipeline_guard[pipeline_id];
-                    cmdbuf.bind_graphics_pipeline(&pipeline.raw);
+                    let pipeline = pipeline_guard.get(pipeline_id).unwrap();
+                    cmd_buf.bind_graphics_pipeline(&pipeline.raw);
                     index_type = conv::map_index_format(pipeline.index_format);
                     pipeline_layout_id = Some(pipeline.layout_id.value);
                 }
@@ -168,7 +173,7 @@ impl RenderBundle {
                     offset,
                     size,
                 } => {
-                    let buffer = &buffer_guard[buffer_id];
+                    let buffer = buffer_guard.get(buffer_id).unwrap();
                     let view = hal::buffer::IndexBufferView {
                         buffer: &buffer.raw,
                         range: hal::buffer::SubRange {
@@ -178,7 +183,7 @@ impl RenderBundle {
                         index_type,
                     };
 
-                    cmdbuf.bind_index_buffer(view);
+                    cmd_buf.bind_index_buffer(view);
                 }
                 RenderCommand::SetVertexBuffer {
                     slot,
@@ -186,12 +191,12 @@ impl RenderBundle {
                     offset,
                     size,
                 } => {
-                    let buffer = &buffer_guard[buffer_id];
+                    let buffer = buffer_guard.get(buffer_id).unwrap();
                     let range = hal::buffer::SubRange {
                         offset,
                         size: size.map(|s| s.get()),
                     };
-                    cmdbuf.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
+                    cmd_buf.bind_vertex_buffers(slot, iter::once((&buffer.raw, range)));
                 }
                 RenderCommand::SetPushConstant {
                     stages,
@@ -199,8 +204,7 @@ impl RenderBundle {
                     size_bytes,
                     values_offset,
                 } => {
-                    let pipeline_layout_id =
-                        pipeline_layout_id.ok_or(RenderCommandError::UnboundPipeline)?;
+                    let pipeline_layout_id = pipeline_layout_id.unwrap();
                     let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                     if let Some(values_offset) = values_offset {
@@ -208,7 +212,7 @@ impl RenderBundle {
                         let data_slice = &self.base.push_constant_data
                             [(values_offset as usize)..values_end_offset];
 
-                        cmdbuf.push_graphics_constants(
+                        cmd_buf.push_graphics_constants(
                             &pipeline_layout.raw,
                             conv::map_shader_stage_flags(stages),
                             offset,
@@ -219,7 +223,7 @@ impl RenderBundle {
                             offset,
                             size_bytes,
                             |clear_offset, clear_data| {
-                                cmdbuf.push_graphics_constants(
+                                cmd_buf.push_graphics_constants(
                                     &pipeline_layout.raw,
                                     conv::map_shader_stage_flags(stages),
                                     clear_offset,
@@ -235,7 +239,7 @@ impl RenderBundle {
                     first_vertex,
                     first_instance,
                 } => {
-                    cmdbuf.draw(
+                    cmd_buf.draw(
                         first_vertex..first_vertex + vertex_count,
                         first_instance..first_instance + instance_count,
                     );
@@ -247,7 +251,7 @@ impl RenderBundle {
                     base_vertex,
                     first_instance,
                 } => {
-                    cmdbuf.draw_indexed(
+                    cmd_buf.draw_indexed(
                         first_index..first_index + index_count,
                         base_vertex,
                         first_instance..first_instance + instance_count,
@@ -259,8 +263,8 @@ impl RenderBundle {
                     count: None,
                     indexed: false,
                 } => {
-                    let buffer = &buffer_guard[buffer_id];
-                    cmdbuf.draw_indirect(&buffer.raw, offset, 1, 0);
+                    let buffer = buffer_guard.get(buffer_id).unwrap();
+                    cmd_buf.draw_indirect(&buffer.raw, offset, 1, 0);
                 }
                 RenderCommand::MultiDrawIndirect {
                     buffer_id,
@@ -268,8 +272,8 @@ impl RenderBundle {
                     count: None,
                     indexed: true,
                 } => {
-                    let buffer = &buffer_guard[buffer_id];
-                    cmdbuf.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
+                    let buffer = buffer_guard.get(buffer_id).unwrap();
+                    cmd_buf.draw_indexed_indirect(&buffer.raw, offset, 1, 0);
                 }
                 RenderCommand::MultiDrawIndirect { .. }
                 | RenderCommand::MultiDrawIndirectCount { .. } => unimplemented!(),
@@ -283,7 +287,6 @@ impl RenderBundle {
                 | RenderCommand::SetScissor(_) => unreachable!(),
             }
         }
-        Ok(())
     }
 }
 
@@ -488,12 +491,12 @@ impl State {
         &mut self,
         slot: u8,
         bind_group_id: id::BindGroupId,
-        layout_id: id::BindGroupLayoutId,
+        layout_id: id::Valid<id::BindGroupLayoutId>,
         offsets: &[wgt::DynamicOffset],
     ) {
         if self.bind[slot as usize].set_group(
             bind_group_id,
-            layout_id,
+            layout_id.0,
             self.raw_dynamic_offsets.len(),
             offsets.len(),
         ) {
@@ -506,7 +509,7 @@ impl State {
         &mut self,
         index_format: wgt::IndexFormat,
         vertex_strides: &[(wgt::BufferAddress, wgt::InputStepMode)],
-        layout_ids: &[id::BindGroupLayoutId],
+        layout_ids: &[id::Valid<id::BindGroupLayoutId>],
         push_constant_layouts: &[wgt::PushConstantRange],
     ) {
         self.index.set_format(index_format);
@@ -529,8 +532,8 @@ impl State {
             self.bind
                 .iter()
                 .zip(layout_ids)
-                .position(|(bs, &layout_id)| match bs.bind_group {
-                    Some((_, bgl_id)) => bgl_id != layout_id,
+                .position(|(bs, layout_id)| match bs.bind_group {
+                    Some((_, bgl_id)) => bgl_id != layout_id.0,
                     None => false,
                 })
         };
@@ -595,36 +598,15 @@ impl State {
     }
 }
 
-/// Error encountered when encoding a render command.
+/// Error encountered when finishing recording a render bundle.
 #[derive(Clone, Debug, Error)]
-pub enum RenderCommandError {
-    #[error("bind group index {index} is greater than the device's requested `max_bind_group` limit {max}")]
-    BindGroupIndexOutOfRange { index: u8, max: u32 },
-    #[error("dynamic buffer offset {0} does not respect `BIND_BUFFER_ALIGNMENT`")]
-    UnalignedBufferOffset(u64),
-    #[error("number of buffer offsets ({actual}) does not match the number of dynamic bindings ({expected})")]
-    InvalidDynamicOffsetCount { actual: usize, expected: usize },
-    #[error("render pipeline output formats and sample counts do not match render pass attachment formats")]
-    IncompatiblePipeline,
-    #[error("pipeline is not compatible with the depth-stencil read-only render pass")]
-    IncompatibleReadOnlyDepthStencil,
+pub enum RenderBundleError {
     #[error(transparent)]
-    MissingBufferUsage(#[from] MissingBufferUsageError),
+    Device(#[from] DeviceError),
     #[error(transparent)]
-    MissingTextureUsage(#[from] MissingTextureUsageError),
-    #[error("a render pipeline must be bound")]
-    UnboundPipeline,
+    RenderCommand(#[from] RenderCommandError),
     #[error(transparent)]
-    PushConstants(#[from] PushConstantUploadError),
-    #[error("vertex {last_vertex} extends beyond limit {vertex_limit}")]
-    VertexBeyondLimit { last_vertex: u32, vertex_limit: u32 },
-    #[error("instance {last_instance} extends beyond limit {instance_limit}")]
-    InstanceBeyondLimit {
-        last_instance: u32,
-        instance_limit: u32,
-    },
-    #[error("index {last_index} extends beyond limit {index_limit}")]
-    IndexBeyondLimit { last_index: u32, index_limit: u32 },
+    Draw(#[from] DrawError),
 }
 
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
@@ -633,13 +615,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         bundle_encoder: RenderBundleEncoder,
         desc: &wgt::RenderBundleDescriptor<Label>,
         id_in: Input<G, id::RenderBundleId>,
-    ) -> Result<id::RenderBundleId, RenderCommandError> {
+    ) -> Result<id::RenderBundleId, RenderBundleError> {
         span!(_guard, INFO, "RenderBundleEncoder::finish");
         let hub = B::hub(self);
         let mut token = Token::root();
         let (device_guard, mut token) = hub.devices.read(&mut token);
 
-        let device = &device_guard[bundle_encoder.parent_id];
+        let device = device_guard
+            .get(bundle_encoder.parent_id)
+            .map_err(|_| DeviceError::Invalid)?;
         let render_bundle = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bind_group_guard, mut token) = hub.bind_groups.read(&mut token);
@@ -660,7 +644,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
             let mut commands = Vec::new();
             let mut base = bundle_encoder.base.as_ref();
-            let mut pipeline_layout_id = None::<id::PipelineLayoutId>;
+            let mut pipeline_layout_id = None::<id::Valid<id::PipelineLayoutId>>;
 
             for &command in base.commands {
                 match command {
@@ -671,10 +655,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     } => {
                         let max_bind_groups = device.limits.max_bind_groups;
                         if (index as u32) >= max_bind_groups {
-                            return Err(RenderCommandError::BindGroupIndexOutOfRange {
+                            Err(RenderCommandError::BindGroupIndexOutOfRange {
                                 index,
                                 max: max_bind_groups,
-                            });
+                            })?
                         }
 
                         let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
@@ -686,19 +670,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .map(|offset| *offset as wgt::BufferAddress)
                             .find(|offset| offset % wgt::BIND_BUFFER_ALIGNMENT != 0)
                         {
-                            return Err(RenderCommandError::UnalignedBufferOffset(offset));
+                            Err(RenderCommandError::UnalignedBufferOffset(offset))?
                         }
 
                         let bind_group = state
                             .trackers
                             .bind_groups
                             .use_extend(&*bind_group_guard, bind_group_id, (), ())
-                            .unwrap();
+                            .map_err(|_| RenderCommandError::InvalidBindGroup(bind_group_id))?;
                         if bind_group.dynamic_binding_info.len() != offsets.len() {
-                            return Err(RenderCommandError::InvalidDynamicOffsetCount {
+                            Err(RenderCommandError::InvalidDynamicOffsetCount {
                                 actual: offsets.len(),
                                 expected: bind_group.dynamic_binding_info.len(),
-                            });
+                            })?
                         }
 
                         state.set_bind_group(index, bind_group_id, bind_group.layout_id, offsets);
@@ -712,7 +696,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .unwrap();
 
                         if !bundle_encoder.context.compatible(&pipeline.pass_context) {
-                            return Err(RenderCommandError::IncompatiblePipeline);
+                            Err(RenderCommandError::IncompatiblePipeline)?
                         }
                         //TODO: check read-only depth
 
@@ -740,7 +724,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDEX)
                             .unwrap();
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDEX)?;
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDEX)
+                            .map_err(RenderCommandError::from)?;
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -759,7 +744,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::VERTEX)
                             .unwrap();
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::VERTEX)?;
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::VERTEX)
+                            .map_err(RenderCommandError::from)?;
 
                         let end = match size {
                             Some(s) => offset + s.get(),
@@ -776,11 +762,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let end_offset = offset + size_bytes;
 
                         let pipeline_layout_id =
-                            pipeline_layout_id.ok_or(RenderCommandError::UnboundPipeline)?;
+                            pipeline_layout_id.ok_or(DrawError::MissingPipeline)?;
                         let pipeline_layout = &pipeline_layout_guard[pipeline_layout_id];
 
                         pipeline_layout
-                            .validate_push_constant_ranges(stages, offset, end_offset)?;
+                            .validate_push_constant_ranges(stages, offset, end_offset)
+                            .map_err(RenderCommandError::from)?;
 
                         commands.push(command);
                     }
@@ -793,17 +780,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let (vertex_limit, instance_limit) = state.vertex_limits();
                         let last_vertex = first_vertex + vertex_count;
                         if last_vertex > vertex_limit {
-                            return Err(RenderCommandError::VertexBeyondLimit {
+                            Err(DrawError::VertexBeyondLimit {
                                 last_vertex,
                                 vertex_limit,
-                            });
+                            })?
                         }
                         let last_instance = first_instance + instance_count;
                         if last_instance > instance_limit {
-                            return Err(RenderCommandError::InstanceBeyondLimit {
+                            Err(DrawError::InstanceBeyondLimit {
                                 last_instance,
                                 instance_limit,
-                            });
+                            })?
                         }
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -821,17 +808,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let index_limit = state.index.limit();
                         let last_index = first_index + index_count;
                         if last_index > index_limit {
-                            return Err(RenderCommandError::IndexBeyondLimit {
+                            Err(DrawError::IndexBeyondLimit {
                                 last_index,
                                 index_limit,
-                            });
+                            })?
                         }
                         let last_instance = first_instance + instance_count;
                         if last_instance > instance_limit {
-                            return Err(RenderCommandError::InstanceBeyondLimit {
+                            Err(DrawError::InstanceBeyondLimit {
                                 last_instance,
                                 instance_limit,
-                            });
+                            })?
                         }
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
@@ -849,7 +836,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
                             .unwrap();
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)?;
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
+                            .map_err(RenderCommandError::from)?;
 
                         commands.extend(state.flush_vertices());
                         commands.extend(state.flush_binds());
@@ -865,8 +853,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .trackers
                             .buffers
                             .use_extend(&*buffer_guard, buffer_id, (), BufferUse::INDIRECT)
-                            .unwrap();
-                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)?;
+                            .map_err(|err| RenderCommandError::Buffer(buffer_id, err))?;
+                        check_buffer_usage(buffer.usage, wgt::BufferUsage::INDIRECT)
+                            .map_err(RenderCommandError::from)?;
 
                         commands.extend(state.index.flush());
                         commands.extend(state.flush_vertices());
@@ -899,7 +888,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     push_constant_data: Vec::new(),
                 },
                 device_id: Stored {
-                    value: bundle_encoder.parent_id,
+                    value: id::Valid(bundle_encoder.parent_id),
                     ref_count: device.life_guard.add_ref(),
                 },
                 used: state.trackers,
@@ -920,7 +909,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let (bundle_guard, _) = hub.render_bundles.read(&mut token);
                 let bundle = &bundle_guard[id];
                 trace.lock().add(trace::Action::CreateRenderBundle {
-                    id,
+                    id: id.0,
                     desc: trace::new_render_bundle_encoder_descriptor(desc.label, &bundle.context),
                     base: BasePass::from_ref(bundle.base.as_ref()),
                 });
@@ -934,7 +923,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .bundles
             .init(id, ref_count, PhantomData)
             .unwrap();
-        Ok(id)
+        Ok(id.0)
     }
 }
 
