@@ -107,4 +107,3 @@ pub struct BufferInitDescriptor<'a> {
     /// will panic.
     pub usage: crate::BufferUsage,
 }
-
