@@ -1202,11 +1202,11 @@ impl crate::Context for Context {
                 mapped_desc.aspect(map_texture_aspect(d.aspect));
                 mapped_desc.base_array_layer(d.base_array_layer);
                 if let Some(count) = d.array_layer_count {
-                    mapped_desc.array_layer_count(count);
+                    mapped_desc.array_layer_count(count.get());
                 }
                 mapped_desc.base_mip_level(d.base_mip_level);
                 if let Some(count) = d.level_count {
-                    mapped_desc.mip_level_count(count);
+                    mapped_desc.mip_level_count(count.get());
                 }
                 // TODO: label
                 texture.0.create_view_with_descriptor(&mapped_desc)
