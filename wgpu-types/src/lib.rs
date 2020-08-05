@@ -1365,7 +1365,7 @@ impl<'a> BufferDescriptor<Option<Cow<'a, str>>> {
         }
     }
 
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+    pub fn label<'b: 'a>(&mut self, label: impl IntoCow<'b, str>) -> &mut Self {
         self.label = Some(label.into_cow());
         self
     }
@@ -2022,7 +2022,7 @@ impl<'a, L, B: Clone> BindGroupDescriptor<'a, L, B> {
         }
     }
 
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+    pub fn label<'b: 'a>(&mut self, label: impl IntoCow<'b, str>) -> &mut Self {
         self.label = Some(label.into_cow());
         self
     }
@@ -2252,7 +2252,7 @@ impl<'a> RenderBundleEncoderDescriptor<'a> {
         }
     }
 
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+    pub fn label<'b: 'a>(&mut self, label: impl IntoCow<'b, str>) -> &mut Self {
         self.label = Some(label.into_cow());
         self
     }
@@ -2595,7 +2595,7 @@ impl<'a> BindGroupLayoutDescriptor<'a> {
         }
     }
 
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
+    pub fn label<'b: 'a>(&mut self, label: impl IntoCow<'b, str>) -> &mut Self {
         self.label = Some(label.into_cow());
         self
     }
