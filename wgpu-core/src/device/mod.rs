@@ -1525,10 +1525,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device_id = {
             let (mut bind_group_layout_guard, _) = hub.bind_group_layouts.write(&mut token);
             match bind_group_layout_guard.get_mut(bind_group_layout_id) {
-                Ok(layout) => {
-                    layout.multi_ref_count.dec();
-                    layout.device_id.value
-                }
+                Ok(layout) => layout.device_id.value,
                 Err(InvalidId) => {
                     hub.bind_group_layouts
                         .unregister_locked(bind_group_layout_id, &mut *bind_group_layout_guard);
