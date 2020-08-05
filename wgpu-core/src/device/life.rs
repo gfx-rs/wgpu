@@ -519,8 +519,7 @@ impl<B: GfxBackend> LifetimeTracker<B> {
         }
 
         if !self.suspected_resources.pipeline_layouts.is_empty() {
-            let (mut guard, mut token) = hub.pipeline_layouts.write(token);
-            let (bgl_guard, _) = hub.bind_group_layouts.read(&mut token);
+            let (mut guard, _) = hub.pipeline_layouts.write(token);
 
             for Stored {
                 value: id,
@@ -533,23 +532,23 @@ impl<B: GfxBackend> LifetimeTracker<B> {
                     trace.map(|t| t.lock().add(trace::Action::DestroyPipelineLayout(id.0)));
                     let layout = hub.pipeline_layouts.unregister_locked(id.0, &mut *guard);
 
-                    for &bgl_id in layout.bind_group_layout_ids.iter() {
-                        bgl_guard[bgl_id].multi_ref_count.dec();
-                    }
+                    self.suspected_resources
+                        .bind_group_layouts
+                        .extend_from_slice(&layout.bind_group_layout_ids);
                     self.free_resources.pipeline_layouts.push(layout.raw);
                 }
             }
         }
 
         if !self.suspected_resources.bind_group_layouts.is_empty() {
-            self.suspected_resources.bind_group_layouts.sort();
-            self.suspected_resources.bind_group_layouts.dedup();
             let (mut guard, _) = hub.bind_group_layouts.write(token);
 
             for id in self.suspected_resources.bind_group_layouts.drain(..) {
                 //Note: this has to happen after all the suspected pipelines are destroyed
                 //Note: nothing else can bump the refcount since the guard is locked exclusively
-                if guard[id].multi_ref_count.is_empty() {
+                //Note: same BGL can appear multiple times in the list, but only the last
+                // encounter could drop the refcount to 0.
+                if guard[id].multi_ref_count.dec_and_check_empty() {
                     #[cfg(feature = "trace")]
                     trace.map(|t| t.lock().add(trace::Action::DestroyBindGroupLayout(id.0)));
                     let layout = hub.bind_group_layouts.unregister_locked(id.0, &mut *guard);

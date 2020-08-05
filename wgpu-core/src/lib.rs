@@ -152,12 +152,8 @@ impl MultiRefCount {
         unsafe { self.0.as_ref() }.fetch_add(1, Ordering::AcqRel);
     }
 
-    fn dec(&self) {
-        unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::AcqRel);
-    }
-
-    fn is_empty(&self) -> bool {
-        unsafe { self.0.as_ref() }.load(Ordering::Acquire) == 0
+    fn dec_and_check_empty(&self) -> bool {
+        unsafe { self.0.as_ref() }.fetch_sub(1, Ordering::AcqRel) == 1
     }
 }
 
