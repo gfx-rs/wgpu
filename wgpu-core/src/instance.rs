@@ -7,7 +7,7 @@ use crate::{
     device::Device,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{AdapterId, DeviceId, SurfaceId, Valid},
-    power, span, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
+    span, LifeGuard, PrivateFeatures, Stored, MAX_BIND_GROUPS,
 };
 
 use wgt::{Backend, BackendBit, DeviceDescriptor, PowerPreference, BIND_BUFFER_ALIGNMENT};
@@ -500,18 +500,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
 
         let preferred_gpu = match desc.power_preference {
-            PowerPreference::Default => match power::is_battery_discharging() {
-                Ok(false) => discrete.or(integrated).or(other).or(virt),
-                Ok(true) => integrated.or(discrete).or(other).or(virt),
-                Err(err) => {
-                    tracing::debug!(
-                        "Power info unavailable, preferring integrated gpu ({})",
-                        err
-                    );
-                    integrated.or(discrete).or(other).or(virt)
-                }
-            },
-            PowerPreference::LowPower => integrated.or(other).or(discrete).or(virt),
+            PowerPreference::Default | PowerPreference::LowPower => {
+                integrated.or(other).or(discrete).or(virt)
+            }
             PowerPreference::HighPerformance => discrete.or(other).or(integrated).or(virt),
         };
 

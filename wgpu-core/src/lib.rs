@@ -37,7 +37,6 @@ pub mod id;
 pub mod instance;
 pub mod logging;
 pub mod pipeline;
-pub mod power;
 pub mod resource;
 pub mod swap_chain;
 mod track;
