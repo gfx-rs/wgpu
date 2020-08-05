@@ -1,4 +1,4 @@
-use std::{borrow::Cow::Borrowed, iter, mem, ops::Range, rc::Rc};
+use std::{borrow::Cow::Borrowed, iter, mem, num::NonZeroU32, ops::Range, rc::Rc};
 
 #[path = "../framework.rs"]
 mod framework;
@@ -391,7 +391,7 @@ impl framework::Example for Example {
                     base_mip_level: 0,
                     level_count: None,
                     base_array_layer: i as u32,
-                    array_layer_count: Some(1),
+                    array_layer_count: NonZeroU32::new(1),
                 }))
             })
             .collect::<Vec<_>>();
