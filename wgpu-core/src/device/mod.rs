@@ -1107,22 +1107,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let (format, view_kind, range) = match desc {
             Some(desc) => {
                 let kind = conv::map_texture_view_dimension(desc.dimension);
-                let required_level_count = desc.base_mip_level + desc.level_count.unwrap_or(1);
+                let required_level_count =
+                    desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
                 let required_layer_count =
-                    desc.base_array_layer + desc.array_layer_count.unwrap_or(1);
+                    desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
                 let level_end = texture.full_range.levels.end;
                 let layer_end = texture.full_range.layers.end;
-                if required_level_count > level_end as u32
-                    || required_level_count == desc.base_mip_level
-                {
+                if required_level_count > level_end as u32 {
                     return Err(resource::CreateTextureViewError::InvalidMipLevelCount {
                         requested: required_level_count,
                         total: level_end,
                     });
                 }
-                if required_layer_count > layer_end as u32
-                    || required_layer_count == desc.base_array_layer
-                {
+                if required_layer_count > layer_end as u32 {
                     return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
                         requested: required_layer_count,
                         total: layer_end,

@@ -10,7 +10,7 @@
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, ops::Range};
+use std::{borrow::Cow, num::NonZeroU32, ops::Range};
 
 pub use into_cow::IntoCow;
 mod into_cow;
@@ -1750,13 +1750,13 @@ pub struct TextureViewDescriptor<L> {
     /// Mip level count.
     /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
     /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub level_count: Option<u32>,
+    pub level_count: Option<NonZeroU32>,
     /// Base array layer.
     pub base_array_layer: u32,
     /// Layer count.
     /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
     /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
-    pub array_layer_count: Option<u32>,
+    pub array_layer_count: Option<NonZeroU32>,
 }
 
 impl<'a> TextureViewDescriptor<Option<Cow<'a, str>>> {
@@ -1786,7 +1786,7 @@ impl<L> TextureViewDescriptor<L> {
     }
 
     pub fn level_count(&mut self, level_count: u32) -> &mut Self {
-        self.level_count = Some(level_count);
+        self.level_count = Some(NonZeroU32::new(level_count).unwrap());
         self
     }
 
@@ -1796,7 +1796,7 @@ impl<L> TextureViewDescriptor<L> {
     }
 
     pub fn array_layer_count(&mut self, array_layer_count: u32) -> &mut Self {
-        self.array_layer_count = Some(array_layer_count);
+        self.array_layer_count = Some(NonZeroU32::new(array_layer_count).unwrap());
         self
     }
 
