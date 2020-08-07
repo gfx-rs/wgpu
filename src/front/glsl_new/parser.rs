@@ -153,7 +153,7 @@ pomelo! {
             // try global vars
             if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
                 ExpressionRule{
-                    expression: extra.context.expressions.append(Expression::GlobalVariable(global_var.clone())),
+                    expression: extra.context.expressions.append(Expression::GlobalVariable(*global_var)),
                     statements: vec![],
                 }
             } else {
@@ -435,30 +435,25 @@ pomelo! {
     single_declaration ::= fully_specified_type;
     single_declaration ::= fully_specified_type(t) Identifier(i) {
         //TODO: global or local? For now always global
-        if let Some(ty) = t.1 {
-            if let Some(TypeQualifier::StorageClass(sc)) = t.0.iter().find(|tq| {
-                if let TypeQualifier::StorageClass(_) = tq { true } else { false }
-            }) {
-                let binding = t.0.iter().find_map(|tq| {
-                    if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
-                });
+        let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
 
-                let h = extra.global_variables.fetch_or_append(
-                    GlobalVariable {
-                        name: Some(i.1.clone()),
-                        class: *sc,
-                        binding: binding,
-                        ty: ty,
-                    },
-                );
-                extra.lookup_global_variables.insert(i.1, h);
-                
-            } else {
-                return Err(ErrorKind::SemanticError("Missing storage class for declaration"))
-            }
-        } else {
-            return Err(ErrorKind::SemanticError("Empty type for declaration"))
-        }
+        let class = t.0.iter().find_map(|tq| {
+            if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
+        }).ok_or(ErrorKind::SemanticError("Missing storage class for declaration"))?;
+
+        let binding = t.0.iter().find_map(|tq| {
+            if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
+        });
+
+        let h = extra.global_variables.fetch_or_append(
+            GlobalVariable {
+                name: Some(i.1.clone()),
+                class,
+                binding,
+                ty,
+            },
+        );
+        extra.lookup_global_variables.insert(i.1, h);
     }
 
     fully_specified_type ::= type_specifier(t) {(vec![], t)}
