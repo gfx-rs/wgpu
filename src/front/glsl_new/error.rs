@@ -13,6 +13,9 @@ pub enum ErrorKind {
     ParserFail,
     ParserStackOverflow,
     NotImplemented(&'static str),
+    UnknownVariable(TokenMetadata, String),
+    ExpectedConstant,
+    SemanticError(&'static str),
 }
 
 impl fmt::Display for ErrorKind {
@@ -31,6 +34,11 @@ impl fmt::Display for ErrorKind {
             ErrorKind::ParserFail => write!(f, "Parser failed"),
             ErrorKind::ParserStackOverflow => write!(f, "Parser stack overflow"),
             ErrorKind::NotImplemented(msg) => write!(f, "Not implemented: {}", msg),
+            ErrorKind::UnknownVariable(meta, val) => {
+                write!(f, "Unknown variable {} at {:?}", val, meta)
+            }
+            ErrorKind::ExpectedConstant => write!(f, "Expected constant"),
+            ErrorKind::SemanticError(msg) => write!(f, "Semantic error: {}", msg),
         }
     }
 }

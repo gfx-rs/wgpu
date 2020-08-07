@@ -45,6 +45,7 @@ pomelo! {
     %type function_declarator Function;
     %type function_header Function;
     %type function_definition Function;
+
     // statements
     %type compound_statement Block;
     %type compound_statement_no_new_scope Block;
@@ -52,6 +53,7 @@ pomelo! {
     %type statement Statement;
     %type simple_statement Statement;
     %type expression_statement Statement;
+    %type declaration_statement Statement;
 
     // expressions
     %type unary_expression ExpressionRule;
@@ -82,9 +84,18 @@ pomelo! {
     %type assignment_expression ExpressionRule;
     %type assignment_operator BinaryOperator;
     %type expression ExpressionRule;
+    %type constant_expression Handle<Constant>;
+
+    // decalartions
+    %type layout_qualifier Binding;
+    %type layout_qualifier_id_list Binding;
+    %type layout_qualifier_id Binding;
+    %type type_qualifier Vec<TypeQualifier>;
+    %type single_type_qualifier TypeQualifier;
+    %type storage_qualifier StorageClass;
 
     // types
-    %type fully_specified_type Option<Handle<Type>>;
+    %type fully_specified_type (Vec<TypeQualifier>, Option<Handle<Type>>);
     %type type_specifier Option<Handle<Type>>;
     %type type_specifier_nonarray Option<Type>;
 
@@ -116,7 +127,7 @@ pomelo! {
             extra.shader_stage == ShaderStage::Fragment) {
             let h = extra.global_variables.fetch_or_append(
                 GlobalVariable {
-                    name: Some(v.1),
+                    name: Some(v.1.clone()),
                     class: match extra.shader_stage {
                         ShaderStage::Vertex => StorageClass::Output,
                         ShaderStage::Fragment => StorageClass::Input,
@@ -133,12 +144,21 @@ pomelo! {
                     }),
                 },
             );
+            extra.lookup_global_variables.insert(v.1, h);
             ExpressionRule{
                 expression: extra.context.expressions.append(Expression::GlobalVariable(h)),
                 statements: vec![],
             }
         } else {
-            return Err(ErrorKind::NotImplemented("var"))
+            // try global vars
+            if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
+                ExpressionRule{
+                    expression: extra.context.expressions.append(Expression::GlobalVariable(global_var.clone())),
+                    statements: vec![],
+                }
+            } else {
+                return Err(ErrorKind::UnknownVariable(v.0, v.1))
+            }
         }
     }
 
@@ -401,12 +421,108 @@ pomelo! {
         }
     }
 
+    constant_expression ::= conditional_expression(e) {
+        if let Expression::Constant(h) = extra.context.expressions[e] {
+            h
+        } else {
+            return Err(ErrorKind::ExpectedConstant)
+        }
+    }
+
+    // declaration
+    declaration ::= init_declarator_list Semicolon;
+    init_declarator_list ::= single_declaration;
+    single_declaration ::= fully_specified_type;
+    single_declaration ::= fully_specified_type(t) Identifier(i) {
+        //TODO: global or local? For now always global
+        if let Some(ty) = t.1 {
+            if let Some(TypeQualifier::StorageClass(sc)) = t.0.iter().find(|tq| {
+                if let TypeQualifier::StorageClass(_) = tq { true } else { false }
+            }) {
+                let binding = t.0.iter().find_map(|tq| {
+                    if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
+                });
+
+                let h = extra.global_variables.fetch_or_append(
+                    GlobalVariable {
+                        name: Some(i.1.clone()),
+                        class: *sc,
+                        binding: binding,
+                        ty: ty,
+                    },
+                );
+                extra.lookup_global_variables.insert(i.1, h);
+                
+            } else {
+                return Err(ErrorKind::SemanticError("Missing storage class for declaration"))
+            }
+        } else {
+            return Err(ErrorKind::SemanticError("Empty type for declaration"))
+        }
+    }
+
+    fully_specified_type ::= type_specifier(t) {(vec![], t)}
+    fully_specified_type ::= type_qualifier(q) type_specifier(t) {(q,t)}
+
+    layout_qualifier ::= Layout LeftParen layout_qualifier_id_list(l) RightParen {l}
+    layout_qualifier_id_list ::= layout_qualifier_id;
+    layout_qualifier_id_list ::= layout_qualifier_id_list Comma layout_qualifier_id(l) {
+        //TODO: for now always pick last
+        l
+    }
+    // layout_qualifier_id ::= Identifier;
+    layout_qualifier_id ::= Identifier(i) Equal constant_expression(c) {
+        if i.1.as_str() == "location" {
+            if let ConstantInner::Sint(loc) = extra.constants[c].inner {
+                Binding::Location(loc as u32)
+            } else {
+                return Err(ErrorKind::NotImplemented("location not Sint"));
+            }
+        } else {
+            return Err(ErrorKind::NotImplemented("non location layout qualifier"));
+        }
+    }
+    // layout_qualifier_id ::= Shared;
+
+    // precise_qualifier ::= Precise;
+
+    type_qualifier ::= single_type_qualifier(t) {
+        vec![t]
+    }
+    type_qualifier ::= type_qualifier(mut l) single_type_qualifier(t) {
+        l.push(t);
+        l
+    }
+
+    single_type_qualifier ::= storage_qualifier(s) {
+        TypeQualifier::StorageClass(s)
+    }
+    single_type_qualifier ::= layout_qualifier(l) {
+        TypeQualifier::Binding(l)
+    }
+    // single_type_qualifier ::= precision_qualifier;
+    // single_type_qualifier ::= interpolation_qualifier;
+    // single_type_qualifier ::= invariant_qualifier;
+    // single_type_qualifier ::= precise_qualifier;
+
+    storage_qualifier ::= Const {StorageClass::Constant}
+    // storage_qualifier ::= InOut;
+    storage_qualifier ::= In {StorageClass::Input}
+    storage_qualifier ::= Out {StorageClass::Output}
+    //TODO: other storage qualifiers
+
+
+    declaration_statement ::= declaration {
+        //TODO: Should declarations be able to genereate expression/statements?
+        Statement::Empty
+    }
+
     // statement
     statement ::= compound_statement(cs) {Statement::Block(cs)}
     statement ::= simple_statement;
 
     // Grammar Note: labeled statements for SWITCH only; 'goto' is not supported.
-    //simple_statement ::= declaration_statement;
+    simple_statement ::= declaration_statement;
     simple_statement ::= expression_statement;
     //simple_statement ::= selection_statement;
     //simple_statement ::= switch_statement;
@@ -440,7 +556,7 @@ pomelo! {
         Function {
             name: Some(n.1),
             parameter_types: vec![],
-            return_type: t,
+            return_type: t.1,
             global_usage: vec![],
             local_variables: Arena::<LocalVariable>::new(),
             expressions: Arena::<Expression>::new(),
@@ -449,7 +565,6 @@ pomelo! {
     }
 
     // type
-    fully_specified_type ::= type_specifier;
     type_specifier ::= type_specifier_nonarray(t) {
         t.map(|t| {
             let name = t.name.clone();
@@ -505,6 +620,7 @@ pomelo! {
             extra.lookup_function.insert(name, handle);
         }
     }
+    external_declaration ::= declaration;
 
     function_definition ::= function_prototype(mut f) compound_statement_no_new_scope(cs) {
         std::mem::swap(&mut f.expressions, &mut extra.context.expressions);

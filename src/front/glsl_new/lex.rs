@@ -110,6 +110,10 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
             let (word, rest, pos) = consume_any(input, |c| c.is_ascii_alphanumeric() || c == '_');
             meta.chars.end = start + pos;
             match word {
+                "layout" => (Some(Token::Layout(meta)), rest),
+                "in" => (Some(Token::In(meta)), rest),
+                "out" => (Some(Token::Out(meta)), rest),
+                // types
                 "void" => (Some(Token::Void(meta)), rest),
                 "vec2" => (Some(Token::Vec2(meta)), rest),
                 "vec3" => (Some(Token::Vec3(meta)), rest),
