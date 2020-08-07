@@ -462,6 +462,26 @@ pomelo! {
     }
 
     type_specifier_nonarray ::= Void { None }
+    type_specifier_nonarray ::= Vec2 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Float,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Vec3 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Tri,
+                kind: ScalarKind::Float,
+                width: 4,
+            }
+        })
+    }
     type_specifier_nonarray ::= Vec4 {
         Some(Type {
             name: None,

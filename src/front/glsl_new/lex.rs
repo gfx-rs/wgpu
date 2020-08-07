@@ -111,6 +111,8 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
             meta.chars.end = start + pos;
             match word {
                 "void" => (Some(Token::Void(meta)), rest),
+                "vec2" => (Some(Token::Vec2(meta)), rest),
+                "vec3" => (Some(Token::Vec3(meta)), rest),
                 "vec4" => (Some(Token::Vec4(meta)), rest),
                 //TODO: remaining types
                 _ => (Some(Token::Identifier((meta, String::from(word)))), rest),
