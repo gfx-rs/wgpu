@@ -2194,17 +2194,22 @@ impl<'a, L, D> RenderPipelineDescriptor<'a, L, D> {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ComputePipelineDescriptor<L, D> {
     /// The layout of bind groups for this pipeline.
-    pub layout: L,
+    pub layout: Option<L>,
     /// The compiled compute stage and its entry point.
     pub compute_stage: D,
 }
 
 impl<L, D> ComputePipelineDescriptor<L, D> {
-    pub fn new(layout: L, compute_stage: D) -> Self {
+    pub fn new(compute_stage: D) -> Self {
         Self {
-            layout,
+            layout: None,
             compute_stage,
         }
+    }
+
+    pub fn layout(&mut self, layout: L) -> &mut Self {
+        self.layout = Some(layout);
+        self
     }
 }
 

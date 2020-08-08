@@ -2582,7 +2582,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 if let Some(ref module) = shader_module.module {
                     interface = validation::check_stage(
                         module,
-                        &group_layouts,
+                        validation::IntrospectionBindGroupLayouts::Given(&group_layouts),
                         &entry_point_name,
                         naga::ShaderStage::Vertex,
                         interface,
@@ -2614,7 +2614,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         if let Some(ref module) = shader_module.module {
                             interface = validation::check_stage(
                                 module,
-                                &group_layouts,
+                                validation::IntrospectionBindGroupLayouts::Given(&group_layouts),
                                 &entry_point_name,
                                 naga::ShaderStage::Fragment,
                                 interface,
@@ -2820,17 +2820,32 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let device = device_guard
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
-        let (raw_pipeline, layout_ref_count) = {
+        let (raw_pipeline, layout_id, layout_ref_count) = {
             let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
             let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let layout = pipeline_layout_guard
-                .get(desc.layout)
-                .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
-            let group_layouts = layout
-                .bind_group_layout_ids
-                .iter()
-                .map(|&id| &bgl_guard[id].entries)
-                .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
+
+            let mut derived_group_layouts =
+                ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
+            let given_group_layouts: ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>;
+            let group_layouts = match desc.layout {
+                Some(pipeline_layout_id) => {
+                    let layout = pipeline_layout_guard
+                        .get(pipeline_layout_id)
+                        .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
+                    given_group_layouts = layout
+                        .bind_group_layout_ids
+                        .iter()
+                        .map(|&id| &bgl_guard[id].entries)
+                        .collect();
+                    validation::IntrospectionBindGroupLayouts::Given(&given_group_layouts)
+                }
+                None => {
+                    for _ in 0..device.limits.max_bind_groups {
+                        derived_group_layouts.push(binding_model::BindEntryMap::default());
+                    }
+                    validation::IntrospectionBindGroupLayouts::Derived(&mut derived_group_layouts)
+                }
+            };
 
             let interface = validation::StageInterface::default();
             let pipeline_stage = &desc.compute_stage;
@@ -2849,7 +2864,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             if let Some(ref module) = shader_module.module {
                 let _ = validation::check_stage(
                     module,
-                    &group_layouts,
+                    group_layouts,
                     &entry_point_name,
                     naga::ShaderStage::Compute,
                     interface,
@@ -2868,6 +2883,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             // TODO
             let parent = hal::pso::BasePipeline::None;
 
+            let pipeline_layout_id = match desc.layout {
+                Some(id) => id,
+                None => {
+                    //TODO: create a new pipeline layout
+                    unimplemented!()
+                }
+            };
+            let layout = pipeline_layout_guard
+                .get(pipeline_layout_id)
+                .map_err(|_| pipeline::CreateComputePipelineError::InvalidLayout)?;
+
             let pipeline_desc = hal::pso::ComputePipelineDesc {
                 shader,
                 layout: &layout.raw,
@@ -2876,7 +2902,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             };
 
             match unsafe { device.raw.create_compute_pipeline(&pipeline_desc, None) } {
-                Ok(pipeline) => (pipeline, layout.life_guard.add_ref()),
+                Ok(pipeline) => (pipeline, pipeline_layout_id, layout.life_guard.add_ref()),
                 Err(hal::pso::CreationError::OutOfMemory(_)) => {
                     return Err(pipeline::CreateComputePipelineError::Device(
                         DeviceError::OutOfMemory,
@@ -2889,7 +2915,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let pipeline = pipeline::ComputePipeline {
             raw: raw_pipeline,
             layout_id: Stored {
-                value: id::Valid(desc.layout),
+                value: id::Valid(layout_id),
                 ref_count: layout_ref_count,
             },
             device_id: Stored {
