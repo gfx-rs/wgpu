@@ -78,6 +78,10 @@ pub enum CreateRenderPipelineError {
     Device(#[from] DeviceError),
     #[error("pipelie layout is invalid")]
     InvalidLayout,
+    #[error("implicit bind group layout failed to validate")]
+    ImplicitBindGroupLayout(#[from] CreateBindGroupLayoutError),
+    #[error("implicit pipeline layout failed to validate")]
+    ImplicitPipelineLayout(#[from] CreatePipelineLayoutError),
     #[error("incompatible output format at index {index}")]
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]

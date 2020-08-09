@@ -2420,7 +2420,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         device_id: id::DeviceId,
         desc: &pipeline::RenderPipelineDescriptor,
         id_in: Input<G, id::RenderPipelineId>,
-    ) -> Result<id::RenderPipelineId, pipeline::CreateRenderPipelineError> {
+        implicit_pipeline_ids: Option<ImplicitPipelineIds<G>>,
+    ) -> Result<(id::RenderPipelineId, DerivedBindGroupCount), pipeline::CreateRenderPipelineError>
+    {
         span!(_guard, INFO, "Device::create_render_pipeline");
 
         let hub = B::hub(self);
@@ -2546,17 +2548,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             ));
         }
 
-        let (raw_pipeline, layout_ref_count) = {
-            let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
-            let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
-            let layout = pipeline_layout_guard
-                .get(desc.layout)
-                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
-            let group_layouts = layout
-                .bind_group_layout_ids
-                .iter()
-                .map(|&id| &bgl_guard[id].entries)
-                .collect::<ArrayVec<[&binding_model::BindEntryMap; MAX_BIND_GROUPS]>>();
+        let (raw_pipeline, layout_id, layout_ref_count, derived_bind_group_count) = {
+            //TODO: only lock mutable if the layout is derived
+            let (mut pipeline_layout_guard, mut token) = hub.pipeline_layouts.write(&mut token);
+            let (mut bgl_guard, mut token) = hub.bind_group_layouts.write(&mut token);
+
+            let mut derived_group_layouts =
+                ArrayVec::<[binding_model::BindEntryMap; MAX_BIND_GROUPS]>::new();
+            if desc.layout.is_none() {
+                for _ in 0..device.limits.max_bind_groups {
+                    derived_group_layouts.push(binding_model::BindEntryMap::default());
+                }
+            }
 
             let (shader_module_guard, _) = hub.shader_modules.read(&mut token);
 
@@ -2610,9 +2613,29 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         })?;
 
                 if let Some(ref module) = shader_module.module {
+                    let given_group_layouts: ArrayVec<
+                        [&binding_model::BindEntryMap; MAX_BIND_GROUPS],
+                    >;
+                    let group_layouts = match desc.layout {
+                        Some(pipeline_layout_id) => {
+                            let layout = pipeline_layout_guard
+                                .get(pipeline_layout_id)
+                                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+                            given_group_layouts = layout
+                                .bind_group_layout_ids
+                                .iter()
+                                .map(|&id| &bgl_guard[id].entries)
+                                .collect();
+                            validation::IntrospectionBindGroupLayouts::Given(&given_group_layouts)
+                        }
+                        None => validation::IntrospectionBindGroupLayouts::Derived(
+                            &mut derived_group_layouts,
+                        ),
+                    };
+
                     interface = validation::check_stage(
                         module,
-                        validation::IntrospectionBindGroupLayouts::Given(&group_layouts),
+                        group_layouts,
                         &entry_point_name,
                         naga::ShaderStage::Vertex,
                         interface,
@@ -2640,11 +2663,31 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
                     })?;
 
+                    let given_group_layouts: ArrayVec<
+                        [&binding_model::BindEntryMap; MAX_BIND_GROUPS],
+                    >;
+                    let group_layouts = match desc.layout {
+                        Some(pipeline_layout_id) => {
+                            let layout = pipeline_layout_guard
+                                .get(pipeline_layout_id)
+                                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
+                            given_group_layouts = layout
+                                .bind_group_layout_ids
+                                .iter()
+                                .map(|&id| &bgl_guard[id].entries)
+                                .collect();
+                            validation::IntrospectionBindGroupLayouts::Given(&given_group_layouts)
+                        }
+                        None => validation::IntrospectionBindGroupLayouts::Derived(
+                            &mut derived_group_layouts,
+                        ),
+                    };
+
                     if validated_stages == wgt::ShaderStage::VERTEX {
                         if let Some(ref module) = shader_module.module {
                             interface = validation::check_stage(
                                 module,
-                                validation::IntrospectionBindGroupLayouts::Given(&group_layouts),
+                                group_layouts,
                                 &entry_point_name,
                                 naga::ShaderStage::Fragment,
                                 interface,
@@ -2682,6 +2725,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         );
                     }
                 }
+            } else if desc.layout.is_none() {
+                tracing::error!("Shader failed to validate, unable to derive the implicit layout!");
+                return Err(pipeline::CreateRenderPipelineError::InvalidLayout);
             }
 
             let shaders = hal::pso::GraphicsShaderSet {
@@ -2694,6 +2740,95 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             // TODO
             let flags = hal::pso::PipelineCreationFlags::empty();
+            // TODO
+            let parent = hal::pso::BasePipeline::None;
+
+            let derived_bind_group_count = derived_group_layouts.len() as DerivedBindGroupCount;
+
+            let pipeline_layout_id = match desc.layout {
+                Some(id) => id,
+                None => {
+                    while derived_group_layouts
+                        .last()
+                        .map_or(false, |map| map.is_empty())
+                    {
+                        derived_group_layouts.pop();
+                    }
+                    let ids = implicit_pipeline_ids
+                        .as_ref()
+                        .ok_or(pipeline::CreateRenderPipelineError::InvalidLayout)?;
+                    if ids.group_ids.len() < derived_group_layouts.len() {
+                        tracing::error!(
+                            "Not enough bind group IDs ({}) specified for the implicit layout ({})",
+                            ids.group_ids.len(),
+                            derived_group_layouts.len()
+                        );
+                        return Err(pipeline::CreateRenderPipelineError::InvalidLayout);
+                    }
+
+                    let mut derived_group_layout_ids =
+                        ArrayVec::<[id::BindGroupLayoutId; MAX_BIND_GROUPS]>::new();
+                    for (bgl_id, map) in ids.group_ids.iter().zip(derived_group_layouts) {
+                        let processed_id = match Device::deduplicate_bind_group_layout(
+                            device_id,
+                            &map,
+                            &*bgl_guard,
+                        ) {
+                            Some(dedup_id) => dedup_id,
+                            None => {
+                                #[cfg(feature = "trace")]
+                                let bgl_desc = wgt::BindGroupLayoutDescriptor {
+                                    label: None,
+                                    entries: if device.trace.is_some() {
+                                        Cow::Owned(map.values().cloned().collect())
+                                    } else {
+                                        Cow::Borrowed(&[])
+                                    },
+                                };
+                                let bgl = device.create_bind_group_layout(device_id, None, map)?;
+                                let out_id = hub.bind_group_layouts.register_identity_locked(
+                                    bgl_id.clone(),
+                                    bgl,
+                                    &mut *bgl_guard,
+                                );
+                                #[cfg(feature = "trace")]
+                                match device.trace {
+                                    Some(ref trace) => trace.lock().add(
+                                        trace::Action::CreateBindGroupLayout(out_id.0, bgl_desc),
+                                    ),
+                                    None => (),
+                                };
+                                out_id.0
+                            }
+                        };
+                        derived_group_layout_ids.push(processed_id);
+                    }
+
+                    let layout_desc = wgt::PipelineLayoutDescriptor {
+                        bind_group_layouts: Cow::Borrowed(&derived_group_layout_ids),
+                        push_constant_ranges: Cow::Borrowed(&[]), //TODO?
+                    };
+                    let layout =
+                        device.create_pipeline_layout(device_id, &layout_desc, &*bgl_guard)?;
+                    let layout_id = hub.pipeline_layouts.register_identity_locked(
+                        ids.root_id.clone(),
+                        layout,
+                        &mut *pipeline_layout_guard,
+                    );
+                    #[cfg(feature = "trace")]
+                    match device.trace {
+                        Some(ref trace) => trace.lock().add(trace::Action::CreatePipelineLayout(
+                            layout_id.0,
+                            layout_desc,
+                        )),
+                        None => (),
+                    };
+                    layout_id.0
+                }
+            };
+            let layout = pipeline_layout_guard
+                .get(pipeline_layout_id)
+                .map_err(|_| pipeline::CreateRenderPipelineError::InvalidLayout)?;
 
             let mut render_pass_cache = device.render_passes.lock();
             let pipeline_desc = hal::pso::GraphicsPipelineDesc {
@@ -2720,7 +2855,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     },
                 },
                 flags,
-                parent: hal::pso::BasePipeline::None,
+                parent,
             };
             // TODO: cache
             let pipeline = unsafe {
@@ -2733,7 +2868,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     })?
             };
 
-            (pipeline, layout.life_guard.add_ref())
+            (
+                pipeline,
+                pipeline_layout_id,
+                layout.life_guard.add_ref(),
+                derived_bind_group_count,
+            )
         };
 
         let pass_context = RenderPassContext {
@@ -2765,7 +2905,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let pipeline = pipeline::RenderPipeline {
             raw: raw_pipeline,
             layout_id: Stored {
-                value: id::Valid(desc.layout),
+                value: id::Valid(layout_id),
                 ref_count: layout_ref_count,
             },
             device_id: Stored {
@@ -2785,12 +2925,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace
-                .lock()
-                .add(trace::Action::CreateRenderPipeline(id.0, desc.clone())),
+            Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline(
+                id.0,
+                wgt::RenderPipelineDescriptor {
+                    layout: Some(layout_id),
+                    ..desc.clone()
+                },
+            )),
             None => (),
         };
-        Ok(id.0)
+        Ok((id.0, derived_bind_group_count))
     }
 
     pub fn render_pipeline_error<B: GfxBackend>(
@@ -2904,6 +3048,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     interface,
                 )
                 .map_err(pipeline::CreateComputePipelineError::Stage)?;
+            } else if desc.layout.is_none() {
+                tracing::error!("Shader failed to validate, unable to derive the implicit layout!");
+                return Err(pipeline::CreateComputePipelineError::InvalidLayout);
             }
 
             let shader = hal::pso::EntryPoint::<B> {

@@ -755,7 +755,7 @@ fn derive_binding_type(
 
 pub fn check_stage<'a>(
     module: &'a naga::Module,
-    mut group_layouts: IntrospectionBindGroupLayouts<'a>,
+    mut group_layouts: IntrospectionBindGroupLayouts,
     entry_point_name: &str,
     stage: naga::ShaderStage,
     inputs: StageInterface<'a>,

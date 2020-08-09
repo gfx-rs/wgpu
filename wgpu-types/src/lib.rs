@@ -2104,7 +2104,7 @@ impl<'a, M> ProgrammableStageDescriptor<'a, M> {
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct RenderPipelineDescriptor<'a, L, D> {
     /// The layout of bind groups for this pipeline.
-    pub layout: L,
+    pub layout: Option<L>,
     /// The compiled vertex stage and its entry point.
     pub vertex_stage: D,
     /// The compiled fragment stage and its entry point, if any.
@@ -2136,14 +2136,13 @@ pub struct RenderPipelineDescriptor<'a, L, D> {
 
 impl<'a, L, D> RenderPipelineDescriptor<'a, L, D> {
     pub fn new(
-        layout: L,
         vertex_stage: D,
         primitive_topology: PrimitiveTopology,
         color_states: impl IntoCow<'a, [ColorStateDescriptor]>,
         vertex_state: VertexStateDescriptor<'a>,
     ) -> Self {
         Self {
-            layout,
+            layout: None,
             vertex_stage,
             fragment_stage: None,
             rasterization_state: None,
@@ -2155,6 +2154,11 @@ impl<'a, L, D> RenderPipelineDescriptor<'a, L, D> {
             sample_mask: !0,
             alpha_to_coverage_enabled: false,
         }
+    }
+
+    pub fn layout(&mut self, layout: L) -> &mut Self {
+        self.layout = Some(layout);
+        self
     }
 
     pub fn fragment_stage(&mut self, stage: D) -> &mut Self {
