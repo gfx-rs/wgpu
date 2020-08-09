@@ -1046,10 +1046,64 @@ impl Parser {
                     width,
                 }
             }
+            Token::Word("mat2x3") => {
+                let (kind, width) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Tri,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat2x4") => {
+                let (kind, width) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Bi,
+                    rows: crate::VectorSize::Quad,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat3x2") => {
+                let (kind, width) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Bi,
+                    kind,
+                    width,
+                }
+            }
             Token::Word("mat3x3") => {
                 let (kind, width) = lexer.next_scalar_generic()?;
                 crate::TypeInner::Matrix {
                     columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Tri,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat3x4") => {
+                let (kind, width) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Tri,
+                    rows: crate::VectorSize::Quad,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat4x2") => {
+                let (kind, width) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Quad,
+                    rows: crate::VectorSize::Bi,
+                    kind,
+                    width,
+                }
+            }
+            Token::Word("mat4x3") => {
+                let (kind, width) = lexer.next_scalar_generic()?;
+                crate::TypeInner::Matrix {
+                    columns: crate::VectorSize::Quad,
                     rows: crate::VectorSize::Tri,
                     kind,
                     width,
