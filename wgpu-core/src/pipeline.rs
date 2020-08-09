@@ -38,6 +38,21 @@ pub enum CreateShaderModuleError {
 
 pub type ProgrammableStageDescriptor<'a> = wgt::ProgrammableStageDescriptor<'a, ShaderModuleId>;
 
+/// Number of implicit bind groups derived at pipeline creation.
+pub type ImplicitBindGroupCount = u8;
+
+#[derive(Clone, Debug, Error)]
+pub enum ImplicitLayoutError {
+    #[error("missing IDs for deriving {0} bind groups")]
+    MissingIds(ImplicitBindGroupCount),
+    #[error("unable to reflect the shader {0:?} interface")]
+    ReflectionError(wgt::ShaderStage),
+    #[error(transparent)]
+    BindGroup(#[from] CreateBindGroupLayoutError),
+    #[error(transparent)]
+    Pipeline(#[from] CreatePipelineLayoutError),
+}
+
 pub type ComputePipelineDescriptor<'a> =
     wgt::ComputePipelineDescriptor<PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
@@ -47,10 +62,8 @@ pub enum CreateComputePipelineError {
     Device(#[from] DeviceError),
     #[error("pipeline layout is invalid")]
     InvalidLayout,
-    #[error("implicit bind group layout failed to validate")]
-    ImplicitBindGroupLayout(#[from] CreateBindGroupLayoutError),
-    #[error("implicit pipeline layout failed to validate")]
-    ImplicitPipelineLayout(#[from] CreatePipelineLayoutError),
+    #[error("unable to derive an implicit layout")]
+    Implicit(#[from] ImplicitLayoutError),
     #[error(transparent)]
     Stage(StageError),
 }
@@ -78,10 +91,8 @@ pub enum CreateRenderPipelineError {
     Device(#[from] DeviceError),
     #[error("pipelie layout is invalid")]
     InvalidLayout,
-    #[error("implicit bind group layout failed to validate")]
-    ImplicitBindGroupLayout(#[from] CreateBindGroupLayoutError),
-    #[error("implicit pipeline layout failed to validate")]
-    ImplicitPipelineLayout(#[from] CreatePipelineLayoutError),
+    #[error("unable to derive an implicit layout")]
+    Implicit(#[from] ImplicitLayoutError),
     #[error("incompatible output format at index {index}")]
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]

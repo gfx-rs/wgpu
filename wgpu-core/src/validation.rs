@@ -2,7 +2,8 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model::BindEntryMap, FastHashMap};
+use crate::{binding_model::BindEntryMap, FastHashMap, MAX_BIND_GROUPS};
+use arrayvec::ArrayVec;
 use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
@@ -683,7 +684,7 @@ pub fn check_texture_format(format: wgt::TextureFormat, output: &naga::TypeInner
 pub type StageInterface<'a> = FastHashMap<wgt::ShaderLocation, MaybeOwned<'a, naga::TypeInner>>;
 
 pub enum IntrospectionBindGroupLayouts<'a> {
-    Given(&'a [&'a BindEntryMap]),
+    Given(ArrayVec<[&'a BindEntryMap; MAX_BIND_GROUPS]>),
     Derived(&'a mut [BindEntryMap]),
 }
 
@@ -782,7 +783,7 @@ pub fn check_stage<'a>(
         match var.binding {
             Some(naga::Binding::Descriptor { set, binding }) => {
                 let result = match group_layouts {
-                    IntrospectionBindGroupLayouts::Given(layouts) => layouts
+                    IntrospectionBindGroupLayouts::Given(ref layouts) => layouts
                         .get(set as usize)
                         .and_then(|map| map.get(&binding))
                         .ok_or(BindingError::Missing)
