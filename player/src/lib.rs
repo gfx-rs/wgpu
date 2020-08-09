@@ -248,7 +248,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
             }
             A::CreateComputePipeline(id, desc) => {
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_compute_pipeline::<B>(device, &desc, id)
+                self.device_create_compute_pipeline::<B>(device, &desc, id, None)
                     .unwrap();
             }
             A::DestroyComputePipeline(id) => {

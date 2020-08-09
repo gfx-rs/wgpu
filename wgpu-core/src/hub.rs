@@ -429,6 +429,17 @@ impl<T, I: TypedId + Copy, F: IdentityHandlerFactory<I>> Registry<T, I, F> {
         Valid(id)
     }
 
+    pub(crate) fn register_identity_locked(
+        &self,
+        id_in: <F::Filter as IdentityHandler<I>>::Input,
+        value: T,
+        guard: &mut Storage<T, I>,
+    ) -> Valid<I> {
+        let id = self.identity.process(id_in, self.backend);
+        guard.insert(id, value);
+        Valid(id)
+    }
+
     pub fn register_error<A: Access<T>>(
         &self,
         id_in: <F::Filter as IdentityHandler<I>>::Input,

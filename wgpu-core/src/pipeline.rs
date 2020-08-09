@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     device::{DeviceError, RenderPassContext},
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
@@ -44,8 +45,12 @@ pub type ComputePipelineDescriptor<'a> =
 pub enum CreateComputePipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("pipelie layout is invalid")]
+    #[error("pipeline layout is invalid")]
     InvalidLayout,
+    #[error("implicit bind group layout failed to validate")]
+    ImplicitBindGroupLayout(#[from] CreateBindGroupLayoutError),
+    #[error("implicit pipeline layout failed to validate")]
+    ImplicitPipelineLayout(#[from] CreatePipelineLayoutError),
     #[error(transparent)]
     Stage(StageError),
 }
