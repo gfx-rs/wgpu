@@ -2957,6 +2957,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok((id.0, derived_bind_group_count))
     }
 
+    pub fn render_pipeline_get_bind_group_layout<B: GfxBackend>(
+        &self,
+        pipeline_id: id::RenderPipelineId,
+        index: u32,
+    ) -> Result<id::BindGroupLayoutId, binding_model::GetBindGroupLayoutError> {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+        let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
+
+        let pipeline = pipeline_guard
+            .get(pipeline_id)
+            .map_err(|_| binding_model::GetBindGroupLayoutError::InvalidPipeline)?;
+        pipeline_layout_guard[pipeline.layout_id.value]
+            .bind_group_layout_ids
+            .get(index as usize)
+            .map(|valid| valid.0)
+            .ok_or(binding_model::GetBindGroupLayoutError::InvalidGroupIndex(
+                index,
+            ))
+    }
+
     pub fn render_pipeline_error<B: GfxBackend>(
         &self,
         id_in: Input<G, id::RenderPipelineId>,
@@ -3147,6 +3169,28 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None => (),
         };
         Ok((id.0, derived_bind_group_count))
+    }
+
+    pub fn compute_pipeline_get_bind_group_layout<B: GfxBackend>(
+        &self,
+        pipeline_id: id::ComputePipelineId,
+        index: u32,
+    ) -> Result<id::BindGroupLayoutId, binding_model::GetBindGroupLayoutError> {
+        let hub = B::hub(self);
+        let mut token = Token::root();
+        let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+        let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
+
+        let pipeline = pipeline_guard
+            .get(pipeline_id)
+            .map_err(|_| binding_model::GetBindGroupLayoutError::InvalidPipeline)?;
+        pipeline_layout_guard[pipeline.layout_id.value]
+            .bind_group_layout_ids
+            .get(index as usize)
+            .map(|valid| valid.0)
+            .ok_or(binding_model::GetBindGroupLayoutError::InvalidGroupIndex(
+                index,
+            ))
     }
 
     pub fn compute_pipeline_error<B: GfxBackend>(
