@@ -732,7 +732,7 @@ impl crate::Context for Context {
         wgc::gfx_select!(*device => global.device_create_render_pipeline(
             *device,
             &pipe::RenderPipelineDescriptor {
-                layout: desc.layout.id,
+                layout: desc.layout.map(|l| l.id),
                 vertex_stage,
                 fragment_stage,
                 rasterization_state: desc.rasterization_state.clone(),
@@ -744,9 +744,11 @@ impl crate::Context for Context {
                 sample_mask: desc.sample_mask,
                 alpha_to_coverage_enabled: desc.alpha_to_coverage_enabled,
             },
-            PhantomData
+            PhantomData,
+            None
         ))
         .unwrap_pretty()
+        .0
     }
 
     fn device_create_compute_pipeline(
@@ -760,15 +762,17 @@ impl crate::Context for Context {
         wgc::gfx_select!(*device => global.device_create_compute_pipeline(
             *device,
             &pipe::ComputePipelineDescriptor {
-                layout: desc.layout.id,
+                layout: desc.layout.map(|l| l.id),
                 compute_stage: pipe::ProgrammableStageDescriptor {
                     module: desc.compute_stage.module.id,
                     entry_point: Borrowed(&desc.compute_stage.entry_point),
                 },
             },
-            PhantomData
+            PhantomData,
+            None
         ))
         .unwrap_pretty()
+        .0
     }
 
     fn device_create_buffer(

@@ -1007,7 +1007,7 @@ impl crate::Context for Context {
         let mapped_vertex_stage = map_stage_descriptor(&desc.vertex_stage);
 
         let mut mapped_desc = web_sys::GpuRenderPipelineDescriptor::new(
-            &desc.layout.id.0,
+            &desc.layout.as_ref().unwrap().id.0,
             &mapped_color_states,
             mapped_primitive_topology,
             &mapped_vertex_stage,
@@ -1041,8 +1041,10 @@ impl crate::Context for Context {
         desc: &ComputePipelineDescriptor,
     ) -> Self::ComputePipelineId {
         let mapped_compute_stage = map_stage_descriptor(&desc.compute_stage);
-        let mapped_desc =
-            web_sys::GpuComputePipelineDescriptor::new(&desc.layout.id.0, &mapped_compute_stage);
+        let mapped_desc = web_sys::GpuComputePipelineDescriptor::new(
+            &desc.layout.as_ref().unwrap().id.0,
+            &mapped_compute_stage,
+        );
         // TODO: label
         Sendable(device.0.create_compute_pipeline(&mapped_desc))
     }
