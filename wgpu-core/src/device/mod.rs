@@ -2957,6 +2957,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok((id.0, derived_bind_group_count))
     }
 
+    /// Get an ID of one of the bind group layouts. The ID adds a refcount,
+    /// which needs to be released by calling `bind_group_layout_drop`.
     pub fn render_pipeline_get_bind_group_layout<B: GfxBackend>(
         &self,
         pipeline_id: id::RenderPipelineId,
@@ -2965,18 +2967,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+        let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+        let (_, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, _) = hub.render_pipelines.read(&mut token);
 
         let pipeline = pipeline_guard
             .get(pipeline_id)
             .map_err(|_| binding_model::GetBindGroupLayoutError::InvalidPipeline)?;
-        pipeline_layout_guard[pipeline.layout_id.value]
+        let id = pipeline_layout_guard[pipeline.layout_id.value]
             .bind_group_layout_ids
             .get(index as usize)
-            .map(|valid| valid.0)
             .ok_or(binding_model::GetBindGroupLayoutError::InvalidGroupIndex(
                 index,
-            ))
+            ))?;
+        bgl_guard[*id].multi_ref_count.inc();
+        Ok(id.0)
     }
 
     pub fn render_pipeline_error<B: GfxBackend>(
@@ -3171,6 +3176,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         Ok((id.0, derived_bind_group_count))
     }
 
+    /// Get an ID of one of the bind group layouts. The ID adds a refcount,
+    /// which needs to be released by calling `bind_group_layout_drop`.
     pub fn compute_pipeline_get_bind_group_layout<B: GfxBackend>(
         &self,
         pipeline_id: id::ComputePipelineId,
@@ -3179,18 +3186,21 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let hub = B::hub(self);
         let mut token = Token::root();
         let (pipeline_layout_guard, mut token) = hub.pipeline_layouts.read(&mut token);
+        let (bgl_guard, mut token) = hub.bind_group_layouts.read(&mut token);
+        let (_, mut token) = hub.bind_groups.read(&mut token);
         let (pipeline_guard, _) = hub.compute_pipelines.read(&mut token);
 
         let pipeline = pipeline_guard
             .get(pipeline_id)
             .map_err(|_| binding_model::GetBindGroupLayoutError::InvalidPipeline)?;
-        pipeline_layout_guard[pipeline.layout_id.value]
+        let id = pipeline_layout_guard[pipeline.layout_id.value]
             .bind_group_layout_ids
             .get(index as usize)
-            .map(|valid| valid.0)
             .ok_or(binding_model::GetBindGroupLayoutError::InvalidGroupIndex(
                 index,
-            ))
+            ))?;
+        bgl_guard[*id].multi_ref_count.inc();
+        Ok(id.0)
     }
 
     pub fn compute_pipeline_error<B: GfxBackend>(
