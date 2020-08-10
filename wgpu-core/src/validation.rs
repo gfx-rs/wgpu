@@ -2,7 +2,9 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-use crate::{binding_model::BindEntryMap, FastHashMap};
+use crate::{binding_model::BindEntryMap, FastHashMap, MAX_BIND_GROUPS};
+use arrayvec::ArrayVec;
+use std::collections::hash_map::Entry;
 use thiserror::Error;
 use wgt::{BindGroupLayoutEntry, BindingType};
 
@@ -71,6 +73,8 @@ pub enum BindingError {
     WrongTextureMultisampled,
     #[error("comparison flag doesn't match the shader")]
     WrongSamplerComparison,
+    #[error("derived bind group layout type is not consistent between stages")]
+    InconsistentlyDerivedType,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -159,13 +163,12 @@ fn get_aligned_type_size(
     }
 }
 
-fn check_binding(
+fn check_binding_use(
     module: &naga::Module,
     var: &naga::GlobalVariable,
     entry: &BindGroupLayoutEntry,
-    usage: naga::GlobalUse,
-) -> Result<(), BindingError> {
-    let allowed_usage = match module.types[var.ty].inner {
+) -> Result<naga::GlobalUse, BindingError> {
+    match module.types[var.ty].inner {
         naga::TypeInner::Struct { ref members } => {
             let (allowed_usage, min_size) = match entry.ty {
                 BindingType::UniformBuffer {
@@ -196,17 +199,17 @@ fn check_binding(
                 }
                 _ => (),
             }
-            allowed_usage
+            Ok(allowed_usage)
         }
         naga::TypeInner::Sampler { comparison } => match entry.ty {
             BindingType::Sampler { comparison: cmp } => {
                 if cmp == comparison {
-                    naga::GlobalUse::empty()
+                    Ok(naga::GlobalUse::empty())
                 } else {
-                    return Err(BindingError::WrongSamplerComparison);
+                    Err(BindingError::WrongSamplerComparison)
                 }
             }
-            _ => return Err(BindingError::WrongType),
+            _ => Err(BindingError::WrongType),
         },
         naga::TypeInner::Image { base, dim, flags } => {
             if flags.contains(naga::ImageFlags::MULTISAMPLED) {
@@ -284,14 +287,9 @@ fn check_binding(
             if is_sampled != flags.contains(naga::ImageFlags::SAMPLED) {
                 return Err(BindingError::WrongTextureSampled);
             }
-            allowed_usage
+            Ok(allowed_usage)
         }
-        _ => return Err(BindingError::WrongType),
-    };
-    if allowed_usage.contains(usage) {
-        Ok(())
-    } else {
-        Err(BindingError::WrongUsage(usage))
+        _ => Err(BindingError::WrongType),
     }
 }
 
@@ -685,9 +683,80 @@ pub fn check_texture_format(format: wgt::TextureFormat, output: &naga::TypeInner
 
 pub type StageInterface<'a> = FastHashMap<wgt::ShaderLocation, MaybeOwned<'a, naga::TypeInner>>;
 
+pub enum IntrospectionBindGroupLayouts<'a> {
+    Given(ArrayVec<[&'a BindEntryMap; MAX_BIND_GROUPS]>),
+    Derived(&'a mut [BindEntryMap]),
+}
+
+fn derive_binding_type(
+    module: &naga::Module,
+    var: &naga::GlobalVariable,
+    usage: naga::GlobalUse,
+) -> Result<BindingType, BindingError> {
+    let ty = &module.types[var.ty];
+    Ok(match ty.inner {
+        naga::TypeInner::Struct { ref members } => {
+            let dynamic = false;
+            let mut actual_size = 0;
+            for (i, member) in members.iter().enumerate() {
+                actual_size += get_aligned_type_size(module, member.ty, i + 1 == members.len());
+            }
+            match var.class {
+                naga::StorageClass::Uniform => BindingType::UniformBuffer {
+                    dynamic,
+                    min_binding_size: wgt::BufferSize::new(actual_size),
+                },
+                naga::StorageClass::StorageBuffer => BindingType::StorageBuffer {
+                    dynamic,
+                    min_binding_size: wgt::BufferSize::new(actual_size),
+                    readonly: !usage.contains(naga::GlobalUse::STORE), //TODO: clarify
+                },
+                _ => return Err(BindingError::WrongType),
+            }
+        }
+        naga::TypeInner::Sampler { comparison } => BindingType::Sampler { comparison },
+        naga::TypeInner::Image { base, dim, flags } => {
+            let array = flags.contains(naga::ImageFlags::ARRAYED);
+            let dimension = match dim {
+                naga::ImageDimension::D1 => wgt::TextureViewDimension::D1,
+                naga::ImageDimension::D2 if array => wgt::TextureViewDimension::D2Array,
+                naga::ImageDimension::D2 => wgt::TextureViewDimension::D2,
+                naga::ImageDimension::D3 => wgt::TextureViewDimension::D3,
+                naga::ImageDimension::Cube if array => wgt::TextureViewDimension::CubeArray,
+                naga::ImageDimension::Cube => wgt::TextureViewDimension::Cube,
+            };
+            if flags.contains(naga::ImageFlags::SAMPLED) {
+                BindingType::SampledTexture {
+                    dimension,
+                    component_type: match module.types[base].inner {
+                        naga::TypeInner::Scalar { kind, .. }
+                        | naga::TypeInner::Vector { kind, .. } => match kind {
+                            naga::ScalarKind::Float => wgt::TextureComponentType::Float,
+                            naga::ScalarKind::Sint => wgt::TextureComponentType::Sint,
+                            naga::ScalarKind::Uint => wgt::TextureComponentType::Uint,
+                            other => {
+                                return Err(BindingError::WrongTextureComponentType(Some(other)))
+                            }
+                        },
+                        _ => return Err(BindingError::WrongTextureComponentType(None)),
+                    },
+                    multisampled: flags.contains(naga::ImageFlags::MULTISAMPLED),
+                }
+            } else {
+                BindingType::StorageTexture {
+                    dimension,
+                    format: wgt::TextureFormat::Rgba8Unorm, //TODO
+                    readonly: !flags.contains(naga::ImageFlags::CAN_STORE),
+                }
+            }
+        }
+        _ => return Err(BindingError::WrongType),
+    })
+}
+
 pub fn check_stage<'a>(
     module: &'a naga::Module,
-    group_layouts: &[&BindEntryMap],
+    mut group_layouts: IntrospectionBindGroupLayouts,
     entry_point_name: &str,
     stage: naga::ShaderStage,
     inputs: StageInterface<'a>,
@@ -713,18 +782,49 @@ pub fn check_stage<'a>(
         }
         match var.binding {
             Some(naga::Binding::Descriptor { set, binding }) => {
-                let result = group_layouts
-                    .get(set as usize)
-                    .and_then(|map| map.get(&binding))
-                    .ok_or(BindingError::Missing)
-                    .and_then(|entry| {
-                        if entry.visibility.contains(stage_bit) {
-                            Ok(entry)
-                        } else {
-                            Err(BindingError::Invisible)
-                        }
-                    })
-                    .and_then(|entry| check_binding(module, var, entry, usage));
+                let result = match group_layouts {
+                    IntrospectionBindGroupLayouts::Given(ref layouts) => layouts
+                        .get(set as usize)
+                        .and_then(|map| map.get(&binding))
+                        .ok_or(BindingError::Missing)
+                        .and_then(|entry| {
+                            if entry.visibility.contains(stage_bit) {
+                                Ok(entry)
+                            } else {
+                                Err(BindingError::Invisible)
+                            }
+                        })
+                        .and_then(|entry| check_binding_use(module, var, entry))
+                        .and_then(|allowed_usage| {
+                            if allowed_usage.contains(usage) {
+                                Ok(())
+                            } else {
+                                Err(BindingError::WrongUsage(usage))
+                            }
+                        }),
+                    IntrospectionBindGroupLayouts::Derived(ref mut layouts) => layouts
+                        .get_mut(set as usize)
+                        .ok_or(BindingError::Missing)
+                        .and_then(|set| {
+                            let ty = derive_binding_type(module, var, usage)?;
+                            Ok(match set.entry(binding) {
+                                Entry::Occupied(e) if e.get().ty != ty => {
+                                    return Err(BindingError::InconsistentlyDerivedType)
+                                }
+                                Entry::Occupied(e) => {
+                                    e.into_mut().visibility |= stage_bit;
+                                }
+                                Entry::Vacant(e) => {
+                                    e.insert(BindGroupLayoutEntry {
+                                        binding,
+                                        ty,
+                                        visibility: stage_bit,
+                                        count: None,
+                                    });
+                                }
+                            })
+                        }),
+                };
                 if let Err(error) = result {
                     return Err(StageError::Binding {
                         set,

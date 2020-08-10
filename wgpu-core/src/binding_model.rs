@@ -523,3 +523,11 @@ impl<B: hal::Backend> Borrow<()> for BindGroup<B> {
         &DUMMY_SELECTOR
     }
 }
+
+#[derive(Clone, Debug, Error)]
+pub enum GetBindGroupLayoutError {
+    #[error("pipeline is invalid")]
+    InvalidPipeline,
+    #[error("invalid group index {0}")]
+    InvalidGroupIndex(u32),
+}

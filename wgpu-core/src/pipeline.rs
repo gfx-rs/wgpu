@@ -3,6 +3,7 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 use crate::{
+    binding_model::{CreateBindGroupLayoutError, CreatePipelineLayoutError},
     device::{DeviceError, RenderPassContext},
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
@@ -37,6 +38,21 @@ pub enum CreateShaderModuleError {
 
 pub type ProgrammableStageDescriptor<'a> = wgt::ProgrammableStageDescriptor<'a, ShaderModuleId>;
 
+/// Number of implicit bind groups derived at pipeline creation.
+pub type ImplicitBindGroupCount = u8;
+
+#[derive(Clone, Debug, Error)]
+pub enum ImplicitLayoutError {
+    #[error("missing IDs for deriving {0} bind groups")]
+    MissingIds(ImplicitBindGroupCount),
+    #[error("unable to reflect the shader {0:?} interface")]
+    ReflectionError(wgt::ShaderStage),
+    #[error(transparent)]
+    BindGroup(#[from] CreateBindGroupLayoutError),
+    #[error(transparent)]
+    Pipeline(#[from] CreatePipelineLayoutError),
+}
+
 pub type ComputePipelineDescriptor<'a> =
     wgt::ComputePipelineDescriptor<PipelineLayoutId, ProgrammableStageDescriptor<'a>>;
 
@@ -44,8 +60,10 @@ pub type ComputePipelineDescriptor<'a> =
 pub enum CreateComputePipelineError {
     #[error(transparent)]
     Device(#[from] DeviceError),
-    #[error("pipelie layout is invalid")]
+    #[error("pipeline layout is invalid")]
     InvalidLayout,
+    #[error("unable to derive an implicit layout")]
+    Implicit(#[from] ImplicitLayoutError),
     #[error(transparent)]
     Stage(StageError),
 }
@@ -73,6 +91,8 @@ pub enum CreateRenderPipelineError {
     Device(#[from] DeviceError),
     #[error("pipelie layout is invalid")]
     InvalidLayout,
+    #[error("unable to derive an implicit layout")]
+    Implicit(#[from] ImplicitLayoutError),
     #[error("incompatible output format at index {index}")]
     IncompatibleOutputFormat { index: u8 },
     #[error("invalid sample count {0}")]
