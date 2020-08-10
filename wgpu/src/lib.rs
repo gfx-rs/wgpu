@@ -16,6 +16,7 @@ use std::{
     fmt::{Debug, Display},
     future::Future,
     marker::PhantomData,
+    num::{NonZeroU32, NonZeroU8},
     ops::{Bound, Range, RangeBounds},
     sync::Arc,
     thread,
@@ -31,18 +32,17 @@ use serde::Serialize;
 #[cfg(not(target_arch = "wasm32"))]
 pub use wgc::instance::{AdapterInfo, DeviceType};
 pub use wgt::{
-    AddressMode, Backend, BackendBit, BindGroupLayoutDescriptor, BindGroupLayoutEntry, BindingType,
-    BlendDescriptor, BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage, Color,
+    AddressMode, Backend, BackendBit, BindGroupLayoutEntry, BindingType, BlendDescriptor,
+    BlendFactor, BlendOperation, BufferAddress, BufferSize, BufferUsage, Color,
     ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
     DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extent3d, Features, FilterMode,
     FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PowerPreference, PresentMode,
-    PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor,
-    RenderBundleEncoderDescriptor, ShaderLocation, ShaderStage, StencilOperation,
-    StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
-    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
-    TextureViewDimension, VertexAttributeDescriptor, VertexBufferDescriptor, VertexFormat,
-    VertexStateDescriptor, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT,
-    COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
+    PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, ShaderLocation,
+    ShaderStage, StencilOperation, StencilStateFaceDescriptor, SwapChainDescriptor,
+    SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension,
+    TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
+    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    PUSH_CONSTANT_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -926,64 +926,218 @@ pub use wgt::RequestAdapterOptions as RequestAdapterOptionsBase;
 /// Additional information required when requesting an adapter.
 pub type RequestAdapterOptions<'a> = RequestAdapterOptionsBase<&'a Surface>;
 
-pub use wgt::BufferDescriptor as BufferDescriptorBase;
 /// Describes a [`Buffer`].
-pub type BufferDescriptor<'a> = BufferDescriptorBase<Option<Cow<'a, str>>>;
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct BufferDescriptor<'a> {
+    /// Debug label of a buffer. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+    /// Size of a buffer.
+    pub size: BufferAddress,
+    /// Usages of a buffer. If the buffer is used in any way that isn't specified here, the operation
+    /// will panic.
+    pub usage: BufferUsage,
+    /// Allows a buffer to be mapped immediately after they are made. It does not have to be [`BufferUsage::MAP_READ`] or
+    /// [`BufferUsage::MAP_WRITE`], all buffers are allowed to be mapped at creation.
+    pub mapped_at_creation: bool,
+}
 
-pub use wgt::CommandEncoderDescriptor as CommandEncoderDescriptorBase;
 /// Describes a [`CommandEncoder`].
-pub type CommandEncoderDescriptor<'a> = CommandEncoderDescriptorBase<Option<Cow<'a, str>>>;
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct CommandEncoderDescriptor<'a> {
+    /// Debug label for the command encoder. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+}
 
-pub use wgt::RenderBundleDescriptor as RenderBundleDescriptorBase;
 /// Describes a [`RenderBundle`].
-pub type RenderBundleDescriptor<'a> = RenderBundleDescriptorBase<Option<Cow<'a, str>>>;
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Default)]
+pub struct RenderBundleDescriptor<'a> {
+    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+}
 
-pub use wgt::TextureDescriptor as TextureDescriptorBase;
 /// Describes a [`Texture`].
-pub type TextureDescriptor<'a> = TextureDescriptorBase<Option<Cow<'a, str>>>;
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct TextureDescriptor<'a> {
+    /// Debug label of the texture. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+    /// Size of the texture. For a regular 1D/2D texture, the unused sizes will be 1. For 2DArray textures, Z is the
+    /// number of 2D textures in that array.
+    pub size: Extent3d,
+    /// Mip count of texture. For a texture with no extra mips, this must be 1.
+    pub mip_level_count: u32,
+    /// Sample count of texture. If this is not 1, texture must have [`BindingType::SampledTexture::multisampled`] set to true.
+    pub sample_count: u32,
+    /// Dimensions of the texture.
+    pub dimension: TextureDimension,
+    /// Format of the texture.
+    pub format: TextureFormat,
+    /// Allowed usages of the texture. If used in other ways, the operation will panic.
+    pub usage: TextureUsage,
+}
 
-pub use wgt::TextureViewDescriptor as TextureViewDescriptorBase;
 /// Describes a [`TextureView`].
-pub type TextureViewDescriptor<'a> = TextureViewDescriptorBase<Option<Cow<'a, str>>>;
+#[derive(Clone, Debug, PartialEq)]
+pub struct TextureViewDescriptor<'a> {
+    /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+    /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
+    pub format: TextureFormat,
+    /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
+    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
+    pub dimension: TextureViewDimension,
+    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
+    pub aspect: TextureAspect,
+    /// Base mip level.
+    pub base_mip_level: u32,
+    /// Mip level count.
+    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
+    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
+    pub level_count: Option<NonZeroU32>,
+    /// Base array layer.
+    pub base_array_layer: u32,
+    /// Layer count.
+    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
+    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
+    pub array_layer_count: Option<NonZeroU32>,
+}
 
-pub use wgt::PipelineLayoutDescriptor as PipelineLayoutDescriptorBase;
-/// Describes a [`PipelineLayout`].
-pub type PipelineLayoutDescriptor<'a> = PipelineLayoutDescriptorBase<'a, &'a BindGroupLayout>;
+/// Describes a pipeline layout.
+///
+/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
+#[derive(Clone, Debug)]
+pub struct PipelineLayoutDescriptor<'a> {
+    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
+    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
+    pub bind_group_layouts: &'a [&'a BindGroupLayout],
+    /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
+    /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
+    /// uniform block.
+    ///
+    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
+    pub push_constant_ranges: &'a [PushConstantRange],
+}
 
-pub use wgt::SamplerDescriptor as SamplerDescriptorBase;
-/// Describes a [`Sampler`].
-pub type SamplerDescriptor<'a> = SamplerDescriptorBase<Option<Cow<'a, str>>>;
+/// Describes a [`Sampler`]
+#[derive(Clone, Debug, PartialEq)]
+pub struct SamplerDescriptor<'a> {
+    /// Debug label of the sampler. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+    /// How to deal with out of bounds accesses in the u (i.e. x) direction
+    pub address_mode_u: AddressMode,
+    /// How to deal with out of bounds accesses in the v (i.e. y) direction
+    pub address_mode_v: AddressMode,
+    /// How to deal with out of bounds accesses in the w (i.e. z) direction
+    pub address_mode_w: AddressMode,
+    /// How to filter the texture when it needs to be magnified (made larger)
+    pub mag_filter: FilterMode,
+    /// How to filter the texture when it needs to be minified (made smaller)
+    pub min_filter: FilterMode,
+    /// How to filter between mip map levels
+    pub mipmap_filter: FilterMode,
+    /// Minimum level of detail (i.e. mip level) to use
+    pub lod_min_clamp: f32,
+    /// Maximum level of detail (i.e. mip level) to use
+    pub lod_max_clamp: f32,
+    /// If this is enabled, this is a comparison sampler using the given comparison function.
+    pub compare: Option<CompareFunction>,
+    /// Valid values: 1, 2, 4, 8, and 16.
+    pub anisotropy_clamp: Option<NonZeroU8>,
+}
+
+impl Default for SamplerDescriptor<'_> {
+    fn default() -> Self {
+        Self {
+            label: Default::default(),
+            address_mode_u: Default::default(),
+            address_mode_v: Default::default(),
+            address_mode_w: Default::default(),
+            mag_filter: Default::default(),
+            min_filter: Default::default(),
+            mipmap_filter: Default::default(),
+            lod_min_clamp: 0.0,
+            lod_max_clamp: std::f32::MAX,
+            compare: Default::default(),
+            anisotropy_clamp: Default::default(),
+        }
+    }
+}
 
 pub use wgt::BindGroupEntry as BindGroupEntryBase;
 /// Bindable resource and the slot to bind it to.
 pub type BindGroupEntry<'a> = BindGroupEntryBase<BindingResource<'a>>;
 
-pub use wgt::BindGroupDescriptor as BindGroupDescriptorBase;
 /// Describes a group of bindings and the resources to be bound.
-pub type BindGroupDescriptor<'a> =
-    BindGroupDescriptorBase<'a, &'a BindGroupLayout, BindGroupEntry<'a>>;
+#[derive(Clone)]
+pub struct BindGroupDescriptor<'a> {
+    /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+    /// The [`BindGroupLayout`] that corresponds to this bind group.
+    pub layout: &'a BindGroupLayout,
+    /// The resources to bind to this bind group.
+    pub entries: &'a [BindGroupEntry<'a>],
+}
 
-pub use wgt::ProgrammableStageDescriptor as ProgrammableStageDescriptorBase;
 /// Describes a programmable pipeline stage.
-pub type ProgrammableStageDescriptor<'a> = wgt::ProgrammableStageDescriptor<'a, &'a ShaderModule>;
+#[derive(Clone, Debug)]
+pub struct ProgrammableStageDescriptor<'a> {
+    /// The compiled shader module for this stage.
+    pub module: &'a ShaderModule,
+    /// The name of the entry point in the compiled shader. There must be a function that returns
+    /// void with this name in the shader.
+    pub entry_point: &'a str,
+}
 
-pub use wgt::RenderPassDescriptor as RenderPassDescriptorBase;
-/// Describes the attachments of a [`RenderPass`];
-pub type RenderPassDescriptor<'a, 'b> = RenderPassDescriptorBase<
-    'b,
-    RenderPassColorAttachmentDescriptor<'a>,
-    RenderPassDepthStencilAttachmentDescriptor<'a>,
->;
+/// Describes the attachments of a render pass.
+#[derive(Clone, Debug, Default)]
+pub struct RenderPassDescriptor<'a, 'b> {
+    /// The color attachments of the render pass.
+    pub color_attachments: &'b [RenderPassColorAttachmentDescriptor<'a>],
+    /// The depth and stencil attachment of the render pass, if any.
+    pub depth_stencil_attachment: Option<RenderPassDepthStencilAttachmentDescriptor<'a>>,
+}
 
-pub use wgt::RenderPipelineDescriptor as RenderPipelineDescriptorBase;
 /// Describes a render (graphics) pipeline.
-pub type RenderPipelineDescriptor<'a> =
-    RenderPipelineDescriptorBase<'a, &'a PipelineLayout, ProgrammableStageDescriptor<'a>>;
+#[derive(Clone, Debug)]
+pub struct RenderPipelineDescriptor<'a> {
+    /// The layout of bind groups for this pipeline.
+    pub layout: Option<&'a PipelineLayout>,
+    /// The compiled vertex stage and its entry point.
+    pub vertex_stage: ProgrammableStageDescriptor<'a>,
+    /// The compiled fragment stage and its entry point, if any.
+    pub fragment_stage: Option<ProgrammableStageDescriptor<'a>>,
+    /// The rasterization process for this pipeline.
+    pub rasterization_state: Option<RasterizationStateDescriptor>,
+    /// The primitive topology used to interpret vertices.
+    pub primitive_topology: PrimitiveTopology,
+    /// The effect of draw calls on the color aspect of the output target.
+    pub color_states: &'a [ColorStateDescriptor],
+    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
+    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
+    /// The vertex input state for this pipeline.
+    pub vertex_state: VertexStateDescriptor<'a>,
+    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
+    /// this should be `1`
+    pub sample_count: u32,
+    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
+    /// can be enabled using the value `!0`
+    pub sample_mask: u32,
+    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
+    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
+    /// affected by a primitive.
+    ///
+    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
+    /// is guaranteed to be all 1-s.
+    pub alpha_to_coverage_enabled: bool,
+}
 
-pub use ComputePipelineDescriptor as ComputePipelineDescriptorBase;
 /// Describes a compute pipeline.
-pub type ComputePipelineDescriptor<'a> =
-    wgt::ComputePipelineDescriptor<&'a PipelineLayout, ProgrammableStageDescriptor<'a>>;
+#[derive(Clone, Debug)]
+pub struct ComputePipelineDescriptor<'a> {
+    /// The layout of bind groups for this pipeline.
+    pub layout: Option<&'a PipelineLayout>,
+    /// The compiled compute stage and its entry point.
+    pub compute_stage: ProgrammableStageDescriptor<'a>,
+}
 
 pub use wgt::BufferCopyView as BufferCopyViewBase;
 /// View of a buffer which can be used to copy to/from a texture.
@@ -992,6 +1146,52 @@ pub type BufferCopyView<'a> = BufferCopyViewBase<&'a Buffer>;
 pub use wgt::TextureCopyView as TextureCopyViewBase;
 /// View of a texture which can be used to copy to/from a buffer/texture.
 pub type TextureCopyView<'a> = TextureCopyViewBase<&'a Texture>;
+
+/// Describes a [`BindGroupLayout`].
+#[derive(Clone, Debug)]
+pub struct BindGroupLayoutDescriptor<'a> {
+    /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+
+    /// Array of entries in this BindGroupLayout
+    pub entries: &'a [BindGroupLayoutEntry],
+}
+
+/// Describes how the vertex buffer is interpreted.
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct VertexBufferDescriptor<'a> {
+    /// The stride, in bytes, between elements of this buffer.
+    pub stride: BufferAddress,
+    /// How often this vertex buffer is "stepped" forward.
+    pub step_mode: InputStepMode,
+    /// The list of attributes which comprise a single vertex.
+    pub attributes: &'a [VertexAttributeDescriptor],
+}
+
+/// Describes vertex input state for a render pipeline.
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+pub struct VertexStateDescriptor<'a> {
+    /// The format of any index buffers used with this pipeline.
+    pub index_format: IndexFormat,
+    /// The format of any vertex buffers used with this pipeline.
+    pub vertex_buffers: &'a [VertexBufferDescriptor<'a>],
+}
+
+/// Describes a [`RenderBundleEncoder`].
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+pub struct RenderBundleEncoderDescriptor<'a> {
+    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
+    /// The formats of the color attachments that this render bundle is capable to rendering to. This
+    /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
+    pub color_formats: &'a [TextureFormat],
+    /// The formats of the depth attachment that this render bundle is capable to rendering to. This
+    /// must match the formats of the depth attachments in the renderpass this render bundle is executed in.
+    pub depth_stencil_format: Option<TextureFormat>,
+    /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
+    /// the renderpasses it is used in.
+    pub sample_count: u32,
+}
 
 /// Swap chain image that can be rendered to.
 #[derive(Debug)]
