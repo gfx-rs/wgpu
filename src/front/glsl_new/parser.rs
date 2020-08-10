@@ -87,6 +87,9 @@ pomelo! {
     %type constant_expression Handle<Constant>;
 
     // decalartions
+    %type declaration VarDeclaration;
+    %type init_declarator_list VarDeclaration;
+    %type single_declaration VarDeclaration;
     %type layout_qualifier Binding;
     %type layout_qualifier_id_list Binding;
     %type layout_qualifier_id Binding;
@@ -430,30 +433,34 @@ pomelo! {
     }
 
     // declaration
-    declaration ::= init_declarator_list Semicolon;
+    declaration ::= init_declarator_list(idl) Semicolon {idl}
+
     init_declarator_list ::= single_declaration;
-    single_declaration ::= fully_specified_type;
-    single_declaration ::= fully_specified_type(t) Identifier(i) {
-        //TODO: global or local? For now always global
+    init_declarator_list ::= init_declarator_list(mut idl) Comma Identifier(i) {
+        idl.ids_initializers.push((i.1, None));
+        idl
+    }
+    // init_declarator_list ::= init_declarator_list Comma Identifier array_specifier;
+    // init_declarator_list ::= init_declarator_list Comma Identifier array_specifier Equal initializer;
+    // init_declarator_list ::= init_declarator_list Comma Identifier Equal initializer;
+
+    single_declaration ::= fully_specified_type(t) {
         let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
 
-        let class = t.0.iter().find_map(|tq| {
-            if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
-        }).ok_or(ErrorKind::SemanticError("Missing storage class for declaration"))?;
+        VarDeclaration{
+            type_qualifiers: t.0,
+            ids_initializers: vec![],
+            ty,
+        }
+    }
+    single_declaration ::= fully_specified_type(t) Identifier(i) {
+        let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
 
-        let binding = t.0.iter().find_map(|tq| {
-            if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
-        });
-
-        let h = extra.global_variables.fetch_or_append(
-            GlobalVariable {
-                name: Some(i.1.clone()),
-                class,
-                binding,
-                ty,
-            },
-        );
-        extra.lookup_global_variables.insert(i.1, h);
+        VarDeclaration{
+            type_qualifiers: t.0,
+            ids_initializers: vec![(i.1, None)],
+            ty,
+        }
     }
 
     fully_specified_type ::= type_specifier(t) {(vec![], t)}
@@ -509,6 +516,7 @@ pomelo! {
 
     declaration_statement ::= declaration {
         //TODO: Should declarations be able to genereate expression/statements?
+        //TODO: local vars
         Statement::Empty
     }
 
@@ -615,7 +623,27 @@ pomelo! {
             extra.lookup_function.insert(name, handle);
         }
     }
-    external_declaration ::= declaration;
+    external_declaration ::= declaration(d) {
+        let class = d.type_qualifiers.iter().find_map(|tq| {
+            if let TypeQualifier::StorageClass(sc) = tq { Some(*sc) } else { None }
+        }).ok_or(ErrorKind::SemanticError("Missing storage class for global var"))?;
+
+        let binding = d.type_qualifiers.iter().find_map(|tq| {
+            if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
+        });
+
+        for (id, initializer) in d.ids_initializers {
+            let h = extra.global_variables.fetch_or_append(
+                GlobalVariable {
+                    name: Some(id.clone()),
+                    class,
+                    binding: binding.clone(),
+                    ty: d.ty,
+                },
+            );
+            extra.lookup_global_variables.insert(id, h);
+        }
+    }
 
     function_definition ::= function_prototype(mut f) compound_statement_no_new_scope(cs) {
         std::mem::swap(&mut f.expressions, &mut extra.context.expressions);
