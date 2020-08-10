@@ -106,7 +106,7 @@ impl framework::Example for Example {
             });
 
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            layout: &render_pipeline_layout,
+            layout: Some(&render_pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
                 entry_point: Borrowed("main"),
@@ -151,7 +151,7 @@ impl framework::Example for Example {
         // create compute pipeline
 
         let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            layout: &compute_pipeline_layout,
+            layout: Some(&compute_pipeline_layout),
             compute_stage: wgpu::ProgrammableStageDescriptor {
                 module: &boids_module,
                 entry_point: Borrowed("main"),

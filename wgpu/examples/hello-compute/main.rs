@@ -89,7 +89,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     });
 
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        layout: &pipeline_layout,
+        layout: Some(&pipeline_layout),
         compute_stage: wgpu::ProgrammableStageDescriptor {
             module: &cs_module,
             entry_point: Borrowed("main"),

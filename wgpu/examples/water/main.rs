@@ -230,6 +230,8 @@ impl Example {
             ..Default::default()
         });
 
+        let depth_view = draw_depth_buffer.create_default_view();
+
         let water_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: water_bind_group_layout,
             entries: Borrowed(&[
@@ -245,9 +247,7 @@ impl Example {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: wgpu::BindingResource::TextureView(
-                        &draw_depth_buffer.create_default_view(),
-                    ),
+                    resource: wgpu::BindingResource::TextureView(&depth_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
@@ -259,7 +259,7 @@ impl Example {
 
         (
             reflection_texture.create_default_view(),
-            draw_depth_buffer.create_default_view(),
+            depth_view,
             water_bind_group,
         )
     }
@@ -491,7 +491,7 @@ impl framework::Example for Example {
         // constraints and modifiers it will have.
         let water_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             // The "layout" is what uniforms will be needed.
-            layout: &water_pipeline_layout,
+            layout: Some(&water_pipeline_layout),
             // Vertex & Fragment shaders
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &water_vs_module,
@@ -566,7 +566,7 @@ impl framework::Example for Example {
 
         // Same idea as the water pipeline.
         let terrain_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            layout: &terrain_pipeline_layout,
+            layout: Some(&terrain_pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &terrain_vs_module,
                 entry_point: Borrowed("main"),
