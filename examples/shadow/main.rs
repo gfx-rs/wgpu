@@ -1,4 +1,4 @@
-use std::{borrow::Cow::Borrowed, iter, mem, num::NonZeroU32, ops::Range, rc::Rc};
+use std::{iter, mem, num::NonZeroU32, ops::Range, rc::Rc};
 
 #[path = "../framework.rs"]
 mod framework;
@@ -255,7 +255,7 @@ impl framework::Example for Example {
 
         let local_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: Borrowed(&[wgpu::BindGroupLayoutEntry::new(
+                entries: &[wgpu::BindGroupLayoutEntry::new(
                     0,
                     wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
                     wgpu::BindingType::UniformBuffer {
@@ -264,7 +264,7 @@ impl framework::Example for Example {
                             mem::size_of::<EntityUniforms>() as _
                         ),
                     },
-                )]),
+                )],
                 label: None,
             });
 
@@ -273,10 +273,10 @@ impl framework::Example for Example {
 
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &local_bind_group_layout,
-                entries: Borrowed(&[wgpu::BindGroupEntry {
+                entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(plane_uniform_buf.slice(..)),
-                }]),
+                }],
                 label: None,
             });
             Entity {
@@ -347,10 +347,10 @@ impl framework::Example for Example {
                 index_count: cube_index_data.len(),
                 bind_group: device.create_bind_group(&wgpu::BindGroupDescriptor {
                     layout: &local_bind_group_layout,
-                    entries: Borrowed(&[wgpu::BindGroupEntry {
+                    entries: &[wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
-                    }]),
+                    }],
                     label: None,
                 }),
                 uniform_buf,
@@ -359,7 +359,7 @@ impl framework::Example for Example {
 
         // Create other resources
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some(Borrowed("shadow")),
+            label: Some("shadow"),
             address_mode_u: wgpu::AddressMode::ClampToEdge,
             address_mode_v: wgpu::AddressMode::ClampToEdge,
             address_mode_w: wgpu::AddressMode::ClampToEdge,
@@ -384,7 +384,7 @@ impl framework::Example for Example {
         let mut shadow_target_views = (0..2)
             .map(|i| {
                 Some(shadow_texture.create_view(&wgpu::TextureViewDescriptor {
-                    label: Some(Borrowed("shadow")),
+                    label: Some("shadow"),
                     format: Self::SHADOW_FORMAT,
                     dimension: wgpu::TextureViewDimension::D2,
                     aspect: wgpu::TextureAspect::All,
@@ -436,7 +436,7 @@ impl framework::Example for Example {
         let vb_desc = wgpu::VertexBufferDescriptor {
             stride: vertex_size as wgpu::BufferAddress,
             step_mode: wgpu::InputStepMode::Vertex,
-            attributes: Borrowed(&vertex_attr),
+            attributes: &vertex_attr,
         };
 
         let shadow_pass = {
@@ -444,19 +444,19 @@ impl framework::Example for Example {
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: Borrowed(&[wgpu::BindGroupLayoutEntry::new(
+                    entries: &[wgpu::BindGroupLayoutEntry::new(
                         0, // global
                         wgpu::ShaderStage::VERTEX,
                         wgpu::BindingType::UniformBuffer {
                             dynamic: false,
                             min_binding_size: wgpu::BufferSize::new(uniform_size),
                         },
-                    )]),
+                    )],
                     label: None,
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: Borrowed(&[&bind_group_layout, &local_bind_group_layout]),
-                push_constant_ranges: Borrowed(&[]),
+                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                push_constant_ranges: &[],
             });
 
             let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
@@ -469,10 +469,10 @@ impl framework::Example for Example {
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
-                entries: Borrowed(&[wgpu::BindGroupEntry {
+                entries: &[wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
-                }]),
+                }],
                 label: None,
             });
 
@@ -484,11 +484,11 @@ impl framework::Example for Example {
                 layout: Some(&pipeline_layout),
                 vertex_stage: wgpu::ProgrammableStageDescriptor {
                     module: &vs_module,
-                    entry_point: Borrowed("main"),
+                    entry_point: "main",
                 },
                 fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                     module: &fs_module,
-                    entry_point: Borrowed("main"),
+                    entry_point: "main",
                 }),
                 rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                     front_face: wgpu::FrontFace::Ccw,
@@ -499,7 +499,7 @@ impl framework::Example for Example {
                     clamp_depth: device.features().contains(wgpu::Features::DEPTH_CLAMPING),
                 }),
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-                color_states: Borrowed(&[]),
+                color_states: &[],
                 depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                     format: Self::SHADOW_FORMAT,
                     depth_write_enabled: true,
@@ -511,7 +511,7 @@ impl framework::Example for Example {
                 }),
                 vertex_state: wgpu::VertexStateDescriptor {
                     index_format: wgpu::IndexFormat::Uint16,
-                    vertex_buffers: Borrowed(&[vb_desc.clone()]),
+                    vertex_buffers: &[vb_desc.clone()],
                 },
                 sample_count: 1,
                 sample_mask: !0,
@@ -529,7 +529,7 @@ impl framework::Example for Example {
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: Borrowed(&[
+                    entries: &[
                         wgpu::BindGroupLayoutEntry::new(
                             0, // global
                             wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
@@ -564,12 +564,12 @@ impl framework::Example for Example {
                             wgpu::ShaderStage::FRAGMENT,
                             wgpu::BindingType::Sampler { comparison: true },
                         ),
-                    ]),
+                    ],
                     label: None,
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: Borrowed(&[&bind_group_layout, &local_bind_group_layout]),
-                push_constant_ranges: Borrowed(&[]),
+                bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
+                push_constant_ranges: &[],
             });
 
             let mx_total = Self::generate_matrix(sc_desc.width as f32 / sc_desc.height as f32);
@@ -586,7 +586,7 @@ impl framework::Example for Example {
             // Create bind group
             let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
                 layout: &bind_group_layout,
-                entries: Borrowed(&[
+                entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
                         resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
@@ -603,7 +603,7 @@ impl framework::Example for Example {
                         binding: 3,
                         resource: wgpu::BindingResource::Sampler(&shadow_sampler),
                     },
-                ]),
+                ],
                 label: None,
             });
 
@@ -615,11 +615,11 @@ impl framework::Example for Example {
                 layout: Some(&pipeline_layout),
                 vertex_stage: wgpu::ProgrammableStageDescriptor {
                     module: &vs_module,
-                    entry_point: Borrowed("main"),
+                    entry_point: "main",
                 },
                 fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                     module: &fs_module,
-                    entry_point: Borrowed("main"),
+                    entry_point: "main",
                 }),
                 rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                     front_face: wgpu::FrontFace::Ccw,
@@ -627,12 +627,12 @@ impl framework::Example for Example {
                     ..Default::default()
                 }),
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-                color_states: Borrowed(&[wgpu::ColorStateDescriptor {
+                color_states: &[wgpu::ColorStateDescriptor {
                     format: sc_desc.format,
                     color_blend: wgpu::BlendDescriptor::REPLACE,
                     alpha_blend: wgpu::BlendDescriptor::REPLACE,
                     write_mask: wgpu::ColorWrite::ALL,
-                }]),
+                }],
                 depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                     format: Self::DEPTH_FORMAT,
                     depth_write_enabled: true,
@@ -644,7 +644,7 @@ impl framework::Example for Example {
                 }),
                 vertex_state: wgpu::VertexStateDescriptor {
                     index_format: wgpu::IndexFormat::Uint16,
-                    vertex_buffers: Borrowed(&[vb_desc]),
+                    vertex_buffers: &[vb_desc],
                 },
                 sample_count: 1,
                 sample_mask: !0,
@@ -769,7 +769,7 @@ impl framework::Example for Example {
             );
 
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: Borrowed(&[]),
+                color_attachments: &[],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &light.target_view,
                     depth_ops: Some(wgpu::Operations {
@@ -793,7 +793,7 @@ impl framework::Example for Example {
         // forward pass
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
+                color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                     attachment: &frame.view,
                     resolve_target: None,
                     ops: wgpu::Operations {
@@ -805,7 +805,7 @@ impl framework::Example for Example {
                         }),
                         store: true,
                     },
-                }]),
+                }],
                 depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
                     attachment: &self.forward_depth,
                     depth_ops: Some(wgpu::Operations {

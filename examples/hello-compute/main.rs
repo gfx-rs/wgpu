@@ -1,4 +1,4 @@
-use std::{borrow::Cow::Borrowed, convert::TryInto, str::FromStr};
+use std::{convert::TryInto, str::FromStr};
 use wgpu::util::DeviceExt;
 
 async fn run() {
@@ -63,7 +63,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
-        entries: Borrowed(&[wgpu::BindGroupLayoutEntry::new(
+        entries: &[wgpu::BindGroupLayoutEntry::new(
             0,
             wgpu::ShaderStage::COMPUTE,
             wgpu::BindingType::StorageBuffer {
@@ -71,28 +71,28 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
                 readonly: false,
                 min_binding_size: wgpu::BufferSize::new(4),
             },
-        )]),
+        )],
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: None,
         layout: &bind_group_layout,
-        entries: Borrowed(&[wgpu::BindGroupEntry {
+        entries: &[wgpu::BindGroupEntry {
             binding: 0,
             resource: wgpu::BindingResource::Buffer(storage_buffer.slice(..)),
-        }]),
+        }],
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-        bind_group_layouts: Borrowed(&[&bind_group_layout]),
-        push_constant_ranges: Borrowed(&[]),
+        bind_group_layouts: &[&bind_group_layout],
+        push_constant_ranges: &[],
     });
 
     let compute_pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
         layout: Some(&pipeline_layout),
         compute_stage: wgpu::ProgrammableStageDescriptor {
             module: &cs_module,
-            entry_point: Borrowed("main"),
+            entry_point: "main",
         },
     });
 
