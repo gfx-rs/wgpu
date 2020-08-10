@@ -34,6 +34,7 @@ impl Program {
             context: Context {
                 expressions: Arena::<Expression>::new(),
                 local_variables: Arena::<LocalVariable>::new(),
+                lookup_local_variables: FastHashMap::default(),
             },
         }
     }
@@ -48,6 +49,7 @@ pub enum Profile {
 pub struct Context {
     pub expressions: Arena<Expression>,
     pub local_variables: Arena<LocalVariable>,
+    pub lookup_local_variables: FastHashMap<String, Handle<LocalVariable>>,
 }
 
 #[derive(Debug)]

@@ -86,6 +86,8 @@ pomelo! {
     %type expression ExpressionRule;
     %type constant_expression Handle<Constant>;
 
+    %type initializer ExpressionRule;
+
     // decalartions
     %type declaration VarDeclaration;
     %type init_declarator_list VarDeclaration;
@@ -153,10 +155,15 @@ pomelo! {
                 statements: vec![],
             }
         } else {
-            // try global vars
+            // try global and local vars
             if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
                 ExpressionRule{
                     expression: extra.context.expressions.append(Expression::GlobalVariable(*global_var)),
+                    statements: vec![],
+                }
+            } else if let Some(local_var) = extra.context.lookup_local_variables.get(&v.1) {
+                ExpressionRule{
+                    expression: extra.context.expressions.append(Expression::LocalVariable(*local_var)),
                     statements: vec![],
                 }
             } else {
@@ -442,7 +449,10 @@ pomelo! {
     }
     // init_declarator_list ::= init_declarator_list Comma Identifier array_specifier;
     // init_declarator_list ::= init_declarator_list Comma Identifier array_specifier Equal initializer;
-    // init_declarator_list ::= init_declarator_list Comma Identifier Equal initializer;
+    init_declarator_list ::= init_declarator_list(mut idl) Comma Identifier(i) Equal initializer(init) {
+        idl.ids_initializers.push((i.1, Some(init)));
+        idl
+    }
 
     single_declaration ::= fully_specified_type(t) {
         let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
@@ -459,6 +469,17 @@ pomelo! {
         VarDeclaration{
             type_qualifiers: t.0,
             ids_initializers: vec![(i.1, None)],
+            ty,
+        }
+    }
+    // single_declaration ::= fully_specified_type Identifier array_specifier;
+    // single_declaration ::= fully_specified_type Identifier array_specifier Equal initializer;
+    single_declaration ::= fully_specified_type(t) Identifier(i) Equal initializer(init) {
+        let ty = t.1.ok_or(ErrorKind::SemanticError("Empty type for declaration"))?;
+
+        VarDeclaration{
+            type_qualifiers: t.0,
+            ids_initializers: vec![(i.1, Some(init))],
             ty,
         }
     }
@@ -513,11 +534,33 @@ pomelo! {
     storage_qualifier ::= Out {StorageClass::Output}
     //TODO: other storage qualifiers
 
+    initializer ::= assignment_expression;
+    // initializer ::= LeftBrace initializer_list RightBrace;
+    // initializer ::= LeftBrace initializer_list Comma RightBrace;
 
-    declaration_statement ::= declaration {
-        //TODO: Should declarations be able to genereate expression/statements?
-        //TODO: local vars
-        Statement::Empty
+    // initializer_list ::= initializer;
+    // initializer_list ::= initializer_list Comma initializer;
+
+    declaration_statement ::= declaration(d) {
+        let mut statements = Vec::<Statement>::new();
+        // local variables
+        for (id, initializer) in d.ids_initializers {
+            let h = extra.context.local_variables.append(
+                LocalVariable {
+                    name: Some(id.clone()),
+                    ty: d.ty,
+                    init: initializer.map(|i| {
+                        statements.extend(i.statements);
+                        i.expression
+                    }),
+                }
+            );
+            extra.context.lookup_local_variables.insert(id, h);
+        }
+        match statements.len() {
+            1 => statements.remove(0),
+            _ => Statement::Block(statements),
+        }
     }
 
     // statement
@@ -580,6 +623,15 @@ pomelo! {
     }
 
     type_specifier_nonarray ::= Void { None }
+    type_specifier_nonarray ::= Float {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Float,
+                width: 4,
+            }
+        })
+    }
     type_specifier_nonarray ::= Vec2 {
         Some(Type {
             name: None,
