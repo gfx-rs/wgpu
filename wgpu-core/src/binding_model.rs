@@ -91,6 +91,8 @@ pub enum CreateBindGroupError {
     },
     #[error("the given sampler is/is not a comparison sampler, while the layout type indicates otherwise")]
     WrongSamplerComparison,
+    #[error("bound texture views can not have both depth and stencil aspects enabled")]
+    DepthStencilAspect,
 }
 
 #[derive(Clone, Debug, Error)]

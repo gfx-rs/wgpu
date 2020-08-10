@@ -1348,8 +1348,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 let end_layer = desc
                     .array_layer_count
                     .map_or(layer_end, |_| required_layer_count as u16);
+                let aspects = match desc.aspect {
+                    wgt::TextureAspect::All => texture.full_range.aspects,
+                    wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
+                    wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+                };
+                if !texture.full_range.aspects.contains(aspects) {
+                    return Err(resource::CreateTextureViewError::InvalidAspect {
+                        requested: aspects,
+                        total: texture.full_range.aspects,
+                    });
+                }
+
                 let range = hal::image::SubresourceRange {
-                    aspects: texture.full_range.aspects,
+                    aspects,
                     levels: desc.base_mip_level as u8..end_level,
                     layers: desc.base_array_layer as u16..end_layer,
                 };
@@ -2061,6 +2073,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                 expected: "SampledTexture, ReadonlyStorageTexture or WriteonlyStorageTexture"
                             })
                         };
+                        if view
+                            .range
+                            .aspects
+                            .contains(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL)
+                        {
+                            return Err(CreateBindGroupError::DepthStencilAspect);
+                        }
                         match view.inner {
                             resource::TextureViewInner::Native {
                                 ref raw,

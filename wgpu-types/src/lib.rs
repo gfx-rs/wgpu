@@ -1780,6 +1780,11 @@ impl<'a> TextureViewDescriptor<Option<Cow<'a, str>>> {
 }
 
 impl<L> TextureViewDescriptor<L> {
+    pub fn aspect(&mut self, aspect: TextureAspect) -> &mut Self {
+        self.aspect = aspect;
+        self
+    }
+
     pub fn base_mip_level(&mut self, base_mip_level: u32) -> &mut Self {
         self.base_mip_level = base_mip_level;
         self

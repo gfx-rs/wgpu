@@ -276,6 +276,11 @@ pub enum CreateTextureViewError {
     InvalidMipLevelCount { requested: u32, total: u8 },
     #[error("TextureView array layer count + base array layer {requested} must be <= Texture depth/array layer count {total}")]
     InvalidArrayLayerCount { requested: u32, total: u16 },
+    #[error("Aspect {requested:?} is not in the source texture ({total:?})")]
+    InvalidAspect {
+        requested: hal::format::Aspects,
+        total: hal::format::Aspects,
+    },
 }
 
 #[derive(Clone, Debug, Error)]
