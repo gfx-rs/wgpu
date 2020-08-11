@@ -23,6 +23,7 @@ thiserror = "1.0"
 default = []
 glsl_preprocessor = ["glsl"]
 glsl-new = ["pomelo"]
+glsl-out = []
 
 [dev-dependencies]
 env_logger = "0.6"
