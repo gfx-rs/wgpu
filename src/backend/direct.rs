@@ -1042,6 +1042,23 @@ impl crate::Context for Context {
         wgc::gfx_select!(*pipeline => global.render_pipeline_drop(*pipeline))
     }
 
+    fn compute_pipeline_get_bind_group_layout(
+        &self,
+        pipeline: &Self::ComputePipelineId,
+        index: u32,
+    ) -> Self::BindGroupLayoutId {
+        let global = &self.0;
+        wgc::gfx_select!(*pipeline => global.compute_pipeline_get_bind_group_layout(*pipeline, index)).unwrap()
+    }
+    fn render_pipeline_get_bind_group_layout(
+        &self,
+        pipeline: &Self::RenderPipelineId,
+        index: u32,
+    ) -> Self::BindGroupLayoutId {
+        let global = &self.0;
+        wgc::gfx_select!(*pipeline => global.render_pipeline_get_bind_group_layout(*pipeline, index)).unwrap()
+    }
+
     fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
