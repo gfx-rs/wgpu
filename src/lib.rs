@@ -306,6 +306,17 @@ trait Context: Debug + Send + Sized + Sync {
     fn compute_pipeline_drop(&self, pipeline: &Self::ComputePipelineId);
     fn render_pipeline_drop(&self, pipeline: &Self::RenderPipelineId);
 
+    fn compute_pipeline_get_bind_group_layout(
+        &self,
+        pipeline: &Self::ComputePipelineId,
+        index: u32,
+    ) -> Self::BindGroupLayoutId;
+    fn render_pipeline_get_bind_group_layout(
+        &self,
+        pipeline: &Self::RenderPipelineId,
+        index: u32,
+    ) -> Self::BindGroupLayoutId;
+
     fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
@@ -682,6 +693,19 @@ impl Drop for RenderPipeline {
     }
 }
 
+impl RenderPipeline {
+    /// Get an object representing the bind group layout at a given index.
+    pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
+        let context = Arc::clone(&self.context);
+        BindGroupLayout {
+            context,
+            id: self
+                .context
+                .render_pipeline_get_bind_group_layout(&self.id, index),
+        }
+    }
+}
+
 /// Handle to a compute pipeline.
 ///
 /// A `ComputePipeline` object represents a compute pipeline and its single shader stage.
@@ -696,6 +720,19 @@ impl Drop for ComputePipeline {
     fn drop(&mut self) {
         if !thread::panicking() {
             self.context.compute_pipeline_drop(&self.id);
+        }
+    }
+}
+
+impl ComputePipeline {
+    /// Get an object representing the bind group layout at a given index.
+    pub fn get_bind_group_layout(&self, index: u32) -> BindGroupLayout {
+        let context = Arc::clone(&self.context);
+        BindGroupLayout {
+            context,
+            id: self
+                .context
+                .compute_pipeline_get_bind_group_layout(&self.id, index),
         }
     }
 }

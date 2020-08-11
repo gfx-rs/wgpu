@@ -1254,6 +1254,21 @@ impl crate::Context for Context {
         // Dropped automatically
     }
 
+    fn compute_pipeline_get_bind_group_layout(
+        &self,
+        _pipeline: &Self::ComputePipelineId,
+        _index: u32,
+    ) -> Self::BindGroupLayoutId {
+        unimplemented!()
+    }
+    fn render_pipeline_get_bind_group_layout(
+        &self,
+        _pipeline: &Self::RenderPipelineId,
+        _index: u32,
+    ) -> Self::BindGroupLayoutId {
+        unimplemented!()
+    }
+
     fn command_encoder_copy_buffer_to_buffer(
         &self,
         encoder: &Self::CommandEncoderId,
