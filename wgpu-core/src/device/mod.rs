@@ -2914,7 +2914,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         if let Some(ds) = depth_stencil_state.as_ref() {
-            if ds.stencil.as_ref().map_or(false, |s| s.needs_ref_value()) {
+            if ds.stencil.needs_ref_value() {
                 flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
             }
             if !ds.is_read_only() {

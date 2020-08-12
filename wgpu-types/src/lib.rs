@@ -505,6 +505,17 @@ pub struct ColorStateDescriptor {
     pub write_mask: ColorWrite,
 }
 
+impl From<TextureFormat> for ColorStateDescriptor {
+    fn from(format: TextureFormat) -> Self {
+        ColorStateDescriptor {
+            format,
+            alpha_blend: BlendDescriptor::REPLACE,
+            color_blend: BlendDescriptor::REPLACE,
+            write_mask: ColorWrite::ALL,
+        }
+    }
+}
+
 /// Primitive type the input mesh is composed of.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -830,11 +841,16 @@ pub struct StencilStateDescriptor {
 }
 
 impl StencilStateDescriptor {
-    pub fn needs_ref_value(&self) -> bool {
-        !self.front.compare.is_trivial() || !self.back.compare.is_trivial()
+    pub fn is_enabled(&self) -> bool {
+        (self.front != StencilStateFaceDescriptor::IGNORE
+            || self.back != StencilStateFaceDescriptor::IGNORE)
+            && self.read_mask != 0
     }
     pub fn is_read_only(&self) -> bool {
         self.write_mask == 0
+    }
+    pub fn needs_ref_value(&self) -> bool {
+        self.front.compare.needs_ref_value() || self.back.compare.needs_ref_value()
     }
 }
 
@@ -851,16 +867,15 @@ pub struct DepthStencilStateDescriptor {
     pub depth_write_enabled: bool,
     /// Comparison function used to compare depth values in the depth test.
     pub depth_compare: CompareFunction,
-    pub stencil: Option<StencilStateDescriptor>,
+    pub stencil: StencilStateDescriptor,
 }
 
 impl DepthStencilStateDescriptor {
+    pub fn is_depth_enabled(&self) -> bool {
+        self.depth_compare != CompareFunction::Always || self.depth_write_enabled
+    }
     pub fn is_read_only(&self) -> bool {
-        !self.depth_write_enabled
-            && self
-                .stencil
-                .as_ref()
-                .map_or(true, StencilStateDescriptor::is_read_only)
+        !self.depth_write_enabled && self.stencil.is_read_only()
     }
 }
 
@@ -970,10 +985,10 @@ pub enum CompareFunction {
 }
 
 impl CompareFunction {
-    pub fn is_trivial(self) -> bool {
+    pub fn needs_ref_value(self) -> bool {
         match self {
-            CompareFunction::Never | CompareFunction::Always => true,
-            _ => false,
+            CompareFunction::Never | CompareFunction::Always => false,
+            _ => true,
         }
     }
 }

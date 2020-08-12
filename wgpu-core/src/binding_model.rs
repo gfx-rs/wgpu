@@ -94,10 +94,18 @@ pub enum CreateBindGroupError {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("too many bindings of type {kind:?} in stage {stage:?}, limit is {count}")]
+pub enum BindingZone {
+    #[error("stage {0:?}")]
+    Stage(wgt::ShaderStage),
+    #[error("whole pipeline")]
+    Pipeline,
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("too many bindings of type {kind:?} in {zone}, limit is {count}")]
 pub struct BindingTypeMaxCountError {
     pub kind: BindingTypeMaxCountErrorKind,
-    pub stage: wgt::ShaderStage,
+    pub zone: BindingZone,
     pub count: u32,
 }
 
@@ -132,7 +140,7 @@ impl PerStageBindingTypeCounter {
         }
     }
 
-    pub(crate) fn max(&self) -> (wgt::ShaderStage, u32) {
+    pub(crate) fn max(&self) -> (BindingZone, u32) {
         let max_value = self.vertex.max(self.fragment.max(self.compute));
         let mut stage = wgt::ShaderStage::NONE;
         if max_value == self.vertex {
@@ -144,7 +152,7 @@ impl PerStageBindingTypeCounter {
         if max_value == self.compute {
             stage |= wgt::ShaderStage::COMPUTE
         }
-        (stage, max_value)
+        (BindingZone::Stage(stage), max_value)
     }
 
     pub(crate) fn merge(&mut self, other: &Self) {
@@ -158,9 +166,9 @@ impl PerStageBindingTypeCounter {
         limit: u32,
         kind: BindingTypeMaxCountErrorKind,
     ) -> Result<(), BindingTypeMaxCountError> {
-        let (stage, count) = self.max();
+        let (zone, count) = self.max();
         if limit < count {
-            Err(BindingTypeMaxCountError { kind, stage, count })
+            Err(BindingTypeMaxCountError { kind, zone, count })
         } else {
             Ok(())
         }
@@ -220,14 +228,14 @@ impl BindingTypeMaxCountValidator {
         if limits.max_dynamic_uniform_buffers_per_pipeline_layout < self.dynamic_uniform_buffers {
             return Err(BindingTypeMaxCountError {
                 kind: BindingTypeMaxCountErrorKind::DynamicUniformBuffers,
-                stage: wgt::ShaderStage::NONE,
+                zone: BindingZone::Pipeline,
                 count: self.dynamic_uniform_buffers,
             });
         }
         if limits.max_dynamic_storage_buffers_per_pipeline_layout < self.dynamic_storage_buffers {
             return Err(BindingTypeMaxCountError {
                 kind: BindingTypeMaxCountErrorKind::DynamicStorageBuffers,
-                stage: wgt::ShaderStage::NONE,
+                zone: BindingZone::Pipeline,
                 count: self.dynamic_storage_buffers,
             });
         }

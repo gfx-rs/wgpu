@@ -242,7 +242,7 @@ pub fn map_depth_stencil_state_descriptor(
     desc: &wgt::DepthStencilStateDescriptor,
 ) -> hal::pso::DepthStencilDesc {
     hal::pso::DepthStencilDesc {
-        depth: if desc.depth_write_enabled || desc.depth_compare != wgt::CompareFunction::Always {
+        depth: if desc.is_depth_enabled() {
             Some(hal::pso::DepthTest {
                 fun: map_compare_function(desc.depth_compare),
                 write: desc.depth_write_enabled,
@@ -251,19 +251,24 @@ pub fn map_depth_stencil_state_descriptor(
             None
         },
         depth_bounds: false, // TODO
-        stencil: desc.stencil.as_ref().map(|stencil| hal::pso::StencilTest {
-            faces: hal::pso::Sided {
-                front: map_stencil_face(&stencil.front),
-                back: map_stencil_face(&stencil.back),
-            },
-            read_masks: hal::pso::State::Static(hal::pso::Sided::new(stencil.read_mask)),
-            write_masks: hal::pso::State::Static(hal::pso::Sided::new(stencil.write_mask)),
-            reference_values: if stencil.needs_ref_value() {
-                hal::pso::State::Dynamic
-            } else {
-                hal::pso::State::Static(hal::pso::Sided::new(0))
-            },
-        }),
+        stencil: if desc.stencil.is_enabled() {
+            let s = &desc.stencil;
+            Some(hal::pso::StencilTest {
+                faces: hal::pso::Sided {
+                    front: map_stencil_face(&s.front),
+                    back: map_stencil_face(&s.back),
+                },
+                read_masks: hal::pso::State::Static(hal::pso::Sided::new(s.read_mask)),
+                write_masks: hal::pso::State::Static(hal::pso::Sided::new(s.write_mask)),
+                reference_values: if s.needs_ref_value() {
+                    hal::pso::State::Dynamic
+                } else {
+                    hal::pso::State::Static(hal::pso::Sided::new(0))
+                },
+            })
+        } else {
+            None
+        },
     }
 }
 
