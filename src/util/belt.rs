@@ -3,7 +3,7 @@ use crate::{
     CommandEncoder, CommandEncoderDescriptor, Device, MapMode,
 };
 use futures::{future::join_all, FutureExt};
-use std::{borrow::Cow::Borrowed, future::Future, mem, sync::mpsc};
+use std::{future::Future, mem, sync::mpsc};
 
 struct Chunk {
     buffer: Buffer,
@@ -77,7 +77,7 @@ impl StagingBelt {
             wgc::span!(_guard, INFO, "Creating chunk of size {}", size);
             Chunk {
                 buffer: device.create_buffer(&BufferDescriptor {
-                    label: Some(Borrowed("staging")),
+                    label: Some("staging"),
                     size,
                     usage: BufferUsage::MAP_WRITE | BufferUsage::COPY_SRC,
                     mapped_at_creation: true,

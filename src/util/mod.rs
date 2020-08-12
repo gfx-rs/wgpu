@@ -67,8 +67,8 @@ impl DeviceExt for crate::Device {
         let padding = crate::COPY_BUFFER_ALIGNMENT - unpadded_size % crate::COPY_BUFFER_ALIGNMENT;
         let padded_size = padding + unpadded_size;
 
-        let wgt_descriptor = wgt::BufferDescriptor {
-            label: descriptor.label.as_ref().map(|x| Cow::Borrowed(&**x)),
+        let wgt_descriptor = crate::BufferDescriptor {
+            label: descriptor.label,
             size: padded_size,
             usage: descriptor.usage,
             mapped_at_creation: true,
