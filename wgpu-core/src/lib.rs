@@ -49,7 +49,7 @@ use std::sync::atomic;
 
 use atomic::{AtomicUsize, Ordering};
 
-use std::{os::raw::c_char, ptr};
+use std::{borrow::Cow, os::raw::c_char, ptr};
 
 pub const MAX_BIND_GROUPS: usize = 8;
 
@@ -58,6 +58,7 @@ type Index = u32;
 type Epoch = u32;
 
 pub type RawString = *const c_char;
+pub type Label<'a> = Option<Cow<'a, str>>;
 
 /// Reference count object that is 1:1 with each reference.
 #[derive(Debug)]

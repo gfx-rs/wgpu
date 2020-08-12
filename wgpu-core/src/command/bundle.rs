@@ -41,8 +41,7 @@ use crate::{
     command::{BasePass, DrawError, RenderCommand, RenderCommandError},
     conv,
     device::{
-        AttachmentData, DeviceError, Label, RenderPassContext, MAX_VERTEX_BUFFERS,
-        SHADER_STAGE_COUNT,
+        AttachmentData, DeviceError, RenderPassContext, MAX_VERTEX_BUFFERS, SHADER_STAGE_COUNT,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Storage, Token},
     id,
@@ -50,11 +49,34 @@ use crate::{
     span,
     track::TrackerSet,
     validation::check_buffer_usage,
-    LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
+    Label, LifeGuard, RefCount, Stored, MAX_BIND_GROUPS,
 };
 use arrayvec::ArrayVec;
-use std::{borrow::Borrow, iter, marker::PhantomData, ops::Range};
+use std::{
+    borrow::{Borrow, Cow},
+    iter,
+    marker::PhantomData,
+    ops::Range,
+};
 use thiserror::Error;
+
+/// Describes a [`RenderBundleEncoder`].
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct RenderBundleEncoderDescriptor<'a> {
+    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// The formats of the color attachments that this render bundle is capable to rendering to. This
+    /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
+    pub color_formats: Cow<'a, [wgt::TextureFormat]>,
+    /// The formats of the depth attachment that this render bundle is capable to rendering to. This
+    /// must match the formats of the depth attachments in the renderpass this render bundle is executed in.
+    pub depth_stencil_format: Option<wgt::TextureFormat>,
+    /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
+    /// the renderpasses it is used in.
+    pub sample_count: u32,
+}
 
 #[derive(Debug)]
 #[cfg_attr(feature = "serial-pass", derive(serde::Deserialize, serde::Serialize))]
@@ -66,7 +88,7 @@ pub struct RenderBundleEncoder {
 
 impl RenderBundleEncoder {
     pub fn new(
-        desc: &wgt::RenderBundleEncoderDescriptor,
+        desc: &RenderBundleEncoderDescriptor,
         parent_id: id::DeviceId,
         base: Option<BasePass<RenderCommand>>,
     ) -> Result<Self, CreateRenderBundleError> {
@@ -102,6 +124,8 @@ pub enum CreateRenderBundleError {
     #[error("invalid number of samples {0}")]
     InvalidSampleCount(u32),
 }
+
+pub type RenderBundleDescriptor<'a> = wgt::RenderBundleDescriptor<Label<'a>>;
 
 //Note: here, `RenderBundle` is just wrapping a raw stream of render commands.
 // The plan is to back it by an actual Vulkan secondary buffer, D3D12 Bundle,
@@ -613,7 +637,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn render_bundle_encoder_finish<B: GfxBackend>(
         &self,
         bundle_encoder: RenderBundleEncoder,
-        desc: &wgt::RenderBundleDescriptor<Label>,
+        desc: &RenderBundleDescriptor,
         id_in: Input<G, id::RenderBundleId>,
     ) -> Result<id::RenderBundleId, RenderBundleError> {
         span!(_guard, INFO, "RenderBundleEncoder::finish");
@@ -908,9 +932,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 use crate::device::trace;
                 let (bundle_guard, _) = hub.render_bundles.read(&mut token);
                 let bundle = &bundle_guard[id];
+                let label = desc.label.as_ref().map(|l| l.as_ref());
                 trace.lock().add(trace::Action::CreateRenderBundle {
                     id: id.0,
-                    desc: trace::new_render_bundle_encoder_descriptor(desc.label, &bundle.context),
+                    desc: trace::new_render_bundle_encoder_descriptor(label, &bundle.context),
                     base: BasePass::from_ref(bundle.base.as_ref()),
                 });
             }

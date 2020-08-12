@@ -25,7 +25,7 @@ use crate::{
     resource::{Buffer, Texture},
     span,
     track::TrackerSet,
-    PrivateFeatures, Stored,
+    Label, PrivateFeatures, Stored,
 };
 
 use hal::command::CommandBuffer as _;
@@ -168,7 +168,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn command_encoder_finish<B: GfxBackend>(
         &self,
         encoder_id: id::CommandEncoderId,
-        _desc: &wgt::CommandBufferDescriptor,
+        _desc: &wgt::CommandBufferDescriptor<Label>,
     ) -> Result<id::CommandBufferId, CommandEncoderError> {
         span!(_guard, INFO, "CommandEncoder::finish");
 

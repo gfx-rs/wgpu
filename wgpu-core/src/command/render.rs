@@ -37,7 +37,14 @@ use serde::Deserialize;
 #[cfg(any(feature = "serial-pass", feature = "trace"))]
 use serde::Serialize;
 
-use std::{borrow::Borrow, collections::hash_map::Entry, fmt, iter, ops::Range, str};
+use std::{
+    borrow::{Borrow, Cow},
+    collections::hash_map::Entry,
+    fmt, iter,
+    num::NonZeroU32,
+    ops::Range,
+    str,
+};
 
 /// Operation to perform to the output attachment at the start of a renderpass.
 #[repr(C)]
@@ -65,7 +72,7 @@ pub enum StoreOp {
 
 /// Describes an individual channel within a render pass, such as color, depth, or stencil.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct PassChannel<V> {
@@ -83,7 +90,7 @@ pub struct PassChannel<V> {
 
 /// Describes a color attachment to a render pass.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct ColorAttachmentDescriptor {
@@ -97,7 +104,7 @@ pub struct ColorAttachmentDescriptor {
 
 /// Describes a depth/stencil attachment to a render pass.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
 #[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
 pub struct DepthStencilAttachmentDescriptor {
@@ -109,27 +116,32 @@ pub struct DepthStencilAttachmentDescriptor {
     pub stencil: PassChannel<u32>,
 }
 
-fn is_depth_stencil_read_only(
-    desc: &DepthStencilAttachmentDescriptor,
-    aspects: hal::format::Aspects,
-) -> Result<bool, RenderPassError> {
-    if aspects.contains(hal::format::Aspects::DEPTH) && !desc.depth.read_only {
-        return Ok(false);
+impl DepthStencilAttachmentDescriptor {
+    fn is_read_only(&self, aspects: hal::format::Aspects) -> Result<bool, RenderPassError> {
+        if aspects.contains(hal::format::Aspects::DEPTH) && !self.depth.read_only {
+            return Ok(false);
+        }
+        if (self.depth.load_op, self.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
+            return Err(RenderPassError::InvalidDepthOps);
+        }
+        if aspects.contains(hal::format::Aspects::STENCIL) && !self.stencil.read_only {
+            return Ok(false);
+        }
+        if (self.stencil.load_op, self.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
+            return Err(RenderPassError::InvalidStencilOps);
+        }
+        Ok(true)
     }
-    if (desc.depth.load_op, desc.depth.store_op) != (LoadOp::Load, StoreOp::Store) {
-        return Err(RenderPassError::InvalidDepthOps);
-    }
-    if aspects.contains(hal::format::Aspects::STENCIL) && !desc.stencil.read_only {
-        return Ok(false);
-    }
-    if (desc.stencil.load_op, desc.stencil.store_op) != (LoadOp::Load, StoreOp::Store) {
-        return Err(RenderPassError::InvalidStencilOps);
-    }
-    Ok(true)
 }
 
-pub type RenderPassDescriptor<'a> =
-    wgt::RenderPassDescriptor<'a, ColorAttachmentDescriptor, &'a DepthStencilAttachmentDescriptor>;
+/// Describes the attachments of a render pass.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct RenderPassDescriptor<'a> {
+    /// The color attachments of the render pass.
+    pub color_attachments: Cow<'a, [ColorAttachmentDescriptor]>,
+    /// The depth and stencil attachment of the render pass, if any.
+    pub depth_stencil_attachment: Option<&'a DepthStencilAttachmentDescriptor>,
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 #[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
@@ -198,7 +210,7 @@ pub enum RenderCommand {
         buffer_id: id::BufferId,
         offset: BufferAddress,
         /// Count of `None` represents a non-multi call.
-        count: Option<u32>,
+        count: Option<NonZeroU32>,
         indexed: bool,
     },
     MultiDrawIndirectCount {
@@ -425,7 +437,7 @@ pub enum RenderPassError {
     #[error("indirect draw with offset {offset}{} uses bytes {begin_offset}..{end_offset} which overruns indirect buffer of size {buffer_size}", count.map_or_else(String::new, |v| format!(" and count {}", v)))]
     IndirectBufferOverrun {
         offset: u64,
-        count: Option<u32>,
+        count: Option<NonZeroU32>,
         begin_offset: u64,
         end_offset: u64,
         buffer_size: u64,
@@ -604,7 +616,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         let previous_use = base_trackers
                             .textures
                             .query(source_id.value, view.range.clone());
-                        let new_use = if is_depth_stencil_read_only(at, view.range.aspects)? {
+                        let new_use = if at.is_read_only(view.range.aspects)? {
                             is_ds_read_only = true;
                             TextureUse::ATTACHMENT_READ
                         } else {
@@ -1414,7 +1426,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .unwrap();
                     check_buffer_usage(buffer.usage, BufferUsage::INDIRECT)?;
 
-                    let actual_count = count.unwrap_or(1);
+                    let actual_count = count.map_or(1, |c| c.get());
 
                     let begin_offset = offset;
                     let end_offset = offset + stride * actual_count as u64;
@@ -1622,7 +1634,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 pub mod render_ffi {
     use super::{super::Rect, RenderCommand, RenderPass};
     use crate::{id, span, RawString};
-    use std::{convert::TryInto, ffi, slice};
+    use std::{convert::TryInto, ffi, num::NonZeroU32, slice};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};
 
     /// # Safety
@@ -1840,7 +1852,7 @@ pub mod render_ffi {
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
-            count: Some(count),
+            count: NonZeroU32::new(count),
             indexed: false,
         });
     }
@@ -1856,7 +1868,7 @@ pub mod render_ffi {
         pass.base.commands.push(RenderCommand::MultiDrawIndirect {
             buffer_id,
             offset,
-            count: Some(count),
+            count: NonZeroU32::new(count),
             indexed: true,
         });
     }

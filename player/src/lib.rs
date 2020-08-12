@@ -12,7 +12,7 @@
 
 use wgc::device::trace;
 
-use std::{borrow::Cow, ffi::CString, fmt::Debug, fs, marker::PhantomData, path::Path, ptr};
+use std::{borrow::Cow, fmt::Debug, fs, marker::PhantomData, path::Path};
 
 #[macro_export]
 macro_rules! gfx_select {
@@ -29,24 +29,6 @@ macro_rules! gfx_select {
             _ => unreachable!()
         }
     };
-}
-
-struct Label(Option<CString>);
-impl Label {
-    fn new(text: &str) -> Self {
-        Self(if text.is_empty() {
-            None
-        } else {
-            Some(CString::new(text).expect("invalid label"))
-        })
-    }
-
-    fn as_ptr(&self) -> *const std::os::raw::c_char {
-        match self.0 {
-            Some(ref c_string) => c_string.as_ptr(),
-            None => ptr::null(),
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -135,7 +117,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 }
             }
         }
-        self.command_encoder_finish::<B>(encoder, &wgt::CommandBufferDescriptor { todo: 0 })
+        self.command_encoder_finish::<B>(encoder, &wgt::CommandBufferDescriptor { label: None })
             .unwrap()
     }
 
@@ -154,19 +136,15 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 panic!("Unexpected SwapChain action: winit feature is not enabled")
             }
             A::CreateBuffer(id, desc) => {
-                let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_buffer::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
-                    .unwrap();
+                self.device_create_buffer::<B>(device, &desc, id).unwrap();
             }
             A::DestroyBuffer(id) => {
                 self.buffer_drop::<B>(id, true);
             }
             A::CreateTexture(id, desc) => {
-                let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_texture::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
-                    .unwrap();
+                self.device_create_texture::<B>(device, &desc, id).unwrap();
             }
             A::DestroyTexture(id) => {
                 self.texture_drop::<B>(id);
@@ -176,23 +154,15 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 parent_id,
                 desc,
             } => {
-                let label = desc.as_ref().map_or(Label(None), |d| Label::new(&d.label));
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.texture_create_view::<B>(
-                    parent_id,
-                    desc.map(|d| d.map_label(|_| label.as_ptr())).as_ref(),
-                    id,
-                )
-                .unwrap();
+                self.texture_create_view::<B>(parent_id, &desc, id).unwrap();
             }
             A::DestroyTextureView(id) => {
                 self.texture_view_drop::<B>(id).unwrap();
             }
             A::CreateSampler(id, desc) => {
-                let label = Label::new(&desc.label);
                 self.device_maintain_ids::<B>(device).unwrap();
-                self.device_create_sampler::<B>(device, &desc.map_label(|_| label.as_ptr()), id)
-                    .unwrap();
+                self.device_create_sampler::<B>(device, &desc, id).unwrap();
             }
             A::DestroySampler(id) => {
                 self.sampler_drop::<B>(id);
@@ -263,14 +233,11 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 self.render_pipeline_drop::<B>(id);
             }
             A::CreateRenderBundle { id, desc, base } => {
-                let label = Label::new(&desc.label.as_ref().unwrap());
                 let bundle =
                     wgc::command::RenderBundleEncoder::new(&desc, device, Some(base)).unwrap();
                 self.render_bundle_encoder_finish::<B>(
                     bundle,
-                    &wgt::RenderBundleDescriptor {
-                        label: label.as_ptr(),
-                    },
+                    &wgt::RenderBundleDescriptor { label: desc.label },
                     id,
                 )
                 .unwrap();
@@ -309,7 +276,7 @@ impl GlobalPlay for wgc::hub::Global<IdentityPassThroughFactory> {
                 let encoder = self
                     .device_create_command_encoder::<B>(
                         device,
-                        &wgt::CommandEncoderDescriptor { label: ptr::null() },
+                        &wgt::CommandEncoderDescriptor { label: None },
                         comb_manager.alloc(device.backend()),
                     )
                     .unwrap();

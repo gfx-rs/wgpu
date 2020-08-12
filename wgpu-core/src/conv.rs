@@ -244,35 +244,26 @@ pub fn map_depth_stencil_state_descriptor(
     hal::pso::DepthStencilDesc {
         depth: if desc.depth_write_enabled || desc.depth_compare != wgt::CompareFunction::Always {
             Some(hal::pso::DepthTest {
-                fun: map_compare_function(desc.depth_compare)
-                    .expect("DepthStencilStateDescriptor has undefined compare function"),
+                fun: map_compare_function(desc.depth_compare),
                 write: desc.depth_write_enabled,
             })
         } else {
             None
         },
         depth_bounds: false, // TODO
-        stencil: if desc.stencil_read_mask != !0
-            || desc.stencil_write_mask != !0
-            || desc.stencil_front != wgt::StencilStateFaceDescriptor::IGNORE
-            || desc.stencil_back != wgt::StencilStateFaceDescriptor::IGNORE
-        {
-            Some(hal::pso::StencilTest {
-                faces: hal::pso::Sided {
-                    front: map_stencil_face(&desc.stencil_front),
-                    back: map_stencil_face(&desc.stencil_back),
-                },
-                read_masks: hal::pso::State::Static(hal::pso::Sided::new(desc.stencil_read_mask)),
-                write_masks: hal::pso::State::Static(hal::pso::Sided::new(desc.stencil_write_mask)),
-                reference_values: if desc.needs_stencil_reference() {
-                    hal::pso::State::Dynamic
-                } else {
-                    hal::pso::State::Static(hal::pso::Sided::new(0))
-                },
-            })
-        } else {
-            None
-        },
+        stencil: desc.stencil.as_ref().map(|stencil| hal::pso::StencilTest {
+            faces: hal::pso::Sided {
+                front: map_stencil_face(&stencil.front),
+                back: map_stencil_face(&stencil.back),
+            },
+            read_masks: hal::pso::State::Static(hal::pso::Sided::new(stencil.read_mask)),
+            write_masks: hal::pso::State::Static(hal::pso::Sided::new(stencil.write_mask)),
+            reference_values: if stencil.needs_ref_value() {
+                hal::pso::State::Dynamic
+            } else {
+                hal::pso::State::Static(hal::pso::Sided::new(0))
+            },
+        }),
     }
 }
 
@@ -280,29 +271,25 @@ fn map_stencil_face(
     stencil_state_face_desc: &wgt::StencilStateFaceDescriptor,
 ) -> hal::pso::StencilFace {
     hal::pso::StencilFace {
-        fun: map_compare_function(stencil_state_face_desc.compare)
-            .expect("StencilStateFaceDescriptor has undefined compare function"),
+        fun: map_compare_function(stencil_state_face_desc.compare),
         op_fail: map_stencil_operation(stencil_state_face_desc.fail_op),
         op_depth_fail: map_stencil_operation(stencil_state_face_desc.depth_fail_op),
         op_pass: map_stencil_operation(stencil_state_face_desc.pass_op),
     }
 }
 
-pub fn map_compare_function(
-    compare_function: wgt::CompareFunction,
-) -> Option<hal::pso::Comparison> {
+pub fn map_compare_function(compare_function: wgt::CompareFunction) -> hal::pso::Comparison {
     use hal::pso::Comparison as H;
     use wgt::CompareFunction as Cf;
     match compare_function {
-        Cf::Undefined => None,
-        Cf::Never => Some(H::Never),
-        Cf::Less => Some(H::Less),
-        Cf::Equal => Some(H::Equal),
-        Cf::LessEqual => Some(H::LessEqual),
-        Cf::Greater => Some(H::Greater),
-        Cf::NotEqual => Some(H::NotEqual),
-        Cf::GreaterEqual => Some(H::GreaterEqual),
-        Cf::Always => Some(H::Always),
+        Cf::Never => H::Never,
+        Cf::Less => H::Less,
+        Cf::Equal => H::Equal,
+        Cf::LessEqual => H::LessEqual,
+        Cf::Greater => H::Greater,
+        Cf::NotEqual => H::NotEqual,
+        Cf::GreaterEqual => H::GreaterEqual,
+        Cf::Always => H::Always,
     }
 }
 
