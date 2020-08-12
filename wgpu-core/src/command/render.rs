@@ -6,7 +6,8 @@ use crate::{
     binding_model::BindError,
     command::{
         bind::{Binder, LayoutChange},
-        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, DrawError, RenderCommandError,
+        BasePass, BasePassRef, CommandBuffer, CommandEncoderError, DrawError, RenderCommand,
+        RenderCommandError,
     },
     conv,
     device::{
@@ -28,9 +29,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
-use wgt::{
-    BufferAddress, BufferSize, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage,
-};
+use wgt::{BufferAddress, BufferUsage, Color, IndexFormat, InputStepMode, TextureUsage};
 
 #[cfg(any(feature = "serial-pass", feature = "replay"))]
 use serde::Deserialize;
@@ -141,96 +140,6 @@ pub struct RenderPassDescriptor<'a> {
     pub color_attachments: Cow<'a, [ColorAttachmentDescriptor]>,
     /// The depth and stencil attachment of the render pass, if any.
     pub depth_stencil_attachment: Option<&'a DepthStencilAttachmentDescriptor>,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
-#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub struct Rect<T> {
-    pub x: T,
-    pub y: T,
-    pub w: T,
-    pub h: T,
-}
-
-#[doc(hidden)]
-#[derive(Clone, Copy, Debug)]
-#[cfg_attr(any(feature = "serial-pass", feature = "trace"), derive(Serialize))]
-#[cfg_attr(any(feature = "serial-pass", feature = "replay"), derive(Deserialize))]
-pub enum RenderCommand {
-    SetBindGroup {
-        index: u8,
-        num_dynamic_offsets: u8,
-        bind_group_id: id::BindGroupId,
-    },
-    SetPipeline(id::RenderPipelineId),
-    SetIndexBuffer {
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        size: Option<BufferSize>,
-    },
-    SetVertexBuffer {
-        slot: u32,
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        size: Option<BufferSize>,
-    },
-    SetBlendColor(Color),
-    SetStencilReference(u32),
-    SetViewport {
-        rect: Rect<f32>,
-        //TODO: use half-float to reduce the size?
-        depth_min: f32,
-        depth_max: f32,
-    },
-    SetScissor(Rect<u32>),
-    SetPushConstant {
-        stages: wgt::ShaderStage,
-        offset: u32,
-        size_bytes: u32,
-        /// None means there is no data and the data should be an array of zeros.
-        ///
-        /// Facilitates clears in renderbundles which explicitly do their clears.
-        values_offset: Option<u32>,
-    },
-    Draw {
-        vertex_count: u32,
-        instance_count: u32,
-        first_vertex: u32,
-        first_instance: u32,
-    },
-    DrawIndexed {
-        index_count: u32,
-        instance_count: u32,
-        first_index: u32,
-        base_vertex: i32,
-        first_instance: u32,
-    },
-    MultiDrawIndirect {
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        /// Count of `None` represents a non-multi call.
-        count: Option<NonZeroU32>,
-        indexed: bool,
-    },
-    MultiDrawIndirectCount {
-        buffer_id: id::BufferId,
-        offset: BufferAddress,
-        count_buffer_id: id::BufferId,
-        count_buffer_offset: BufferAddress,
-        max_count: u32,
-        indexed: bool,
-    },
-    PushDebugGroup {
-        color: u32,
-        len: usize,
-    },
-    PopDebugGroup,
-    InsertDebugMarker {
-        color: u32,
-        len: usize,
-    },
-    ExecuteBundle(id::RenderBundleId),
 }
 
 #[cfg_attr(feature = "serial-pass", derive(Deserialize, Serialize))]
@@ -1632,7 +1541,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 }
 
 pub mod render_ffi {
-    use super::{super::Rect, RenderCommand, RenderPass};
+    use super::{
+        super::{Rect, RenderCommand},
+        RenderPass,
+    };
     use crate::{id, span, RawString};
     use std::{convert::TryInto, ffi, num::NonZeroU32, slice};
     use wgt::{BufferAddress, BufferSize, Color, DynamicOffset};

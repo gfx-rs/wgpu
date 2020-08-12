@@ -16,8 +16,6 @@ use std::{num::NonZeroU32, ops::Range};
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
 pub type BufferSize = std::num::NonZeroU64;
-/// Index for binding a group.
-pub type BindGroupIndex = u8;
 /// Integral type used for binding locations in shaders.
 pub type ShaderLocation = u32;
 /// Integral type used for dynamic bind group offsets.

@@ -37,8 +37,6 @@ pub enum CreateBindGroupLayoutError {
     MissingFeature(wgt::Features),
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
-    #[error("arrays of bindings can't be 0 elements long")]
-    ZeroCount,
 }
 
 #[derive(Clone, Debug, Error)]
