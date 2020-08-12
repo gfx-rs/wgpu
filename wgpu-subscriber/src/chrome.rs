@@ -1,4 +1,4 @@
-use crate::logging::subscriber::CURRENT_THREAD_ID;
+use crate::CURRENT_THREAD_ID;
 use parking_lot::Mutex;
 use std::{
     borrow::Cow,
@@ -8,8 +8,10 @@ use std::{
     sync::Arc,
     time::Instant,
 };
-use tracing::field::{Field, Visit};
-use tracing::{span, Event, Metadata, Subscriber};
+use tracing::{
+    field::{Field, Visit},
+    span, Event, Metadata, Subscriber,
+};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]

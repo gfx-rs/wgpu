@@ -13,6 +13,7 @@ The implementation consists of the following parts:
 
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-core.svg?label=wgpu-core)](https://crates.io/crates/wgpu-core) [![docs.rs](https://docs.rs/wgpu-core/badge.svg)](https://docs.rs/wgpu-core/) - internal Rust API for WebGPU implementations to use
   - [![Crates.io](https://img.shields.io/crates/v/wgpu-types.svg?label=wgpu-types)](https://crates.io/crates/wgpu-types) [![docs.rs](https://docs.rs/wgpu-types/badge.svg)](https://docs.rs/wgpu-types/) - Rust types shared between `wgpu-core`, `wgpu-native`, and `wgpu-rs`
+  - [![Crates.io](https://img.shields.io/crates/v/wgpu-subscriber.svg?label=wgpu-subsciber)](https://crates.io/crates/wgpu-subscriber) [![docs.rs](https://docs.rs/wgpu-subscriber/badge.svg)](https://docs.rs/wgpu-subscriber/) - tracing subscribers to use with `wgpu`
   - `player` - standalone application for replaying the API traces, uses `winit`
 
 This repository contains the core of `wgpu`, and is not usable directly by applications.
