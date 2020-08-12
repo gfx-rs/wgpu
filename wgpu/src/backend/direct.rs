@@ -1,21 +1,17 @@
 use crate::{
     backend::native_gpu_future, BindGroupDescriptor, BindGroupLayoutDescriptor, BindingResource,
     CommandEncoderDescriptor, ComputePipelineDescriptor, Features, Limits, LoadOp, MapMode,
-    Operations, PipelineLayoutDescriptor, RenderPipelineDescriptor, SamplerDescriptor,
-    ShaderModuleSource, SwapChainStatus, TextureDescriptor, TextureViewDescriptor,
+    Operations, PipelineLayoutDescriptor, RenderBundleEncoderDescriptor, RenderPipelineDescriptor,
+    SamplerDescriptor, ShaderModuleSource, SwapChainStatus, TextureDescriptor,
+    TextureViewDescriptor,
 };
 
 use arrayvec::ArrayVec;
 use futures::future::{ready, Ready};
 use smallvec::SmallVec;
 use std::{
-    borrow::Cow::{self, Borrowed},
-    error::Error,
-    ffi::CString,
-    fmt,
-    marker::PhantomData,
-    ops::Range,
-    ptr, slice,
+    borrow::Cow::Borrowed, error::Error, ffi::CString, fmt, marker::PhantomData, ops::Range, ptr,
+    slice,
 };
 use typed_arena::Arena;
 
@@ -614,7 +610,10 @@ impl crate::Context for Context {
     ) -> Self::BindGroupLayoutId {
         let global = &self.0;
         wgc::gfx_select!(
-            *device => global.device_create_bind_group_layout(*device, desc, PhantomData)
+            *device => global.device_create_bind_group_layout(*device, &wgt::BindGroupLayoutDescriptor {
+                label: desc.label.map(Borrowed),
+                entries: Borrowed(desc.entries),
+            }, PhantomData)
         )
         .unwrap_pretty()
     }
@@ -723,9 +722,19 @@ impl crate::Context for Context {
                     module: fs.module.id,
                     entry_point: Borrowed(&fs.entry_point),
                 });
+        let vertex_buffers: ArrayVec<[_; wgc::device::MAX_VERTEX_BUFFERS]> = desc
+            .vertex_state
+            .vertex_buffers
+            .iter()
+            .map(|vertex_buffer| wgt::VertexBufferDescriptor {
+                stride: vertex_buffer.stride,
+                step_mode: vertex_buffer.step_mode,
+                attributes: Borrowed(vertex_buffer.attributes),
+            })
+            .collect();
         let vertex_state = wgt::VertexStateDescriptor {
             index_format: desc.vertex_state.index_format,
-            vertex_buffers: Borrowed(&desc.vertex_state.vertex_buffers),
+            vertex_buffers: Borrowed(&vertex_buffers),
         };
 
         let global = &self.0;
@@ -778,14 +787,19 @@ impl crate::Context for Context {
     fn device_create_buffer(
         &self,
         device: &Self::DeviceId,
-        desc: &wgt::BufferDescriptor<Option<Cow<'_, str>>>,
+        desc: &crate::BufferDescriptor<'_>,
     ) -> Self::BufferId {
         let owned_label = OwnedLabel::new(desc.label.as_deref());
 
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_buffer(
             *device,
-            &desc.map_label(|_| owned_label.as_ptr()),
+            &wgt::BufferDescriptor {
+                label: owned_label.as_ptr(),
+                mapped_at_creation: desc.mapped_at_creation,
+                size: desc.size,
+                usage: desc.usage,
+            },
             PhantomData
         ))
         .unwrap_pretty()
@@ -801,7 +815,15 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_texture(
             *device,
-            &desc.map_label(|_| owned_label.as_ptr()),
+            &wgt::TextureDescriptor {
+                label: owned_label.as_ptr(),
+                size: desc.size,
+                mip_level_count: desc.mip_level_count,
+                sample_count: desc.sample_count,
+                dimension: desc.dimension,
+                format:desc.format,
+                usage:desc.usage,
+            },
             PhantomData
         ))
         .unwrap_pretty()
@@ -817,7 +839,19 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_sampler(
             *device,
-            &desc.map_label(|_| owned_label.as_ptr()),
+            &wgt::SamplerDescriptor {
+                label: owned_label.as_ptr(),
+                address_mode_u: desc.address_mode_u,
+                address_mode_v: desc.address_mode_v,
+                address_mode_w: desc.address_mode_w,
+                mag_filter: desc.mag_filter,
+                min_filter: desc.min_filter,
+                mipmap_filter: desc.mipmap_filter,
+                lod_min_clamp: desc.lod_min_clamp,
+                lod_max_clamp: desc.lod_max_clamp,
+                compare: desc.compare,
+                anisotropy_clamp: desc.anisotropy_clamp.map(|v| v.get()),
+            },
             PhantomData
         ))
         .unwrap_pretty()
@@ -844,9 +878,19 @@ impl crate::Context for Context {
     fn device_create_render_bundle_encoder(
         &self,
         device: &Self::DeviceId,
-        desc: &wgt::RenderBundleEncoderDescriptor,
+        desc: &RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId {
-        wgc::command::RenderBundleEncoder::new(desc, *device, None).unwrap_pretty()
+        wgc::command::RenderBundleEncoder::new(
+            &wgt::RenderBundleEncoderDescriptor {
+                label: desc.label.map(Borrowed),
+                color_formats: Borrowed(desc.color_formats),
+                depth_stencil_format: desc.depth_stencil_format,
+                sample_count: desc.sample_count,
+            },
+            *device,
+            None,
+        )
+        .unwrap_pretty()
     }
 
     fn device_drop(&self, device: &Self::DeviceId) {
@@ -985,7 +1029,16 @@ impl crate::Context for Context {
         desc: Option<&TextureViewDescriptor>,
     ) -> Self::TextureViewId {
         let owned_label = OwnedLabel::new(desc.and_then(|d| d.label.as_deref()));
-        let descriptor = desc.map(|d| d.map_label(|_| owned_label.as_ptr()));
+        let descriptor = desc.map(|d| wgt::TextureViewDescriptor {
+            label: owned_label.as_ptr(),
+            format: d.format,
+            dimension: d.dimension,
+            aspect: d.aspect,
+            base_mip_level: d.base_mip_level,
+            level_count: d.level_count,
+            base_array_layer: d.base_array_layer,
+            array_layer_count: d.array_layer_count,
+        });
         let global = &self.0;
         wgc::gfx_select!(
             *texture => global.texture_create_view(*texture, descriptor.as_ref(), PhantomData)
@@ -1208,7 +1261,9 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(encoder.parent() => global.render_bundle_encoder_finish(
             encoder,
-            &desc.map_label(|_| owned_label.as_ptr()),
+            &wgt::RenderBundleDescriptor {
+                label: owned_label.as_ptr()
+            },
             PhantomData
         ))
         .unwrap_pretty()

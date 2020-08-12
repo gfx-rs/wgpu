@@ -2,7 +2,7 @@
 mod framework;
 
 use bytemuck::{Pod, Zeroable};
-use std::borrow::Cow::Borrowed;
+
 use wgpu::util::DeviceExt;
 
 #[repr(C)]
@@ -153,11 +153,11 @@ impl framework::Example for Example {
             label: None,
         };
         let red_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(Borrowed("red")),
+            label: Some("red"),
             ..texture_descriptor
         });
         let green_texture = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some(Borrowed("green")),
+            label: Some("green"),
             ..texture_descriptor
         });
 
@@ -204,8 +204,8 @@ impl framework::Example for Example {
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
 
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some(Borrowed("bind group layout")),
-            entries: Borrowed(&[
+            label: Some("bind group layout"),
+            entries: &[
                 wgpu::BindGroupLayoutEntry {
                     count: Some(2),
                     ..wgpu::BindGroupLayoutEntry::new(
@@ -223,11 +223,11 @@ impl framework::Example for Example {
                     wgpu::ShaderStage::FRAGMENT,
                     wgpu::BindingType::Sampler { comparison: false },
                 ),
-            ]),
+            ],
         });
 
         let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            entries: Borrowed(&[
+            entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: wgpu::BindingResource::TextureViewArray(&[
@@ -239,23 +239,23 @@ impl framework::Example for Example {
                     binding: 1,
                     resource: wgpu::BindingResource::Sampler(&sampler),
                 },
-            ]),
+            ],
             layout: &bind_group_layout,
-            label: Some(Borrowed("bind group")),
+            label: Some("bind group"),
         });
 
         let pipeline_layout = if uniform_workaround {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: Borrowed(&[&bind_group_layout]),
-                push_constant_ranges: Borrowed(&[wgpu::PushConstantRange {
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[wgpu::PushConstantRange {
                     stages: wgpu::ShaderStage::FRAGMENT,
                     range: 0..4,
-                }]),
+                }],
             })
         } else {
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: Borrowed(&[&bind_group_layout]),
-                push_constant_ranges: Borrowed(&[]),
+                bind_group_layouts: &[&bind_group_layout],
+                push_constant_ranges: &[],
             })
         };
 
@@ -263,11 +263,11 @@ impl framework::Example for Example {
             layout: Some(&pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
-                entry_point: Borrowed("main"),
+                entry_point: "main",
             },
             fragment_stage: Some(wgpu::ProgrammableStageDescriptor {
                 module: &fs_module,
-                entry_point: Borrowed("main"),
+                entry_point: "main",
             }),
             rasterization_state: Some(wgpu::RasterizationStateDescriptor {
                 front_face: wgpu::FrontFace::Ccw,
@@ -275,22 +275,20 @@ impl framework::Example for Example {
                 ..Default::default()
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: Borrowed(&[wgpu::ColorStateDescriptor {
+            color_states: &[wgpu::ColorStateDescriptor {
                 format: sc_desc.format,
                 color_blend: wgpu::BlendDescriptor::REPLACE,
                 alpha_blend: wgpu::BlendDescriptor::REPLACE,
                 write_mask: wgpu::ColorWrite::ALL,
-            }]),
+            }],
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
-                vertex_buffers: Borrowed(&[wgpu::VertexBufferDescriptor {
+                vertex_buffers: &[wgpu::VertexBufferDescriptor {
                     stride: vertex_size as wgpu::BufferAddress,
                     step_mode: wgpu::InputStepMode::Vertex,
-                    attributes: Borrowed(
-                        &wgpu::vertex_attr_array![0 => Float2, 1 => Float2, 2 => Int],
-                    ),
-                }]),
+                    attributes: &wgpu::vertex_attr_array![0 => Float2, 1 => Float2, 2 => Int],
+                }],
             },
             sample_count: 1,
             sample_mask: !0,
@@ -324,18 +322,18 @@ impl framework::Example for Example {
         _spawner: &impl futures::task::LocalSpawn,
     ) {
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some(Borrowed("primary")),
+            label: Some("primary"),
         });
 
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            color_attachments: Borrowed(&[wgpu::RenderPassColorAttachmentDescriptor {
+            color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
                 attachment: &frame.view,
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
                     store: true,
                 },
-            }]),
+            }],
             depth_stencil_attachment: None,
         });
 
