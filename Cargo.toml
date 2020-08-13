@@ -18,14 +18,17 @@ spirv = { package = "spirv_headers", version = "1.4.2", optional = true }
 glsl = { version = "4.1", optional = true }
 pomelo = { version = "0.1.4", optional = true }
 thiserror = "1.0"
+serde = { version = "1.0", features = ["derive"], optional = true }
 
 [features]
 default = []
 glsl_preprocessor = ["glsl"]
 glsl-new = ["pomelo"]
 glsl-out = []
+serialize = ["serde"]
+deserialize = ["serde"]
 
 [dev-dependencies]
 env_logger = "0.6"
 ron = "0.5"
-serde = { version = "1", features = ["serde_derive"] }
+serde = { version = "1.0", features = ["derive"] }

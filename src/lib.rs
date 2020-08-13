@@ -20,6 +20,11 @@ use std::{
     num::NonZeroU32,
 };
 
+#[cfg(feature = "deserialize")]
+use serde::Deserialize;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
+
 /// Hash map that is faster but not resilient to DoS attacks.
 pub type FastHashMap<K, T> = HashMap<K, T, BuildHasherDefault<fxhash::FxHasher>>;
 /// Hash set that is faster but not resilient to DoS attacks.
@@ -27,6 +32,8 @@ pub type FastHashSet<K> = HashSet<K, BuildHasherDefault<fxhash::FxHasher>>;
 
 /// Metadata for a given module.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Header {
     /// Major, minor and patch version.
     ///
@@ -40,6 +47,8 @@ pub struct Header {
 
 /// Stage of the programmable pipeline.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[allow(missing_docs)] // The names are self evident
 pub enum ShaderStage {
     Vertex,
@@ -49,6 +58,8 @@ pub enum ShaderStage {
 
 /// Class of storage for variables.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[allow(missing_docs)] // The names are self evident
 pub enum StorageClass {
     Constant,
@@ -63,6 +74,8 @@ pub enum StorageClass {
 
 /// Built-in inputs and outputs.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum BuiltIn {
     // vertex
     BaseInstance,
@@ -90,6 +103,8 @@ pub type Bytes = u8;
 /// Number of components in a vector.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum VectorSize {
     /// 2D vector
     Bi = 2,
@@ -102,6 +117,8 @@ pub enum VectorSize {
 /// Primitive type for a scalar.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ScalarKind {
     /// Signed integer type.
     Sint,
@@ -116,6 +133,8 @@ pub enum ScalarKind {
 /// Size of an array.
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ArraySize {
     /// The array size is known at compilation.
     Static(u32),
@@ -125,6 +144,8 @@ pub enum ArraySize {
 
 /// Describes where a struct member is placed.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum MemberOrigin {
     /// Built-in shader variable.
     BuiltIn(BuiltIn),
@@ -135,6 +156,8 @@ pub enum MemberOrigin {
 /// Member of a user-defined structure.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct StructMember {
     pub name: Option<String>,
     pub origin: MemberOrigin,
@@ -143,6 +166,8 @@ pub struct StructMember {
 
 /// The number of dimensions an image has.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ImageDimension {
     /// 1D image
     D1,
@@ -156,6 +181,8 @@ pub enum ImageDimension {
 
 bitflags::bitflags! {
     /// Flags describing an image.
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
     pub struct ImageFlags: u32 {
         /// Image is an array.
         const ARRAYED = 0x1;
@@ -172,6 +199,8 @@ bitflags::bitflags! {
 
 /// A data type declared in the module.
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Type {
     /// The name of the type, if any.
     pub name: Option<String>,
@@ -182,6 +211,8 @@ pub struct Type {
 /// Enum with additional information, depending on the kind of type.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum TypeInner {
     /// Number of integral or floating-point kind.
     Scalar { kind: ScalarKind, width: Bytes },
@@ -225,6 +256,8 @@ pub enum TypeInner {
 
 /// Constant value.
 #[derive(Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Constant {
     pub name: Option<String>,
     pub specialization: Option<u32>,
@@ -235,6 +268,8 @@ pub struct Constant {
 /// Additional information, dependendent on the kind of constant.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ConstantInner {
     Sint(i64),
     Uint(u64),
@@ -245,6 +280,8 @@ pub enum ConstantInner {
 
 /// Describes how an input/output variable is to be bound.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Binding {
     /// Built-in shader variable.
     BuiltIn(BuiltIn),
@@ -256,6 +293,8 @@ pub enum Binding {
 
 bitflags::bitflags! {
     /// Indicates how a global variable is used.
+    #[cfg_attr(feature = "serialize", derive(Serialize))]
+    #[cfg_attr(feature = "deserialize", derive(Deserialize))]
     pub struct GlobalUse: u8 {
         /// Data will be read from the variable.
         const LOAD = 0x1;
@@ -266,6 +305,8 @@ bitflags::bitflags! {
 
 /// Variable defined at module level.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct GlobalVariable {
     /// Name of the variable, if any.
     pub name: Option<String>,
@@ -279,6 +320,8 @@ pub struct GlobalVariable {
 
 /// Variable defined at function level.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct LocalVariable {
     /// Name of the variable, if any.
     pub name: Option<String>,
@@ -290,6 +333,8 @@ pub struct LocalVariable {
 
 /// Operation that can be applied on a single value.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum UnaryOperator {
     Negate,
     Not,
@@ -297,6 +342,8 @@ pub enum UnaryOperator {
 
 /// Operation that can be applied on two values.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum BinaryOperator {
     Add,
     Subtract,
@@ -321,6 +368,8 @@ pub enum BinaryOperator {
 
 /// Built-in shader function.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum IntrinsicFunction {
     Any,
     All,
@@ -332,6 +381,8 @@ pub enum IntrinsicFunction {
 
 /// Axis on which to compute a derivative.
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum DerivativeAxis {
     X,
     Y,
@@ -340,6 +391,8 @@ pub enum DerivativeAxis {
 
 /// Origin of a function to call.
 #[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum FunctionOrigin {
     Local(Handle<Function>),
     External(String),
@@ -347,6 +400,8 @@ pub enum FunctionOrigin {
 
 /// An expression that can be evaluated to obtain a value.
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Expression {
     /// Array access with a computed index.
     Access {
@@ -419,11 +474,15 @@ pub type Block = Vec<Statement>;
 /// Marker type, used for falling through in a switch statement.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct FallThrough;
 
 /// Instructions which make up an executable block.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum Statement {
     /// Empty statement, does nothing.
     Empty,
@@ -461,6 +520,8 @@ pub enum Statement {
 
 /// A function defined in the module.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Function {
     /// Name of the function, if any.
     pub name: Option<String>,
@@ -483,6 +544,8 @@ pub struct Function {
 
 /// Exported function, to be run at a certain stage in the pipeline.
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct EntryPoint {
     /// The stage in the programmable pipeline this entry point is for.
     pub stage: ShaderStage,
@@ -504,6 +567,8 @@ pub struct EntryPoint {
 ///
 /// When finished, you can export modules using one of the [available back ends][back].
 #[derive(Debug)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub struct Module {
     /// Header containing module metadata.
     pub header: Header,

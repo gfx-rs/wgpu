@@ -91,6 +91,11 @@ fn main() {
             naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Compute)
                 .unwrap()
         }
+        #[cfg(feature = "deserialize")]
+        "ron" => {
+            let mut input = fs::File::open(&args[1]).unwrap();
+            ron::de::from_reader(&mut input).unwrap()
+        }
         other => panic!("Unknown input extension: {}", other),
     };
 
@@ -99,7 +104,7 @@ fn main() {
         return;
     }
 
-    let param_path = std::path::PathBuf::from(&args[1]).with_extension("ron");
+    let param_path = std::path::PathBuf::from(&args[1]).with_extension("param.ron");
     let params = match fs::read_to_string(param_path) {
         Ok(string) => ron::de::from_str(&string).unwrap(),
         Err(_) => Parameters::default(),
@@ -169,6 +174,11 @@ fn main() {
                 .unwrap();
 
             glsl::write(&module, &mut file).unwrap();
+        }
+        #[cfg(feature = "serialize")]
+        "ron" => {
+            let output = ron::ser::to_string_pretty(&module, Default::default()).unwrap();
+            fs::write(&args[2], output).unwrap();
         }
         other => {
             panic!("Unknown output extension: {}", other);
