@@ -744,6 +744,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let private_features = PrivateFeatures {
                 shader_validation: desc.shader_validation,
                 anisotropic_filtering: enabled_features.contains(hal::Features::SAMPLER_ANISOTROPY),
+                texture_d24: phd
+                    .format_properties(Some(hal::format::Format::X8D24Unorm))
+                    .optimal_tiling
+                    .contains(hal::format::ImageFeature::DEPTH_STENCIL_ATTACHMENT),
                 texture_d24_s8: phd
                     .format_properties(Some(hal::format::Format::D24UnormS8Uint))
                     .optimal_tiling
