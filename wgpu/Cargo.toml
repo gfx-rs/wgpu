@@ -26,14 +26,14 @@ vulkan-portability = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "6e3e88dd1058fdd0c9906ba672bbbba811422c56"
+rev = "92aaa2bba6f2125a93525aabb404ec2952421696"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "6e3e88dd1058fdd0c9906ba672bbbba811422c56"
+rev = "92aaa2bba6f2125a93525aabb404ec2952421696"
 
 [dependencies]
 arrayvec = "0.5"
@@ -62,9 +62,9 @@ ddsfile = "0.4.0"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.subscriber]
 package = "wgpu-subscriber"
-version = "0.5" #TODO: change to 0.1
+version = "0.1"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "6e3e88dd1058fdd0c9906ba672bbbba811422c56"
+rev = "92aaa2bba6f2125a93525aabb404ec2952421696"
 
 [[example]]
 name="hello-compute"
@@ -74,7 +74,7 @@ test = true
 [patch."https://github.com/gfx-rs/wgpu"]
 #wgpu-types = { version = "0.5", path = "../wgpu/wgpu-types" }
 #wgpu-core = { version = "0.5", path = "../wgpu/wgpu-core" }
-#wgpu-subscriber = { version = "0.5", path = "../wgpu/wgpu-subscriber" }
+#wgpu-subscriber = { version = "0.1", path = "../wgpu/wgpu-subscriber" }
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }

@@ -739,6 +739,7 @@ impl crate::Context for Context {
         wgc::gfx_select!(*device => global.device_create_render_pipeline(
             *device,
             &pipe::RenderPipelineDescriptor {
+                label: desc.label.map(Borrowed),
                 layout: desc.layout.map(|l| l.id),
                 vertex_stage,
                 fragment_stage,
@@ -769,6 +770,7 @@ impl crate::Context for Context {
         wgc::gfx_select!(*device => global.device_create_compute_pipeline(
             *device,
             &pipe::ComputePipelineDescriptor {
+                label: desc.label.map(Borrowed),
                 layout: desc.layout.map(|l| l.id),
                 compute_stage: pipe::ProgrammableStageDescriptor {
                     module: desc.compute_stage.module.id,
