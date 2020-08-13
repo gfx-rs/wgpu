@@ -161,8 +161,8 @@ impl framework::Example for Example {
             ..texture_descriptor
         });
 
-        let red_texture_view = red_texture.create_default_view();
-        let green_texture_view = green_texture.create_default_view();
+        let red_texture_view = red_texture.create_view(&wgpu::TextureViewDescriptor::default());
+        let green_texture_view = green_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         queue.write_texture(
             wgpu::TextureCopyView {
@@ -207,22 +207,21 @@ impl framework::Example for Example {
             label: Some("bind group layout"),
             entries: &[
                 wgpu::BindGroupLayoutEntry {
-                    count: Some(2),
-                    ..wgpu::BindGroupLayoutEntry::new(
-                        0,
-                        wgpu::ShaderStage::FRAGMENT,
-                        wgpu::BindingType::SampledTexture {
-                            component_type: wgpu::TextureComponentType::Float,
-                            dimension: wgpu::TextureViewDimension::D2,
-                            multisampled: false,
-                        },
-                    )
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::SampledTexture {
+                        component_type: wgpu::TextureComponentType::Float,
+                        dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: std::num::NonZeroU32::new(2),
                 },
-                wgpu::BindGroupLayoutEntry::new(
-                    1,
-                    wgpu::ShaderStage::FRAGMENT,
-                    wgpu::BindingType::Sampler { comparison: false },
-                ),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler { comparison: false },
+                    count: None,
+                },
             ],
         });
 
@@ -244,20 +243,18 @@ impl framework::Example for Example {
             label: Some("bind group"),
         });
 
-        let pipeline_layout = if uniform_workaround {
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[wgpu::PushConstantRange {
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("main"),
+            bind_group_layouts: &[&bind_group_layout],
+            push_constant_ranges: if uniform_workaround {
+                &[wgpu::PushConstantRange {
                     stages: wgpu::ShaderStage::FRAGMENT,
                     range: 0..4,
-                }],
-            })
-        } else {
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                bind_group_layouts: &[&bind_group_layout],
-                push_constant_ranges: &[],
-            })
-        };
+                }]
+            } else {
+                &[]
+            },
+        });
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             layout: Some(&pipeline_layout),
@@ -275,12 +272,7 @@ impl framework::Example for Example {
                 ..Default::default()
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: sc_desc.format,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            color_states: &[sc_desc.format.into()],
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,

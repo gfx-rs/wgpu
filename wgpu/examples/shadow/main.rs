@@ -255,16 +255,17 @@ impl framework::Example for Example {
 
         let local_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry::new(
-                    0,
-                    wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    wgpu::BindingType::UniformBuffer {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::UniformBuffer {
                         dynamic: false,
                         min_binding_size: wgpu::BufferSize::new(
                             mem::size_of::<EntityUniforms>() as _
                         ),
                     },
-                )],
+                    count: None,
+                }],
                 label: None,
             });
 
@@ -379,14 +380,14 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT | wgpu::TextureUsage::SAMPLED,
             label: None,
         });
-        let shadow_view = shadow_texture.create_default_view();
+        let shadow_view = shadow_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut shadow_target_views = (0..2)
             .map(|i| {
                 Some(shadow_texture.create_view(&wgpu::TextureViewDescriptor {
                     label: Some("shadow"),
-                    format: Self::SHADOW_FORMAT,
-                    dimension: wgpu::TextureViewDimension::D2,
+                    format: None,
+                    dimension: Some(wgpu::TextureViewDimension::D2),
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: 0,
                     level_count: None,
@@ -444,17 +445,19 @@ impl framework::Example for Example {
             // Create pipeline layout
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                    entries: &[wgpu::BindGroupLayoutEntry::new(
-                        0, // global
-                        wgpu::ShaderStage::VERTEX,
-                        wgpu::BindingType::UniformBuffer {
+                    label: None,
+                    entries: &[wgpu::BindGroupLayoutEntry {
+                        binding: 0, // global
+                        visibility: wgpu::ShaderStage::VERTEX,
+                        ty: wgpu::BindingType::UniformBuffer {
                             dynamic: false,
                             min_binding_size: wgpu::BufferSize::new(uniform_size),
                         },
-                    )],
-                    label: None,
+                        count: None,
+                    }],
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("shadow"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
                 push_constant_ranges: &[],
             });
@@ -504,10 +507,7 @@ impl framework::Example for Example {
                     format: Self::SHADOW_FORMAT,
                     depth_write_enabled: true,
                     depth_compare: wgpu::CompareFunction::LessEqual,
-                    stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
-                    stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
-                    stencil_read_mask: 0,
-                    stencil_write_mask: 0,
+                    stencil: wgpu::StencilStateDescriptor::default(),
                 }),
                 vertex_state: wgpu::VertexStateDescriptor {
                     index_format: wgpu::IndexFormat::Uint16,
@@ -530,10 +530,10 @@ impl framework::Example for Example {
             let bind_group_layout =
                 device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                     entries: &[
-                        wgpu::BindGroupLayoutEntry::new(
-                            0, // global
-                            wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            wgpu::BindingType::UniformBuffer {
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 0, // global
+                            visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::UniformBuffer {
                                 dynamic: false,
                                 min_binding_size: wgpu::BufferSize::new(mem::size_of::<
                                     ForwardUniforms,
@@ -541,33 +541,38 @@ impl framework::Example for Example {
                                 )
                                     as _),
                             },
-                        ),
-                        wgpu::BindGroupLayoutEntry::new(
-                            1, // lights
-                            wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                            wgpu::BindingType::UniformBuffer {
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 1, // lights
+                            visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::UniformBuffer {
                                 dynamic: false,
                                 min_binding_size: wgpu::BufferSize::new(light_uniform_size),
                             },
-                        ),
-                        wgpu::BindGroupLayoutEntry::new(
-                            2,
-                            wgpu::ShaderStage::FRAGMENT,
-                            wgpu::BindingType::SampledTexture {
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 2,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::SampledTexture {
                                 multisampled: false,
                                 component_type: wgpu::TextureComponentType::Float,
                                 dimension: wgpu::TextureViewDimension::D2Array,
                             },
-                        ),
-                        wgpu::BindGroupLayoutEntry::new(
-                            3,
-                            wgpu::ShaderStage::FRAGMENT,
-                            wgpu::BindingType::Sampler { comparison: true },
-                        ),
+                            count: None,
+                        },
+                        wgpu::BindGroupLayoutEntry {
+                            binding: 3,
+                            visibility: wgpu::ShaderStage::FRAGMENT,
+                            ty: wgpu::BindingType::Sampler { comparison: true },
+                            count: None,
+                        },
                     ],
                     label: None,
                 });
             let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("main"),
                 bind_group_layouts: &[&bind_group_layout, &local_bind_group_layout],
                 push_constant_ranges: &[],
             });
@@ -627,20 +632,12 @@ impl framework::Example for Example {
                     ..Default::default()
                 }),
                 primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-                color_states: &[wgpu::ColorStateDescriptor {
-                    format: sc_desc.format,
-                    color_blend: wgpu::BlendDescriptor::REPLACE,
-                    alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                    write_mask: wgpu::ColorWrite::ALL,
-                }],
+                color_states: &[sc_desc.format.into()],
                 depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                     format: Self::DEPTH_FORMAT,
                     depth_write_enabled: true,
                     depth_compare: wgpu::CompareFunction::Less,
-                    stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
-                    stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
-                    stencil_read_mask: 0,
-                    stencil_write_mask: 0,
+                    stencil: wgpu::StencilStateDescriptor::default(),
                 }),
                 vertex_state: wgpu::VertexStateDescriptor {
                     index_format: wgpu::IndexFormat::Uint16,
@@ -678,7 +675,7 @@ impl framework::Example for Example {
             lights_are_dirty: true,
             shadow_pass,
             forward_pass,
-            forward_depth: depth_texture.create_default_view(),
+            forward_depth: depth_texture.create_view(&wgpu::TextureViewDescriptor::default()),
             light_uniform_buf,
         }
     }
@@ -715,7 +712,7 @@ impl framework::Example for Example {
             usage: wgpu::TextureUsage::OUTPUT_ATTACHMENT,
             label: None,
         });
-        self.forward_depth = depth_texture.create_default_view();
+        self.forward_depth = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
     }
 
     fn render(
