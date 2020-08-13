@@ -1,0 +1,21 @@
+[package]
+name = "wgpu-subscriber"
+version = "0.5.0"
+authors = ["wgpu developers"]
+edition = "2018"
+description = "WebGPU tracing subscriber"
+homepage = "https://github.com/gfx-rs/wgpu"
+repository = "https://github.com/gfx-rs/wgpu"
+keywords = ["graphics"]
+license = "MPL-2.0"
+
+[lib]
+
+[features]
+
+[dependencies]
+parking_lot = "0.10"
+thread-id = "3"
+tracing = { version = "0.1", default-features = false, features = ["std"] }
+tracing-log = "0.1"
+tracing-subscriber = "0.2"

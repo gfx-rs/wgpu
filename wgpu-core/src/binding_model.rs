@@ -7,7 +7,7 @@ use crate::{
     id::{BindGroupLayoutId, BufferId, DeviceId, SamplerId, TextureViewId, Valid},
     track::{TrackerSet, DUMMY_SELECTOR},
     validation::{MissingBufferUsageError, MissingTextureUsageError},
-    FastHashMap, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
+    FastHashMap, Label, LifeGuard, MultiRefCount, RefCount, Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -37,8 +37,6 @@ pub enum CreateBindGroupLayoutError {
     MissingFeature(wgt::Features),
     #[error(transparent)]
     TooManyBindings(BindingTypeMaxCountError),
-    #[error("arrays of bindings can't be 0 elements long")]
-    ZeroCount,
 }
 
 #[derive(Clone, Debug, Error)]
@@ -96,10 +94,18 @@ pub enum CreateBindGroupError {
 }
 
 #[derive(Clone, Debug, Error)]
-#[error("too many bindings of type {kind:?} in stage {stage:?}, limit is {count}")]
+pub enum BindingZone {
+    #[error("stage {0:?}")]
+    Stage(wgt::ShaderStage),
+    #[error("whole pipeline")]
+    Pipeline,
+}
+
+#[derive(Clone, Debug, Error)]
+#[error("too many bindings of type {kind:?} in {zone}, limit is {count}")]
 pub struct BindingTypeMaxCountError {
     pub kind: BindingTypeMaxCountErrorKind,
-    pub stage: wgt::ShaderStage,
+    pub zone: BindingZone,
     pub count: u32,
 }
 
@@ -134,7 +140,7 @@ impl PerStageBindingTypeCounter {
         }
     }
 
-    pub(crate) fn max(&self) -> (wgt::ShaderStage, u32) {
+    pub(crate) fn max(&self) -> (BindingZone, u32) {
         let max_value = self.vertex.max(self.fragment.max(self.compute));
         let mut stage = wgt::ShaderStage::NONE;
         if max_value == self.vertex {
@@ -146,7 +152,7 @@ impl PerStageBindingTypeCounter {
         if max_value == self.compute {
             stage |= wgt::ShaderStage::COMPUTE
         }
-        (stage, max_value)
+        (BindingZone::Stage(stage), max_value)
     }
 
     pub(crate) fn merge(&mut self, other: &Self) {
@@ -160,9 +166,9 @@ impl PerStageBindingTypeCounter {
         limit: u32,
         kind: BindingTypeMaxCountErrorKind,
     ) -> Result<(), BindingTypeMaxCountError> {
-        let (stage, count) = self.max();
+        let (zone, count) = self.max();
         if limit < count {
-            Err(BindingTypeMaxCountError { kind, stage, count })
+            Err(BindingTypeMaxCountError { kind, zone, count })
         } else {
             Ok(())
         }
@@ -182,7 +188,7 @@ pub(crate) struct BindingTypeMaxCountValidator {
 
 impl BindingTypeMaxCountValidator {
     pub(crate) fn add_binding(&mut self, binding: &wgt::BindGroupLayoutEntry) {
-        let count = binding.count.unwrap_or(1);
+        let count = binding.count.map_or(1, |count| count.get());
         match binding.ty {
             wgt::BindingType::UniformBuffer { dynamic, .. } => {
                 self.uniform_buffers.add(binding.visibility, count);
@@ -222,14 +228,14 @@ impl BindingTypeMaxCountValidator {
         if limits.max_dynamic_uniform_buffers_per_pipeline_layout < self.dynamic_uniform_buffers {
             return Err(BindingTypeMaxCountError {
                 kind: BindingTypeMaxCountErrorKind::DynamicUniformBuffers,
-                stage: wgt::ShaderStage::NONE,
+                zone: BindingZone::Pipeline,
                 count: self.dynamic_uniform_buffers,
             });
         }
         if limits.max_dynamic_storage_buffers_per_pipeline_layout < self.dynamic_storage_buffers {
             return Err(BindingTypeMaxCountError {
                 kind: BindingTypeMaxCountErrorKind::DynamicStorageBuffers,
-                stage: wgt::ShaderStage::NONE,
+                zone: BindingZone::Pipeline,
                 count: self.dynamic_storage_buffers,
             });
         }
@@ -259,6 +265,42 @@ impl BindingTypeMaxCountValidator {
         )?;
         Ok(())
     }
+}
+
+/// Bindable resource and the slot to bind it to.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BindGroupEntry<'a> {
+    /// Slot for which binding provides resource. Corresponds to an entry of the same
+    /// binding index in the [`BindGroupLayoutDescriptor`].
+    pub binding: u32,
+    /// Resource to attach to the binding
+    pub resource: BindingResource<'a>,
+}
+
+/// Describes a group of bindings and the resources to be bound.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct BindGroupDescriptor<'a> {
+    /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// The [`BindGroupLayout`] that corresponds to this bind group.
+    pub layout: BindGroupLayoutId,
+    /// The resources to bind to this bind group.
+    pub entries: Cow<'a, [BindGroupEntry<'a>]>,
+}
+
+/// Describes a [`BindGroupLayout`].
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub struct BindGroupLayoutDescriptor<'a> {
+    /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// Array of entries in this BindGroupLayout
+    pub entries: Cow<'a, [wgt::BindGroupLayoutEntry]>,
 }
 
 pub(crate) type BindEntryMap = FastHashMap<u32, wgt::BindGroupLayoutEntry>;
@@ -333,6 +375,26 @@ pub enum PushConstantUploadError {
     },
     #[error("provided push constant offset {0} does not respect `PUSH_CONSTANT_ALIGNMENT`")]
     Unaligned(u32),
+}
+
+/// Describes a pipeline layout.
+///
+/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct PipelineLayoutDescriptor<'a> {
+    /// Debug label of the pipeine layout. This will show up in graphics debuggers for easy identification.
+    pub label: Label<'a>,
+    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
+    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
+    pub bind_group_layouts: Cow<'a, [BindGroupLayoutId]>,
+    /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
+    /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
+    /// uniform block.
+    ///
+    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
+    pub push_constant_ranges: Cow<'a, [wgt::PushConstantRange]>,
 }
 
 #[derive(Debug)]
@@ -445,11 +507,6 @@ pub enum BindingResource<'a> {
     TextureView(TextureViewId),
     TextureViewArray(Cow<'a, [TextureViewId]>),
 }
-
-pub type BindGroupEntry<'a> = wgt::BindGroupEntry<BindingResource<'a>>;
-
-pub type BindGroupDescriptor<'a> =
-    wgt::BindGroupDescriptor<'a, BindGroupLayoutId, BindGroupEntry<'a>>;
 
 #[derive(Clone, Debug, Error)]
 pub enum BindError {

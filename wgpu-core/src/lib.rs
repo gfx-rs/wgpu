@@ -35,7 +35,6 @@ pub mod device;
 pub mod hub;
 pub mod id;
 pub mod instance;
-pub mod logging;
 pub mod pipeline;
 pub mod resource;
 pub mod swap_chain;
@@ -49,7 +48,7 @@ use std::sync::atomic;
 
 use atomic::{AtomicUsize, Ordering};
 
-use std::{os::raw::c_char, ptr};
+use std::{borrow::Cow, os::raw::c_char, ptr};
 
 pub const MAX_BIND_GROUPS: usize = 8;
 
@@ -58,6 +57,7 @@ type Index = u32;
 type Epoch = u32;
 
 pub type RawString = *const c_char;
+pub type Label<'a> = Option<Cow<'a, str>>;
 
 /// Reference count object that is 1:1 with each reference.
 #[derive(Debug)]
@@ -216,6 +216,18 @@ macro_rules! gfx_select {
             wgt::Backend::Dx11 => $global.$method::<$crate::backend::Dx11>( $($param),+ ),
             _ => unreachable!()
         }
+    };
+}
+
+#[macro_export]
+macro_rules! span {
+    ($guard_name:tt, $level:ident, $name:expr, $($fields:tt)*) => {
+        let span = tracing::span!(tracing::Level::$level, $name, $($fields)*);
+        let $guard_name = span.enter();
+    };
+    ($guard_name:tt, $level:ident, $name:expr) => {
+        let span = tracing::span!(tracing::Level::$level, $name);
+        let $guard_name = span.enter();
     };
 }
 

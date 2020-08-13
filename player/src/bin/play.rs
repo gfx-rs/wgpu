@@ -17,7 +17,7 @@ fn main() {
     #[cfg(feature = "winit")]
     use winit::{event_loop::EventLoop, window::WindowBuilder};
 
-    wgc::logging::subscriber::initialize_default_subscriber(
+    wgpu_subscriber::initialize_default_subscriber(
         std::env::var("WGPU_CHROME_TRACE")
             .as_ref()
             .map(Path::new)

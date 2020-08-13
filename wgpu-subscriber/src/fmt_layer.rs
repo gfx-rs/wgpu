@@ -1,11 +1,8 @@
-use smallvec::SmallVec;
-use std::{
-    fmt,
-    io::{self, Stderr, Stdout},
-    time::Instant,
+use std::{fmt, io, time::Instant};
+use tracing::{
+    field::{Field, Visit},
+    Event, Level, Subscriber,
 };
-use tracing::field::{Field, Visit};
-use tracing::{Event, Level, Subscriber};
 use tracing_subscriber::{layer::Context, registry::LookupSpan, Layer};
 
 #[derive(Debug, Default)]
@@ -23,8 +20,8 @@ impl Visit for FmtEventVisitor {
 }
 
 enum StandardOutput {
-    Out(Stdout),
-    Err(Stderr),
+    Out(io::Stdout),
+    Err(io::Stderr),
 }
 
 impl StandardOutput {
@@ -66,11 +63,13 @@ where
         let mut visitor = FmtEventVisitor::default();
         event.record(&mut visitor);
 
-        let mut spans: SmallVec<[&str; 8]> = SmallVec::new();
+        let mut span_string = String::new();
         for span in ctx.scope() {
-            spans.push(span.name());
+            if !span_string.is_empty() {
+                span_string.push_str(" | ");
+            }
+            span_string.push_str(span.name());
         }
-        let span_string = spans.join(" | ");
 
         let metadata = event.metadata();
         let level = match *metadata.level() {

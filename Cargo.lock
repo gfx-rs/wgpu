@@ -98,23 +98,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "battery"
-version = "0.7.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36a698e449024a5d18994a815998bf5e2e4bc1883e35a7d7ba95b6b69ee45907"
-dependencies = [
- "cfg-if",
- "core-foundation 0.6.4",
- "lazycell",
- "libc",
- "mach",
- "nix 0.15.0",
- "num-traits",
- "uom",
- "winapi 0.3.8",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -146,7 +129,7 @@ checksum = "7aa2097be53a00de9e8fc349fea6d76221f398f5c4fa550d420669906962d160"
 dependencies = [
  "mio",
  "mio-extras",
- "nix 0.14.1",
+ "nix",
 ]
 
 [[package]]
@@ -219,16 +202,6 @@ checksum = "a2df960f5d869b2dd8532793fde43eb5427cceb126c929747a26823ab0eeb536"
 
 [[package]]
 name = "core-foundation"
-version = "0.6.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25b9e03f145fd4f2bf705e07b900cd41fc636598fe5dc452fd0db1441c3f496d"
-dependencies = [
- "core-foundation-sys 0.6.2",
- "libc",
-]
-
-[[package]]
-name = "core-foundation"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "57d24c7a13c43e870e37c1556b74555437870a04514f7685f5b354e090567171"
@@ -246,12 +219,6 @@ dependencies = [
  "core-foundation-sys 0.8.0",
  "libc",
 ]
-
-[[package]]
-name = "core-foundation-sys"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7ca8a5221364ef15ce201e8ed2f609fc312682a8f4e0e3d4aa5879764e0fa3b"
 
 [[package]]
 name = "core-foundation-sys"
@@ -713,15 +680,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mach"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "86dd2487cdfea56def77b88438a2c915fb45113c5319bfe7e14306ca4cd0b0e1"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "malloc_buf"
 version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -887,19 +845,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "nix"
-version = "0.15.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b2e0b4f3320ed72aaedb9a5ac838690a8047c7b275da22711fddff4f8a14229"
-dependencies = [
- "bitflags",
- "cc",
- "cfg-if",
- "libc",
- "void",
-]
-
-[[package]]
 name = "num-integer"
 version = "0.1.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1022,6 +967,7 @@ dependencies = [
  "ron",
  "serde",
  "wgpu-core",
+ "wgpu-subscriber",
  "wgpu-types",
  "winit",
 ]
@@ -1292,7 +1238,7 @@ dependencies = [
  "dlib",
  "lazy_static",
  "memmap",
- "nix 0.14.1",
+ "nix",
  "wayland-client",
  "wayland-protocols",
 ]
@@ -1476,12 +1422,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "typenum"
-version = "1.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "373c8a200f9e67a0c95e62a4f52fbf80c23b4381c05a17845531982fa99e6b33"
-
-[[package]]
 name = "unicode-xid"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1492,16 +1432,6 @@ name = "unicode-xid"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "826e7639553986605ec5979c7dd957c7895e93eabed50ab2ffa7f6128a75097c"
-
-[[package]]
-name = "uom"
-version = "0.26.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cec796ec5f7ac557631709079168286056205c51c60aac33f51764bdc7b8dc4"
-dependencies = [
- "num-traits",
- "typenum",
-]
 
 [[package]]
 name = "void"
@@ -1585,7 +1515,7 @@ dependencies = [
  "downcast-rs",
  "libc",
  "mio",
- "nix 0.14.1",
+ "nix",
  "wayland-commons",
  "wayland-scanner",
  "wayland-sys",
@@ -1597,7 +1527,7 @@ version = "0.23.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb66b0d1a27c39bbce712b6372131c6e25149f03ffb0cd017cf8f7de8d66dbdb"
 dependencies = [
- "nix 0.14.1",
+ "nix",
  "wayland-sys",
 ]
 
@@ -1639,7 +1569,6 @@ name = "wgpu-core"
 version = "0.5.0"
 dependencies = [
  "arrayvec",
- "battery",
  "bitflags",
  "copyless",
  "fxhash",
@@ -1659,11 +1588,19 @@ dependencies = [
  "serde",
  "smallvec",
  "thiserror",
+ "tracing",
+ "wgpu-types",
+]
+
+[[package]]
+name = "wgpu-subscriber"
+version = "0.5.0"
+dependencies = [
+ "parking_lot",
  "thread-id",
  "tracing",
  "tracing-log",
  "tracing-subscriber",
- "wgpu-types",
 ]
 
 [[package]]

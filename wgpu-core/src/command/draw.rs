@@ -12,9 +12,12 @@ use crate::{
     track::UseExtendError,
     validation::{MissingBufferUsageError, MissingTextureUsageError},
 };
-pub type BufferError = UseExtendError<BufferUse>;
+use wgt::{BufferAddress, BufferSize, Color};
 
+use std::num::NonZeroU32;
 use thiserror::Error;
+
+pub type BufferError = UseExtendError<BufferUse>;
 
 /// Error validating a draw call.
 #[derive(Clone, Debug, Error, PartialEq)]
@@ -68,4 +71,106 @@ pub enum RenderCommandError {
     MissingTextureUsage(#[from] MissingTextureUsageError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "trace"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "replay"),
+    derive(serde::Deserialize)
+)]
+pub struct Rect<T> {
+    pub x: T,
+    pub y: T,
+    pub w: T,
+    pub h: T,
+}
+
+#[doc(hidden)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "trace"),
+    derive(serde::Serialize)
+)]
+#[cfg_attr(
+    any(feature = "serial-pass", feature = "replay"),
+    derive(serde::Deserialize)
+)]
+pub enum RenderCommand {
+    SetBindGroup {
+        index: u8,
+        num_dynamic_offsets: u8,
+        bind_group_id: id::BindGroupId,
+    },
+    SetPipeline(id::RenderPipelineId),
+    SetIndexBuffer {
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    },
+    SetVertexBuffer {
+        slot: u32,
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        size: Option<BufferSize>,
+    },
+    SetBlendColor(Color),
+    SetStencilReference(u32),
+    SetViewport {
+        rect: Rect<f32>,
+        //TODO: use half-float to reduce the size?
+        depth_min: f32,
+        depth_max: f32,
+    },
+    SetScissor(Rect<u32>),
+    SetPushConstant {
+        stages: wgt::ShaderStage,
+        offset: u32,
+        size_bytes: u32,
+        /// None means there is no data and the data should be an array of zeros.
+        ///
+        /// Facilitates clears in renderbundles which explicitly do their clears.
+        values_offset: Option<u32>,
+    },
+    Draw {
+        vertex_count: u32,
+        instance_count: u32,
+        first_vertex: u32,
+        first_instance: u32,
+    },
+    DrawIndexed {
+        index_count: u32,
+        instance_count: u32,
+        first_index: u32,
+        base_vertex: i32,
+        first_instance: u32,
+    },
+    MultiDrawIndirect {
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        /// Count of `None` represents a non-multi call.
+        count: Option<NonZeroU32>,
+        indexed: bool,
+    },
+    MultiDrawIndirectCount {
+        buffer_id: id::BufferId,
+        offset: BufferAddress,
+        count_buffer_id: id::BufferId,
+        count_buffer_offset: BufferAddress,
+        max_count: u32,
+        indexed: bool,
+    },
+    PushDebugGroup {
+        color: u32,
+        len: usize,
+    },
+    PopDebugGroup,
+    InsertDebugMarker {
+        color: u32,
+        len: usize,
+    },
+    ExecuteBundle(id::RenderBundleId),
 }

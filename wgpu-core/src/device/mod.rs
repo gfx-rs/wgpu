@@ -12,7 +12,7 @@ use crate::{
     id, pipeline, resource, span, swap_chain,
     track::{BufferState, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
-    FastHashMap, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
+    FastHashMap, Label, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
     MAX_BIND_GROUPS,
 };
 
@@ -30,8 +30,8 @@ use thiserror::Error;
 use wgt::{BufferAddress, BufferSize, InputStepMode, TextureDimension, TextureFormat};
 
 use std::{
-    borrow::Cow, collections::hash_map::Entry, ffi, iter, marker::PhantomData, mem, ops::Range,
-    ptr, sync::atomic::Ordering,
+    borrow::Cow, collections::hash_map::Entry, iter, marker::PhantomData, mem, ops::Range, ptr,
+    sync::atomic::Ordering,
 };
 
 mod life;
@@ -42,18 +42,6 @@ pub mod trace;
 use smallvec::SmallVec;
 #[cfg(feature = "trace")]
 use trace::{Action, Trace};
-
-pub type Label = *const std::os::raw::c_char;
-#[cfg(feature = "trace")]
-fn own_label(label: &Label) -> String {
-    if label.is_null() {
-        String::new()
-    } else {
-        unsafe { ffi::CStr::from_ptr(*label) }
-            .to_string_lossy()
-            .to_string()
-    }
-}
 
 pub const MAX_COLOR_TARGETS: usize = 4;
 pub const MAX_MIP_LEVELS: u32 = 16;
@@ -394,7 +382,7 @@ impl<B: GfxBackend> Device<B> {
     fn create_buffer(
         &self,
         self_id: id::DeviceId,
-        desc: &wgt::BufferDescriptor<Label>,
+        desc: &resource::BufferDescriptor,
         memory_kind: gfx_memory::Kind,
     ) -> Result<resource::Buffer<B>, resource::CreateBufferError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
@@ -428,19 +416,14 @@ impl<B: GfxBackend> Device<B> {
             }
         };
 
-        let mut buffer = unsafe {
-            self.raw
-                .create_buffer(desc.size.max(1), usage)
-                .map_err(|err| match err {
-                    hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
-                    _ => panic!("failed to create buffer: {}", err),
-                })?
-        };
-        if !desc.label.is_null() {
-            unsafe {
-                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
-                self.raw.set_buffer_name(&mut buffer, &label)
-            };
+        let mut buffer = unsafe { self.raw.create_buffer(desc.size.max(1), usage) }.map_err(
+            |err| match err {
+                hal::buffer::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
+                _ => panic!("failed to create buffer: {}", err),
+            },
+        )?;
+        if let Some(ref label) = desc.label {
+            unsafe { self.raw.set_buffer_name(&mut buffer, label) };
         }
 
         let requirements = unsafe { self.raw.get_buffer_requirements(&buffer) };
@@ -474,7 +457,7 @@ impl<B: GfxBackend> Device<B> {
     fn create_texture(
         &self,
         self_id: id::DeviceId,
-        desc: &wgt::TextureDescriptor<Label>,
+        desc: &resource::TextureDescriptor,
     ) -> Result<resource::Texture<B>, resource::CreateTextureError> {
         debug_assert_eq!(self_id.backend(), B::VARIANT);
 
@@ -527,9 +510,8 @@ impl<B: GfxBackend> Device<B> {
                     hal::image::CreationError::OutOfMemory(_) => DeviceError::OutOfMemory,
                     _ => panic!("failed to create texture: {}", err),
                 })?;
-            if !desc.label.is_null() {
-                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
-                self.raw.set_image_name(&mut image, &label);
+            if let Some(ref label) = desc.label {
+                self.raw.set_image_name(&mut image, label);
             }
             image
         };
@@ -638,10 +620,7 @@ impl<B: GfxBackend> Device<B> {
     ) -> Result<binding_model::BindGroupLayout<B>, binding_model::CreateBindGroupLayoutError> {
         // Validate the count parameter
         for binding in entry_map.values() {
-            if let Some(count) = binding.count {
-                if count == 0 {
-                    return Err(binding_model::CreateBindGroupLayoutError::ZeroCount);
-                }
+            if binding.count.is_some() {
                 match binding.ty {
                     wgt::BindingType::SampledTexture { .. } => {
                         if !self
@@ -665,7 +644,7 @@ impl<B: GfxBackend> Device<B> {
                 ty: conv::map_binding_type(entry),
                 count: entry
                     .count
-                    .map_or(1, |v| v as hal::pso::DescriptorArrayIndex), //TODO: consolidate
+                    .map_or(1, |v| v.get() as hal::pso::DescriptorArrayIndex), //TODO: consolidate
                 stage_flags: conv::map_shader_stage_flags(entry.visibility),
                 immutable_samplers: false, // TODO
             })
@@ -703,7 +682,7 @@ impl<B: GfxBackend> Device<B> {
             desc_counts: raw_bindings.iter().cloned().collect(),
             dynamic_count: entry_map
                 .values()
-                .filter(|b| b.has_dynamic_offset())
+                .filter(|b| b.ty.has_dynamic_offset())
                 .count(),
             count_validator,
             entries: entry_map,
@@ -713,7 +692,7 @@ impl<B: GfxBackend> Device<B> {
     fn create_pipeline_layout(
         &self,
         self_id: id::DeviceId,
-        desc: &wgt::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
+        desc: &binding_model::PipelineLayoutDescriptor,
         bgl_guard: &Storage<binding_model::BindGroupLayout<B>, id::BindGroupLayoutId>,
     ) -> Result<binding_model::PipelineLayout<B>, CreatePipelineLayoutError> {
         let bind_group_layouts_count = desc.bind_group_layouts.len();
@@ -790,12 +769,20 @@ impl<B: GfxBackend> Device<B> {
             .iter()
             .map(|pc| (conv::map_shader_stage_flags(pc.stages), pc.range.clone()));
 
+        let raw = unsafe {
+            let raw_layout = self
+                .raw
+                .create_pipeline_layout(descriptor_set_layouts, push_constants)
+                .or(Err(DeviceError::OutOfMemory))?;
+            if let Some(_) = desc.label {
+                //TODO-0.6: needs gfx changes published
+                //self.raw.set_pipeline_layout_name(&mut raw_layout, label);
+            }
+            raw_layout
+        };
+
         Ok(binding_model::PipelineLayout {
-            raw: unsafe {
-                self.raw
-                    .create_pipeline_layout(descriptor_set_layouts, push_constants)
-                    .or(Err(DeviceError::OutOfMemory))?
-            },
+            raw,
             device_id: Stored {
                 value: id::Valid(self_id),
                 ref_count: self.life_guard.add_ref(),
@@ -956,7 +943,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_buffer<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::BufferDescriptor<Label>,
+        desc: &resource::BufferDescriptor,
         id_in: Input<G, id::BufferId>,
     ) -> Result<id::BufferId, resource::CreateBufferError> {
         span!(_guard, INFO, "Device::create_buffer");
@@ -1000,7 +987,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             let mut stage = device.create_buffer(
                 device_id,
                 &wgt::BufferDescriptor {
-                    label: b"<init_buffer>\0".as_ptr() as *const _,
+                    label: Some(Cow::Borrowed("<init_buffer>")),
                     size: desc.size,
                     usage: wgt::BufferUsage::MAP_WRITE | wgt::BufferUsage::COPY_SRC,
                     mapped_at_creation: false,
@@ -1025,7 +1012,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         #[cfg(feature = "trace")]
         match device.trace {
             Some(ref trace) => {
-                let mut desc = desc.map_label(own_label);
+                let mut desc = desc.clone();
                 let mapped_at_creation = mem::replace(&mut desc.mapped_at_creation, false);
                 if mapped_at_creation && !desc.usage.contains(wgt::BufferUsage::MAP_WRITE) {
                     desc.usage |= wgt::BufferUsage::COPY_DST;
@@ -1222,7 +1209,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_texture<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::TextureDescriptor<Label>,
+        desc: &resource::TextureDescriptor,
         id_in: Input<G, id::TextureId>,
     ) -> Result<id::TextureId, resource::CreateTextureError> {
         span!(_guard, INFO, "Device::create_texture");
@@ -1241,10 +1228,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub.textures.register_identity(id_in, texture, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateTexture(
-                id.0,
-                desc.map_label(own_label),
-            )),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateTexture(id.0, desc.clone())),
             None => (),
         };
 
@@ -1306,7 +1292,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn texture_create_view<B: GfxBackend>(
         &self,
         texture_id: id::TextureId,
-        desc: Option<&wgt::TextureViewDescriptor<Label>>,
+        desc: &resource::TextureViewDescriptor,
         id_in: Input<G, id::TextureViewId>,
     ) -> Result<id::TextureViewId, resource::CreateTextureViewError> {
         span!(_guard, INFO, "Texture::create_view");
@@ -1321,62 +1307,57 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| resource::CreateTextureViewError::InvalidTexture)?;
         let device = &device_guard[texture.device_id.value];
 
-        let (format, view_kind, range) = match desc {
-            Some(desc) => {
-                let kind = conv::map_texture_view_dimension(desc.dimension);
-                let required_level_count =
-                    desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
-                let required_layer_count =
-                    desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
-                let level_end = texture.full_range.levels.end;
-                let layer_end = texture.full_range.layers.end;
-                if required_level_count > level_end as u32 {
-                    return Err(resource::CreateTextureViewError::InvalidMipLevelCount {
-                        requested: required_level_count,
-                        total: level_end,
-                    });
-                }
-                if required_layer_count > layer_end as u32 {
-                    return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
-                        requested: required_layer_count,
-                        total: layer_end,
-                    });
-                };
-                let end_level = desc
-                    .level_count
-                    .map_or(level_end, |_| required_level_count as u8);
-                let end_layer = desc
-                    .array_layer_count
-                    .map_or(layer_end, |_| required_layer_count as u16);
-                let aspects = match desc.aspect {
-                    wgt::TextureAspect::All => texture.full_range.aspects,
-                    wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
-                    wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
-                };
-                if !texture.full_range.aspects.contains(aspects) {
-                    return Err(resource::CreateTextureViewError::InvalidAspect {
-                        requested: aspects,
-                        total: texture.full_range.aspects,
-                    });
-                }
+        let view_kind = match desc.dimension {
+            Some(dim) => conv::map_texture_view_dimension(dim),
+            None => match texture.kind {
+                hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
+                hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
+                hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
+                hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
+                hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
+            },
+        };
+        let required_level_count =
+            desc.base_mip_level + desc.level_count.map_or(1, |count| count.get());
+        let required_layer_count =
+            desc.base_array_layer + desc.array_layer_count.map_or(1, |count| count.get());
+        let level_end = texture.full_range.levels.end;
+        let layer_end = texture.full_range.layers.end;
+        if required_level_count > level_end as u32 {
+            return Err(resource::CreateTextureViewError::InvalidMipLevelCount {
+                requested: required_level_count,
+                total: level_end,
+            });
+        }
+        if required_layer_count > layer_end as u32 {
+            return Err(resource::CreateTextureViewError::InvalidArrayLayerCount {
+                requested: required_layer_count,
+                total: layer_end,
+            });
+        };
+        let end_level = desc
+            .level_count
+            .map_or(level_end, |_| required_level_count as u8);
+        let end_layer = desc
+            .array_layer_count
+            .map_or(layer_end, |_| required_layer_count as u16);
+        let aspects = match desc.aspect {
+            wgt::TextureAspect::All => texture.full_range.aspects,
+            wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
+            wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
+        };
+        if !texture.full_range.aspects.contains(aspects) {
+            return Err(resource::CreateTextureViewError::InvalidAspect {
+                requested: aspects,
+                total: texture.full_range.aspects,
+            });
+        }
 
-                let range = hal::image::SubresourceRange {
-                    aspects,
-                    levels: desc.base_mip_level as u8..end_level,
-                    layers: desc.base_array_layer as u16..end_layer,
-                };
-                (desc.format, kind, range)
-            }
-            None => {
-                let kind = match texture.kind {
-                    hal::image::Kind::D1(_, 1) => hal::image::ViewKind::D1,
-                    hal::image::Kind::D1(..) => hal::image::ViewKind::D1Array,
-                    hal::image::Kind::D2(_, _, 1, _) => hal::image::ViewKind::D2,
-                    hal::image::Kind::D2(..) => hal::image::ViewKind::D2Array,
-                    hal::image::Kind::D3(..) => hal::image::ViewKind::D3,
-                };
-                (texture.format, kind, texture.full_range.clone())
-            }
+        let format = desc.format.unwrap_or(texture.format);
+        let range = hal::image::SubresourceRange {
+            aspects,
+            levels: desc.base_mip_level as u8..end_level,
+            layers: desc.base_array_layer as u16..end_layer,
         };
 
         let raw = unsafe {
@@ -1414,7 +1395,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Some(ref trace) => trace.lock().add(trace::Action::CreateTextureView {
                 id: id.0,
                 parent_id: texture_id,
-                desc: desc.map(|d| d.map_label(own_label)),
+                desc: desc.clone(),
             }),
             None => (),
         };
@@ -1482,7 +1463,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_sampler<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::SamplerDescriptor<Label>,
+        desc: &resource::SamplerDescriptor,
         id_in: Input<G, id::SamplerId>,
     ) -> Result<id::SamplerId, resource::CreateSamplerError> {
         span!(_guard, INFO, "Device::create_sampler");
@@ -1495,6 +1476,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .map_err(|_| DeviceError::Invalid)?;
 
         let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
+            let clamp = clamp.get();
             let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
             if !valid_clamp {
                 return Err(resource::CreateSamplerError::InvalidClamp(clamp));
@@ -1513,13 +1495,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             mag_filter: conv::map_filter(desc.mag_filter),
             mip_filter: conv::map_filter(desc.mipmap_filter),
             wrap_mode: (
-                conv::map_wrap(desc.address_mode_u),
-                conv::map_wrap(desc.address_mode_v),
-                conv::map_wrap(desc.address_mode_w),
+                conv::map_wrap(desc.address_modes[0]),
+                conv::map_wrap(desc.address_modes[1]),
+                conv::map_wrap(desc.address_modes[2]),
             ),
             lod_bias: hal::image::Lod(0.0),
             lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
-            comparison: desc.compare.and_then(conv::map_compare_function),
+            comparison: desc.compare.map(conv::map_compare_function),
             border: hal::image::PackedColor(0),
             normalized: true,
             anisotropy_clamp: actual_clamp,
@@ -1549,10 +1531,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let id = hub.samplers.register_identity(id_in, sampler, &mut token);
         #[cfg(feature = "trace")]
         match device.trace {
-            Some(ref trace) => trace.lock().add(trace::Action::CreateSampler(
-                id.0,
-                desc.map_label(own_label),
-            )),
+            Some(ref trace) => trace
+                .lock()
+                .add(trace::Action::CreateSampler(id.0, desc.clone())),
             None => (),
         };
 
@@ -1603,7 +1584,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_bind_group_layout<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::BindGroupLayoutDescriptor,
+        desc: &binding_model::BindGroupLayoutDescriptor,
         id_in: Input<G, id::BindGroupLayoutId>,
     ) -> Result<id::BindGroupLayoutId, binding_model::CreateBindGroupLayoutError> {
         span!(_guard, INFO, "Device::create_bind_group_layout");
@@ -1695,7 +1676,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_pipeline_layout<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::PipelineLayoutDescriptor<id::BindGroupLayoutId>,
+        desc: &binding_model::PipelineLayoutDescriptor,
         id_in: Input<G, id::PipelineLayoutId>,
     ) -> Result<id::PipelineLayoutId, CreatePipelineLayoutError> {
         span!(_guard, INFO, "Device::create_pipeline_layout");
@@ -1810,7 +1791,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     Some(dedup_id) => dedup_id,
                     None => {
                         #[cfg(feature = "trace")]
-                        let bgl_desc = wgt::BindGroupLayoutDescriptor {
+                        let bgl_desc = binding_model::BindGroupLayoutDescriptor {
                             label: None,
                             entries: if device.trace.is_some() {
                                 Cow::Owned(map.values().cloned().collect())
@@ -1837,7 +1818,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             derived_group_layout_ids.push(processed_id);
         }
 
-        let layout_desc = wgt::PipelineLayoutDescriptor {
+        let layout_desc = binding_model::PipelineLayoutDescriptor {
+            label: None,
             bind_group_layouts: Cow::Borrowed(&derived_group_layout_ids),
             push_constant_ranges: Cow::Borrowed(&[]), //TODO?
         };
@@ -2113,7 +2095,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         }
 
                         if let Some(count) = decl.count {
-                            let count = count as usize;
+                            let count = count.get() as usize;
                             let num_bindings = bindings_array.len();
                             if count != num_bindings {
                                 return Err(CreateBindGroupError::BindingArrayLengthMismatch {
@@ -2433,11 +2415,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         unsafe {
             let raw_command_buffer = command_buffer.raw.last_mut().unwrap();
-            if !desc.label.is_null() {
-                let label = ffi::CStr::from_ptr(desc.label).to_string_lossy();
+            if let Some(ref label) = desc.label {
                 device
                     .raw
-                    .set_command_buffer_name(raw_command_buffer, &label);
+                    .set_command_buffer_name(raw_command_buffer, label);
             }
             raw_command_buffer.begin_primary(hal::command::CommandBufferFlags::ONE_TIME_SUBMIT);
         }
@@ -2491,7 +2472,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     pub fn device_create_render_bundle_encoder(
         &self,
         device_id: id::DeviceId,
-        desc: &wgt::RenderBundleEncoderDescriptor,
+        desc: &command::RenderBundleEncoderDescriptor,
     ) -> Result<id::RenderBundleEncoderId, command::CreateRenderBundleError> {
         span!(_guard, INFO, "Device::create_render_bundle_encoder");
         let encoder = command::RenderBundleEncoder::new(desc, device_id, None);
@@ -2933,7 +2914,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             }
         }
         if let Some(ds) = depth_stencil_state.as_ref() {
-            if ds.needs_stencil_reference() {
+            if ds.stencil.needs_ref_value() {
                 flags |= pipeline::PipelineFlags::STENCIL_REFERENCE;
             }
             if !ds.is_read_only() {
@@ -2966,7 +2947,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateRenderPipeline(
                 id.0,
-                wgt::RenderPipelineDescriptor {
+                pipeline::RenderPipelineDescriptor {
                     layout: Some(layout_id),
                     ..desc.clone()
                 },
@@ -3185,7 +3166,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         match device.trace {
             Some(ref trace) => trace.lock().add(trace::Action::CreateComputePipeline(
                 id.0,
-                wgt::ComputePipelineDescriptor {
+                pipeline::ComputePipelineDescriptor {
                     layout: Some(layout_id),
                     ..desc.clone()
                 },

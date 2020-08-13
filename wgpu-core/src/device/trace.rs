@@ -5,7 +5,7 @@
 use crate::id;
 #[cfg(feature = "trace")]
 use std::io::Write as _;
-use std::ops::Range;
+use std::{borrow::Cow, ops::Range};
 
 //TODO: consider a readable Id that doesn't include the backend
 
@@ -14,13 +14,13 @@ type FileName = String;
 pub const FILE_NAME: &str = "trace.ron";
 
 #[cfg(feature = "trace")]
-pub(crate) fn new_render_bundle_encoder_descriptor(
-    label: super::Label,
-    context: &super::RenderPassContext,
-) -> wgt::RenderBundleEncoderDescriptor {
-    wgt::RenderBundleEncoderDescriptor {
-        label: Some(super::own_label(&label).into()),
-        color_formats: context.attachments.colors.to_vec().into(),
+pub(crate) fn new_render_bundle_encoder_descriptor<'a>(
+    label: Option<&'a str>,
+    context: &'a super::RenderPassContext,
+) -> crate::command::RenderBundleEncoderDescriptor<'a> {
+    crate::command::RenderBundleEncoderDescriptor {
+        label: label.map(Cow::Borrowed),
+        color_formats: Cow::Borrowed(&context.attachments.colors),
         depth_stencil_format: context.attachments.depth_stencil,
         sample_count: context.sample_count as u32,
     }
@@ -34,17 +34,17 @@ pub enum Action<'a> {
         desc: wgt::DeviceDescriptor,
         backend: wgt::Backend,
     },
-    CreateBuffer(id::BufferId, wgt::BufferDescriptor<String>),
+    CreateBuffer(id::BufferId, crate::resource::BufferDescriptor<'a>),
     DestroyBuffer(id::BufferId),
-    CreateTexture(id::TextureId, wgt::TextureDescriptor<String>),
+    CreateTexture(id::TextureId, crate::resource::TextureDescriptor<'a>),
     DestroyTexture(id::TextureId),
     CreateTextureView {
         id: id::TextureViewId,
         parent_id: id::TextureId,
-        desc: Option<wgt::TextureViewDescriptor<String>>,
+        desc: crate::resource::TextureViewDescriptor<'a>,
     },
     DestroyTextureView(id::TextureViewId),
-    CreateSampler(id::SamplerId, wgt::SamplerDescriptor<String>),
+    CreateSampler(id::SamplerId, crate::resource::SamplerDescriptor<'a>),
     DestroySampler(id::SamplerId),
     CreateSwapChain(id::SwapChainId, wgt::SwapChainDescriptor),
     GetSwapChainTexture {
@@ -52,20 +52,19 @@ pub enum Action<'a> {
         parent_id: id::SwapChainId,
     },
     PresentSwapChain(id::SwapChainId),
-    CreateBindGroupLayout(id::BindGroupLayoutId, wgt::BindGroupLayoutDescriptor<'a>),
+    CreateBindGroupLayout(
+        id::BindGroupLayoutId,
+        crate::binding_model::BindGroupLayoutDescriptor<'a>,
+    ),
     DestroyBindGroupLayout(id::BindGroupLayoutId),
     CreatePipelineLayout(
         id::PipelineLayoutId,
-        wgt::PipelineLayoutDescriptor<'a, id::BindGroupLayoutId>,
+        crate::binding_model::PipelineLayoutDescriptor<'a>,
     ),
     DestroyPipelineLayout(id::PipelineLayoutId),
     CreateBindGroup(
         id::BindGroupId,
-        wgt::BindGroupDescriptor<
-            'a,
-            id::BindGroupLayoutId,
-            wgt::BindGroupEntry<crate::binding_model::BindingResource<'a>>,
-        >,
+        crate::binding_model::BindGroupDescriptor<'a>,
     ),
     DestroyBindGroup(id::BindGroupId),
     CreateShaderModule {
@@ -75,24 +74,17 @@ pub enum Action<'a> {
     DestroyShaderModule(id::ShaderModuleId),
     CreateComputePipeline(
         id::ComputePipelineId,
-        wgt::ComputePipelineDescriptor<
-            id::PipelineLayoutId,
-            wgt::ProgrammableStageDescriptor<'a, id::ShaderModuleId>,
-        >,
+        crate::pipeline::ComputePipelineDescriptor<'a>,
     ),
     DestroyComputePipeline(id::ComputePipelineId),
     CreateRenderPipeline(
         id::RenderPipelineId,
-        wgt::RenderPipelineDescriptor<
-            'a,
-            id::PipelineLayoutId,
-            wgt::ProgrammableStageDescriptor<'a, id::ShaderModuleId>,
-        >,
+        crate::pipeline::RenderPipelineDescriptor<'a>,
     ),
     DestroyRenderPipeline(id::RenderPipelineId),
     CreateRenderBundle {
         id: id::RenderBundleId,
-        desc: wgt::RenderBundleEncoderDescriptor<'a>,
+        desc: crate::command::RenderBundleEncoderDescriptor<'a>,
         base: crate::command::BasePass<crate::command::RenderCommand>,
     },
     DestroyRenderBundle(id::RenderBundleId),

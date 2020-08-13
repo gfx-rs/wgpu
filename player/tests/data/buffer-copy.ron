@@ -12,7 +12,7 @@
         CreateBuffer(
             Id(0, 1, Empty),
             (
-                label: "",
+                label: Some("dummy"),
                 size: 16,
                 usage: (
                     bits: 41,

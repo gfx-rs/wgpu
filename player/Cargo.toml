@@ -32,7 +32,11 @@ features = ["replay"]
 path = "../wgpu-core"
 package = "wgpu-core"
 version = "0.5"
-features = ["replay", "raw-window-handle", "subscriber"]
+features = ["replay", "raw-window-handle"]
+
+[dependencies.wgpu-subscriber]
+path = "../wgpu-subscriber"
+version = "0.5"
 
 [target.'cfg(all(unix, not(target_os = "ios"), not(target_os = "macos")))'.dependencies]
 gfx-backend-vulkan = { version = "0.5", features = ["x11"] }

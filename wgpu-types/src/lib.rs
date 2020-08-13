@@ -10,15 +10,16 @@
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, num::NonZeroU32, ops::Range};
-
-pub use into_cow::IntoCow;
-mod into_cow;
+use std::{num::NonZeroU32, ops::Range};
 
 /// Integral type used for buffer offsets.
 pub type BufferAddress = u64;
 /// Integral type used for buffer slice sizes.
 pub type BufferSize = std::num::NonZeroU64;
+/// Integral type used for binding locations in shaders.
+pub type ShaderLocation = u32;
+/// Integral type used for dynamic bind group offsets.
+pub type DynamicOffset = u32;
 
 /// Buffer-Texture copies must have [`bytes_per_row`] aligned to this number.
 ///
@@ -120,22 +121,6 @@ pub struct RequestAdapterOptions<S> {
     /// Surface that is required to be presentable with the requested adapter. This does not
     /// create the surface, only guarantees that the adapter can present to said surface.
     pub compatible_surface: Option<S>,
-}
-
-impl<S> RequestAdapterOptions<S> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn power_preference(&mut self, preference: PowerPreference) -> &mut Self {
-        self.power_preference = preference;
-        self
-    }
-
-    pub fn compatible_surface(&mut self, surface: S) -> &mut Self {
-        self.compatible_surface = Some(surface);
-        self
-    }
 }
 
 impl<S> Default for RequestAdapterOptions<S> {
@@ -382,27 +367,6 @@ pub struct DeviceDescriptor {
     pub shader_validation: bool,
 }
 
-impl DeviceDescriptor {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn features(&mut self, features: Features) -> &mut Self {
-        self.features = features;
-        self
-    }
-
-    pub fn limits(&mut self, limits: Limits) -> &mut Self {
-        self.limits = limits;
-        self
-    }
-
-    pub fn shader_validation(&mut self) -> &mut Self {
-        self.shader_validation = true;
-        self
-    }
-}
-
 bitflags::bitflags! {
     /// Describes the shader stages that a binding will be visible from.
     ///
@@ -412,13 +376,13 @@ bitflags::bitflags! {
     #[repr(transparent)]
     #[cfg_attr(feature = "serde", derive(Deserialize, Serialize))]
     pub struct ShaderStage: u32 {
-        /// Binding is not visible from any shader stage
+        /// Binding is not visible from any shader stage.
         const NONE = 0;
-        /// Binding is visible from the vertex shader of a render pipeline
+        /// Binding is visible from the vertex shader of a render pipeline.
         const VERTEX = 1;
-        /// Binding is visible from the fragment shader of a render pipeline
+        /// Binding is visible from the fragment shader of a render pipeline.
         const FRAGMENT = 2;
-        /// Binding is visible from the compute shader of a compute pipeline
+        /// Binding is visible from the compute shader of a compute pipeline.
         const COMPUTE = 4;
     }
 }
@@ -518,23 +482,6 @@ impl BlendDescriptor {
     }
 }
 
-impl BlendDescriptor {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn factors(&mut self, src_factor: BlendFactor, dst_factor: BlendFactor) -> &mut Self {
-        self.src_factor = src_factor;
-        self.dst_factor = dst_factor;
-        self
-    }
-
-    pub fn operation(&mut self, operation: BlendOperation) -> &mut Self {
-        self.operation = operation;
-        self
-    }
-}
-
 impl Default for BlendDescriptor {
     fn default() -> Self {
         BlendDescriptor::REPLACE
@@ -558,29 +505,14 @@ pub struct ColorStateDescriptor {
     pub write_mask: ColorWrite,
 }
 
-impl ColorStateDescriptor {
-    pub fn new(format: TextureFormat) -> Self {
-        Self {
+impl From<TextureFormat> for ColorStateDescriptor {
+    fn from(format: TextureFormat) -> Self {
+        ColorStateDescriptor {
             format,
-            alpha_blend: BlendDescriptor::default(),
-            color_blend: BlendDescriptor::default(),
-            write_mask: ColorWrite::default(),
+            alpha_blend: BlendDescriptor::REPLACE,
+            color_blend: BlendDescriptor::REPLACE,
+            write_mask: ColorWrite::ALL,
         }
-    }
-
-    pub fn alpha_blend(&mut self, blend: BlendDescriptor) -> &mut Self {
-        self.alpha_blend = blend;
-        self
-    }
-
-    pub fn color_blend(&mut self, blend: BlendDescriptor) -> &mut Self {
-        self.color_blend = blend;
-        self
-    }
-
-    pub fn write_mask(&mut self, mask: ColorWrite) -> &mut Self {
-        self.write_mask = mask;
-        self
     }
 }
 
@@ -667,34 +599,6 @@ pub struct RasterizationStateDescriptor {
     pub depth_bias: i32,
     pub depth_bias_slope_scale: f32,
     pub depth_bias_clamp: f32,
-}
-
-impl RasterizationStateDescriptor {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn front_face(&mut self, front_face: FrontFace) -> &mut Self {
-        self.front_face = front_face;
-        self
-    }
-
-    pub fn cull_mode(&mut self, cull_mode: CullMode) -> &mut Self {
-        self.cull_mode = cull_mode;
-        self
-    }
-
-    pub fn clamp_depth(&mut self) -> &mut Self {
-        self.clamp_depth = true;
-        self
-    }
-
-    pub fn depth_bias(&mut self, bias: i32, slope_scale: f32, clamp: f32) -> &mut Self {
-        self.depth_bias = bias;
-        self.depth_bias_slope_scale = slope_scale;
-        self.depth_bias_clamp = clamp;
-        self
-    }
 }
 
 /// Underlying texture data format.
@@ -921,6 +825,35 @@ impl Default for ColorWrite {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "trace", derive(Serialize))]
+#[cfg_attr(feature = "replay", derive(Deserialize))]
+pub struct StencilStateDescriptor {
+    /// Front face mode.
+    pub front: StencilStateFaceDescriptor,
+    /// Back face mode.
+    pub back: StencilStateFaceDescriptor,
+    /// Stencil values are AND'd with this mask when reading and writing from the stencil buffer. Only low 8 bits are used.
+    pub read_mask: u32,
+    /// Stencil values are AND'd with this mask when writing to the stencil buffer. Only low 8 bits are used.
+    pub write_mask: u32,
+}
+
+impl StencilStateDescriptor {
+    pub fn is_enabled(&self) -> bool {
+        (self.front != StencilStateFaceDescriptor::IGNORE
+            || self.back != StencilStateFaceDescriptor::IGNORE)
+            && self.read_mask != 0
+    }
+    pub fn is_read_only(&self) -> bool {
+        self.write_mask == 0
+    }
+    pub fn needs_ref_value(&self) -> bool {
+        self.front.compare.needs_ref_value() || self.back.compare.needs_ref_value()
+    }
+}
+
 /// Describes the depth/stencil state in a render pipeline.
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -934,55 +867,15 @@ pub struct DepthStencilStateDescriptor {
     pub depth_write_enabled: bool,
     /// Comparison function used to compare depth values in the depth test.
     pub depth_compare: CompareFunction,
-    /// Stencil state used for front faces.
-    pub stencil_front: StencilStateFaceDescriptor,
-    /// Stencil state used for back faces.
-    pub stencil_back: StencilStateFaceDescriptor,
-    /// Stencil values are AND'd with this mask when reading and writing from the stencil buffer. Only low 8 bits are used.
-    pub stencil_read_mask: u32,
-    /// Stencil values are AND'd with this mask when writing to the stencil buffer. Only low 8 bits are used.
-    pub stencil_write_mask: u32,
+    pub stencil: StencilStateDescriptor,
 }
 
 impl DepthStencilStateDescriptor {
-    pub fn new(format: TextureFormat, depth_compare: CompareFunction) -> Self {
-        Self {
-            format,
-            depth_write_enabled: false,
-            depth_compare,
-            stencil_front: StencilStateFaceDescriptor::default(),
-            stencil_back: StencilStateFaceDescriptor::default(),
-            stencil_read_mask: 0,
-            stencil_write_mask: 0,
-        }
-    }
-
-    pub fn depth_write(&mut self) -> &mut Self {
-        self.depth_write_enabled = true;
-        self
-    }
-
-    pub fn stencil_front(&mut self, stencil: StencilStateFaceDescriptor) -> &mut Self {
-        self.stencil_front = stencil;
-        self
-    }
-
-    pub fn stencil_back(&mut self, stencil: StencilStateFaceDescriptor) -> &mut Self {
-        self.stencil_back = stencil;
-        self
-    }
-
-    pub fn stencil_masks(&mut self, read: u32, write: u32) -> &mut Self {
-        self.stencil_read_mask = read;
-        self.stencil_write_mask = write;
-        self
-    }
-
-    pub fn needs_stencil_reference(&self) -> bool {
-        !self.stencil_front.compare.is_trivial() || !self.stencil_back.compare.is_trivial()
+    pub fn is_depth_enabled(&self) -> bool {
+        self.depth_compare != CompareFunction::Always || self.depth_write_enabled
     }
     pub fn is_read_only(&self) -> bool {
-        !self.depth_write_enabled && self.stencil_write_mask == 0
+        !self.depth_write_enabled && self.stencil.is_read_only()
     }
 }
 
@@ -1073,8 +966,6 @@ impl Default for StencilStateFaceDescriptor {
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
 pub enum CompareFunction {
-    /// Invalid value, do not use
-    Undefined = 0,
     /// Function never passes
     Never = 1,
     /// Function passes if new value less than existing value
@@ -1094,16 +985,13 @@ pub enum CompareFunction {
 }
 
 impl CompareFunction {
-    pub fn is_trivial(self) -> bool {
+    pub fn needs_ref_value(self) -> bool {
         match self {
-            CompareFunction::Never | CompareFunction::Always => true,
-            _ => false,
+            CompareFunction::Never | CompareFunction::Always => false,
+            _ => true,
         }
     }
 }
-
-/// Integral type used for binding locations in shaders.
-pub type ShaderLocation = u32;
 
 /// Rate that determines when vertex data is advanced.
 #[repr(C)]
@@ -1131,58 +1019,6 @@ pub struct VertexAttributeDescriptor {
     pub format: VertexFormat,
     /// Location for this input. Must match the location in the shader.
     pub shader_location: ShaderLocation,
-}
-
-/// Describes how the vertex buffer is interpreted.
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexBufferDescriptor<'a> {
-    /// The stride, in bytes, between elements of this buffer.
-    pub stride: BufferAddress,
-    /// How often this vertex buffer is "stepped" forward.
-    pub step_mode: InputStepMode,
-    /// The list of attributes which comprise a single vertex.
-    pub attributes: Cow<'a, [VertexAttributeDescriptor]>,
-}
-
-impl<'a> VertexBufferDescriptor<'a> {
-    pub fn new(
-        stride: BufferAddress,
-        step_mode: InputStepMode,
-        attributes: impl IntoCow<'a, [VertexAttributeDescriptor]>,
-    ) -> Self {
-        Self {
-            stride,
-            step_mode,
-            attributes: attributes.into_cow(),
-        }
-    }
-}
-
-/// Describes vertex input state for a render pipeline.
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct VertexStateDescriptor<'a> {
-    /// The format of any index buffers used with this pipeline.
-    pub index_format: IndexFormat,
-    /// The format of any vertex buffers used with this pipeline.
-    pub vertex_buffers: Cow<'a, [VertexBufferDescriptor<'a>]>,
-}
-
-impl<'a> VertexStateDescriptor<'a> {
-    pub fn new(vertex_buffers: impl IntoCow<'a, [VertexBufferDescriptor<'a>]>) -> Self {
-        Self {
-            index_format: IndexFormat::default(),
-            vertex_buffers: vertex_buffers.into_cow(),
-        }
-    }
-
-    pub fn index_format(&mut self, format: IndexFormat) -> &mut Self {
-        self.index_format = format;
-        self
-    }
 }
 
 /// Vertex Format for a Vertex Attribute (input).
@@ -1355,27 +1191,6 @@ impl<L> BufferDescriptor<L> {
     }
 }
 
-impl<'a> BufferDescriptor<Option<Cow<'a, str>>> {
-    pub fn new(usage: BufferUsage, size: BufferAddress) -> Self {
-        BufferDescriptor {
-            label: None,
-            size,
-            usage,
-            mapped_at_creation: false,
-        }
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
-
-    pub fn mapped_at_creation(&mut self) -> &mut Self {
-        self.mapped_at_creation = true;
-        self
-    }
-}
-
 /// Describes a [`CommandEncoder`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1392,25 +1207,11 @@ impl<L> CommandEncoderDescriptor<L> {
     }
 }
 
-impl<'a> CommandEncoderDescriptor<Option<Cow<'a, str>>> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
-}
-
-impl<'a> Default for CommandEncoderDescriptor<Option<Cow<'a, str>>> {
+impl<T> Default for CommandEncoderDescriptor<Option<T>> {
     fn default() -> Self {
         Self { label: None }
     }
 }
-
-/// Integral type used for dynamic bind group offsets.
-pub type DynamicOffset = u32;
 
 /// Behavior of the presentation engine based on frame rate.
 #[repr(C)]
@@ -1478,33 +1279,6 @@ pub struct SwapChainDescriptor {
     pub present_mode: PresentMode,
 }
 
-impl SwapChainDescriptor {
-    pub fn new(width: u32, height: u32) -> Self {
-        Self {
-            usage: TextureUsage::OUTPUT_ATTACHMENT,
-            format: TextureFormat::Bgra8UnormSrgb,
-            width,
-            height,
-            present_mode: PresentMode::Fifo,
-        }
-    }
-
-    pub fn usage(&mut self, usage: TextureUsage) -> &mut Self {
-        self.usage = usage;
-        self
-    }
-
-    pub fn format(&mut self, format: TextureFormat) -> &mut Self {
-        self.format = format;
-        self
-    }
-
-    pub fn present_mode(&mut self, present_mode: PresentMode) -> &mut Self {
-        self.present_mode = present_mode;
-        self
-    }
-}
-
 /// Status of the recieved swapchain image.
 #[repr(C)]
 #[derive(Debug)]
@@ -1514,29 +1288,6 @@ pub enum SwapChainStatus {
     Timeout,
     Outdated,
     Lost,
-}
-
-/// Describes the attachments of a render pass.
-#[derive(Clone, Debug, Default, PartialEq)]
-pub struct RenderPassDescriptor<'a, C: Clone, D> {
-    /// The color attachments of the render pass.
-    pub color_attachments: Cow<'a, [C]>,
-    /// The depth and stencil attachment of the render pass, if any.
-    pub depth_stencil_attachment: Option<D>,
-}
-
-impl<'a, C: Clone, D> RenderPassDescriptor<'a, C, D> {
-    pub fn new(color_attachments: impl IntoCow<'a, [C]>) -> Self {
-        Self {
-            color_attachments: color_attachments.into_cow(),
-            depth_stencil_attachment: None,
-        }
-    }
-
-    pub fn depth_stencil_attachment(&mut self, attachment: D) -> &mut Self {
-        self.depth_stencil_attachment = Some(attachment);
-        self
-    }
 }
 
 /// RGBA double precision color.
@@ -1637,6 +1388,16 @@ pub struct Extent3d {
     pub depth: u32,
 }
 
+impl Default for Extent3d {
+    fn default() -> Self {
+        Extent3d {
+            width: 1,
+            height: 1,
+            depth: 1,
+        }
+    }
+}
+
 /// Describes a [`Texture`].
 #[repr(C)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1674,42 +1435,6 @@ impl<L> TextureDescriptor<L> {
     }
 }
 
-/// Texture descriptor builder methods
-impl<'a> TextureDescriptor<Option<Cow<'a, str>>> {
-    pub fn new(
-        size: Extent3d,
-        dimension: TextureDimension,
-        format: TextureFormat,
-        usage: TextureUsage,
-    ) -> Self {
-        Self {
-            label: None,
-            size,
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension,
-            format,
-            usage,
-        }
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
-
-    pub fn mip_level_count(&mut self, count: u32) -> &mut Self {
-        // TODO: validate this size is sane
-        self.mip_level_count = count;
-        self
-    }
-
-    pub fn sample_count(&mut self, count: u32) -> &mut Self {
-        self.sample_count = count;
-        self
-    }
-}
-
 /// Kind of data the texture holds.
 #[repr(C)]
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -1727,95 +1452,6 @@ pub enum TextureAspect {
 impl Default for TextureAspect {
     fn default() -> Self {
         TextureAspect::All
-    }
-}
-
-/// Describes a [`TextureView`].
-#[repr(C)]
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct TextureViewDescriptor<L> {
-    /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
-    pub format: TextureFormat,
-    /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
-    /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
-    pub dimension: TextureViewDimension,
-    /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
-    pub aspect: TextureAspect,
-    /// Base mip level.
-    pub base_mip_level: u32,
-    /// Mip level count.
-    /// If `Some(count)`, `base_mip_level + count` must be less or equal to underlying texture mip count.
-    /// If `None`, considered to include the rest of the mipmap levels, but at least 1 in total.
-    pub level_count: Option<NonZeroU32>,
-    /// Base array layer.
-    pub base_array_layer: u32,
-    /// Layer count.
-    /// If `Some(count)`, `base_array_layer + count` must be less or equal to the underlying array count.
-    /// If `None`, considered to include the rest of the array layers, but at least 1 in total.
-    pub array_layer_count: Option<NonZeroU32>,
-}
-
-impl<'a> TextureViewDescriptor<Option<Cow<'a, str>>> {
-    pub fn new(format: TextureFormat, dimension: TextureViewDimension) -> Self {
-        Self {
-            label: None,
-            format,
-            dimension,
-            aspect: TextureAspect::default(),
-            base_mip_level: 0,
-            level_count: None,
-            base_array_layer: 0,
-            array_layer_count: None,
-        }
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
-}
-
-impl<L> TextureViewDescriptor<L> {
-    pub fn aspect(&mut self, aspect: TextureAspect) -> &mut Self {
-        self.aspect = aspect;
-        self
-    }
-
-    pub fn base_mip_level(&mut self, base_mip_level: u32) -> &mut Self {
-        self.base_mip_level = base_mip_level;
-        self
-    }
-
-    pub fn level_count(&mut self, level_count: u32) -> &mut Self {
-        self.level_count = Some(NonZeroU32::new(level_count).unwrap());
-        self
-    }
-
-    pub fn base_array_layer(&mut self, base_array_layer: u32) -> &mut Self {
-        self.base_array_layer = base_array_layer;
-        self
-    }
-
-    pub fn array_layer_count(&mut self, array_layer_count: u32) -> &mut Self {
-        self.array_layer_count = Some(NonZeroU32::new(array_layer_count).unwrap());
-        self
-    }
-
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> TextureViewDescriptor<K> {
-        TextureViewDescriptor {
-            label: fun(&self.label),
-            format: self.format,
-            dimension: self.dimension,
-            aspect: self.aspect,
-            base_mip_level: self.base_mip_level,
-            level_count: self.level_count,
-            base_array_layer: self.base_array_layer,
-            array_layer_count: self.array_layer_count,
-        }
     }
 }
 
@@ -1870,199 +1506,6 @@ impl Default for FilterMode {
     }
 }
 
-/// Describes a [`Sampler`]
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct SamplerDescriptor<L> {
-    /// Debug label of the sampler. This will show up in graphics debuggers for easy identification.
-    pub label: L,
-    /// How to deal with out of bounds accesses in the u (i.e. x) direction
-    pub address_mode_u: AddressMode,
-    /// How to deal with out of bounds accesses in the v (i.e. y) direction
-    pub address_mode_v: AddressMode,
-    /// How to deal with out of bounds accesses in the w (i.e. z) direction
-    pub address_mode_w: AddressMode,
-    /// How to filter the texture when it needs to be magnified (made larger)
-    pub mag_filter: FilterMode,
-    /// How to filter the texture when it needs to be minified (made smaller)
-    pub min_filter: FilterMode,
-    /// How to filter between mip map levels
-    pub mipmap_filter: FilterMode,
-    /// Minimum level of detail (i.e. mip level) to use
-    pub lod_min_clamp: f32,
-    /// Maximum level of detail (i.e. mip level) to use
-    pub lod_max_clamp: f32,
-    /// If this is enabled, this is a comparison sampler using the given comparison function.
-    pub compare: Option<CompareFunction>,
-    /// Valid values: 1, 2, 4, 8, and 16.
-    pub anisotropy_clamp: Option<u8>,
-}
-
-impl<L: Default> Default for SamplerDescriptor<L> {
-    fn default() -> Self {
-        Self {
-            label: Default::default(),
-            address_mode_u: Default::default(),
-            address_mode_v: Default::default(),
-            address_mode_w: Default::default(),
-            mag_filter: Default::default(),
-            min_filter: Default::default(),
-            mipmap_filter: Default::default(),
-            lod_min_clamp: 0.0,
-            lod_max_clamp: std::f32::MAX,
-            compare: Default::default(),
-            anisotropy_clamp: Default::default(),
-        }
-    }
-}
-
-impl<L: Default> SamplerDescriptor<L> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-impl<L> SamplerDescriptor<L> {
-    pub fn address_mode_u(&mut self, mode: AddressMode) -> &mut Self {
-        self.address_mode_u = mode;
-        self
-    }
-
-    pub fn address_mode_v(&mut self, mode: AddressMode) -> &mut Self {
-        self.address_mode_v = mode;
-        self
-    }
-
-    pub fn address_mode_w(&mut self, mode: AddressMode) -> &mut Self {
-        self.address_mode_w = mode;
-        self
-    }
-
-    pub fn mag_filter(&mut self, mode: FilterMode) -> &mut Self {
-        self.mag_filter = mode;
-        self
-    }
-
-    pub fn min_filter(&mut self, mode: FilterMode) -> &mut Self {
-        self.min_filter = mode;
-        self
-    }
-
-    pub fn lod_min_clamp(&mut self, clamp: f32) -> &mut Self {
-        self.lod_min_clamp = clamp;
-        self
-    }
-
-    pub fn lod_max_clamp(&mut self, clamp: f32) -> &mut Self {
-        self.lod_max_clamp = clamp;
-        self
-    }
-
-    pub fn compare(&mut self, fun: CompareFunction) -> &mut Self {
-        self.compare = Some(fun);
-        self
-    }
-
-    pub fn anisotropy_clamp(&mut self, clamp: u8) -> &mut Self {
-        //TODO check if value is sensible
-        self.anisotropy_clamp = Some(clamp);
-        self
-    }
-
-    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> SamplerDescriptor<K> {
-        SamplerDescriptor {
-            label: fun(&self.label),
-            address_mode_u: self.address_mode_u,
-            address_mode_v: self.address_mode_v,
-            address_mode_w: self.address_mode_w,
-            mag_filter: self.mag_filter,
-            min_filter: self.min_filter,
-            mipmap_filter: self.mipmap_filter,
-            lod_min_clamp: self.lod_min_clamp,
-            lod_max_clamp: self.lod_max_clamp,
-            compare: self.compare,
-            anisotropy_clamp: self.anisotropy_clamp,
-        }
-    }
-}
-
-/// Bindable resource and the slot to bind it to.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupEntry<R> {
-    /// Slot for which binding provides resource. Corresponds to an entry of the same
-    /// binding index in the [`BindGroupLayoutDescriptor`].
-    pub binding: u32,
-    /// Resource to attach to the binding
-    pub resource: R,
-}
-
-impl<R> BindGroupEntry<R> {
-    pub fn new(binding: u32, resource: R) -> Self {
-        Self { binding, resource }
-    }
-}
-
-/// Describes a group of bindings and the resources to be bound.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct BindGroupDescriptor<'a, L, B: Clone> {
-    /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
-    pub label: Option<Cow<'a, str>>,
-    /// The [`BindGroupLayout`] that corresponds to this bind group.
-    pub layout: L,
-    /// The resources to bind to this bind group.
-    pub entries: Cow<'a, [B]>,
-}
-
-impl<'a, L, B: Clone> BindGroupDescriptor<'a, L, B> {
-    pub fn new(layout: L, entries: impl IntoCow<'a, [B]>) -> Self {
-        Self {
-            label: None,
-            layout,
-            entries: entries.into_cow(),
-        }
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
-}
-
-/// Describes a pipeline layout.
-///
-/// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(Serialize))]
-#[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct PipelineLayoutDescriptor<'a, B: Clone> {
-    /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
-    /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
-    pub bind_group_layouts: Cow<'a, [B]>,
-    /// Set of push constant ranges this pipeline uses. Each shader stage that uses push constants
-    /// must define the range in push constant memory that corresponds to its single `layout(push_constant)`
-    /// uniform block.
-    ///
-    /// If this array is non-empty, the [`Features::PUSH_CONSTANTS`] must be enabled.
-    pub push_constant_ranges: Cow<'a, [PushConstantRange]>,
-}
-
-impl<'a, B: Clone> PipelineLayoutDescriptor<'a, B> {
-    pub fn new(
-        bind_group_layouts: impl IntoCow<'a, [B]>,
-        push_constant_ranges: impl IntoCow<'a, [PushConstantRange]>,
-    ) -> Self {
-        Self {
-            bind_group_layouts: bind_group_layouts.into_cow(),
-            push_constant_ranges: push_constant_ranges.into_cow(),
-        }
-    }
-}
-
 /// A range of push constant memory to pass to a shader stage.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2076,209 +1519,20 @@ pub struct PushConstantRange {
     pub range: Range<u32>,
 }
 
-impl PushConstantRange {
-    pub fn new(stages: ShaderStage, range: Range<u32>) -> Self {
-        Self { stages, range }
-    }
-}
-
-/// Describes a programmable pipeline stage.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ProgrammableStageDescriptor<'a, M> {
-    /// The compiled shader module for this stage.
-    pub module: M,
-    /// The name of the entry point in the compiled shader. There must be a function that returns
-    /// void with this name in the shader.
-    pub entry_point: Cow<'a, str>,
-}
-
-impl<'a, M> ProgrammableStageDescriptor<'a, M> {
-    pub fn new(module: M, entry_point: impl IntoCow<'a, str>) -> Self {
-        Self {
-            module,
-            entry_point: entry_point.into_cow(),
-        }
-    }
-}
-
-/// Describes a render (graphics) pipeline.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderPipelineDescriptor<'a, L, D> {
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<L>,
-    /// The compiled vertex stage and its entry point.
-    pub vertex_stage: D,
-    /// The compiled fragment stage and its entry point, if any.
-    pub fragment_stage: Option<D>,
-    /// The rasterization process for this pipeline.
-    pub rasterization_state: Option<RasterizationStateDescriptor>,
-    /// The primitive topology used to interpret vertices.
-    pub primitive_topology: PrimitiveTopology,
-    /// The effect of draw calls on the color aspect of the output target.
-    pub color_states: Cow<'a, [ColorStateDescriptor]>,
-    /// The effect of draw calls on the depth and stencil aspects of the output target, if any.
-    pub depth_stencil_state: Option<DepthStencilStateDescriptor>,
-    /// The vertex input state for this pipeline.
-    pub vertex_state: VertexStateDescriptor<'a>,
-    /// The number of samples calculated per pixel (for MSAA). For non-multisampled textures,
-    /// this should be `1`
-    pub sample_count: u32,
-    /// Bitmask that restricts the samples of a pixel modified by this pipeline. All samples
-    /// can be enabled using the value `!0`
-    pub sample_mask: u32,
-    /// When enabled, produces another sample mask per pixel based on the alpha output value, that
-    /// is ANDed with the sample_mask and the primitive coverage to restrict the set of samples
-    /// affected by a primitive.
-    ///
-    /// The implicit mask produced for alpha of zero is guaranteed to be zero, and for alpha of one
-    /// is guaranteed to be all 1-s.
-    pub alpha_to_coverage_enabled: bool,
-}
-
-impl<'a, L, D> RenderPipelineDescriptor<'a, L, D> {
-    pub fn new(
-        vertex_stage: D,
-        primitive_topology: PrimitiveTopology,
-        color_states: impl IntoCow<'a, [ColorStateDescriptor]>,
-        vertex_state: VertexStateDescriptor<'a>,
-    ) -> Self {
-        Self {
-            layout: None,
-            vertex_stage,
-            fragment_stage: None,
-            rasterization_state: None,
-            primitive_topology,
-            color_states: color_states.into_cow(),
-            depth_stencil_state: None,
-            vertex_state,
-            sample_count: 1,
-            sample_mask: !0,
-            alpha_to_coverage_enabled: false,
-        }
-    }
-
-    pub fn layout(&mut self, layout: L) -> &mut Self {
-        self.layout = Some(layout);
-        self
-    }
-
-    pub fn fragment_stage(&mut self, stage: D) -> &mut Self {
-        self.fragment_stage = Some(stage);
-        self
-    }
-
-    pub fn rasterization_state(&mut self, state: RasterizationStateDescriptor) -> &mut Self {
-        self.rasterization_state = Some(state);
-        self
-    }
-
-    pub fn depth_stencil_state(&mut self, state: DepthStencilStateDescriptor) -> &mut Self {
-        self.depth_stencil_state = Some(state);
-        self
-    }
-
-    pub fn sample_count(&mut self, count: u32) -> &mut Self {
-        self.sample_count = count;
-        self
-    }
-
-    pub fn sample_mask(&mut self, mask: u32) -> &mut Self {
-        self.sample_mask = mask;
-        self
-    }
-
-    pub fn alpha_to_coverage(&mut self) -> &mut Self {
-        self.alpha_to_coverage_enabled = true;
-        self
-    }
-}
-
-/// Describes a compute pipeline.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct ComputePipelineDescriptor<L, D> {
-    /// The layout of bind groups for this pipeline.
-    pub layout: Option<L>,
-    /// The compiled compute stage and its entry point.
-    pub compute_stage: D,
-}
-
-impl<L, D> ComputePipelineDescriptor<L, D> {
-    pub fn new(compute_stage: D) -> Self {
-        Self {
-            layout: None,
-            compute_stage,
-        }
-    }
-
-    pub fn layout(&mut self, layout: L) -> &mut Self {
-        self.layout = Some(layout);
-        self
-    }
-}
-
 /// Describes a [`CommandBuffer`].
 #[repr(C)]
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
 #[cfg_attr(feature = "replay", derive(Deserialize))]
-pub struct CommandBufferDescriptor {
-    /// Set this member to zero
-    pub todo: u32,
+pub struct CommandBufferDescriptor<L> {
+    pub label: L,
 }
 
-impl CommandBufferDescriptor {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
-/// Describes a [`RenderBundleEncoder`].
-#[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct RenderBundleEncoderDescriptor<'a> {
-    /// Debug label of the render bundle encoder. This will show up in graphics debuggers for easy identification.
-    pub label: Option<Cow<'a, str>>,
-    /// The formats of the color attachments that this render bundle is capable to rendering to. This
-    /// must match the formats of the color attachments in the renderpass this render bundle is executed in.
-    pub color_formats: Cow<'a, [TextureFormat]>,
-    /// The formats of the depth attachment that this render bundle is capable to rendering to. This
-    /// must match the formats of the depth attachments in the renderpass this render bundle is executed in.
-    pub depth_stencil_format: Option<TextureFormat>,
-    /// Sample count this render bundle is capable of rendering to. This must match the pipelines and
-    /// the renderpasses it is used in.
-    pub sample_count: u32,
-}
-
-impl<'a> RenderBundleEncoderDescriptor<'a> {
-    pub fn new(color_formats: impl IntoCow<'a, [TextureFormat]>) -> Self {
-        Self {
-            label: None,
-            color_formats: color_formats.into_cow(),
-            depth_stencil_format: None,
-            sample_count: 1,
+impl<L> CommandBufferDescriptor<L> {
+    pub fn map_label<K>(&self, fun: impl FnOnce(&L) -> K) -> CommandBufferDescriptor<K> {
+        CommandBufferDescriptor {
+            label: fun(&self.label),
         }
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
-
-    pub fn depth_stencil_format(&mut self, format: TextureFormat) -> &mut Self {
-        self.depth_stencil_format = Some(format);
-        self
-    }
-
-    pub fn sample_count(&mut self, count: u32) -> &mut Self {
-        self.sample_count = count;
-        self
     }
 }
 
@@ -2300,18 +1554,7 @@ impl<L> RenderBundleDescriptor<L> {
     }
 }
 
-impl<'a> RenderBundleDescriptor<Option<Cow<'a, str>>> {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
-}
-
-impl<'a> Default for RenderBundleDescriptor<Option<Cow<'a, str>>> {
+impl<T> Default for RenderBundleDescriptor<Option<T>> {
     fn default() -> Self {
         Self { label: None }
     }
@@ -2396,7 +1639,7 @@ impl From<TextureFormat> for TextureComponentType {
 
 /// Layout of a texture in a buffer's memory.
 #[repr(C)]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct TextureDataLayout {
@@ -2416,26 +1659,6 @@ pub struct TextureDataLayout {
     ///
     /// May be 0 for 2D texture copies.
     pub rows_per_image: u32,
-}
-
-impl TextureDataLayout {
-    pub fn new(bytes_per_row: u32) -> Self {
-        Self {
-            offset: 0,
-            bytes_per_row,
-            rows_per_image: 0,
-        }
-    }
-
-    pub fn offset(&mut self, offset: BufferAddress) -> &mut Self {
-        self.offset = offset;
-        self
-    }
-
-    pub fn rows_per_image(&mut self, rows_per_image: u32) -> &mut Self {
-        self.rows_per_image = rows_per_image;
-        self
-    }
 }
 
 /// Specific type of a binding.
@@ -2545,6 +1768,16 @@ pub enum BindingType {
     },
 }
 
+impl BindingType {
+    pub fn has_dynamic_offset(&self) -> bool {
+        match *self {
+            BindingType::UniformBuffer { dynamic, .. }
+            | BindingType::StorageBuffer { dynamic, .. } => dynamic,
+            _ => false,
+        }
+    }
+}
+
 /// Describes a single binding inside a bind group.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "trace", derive(Serialize))]
@@ -2562,57 +1795,7 @@ pub struct BindGroupLayoutEntry {
     /// If this value is Some and `ty` is `BindingType::SampledTexture`, [`Capabilities::SAMPLED_TEXTURE_BINDING_ARRAY`] must be supported.
     ///
     /// If this value is Some and `ty` is any other variant, bind group creation will fail.
-    pub count: Option<u32>,
-}
-
-impl BindGroupLayoutEntry {
-    pub fn new(binding: u32, visibility: ShaderStage, ty: BindingType) -> Self {
-        Self {
-            binding,
-            visibility,
-            ty,
-            count: None,
-        }
-    }
-
-    pub fn count(&mut self, count: u32) -> &mut Self {
-        self.count = Some(count);
-        self
-    }
-
-    pub fn has_dynamic_offset(&self) -> bool {
-        match self.ty {
-            BindingType::UniformBuffer { dynamic, .. }
-            | BindingType::StorageBuffer { dynamic, .. } => dynamic,
-            _ => false,
-        }
-    }
-}
-
-/// Describes a [`BindGroupLayout`].
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "trace", derive(serde::Serialize))]
-#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
-pub struct BindGroupLayoutDescriptor<'a> {
-    /// Debug label of the bind group layout. This will show up in graphics debuggers for easy identification.
-    pub label: Option<Cow<'a, str>>,
-
-    /// Array of entries in this BindGroupLayout
-    pub entries: Cow<'a, [BindGroupLayoutEntry]>,
-}
-
-impl<'a> BindGroupLayoutDescriptor<'a> {
-    pub fn new(entries: impl IntoCow<'a, [BindGroupLayoutEntry]>) -> Self {
-        Self {
-            label: None,
-            entries: entries.into_cow(),
-        }
-    }
-
-    pub fn label(&mut self, label: impl IntoCow<'a, str>) -> &mut Self {
-        self.label = Some(label.into_cow());
-        self
-    }
+    pub count: Option<NonZeroU32>,
 }
 
 /// View of a buffer which can be used to copy to/from a texture.
@@ -2626,12 +1809,6 @@ pub struct BufferCopyView<B> {
     pub layout: TextureDataLayout,
 }
 
-impl<B> BufferCopyView<B> {
-    pub fn new(buffer: B, layout: TextureDataLayout) -> Self {
-        Self { buffer, layout }
-    }
-}
-
 /// View of a texture which can be used to copy to/from a buffer/texture.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
@@ -2643,19 +1820,4 @@ pub struct TextureCopyView<T> {
     pub mip_level: u32,
     /// The base texel of the texture in the selected `mip_level`.
     pub origin: Origin3d,
-}
-
-impl<T> TextureCopyView<T> {
-    pub fn new(texture: T) -> Self {
-        Self {
-            texture,
-            origin: Origin3d::default(),
-            mip_level: 1,
-        }
-    }
-
-    pub fn mip_level(&mut self, level: u32) -> &mut Self {
-        self.mip_level = level;
-        self
-    }
 }
