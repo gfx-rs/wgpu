@@ -7,7 +7,7 @@ use crate::{
     device::{DeviceError, RenderPassContext},
     id::{DeviceId, PipelineLayoutId, ShaderModuleId},
     validation::StageError,
-    LifeGuard, RefCount, Stored,
+    Label, LifeGuard, RefCount, Stored,
 };
 use std::borrow::{Borrow, Cow};
 use thiserror::Error;
@@ -68,6 +68,7 @@ pub enum ImplicitLayoutError {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct ComputePipelineDescriptor<'a> {
+    pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<PipelineLayoutId>,
     /// The compiled compute stage and its entry point.
@@ -129,6 +130,7 @@ pub struct VertexStateDescriptor<'a> {
 #[cfg_attr(feature = "trace", derive(serde::Serialize))]
 #[cfg_attr(feature = "replay", derive(serde::Deserialize))]
 pub struct RenderPipelineDescriptor<'a> {
+    pub label: Label<'a>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<PipelineLayoutId>,
     /// The compiled vertex stage and its entry point.

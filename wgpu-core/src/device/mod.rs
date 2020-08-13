@@ -2878,7 +2878,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 parent,
             };
             // TODO: cache
-            let pipeline = unsafe {
+            let raw = unsafe {
                 device
                     .raw
                     .create_graphics_pipeline(&pipeline_desc, None)
@@ -2887,9 +2887,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         _ => panic!("failed to create graphics pipeline: {}", err),
                     })?
             };
+            if let Some(_) = desc.label {
+                //TODO-0.6: device.set_graphics_pipeline_name(&mut raw, label)
+            }
 
             (
-                pipeline,
+                raw,
                 pipeline_layout_id,
                 layout.life_guard.add_ref(),
                 derived_bind_group_count,
@@ -3130,20 +3133,24 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 parent,
             };
 
-            match unsafe { device.raw.create_compute_pipeline(&pipeline_desc, None) } {
-                Ok(pipeline) => (
-                    pipeline,
-                    pipeline_layout_id,
-                    layout.life_guard.add_ref(),
-                    derived_bind_group_count,
-                ),
+            let raw = match unsafe { device.raw.create_compute_pipeline(&pipeline_desc, None) } {
+                Ok(pipeline) => pipeline,
                 Err(hal::pso::CreationError::OutOfMemory(_)) => {
                     return Err(pipeline::CreateComputePipelineError::Device(
                         DeviceError::OutOfMemory,
                     ))
                 }
                 other => panic!("Compute pipeline creation error: {:?}", other),
+            };
+            if let Some(_) = desc.label {
+                //TODO-0.6: device.raw.set_compute_pipeline_name(&mut raw, label);
             }
+            (
+                raw,
+                pipeline_layout_id,
+                layout.life_guard.add_ref(),
+                derived_bind_group_count,
+            )
         };
 
         let pipeline = pipeline::ComputePipeline {
