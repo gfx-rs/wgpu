@@ -99,6 +99,7 @@ impl framework::Example for Skybox {
 
         // Create the render pipeline
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
             layout: Some(&pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
