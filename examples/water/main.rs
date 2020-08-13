@@ -497,6 +497,7 @@ impl framework::Example for Example {
         // Create the render pipelines. These describe how the data will flow through the GPU, and what
         // constraints and modifiers it will have.
         let water_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("water"),
             // The "layout" is what uniforms will be needed.
             layout: Some(&water_pipeline_layout),
             // Vertex & Fragment shaders
@@ -570,6 +571,7 @@ impl framework::Example for Example {
 
         // Same idea as the water pipeline.
         let terrain_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("terrain"),
             layout: Some(&terrain_pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &terrain_vs_module,

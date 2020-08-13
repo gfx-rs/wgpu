@@ -41,6 +41,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     });
 
     let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: None,
         layout: Some(&pipeline_layout),
         vertex_stage: wgpu::ProgrammableStageDescriptor {
             module: &vs_module,

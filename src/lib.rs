@@ -1107,6 +1107,8 @@ pub struct RenderPassDescriptor<'a, 'b> {
 /// Describes a render (graphics) pipeline.
 #[derive(Clone, Debug)]
 pub struct RenderPipelineDescriptor<'a> {
+    /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled vertex stage and its entry point.
@@ -1141,6 +1143,8 @@ pub struct RenderPipelineDescriptor<'a> {
 /// Describes a compute pipeline.
 #[derive(Clone, Debug)]
 pub struct ComputePipelineDescriptor<'a> {
+    /// Debug label of the pipeline. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
     /// The layout of bind groups for this pipeline.
     pub layout: Option<&'a PipelineLayout>,
     /// The compiled compute stage and its entry point.

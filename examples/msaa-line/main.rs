@@ -51,6 +51,7 @@ impl Example {
     ) -> wgpu::RenderBundle {
         log::info!("sample_count: {}", sample_count);
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: None,
             layout: Some(&pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: vs_module,

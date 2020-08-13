@@ -113,6 +113,7 @@ impl Example {
         let fs_module = device.create_shader_module(wgpu::include_spirv!("blit.frag.spv"));
 
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("blit"),
             layout: Some(&pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
@@ -345,6 +346,7 @@ impl framework::Example for Example {
         let fs_module = device.create_shader_module(wgpu::include_spirv!("draw.frag.spv"));
 
         let draw_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("draw"),
             layout: Some(&pipeline_layout),
             vertex_stage: wgpu::ProgrammableStageDescriptor {
                 module: &vs_module,
