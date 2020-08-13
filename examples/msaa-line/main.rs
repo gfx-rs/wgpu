@@ -66,12 +66,7 @@ impl Example {
                 ..Default::default()
             }),
             primitive_topology: wgpu::PrimitiveTopology::LineList,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: sc_desc.format,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            color_states: &[sc_desc.format.into()],
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
@@ -122,7 +117,7 @@ impl Example {
 
         device
             .create_texture(multisampled_frame_descriptor)
-            .create_default_view()
+            .create_view(&wgpu::TextureViewDescriptor::default())
     }
 }
 
@@ -139,6 +134,7 @@ impl framework::Example for Example {
         let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: None,
             bind_group_layouts: &[],
             push_constant_ranges: &[],
         });

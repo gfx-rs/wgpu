@@ -358,19 +358,18 @@ fn map_rasterization_state_descriptor(
     mapped
 }
 
-fn map_compare_function(compare_fn: wgt::CompareFunction) -> Option<web_sys::GpuCompareFunction> {
+fn map_compare_function(compare_fn: wgt::CompareFunction) -> web_sys::GpuCompareFunction {
     use web_sys::GpuCompareFunction as cf;
     use wgt::CompareFunction;
     match compare_fn {
-        CompareFunction::Undefined => None,
-        CompareFunction::Never => Some(cf::Never),
-        CompareFunction::Less => Some(cf::Less),
-        CompareFunction::Equal => Some(cf::Equal),
-        CompareFunction::LessEqual => Some(cf::LessEqual),
-        CompareFunction::Greater => Some(cf::Greater),
-        CompareFunction::NotEqual => Some(cf::NotEqual),
-        CompareFunction::GreaterEqual => Some(cf::GreaterEqual),
-        CompareFunction::Always => Some(cf::Always),
+        CompareFunction::Never => cf::Never,
+        CompareFunction::Less => cf::Less,
+        CompareFunction::Equal => cf::Equal,
+        CompareFunction::LessEqual => cf::LessEqual,
+        CompareFunction::Greater => cf::Greater,
+        CompareFunction::NotEqual => cf::NotEqual,
+        CompareFunction::GreaterEqual => cf::GreaterEqual,
+        CompareFunction::Always => cf::Always,
     }
 }
 
@@ -393,9 +392,7 @@ fn map_stencil_state_face_descriptor(
     desc: &wgt::StencilStateFaceDescriptor,
 ) -> web_sys::GpuStencilStateFaceDescriptor {
     let mut mapped = web_sys::GpuStencilStateFaceDescriptor::new();
-    if let Some(compare) = map_compare_function(desc.compare) {
-        mapped.compare(compare);
-    }
+    mapped.compare(map_compare_function(desc.compare));
     mapped.depth_fail_op(map_stencil_operation(desc.depth_fail_op));
     mapped.fail_op(map_stencil_operation(desc.fail_op));
     mapped.pass_op(map_stencil_operation(desc.pass_op));
@@ -406,14 +403,12 @@ fn map_depth_stencil_state_descriptor(
     desc: &wgt::DepthStencilStateDescriptor,
 ) -> web_sys::GpuDepthStencilStateDescriptor {
     let mut mapped = web_sys::GpuDepthStencilStateDescriptor::new(map_texture_format(desc.format));
-    if let Some(depth_compare) = map_compare_function(desc.depth_compare) {
-        mapped.depth_compare(depth_compare);
-    }
+    mapped.depth_compare(map_compare_function(desc.depth_compare));
     mapped.depth_write_enabled(desc.depth_write_enabled);
-    mapped.stencil_back(&map_stencil_state_face_descriptor(&desc.stencil_back));
-    mapped.stencil_front(&map_stencil_state_face_descriptor(&desc.stencil_front));
-    mapped.stencil_read_mask(desc.stencil_read_mask);
-    mapped.stencil_write_mask(desc.stencil_write_mask);
+    mapped.stencil_back(&map_stencil_state_face_descriptor(&desc.stencil.back));
+    mapped.stencil_front(&map_stencil_state_face_descriptor(&desc.stencil.front));
+    mapped.stencil_read_mask(desc.stencil.read_mask);
+    mapped.stencil_write_mask(desc.stencil.write_mask);
     mapped
 }
 
@@ -1091,8 +1086,8 @@ impl crate::Context for Context {
         mapped_desc.address_mode_u(map_address_mode(desc.address_mode_u));
         mapped_desc.address_mode_v(map_address_mode(desc.address_mode_v));
         mapped_desc.address_mode_w(map_address_mode(desc.address_mode_w));
-        if let Some(compare) = desc.compare.and_then(map_compare_function) {
-            mapped_desc.compare(compare);
+        if let Some(compare) = desc.compare {
+            mapped_desc.compare(map_compare_function(compare));
         }
         mapped_desc.lod_max_clamp(desc.lod_max_clamp);
         mapped_desc.lod_min_clamp(desc.lod_min_clamp);
@@ -1194,27 +1189,26 @@ impl crate::Context for Context {
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
-        desc: Option<&TextureViewDescriptor>,
+        desc: &TextureViewDescriptor,
     ) -> Self::TextureViewId {
-        Sendable(match desc {
-            Some(d) => {
-                let mut mapped_desc = web_sys::GpuTextureViewDescriptor::new();
-                mapped_desc.dimension(map_texture_view_dimension(d.dimension));
-                mapped_desc.format(map_texture_format(d.format));
-                mapped_desc.aspect(map_texture_aspect(d.aspect));
-                mapped_desc.base_array_layer(d.base_array_layer);
-                if let Some(count) = d.array_layer_count {
-                    mapped_desc.array_layer_count(count.get());
-                }
-                mapped_desc.base_mip_level(d.base_mip_level);
-                if let Some(count) = d.level_count {
-                    mapped_desc.mip_level_count(count.get());
-                }
-                // TODO: label
-                texture.0.create_view_with_descriptor(&mapped_desc)
-            }
-            None => texture.0.create_view(),
-        })
+        let mut mapped = web_sys::GpuTextureViewDescriptor::new();
+        if let Some(dim) = desc.dimension {
+            mapped.dimension(map_texture_view_dimension(dim));
+        }
+        if let Some(format) = desc.format {
+            mapped.format(map_texture_format(format));
+        }
+        mapped.aspect(map_texture_aspect(desc.aspect));
+        mapped.base_array_layer(desc.base_array_layer);
+        if let Some(count) = desc.array_layer_count {
+            mapped.array_layer_count(count.get());
+        }
+        mapped.base_mip_level(desc.base_mip_level);
+        if let Some(count) = desc.level_count {
+            mapped.mip_level_count(count.get());
+        }
+        // TODO: label
+        Sendable(texture.0.create_view_with_descriptor(&mapped))
     }
 
     fn texture_drop(&self, _texture: &Self::TextureId) {

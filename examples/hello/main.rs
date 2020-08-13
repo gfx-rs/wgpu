@@ -16,8 +16,7 @@ async fn run() {
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        #[cfg(feature = "subscriber")]
-        wgpu::util::initialize_default_subscriber(None);
+        subscriber::initialize_default_subscriber(None);
         futures::executor::block_on(run());
     }
     #[cfg(target_arch = "wasm32")]
