@@ -34,7 +34,7 @@ impl Program {
             context: Context {
                 expressions: Arena::<Expression>::new(),
                 local_variables: Arena::<LocalVariable>::new(),
-                lookup_local_variables: FastHashMap::default(),
+                scopes: vec![FastHashMap::default()],
             },
         }
     }
@@ -49,7 +49,48 @@ pub enum Profile {
 pub struct Context {
     pub expressions: Arena<Expression>,
     pub local_variables: Arena<LocalVariable>,
-    pub lookup_local_variables: FastHashMap<String, Handle<LocalVariable>>,
+    //TODO: Find less allocation heavy representation
+    pub scopes: Vec<FastHashMap<String, Handle<LocalVariable>>>,
+}
+
+impl Context {
+    pub fn lookup_local_var(&self, name: &str) -> Option<Handle<LocalVariable>> {
+        for scope in self.scopes.iter().rev() {
+            if let Some(var) = scope.get(name) {
+                return Some(*var);
+            }
+        }
+        None
+    }
+
+    pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<Handle<LocalVariable>> {
+        if let Some(current) = self.scopes.last() {
+            current.get(name).cloned()
+        } else {
+            None
+        }
+    }
+
+    pub fn clear_scopes(&mut self) {
+        self.scopes.clear();
+        self.scopes.push(FastHashMap::default());
+    }
+
+    /// Add variable to current scope
+    pub fn add_local_var(&mut self, name: String, handle: Handle<LocalVariable>) {
+        if let Some(current) = self.scopes.last_mut() {
+            (*current).insert(name, handle);
+        }
+    }
+
+    /// Add new empty scope
+    pub fn push_scope(&mut self) {
+        self.scopes.push(FastHashMap::default());
+    }
+
+    pub fn remove_current_scope(&mut self) {
+        self.scopes.pop();
+    }
 }
 
 #[derive(Debug)]

@@ -156,18 +156,17 @@ pomelo! {
             }
         } else {
             // try global and local vars
-            if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
-                ExpressionRule{
-                    expression: extra.context.expressions.append(Expression::GlobalVariable(*global_var)),
-                    statements: vec![],
-                }
-            } else if let Some(local_var) = extra.context.lookup_local_variables.get(&v.1) {
-                ExpressionRule{
-                    expression: extra.context.expressions.append(Expression::LocalVariable(*local_var)),
-                    statements: vec![],
-                }
-            } else {
-                return Err(ErrorKind::UnknownVariable(v.0, v.1))
+            let expr =
+                if let Some(local_var) = extra.context.lookup_local_var(&v.1) {
+                    Expression::LocalVariable(local_var)
+                } else if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
+                    Expression::GlobalVariable(*global_var)
+                } else {
+                    return Err(ErrorKind::UnknownVariable(v.0, v.1))
+                };
+            ExpressionRule{
+                expression: extra.context.expressions.append(expr),
+                statements: vec![],
             }
         }
     }
@@ -545,6 +544,10 @@ pomelo! {
         let mut statements = Vec::<Statement>::new();
         // local variables
         for (id, initializer) in d.ids_initializers {
+            // check if already declared in current scope
+            if extra.context.lookup_local_var_current_scope(&id).is_some() {
+                return Err(ErrorKind::VariableAlreadyDeclared(id))
+            }
             let h = extra.context.local_variables.append(
                 LocalVariable {
                     name: Some(id.clone()),
@@ -555,7 +558,7 @@ pomelo! {
                     }),
                 }
             );
-            extra.context.lookup_local_variables.insert(id, h);
+            extra.context.add_local_var(id, h);
         }
         match statements.len() {
             1 => statements.remove(0),
@@ -577,7 +580,16 @@ pomelo! {
     //simple_statement ::= jump_statement;
 
     compound_statement ::= LeftBrace RightBrace {vec![]}
-    compound_statement ::= LeftBrace statement_list(sl) RightBrace {sl}
+    compound_statement ::= left_brace_scope statement_list(sl) RightBrace {
+        extra.context.remove_current_scope();
+        sl
+    }
+
+    // extra rule to add scope before statement_list
+    left_brace_scope ::= LeftBrace {
+        extra.context.push_scope();
+    }
+
 
     compound_statement_no_new_scope ::= LeftBrace RightBrace  {vec![]}
     compound_statement_no_new_scope ::= LeftBrace statement_list(sl) RightBrace {sl}
@@ -700,6 +712,7 @@ pomelo! {
     function_definition ::= function_prototype(mut f) compound_statement_no_new_scope(cs) {
         std::mem::swap(&mut f.expressions, &mut extra.context.expressions);
         std::mem::swap(&mut f.local_variables, &mut extra.context.local_variables);
+        extra.context.clear_scopes();
         f.body = cs;
         f
     };

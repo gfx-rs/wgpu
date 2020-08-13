@@ -14,6 +14,7 @@ pub enum ErrorKind {
     ParserStackOverflow,
     NotImplemented(&'static str),
     UnknownVariable(TokenMetadata, String),
+    VariableAlreadyDeclared(String),
     ExpectedConstant,
     SemanticError(&'static str),
 }
@@ -36,6 +37,9 @@ impl fmt::Display for ErrorKind {
             ErrorKind::NotImplemented(msg) => write!(f, "Not implemented: {}", msg),
             ErrorKind::UnknownVariable(meta, val) => {
                 write!(f, "Unknown variable {} at {:?}", val, meta)
+            }
+            ErrorKind::VariableAlreadyDeclared(val) => {
+                write!(f, "Variable {} already decalred in current scope", val)
             }
             ErrorKind::ExpectedConstant => write!(f, "Expected constant"),
             ErrorKind::SemanticError(msg) => write!(f, "Semantic error: {}", msg),
