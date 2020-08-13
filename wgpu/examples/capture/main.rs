@@ -84,7 +84,7 @@ async fn create_red_image_with_dimensions(
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
         encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
-                attachment: &texture.create_default_view(),
+                attachment: &texture.create_view(&wgpu::TextureViewDescriptor::default()),
                 resolve_target: None,
                 ops: wgpu::Operations {
                     load: wgpu::LoadOp::Clear(wgpu::Color::RED),
@@ -196,8 +196,7 @@ impl BufferDimensions {
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        #[cfg(feature = "subscriber")]
-        wgpu::util::initialize_default_subscriber(None);
+        subscriber::initialize_default_subscriber(None);
         futures::executor::block_on(run("red.png"));
     }
     #[cfg(target_arch = "wasm32")]

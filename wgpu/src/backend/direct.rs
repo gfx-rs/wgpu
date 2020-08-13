@@ -9,10 +9,7 @@ use crate::{
 use arrayvec::ArrayVec;
 use futures::future::{ready, Ready};
 use smallvec::SmallVec;
-use std::{
-    borrow::Cow::Borrowed, error::Error, ffi::CString, fmt, marker::PhantomData, ops::Range, ptr,
-    slice,
-};
+use std::{borrow::Cow::Borrowed, error::Error, fmt, marker::PhantomData, ops::Range, slice};
 use typed_arena::Arena;
 
 pub struct Context(wgc::hub::Global<wgc::hub::IdentityManagerFactory>);
@@ -610,7 +607,7 @@ impl crate::Context for Context {
     ) -> Self::BindGroupLayoutId {
         let global = &self.0;
         wgc::gfx_select!(
-            *device => global.device_create_bind_group_layout(*device, &wgt::BindGroupLayoutDescriptor {
+            *device => global.device_create_bind_group_layout(*device, &wgc::binding_model::BindGroupLayoutDescriptor {
                 label: desc.label.map(Borrowed),
                 entries: Borrowed(desc.entries),
             }, PhantomData)
@@ -694,7 +691,8 @@ impl crate::Context for Context {
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_pipeline_layout(
             *device,
-            &wgt::PipelineLayoutDescriptor {
+            &wgc::binding_model::PipelineLayoutDescriptor {
+                label: desc.label.map(Borrowed),
                 bind_group_layouts: Borrowed(&temp_layouts),
                 push_constant_ranges: Borrowed(&desc.push_constant_ranges),
             },
@@ -726,13 +724,13 @@ impl crate::Context for Context {
             .vertex_state
             .vertex_buffers
             .iter()
-            .map(|vertex_buffer| wgt::VertexBufferDescriptor {
+            .map(|vertex_buffer| pipe::VertexBufferDescriptor {
                 stride: vertex_buffer.stride,
                 step_mode: vertex_buffer.step_mode,
                 attributes: Borrowed(vertex_buffer.attributes),
             })
             .collect();
-        let vertex_state = wgt::VertexStateDescriptor {
+        let vertex_state = pipe::VertexStateDescriptor {
             index_format: desc.vertex_state.index_format,
             vertex_buffers: Borrowed(&vertex_buffers),
         };
@@ -789,13 +787,11 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &crate::BufferDescriptor<'_>,
     ) -> Self::BufferId {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_buffer(
             *device,
             &wgt::BufferDescriptor {
-                label: owned_label.as_ptr(),
+                label: desc.label.map(Borrowed),
                 mapped_at_creation: desc.mapped_at_creation,
                 size: desc.size,
                 usage: desc.usage,
@@ -810,13 +806,11 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &TextureDescriptor,
     ) -> Self::TextureId {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_texture(
             *device,
             &wgt::TextureDescriptor {
-                label: owned_label.as_ptr(),
+                label: desc.label.map(Borrowed),
                 size: desc.size,
                 mip_level_count: desc.mip_level_count,
                 sample_count: desc.sample_count,
@@ -834,23 +828,19 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &SamplerDescriptor,
     ) -> Self::SamplerId {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_sampler(
             *device,
-            &wgt::SamplerDescriptor {
-                label: owned_label.as_ptr(),
-                address_mode_u: desc.address_mode_u,
-                address_mode_v: desc.address_mode_v,
-                address_mode_w: desc.address_mode_w,
+            &wgc::resource::SamplerDescriptor {
+                label: desc.label.map(Borrowed),
+                address_modes: [desc.address_mode_u, desc.address_mode_v, desc.address_mode_w],
                 mag_filter: desc.mag_filter,
                 min_filter: desc.min_filter,
                 mipmap_filter: desc.mipmap_filter,
                 lod_min_clamp: desc.lod_min_clamp,
                 lod_max_clamp: desc.lod_max_clamp,
                 compare: desc.compare,
-                anisotropy_clamp: desc.anisotropy_clamp.map(|v| v.get()),
+                anisotropy_clamp: desc.anisotropy_clamp,
             },
             PhantomData
         ))
@@ -862,13 +852,11 @@ impl crate::Context for Context {
         device: &Self::DeviceId,
         desc: &CommandEncoderDescriptor,
     ) -> Self::CommandEncoderId {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
-
         let global = &self.0;
         wgc::gfx_select!(*device => global.device_create_command_encoder(
             *device,
             &wgt::CommandEncoderDescriptor {
-                label: owned_label.as_ptr(),
+                label: desc.label.map(Borrowed),
             },
             PhantomData
         ))
@@ -881,7 +869,7 @@ impl crate::Context for Context {
         desc: &RenderBundleEncoderDescriptor,
     ) -> Self::RenderBundleEncoderId {
         wgc::command::RenderBundleEncoder::new(
-            &wgt::RenderBundleEncoderDescriptor {
+            &wgc::command::RenderBundleEncoderDescriptor {
                 label: desc.label.map(Borrowed),
                 color_formats: Borrowed(desc.color_formats),
                 depth_stencil_format: desc.depth_stencil_format,
@@ -1026,22 +1014,21 @@ impl crate::Context for Context {
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
-        desc: Option<&TextureViewDescriptor>,
+        desc: &TextureViewDescriptor,
     ) -> Self::TextureViewId {
-        let owned_label = OwnedLabel::new(desc.and_then(|d| d.label.as_deref()));
-        let descriptor = desc.map(|d| wgt::TextureViewDescriptor {
-            label: owned_label.as_ptr(),
-            format: d.format,
-            dimension: d.dimension,
-            aspect: d.aspect,
-            base_mip_level: d.base_mip_level,
-            level_count: d.level_count,
-            base_array_layer: d.base_array_layer,
-            array_layer_count: d.array_layer_count,
-        });
+        let descriptor = wgc::resource::TextureViewDescriptor {
+            label: desc.label.map(Borrowed),
+            format: desc.format,
+            dimension: desc.dimension,
+            aspect: desc.aspect,
+            base_mip_level: desc.base_mip_level,
+            level_count: desc.level_count,
+            base_array_layer: desc.base_array_layer,
+            array_layer_count: desc.array_layer_count,
+        };
         let global = &self.0;
         wgc::gfx_select!(
-            *texture => global.texture_create_view(*texture, descriptor.as_ref(), PhantomData)
+            *texture => global.texture_create_view(*texture, &descriptor, PhantomData)
         )
         .unwrap_pretty()
     }
@@ -1257,12 +1244,11 @@ impl crate::Context for Context {
         encoder: Self::RenderBundleEncoderId,
         desc: &crate::RenderBundleDescriptor,
     ) -> Self::RenderBundleId {
-        let owned_label = OwnedLabel::new(desc.label.as_deref());
         let global = &self.0;
         wgc::gfx_select!(encoder.parent() => global.render_bundle_encoder_finish(
             encoder,
             &wgt::RenderBundleDescriptor {
-                label: owned_label.as_ptr()
+                label: desc.label.map(Borrowed)
             },
             PhantomData
         ))
@@ -1318,21 +1304,6 @@ impl crate::Context for Context {
 #[derive(Debug)]
 pub(crate) struct SwapChainOutputDetail {
     swap_chain_id: wgc::id::SwapChainId,
-}
-
-struct OwnedLabel(Option<CString>);
-
-impl OwnedLabel {
-    fn new(text: Option<&str>) -> Self {
-        Self(text.map(|t| CString::new(t).expect("invalid label")))
-    }
-
-    fn as_ptr(&self) -> *const std::os::raw::c_char {
-        match self.0 {
-            Some(ref c_string) => c_string.as_ptr(),
-            None => ptr::null(),
-        }
-    }
 }
 
 trait PrettyResult<T> {
