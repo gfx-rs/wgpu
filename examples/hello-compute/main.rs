@@ -63,15 +63,16 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 
     let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: None,
-        entries: &[wgpu::BindGroupLayoutEntry::new(
-            0,
-            wgpu::ShaderStage::COMPUTE,
-            wgpu::BindingType::StorageBuffer {
+        entries: &[wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStage::COMPUTE,
+            ty: wgpu::BindingType::StorageBuffer {
                 dynamic: false,
                 readonly: false,
                 min_binding_size: wgpu::BufferSize::new(4),
             },
-        )],
+            count: None,
+        }],
     });
 
     let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -84,6 +85,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
     });
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
         bind_group_layouts: &[&bind_group_layout],
         push_constant_ranges: &[],
     });
@@ -138,9 +140,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
 fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     {
-        #[cfg(feature = "subscriber")]
-        wgpu::util::initialize_default_subscriber(None);
-
+        subscriber::initialize_default_subscriber(None);
         futures::executor::block_on(run());
     }
     #[cfg(target_arch = "wasm32")]

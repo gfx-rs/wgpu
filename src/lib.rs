@@ -38,10 +38,10 @@ pub use wgt::{
     DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extent3d, Features, FilterMode,
     FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PowerPreference, PresentMode,
     PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, ShaderLocation,
-    ShaderStage, StencilOperation, StencilStateFaceDescriptor, SwapChainDescriptor,
-    SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout, TextureDimension,
-    TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor, VertexFormat,
-    BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
+    ShaderStage, StencilOperation, StencilStateDescriptor, StencilStateFaceDescriptor,
+    SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout,
+    TextureDimension, TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor,
+    VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
     PUSH_CONSTANT_ALIGNMENT,
 };
 
@@ -291,7 +291,7 @@ trait Context: Debug + Send + Sized + Sync {
     fn texture_create_view(
         &self,
         texture: &Self::TextureId,
-        desc: Option<&TextureViewDescriptor>,
+        desc: &TextureViewDescriptor,
     ) -> Self::TextureViewId;
     fn texture_drop(&self, texture: &Self::TextureId);
     fn texture_view_drop(&self, texture_view: &Self::TextureViewId);
@@ -836,7 +836,7 @@ pub struct Queue {
 
 /// Resource that can be bound to a pipeline.
 #[non_exhaustive]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum BindingResource<'a> {
     /// Binding is backed by a buffer.
     ///
@@ -976,15 +976,15 @@ pub struct TextureDescriptor<'a> {
 }
 
 /// Describes a [`TextureView`].
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct TextureViewDescriptor<'a> {
     /// Debug label of the texture view. This will show up in graphics debuggers for easy identification.
     pub label: Option<&'a str>,
     /// Format of the texture view. At this time, it must be the same as the underlying format of the texture.
-    pub format: TextureFormat,
+    pub format: Option<TextureFormat>,
     /// The dimension of the texture view. For 1D textures, this must be `1D`. For 2D textures it must be one of
     /// `D2`, `D2Array`, `Cube`, and `CubeArray`. For 3D textures it must be `3D`
-    pub dimension: TextureViewDimension,
+    pub dimension: Option<TextureViewDimension>,
     /// Aspect of the texture. Color textures must be [`TextureAspect::All`].
     pub aspect: TextureAspect,
     /// Base mip level.
@@ -1006,6 +1006,8 @@ pub struct TextureViewDescriptor<'a> {
 /// A `PipelineLayoutDescriptor` can be used to create a pipeline layout.
 #[derive(Clone, Debug)]
 pub struct PipelineLayoutDescriptor<'a> {
+    /// Debug label of the pipeline layout. This will show up in graphics debuggers for easy identification.
+    pub label: Option<&'a str>,
     /// Bind groups that this pipeline uses. The first entry will provide all the bindings for
     /// "set = 0", second entry will provide all the bindings for "set = 1" etc.
     pub bind_group_layouts: &'a [&'a BindGroupLayout],
@@ -1047,7 +1049,7 @@ pub struct SamplerDescriptor<'a> {
 impl Default for SamplerDescriptor<'_> {
     fn default() -> Self {
         Self {
-            label: Default::default(),
+            label: None,
             address_mode_u: Default::default(),
             address_mode_v: Default::default(),
             address_mode_w: Default::default(),
@@ -1056,18 +1058,24 @@ impl Default for SamplerDescriptor<'_> {
             mipmap_filter: Default::default(),
             lod_min_clamp: 0.0,
             lod_max_clamp: std::f32::MAX,
-            compare: Default::default(),
-            anisotropy_clamp: Default::default(),
+            compare: None,
+            anisotropy_clamp: None,
         }
     }
 }
 
-pub use wgt::BindGroupEntry as BindGroupEntryBase;
 /// Bindable resource and the slot to bind it to.
-pub type BindGroupEntry<'a> = BindGroupEntryBase<BindingResource<'a>>;
+#[derive(Clone, Debug)]
+pub struct BindGroupEntry<'a> {
+    /// Slot for which binding provides resource. Corresponds to an entry of the same
+    /// binding index in the [`BindGroupLayoutDescriptor`].
+    pub binding: u32,
+    /// Resource to attach to the binding
+    pub resource: BindingResource<'a>,
+}
 
 /// Describes a group of bindings and the resources to be bound.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BindGroupDescriptor<'a> {
     /// Debug label of the bind group. This will show up in graphics debuggers for easy identification.
     pub label: Option<&'a str>,
@@ -1732,16 +1740,7 @@ impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         TextureView {
             context: Arc::clone(&self.context),
-            id: Context::texture_create_view(&*self.context, &self.id, Some(desc)),
-            owned: true,
-        }
-    }
-
-    /// Creates the default view of this whole texture. This is likely what you want.
-    pub fn create_default_view(&self) -> TextureView {
-        TextureView {
-            context: Arc::clone(&self.context),
-            id: Context::texture_create_view(&*self.context, &self.id, None),
+            id: Context::texture_create_view(&*self.context, &self.id, desc),
             owned: true,
         }
     }

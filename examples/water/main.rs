@@ -230,7 +230,7 @@ impl Example {
             ..Default::default()
         });
 
-        let depth_view = draw_depth_buffer.create_default_view();
+        let depth_view = draw_depth_buffer.create_view(&wgpu::TextureViewDescriptor::default());
 
         let water_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: water_bind_group_layout,
@@ -242,7 +242,7 @@ impl Example {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: wgpu::BindingResource::TextureView(
-                        &reflection_texture.create_default_view(),
+                        &reflection_texture.create_view(&wgpu::TextureViewDescriptor::default()),
                     ),
                 },
                 wgpu::BindGroupEntry {
@@ -258,7 +258,7 @@ impl Example {
         });
 
         (
-            reflection_texture.create_default_view(),
+            reflection_texture.create_view(&wgpu::TextureViewDescriptor::default()),
             depth_view,
             water_bind_group,
         )
@@ -356,42 +356,46 @@ impl framework::Example for Example {
                 label: Some("Water Bind Group Layout"),
                 entries: &[
                     // Uniform variables such as projection/view.
-                    wgpu::BindGroupLayoutEntry::new(
-                        0,
-                        wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                        wgpu::BindingType::UniformBuffer {
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::UniformBuffer {
                             dynamic: false,
                             min_binding_size: wgpu::BufferSize::new(
                                 mem::size_of::<WaterUniforms>() as _,
                             ),
                         },
-                    ),
+                        count: None,
+                    },
                     // Reflection texture.
-                    wgpu::BindGroupLayoutEntry::new(
-                        1,
-                        wgpu::ShaderStage::FRAGMENT,
-                        wgpu::BindingType::SampledTexture {
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
                             multisampled: false,
                             component_type: wgpu::TextureComponentType::Float,
                             dimension: wgpu::TextureViewDimension::D2,
                         },
-                    ),
+                        count: None,
+                    },
                     // Depth texture for terrain.
-                    wgpu::BindGroupLayoutEntry::new(
-                        2,
-                        wgpu::ShaderStage::FRAGMENT,
-                        wgpu::BindingType::SampledTexture {
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::SampledTexture {
                             multisampled: false,
                             component_type: wgpu::TextureComponentType::Float,
                             dimension: wgpu::TextureViewDimension::D2,
                         },
-                    ),
+                        count: None,
+                    },
                     // Sampler to be able to sample the textures.
-                    wgpu::BindGroupLayoutEntry::new(
-                        3,
-                        wgpu::ShaderStage::FRAGMENT,
-                        wgpu::BindingType::Sampler { comparison: false },
-                    ),
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
+                        visibility: wgpu::ShaderStage::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler { comparison: false },
+                        count: None,
+                    },
                 ],
             });
 
@@ -400,28 +404,31 @@ impl framework::Example for Example {
                 label: Some("Terrain Bind Group Layout"),
                 entries: &[
                     // Regular uniform variables like view/projection.
-                    wgpu::BindGroupLayoutEntry::new(
-                        0,
-                        wgpu::ShaderStage::VERTEX,
-                        wgpu::BindingType::UniformBuffer {
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStage::VERTEX,
+                        ty: wgpu::BindingType::UniformBuffer {
                             dynamic: false,
                             min_binding_size: wgpu::BufferSize::new(
                                 mem::size_of::<TerrainUniforms>() as _,
                             ),
                         },
-                    ),
+                        count: None,
+                    },
                 ],
             });
 
         // Create our pipeline layouts.
         let water_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("water"),
                 bind_group_layouts: &[&water_bind_group_layout],
                 push_constant_ranges: &[],
             });
 
         let terrain_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("terrain"),
                 bind_group_layouts: &[&terrain_bind_group_layout],
                 push_constant_ranges: &[],
             });
@@ -538,10 +545,7 @@ impl framework::Example for Example {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: false,
                 depth_compare: wgpu::CompareFunction::Less,
-                stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
-                stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
-                stencil_read_mask: 0,
-                stencil_write_mask: 0,
+                stencil: wgpu::StencilStateDescriptor::default(),
             }),
             // Layout of our vertices. This should match the structs
             // which are uploaded to the GPU. This should also be
@@ -581,20 +585,12 @@ impl framework::Example for Example {
                 ..Default::default()
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: sc_desc.format,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            color_states: &[sc_desc.format.into()],
             depth_stencil_state: Some(wgpu::DepthStencilStateDescriptor {
                 format: wgpu::TextureFormat::Depth32Float,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
-                stencil_front: wgpu::StencilStateFaceDescriptor::IGNORE,
-                stencil_back: wgpu::StencilStateFaceDescriptor::IGNORE,
-                stencil_read_mask: 0,
-                stencil_write_mask: 0,
+                stencil: wgpu::StencilStateDescriptor::default(),
             }),
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,

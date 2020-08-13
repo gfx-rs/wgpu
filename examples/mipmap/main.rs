@@ -84,24 +84,27 @@ impl Example {
     ) {
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                wgpu::BindGroupLayoutEntry::new(
-                    0,
-                    wgpu::ShaderStage::FRAGMENT,
-                    wgpu::BindingType::SampledTexture {
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::SampledTexture {
                         multisampled: false,
                         component_type: wgpu::TextureComponentType::Float,
                         dimension: wgpu::TextureViewDimension::D2,
                     },
-                ),
-                wgpu::BindGroupLayoutEntry::new(
-                    1,
-                    wgpu::ShaderStage::FRAGMENT,
-                    wgpu::BindingType::Sampler { comparison: false },
-                ),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler { comparison: false },
+                    count: None,
+                },
             ],
             label: None,
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("mipmap"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
@@ -125,12 +128,7 @@ impl Example {
                 ..Default::default()
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleStrip,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: TEXTURE_FORMAT,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            color_states: &[TEXTURE_FORMAT.into()],
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,
@@ -156,8 +154,8 @@ impl Example {
             .map(|mip| {
                 texture.create_view(&wgpu::TextureViewDescriptor {
                     label: Some("mip"),
-                    format: TEXTURE_FORMAT,
-                    dimension: wgpu::TextureViewDimension::D2,
+                    format: None,
+                    dimension: None,
                     aspect: wgpu::TextureAspect::All,
                     base_mip_level: mip,
                     level_count: NonZeroU32::new(1),
@@ -224,32 +222,36 @@ impl framework::Example for Example {
         // Create pipeline layout
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             entries: &[
-                wgpu::BindGroupLayoutEntry::new(
-                    0,
-                    wgpu::ShaderStage::VERTEX,
-                    wgpu::BindingType::UniformBuffer {
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX,
+                    ty: wgpu::BindingType::UniformBuffer {
                         dynamic: false,
                         min_binding_size: wgpu::BufferSize::new(64),
                     },
-                ),
-                wgpu::BindGroupLayoutEntry::new(
-                    1,
-                    wgpu::ShaderStage::FRAGMENT,
-                    wgpu::BindingType::SampledTexture {
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::SampledTexture {
                         component_type: wgpu::TextureComponentType::Float,
                         multisampled: false,
                         dimension: wgpu::TextureViewDimension::D2,
                     },
-                ),
-                wgpu::BindGroupLayoutEntry::new(
-                    2,
-                    wgpu::ShaderStage::FRAGMENT,
-                    wgpu::BindingType::Sampler { comparison: false },
-                ),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler { comparison: false },
+                    count: None,
+                },
             ],
             label: None,
         });
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("main"),
             bind_group_layouts: &[&bind_group_layout],
             push_constant_ranges: &[],
         });
@@ -274,7 +276,7 @@ impl framework::Example for Example {
                 | wgpu::TextureUsage::COPY_DST,
             label: None,
         });
-        let texture_view = texture.create_default_view();
+        let texture_view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         //Note: we could use queue.write_texture instead, and this is what other
         // examples do, but here we want to show another way to do this.
         let temp_buf = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -358,12 +360,7 @@ impl framework::Example for Example {
                 ..Default::default()
             }),
             primitive_topology: wgpu::PrimitiveTopology::TriangleStrip,
-            color_states: &[wgpu::ColorStateDescriptor {
-                format: sc_desc.format,
-                color_blend: wgpu::BlendDescriptor::REPLACE,
-                alpha_blend: wgpu::BlendDescriptor::REPLACE,
-                write_mask: wgpu::ColorWrite::ALL,
-            }],
+            color_states: &[sc_desc.format.into()],
             depth_stencil_state: None,
             vertex_state: wgpu::VertexStateDescriptor {
                 index_format: wgpu::IndexFormat::Uint16,

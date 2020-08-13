@@ -35,6 +35,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
     let fs_module = device.create_shader_module(wgpu::include_spirv!("shader.frag.spv"));
 
     let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: None,
         bind_group_layouts: &[],
         push_constant_ranges: &[],
     });
@@ -52,12 +53,7 @@ async fn run(event_loop: EventLoop<()>, window: Window, swapchain_format: wgpu::
         // Use the default rasterizer state: no culling, no depth bias
         rasterization_state: None,
         primitive_topology: wgpu::PrimitiveTopology::TriangleList,
-        color_states: &[wgpu::ColorStateDescriptor {
-            format: swapchain_format,
-            color_blend: wgpu::BlendDescriptor::REPLACE,
-            alpha_blend: wgpu::BlendDescriptor::REPLACE,
-            write_mask: wgpu::ColorWrite::ALL,
-        }],
+        color_states: &[swapchain_format.into()],
         depth_stencil_state: None,
         vertex_state: wgpu::VertexStateDescriptor {
             index_format: wgpu::IndexFormat::Uint16,
@@ -140,9 +136,7 @@ fn main() {
     let window = winit::window::Window::new(&event_loop).unwrap();
     #[cfg(not(target_arch = "wasm32"))]
     {
-        #[cfg(feature = "subscriber")]
-        wgpu::util::initialize_default_subscriber(None);
-
+        subscriber::initialize_default_subscriber(None);
         // Temporarily avoid srgb formats for the swapchain on the web
         futures::executor::block_on(run(event_loop, window, wgpu::TextureFormat::Bgra8UnormSrgb));
     }

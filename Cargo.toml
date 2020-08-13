@@ -19,7 +19,6 @@ all-features = true
 default = []
 trace = ["serde", "wgc/trace"]
 replay = ["serde", "wgc/replay"]
-subscriber = ["wgc/subscriber"]
 # Make Vulkan backend available on platforms where it is by default not, e.g. macOS
 vulkan-portability = ["wgc/gfx-backend-vulkan"]
 
@@ -27,14 +26,14 @@ vulkan-portability = ["wgc/gfx-backend-vulkan"]
 package = "wgpu-core"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "04f5cfd1c8e66612ed44ab371dac3d956235ffa7"
+rev = "6e3e88dd1058fdd0c9906ba672bbbba811422c56"
 features = ["raw-window-handle"]
 
 [dependencies.wgt]
 package = "wgpu-types"
 version = "0.5"
 git = "https://github.com/gfx-rs/wgpu"
-rev = "04f5cfd1c8e66612ed44ab371dac3d956235ffa7"
+rev = "6e3e88dd1058fdd0c9906ba672bbbba811422c56"
 
 [dependencies]
 arrayvec = "0.5"
@@ -61,14 +60,21 @@ bytemuck = "1"
 noise = "0.6.0"
 ddsfile = "0.4.0"
 
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.subscriber]
+package = "wgpu-subscriber"
+version = "0.5" #TODO: change to 0.1
+git = "https://github.com/gfx-rs/wgpu"
+rev = "6e3e88dd1058fdd0c9906ba672bbbba811422c56"
+
 [[example]]
 name="hello-compute"
 path="examples/hello-compute/main.rs"
 test = true
 
 [patch."https://github.com/gfx-rs/wgpu"]
-#wgpu-types = { version = "0.5.0", path = "../wgpu/wgpu-types" }
-#wgpu-core = { version = "0.5.0", path = "../wgpu/wgpu-core" }
+#wgpu-types = { version = "0.5", path = "../wgpu/wgpu-types" }
+#wgpu-core = { version = "0.5", path = "../wgpu/wgpu-core" }
+#wgpu-subscriber = { version = "0.5", path = "../wgpu/wgpu-subscriber" }
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }

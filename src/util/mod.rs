@@ -8,9 +8,6 @@ use std::{
     ptr::copy_nonoverlapping,
 };
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "subscriber"))]
-pub use wgc::logging::subscriber::{initialize_default_subscriber, ChromeTracingLayer};
-
 pub use belt::StagingBelt;
 use std::sync::Arc;
 
