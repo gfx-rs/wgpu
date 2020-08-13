@@ -545,6 +545,7 @@ pomelo! {
         // local variables
         for (id, initializer) in d.ids_initializers {
             // check if already declared in current scope
+            #[cfg(feature = "glsl-validate")]
             if extra.context.lookup_local_var_current_scope(&id).is_some() {
                 return Err(ErrorKind::VariableAlreadyDeclared(id))
             }

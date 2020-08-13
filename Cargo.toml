@@ -24,6 +24,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 default = []
 glsl_preprocessor = ["glsl"]
 glsl-new = ["pomelo"]
+glsl-validate = []
 glsl-out = []
 serialize = ["serde"]
 deserialize = ["serde"]

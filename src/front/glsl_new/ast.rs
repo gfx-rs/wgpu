@@ -63,6 +63,7 @@ impl Context {
         None
     }
 
+    #[cfg(feature = "glsl-validate")]
     pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<Handle<LocalVariable>> {
         if let Some(current) = self.scopes.last() {
             current.get(name).cloned()
