@@ -61,12 +61,13 @@ pomelo! {
     %type primary_expression ExpressionRule;
     %type variable_identifier ExpressionRule;
 
-    %type function_call Handle<Expression>;
-    %type function_call_generic Handle<Expression>;
-    %type function_call_header_no_parameters Handle<Expression>;
-    %type function_call_header_with_parameters Handle<Expression>;
-    %type function_call_header Handle<Expression>;
-    %type function_identifier Handle<Expression>;
+    %type function_call ExpressionRule;
+    %type function_call_or_method FunctionCall;
+    %type function_call_generic FunctionCall;
+    %type function_call_header_no_parameters FunctionCall;
+    %type function_call_header_with_parameters FunctionCall;
+    %type function_call_header FunctionCall;
+    %type function_identifier FunctionCallKind;
 
     %type multiplicative_expression Handle<Expression>;
     %type additive_expression Handle<Expression>;
@@ -220,12 +221,7 @@ pomelo! {
         // TODO
         return Err(ErrorKind::NotImplemented("[]"))
     }
-    postfix_expression ::= function_call(f) {
-        ExpressionRule{
-            expression: f,
-            statements: vec![],
-        }
-    }
+    postfix_expression ::= function_call;
     postfix_expression ::= postfix_expression Dot FieldSelection {
         // TODO
         return Err(ErrorKind::NotImplemented(".field"))
@@ -241,43 +237,56 @@ pomelo! {
 
     integer_expression ::= expression;
 
-    function_call ::= function_call_generic;
+    function_call ::= function_call_or_method(fc) {
+        if let FunctionCallKind::TypeConstructor(ty) = fc.kind {
+            let h = extra.context.expressions.append(Expression::Compose{
+                ty,
+                components: fc.args,
+            });
+            ExpressionRule{
+                expression: h,
+                statements: fc.statements,
+            }
+        } else {
+            return Err(ErrorKind::NotImplemented("Function call"));
+        }
+    }
+    function_call_or_method ::= function_call_generic;
     function_call_generic ::= function_call_header_with_parameters(h) RightParen {h}
     function_call_generic ::= function_call_header_no_parameters(h) RightParen {h}
     function_call_header_no_parameters ::= function_call_header(h) Void {h}
     function_call_header_no_parameters ::= function_call_header;
-    function_call_header_with_parameters ::= function_call_header(h) assignment_expression(ae) {
-        if let Expression::Compose{ty, components} = extra.context.expressions.get_mut(h) {
-            components.push(ae.expression);
-            //TODO: ae.statements
-        }
-        //TODO: Call
+    function_call_header_with_parameters ::= function_call_header(mut h) assignment_expression(ae) {
+        h.args.push(ae.expression);
+        h.statements.extend(ae.statements);
         h
     }
-    function_call_header_with_parameters ::= function_call_header_with_parameters(h) Comma assignment_expression(ae) {
-        if let Expression::Compose{ty, components} = extra.context.expressions.get_mut(h) {
-            components.push(ae.expression);
-            //TODO: ae.statements
-        }
-        //TODO: Call
+    function_call_header_with_parameters ::= function_call_header_with_parameters(mut h) Comma assignment_expression(ae) {
+        h.args.push(ae.expression);
+        h.statements.extend(ae.statements);
         h
     }
-    function_call_header ::= function_identifier(i) LeftParen {i}
+    function_call_header ::= function_identifier(i) LeftParen {
+        FunctionCall {
+            kind: i,
+            args: vec![],
+            statements: vec![],
+        }
+    }
 
     // Grammar Note: Constructors look like functions, but lexical analysis recognized most of them as
     // keywords. They are now recognized through “type_specifier”.
     // Methods (.length), subroutine array calls, and identifiers are recognized through postfix_expression.
     function_identifier ::= type_specifier(t) {
         if let Some(ty) = t {
-            extra.context.expressions.append(Expression::Compose{
-                ty,
-                components: vec![],
-            })
+            FunctionCallKind::TypeConstructor(ty)
         } else {
             return Err(ErrorKind::NotImplemented("bad type ctor"))
         }
     }
-    function_identifier ::= postfix_expression(e) {e.expression}
+    function_identifier ::= postfix_expression(e) {
+        FunctionCallKind::Function(e.expression)
+    }
 
     unary_expression ::= postfix_expression;
 

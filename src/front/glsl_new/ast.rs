@@ -112,3 +112,16 @@ pub struct VarDeclaration {
     pub ids_initializers: Vec<(String, Option<ExpressionRule>)>,
     pub ty: Handle<Type>,
 }
+
+#[derive(Debug)]
+pub enum FunctionCallKind {
+    TypeConstructor(Handle<Type>),
+    Function(Handle<Expression>),
+}
+
+#[derive(Debug)]
+pub struct FunctionCall {
+    pub kind: FunctionCallKind,
+    pub args: Vec<Handle<Expression>>,
+    pub statements: Vec<Statement>,
+}
