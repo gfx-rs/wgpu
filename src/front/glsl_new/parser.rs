@@ -8,7 +8,7 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{Arena, BinaryOperator, Binding, Block, BuiltIn, Constant, ConstantInner, Expression,
             Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
-            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize};
+            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Bytes};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -104,6 +104,9 @@ pomelo! {
     %type fully_specified_type (Vec<TypeQualifier>, Option<Handle<Type>>);
     %type type_specifier Option<Handle<Type>>;
     %type type_specifier_nonarray Option<Type>;
+
+    %type Vec (VectorSize, ScalarKind, Bytes);
+    %type Mat (VectorSize, VectorSize, ScalarKind, Bytes);
 
 
     root ::= version_pragma translation_unit;
@@ -689,161 +692,27 @@ pomelo! {
             }
         })
     }
-    // Vectors (2)
-    type_specifier_nonarray ::= Vec2 {
+    type_specifier_nonarray ::= Vec((_, (size, kind, width))) {
         Some(Type {
             name: None,
             inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Float,
-                width: 4,
+                size,
+                kind,
+                width,
             }
         })
     }
-    type_specifier_nonarray ::= Bvec2 {
+    type_specifier_nonarray ::= Mat((_, (columns, rows, kind, width))) {
         Some(Type {
             name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Bool,
-                width: 4,
+            inner: TypeInner::Matrix {
+                columns,
+                rows,
+                kind,
+                width,
             }
         })
     }
-    type_specifier_nonarray ::= Ivec2 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Sint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Uvec2 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Uint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Dvec2 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Float,
-                width: 8,
-            }
-        })
-    }
-    // Vectors (3)
-    type_specifier_nonarray ::= Vec3 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Float,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Bvec3 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Bool,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Ivec3 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Sint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Uvec3 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Uint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Dvec3 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Float,
-                width: 8,
-            }
-        })
-    }
-    // Vectors (4)
-    type_specifier_nonarray ::= Vec4 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Float,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Bvec4 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Bool,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Ivec4 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Sint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Uvec4 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Uint,
-                width: 4,
-            }
-        })
-    }
-    type_specifier_nonarray ::= Dvec4 {
-        Some(Type {
-            name: None,
-            inner: TypeInner::Vector {
-                size: VectorSize::Bi,
-                kind: ScalarKind::Float,
-                width: 8,
-            }
-        })
-    }
-
-    //TODO: remaining types
 
     // misc
     translation_unit ::= external_declaration;

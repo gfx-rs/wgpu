@@ -119,23 +119,66 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                 "double" => (Some(Token::Double(meta)), rest),
                 "int" => (Some(Token::Int(meta)), rest),
                 "uint" => (Some(Token::Uint(meta)), rest),
-                "vec2" => (Some(Token::Vec2(meta)), rest),
-                "bvec2" => (Some(Token::Bvec2(meta)), rest),
-                "ivec2" => (Some(Token::Ivec2(meta)), rest),
-                "uvec2" => (Some(Token::Uvec2(meta)), rest),
-                "dvec2" => (Some(Token::Dvec2(meta)), rest),
-                "vec3" => (Some(Token::Vec3(meta)), rest),
-                "bvec3" => (Some(Token::Bvec3(meta)), rest),
-                "ivec3" => (Some(Token::Ivec3(meta)), rest),
-                "uvec3" => (Some(Token::Uvec3(meta)), rest),
-                "dvec3" => (Some(Token::Dvec3(meta)), rest),
-                "vec4" => (Some(Token::Vec4(meta)), rest),
-                "bvec4" => (Some(Token::Bvec4(meta)), rest),
-                "ivec4" => (Some(Token::Ivec4(meta)), rest),
-                "uvec4" => (Some(Token::Uvec4(meta)), rest),
-                "dvec4" => (Some(Token::Dvec4(meta)), rest),
-                //TODO: remaining types
-                _ => (Some(Token::Identifier((meta, String::from(word)))), rest),
+                word => {
+                    use crate::{ScalarKind, VectorSize};
+
+                    fn kind_width_parse(ty: &str) -> Option<(ScalarKind, u8)> {
+                        Some(match ty {
+                            "" => (ScalarKind::Float, 4),
+                            "b" => (ScalarKind::Bool, 4),
+                            "i" => (ScalarKind::Sint, 4),
+                            "u" => (ScalarKind::Uint, 4),
+                            "d" => (ScalarKind::Float, 8),
+                            _ => return None,
+                        })
+                    }
+
+                    fn size_parse(n: &str) -> Option<VectorSize> {
+                        Some(match n {
+                            "2" => VectorSize::Bi,
+                            "3" => VectorSize::Tri,
+                            "4" => VectorSize::Quad,
+                            _ => return None,
+                        })
+                    }
+
+                    let vec_parse = |word: &str| {
+                        let mut iter = word.split("vec");
+
+                        let kind = iter.next()?;
+                        let size = iter.next()?;
+                        let (kind, width) = kind_width_parse(kind)?;
+                        let size = size_parse(size)?;
+
+                        Some(Token::Vec((meta.clone(), (size, kind, width))))
+                    };
+
+                    let mat_parse = |word: &str| {
+                        let mut iter = word.split("mat");
+
+                        let kind = iter.next()?;
+                        let size = iter.next()?;
+                        let (kind, width) = kind_width_parse(kind)?;
+
+                        let (col, row) = if let Some(size) = size_parse(size) {
+                            (size, size)
+                        } else {
+                            let mut iter = size.split('x');
+                            match (iter.next()?, iter.next()?, iter.next()) {
+                                (col, row, None) => (size_parse(col)?, size_parse(row)?),
+                                _ => return None,
+                            }
+                        };
+
+                        Some(Token::Mat((meta.clone(), (col, row, kind, width))))
+                    };
+
+                    let token = vec_parse(word)
+                        .or_else(|| mat_parse(word))
+                        .unwrap_or_else(|| Token::Identifier((meta, String::from(word))));
+
+                    (Some(token), rest)
+                }
             }
         }
 
