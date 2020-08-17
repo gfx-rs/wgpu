@@ -5,7 +5,7 @@
 use crate::{
     device::DeviceError,
     id::{DeviceId, SwapChainId, TextureId},
-    track::DUMMY_SELECTOR,
+    track::{TextureSelector, DUMMY_SELECTOR},
     validation::MissingBufferUsageError,
     Label, LifeGuard, RefCount, Stored,
 };
@@ -204,10 +204,11 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) raw: B::Image,
     pub(crate) device_id: Stored<DeviceId>,
     pub(crate) usage: wgt::TextureUsage,
+    pub(crate) aspects: hal::format::Aspects,
     pub(crate) dimension: wgt::TextureDimension,
     pub(crate) kind: hal::image::Kind,
     pub(crate) format: wgt::TextureFormat,
-    pub(crate) full_range: hal::image::SubresourceRange,
+    pub(crate) full_range: TextureSelector,
     pub(crate) memory: MemoryBlock<B>,
     pub(crate) life_guard: LifeGuard,
 }
@@ -242,8 +243,8 @@ impl<B: hal::Backend> Borrow<RefCount> for Texture<B> {
     }
 }
 
-impl<B: hal::Backend> Borrow<hal::image::SubresourceRange> for Texture<B> {
-    fn borrow(&self) -> &hal::image::SubresourceRange {
+impl<B: hal::Backend> Borrow<TextureSelector> for Texture<B> {
+    fn borrow(&self) -> &TextureSelector {
         &self.full_range
     }
 }
@@ -293,10 +294,11 @@ pub(crate) enum TextureViewInner<B: hal::Backend> {
 pub struct TextureView<B: hal::Backend> {
     pub(crate) inner: TextureViewInner<B>,
     //TODO: store device_id for quick access?
+    pub(crate) aspects: hal::format::Aspects,
     pub(crate) format: wgt::TextureFormat,
     pub(crate) extent: hal::image::Extent,
     pub(crate) samples: hal::image::NumSamples,
-    pub(crate) range: hal::image::SubresourceRange,
+    pub(crate) selector: TextureSelector,
     pub(crate) life_guard: LifeGuard,
 }
 

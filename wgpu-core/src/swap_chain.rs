@@ -39,7 +39,9 @@ use crate::{
     device::DeviceError,
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Input, Token},
     id::{DeviceId, SwapChainId, TextureViewId, Valid},
-    resource, span, LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
+    resource, span,
+    track::TextureSelector,
+    LifeGuard, PrivateFeatures, Stored, SubmissionIndex,
 };
 
 use hal::{self, device::Device as _, queue::CommandQueue as _, window::PresentationSurface as _};
@@ -184,6 +186,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             ref_count: sc.life_guard.add_ref(),
                         },
                     },
+                    aspects: hal::format::Aspects::COLOR,
                     format: sc.desc.format,
                     extent: hal::image::Extent {
                         width: sc.desc.width,
@@ -191,8 +194,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         depth: 1,
                     },
                     samples: 1,
-                    range: hal::image::SubresourceRange {
-                        aspects: hal::format::Aspects::COLOR,
+                    selector: TextureSelector {
                         layers: 0..1,
                         levels: 0..1,
                     },
@@ -272,7 +274,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None
         };
         let queue = &mut device.queue_group.queues[0];
-        let result = unsafe { queue.present_surface(B::get_surface_mut(surface), image, sem) };
+        let result = unsafe { queue.present(B::get_surface_mut(surface), image, sem) };
 
         tracing::debug!(trace = true, "Presented. End of Frame");
 

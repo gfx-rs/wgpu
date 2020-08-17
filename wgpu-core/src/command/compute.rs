@@ -14,8 +14,10 @@ use crate::{
     resource::BufferUse,
     span,
     validation::{check_buffer_usage, MissingBufferUsageError},
+    MAX_BIND_GROUPS,
 };
 
+use arrayvec::ArrayVec;
 use hal::command::CommandBuffer as _;
 use thiserror::Error;
 use wgt::{BufferAddress, BufferUsage, ShaderStage};
@@ -212,6 +214,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             pipeline: PipelineState::Required,
             debug_scope_depth: 0,
         };
+        let mut temp_offsets = Vec::new();
 
         for command in base.commands {
             match *command {
@@ -228,7 +231,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         });
                     }
 
-                    let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
+                    temp_offsets.clear();
+                    temp_offsets
+                        .extend_from_slice(&base.dynamic_offsets[..num_dynamic_offsets as usize]);
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
                     let bind_group = cmd_buf
@@ -236,7 +241,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .bind_groups
                         .use_extend(&*bind_group_guard, bind_group_id, (), ())
                         .map_err(|_| ComputePassError::InvalidBindGroup(bind_group_id))?;
-                    bind_group.validate_dynamic_bindings(offsets)?;
+                    bind_group.validate_dynamic_bindings(&temp_offsets)?;
 
                     tracing::trace!(
                         "Encoding barriers on binding of {:?} to {:?}",
@@ -255,22 +260,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         index as usize,
                         id::Valid(bind_group_id),
                         bind_group,
-                        offsets,
+                        &temp_offsets,
                     ) {
-                        let bind_groups = iter::once(bind_group.raw.raw()).chain(
-                            follow_ups
-                                .clone()
-                                .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
-                        );
+                        let bind_groups = iter::once(bind_group.raw.raw())
+                            .chain(
+                                follow_ups
+                                    .clone()
+                                    .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
+                            )
+                            .collect::<ArrayVec<[_; MAX_BIND_GROUPS]>>();
+                        temp_offsets.extend(follow_ups.flat_map(|(_, offsets)| offsets));
                         unsafe {
                             raw.bind_compute_descriptor_sets(
                                 &pipeline_layout_guard[pipeline_layout_id].raw,
                                 index as usize,
                                 bind_groups,
-                                offsets
-                                    .iter()
-                                    .chain(follow_ups.flat_map(|(_, offsets)| offsets))
-                                    .cloned(),
+                                &temp_offsets,
                             );
                         }
                     }

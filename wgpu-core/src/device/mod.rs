@@ -10,7 +10,7 @@ use crate::{
         GfxBackend, Global, GlobalIdentityHandlerFactory, Hub, Input, InvalidId, Storage, Token,
     },
     id, pipeline, resource, span, swap_chain,
-    track::{BufferState, TextureState, TrackerSet},
+    track::{BufferState, TextureSelector, TextureState, TrackerSet},
     validation::{self, check_buffer_usage, check_texture_usage},
     FastHashMap, Label, LifeGuard, MultiRefCount, PrivateFeatures, Stored, SubmissionIndex,
     MAX_BIND_GROUPS,
@@ -94,6 +94,8 @@ impl<T> AttachmentData<T> {
             .chain(&self.depth_stencil)
     }
 }
+
+pub(crate) type AttachmentDataVec<T> = ArrayVec<[T; MAX_COLOR_TARGETS + MAX_COLOR_TARGETS + 1]>;
 
 pub(crate) type RenderPassKey = AttachmentData<(hal::pass::Attachment, hal::image::Layout)>;
 pub(crate) type FramebufferKey = AttachmentData<id::Valid<id::TextureViewId>>;
@@ -540,11 +542,11 @@ impl<B: GfxBackend> Device<B> {
                 ref_count: self.life_guard.add_ref(),
             },
             usage: desc.usage,
+            aspects,
             dimension: desc.dimension,
             kind,
             format: desc.format,
-            full_range: hal::image::SubresourceRange {
-                aspects,
+            full_range: TextureSelector {
                 levels: 0..desc.mip_level_count as hal::image::Level,
                 layers: 0..kind.num_layers(),
             },
@@ -580,7 +582,10 @@ impl<B: GfxBackend> Device<B> {
             resolves: &[],
             preserves: &[],
         };
-        let all = key.all().map(|(at, _)| at);
+        let all = key
+            .all()
+            .map(|(at, _)| at)
+            .collect::<AttachmentDataVec<_>>();
 
         unsafe { self.raw.create_render_pass(all, iter::once(subpass), &[]) }
     }
@@ -1222,7 +1227,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
         let texture = device.create_texture(device_id, desc)?;
-        let range = texture.full_range.clone();
+        let num_levels = texture.full_range.levels.end;
+        let num_layers = texture.full_range.layers.end;
         let ref_count = texture.life_guard.add_ref();
 
         let id = hub.textures.register_identity(id_in, texture, &mut token);
@@ -1247,7 +1253,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .trackers
             .lock()
             .textures
-            .init(id, ref_count, TextureState::with_range(&range))
+            .init(id, ref_count, TextureState::new(num_levels, num_layers))
             .unwrap();
         Ok(id.0)
     }
@@ -1335,29 +1341,26 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 total: layer_end,
             });
         };
-        let end_level = desc
-            .level_count
-            .map_or(level_end, |_| required_level_count as u8);
-        let end_layer = desc
-            .array_layer_count
-            .map_or(layer_end, |_| required_layer_count as u16);
+
         let aspects = match desc.aspect {
-            wgt::TextureAspect::All => texture.full_range.aspects,
+            wgt::TextureAspect::All => texture.aspects,
             wgt::TextureAspect::DepthOnly => hal::format::Aspects::DEPTH,
             wgt::TextureAspect::StencilOnly => hal::format::Aspects::STENCIL,
         };
-        if !texture.full_range.aspects.contains(aspects) {
+        if !texture.aspects.contains(aspects) {
             return Err(resource::CreateTextureViewError::InvalidAspect {
                 requested: aspects,
-                total: texture.full_range.aspects,
+                total: texture.aspects,
             });
         }
 
         let format = desc.format.unwrap_or(texture.format);
         let range = hal::image::SubresourceRange {
             aspects,
-            levels: desc.base_mip_level as u8..end_level,
-            layers: desc.base_array_layer as u16..end_layer,
+            level_start: desc.base_mip_level as _,
+            level_count: desc.level_count.map(|v| v.get() as _),
+            layer_start: desc.base_array_layer as _,
+            layer_count: desc.array_layer_count.map(|v| v.get() as _),
         };
 
         let raw = unsafe {
@@ -1373,6 +1376,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .or(Err(resource::CreateTextureViewError::OutOfMemory))?
         };
 
+        let end_level = desc
+            .level_count
+            .map_or(level_end, |_| required_level_count as u8);
+        let end_layer = desc
+            .array_layer_count
+            .map_or(layer_end, |_| required_layer_count as u16);
+        let selector = TextureSelector {
+            levels: desc.base_mip_level as u8..end_level,
+            layers: desc.base_array_layer as u16..end_layer,
+        };
+
         let view = resource::TextureView {
             inner: resource::TextureViewInner::Native {
                 raw,
@@ -1381,10 +1395,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     ref_count: texture.life_guard.add_ref(),
                 },
             },
+            aspects,
             format: texture.format,
-            extent: texture.kind.extent().at_level(range.levels.start),
+            extent: texture.kind.extent().at_level(desc.base_mip_level as _),
             samples: texture.kind.num_samples(),
-            range,
+            selector,
             life_guard: LifeGuard::new(),
         };
         let ref_count = view.life_guard.add_ref();
@@ -2056,7 +2071,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                         };
                         if view
-                            .range
                             .aspects
                             .contains(hal::format::Aspects::DEPTH | hal::format::Aspects::STENCIL)
                         {
@@ -2074,13 +2088,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                     .change_extend(
                                         source_id.value,
                                         &source_id.ref_count,
-                                        view.range.clone(),
+                                        view.selector.clone(),
                                         internal_use,
                                     )
                                     .unwrap();
                                 check_texture_usage(texture.usage, pub_usage)?;
                                 let image_layout =
-                                    conv::map_texture_state(internal_use, view.range.aspects).1;
+                                    conv::map_texture_state(internal_use, view.aspects).1;
                                 SmallVec::from([hal::pso::Descriptor::Image(raw, image_layout)])
                             }
                             resource::TextureViewInner::SwapChain { .. } => {
@@ -2138,16 +2152,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                                             .change_extend(
                                                 source_id.value,
                                                 &source_id.ref_count,
-                                                view.range.clone(),
+                                                view.selector.clone(),
                                                 internal_use,
                                             )
                                             .unwrap();
                                         check_texture_usage(texture.usage, pub_usage)?;
-                                        let image_layout = conv::map_texture_state(
-                                            internal_use,
-                                            view.range.aspects,
-                                        )
-                                        .1;
+                                        let image_layout =
+                                            conv::map_texture_state(internal_use, view.aspects).1;
                                         Ok(hal::pso::Descriptor::Image(raw, image_layout))
                                     }
                                     resource::TextureViewInner::SwapChain { .. } => {
@@ -2822,12 +2833,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Err(pipeline::ImplicitLayoutError::ReflectionError(last_stage))?
             }
 
-            let shaders = hal::pso::GraphicsShaderSet {
+            let primitive_assembler = hal::pso::PrimitiveAssemblerDesc::Vertex {
+                buffers: &vertex_buffers,
+                attributes: &attributes,
+                input_assembler,
                 vertex,
-                hull: None,
-                domain: None,
+                tessellation: None,
                 geometry: None,
-                fragment,
             };
 
             // TODO
@@ -2852,11 +2864,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
             let mut render_pass_cache = device.render_passes.lock();
             let pipeline_desc = hal::pso::GraphicsPipelineDesc {
-                shaders,
+                primitive_assembler,
                 rasterizer,
-                vertex_buffers,
-                attributes,
-                input_assembler,
+                fragment,
                 blender,
                 depth_stencil,
                 multisampling,

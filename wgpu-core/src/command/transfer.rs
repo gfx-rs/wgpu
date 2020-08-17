@@ -12,6 +12,7 @@ use crate::{
     id::{BufferId, CommandEncoderId, TextureId},
     resource::{BufferUse, Texture, TextureUse},
     span,
+    track::TextureSelector,
 };
 
 use hal::command::CommandBuffer as _;
@@ -82,7 +83,7 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
 ) -> Result<
     (
         hal::image::SubresourceLayers,
-        hal::image::SubresourceRange,
+        TextureSelector,
         hal::image::Offset,
     ),
     TransferError,
@@ -90,7 +91,7 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
     let texture = texture_guard
         .get(view.texture)
         .map_err(|_| TransferError::InvalidTexture(view.texture))?;
-    let aspects = texture.full_range.aspects;
+
     let level = view.mip_level as hal::image::Level;
     let (layer, layer_count, z) = match texture.dimension {
         wgt::TextureDimension::D1 | wgt::TextureDimension::D2 => (
@@ -102,16 +103,15 @@ pub(crate) fn texture_copy_view_to_hal<B: hal::Backend>(
     };
 
     // TODO: Can't satisfy clippy here unless we modify
-    // `hal::image::SubresourceRange` in gfx to use `std::ops::RangeBounds`.
+    // `TextureSelector` to use `std::ops::RangeBounds`.
     #[allow(clippy::range_plus_one)]
     Ok((
         hal::image::SubresourceLayers {
-            aspects,
-            level: view.mip_level as hal::image::Level,
+            aspects: texture.aspects,
+            level,
             layers: layer..layer + layer_count,
         },
-        hal::image::SubresourceRange {
-            aspects,
+        TextureSelector {
             levels: level..level + 1,
             layers: layer..layer + layer_count,
         },
@@ -349,7 +349,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (dst_layers, dst_range, dst_offset) =
+        let (dst_layers, dst_selector, dst_offset) =
             texture_copy_view_to_hal(destination, copy_size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
@@ -383,7 +383,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .use_replace(
                 &*texture_guard,
                 destination.texture,
-                dst_range,
+                dst_selector,
                 TextureUse::COPY_DST,
             )
             .unwrap();
@@ -456,7 +456,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let cmd_buf = CommandBuffer::get_encoder(&mut *cmd_buf_guard, command_encoder_id)?;
         let (buffer_guard, mut token) = hub.buffers.read(&mut token);
         let (texture_guard, _) = hub.textures.read(&mut token);
-        let (src_layers, src_range, src_offset) =
+        let (src_layers, src_selector, src_offset) =
             texture_copy_view_to_hal(source, copy_size, &*texture_guard)?;
 
         #[cfg(feature = "trace")]
@@ -480,7 +480,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .use_replace(
                 &*texture_guard,
                 source.texture,
-                src_range,
+                src_selector,
                 TextureUse::COPY_SRC,
             )
             .unwrap();
@@ -567,9 +567,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         // we can't hold both src_pending and dst_pending in scope because they
         // borrow the buffer tracker mutably...
         let mut barriers = Vec::new();
-        let (src_layers, src_range, src_offset) =
+        let (src_layers, src_selector, src_offset) =
             texture_copy_view_to_hal(source, copy_size, &*texture_guard)?;
-        let (dst_layers, dst_range, dst_offset) =
+        let (dst_layers, dst_selector, dst_offset) =
             texture_copy_view_to_hal(destination, copy_size, &*texture_guard)?;
         if src_layers.aspects != dst_layers.aspects {
             Err(TransferError::MismatchedAspects)?
@@ -596,7 +596,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .use_replace(
                 &*texture_guard,
                 source.texture,
-                src_range,
+                src_selector,
                 TextureUse::COPY_SRC,
             )
             .unwrap();
@@ -611,7 +611,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .use_replace(
                 &*texture_guard,
                 destination.texture,
-                dst_range,
+                dst_selector,
                 TextureUse::COPY_DST,
             )
             .unwrap();

@@ -11,19 +11,19 @@ use crate::{
     },
     conv,
     device::{
-        AttachmentData, FramebufferKey, RenderPassContext, RenderPassKey, MAX_COLOR_TARGETS,
-        MAX_VERTEX_BUFFERS,
+        AttachmentData, AttachmentDataVec, FramebufferKey, RenderPassContext, RenderPassKey,
+        MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
     pipeline::PipelineFlags,
     resource::{BufferUse, TextureUse, TextureView, TextureViewInner},
     span,
-    track::TrackerSet,
+    track::{TextureSelector, TrackerSet},
     validation::{
         check_buffer_usage, check_texture_usage, MissingBufferUsageError, MissingTextureUsageError,
     },
-    Stored,
+    Stored, MAX_BIND_GROUPS,
 };
 
 use arrayvec::ArrayVec;
@@ -460,12 +460,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
         struct OutputAttachment<'a> {
             texture_id: &'a Stored<id::TextureId>,
-            range: &'a hal::image::SubresourceRange,
+            selector: &'a TextureSelector,
             previous_use: Option<TextureUse>,
             new_use: TextureUse,
         }
-        const MAX_TOTAL_ATTACHMENTS: usize = 2 * MAX_COLOR_TARGETS + 1;
-        let mut output_attachments = ArrayVec::<[OutputAttachment; MAX_TOTAL_ATTACHMENTS]>::new();
+        let mut output_attachments = AttachmentDataVec::<OutputAttachment>::new();
 
         let context = {
             use hal::device::Device as _;
@@ -512,7 +511,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .use_extend(&*view_guard, at.attachment, (), ())
                             .map_err(|_| RenderPassError::InvalidAttachment(at.attachment))?;
                         add_view(view)?;
-                        depth_stencil_aspects = view.range.aspects;
+                        depth_stencil_aspects = view.aspects;
 
                         let source_id = match view.inner {
                             TextureViewInner::Native { ref source_id, .. } => source_id,
@@ -524,8 +523,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         // Using render pass for transition.
                         let previous_use = base_trackers
                             .textures
-                            .query(source_id.value, view.range.clone());
-                        let new_use = if at.is_read_only(view.range.aspects)? {
+                            .query(source_id.value, view.selector.clone());
+                        let new_use = if at.is_read_only(view.aspects)? {
                             is_ds_read_only = true;
                             TextureUse::ATTACHMENT_READ
                         } else {
@@ -533,14 +532,14 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         };
                         output_attachments.push(OutputAttachment {
                             texture_id: source_id,
-                            range: &view.range,
+                            selector: &view.selector,
                             previous_use,
                             new_use,
                         });
 
-                        let new_layout = conv::map_texture_state(new_use, view.range.aspects).1;
+                        let new_layout = conv::map_texture_state(new_use, view.aspects).1;
                         let old_layout = match previous_use {
-                            Some(usage) => conv::map_texture_state(usage, view.range.aspects).1,
+                            Some(usage) => conv::map_texture_state(usage, view.aspects).1,
                             None => new_layout,
                         };
 
@@ -573,11 +572,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         TextureViewInner::Native { ref source_id, .. } => {
                             let previous_use = base_trackers
                                 .textures
-                                .query(source_id.value, view.range.clone());
+                                .query(source_id.value, view.selector.clone());
                             let new_use = TextureUse::ATTACHMENT_WRITE;
                             output_attachments.push(OutputAttachment {
                                 texture_id: source_id,
-                                range: &view.range,
+                                selector: &view.selector,
                                 previous_use,
                                 new_use,
                             });
@@ -646,11 +645,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         TextureViewInner::Native { ref source_id, .. } => {
                             let previous_use = base_trackers
                                 .textures
-                                .query(source_id.value, view.range.clone());
+                                .query(source_id.value, view.selector.clone());
                             let new_use = TextureUse::ATTACHMENT_WRITE;
                             output_attachments.push(OutputAttachment {
                                 texture_id: source_id,
-                                range: &view.range,
+                                selector: &view.selector,
                                 previous_use,
                                 new_use,
                             });
@@ -755,7 +754,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         inputs: &[],
                         preserves: &[],
                     };
-                    let all = entry.key().all().map(|(at, _)| at);
+                    let all = entry
+                        .key()
+                        .all()
+                        .map(|(at, _)| at)
+                        .collect::<AttachmentDataVec<_>>();
 
                     let pass =
                         unsafe { device.raw.create_render_pass(all, iter::once(subpass), &[]) }
@@ -798,10 +801,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 Some(sc_id) => {
                     assert!(cmd_buf.used_swap_chain.is_none());
                     // Always create a new framebuffer and delete it after presentation.
-                    let attachments = fb_key.all().map(|&id| match view_guard[id].inner {
-                        TextureViewInner::Native { ref raw, .. } => raw,
-                        TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
-                    });
+                    let attachments = fb_key
+                        .all()
+                        .map(|&id| match view_guard[id].inner {
+                            TextureViewInner::Native { ref raw, .. } => raw,
+                            TextureViewInner::SwapChain { ref image, .. } => Borrow::borrow(image),
+                        })
+                        .collect::<AttachmentDataVec<_>>();
                     let framebuffer = unsafe {
                         device
                             .raw
@@ -818,13 +824,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         Entry::Occupied(e) => e.into_mut(),
                         Entry::Vacant(e) => {
                             let fb = {
-                                let attachments =
-                                    e.key().all().map(|&id| match view_guard[id].inner {
+                                let attachments = e
+                                    .key()
+                                    .all()
+                                    .map(|&id| match view_guard[id].inner {
                                         TextureViewInner::Native { ref raw, .. } => raw,
                                         TextureViewInner::SwapChain { ref image, .. } => {
                                             Borrow::borrow(image)
                                         }
-                                    });
+                                    })
+                                    .collect::<AttachmentDataVec<_>>();
                                 unsafe {
                                     device
                                         .raw
@@ -895,7 +904,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             })
                         }
                     }
-                }));
+                }))
+                .collect::<ArrayVec<[_; MAX_COLOR_TARGETS + 1]>>();
 
             unsafe {
                 raw.begin_render_pass(
@@ -927,6 +937,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             vertex: VertexState::default(),
             debug_scope_depth: 0,
         };
+        let mut temp_offsets = Vec::new();
 
         for command in base.commands {
             match *command {
@@ -944,7 +955,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .into());
                     }
 
-                    let offsets = &base.dynamic_offsets[..num_dynamic_offsets as usize];
+                    temp_offsets.clear();
+                    temp_offsets
+                        .extend_from_slice(&base.dynamic_offsets[..num_dynamic_offsets as usize]);
                     base.dynamic_offsets = &base.dynamic_offsets[num_dynamic_offsets as usize..];
 
                     let bind_group = trackers
@@ -952,7 +965,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*bind_group_guard, bind_group_id, (), ())
                         .unwrap();
                     bind_group
-                        .validate_dynamic_bindings(offsets)
+                        .validate_dynamic_bindings(&temp_offsets)
                         .map_err(RenderPassError::from)?;
 
                     trackers.merge_extend(&bind_group.used);
@@ -961,22 +974,22 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         index as usize,
                         id::Valid(bind_group_id),
                         bind_group,
-                        offsets,
+                        &temp_offsets,
                     ) {
-                        let bind_groups = iter::once(bind_group.raw.raw()).chain(
-                            follow_ups
-                                .clone()
-                                .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
-                        );
+                        let bind_groups = iter::once(bind_group.raw.raw())
+                            .chain(
+                                follow_ups
+                                    .clone()
+                                    .map(|(bg_id, _)| bind_group_guard[bg_id].raw.raw()),
+                            )
+                            .collect::<ArrayVec<[_; MAX_BIND_GROUPS]>>();
+                        temp_offsets.extend(follow_ups.flat_map(|(_, offsets)| offsets));
                         unsafe {
                             raw.bind_graphics_descriptor_sets(
                                 &pipeline_layout_guard[pipeline_layout_id].raw,
                                 index as usize,
                                 bind_groups,
-                                offsets
-                                    .iter()
-                                    .chain(follow_ups.flat_map(|(_, offsets)| offsets))
-                                    .cloned(),
+                                &temp_offsets,
                             );
                         }
                     };
@@ -1503,7 +1516,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 .change_extend(
                     ot.texture_id.value,
                     &ot.texture_id.ref_count,
-                    ot.range.clone(),
+                    ot.selector.clone(),
                     ot.new_use,
                 )
                 .unwrap();
@@ -1517,7 +1530,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     .prepend(
                         ot.texture_id.value,
                         &ot.texture_id.ref_count,
-                        ot.range.clone(),
+                        ot.selector.clone(),
                         usage,
                     )
                     .unwrap();
