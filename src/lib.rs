@@ -102,7 +102,7 @@ pub type Bytes = u8;
 
 /// Number of components in a vector.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum VectorSize {
@@ -116,7 +116,7 @@ pub enum VectorSize {
 
 /// Primitive type for a scalar.
 #[repr(u8)]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum ScalarKind {
