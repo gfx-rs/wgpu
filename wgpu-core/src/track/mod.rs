@@ -19,7 +19,7 @@ use std::{
 use thiserror::Error;
 
 pub(crate) use buffer::BufferState;
-pub(crate) use texture::TextureState;
+pub(crate) use texture::{TextureSelector, TextureState};
 
 /// A single unit of state tracking. It keeps an initial
 /// usage as well as the last/current one, similar to `Range`.
@@ -151,14 +151,17 @@ impl PendingTransition<TextureState> {
         tex: &'a resource::Texture<B>,
     ) -> hal::memory::Barrier<'a, B> {
         tracing::trace!("\ttexture -> {:?}", self);
-        let aspects = tex.full_range.aspects;
+        let aspects = tex.aspects;
         hal::memory::Barrier::Image {
             states: conv::map_texture_state(self.usage.start, aspects)
                 ..conv::map_texture_state(self.usage.end, aspects),
             target: &tex.raw,
             range: hal::image::SubresourceRange {
                 aspects,
-                ..self.selector
+                level_start: self.selector.levels.start,
+                level_count: Some(self.selector.levels.end - self.selector.levels.start),
+                layer_start: self.selector.layers.start,
+                layer_count: Some(self.selector.layers.end - self.selector.layers.start),
             },
             families: None,
         }
