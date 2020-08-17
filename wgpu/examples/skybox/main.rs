@@ -277,7 +277,7 @@ impl framework::Example for Skybox {
             uniform_buf,
             aspect,
             uniforms,
-            staging_belt: wgpu::util::StagingBelt::new(0x100, device),
+            staging_belt: wgpu::util::StagingBelt::new(0x100),
         }
     }
 
@@ -305,22 +305,25 @@ impl framework::Example for Skybox {
         queue: &wgpu::Queue,
         spawner: &impl LocalSpawn,
     ) {
+        let mut encoder =
+            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+
         // update rotation
         let rotation = cgmath::Matrix4::<f32>::from_angle_x(cgmath::Deg(0.25));
         self.uniforms[1] = self.uniforms[1] * rotation;
         let raw_uniforms = raw_uniforms(&self.uniforms);
         self.staging_belt
             .write_buffer(
+                &mut encoder,
                 &self.uniform_buf,
                 0,
                 wgpu::BufferSize::new((raw_uniforms.len() * 4) as wgpu::BufferAddress).unwrap(),
                 device,
             )
             .copy_from_slice(bytemuck::cast_slice(&raw_uniforms));
-        let transfer_comb = self.staging_belt.flush(device);
 
-        let mut encoder =
-            device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
+        self.staging_belt.finish();
+
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -344,7 +347,7 @@ impl framework::Example for Skybox {
             rpass.draw(0..3 as u32, 0..1);
         }
 
-        queue.submit(vec![transfer_comb, encoder.finish()]);
+        queue.submit(std::iter::once(encoder.finish()));
 
         let belt_future = self.staging_belt.recall();
         spawner.spawn_local(belt_future).unwrap();
