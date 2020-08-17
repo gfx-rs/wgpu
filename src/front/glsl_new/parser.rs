@@ -439,13 +439,14 @@ pomelo! {
         }
     }
 
-    constant_expression ::= conditional_expression(e) {
-        if let Expression::Constant(h) = extra.context.expressions[e] {
-            h
-        } else {
-            return Err(ErrorKind::ExpectedConstant)
-        }
-    }
+    //TODO: properly handle constant expressions
+    // constant_expression ::= conditional_expression(e) {
+    //     if let Expression::Constant(h) = extra.context.expressions[e] {
+    //         h
+    //     } else {
+    //         return Err(ErrorKind::ExpectedConstant)
+    //     }
+    // }
 
     // declaration
     declaration ::= init_declarator_list(idl) Semicolon {idl}
@@ -502,13 +503,10 @@ pomelo! {
         l
     }
     // layout_qualifier_id ::= Identifier;
-    layout_qualifier_id ::= Identifier(i) Equal constant_expression(c) {
+    //TODO: handle full constant_expression instead of IntConstant
+    layout_qualifier_id ::= Identifier(i) Equal IntConstant(ic) {
         if i.1.as_str() == "location" {
-            if let ConstantInner::Sint(loc) = extra.constants[c].inner {
-                Binding::Location(loc as u32)
-            } else {
-                return Err(ErrorKind::NotImplemented("location not Sint"));
-            }
+            Binding::Location(ic.1 as u32)
         } else {
             return Err(ErrorKind::NotImplemented("non location layout qualifier"));
         }
