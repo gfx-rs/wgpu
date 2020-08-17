@@ -256,8 +256,6 @@ bitflags::bitflags! {
         ///
         /// This allows the use of a buffer containing the actual number of draw calls.
         ///
-        /// A block of push constants can be declared with `layout(push_constant) uniform Name {..}` in shaders.
-        ///
         /// Supported platforms:
         /// - DX12
         /// - Vulkan 1.2+ (or VK_KHR_draw_indirect_count)
@@ -269,6 +267,8 @@ bitflags::bitflags! {
         ///
         /// Allows the user to call [`RenderPass::set_push_constants`], provide a non-empty array
         /// to [`PipelineLayoutDescriptor`], and provide a non-zero limit to [`Limits::max_push_constant_size`].
+        ///
+        /// A block of push constants can be declared with `layout(push_constant) uniform Name {..}` in shaders.
         ///
         /// Supported platforms:
         /// - DX12
