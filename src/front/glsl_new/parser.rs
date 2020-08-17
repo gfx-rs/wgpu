@@ -643,6 +643,16 @@ pomelo! {
     }
 
     type_specifier_nonarray ::= Void { None }
+    // Scalars
+    type_specifier_nonarray ::= Bool {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Bool,
+                width: 4, // https://stackoverflow.com/questions/9419781/what-is-the-size-of-glsl-boolean
+            }
+        })
+    }
     type_specifier_nonarray ::= Float {
         Some(Type {
             name: None,
@@ -652,6 +662,34 @@ pomelo! {
             }
         })
     }
+    type_specifier_nonarray ::= Double {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Float,
+                width: 8,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Int {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Sint,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Uint {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Scalar {
+                kind: ScalarKind::Uint,
+                width: 4,
+            }
+        })
+    }
+    // Vectors (2)
     type_specifier_nonarray ::= Vec2 {
         Some(Type {
             name: None,
@@ -662,26 +700,149 @@ pomelo! {
             }
         })
     }
+    type_specifier_nonarray ::= Bvec2 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Bool,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Ivec2 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Sint,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Uvec2 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Uint,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Dvec2 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Float,
+                width: 8,
+            }
+        })
+    }
+    // Vectors (3)
     type_specifier_nonarray ::= Vec3 {
         Some(Type {
             name: None,
             inner: TypeInner::Vector {
-                size: VectorSize::Tri,
+                size: VectorSize::Bi,
                 kind: ScalarKind::Float,
                 width: 4,
             }
         })
     }
+    type_specifier_nonarray ::= Bvec3 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Bool,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Ivec3 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Sint,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Uvec3 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Uint,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Dvec3 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Float,
+                width: 8,
+            }
+        })
+    }
+    // Vectors (4)
     type_specifier_nonarray ::= Vec4 {
         Some(Type {
             name: None,
             inner: TypeInner::Vector {
-                size: VectorSize::Quad,
+                size: VectorSize::Bi,
                 kind: ScalarKind::Float,
                 width: 4,
             }
         })
     }
+    type_specifier_nonarray ::= Bvec4 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Bool,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Ivec4 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Sint,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Uvec4 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Uint,
+                width: 4,
+            }
+        })
+    }
+    type_specifier_nonarray ::= Dvec4 {
+        Some(Type {
+            name: None,
+            inner: TypeInner::Vector {
+                size: VectorSize::Bi,
+                kind: ScalarKind::Float,
+                width: 8,
+            }
+        })
+    }
+
     //TODO: remaining types
 
     // misc
