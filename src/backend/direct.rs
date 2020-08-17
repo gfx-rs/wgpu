@@ -35,9 +35,12 @@ impl Context {
         let surface = wgc::instance::Surface {
             #[cfg(feature = "vulkan-portability")]
             vulkan: None, //TODO: create_surface_from_layer ?
-            metal: self.0.instance.metal.as_ref().map(|inst| {
-                inst.create_surface_from_layer(layer as *mut _, cfg!(debug_assertions))
-            }),
+            metal: self
+                .0
+                .instance
+                .metal
+                .as_ref()
+                .map(|inst| inst.create_surface_from_layer(std::mem::transmute(layer))),
         };
 
         let id = self.0.surfaces.process_id(PhantomData);
