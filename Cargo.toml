@@ -3,6 +3,5 @@ members = [
     "dummy",
     "player",
     "wgpu-core",
-    "wgpu-subscriber",
     "wgpu-types",
 ]

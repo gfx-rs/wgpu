@@ -1648,6 +1648,7 @@ dependencies = [
 [[package]]
 name = "wgpu-subscriber"
 version = "0.1.0"
+source = "git+https://github.com/gfx-rs/subscriber.git?rev=cdc9feb53f152f9c41905ed9efeff2c1ed214361#cdc9feb53f152f9c41905ed9efeff2c1ed214361"
 dependencies = [
  "parking_lot 0.11.0",
  "thread-id",
