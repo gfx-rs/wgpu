@@ -1,9 +1,9 @@
 use crate::{
-    Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsage, BufferViewMut, CommandBuffer,
-    CommandEncoder, CommandEncoderDescriptor, Device, MapMode,
+    Buffer, BufferAddress, BufferDescriptor, BufferSize, BufferUsage, BufferViewMut,
+    CommandEncoder, Device, MapMode,
 };
 use futures::{future::join_all, FutureExt};
-use std::{future::Future, mem, sync::mpsc};
+use std::{future::Future, sync::mpsc};
 
 struct Chunk {
     buffer: Buffer,
@@ -16,9 +16,14 @@ struct Chunk {
 /// Internally it uses a ring-buffer of staging buffers that are sub-allocated.
 /// It has an advantage over `Queue.write_buffer` in a way that it returns a mutable slice,
 /// which you can fill to avoid an extra data copy.
+///
+/// Using a staging belt is slightly complicated, and generally goes as follows:
+/// - Write to buffers that need writing to using `write_buffer`.
+/// - Call `finish`.
+/// - Submit all command encoders used with `write_buffer`.
+/// - Call `recall`
 pub struct StagingBelt {
     chunk_size: BufferAddress,
-    encoder: CommandEncoder,
     /// Chunks that we are actively using for pending transfers at this moment.
     active_chunks: Vec<Chunk>,
     /// Chunks that have scheduled transfers already.
@@ -35,11 +40,10 @@ impl StagingBelt {
     /// The `chunk_size` is the unit of internal buffer allocation.
     /// It's better when it's big, but ideally still 1-4 times less than
     /// the total amount of data uploaded per submission.
-    pub fn new(chunk_size: BufferAddress, device: &Device) -> Self {
+    pub fn new(chunk_size: BufferAddress) -> Self {
         let (sender, receiver) = mpsc::channel();
         StagingBelt {
             chunk_size,
-            encoder: device.create_command_encoder(&CommandEncoderDescriptor::default()),
             active_chunks: Vec::new(),
             closed_chunks: Vec::new(),
             free_chunks: Vec::new(),
@@ -51,9 +55,11 @@ impl StagingBelt {
     /// Allocate the staging belt slice of `size` to be uploaded into the `target` buffer
     /// at the specified offset.
     ///
-    /// The upload will only really be scheduled at the next `StagingBelt::flush` call.
+    /// The upload will be placed into the provided command encoder. This encoder
+    /// must be submitted after `finish` is called and before `recall` is called.
     pub fn write_buffer(
         &mut self,
+        encoder: &mut CommandEncoder,
         target: &Buffer,
         offset: BufferAddress,
         size: BufferSize,
@@ -87,8 +93,7 @@ impl StagingBelt {
             }
         };
 
-        self.encoder
-            .copy_buffer_to_buffer(&chunk.buffer, chunk.offset, target, offset, size.get());
+        encoder.copy_buffer_to_buffer(&chunk.buffer, chunk.offset, target, offset, size.get());
         let old_offset = chunk.offset;
         chunk.offset += size.get();
         let remainder = chunk.offset % crate::COPY_BUFFER_ALIGNMENT;
@@ -105,29 +110,23 @@ impl StagingBelt {
             .get_mapped_range_mut()
     }
 
-    /// Produce a command buffer with all the accumulated transfers.
+    /// Prepare currently mapped buffers for use in a submission.
     ///
     /// At this point, all the partially used staging buffers are closed until
     /// the GPU is done copying the data from them.
-    pub fn flush(&mut self, device: &Device) -> CommandBuffer {
+    pub fn finish(&mut self) {
         #[cfg(not(target_arch = "wasm32"))]
-        wgc::span!(_guard, DEBUG, "Flushing chunks");
+        wgc::span!(_guard, DEBUG, "Finishing chunks");
 
         for chunk in self.active_chunks.drain(..) {
             chunk.buffer.unmap();
             self.closed_chunks.push(chunk);
         }
-
-        mem::replace(
-            &mut self.encoder,
-            device.create_command_encoder(&CommandEncoderDescriptor::default()),
-        )
-        .finish()
     }
 
-    /// Recall all of the closed buffers back for re-usal.
+    /// Recall all of the closed buffers back to be reused.
     ///
-    /// This has to be called after the command buffer produced by `flush` is submitted!
+    /// This has to be called after the command encoders written to `write_buffer` are submitted!
     pub fn recall(&mut self) -> impl Future<Output = ()> + Send {
         while let Ok(mut chunk) = self.receiver.try_recv() {
             chunk.offset = 0;
