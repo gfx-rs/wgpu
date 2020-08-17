@@ -63,8 +63,8 @@ ddsfile = "0.4.0"
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.subscriber]
 package = "wgpu-subscriber"
 version = "0.1"
-git = "https://github.com/gfx-rs/wgpu"
-rev = "096c57008f2907c07ddaa7d0ff02fae21a5e676b"
+git = "https://github.com/gfx-rs/subscriber"
+rev = "cdc9feb53f152f9c41905ed9efeff2c1ed214361"
 
 [[example]]
 name="hello-compute"
@@ -74,7 +74,9 @@ test = true
 [patch."https://github.com/gfx-rs/wgpu"]
 #wgpu-types = { version = "0.5", path = "../wgpu/wgpu-types" }
 #wgpu-core = { version = "0.5", path = "../wgpu/wgpu-core" }
-#wgpu-subscriber = { version = "0.1", path = "../wgpu/wgpu-subscriber" }
+
+[patch."https://github.com/gfx-rs/subscriber"]
+#wgpu-subscriber = { version = "0.1", path = "../subscriber" }
 
 [patch."https://github.com/gfx-rs/naga"]
 #naga = { path = "../naga" }
