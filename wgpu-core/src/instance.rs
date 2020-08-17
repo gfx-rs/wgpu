@@ -652,7 +652,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 | hal::Features::FRAGMENT_STORES_AND_ATOMICS
                 | hal::Features::NDC_Y_UP
                 | hal::Features::INDEPENDENT_BLENDING
-                | hal::Features::SAMPLER_ANISOTROPY;
+                | hal::Features::SAMPLER_ANISOTROPY
+                | hal::Features::IMAGE_CUBE_ARRAY;
             let mut enabled_features = available_features & wishful_features;
             if enabled_features != wishful_features {
                 tracing::warn!(
