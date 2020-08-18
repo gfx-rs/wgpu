@@ -1047,9 +1047,9 @@ pub enum VertexFormat {
     Ushort2 = 8,
     /// Four unsigned shorts (u16). `uvec4` in shaders.
     Ushort4 = 9,
-    /// Two unsigned shorts (i16). `ivec2` in shaders.
+    /// Two signed shorts (i16). `ivec2` in shaders.
     Short2 = 10,
-    /// Four unsigned shorts (i16). `ivec4` in shaders.
+    /// Four signed shorts (i16). `ivec4` in shaders.
     Short4 = 11,
     /// Two unsigned shorts (u16). [0, 65535] converted to float [0, 1] `vec2` in shaders.
     Ushort2Norm = 12,
