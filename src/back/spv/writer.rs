@@ -647,6 +647,13 @@ impl Writer {
         instruction
     }
 
+    fn instruction_function_parameter(&self, result_type_id: Word, id: Word) -> Instruction {
+        let mut instruction = Instruction::new(Op::FunctionParameter);
+        instruction.set_type(result_type_id);
+        instruction.set_result(id);
+        instruction
+    }
+
     fn instruction_function_end(&self) -> Instruction {
         Instruction::new(Op::FunctionEnd)
     }
@@ -1075,39 +1082,6 @@ impl Writer {
         }
     }
 
-    fn write_function(
-        &mut self,
-        handle: crate::Handle<crate::Function>,
-        function: &crate::Function,
-        arena: &crate::Arena<crate::Type>,
-    ) -> Instruction {
-        let id = self.generate_id();
-
-        let return_type_id = self.get_function_type(function.return_type, arena);
-
-        let mut parameter_type_ids = Vec::with_capacity(function.parameter_types.len());
-        for parameter_type in function.parameter_types.iter() {
-            parameter_type_ids.push(self.get_type_id(arena, LookupType::Handle(*parameter_type)))
-        }
-
-        let lookup_function_type = LookupFunctionType {
-            return_type_id,
-            parameter_type_ids,
-        };
-
-        let type_function_id = self.write_function_type(lookup_function_type);
-
-        let instruction = self.instruction_function(
-            return_type_id,
-            id,
-            spirv::FunctionControl::empty(),
-            type_function_id,
-        );
-
-        self.lookup_function.insert(handle, id);
-        instruction
-    }
-
     fn write_expression<'a>(
         &mut self,
         ir_module: &'a crate::Module,
@@ -1310,7 +1284,37 @@ impl Writer {
 
         for (handle, function) in ir_module.functions.iter() {
             let mut function_instructions: Vec<Instruction> = vec![];
-            function_instructions.push(self.write_function(handle, function, &ir_module.types));
+            let id = self.generate_id();
+
+            let return_type_id = self.get_function_type(function.return_type, &ir_module.types);
+            let mut parameter_type_ids = Vec::with_capacity(function.parameter_types.len());
+
+            let mut function_parameter_instructions = vec![];
+            for parameter_type in function.parameter_types.iter() {
+                let parameter_id =
+                    self.get_type_id(&ir_module.types, LookupType::Handle(*parameter_type));
+                parameter_type_ids.push(parameter_id);
+                let id = self.generate_id();
+                function_parameter_instructions
+                    .push(self.instruction_function_parameter(parameter_id, id));
+            }
+
+            let lookup_function_type = LookupFunctionType {
+                return_type_id,
+                parameter_type_ids,
+            };
+
+            let type_function_id = self.write_function_type(lookup_function_type);
+
+            function_instructions.push(self.instruction_function(
+                return_type_id,
+                id,
+                spirv::FunctionControl::empty(),
+                type_function_id,
+            ));
+            function_instructions.append(&mut function_parameter_instructions);
+
+            self.lookup_function.insert(handle, id);
 
             let id = self.generate_id();
             function_instructions.push(self.instruction_label(id));
