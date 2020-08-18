@@ -37,7 +37,7 @@ version = "0.6"
 
 [dependencies]
 arrayvec = "0.5"
-futures = "0.3"
+futures = { version = "0.3", default-features = false, features = ["std"] }
 parking_lot = "0.11"
 raw-window-handle = "0.3"
 smallvec = "1"
@@ -59,6 +59,7 @@ rand = { version = "0.7.2", features = ["wasm-bindgen"] }
 bytemuck = "1"
 noise = "0.6"
 ddsfile = "0.4"
+futures = { version = "0.3", default-features = false, features = ["std", "executor"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies.subscriber]
 package = "wgpu-subscriber"
