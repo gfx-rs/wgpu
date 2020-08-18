@@ -76,6 +76,42 @@ In the future [WGSL](https://gpuweb.github.io/gpuweb/wgsl.html) will be the shad
 
 For now, the shaders can be compiled to SPIR-V by running `make`, which requires you to have `glslang`s `glslangValidator` binary.
 
+## Logging
+
+`wgpu-core` uses `tracing` for logging and `wgpu-rs` uses `log` for logging. 
+
+### Simple Setup
+
+If you just want log messages to show up and to use the chrome tracing infrastructure, 
+take a dependency on the `wgpu-subscriber` crate then call `initialize_default_subscriber`. It will
+set up logging to stdout/stderr based on the `RUST_LOG` environment variable.
+
+### Manual Conversion
+
+`tracing` also has tools available to convert all `tracing` events into `log` events and vise versa.
+
+#### `log` events -> `tracing` events
+
+The `tracing_log` crate has a `log` logger to translate all events into `tracing` events. Call:
+
+```rust
+tracing_log::LogTracer::init().unwrap()
+``` 
+
+#### `tracing` events -> `log` events
+
+The `tracing` crate has a `log` feature which will automatically use `log` if no subscriber is added:
+
+```toml
+tracing = { version = "0.1", features = ["log"] }
+```
+
+If you want events to be handled both by `tracing` and `log`, enable the `log-always` feature of `tracing`:
+
+```toml
+tracing = { version = "0.1", features = ["log-always"] }
+```
+
 ## Development
 
 If you need to test local fixes to gfx-rs or other dependencies, the simplest way is to add a Cargo patch. For example, when working on DX12 backend on Windows, you can check out the "hal-0.2" branch of gfx-rs repo and add this to the end of "Cargo.toml":
