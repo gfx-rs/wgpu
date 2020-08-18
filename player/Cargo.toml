@@ -25,13 +25,13 @@ winit = { version = "0.22", optional = true }
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.5"
+version = "0.6"
 features = ["replay"]
 
 [dependencies.wgc]
 path = "../wgpu-core"
 package = "wgpu-core"
-version = "0.5"
+version = "0.6"
 features = ["replay", "raw-window-handle"]
 
 [dependencies.wgpu-subscriber]

@@ -1,6 +1,6 @@
 [package]
 name = "wgpu-core"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["wgpu developers"]
 edition = "2018"
 description = "WebGPU core logic on gfx-hal"
@@ -46,7 +46,7 @@ features = ["spirv"]
 [dependencies.wgt]
 path = "../wgpu-types"
 package = "wgpu-types"
-version = "0.5"
+version = "0.6"
 
 [target.'cfg(any(target_os = "ios", target_os = "macos"))'.dependencies]
 gfx-backend-metal = { version = "0.6" }
