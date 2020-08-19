@@ -26,6 +26,19 @@ pub(crate) const BITS_PER_BYTE: u32 = 8;
 pub type BufferCopyView = wgt::BufferCopyView<BufferId>;
 pub type TextureCopyView = wgt::TextureCopyView<TextureId>;
 
+#[derive(Clone, Debug)]
+pub enum CopySide {
+    Source,
+    Destination,
+}
+
+#[derive(Clone, Debug)]
+pub enum TextureErrorDimension {
+    X,
+    Y,
+    Z,
+}
+
 /// Error encountered while attempting a data transfer.
 #[derive(Clone, Debug, Error)]
 pub enum TransferError {
@@ -37,8 +50,21 @@ pub enum TransferError {
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag,
-    #[error("copy would end up overruning the bounds of the destination buffer/texture")]
-    BufferOverrun,
+    #[error("copy of {start_offset}..{end_offset} would end up overruning the bounds of the {side:?} buffer of size {buffer_size}")]
+    BufferOverrun {
+        start_offset: BufferAddress,
+        end_offset: BufferAddress,
+        buffer_size: BufferAddress,
+        side: CopySide,
+    },
+    #[error("copy of {dimension:?} {start_offset}..{end_offset} would end up overruning the bounds of the {side:?} texture of {dimension:?} size {texture_size}")]
+    TextureOverrun {
+        start_offset: u32,
+        end_offset: u32,
+        texture_size: u32,
+        dimension: TextureErrorDimension,
+        side: CopySide,
+    },
     #[error("buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
     #[error("copy size {0} does not respect `COPY_BUFFER_ALIGNMENT`")]
@@ -128,6 +154,7 @@ pub(crate) fn validate_linear_texture_data(
     layout: &wgt::TextureDataLayout,
     format: wgt::TextureFormat,
     buffer_size: BufferAddress,
+    buffer_side: CopySide,
     bytes_per_block: BufferAddress,
     copy_size: &Extent3d,
 ) -> Result<(), TransferError> {
@@ -175,7 +202,12 @@ pub(crate) fn validate_linear_texture_data(
         return Err(TransferError::InvalidRowsPerImage);
     }
     if offset + required_bytes_in_copy > buffer_size {
-        return Err(TransferError::BufferOverrun);
+        return Err(TransferError::BufferOverrun {
+            start_offset: offset,
+            end_offset: offset + required_bytes_in_copy,
+            buffer_size,
+            side: buffer_side,
+        });
     }
     if offset % block_size != 0 {
         return Err(TransferError::UnalignedBufferOffset(offset));
@@ -194,6 +226,7 @@ pub(crate) fn validate_texture_copy_range(
     texture_copy_view: &TextureCopyView,
     texture_format: wgt::TextureFormat,
     texture_dimension: hal::image::Kind,
+    texture_side: CopySide,
     copy_size: &Extent3d,
 ) -> Result<(), TransferError> {
     let (block_width, block_height) = conv::texture_block_size(texture_format);
@@ -213,15 +246,33 @@ pub(crate) fn validate_texture_copy_range(
 
     let x_copy_max = texture_copy_view.origin.x + copy_size.width;
     if x_copy_max > extent.width {
-        return Err(TransferError::BufferOverrun);
+        return Err(TransferError::TextureOverrun {
+            start_offset: texture_copy_view.origin.x,
+            end_offset: x_copy_max,
+            texture_size: extent.width,
+            dimension: TextureErrorDimension::X,
+            side: texture_side,
+        });
     }
     let y_copy_max = texture_copy_view.origin.y + copy_size.height;
     if y_copy_max > extent.height {
-        return Err(TransferError::BufferOverrun);
+        return Err(TransferError::TextureOverrun {
+            start_offset: texture_copy_view.origin.y,
+            end_offset: y_copy_max,
+            texture_size: extent.height,
+            dimension: TextureErrorDimension::Y,
+            side: texture_side,
+        });
     }
     let z_copy_max = texture_copy_view.origin.z + copy_size.depth;
     if z_copy_max > extent.depth {
-        return Err(TransferError::BufferOverrun);
+        return Err(TransferError::TextureOverrun {
+            start_offset: texture_copy_view.origin.z,
+            end_offset: z_copy_max,
+            texture_size: extent.depth,
+            dimension: TextureErrorDimension::Z,
+            side: texture_side,
+        });
     }
 
     if texture_copy_view.origin.x % block_width != 0 {
@@ -311,10 +362,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         let source_end_offset = source_offset + size;
         let destination_end_offset = destination_offset + size;
         if source_end_offset > src_buffer.size {
-            Err(TransferError::BufferOverrun)?
+            Err(TransferError::BufferOverrun {
+                start_offset: source_offset,
+                end_offset: source_end_offset,
+                buffer_size: src_buffer.size,
+                side: CopySide::Source,
+            })?
         }
         if destination_end_offset > dst_buffer.size {
-            Err(TransferError::BufferOverrun)?
+            Err(TransferError::BufferOverrun {
+                start_offset: destination_offset,
+                end_offset: destination_end_offset,
+                buffer_size: dst_buffer.size,
+                side: CopySide::Destination,
+            })?
         }
 
         let region = hal::command::BufferCopy {
@@ -404,11 +465,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if src_bytes_per_row % bytes_per_row_alignment != 0 {
             Err(TransferError::UnalignedBytesPerRow)?
         }
-        validate_texture_copy_range(destination, dst_texture.format, dst_texture.kind, copy_size)?;
+        validate_texture_copy_range(
+            destination,
+            dst_texture.format,
+            dst_texture.kind,
+            CopySide::Destination,
+            copy_size,
+        )?;
         validate_linear_texture_data(
             &source.layout,
             dst_texture.format,
             src_buffer.size,
+            CopySide::Source,
             bytes_per_block as BufferAddress,
             copy_size,
         )?;
@@ -511,11 +579,18 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if dst_bytes_per_row % bytes_per_row_alignment != 0 {
             Err(TransferError::UnalignedBytesPerRow)?
         }
-        validate_texture_copy_range(source, src_texture.format, src_texture.kind, copy_size)?;
+        validate_texture_copy_range(
+            source,
+            src_texture.format,
+            src_texture.kind,
+            CopySide::Source,
+            copy_size,
+        )?;
         validate_linear_texture_data(
             &destination.layout,
             src_texture.format,
             dst_buffer.size,
+            CopySide::Destination,
             bytes_per_block as BufferAddress,
             copy_size,
         )?;
@@ -620,8 +695,20 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         barriers.extend(dst_pending.map(|pending| pending.into_hal(dst_texture)));
 
-        validate_texture_copy_range(source, src_texture.format, src_texture.kind, copy_size)?;
-        validate_texture_copy_range(destination, dst_texture.format, dst_texture.kind, copy_size)?;
+        validate_texture_copy_range(
+            source,
+            src_texture.format,
+            src_texture.kind,
+            CopySide::Source,
+            copy_size,
+        )?;
+        validate_texture_copy_range(
+            destination,
+            dst_texture.format,
+            dst_texture.kind,
+            CopySide::Destination,
+            copy_size,
+        )?;
 
         let region = hal::command::ImageCopy {
             src_subresource: src_layers,

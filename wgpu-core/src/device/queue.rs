@@ -7,7 +7,7 @@ use crate::device::trace::Action;
 use crate::{
     command::{
         texture_copy_view_to_hal, validate_linear_texture_data, validate_texture_copy_range,
-        CommandAllocator, CommandBuffer, TextureCopyView, TransferError, BITS_PER_BYTE,
+        CommandAllocator, CommandBuffer, CopySide, TextureCopyView, TransferError, BITS_PER_BYTE,
     },
     conv,
     device::{DeviceError, WaitIdleError},
@@ -224,7 +224,12 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             Err(TransferError::UnalignedBufferOffset(buffer_offset))?
         }
         if buffer_offset + data_size > dst.size {
-            Err(TransferError::BufferOverrun)?
+            Err(TransferError::BufferOverrun {
+                start_offset: buffer_offset,
+                end_offset: buffer_offset + data_size,
+                buffer_size: dst.size,
+                side: CopySide::Destination,
+            })?
         }
 
         let region = hal::command::BufferCopy {
@@ -303,6 +308,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             data_layout,
             texture_format,
             data.len() as wgt::BufferAddress,
+            CopySide::Source,
             bytes_per_block as wgt::BufferAddress,
             size,
         )?;
@@ -337,7 +343,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         if !dst.usage.contains(wgt::TextureUsage::COPY_DST) {
             Err(TransferError::MissingCopyDstUsageFlag)?
         }
-        validate_texture_copy_range(destination, dst.format, dst.kind, size)?;
+        validate_texture_copy_range(
+            destination,
+            dst.format,
+            dst.kind,
+            CopySide::Destination,
+            size,
+        )?;
         dst.life_guard.use_at(device.active_submission_index + 1);
 
         {
