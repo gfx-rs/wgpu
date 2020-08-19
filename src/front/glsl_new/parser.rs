@@ -572,6 +572,7 @@ pomelo! {
             extra.context.add_local_var(id, h);
         }
         match statements.len() {
+            0 => Statement::Empty,
             1 => statements.remove(0),
             _ => Statement::Block(statements),
         }
