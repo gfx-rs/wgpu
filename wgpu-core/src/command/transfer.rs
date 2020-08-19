@@ -37,7 +37,7 @@ pub enum TransferError {
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
     MissingCopyDstUsageFlag,
-    #[error("copy would end up overruning the bounds of the destination buffer/texture")]
+    #[error("copy would end up overruning the bounds of one of the buffers or textures")]
     BufferOverrun,
     #[error("buffer offset {0} is not aligned to block size or `COPY_BUFFER_ALIGNMENT`")]
     UnalignedBufferOffset(BufferAddress),
