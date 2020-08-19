@@ -181,6 +181,20 @@ impl Factory4 {
     }
 }
 
+bitflags! {
+    pub struct SwapChainPresentFlags: u32 {
+        const DXGI_PRESENT_DO_NOT_SEQUENCE = dxgi::DXGI_PRESENT_DO_NOT_SEQUENCE;
+        const DXGI_PRESENT_TEST = dxgi::DXGI_PRESENT_TEST;
+        const DXGI_PRESENT_RESTART = dxgi::DXGI_PRESENT_RESTART;
+        const DXGI_PRESENT_DO_NOT_WAIT = dxgi::DXGI_PRESENT_DO_NOT_WAIT;
+        const DXGI_PRESENT_RESTRICT_TO_OUTPUT = dxgi::DXGI_PRESENT_RESTRICT_TO_OUTPUT;
+        const DXGI_PRESENT_STEREO_PREFER_RIGHT = dxgi::DXGI_PRESENT_STEREO_PREFER_RIGHT;
+        const DXGI_PRESENT_STEREO_TEMPORARY_MONO = dxgi::DXGI_PRESENT_STEREO_TEMPORARY_MONO;
+        const DXGI_PRESENT_USE_DURATION = dxgi::DXGI_PRESENT_USE_DURATION;
+        const DXGI_PRESENT_ALLOW_TEARING = dxgi::DXGI_PRESENT_ALLOW_TEARING;
+    }
+}
+
 impl SwapChain {
     pub fn get_buffer(&self, id: u32) -> D3DResult<Resource> {
         let mut resource = Resource::null();
@@ -190,9 +204,13 @@ impl SwapChain {
         (resource, hr)
     }
 
-    // TODO: present flags
+    //TODO: replace by present_flags
     pub fn present(&self, interval: u32, flags: u32) -> HRESULT {
         unsafe { self.Present(interval, flags) }
+    }
+
+    pub fn present_flags(&self, interval: u32, flags: SwapChainPresentFlags) -> HRESULT {
+        unsafe { self.Present(interval, flags.bits()) }
     }
 }
 
