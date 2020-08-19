@@ -57,7 +57,7 @@ type SimParams = struct {
 };
 
 type Particles = struct {
-  [[offset 0]] particles : array<Particle, 5>;
+  [[offset 0]] particles : [[stride 16]] array<Particle, 5>;
 };
 
 [[binding 0, set 0]] var<uniform> params : SimParams;

@@ -170,6 +170,8 @@ pub enum Error<'a> {
     UnknownFunction(&'a str),
     #[error("missing offset for structure member `{0}`")]
     MissingMemberOffset(&'a str),
+    #[error("array stride must not be 0")]
+    ZeroStride,
     //MutabilityViolation(&'a str),
     // TODO: these could be replaced with more detailed errors
     #[error("other error")]
@@ -255,6 +257,22 @@ impl<'a> Lexer<'a> {
         };
         self.expect(Token::Paren('>'))?;
         Ok(pair)
+    }
+
+    fn take_until(&mut self, what: Token<'a>) -> Result<Lexer<'a>, Error<'a>> {
+        let original_input = self.input;
+        let initial_len = self.input.len();
+        let mut used_len = 0;
+        loop {
+            if self.next() == what {
+                break;
+            }
+            used_len = initial_len - self.input.len();
+        }
+
+        Ok(Lexer {
+            input: &original_input[..used_len],
+        })
     }
 }
 
@@ -1000,6 +1018,12 @@ impl Parser {
         type_arena: &mut Arena<crate::Type>,
     ) -> Result<Handle<crate::Type>, Error<'a>> {
         self.scopes.push(Scope::TypeDecl);
+        let decoration_lexer = if lexer.skip(Token::DoubleParen('[')) {
+            Some(lexer.take_until(Token::DoubleParen(']'))?)
+        } else {
+            None
+        };
+
         let inner = match lexer.next() {
             Token::Word("f32") => crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Float,
@@ -1138,11 +1162,27 @@ impl Parser {
                     Token::Separator('>') => crate::ArraySize::Dynamic,
                     other => return Err(Error::Unexpected(other)),
                 };
-                crate::TypeInner::Array {
-                    base,
-                    size,
-                    stride: None,
+
+                let mut stride = None;
+                if let Some(mut lexer) = decoration_lexer {
+                    self.scopes.push(Scope::Decoration);
+                    loop {
+                        match lexer.next() {
+                            Token::Word("stride") => {
+                                use std::num::NonZeroU32;
+                                stride = Some(
+                                    NonZeroU32::new(lexer.next_uint_literal()?)
+                                        .ok_or(Error::ZeroStride)?,
+                                );
+                            }
+                            Token::End => break,
+                            other => return Err(Error::Unexpected(other)),
+                        }
+                    }
+                    self.scopes.pop();
                 }
+
+                crate::TypeInner::Array { base, size, stride }
             }
             Token::Word("struct") => {
                 let members = self.parse_struct_body(lexer, type_arena)?;
