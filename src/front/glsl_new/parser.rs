@@ -753,6 +753,7 @@ pomelo! {
         std::mem::swap(&mut f.local_variables, &mut extra.context.local_variables);
         extra.context.clear_scopes();
         f.body = cs;
+        f.global_usage = crate::GlobalUse::scan(&f.expressions, &f.body, &extra.global_variables);
         f
     };
 }
