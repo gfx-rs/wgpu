@@ -172,6 +172,8 @@ pub enum Error<'a> {
     MissingMemberOffset(&'a str),
     #[error("array stride must not be 0")]
     ZeroStride,
+    #[error("not a composite type: {0:?}")]
+    NotCompositeType(crate::TypeInner),
     //MutabilityViolation(&'a str),
     // TODO: these could be replaced with more detailed errors
     #[error("other error")]
@@ -466,6 +468,27 @@ impl Parser {
         }
     }
 
+    fn deconstruct_composite_type(
+        type_arena: &mut Arena<crate::Type>,
+        ty: Handle<crate::Type>,
+        index: usize,
+    ) -> Result<Handle<crate::Type>, Error<'static>> {
+        let ty = match type_arena[ty].inner {
+            crate::TypeInner::Vector { kind, width, .. }
+            | crate::TypeInner::Matrix { kind, width, .. } => {
+                type_arena.fetch_or_append(crate::Type {
+                    name: None,
+                    inner: crate::TypeInner::Scalar { kind, width },
+                })
+            }
+            crate::TypeInner::Array { base, .. } => base,
+            crate::TypeInner::Struct { ref members } => members[index].ty,
+            ref inner => return Err(Error::NotCompositeType(inner.clone())),
+        };
+
+        Ok(ty)
+    }
+
     fn get_constant_inner(
         word: &str,
     ) -> Result<(crate::ConstantInner, crate::ScalarKind), Error<'_>> {
@@ -502,12 +525,27 @@ impl Parser {
                 inner
             }
             _ => {
-                let _ty = self.parse_type_decl(lexer, type_arena);
+                let composite_ty = self.parse_type_decl(lexer, type_arena)?;
                 lexer.expect(Token::Paren('('))?;
+                let mut components = Vec::new();
                 while !lexer.skip(Token::Paren(')')) {
-                    let _ = self.parse_const_expression(lexer, type_arena, const_arena)?;
+                    if !components.is_empty() {
+                        lexer.expect(Token::Separator(','))?;
+                    }
+                    let inner = self.parse_const_expression(lexer, type_arena, const_arena)?;
+                    let ty = Self::deconstruct_composite_type(
+                        type_arena,
+                        composite_ty,
+                        components.len(),
+                    )?;
+                    components.push(const_arena.fetch_or_append(crate::Constant {
+                        name: None,
+                        specialization: None,
+                        inner,
+                        ty,
+                    }));
                 }
-                unimplemented!()
+                crate::ConstantInner::Composite(components)
             }
         };
         self.scopes.pop();
