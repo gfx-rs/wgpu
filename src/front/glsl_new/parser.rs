@@ -8,7 +8,7 @@ pomelo! {
         use super::super::{error::ErrorKind, token::*, ast::*};
         use crate::{Arena, BinaryOperator, Binding, Block, BuiltIn, Constant, ConstantInner, Expression,
             Function, GlobalVariable, Handle, LocalVariable, ScalarKind,
-            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Bytes};
+            ShaderStage, Statement, StorageClass, Type, TypeInner, VectorSize, Bytes, Interpolation};
     }
     %token #[derive(Debug)] pub enum Token {};
     %parser pub struct Parser<'a> {};
@@ -99,6 +99,8 @@ pomelo! {
     %type type_qualifier Vec<TypeQualifier>;
     %type single_type_qualifier TypeQualifier;
     %type storage_qualifier StorageClass;
+    %type interpolation_qualifier Interpolation;
+    %type Interpolation Interpolation;
 
     // types
     %type fully_specified_type (Vec<TypeQualifier>, Option<Handle<Type>>);
@@ -151,6 +153,7 @@ pomelo! {
                             width: 4,
                         },
                     }),
+                    interpolation: None,
                 },
             );
             extra.lookup_global_variables.insert(v.1, h);
@@ -533,7 +536,9 @@ pomelo! {
         TypeQualifier::Binding(l)
     }
     // single_type_qualifier ::= precision_qualifier;
-    // single_type_qualifier ::= interpolation_qualifier;
+    single_type_qualifier ::= interpolation_qualifier(i) {
+        TypeQualifier::Interpolation(i)
+    }
     // single_type_qualifier ::= invariant_qualifier;
     // single_type_qualifier ::= precise_qualifier;
 
@@ -542,6 +547,7 @@ pomelo! {
     storage_qualifier ::= In {StorageClass::Input}
     storage_qualifier ::= Out {StorageClass::Output}
     //TODO: other storage qualifiers
+    interpolation_qualifier ::= Interpolation((_, i)) { i }
 
     initializer ::= assignment_expression;
     // initializer ::= LeftBrace initializer_list RightBrace;
@@ -735,6 +741,15 @@ pomelo! {
             if let TypeQualifier::Binding(b) = tq { Some(b.clone()) } else { None }
         });
 
+        let interpolation = d.type_qualifiers.iter().find_map(|tq| {
+            if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
+        }).or_else(|| match class {
+            StorageClass::Input | StorageClass::Output => {
+                Some(Interpolation::Perspective)
+            }
+            _ => None,
+        });
+
         for (id, initializer) in d.ids_initializers {
             let h = extra.global_variables.fetch_or_append(
                 GlobalVariable {
@@ -742,6 +757,7 @@ pomelo! {
                     class,
                     binding: binding.clone(),
                     ty: d.ty,
+                    interpolation,
                 },
             );
             extra.lookup_global_variables.insert(id, h);

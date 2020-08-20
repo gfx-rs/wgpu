@@ -113,6 +113,29 @@ pub fn consume_token(mut input: &str) -> (Option<Token>, &str) {
                 "layout" => (Some(Token::Layout(meta)), rest),
                 "in" => (Some(Token::In(meta)), rest),
                 "out" => (Some(Token::Out(meta)), rest),
+                "flat" => (
+                    Some(Token::Interpolation((meta, crate::Interpolation::Flat))),
+                    rest,
+                ),
+                "noperspective" => (
+                    Some(Token::Interpolation((meta, crate::Interpolation::Linear))),
+                    rest,
+                ),
+                "smooth" => (
+                    Some(Token::Interpolation((
+                        meta,
+                        crate::Interpolation::Perspective,
+                    ))),
+                    rest,
+                ),
+                "centroid" => (
+                    Some(Token::Interpolation((meta, crate::Interpolation::Centroid))),
+                    rest,
+                ),
+                "sample" => (
+                    Some(Token::Interpolation((meta, crate::Interpolation::Sample))),
+                    rest,
+                ),
                 // types
                 "void" => (Some(Token::Void(meta)), rest),
                 "float" => (Some(Token::Float(meta)), rest),

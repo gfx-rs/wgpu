@@ -956,6 +956,21 @@ impl Writer {
                 .push(self.instruction_name(id, global_variable.name.as_ref().unwrap().as_str()));
         }
 
+        if let Some(interpolation) = global_variable.interpolation {
+            let decoration = match interpolation {
+                crate::Interpolation::Linear => Some(spirv::Decoration::NoPerspective),
+                crate::Interpolation::Flat => Some(spirv::Decoration::Flat),
+                crate::Interpolation::Patch => Some(spirv::Decoration::Patch),
+                crate::Interpolation::Centroid => Some(spirv::Decoration::Centroid),
+                crate::Interpolation::Sample => Some(spirv::Decoration::Sample),
+                crate::Interpolation::Perspective => None,
+            };
+            if let Some(decoration) = decoration {
+                self.annotations
+                    .push(self.instruction_decorate(id, decoration, &[]));
+            }
+        }
+
         match global_variable.binding.as_ref().unwrap() {
             crate::Binding::Location(location) => {
                 self.annotations.push(self.instruction_decorate(

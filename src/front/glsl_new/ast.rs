@@ -1,6 +1,6 @@
 use crate::{
     Arena, Binding, Constant, Expression, FastHashMap, Function, GlobalVariable, Handle,
-    LocalVariable, ShaderStage, Statement, StorageClass, Type,
+    Interpolation, LocalVariable, ShaderStage, Statement, StorageClass, Type,
 };
 
 #[derive(Debug)]
@@ -104,6 +104,7 @@ pub struct ExpressionRule {
 pub enum TypeQualifier {
     StorageClass(StorageClass),
     Binding(Binding),
+    Interpolation(Interpolation),
 }
 
 #[derive(Debug)]

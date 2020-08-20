@@ -1,7 +1,8 @@
 use crate::{
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
-    FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageFlags, IntrinsicFunction,
-    LocalVariable, Module, ScalarKind, Statement, StorageClass, Type, TypeInner, UnaryOperator,
+    FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageFlags, Interpolation,
+    IntrinsicFunction, LocalVariable, Module, ScalarKind, Statement, StorageClass, Type, TypeInner,
+    UnaryOperator,
 };
 use std::{
     borrow::Cow,
@@ -121,6 +122,10 @@ pub fn write(module: &Module, out: &mut impl Write) -> Result<(), Error> {
 
         if let Some(ref binding) = global.binding {
             write!(out, "layout({}) ", Binding(binding.clone()))?;
+        }
+
+        if let Some(interpolation) = global.interpolation {
+            write!(out, "{} ", write_interpolation(interpolation)?)?;
         }
 
         let name = namer(global.name.as_ref());
@@ -890,6 +895,21 @@ fn write_storage_class(class: StorageClass) -> Result<String, Error> {
         StorageClass::Uniform => "uniform ",
         StorageClass::WorkGroup => "shared ",
     }))
+}
+
+fn write_interpolation(interpolation: Interpolation) -> Result<&'static str, Error> {
+    Ok(match interpolation {
+        Interpolation::Perspective => "smooth",
+        Interpolation::Linear => "noperspective",
+        Interpolation::Flat => "flat",
+        Interpolation::Centroid => "centroid",
+        Interpolation::Sample => "sample",
+        Interpolation::Patch => {
+            return Err(Error::Custom(
+                "patch interpolation qualifier not supported".to_string(),
+            ))
+        }
+    })
 }
 
 fn write_array_size(size: ArraySize) -> Result<String, Error> {

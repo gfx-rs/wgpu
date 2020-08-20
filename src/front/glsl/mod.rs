@@ -1,8 +1,9 @@
 #![allow(clippy::panic)]
 use crate::{
     Arena, ArraySize, BinaryOperator, Binding, BuiltIn, Constant, ConstantInner, EntryPoint,
-    Expression, FastHashMap, Function, GlobalVariable, Handle, Header, LocalVariable, Module,
-    ScalarKind, ShaderStage, StorageClass, StructMember, Type, TypeInner, VectorSize,
+    Expression, FastHashMap, Function, GlobalVariable, Handle, Header, Interpolation,
+    LocalVariable, Module, ScalarKind, ShaderStage, StorageClass, StructMember, Type, TypeInner,
+    VectorSize,
 };
 use glsl::{
     parser::{Parse, ParseError},
@@ -162,7 +163,8 @@ impl<'a> Parser<'a> {
                         self.globals_lookup.insert(name, Global::Variable(handle));
                     }
                     Declaration::Block(block) => {
-                        let (class, binding) = Self::parse_type_qualifier(block.qualifier);
+                        let (class, binding, interpolation) =
+                            Self::parse_type_qualifier(block.qualifier);
                         let ty_name = block.name.0;
 
                         let name = block.identifier.clone().map(|ident| ident.ident.0);
@@ -232,6 +234,7 @@ impl<'a> Parser<'a> {
                             class,
                             name,
                             ty,
+                            interpolation,
                         });
 
                         for (name, index) in reexports {
@@ -570,6 +573,7 @@ impl<'a> Parser<'a> {
                                     width: 4,
                                 },
                             }),
+                            interpolation: None,
                         }),
                     )),
                     "gl_InstanceIndex" => Ok(Expression::GlobalVariable(
@@ -584,6 +588,7 @@ impl<'a> Parser<'a> {
                                     width: 4,
                                 },
                             }),
+                            interpolation: None,
                         }),
                     )),
                     "gl_BaseVertex" => Ok(Expression::GlobalVariable(
@@ -598,6 +603,7 @@ impl<'a> Parser<'a> {
                                     width: 4,
                                 },
                             }),
+                            interpolation: None,
                         }),
                     )),
                     "gl_BaseInstance" => Ok(Expression::GlobalVariable(
@@ -612,6 +618,7 @@ impl<'a> Parser<'a> {
                                     width: 4,
                                 },
                             }),
+                            interpolation: None,
                         }),
                     )),
                     "gl_Position" => Ok(Expression::GlobalVariable(self.globals.fetch_or_append(
@@ -631,6 +638,7 @@ impl<'a> Parser<'a> {
                                     width: 4,
                                 },
                             }),
+                            interpolation: None,
                         },
                     ))),
                     "gl_PointSize" => Ok(Expression::GlobalVariable(self.globals.fetch_or_append(
@@ -645,6 +653,7 @@ impl<'a> Parser<'a> {
                                     width: 4,
                                 },
                             }),
+                            interpolation: None,
                         },
                     ))),
                     "gl_ClipDistance" => Ok(Expression::GlobalVariable(
@@ -659,6 +668,7 @@ impl<'a> Parser<'a> {
                                     width: 4,
                                 },
                             }),
+                            interpolation: None,
                         }),
                     )),
                     other => {
@@ -1039,17 +1049,18 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let (class, binding) = head
+        let (class, binding, interpolation) = head
             .ty
             .qualifier
             .map(Self::parse_type_qualifier)
-            .unwrap_or((StorageClass::Private, None));
+            .unwrap_or((StorageClass::Private, None, None));
 
         Ok(self.globals.append(GlobalVariable {
             name,
             class,
             binding,
             ty,
+            interpolation,
         }))
     }
 
@@ -1158,9 +1169,12 @@ impl<'a> Parser<'a> {
         Ok(size)
     }
 
-    fn parse_type_qualifier(qualifier: TypeQualifier) -> (StorageClass, Option<Binding>) {
+    fn parse_type_qualifier(
+        qualifier: TypeQualifier,
+    ) -> (StorageClass, Option<Binding>, Option<Interpolation>) {
         let mut storage = None;
         let mut binding = None;
+        let mut interpolation = Interpolation::Perspective;
 
         for qualifier in qualifier.qualifiers {
             match qualifier {
@@ -1228,11 +1242,27 @@ impl<'a> Parser<'a> {
                         panic!()
                     }
                 }
+                TypeQualifierSpec::Interpolation(interpolation_qualifier) => {
+                    interpolation = match interpolation_qualifier {
+                        InterpolationQualifier::NoPerspective => Interpolation::Linear,
+                        InterpolationQualifier::Flat => Interpolation::Flat,
+                        InterpolationQualifier::Smooth => Interpolation::Perspective,
+                    }
+                }
                 _ => unimplemented!(),
             }
         }
 
-        (storage.unwrap_or(StorageClass::Private), binding)
+        let class = storage.unwrap_or(StorageClass::Private);
+
+        (
+            class,
+            binding,
+            match class {
+                StorageClass::Input | StorageClass::Output => Some(interpolation),
+                _ => None,
+            },
+        )
     }
 }
 

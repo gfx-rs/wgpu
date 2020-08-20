@@ -79,11 +79,37 @@ fn main() {
             }
             module.unwrap()
         }
-        #[cfg(feature = "glsl")]
+        #[cfg(any(feature = "glsl", feature = "glsl-new"))]
         "frag" => {
             let input = fs::read_to_string(&args[1]).unwrap();
-            naga::front::glsl::parse_str(&input, "main".to_string(), naga::ShaderStage::Fragment)
-                .unwrap()
+            let mut module = None;
+            if prefer_glsl_new {
+                #[cfg(feature = "glsl-new")]
+                {
+                    module = Some(
+                        naga::front::glsl_new::parse_str(
+                            &input,
+                            "main".to_string(),
+                            naga::ShaderStage::Fragment,
+                        )
+                        .unwrap(),
+                    )
+                }
+            }
+            if module.is_none() {
+                #[cfg(feature = "glsl")]
+                {
+                    module = Some(
+                        naga::front::glsl::parse_str(
+                            &input,
+                            "main".to_string(),
+                            naga::ShaderStage::Fragment,
+                        )
+                        .unwrap(),
+                    )
+                }
+            }
+            module.unwrap()
         }
         #[cfg(feature = "glsl")]
         "comp" => {

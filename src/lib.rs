@@ -153,6 +153,30 @@ pub enum MemberOrigin {
     Offset(u32),
 }
 
+/// The interpolation qualifier of a binding or struct field.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum Interpolation {
+    /// The value will be interpolated in a perspective-correct fashion.
+    /// Also known as "smooth" in glsl.
+    Perspective,
+    /// Indicates that linear, non-perspective, correct
+    /// interpolation must be used.
+    /// Also known as "no_perspective" in glsl.
+    Linear,
+    /// Indicates that no interpolation will be performed.
+    Flat,
+    /// Indicates a tessellation patch.
+    Patch,
+    /// When used with multi-sampling rasterization, allow
+    /// a single interpolation location for an entire pixel.
+    Centroid,
+    /// When used with multi-sampling rasterization, require
+    /// per-sample interpolation.
+    Sample,
+}
+
 /// Member of a user-defined structure.
 // Clone is used only for error reporting and is not intended for end users
 #[derive(Clone, Debug, PartialEq)]
@@ -316,6 +340,10 @@ pub struct GlobalVariable {
     pub binding: Option<Binding>,
     /// The type of this variable.
     pub ty: Handle<Type>,
+    /// The interpolation qualifier, if any.
+    /// Required for global outputs in vertex shaders
+    /// and global inputs in fragment shaders.
+    pub interpolation: Option<Interpolation>,
 }
 
 /// Variable defined at function level.
