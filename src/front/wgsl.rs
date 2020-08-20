@@ -437,16 +437,21 @@ impl Parser {
     }
 
     fn get_built_in(word: &str) -> Result<crate::BuiltIn, Error<'_>> {
-        match word {
+        Ok(match word {
             // vertex
-            "position" => Ok(crate::BuiltIn::Position),
-            "vertex_idx" => Ok(crate::BuiltIn::VertexIndex),
-            "instance_idx" => Ok(crate::BuiltIn::InstanceIndex),
+            "position" => crate::BuiltIn::Position,
+            "vertex_idx" => crate::BuiltIn::VertexIndex,
+            "instance_idx" => crate::BuiltIn::InstanceIndex,
+            // fragment
+            "front_facing" => crate::BuiltIn::FrontFacing,
+            "frag_coord" => crate::BuiltIn::FragCoord,
+            "frag_depth" => crate::BuiltIn::FragDepth,
             // compute
-            "global_invocation_id" => Ok(crate::BuiltIn::GlobalInvocationId),
-            "local_invocation_id" => Ok(crate::BuiltIn::LocalInvocationId),
-            _ => Err(Error::UnknownBuiltin(word)),
-        }
+            "global_invocation_id" => crate::BuiltIn::GlobalInvocationId,
+            "local_invocation_id" => crate::BuiltIn::LocalInvocationId,
+            "local_invocation_idx" => crate::BuiltIn::LocalInvocationIndex,
+            _ => return Err(Error::UnknownBuiltin(word)),
+        })
     }
 
     fn get_shader_stage(word: &str) -> Result<crate::ShaderStage, Error<'_>> {
