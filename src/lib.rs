@@ -423,6 +423,10 @@ pub enum DerivativeAxis {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 pub enum FunctionOrigin {
     Local(Handle<Function>),
+    // External {
+    //     namespace: String, // Maybe this should be a handle to a namespace Arena?
+    //     function: String,
+    // },
     External(String),
 }
 

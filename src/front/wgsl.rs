@@ -209,6 +209,8 @@ pub enum Error<'a> {
     ZeroStride,
     #[error("not a composite type: {0:?}")]
     NotCompositeType(crate::TypeInner),
+    #[error("function redefinition: `{0}`")]
+    FunctionRedefinition(&'a str),
     //MutabilityViolation(&'a str),
     // TODO: these could be replaced with more detailed errors
     #[error("other error")]
@@ -237,7 +239,7 @@ impl<'a> Lexer<'a> {
         self.clone().next()
     }
 
-    fn expect(&mut self, expected: Token<'a>) -> Result<(), Error<'a>> {
+    fn expect(&mut self, expected: Token<'_>) -> Result<(), Error<'a>> {
         let token = self.next();
         if token == expected {
             Ok(())
@@ -246,7 +248,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn skip(&mut self, what: Token<'a>) -> bool {
+    fn skip(&mut self, what: Token<'_>) -> bool {
         let (token, rest) = lex::consume_token(self.input);
         if token == what {
             self.input = rest;
@@ -296,7 +298,7 @@ impl<'a> Lexer<'a> {
         Ok(pair)
     }
 
-    fn take_until(&mut self, what: Token<'a>) -> Result<Lexer<'a>, Error<'a>> {
+    fn take_until(&mut self, what: Token<'_>) -> Result<Lexer<'a>, Error<'a>> {
         let original_input = self.input;
         let initial_len = self.input.len();
         let mut used_len = 0;
@@ -449,7 +451,8 @@ pub struct ParseError<'a> {
 pub struct Parser {
     scopes: Vec<Scope>,
     lookup_type: FastHashMap<String, Handle<crate::Type>>,
-    std_namespace: Option<String>,
+    function_lookup: FastHashMap<String, Handle<crate::Function>>,
+    std_namespace: Option<Vec<String>>,
 }
 
 impl Parser {
@@ -457,6 +460,7 @@ impl Parser {
         Parser {
             scopes: Vec::new(),
             lookup_type: FastHashMap::default(),
+            function_lookup: FastHashMap::default(),
             std_namespace: None,
         }
     }
@@ -541,6 +545,49 @@ impl Parser {
                 .map(|i| (crate::ConstantInner::Sint(i), crate::ScalarKind::Sint))
                 .map_err(|err| Error::BadInteger(word, err))
         }
+    }
+
+    fn parse_function_call<'a>(
+        &mut self,
+        lexer: &Lexer<'a>,
+        mut ctx: ExpressionContext<'a, '_, '_>,
+    ) -> Result<Option<(crate::Expression, Lexer<'a>)>, Error<'a>> {
+        let mut lexer = lexer.clone();
+
+        let external_function = if let Some(std_namespaces) = self.std_namespace.as_deref() {
+            std_namespaces.iter().all(|namespace| {
+                lexer.skip(Token::Word(namespace)) && lexer.skip(Token::DoubleColon)
+            })
+        } else {
+            false
+        };
+
+        let origin = if external_function {
+            let function = lexer.next_ident()?;
+            crate::FunctionOrigin::External(function.to_string())
+        } else if let Ok(function) = lexer.next_ident() {
+            if let Some(&function) = self.function_lookup.get(function) {
+                crate::FunctionOrigin::Local(function)
+            } else {
+                return Ok(None);
+            }
+        } else {
+            return Ok(None);
+        };
+
+        if !lexer.skip(Token::Paren('(')) {
+            return Ok(None);
+        }
+
+        let mut arguments = Vec::new();
+        while !lexer.skip(Token::Paren(')')) {
+            if !arguments.is_empty() {
+                lexer.expect(Token::Separator(','))?;
+            }
+            let arg = self.parse_general_expression(&mut lexer, ctx.reborrow())?;
+            arguments.push(arg);
+        }
+        Ok(Some((crate::Expression::Call { origin, arguments }, lexer)))
     }
 
     fn parse_const_expression<'a>(
@@ -654,22 +701,11 @@ impl Parser {
                     self.scopes.pop();
                     return Ok(*handle);
                 }
-                if self.std_namespace.as_deref() == Some(word) {
-                    lexer.expect(Token::DoubleColon)?;
-                    let name = lexer.next_ident()?;
-                    let mut arguments = Vec::new();
-                    lexer.expect(Token::Paren('('))?;
-                    while !lexer.skip(Token::Paren(')')) {
-                        if !arguments.is_empty() {
-                            lexer.expect(Token::Separator(','))?;
-                        }
-                        let arg = self.parse_general_expression(lexer, ctx.reborrow())?;
-                        arguments.push(arg);
-                    }
-                    crate::Expression::Call {
-                        origin: crate::FunctionOrigin::External(name.to_owned()),
-                        arguments,
-                    }
+                if let Some((expr, new_lexer)) =
+                    self.parse_function_call(&backup, ctx.reborrow())?
+                {
+                    *lexer = new_lexer;
+                    expr
                 } else {
                     *lexer = backup;
                     let ty = self.parse_type_decl(lexer, ctx.types)?;
@@ -1295,6 +1331,7 @@ impl Parser {
         lexer: &mut Lexer<'a>,
         mut context: StatementContext<'a, '_, '_>,
     ) -> Result<Option<crate::Statement>, Error<'a>> {
+        let backup = lexer.clone();
         match lexer.next() {
             Token::Separator(';') => Ok(Some(crate::Statement::Empty)),
             Token::Paren('}') => Ok(None),
@@ -1387,15 +1424,26 @@ impl Parser {
                     "continue" => crate::Statement::Continue,
                     ident => {
                         // assignment
-                        let var_expr = context.lookup_ident.lookup(ident)?;
-                        let left = self.parse_postfix(lexer, context.as_expression(), var_expr)?;
-                        lexer.expect(Token::Operation('='))?;
-                        let value =
-                            self.parse_general_expression(lexer, context.as_expression())?;
-                        lexer.expect(Token::Separator(';'))?;
-                        crate::Statement::Store {
-                            pointer: left,
-                            value,
+                        if let Some(&var_expr) = context.lookup_ident.get(ident) {
+                            let left =
+                                self.parse_postfix(lexer, context.as_expression(), var_expr)?;
+                            lexer.expect(Token::Operation('='))?;
+                            let value =
+                                self.parse_general_expression(lexer, context.as_expression())?;
+                            lexer.expect(Token::Separator(';'))?;
+                            crate::Statement::Store {
+                                pointer: left,
+                                value,
+                            }
+                        } else if let Some((expr, new_lexer)) =
+                            self.parse_function_call(&backup, context.as_expression())?
+                        {
+                            *lexer = new_lexer;
+                            context.expressions.append(expr);
+                            lexer.expect(Token::Separator(';'))?;
+                            crate::Statement::Empty
+                        } else {
+                            return Err(Error::UnknownIdent(ident));
                         }
                     }
                 };
@@ -1459,35 +1507,45 @@ impl Parser {
         } else {
             Some(self.parse_type_decl(lexer, &mut module.types)?)
         };
+
+        let fun_handle = module.functions.append(crate::Function {
+            name: Some(fun_name.to_string()),
+            parameter_types,
+            return_type,
+            global_usage: Vec::new(),
+            local_variables: Arena::new(),
+            expressions,
+            body: Vec::new(),
+        });
+        if self
+            .function_lookup
+            .insert(fun_name.to_string(), fun_handle)
+            .is_some()
+        {
+            return Err(Error::FunctionRedefinition(fun_name));
+        }
+        let fun = module.functions.get_mut(fun_handle);
+
         // read body
-        let mut local_variables = Arena::new();
         let mut typifier = Typifier::new();
-        let body = self.parse_block(
+        fun.body = self.parse_block(
             lexer,
             StatementContext {
                 lookup_ident: &mut lookup_ident,
                 typifier: &mut typifier,
-                variables: &mut local_variables,
-                expressions: &mut expressions,
+                variables: &mut fun.local_variables,
+                expressions: &mut fun.expressions,
                 types: &mut module.types,
                 constants: &mut module.constants,
                 global_vars: &module.global_variables,
             },
         )?;
         // done
-        let global_usage = crate::GlobalUse::scan(&expressions, &body, &module.global_variables);
+        fun.global_usage =
+            crate::GlobalUse::scan(&fun.expressions, &fun.body, &module.global_variables);
         self.scopes.pop();
 
-        let fun = crate::Function {
-            name: Some(fun_name.to_owned()),
-            parameter_types,
-            return_type,
-            global_usage,
-            local_variables,
-            expressions,
-            body,
-        };
-        Ok(module.functions.append(fun))
+        Ok(fun_handle)
     }
 
     fn parse_global_decl<'a>(
@@ -1554,10 +1612,16 @@ impl Parser {
                     other => return Err(Error::Unexpected(other)),
                 };
                 lexer.expect(Token::Word("as"))?;
-                let namespace = lexer.next_ident()?;
-                lexer.expect(Token::Separator(';'))?;
+                let mut namespaces = Vec::new();
+                loop {
+                    namespaces.push(lexer.next_ident()?.to_owned());
+                    if lexer.skip(Token::Separator(';')) {
+                        break;
+                    }
+                    lexer.expect(Token::DoubleColon)?;
+                }
                 match path {
-                    "GLSL.std.450" => self.std_namespace = Some(namespace.to_owned()),
+                    "GLSL.std.450" => self.std_namespace = Some(namespaces),
                     _ => return Err(Error::UnknownImport(path)),
                 }
                 self.scopes.pop();
