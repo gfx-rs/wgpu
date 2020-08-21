@@ -237,7 +237,7 @@ impl Example {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer(water_uniforms.slice(..)),
+                    resource: water_uniforms.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -471,7 +471,7 @@ impl framework::Example for Example {
             layout: &terrain_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(terrain_normal_uniform_buf.slice(..)),
+                resource: terrain_normal_uniform_buf.as_entire_binding(),
             }],
             label: Some("Terrain Normal Bind Group"),
         });
@@ -479,7 +479,7 @@ impl framework::Example for Example {
             layout: &terrain_bind_group_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: wgpu::BindingResource::Buffer(terrain_flipped_uniform_buf.slice(..)),
+                resource: terrain_flipped_uniform_buf.as_entire_binding(),
             }],
             label: Some("Terrain Flipped Bind Group"),
         });

@@ -205,17 +205,15 @@ impl framework::Example for Example {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer(sim_param_buffer.slice(..)),
+                        resource: sim_param_buffer.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Buffer(particle_buffers[i].slice(..)),
+                        resource: particle_buffers[i].as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
-                        resource: wgpu::BindingResource::Buffer(
-                            particle_buffers[(i + 1) % 2].slice(..), // bind to opposite buffer
-                        ),
+                        resource: particle_buffers[(i + 1) % 2].as_entire_binding(), // bind to opposite buffer
                     },
                 ],
                 label: None,

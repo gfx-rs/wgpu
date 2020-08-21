@@ -633,17 +633,17 @@ impl crate::Context for Context {
             .map(|entry| bm::BindGroupEntry {
                 binding: entry.binding,
                 resource: match entry.resource {
-                    BindingResource::Buffer(ref buffer_slice) => {
-                        bm::BindingResource::Buffer(bm::BufferBinding {
-                            buffer_id: buffer_slice.buffer.id,
-                            offset: buffer_slice.offset,
-                            size: buffer_slice.size,
-                        })
-                    }
-                    BindingResource::Sampler(ref sampler) => {
-                        bm::BindingResource::Sampler(sampler.id)
-                    }
-                    BindingResource::TextureView(ref texture_view) => {
+                    BindingResource::Buffer {
+                        buffer,
+                        offset,
+                        size,
+                    } => bm::BindingResource::Buffer(bm::BufferBinding {
+                        buffer_id: buffer.id,
+                        offset,
+                        size,
+                    }),
+                    BindingResource::Sampler(sampler) => bm::BindingResource::Sampler(sampler.id),
+                    BindingResource::TextureView(texture_view) => {
                         bm::BindingResource::TextureView(texture_view.id)
                     }
                     BindingResource::TextureViewArray(texture_view_array) => {

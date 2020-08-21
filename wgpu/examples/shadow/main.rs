@@ -90,8 +90,7 @@ struct Entity {
     vertex_buf: Rc<wgpu::Buffer>,
     index_buf: Rc<wgpu::Buffer>,
     index_count: usize,
-    bind_group: wgpu::BindGroup,
-    uniform_buf: wgpu::Buffer,
+    uniform_offset: wgpu::DynamicOffset,
 }
 
 struct Light {
@@ -178,7 +177,9 @@ struct Example {
     shadow_pass: Pass,
     forward_pass: Pass,
     forward_depth: wgpu::TextureView,
+    entity_bind_group: wgpu::BindGroup,
     light_uniform_buf: wgpu::Buffer,
+    entity_uniform_buf: wgpu::Buffer,
 }
 
 impl Example {
@@ -245,53 +246,6 @@ impl framework::Example for Example {
             usage: wgpu::BufferUsage::INDEX,
         });
 
-        let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
-        let plane_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-            label: None,
-            size: entity_uniform_size,
-            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        let local_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
-                    ty: wgpu::BindingType::UniformBuffer {
-                        dynamic: false,
-                        min_binding_size: wgpu::BufferSize::new(
-                            mem::size_of::<EntityUniforms>() as _
-                        ),
-                    },
-                    count: None,
-                }],
-                label: None,
-            });
-
-        let mut entities = vec![{
-            use cgmath::SquareMatrix;
-
-            let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-                layout: &local_bind_group_layout,
-                entries: &[wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::Buffer(plane_uniform_buf.slice(..)),
-                }],
-                label: None,
-            });
-            Entity {
-                mx_world: cgmath::Matrix4::identity(),
-                rotation_speed: 0.0,
-                color: wgpu::Color::WHITE,
-                vertex_buf: Rc::new(plane_vertex_buf),
-                index_buf: Rc::new(plane_index_buf),
-                index_count: plane_index_data.len(),
-                bind_group,
-                uniform_buf: plane_uniform_buf,
-            }
-        }];
-
         struct CubeDesc {
             offset: cgmath::Vector3<f32>,
             angle: f32,
@@ -325,7 +279,31 @@ impl framework::Example for Example {
             },
         ];
 
-        for cube in &cube_descs {
+        let entity_uniform_size = mem::size_of::<EntityUniforms>() as wgpu::BufferAddress;
+        let num_entities = 1 + cube_descs.len() as wgpu::BufferAddress;
+        assert!(entity_uniform_size <= wgpu::BIND_BUFFER_ALIGNMENT);
+        //Note: dynamic offsets also have to be aligned to `BIND_BUFFER_ALIGNMENT`.
+        let entity_uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
+            label: None,
+            size: num_entities * wgpu::BIND_BUFFER_ALIGNMENT,
+            usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let mut entities = vec![{
+            use cgmath::SquareMatrix;
+            Entity {
+                mx_world: cgmath::Matrix4::identity(),
+                rotation_speed: 0.0,
+                color: wgpu::Color::WHITE,
+                vertex_buf: Rc::new(plane_vertex_buf),
+                index_buf: Rc::new(plane_index_buf),
+                index_count: plane_index_data.len(),
+                uniform_offset: 0,
+            }
+        }];
+
+        for (i, cube) in cube_descs.iter().enumerate() {
             use cgmath::{Decomposed, Deg, InnerSpace, Quaternion, Rotation3};
 
             let transform = Decomposed {
@@ -333,12 +311,6 @@ impl framework::Example for Example {
                 rot: Quaternion::from_axis_angle(cube.offset.normalize(), Deg(cube.angle)),
                 scale: cube.scale,
             };
-            let uniform_buf = device.create_buffer(&wgpu::BufferDescriptor {
-                label: None,
-                size: entity_uniform_size,
-                usage: wgpu::BufferUsage::UNIFORM | wgpu::BufferUsage::COPY_DST,
-                mapped_at_creation: false,
-            });
             entities.push(Entity {
                 mx_world: cgmath::Matrix4::from(transform),
                 rotation_speed: cube.rotation,
@@ -346,17 +318,35 @@ impl framework::Example for Example {
                 vertex_buf: Rc::clone(&cube_vertex_buf),
                 index_buf: Rc::clone(&cube_index_buf),
                 index_count: cube_index_data.len(),
-                bind_group: device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &local_bind_group_layout,
-                    entries: &[wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
-                    }],
-                    label: None,
-                }),
-                uniform_buf,
+                uniform_offset: ((i + 1) * wgpu::BIND_BUFFER_ALIGNMENT as usize) as _,
             });
         }
+
+        let local_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStage::VERTEX | wgpu::ShaderStage::FRAGMENT,
+                    ty: wgpu::BindingType::UniformBuffer {
+                        dynamic: true,
+                        min_binding_size: wgpu::BufferSize::new(entity_uniform_size),
+                    },
+                    count: None,
+                }],
+                label: None,
+            });
+        let entity_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &local_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::Buffer {
+                    buffer: &entity_uniform_buf,
+                    offset: 0,
+                    size: wgpu::BufferSize::new(entity_uniform_size),
+                },
+            }],
+            label: None,
+        });
 
         // Create other resources
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
@@ -474,7 +464,7 @@ impl framework::Example for Example {
                 layout: &bind_group_layout,
                 entries: &[wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
+                    resource: uniform_buf.as_entire_binding(),
                 }],
                 label: None,
             });
@@ -595,11 +585,11 @@ impl framework::Example for Example {
                 entries: &[
                     wgpu::BindGroupEntry {
                         binding: 0,
-                        resource: wgpu::BindingResource::Buffer(uniform_buf.slice(..)),
+                        resource: uniform_buf.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 1,
-                        resource: wgpu::BindingResource::Buffer(light_uniform_buf.slice(..)),
+                        resource: light_uniform_buf.as_entire_binding(),
                     },
                     wgpu::BindGroupEntry {
                         binding: 2,
@@ -679,6 +669,8 @@ impl framework::Example for Example {
             forward_pass,
             forward_depth: depth_texture.create_view(&wgpu::TextureViewDescriptor::default()),
             light_uniform_buf,
+            entity_uniform_buf,
+            entity_bind_group,
         }
     }
 
@@ -739,7 +731,11 @@ impl framework::Example for Example {
                     entity.color.a as f32,
                 ],
             };
-            queue.write_buffer(&entity.uniform_buf, 0, bytemuck::bytes_of(&data));
+            queue.write_buffer(
+                &self.entity_uniform_buf,
+                entity.uniform_offset as wgpu::BufferAddress,
+                bytemuck::bytes_of(&data),
+            );
         }
 
         if self.lights_are_dirty {
@@ -782,7 +778,7 @@ impl framework::Example for Example {
             pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
 
             for entity in &self.entities {
-                pass.set_bind_group(1, &entity.bind_group, &[]);
+                pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
                 pass.set_index_buffer(entity.index_buf.slice(..));
                 pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
@@ -818,7 +814,7 @@ impl framework::Example for Example {
             pass.set_bind_group(0, &self.forward_pass.bind_group, &[]);
 
             for entity in &self.entities {
-                pass.set_bind_group(1, &entity.bind_group, &[]);
+                pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
                 pass.set_index_buffer(entity.index_buf.slice(..));
                 pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
