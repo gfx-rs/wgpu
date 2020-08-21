@@ -922,12 +922,16 @@ impl crate::Context for Context {
             .entries
             .iter()
             .map(|binding| {
-                let mapped_resource = match &binding.resource {
-                    BindingResource::Buffer(buffer_slice) => {
+                let mapped_resource = match binding.resource {
+                    BindingResource::Buffer {
+                        ref buffer,
+                        offset,
+                        size,
+                    } => {
                         let mut mapped_buffer_binding =
-                            web_sys::GpuBufferBinding::new(&buffer_slice.buffer.id.0);
-                        mapped_buffer_binding.offset(buffer_slice.offset as f64);
-                        if let Some(s) = buffer_slice.size {
+                            web_sys::GpuBufferBinding::new(&buffer.id.0);
+                        mapped_buffer_binding.offset(offset as f64);
+                        if let Some(s) = size {
                             mapped_buffer_binding.size(s.get() as f64);
                         }
                         JsValue::from(mapped_buffer_binding.clone())

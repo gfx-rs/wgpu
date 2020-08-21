@@ -15,6 +15,7 @@ All framework-based examples render to the window.
 | vertex attributes         | :star: | :star: | :star: | :star:    | :star: |        | :star:         | :star: |
 | instancing                | :star: |        |        |           |        |        |                |        |
 | lines and points          |        |        |        | :star:    |        |        |                |        |
+| dynamic buffer offsets    |        |        |        |           | :star: |        |                |        |
 | implicit layout           |        |        |        |           |        |        |                |        |
 | sampled color textures    | :star: | :star: | :star: |           |        | :star: | :star:         | :star: |
 | storage textures          | :star: |        |        |           |        |        |                |        |
