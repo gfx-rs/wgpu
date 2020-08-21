@@ -156,23 +156,27 @@ pomelo! {
                     interpolation: None,
                 },
             );
-            extra.lookup_global_variables.insert(v.1, h);
+            extra.lookup_global_variables.insert(v.1.clone(), h);
+            let expression = extra.context.expressions.append(
+                Expression::GlobalVariable(h)
+            );
+            extra.context.lookup_global_var_exps.insert(v.1, expression);
             ExpressionRule{
-                expression: extra.context.expressions.append(Expression::GlobalVariable(h)),
+                expression,
                 statements: vec![],
             }
         } else {
             // try global and local vars
-            let expr =
+            let expression =
                 if let Some(local_var) = extra.context.lookup_local_var(&v.1) {
-                    Expression::LocalVariable(local_var)
-                } else if let Some(global_var) = extra.lookup_global_variables.get(&v.1) {
-                    Expression::GlobalVariable(*global_var)
+                    local_var
+                } else if let Some(global_var) = extra.context.lookup_global_var_exps.get(&v.1) {
+                    *global_var
                 } else {
                     return Err(ErrorKind::UnknownVariable(v.0, v.1))
                 };
             ExpressionRule{
-                expression: extra.context.expressions.append(expr),
+                expression,
                 statements: vec![],
             }
         }
@@ -565,7 +569,7 @@ pomelo! {
             if extra.context.lookup_local_var_current_scope(&id).is_some() {
                 return Err(ErrorKind::VariableAlreadyDeclared(id))
             }
-            let h = extra.context.local_variables.append(
+            let localVar = extra.context.local_variables.append(
                 LocalVariable {
                     name: Some(id.clone()),
                     ty: d.ty,
@@ -575,7 +579,8 @@ pomelo! {
                     }),
                 }
             );
-            extra.context.add_local_var(id, h);
+            let exp = extra.context.expressions.append(Expression::LocalVariable(localVar));
+            extra.context.add_local_var(id, exp);
         }
         match statements.len() {
             0 => Statement::Empty,
@@ -626,7 +631,18 @@ pomelo! {
 
 
     // function
-    function_prototype ::= function_declarator(f) RightParen {f}
+    function_prototype ::= function_declarator(f) RightParen {
+        // prelude, add global var expressions
+        for (var_handle, var) in extra.global_variables.iter() {
+            if let Some(name) = var.name.as_ref() {
+                let exp = extra.context.expressions.append(
+                    Expression::GlobalVariable(var_handle)
+                );
+                extra.context.lookup_global_var_exps.insert(name.clone(), exp);
+            }
+        }
+        f
+    }
     function_declarator ::= function_header;
     function_header ::= fully_specified_type(t) Identifier(n) LeftParen {
         Function {
@@ -763,6 +779,7 @@ pomelo! {
         std::mem::swap(&mut f.expressions, &mut extra.context.expressions);
         std::mem::swap(&mut f.local_variables, &mut extra.context.local_variables);
         extra.context.clear_scopes();
+        extra.context.lookup_global_var_exps.clear();
         f.body = cs;
         f.global_usage = crate::GlobalUse::scan(&f.expressions, &f.body, &extra.global_variables);
         f

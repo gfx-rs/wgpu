@@ -35,6 +35,7 @@ impl Program {
                 expressions: Arena::<Expression>::new(),
                 local_variables: Arena::<LocalVariable>::new(),
                 scopes: vec![FastHashMap::default()],
+                lookup_global_var_exps: FastHashMap::default(),
             },
         }
     }
@@ -50,11 +51,12 @@ pub struct Context {
     pub expressions: Arena<Expression>,
     pub local_variables: Arena<LocalVariable>,
     //TODO: Find less allocation heavy representation
-    pub scopes: Vec<FastHashMap<String, Handle<LocalVariable>>>,
+    pub scopes: Vec<FastHashMap<String, Handle<Expression>>>,
+    pub lookup_global_var_exps: FastHashMap<String, Handle<Expression>>,
 }
 
 impl Context {
-    pub fn lookup_local_var(&self, name: &str) -> Option<Handle<LocalVariable>> {
+    pub fn lookup_local_var(&self, name: &str) -> Option<Handle<Expression>> {
         for scope in self.scopes.iter().rev() {
             if let Some(var) = scope.get(name) {
                 return Some(*var);
@@ -64,7 +66,7 @@ impl Context {
     }
 
     #[cfg(feature = "glsl-validate")]
-    pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<Handle<LocalVariable>> {
+    pub fn lookup_local_var_current_scope(&self, name: &str) -> Option<Handle<Expression>> {
         if let Some(current) = self.scopes.last() {
             current.get(name).cloned()
         } else {
@@ -78,7 +80,7 @@ impl Context {
     }
 
     /// Add variable to current scope
-    pub fn add_local_var(&mut self, name: String, handle: Handle<LocalVariable>) {
+    pub fn add_local_var(&mut self, name: String, handle: Handle<Expression>) {
         if let Some(current) = self.scopes.last_mut() {
             (*current).insert(name, handle);
         }
