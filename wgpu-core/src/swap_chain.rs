@@ -121,22 +121,7 @@ pub struct SwapChainOutput {
     pub view_id: Option<TextureViewId>,
 }
 
-#[error("swap chain is invalid")]
-#[derive(Clone, Debug, Error)]
-pub struct InvalidSwapChain;
-
 impl<G: GlobalIdentityHandlerFactory> Global<G> {
-    pub fn swap_chain_get_preferred_format<B: GfxBackend>(
-        &self,
-        _swap_chain_id: SwapChainId,
-    ) -> Result<wgt::TextureFormat, InvalidSwapChain> {
-        span!(_guard, INFO, "SwapChain::get_next_texture");
-        //TODO: we can query the formats like done in `device_create_swapchain`,
-        // but its not clear which format in the list to return.
-        // For now, return `Bgra8UnormSrgb` that we know is supported everywhere.
-        Ok(wgt::TextureFormat::Bgra8UnormSrgb)
-    }
-
     pub fn swap_chain_get_current_texture_view<B: GfxBackend>(
         &self,
         swap_chain_id: SwapChainId,
