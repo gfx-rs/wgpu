@@ -341,8 +341,9 @@ pub struct GlobalVariable {
     /// The type of this variable.
     pub ty: Handle<Type>,
     /// The interpolation qualifier, if any.
-    /// Required for global outputs in vertex shaders
-    /// and global inputs in fragment shaders.
+    /// If the this `GlobalVariable` is a vertex output
+    /// or fragment input, `None` corresponds to the
+    /// `smooth`/`perspective` interpolation qualifier.
     pub interpolation: Option<Interpolation>,
 }
 

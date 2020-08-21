@@ -2008,12 +2008,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
             class,
             binding,
             ty,
-            interpolation: dec.interpolation.or_else(|| match class {
-                crate::StorageClass::Input | crate::StorageClass::Output => {
-                    Some(crate::Interpolation::Perspective)
-                }
-                _ => None,
-            }),
+            interpolation: dec.interpolation,
         };
         self.lookup_variable.insert(
             id,

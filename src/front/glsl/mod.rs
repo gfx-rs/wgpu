@@ -1174,7 +1174,7 @@ impl<'a> Parser<'a> {
     ) -> (StorageClass, Option<Binding>, Option<Interpolation>) {
         let mut storage = None;
         let mut binding = None;
-        let mut interpolation = Interpolation::Perspective;
+        let mut interpolation = None;
 
         for qualifier in qualifier.qualifiers {
             match qualifier {
@@ -1243,25 +1243,20 @@ impl<'a> Parser<'a> {
                     }
                 }
                 TypeQualifierSpec::Interpolation(interpolation_qualifier) => {
-                    interpolation = match interpolation_qualifier {
+                    interpolation = Some(match interpolation_qualifier {
                         InterpolationQualifier::NoPerspective => Interpolation::Linear,
                         InterpolationQualifier::Flat => Interpolation::Flat,
                         InterpolationQualifier::Smooth => Interpolation::Perspective,
-                    }
+                    });
                 }
                 _ => unimplemented!(),
             }
         }
 
-        let class = storage.unwrap_or(StorageClass::Private);
-
         (
-            class,
+            storage.unwrap_or(StorageClass::Private),
             binding,
-            match class {
-                StorageClass::Input | StorageClass::Output => Some(interpolation),
-                _ => None,
-            },
+            interpolation,
         )
     }
 }

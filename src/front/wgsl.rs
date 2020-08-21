@@ -508,6 +508,7 @@ impl Parser {
             "flat" => Ok(crate::Interpolation::Flat),
             "centroid" => Ok(crate::Interpolation::Centroid),
             "sample" => Ok(crate::Interpolation::Sample),
+            "perspective" => Ok(crate::Interpolation::Perspective),
             _ => Err(Error::UnknownDecoration(word)),
         }
     }
@@ -1557,7 +1558,7 @@ impl Parser {
         // read decorations
         let mut binding = None;
         // Perspective is the default qualifier.
-        let mut interpolation = crate::Interpolation::Perspective;
+        let mut interpolation = None;
         if lexer.skip(Token::DoubleParen('[')) {
             let (mut bind_index, mut bind_set) = (None, None);
             self.scopes.push(Scope::Decoration);
@@ -1578,7 +1579,10 @@ impl Parser {
                         bind_set = Some(lexer.next_uint_literal()?);
                     }
                     "interpolate" => {
-                        interpolation = Self::get_interpolation(lexer.next_ident()?)?;
+                        if interpolation.is_some() {
+                            return Err(Error::UnknownDecoration(lexer.next_ident()?));
+                        }
+                        interpolation = Some(Self::get_interpolation(lexer.next_ident()?)?);
                     }
                     word => return Err(Error::UnknownDecoration(word)),
                 }
@@ -1667,12 +1671,7 @@ impl Parser {
                     class,
                     binding: binding.take(),
                     ty,
-                    interpolation: match class {
-                        crate::StorageClass::Input | crate::StorageClass::Output => {
-                            Some(interpolation)
-                        }
-                        _ => None,
-                    },
+                    interpolation,
                 });
                 lookup_global_expression
                     .insert(name, crate::Expression::GlobalVariable(var_handle));

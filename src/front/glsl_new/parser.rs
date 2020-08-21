@@ -743,11 +743,6 @@ pomelo! {
 
         let interpolation = d.type_qualifiers.iter().find_map(|tq| {
             if let TypeQualifier::Interpolation(i) = tq { Some(*i) } else { None }
-        }).or_else(|| match class {
-            StorageClass::Input | StorageClass::Output => {
-                Some(Interpolation::Perspective)
-            }
-            _ => None,
         });
 
         for (id, initializer) in d.ids_initializers {
