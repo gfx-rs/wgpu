@@ -3262,6 +3262,17 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .push(layout_id);
     }
 
+    pub fn device_get_swap_chain_preferred_format<B: GfxBackend>(
+        &self,
+        _device_id: id::DeviceId,
+    ) -> Result<TextureFormat, InvalidDevice> {
+        span!(_guard, INFO, "Device::get_swap_chain_preferred_format");
+        //TODO: we can query the formats like done in `device_create_swapchain`,
+        // but its not clear which format in the list to return.
+        // For now, return `Bgra8UnormSrgb` that we know is supported everywhere.
+        Ok(TextureFormat::Bgra8UnormSrgb)
+    }
+
     pub fn device_create_swap_chain<B: GfxBackend>(
         &self,
         device_id: id::DeviceId,
