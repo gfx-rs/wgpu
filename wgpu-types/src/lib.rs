@@ -279,6 +279,17 @@ bitflags::bitflags! {
         ///
         /// This is a native only feature.
         const PUSH_CONSTANTS = 0x0000_0000_0080_0000;
+        /// Allows the use of [`AddressMode::ClampToBorder`].
+        ///
+        /// Supported platforms:
+        /// - DX12
+        /// - Vulkan
+        /// - Metal (macOS 10.12+ only)
+        /// - DX11
+        /// - OpenGL
+        ///
+        /// This is a web and native feature.
+        const ADDRESS_MODE_CLAMP_TO_BORDER = 0x0000_0000_0100_0000;
         /// Features which are part of the upstream WebGPU standard.
         const ALL_WEBGPU = 0x0000_0000_0000_FFFF;
         /// Features that are only available when targeting native (not web).
@@ -1476,6 +1487,12 @@ pub enum AddressMode {
     /// -0.25 -> 0.25
     /// 1.25 -> 0.75
     MirrorRepeat = 2,
+    /// Clamp the value to the border of the texture
+    /// Requires feature [`Features::ADDRESS_MODE_CLAMP_TO_BORDER`]
+    ///
+    /// -0.25 -> border
+    /// 1.25 -> border
+    ClampToBorder = 3,
 }
 
 impl Default for AddressMode {
@@ -1820,4 +1837,15 @@ pub struct TextureCopyView<T> {
     pub mip_level: u32,
     /// The base texel of the texture in the selected `mip_level`.
     pub origin: Origin3d,
+}
+
+/// Color variation to use when sampler addressing mode is [`AddressMode::ClampToBorder`]
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "trace", derive(serde::Serialize))]
+#[cfg_attr(feature = "replay", derive(serde::Deserialize))]
+pub enum SamplerBorderColor {
+    TransparentBlack,
+    OpaqueBlack,
+    OpaqueWhite,
 }
