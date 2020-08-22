@@ -56,6 +56,9 @@ trait ComputePassInner<Ctx: Context> {
         offsets: &[DynamicOffset],
     );
     fn set_push_constants(&mut self, offset: u32, data: &[u32]);
+    fn insert_debug_marker(&mut self, label: &str);
+    fn push_debug_group(&mut self, group_label: &str);
+    fn pop_debug_group(&mut self);
     fn dispatch(&mut self, x: u32, y: u32, z: u32);
     fn dispatch_indirect(
         &mut self,
@@ -368,6 +371,11 @@ trait Context: Debug + Send + Sized + Sync {
         pass: &mut Self::RenderPassId,
     );
     fn command_encoder_finish(&self, encoder: &Self::CommandEncoderId) -> Self::CommandBufferId;
+
+    fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str);
+    fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str);
+    fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId);
+
     fn render_bundle_encoder_finish(
         &self,
         encoder: Self::RenderBundleEncoderId,
@@ -1888,6 +1896,21 @@ impl CommandEncoder {
             copy_size,
         );
     }
+
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        Context::command_encoder_insert_debug_marker(&*self.context, &self.id, label);
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        Context::command_encoder_push_debug_group(&*self.context, &self.id, label);
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        Context::command_encoder_pop_debug_group(&*self.context, &self.id);
+    }
 }
 
 impl<'a> RenderPass<'a> {
@@ -2278,6 +2301,21 @@ impl<'a> ComputePass<'a> {
     /// Sets the active compute pipeline.
     pub fn set_pipeline(&mut self, pipeline: &'a ComputePipeline) {
         ComputePassInner::set_pipeline(&mut self.id, &pipeline.id);
+    }
+
+    /// Inserts debug marker.
+    pub fn insert_debug_marker(&mut self, label: &str) {
+        self.id.insert_debug_marker(label);
+    }
+
+    /// Start record commands and group it into debug marker group.
+    pub fn push_debug_group(&mut self, label: &str) {
+        self.id.push_debug_group(label);
+    }
+
+    /// Stops command recording and creates debug group.
+    pub fn pop_debug_group(&mut self) {
+        self.id.pop_debug_group();
     }
 
     /// Dispatches compute work operations.
