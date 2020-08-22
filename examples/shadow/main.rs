@@ -752,7 +752,13 @@ impl framework::Example for Example {
         let mut encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+        encoder.push_debug_group("shadow passes");
         for (i, light) in self.lights.iter().enumerate() {
+            encoder.push_debug_group(&format!(
+                "shadow pass {} (light at position {:?})",
+                i, light.pos
+            ));
+
             // The light uniform buffer already has the projection,
             // let's just copy it over to the shadow uniform buffer.
             encoder.copy_buffer_to_buffer(
@@ -763,29 +769,38 @@ impl framework::Example for Example {
                 64,
             );
 
-            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                color_attachments: &[],
-                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachmentDescriptor {
-                    attachment: &light.target_view,
-                    depth_ops: Some(wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(1.0),
-                        store: true,
-                    }),
-                    stencil_ops: None,
-                }),
-            });
-            pass.set_pipeline(&self.shadow_pass.pipeline);
-            pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
+            encoder.insert_debug_marker("render entities");
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(
+                        wgpu::RenderPassDepthStencilAttachmentDescriptor {
+                            attachment: &light.target_view,
+                            depth_ops: Some(wgpu::Operations {
+                                load: wgpu::LoadOp::Clear(1.0),
+                                store: true,
+                            }),
+                            stencil_ops: None,
+                        },
+                    ),
+                });
+                pass.set_pipeline(&self.shadow_pass.pipeline);
+                pass.set_bind_group(0, &self.shadow_pass.bind_group, &[]);
 
-            for entity in &self.entities {
-                pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
-                pass.set_index_buffer(entity.index_buf.slice(..));
-                pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
-                pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
+                for entity in &self.entities {
+                    pass.set_bind_group(1, &self.entity_bind_group, &[entity.uniform_offset]);
+                    pass.set_index_buffer(entity.index_buf.slice(..));
+                    pass.set_vertex_buffer(0, entity.vertex_buf.slice(..));
+                    pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
+                }
             }
+
+            encoder.pop_debug_group();
         }
+        encoder.pop_debug_group();
 
         // forward pass
+        encoder.push_debug_group("forward rendering pass");
         {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 color_attachments: &[wgpu::RenderPassColorAttachmentDescriptor {
@@ -820,6 +835,7 @@ impl framework::Example for Example {
                 pass.draw_indexed(0..entity.index_count as u32, 0, 0..1);
             }
         }
+        encoder.pop_debug_group();
 
         queue.submit(iter::once(encoder.finish()));
     }

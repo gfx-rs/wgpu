@@ -134,6 +134,7 @@ async fn execute_gpu(numbers: Vec<u32>) -> Vec<u32> {
         let mut cpass = encoder.begin_compute_pass();
         cpass.set_pipeline(&compute_pipeline);
         cpass.set_bind_group(0, &bind_group, &[]);
+        cpass.insert_debug_marker("compute collatz iterations");
         cpass.dispatch(numbers.len() as u32, 1, 1); // Number of cells to run, the (x,y,z) size of item being processed
     }
     // Sets adds copy operation to command encoder.

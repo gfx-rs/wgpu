@@ -88,6 +88,19 @@ impl crate::ComputePassInner<Context> for ComputePass {
     fn set_push_constants(&mut self, _offset: u32, _data: &[u32]) {
         panic!("PUSH_CONSTANTS feature must be enabled to call multi_draw_indexed_indirect")
     }
+
+    fn insert_debug_marker(&mut self, _label: &str) {
+        unimplemented!()
+    }
+
+    fn push_debug_group(&mut self, _group_label: &str) {
+        unimplemented!()
+    }
+
+    fn pop_debug_group(&mut self) {
+        unimplemented!()
+    }
+
     fn dispatch(&mut self, x: u32, y: u32, z: u32) {
         self.0.dispatch_with_y_and_z(x, y, z);
     }
@@ -1434,6 +1447,16 @@ impl crate::Context for Context {
             mapped_desc.label(label);
         }
         Sendable(encoder.finish_with_descriptor(&mapped_desc))
+    }
+
+    fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
+        unimplemented!()
+    }
+    fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
+        unimplemented!()
+    }
+    fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
+        unimplemented!()
     }
 
     fn render_bundle_encoder_finish(
