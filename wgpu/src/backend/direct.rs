@@ -846,6 +846,7 @@ impl crate::Context for Context {
                 lod_max_clamp: desc.lod_max_clamp,
                 compare: desc.compare,
                 anisotropy_clamp: desc.anisotropy_clamp,
+                border_color: desc.border_color,
             },
             PhantomData
         ))
