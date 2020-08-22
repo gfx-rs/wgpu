@@ -137,7 +137,7 @@ impl Writer {
         }
     }
 
-    fn get_function_type(
+    fn get_function_return_type(
         &mut self,
         ty: Option<crate::Handle<crate::Type>>,
         arena: &crate::Arena<crate::Type>,
@@ -1062,7 +1062,7 @@ impl Writer {
         (instruction, id)
     }
 
-    fn write_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
+    fn get_function_type(&mut self, lookup_function_type: LookupFunctionType) -> Word {
         match self
             .lookup_function_type
             .entry(lookup_function_type.clone())
@@ -1088,7 +1088,7 @@ impl Writer {
         function: &crate::Function,
         expression: &crate::Expression,
         output: &mut Vec<Instruction>,
-    ) -> (Word, &'a crate::TypeInner) {
+    ) -> Option<(Word, &'a crate::TypeInner)> {
         match expression {
             crate::Expression::GlobalVariable(handle) => {
                 let var = &ir_module.global_variables[*handle];
@@ -1098,13 +1098,13 @@ impl Writer {
                     &ir_module.global_variables,
                     *handle,
                 );
-                (id, inner)
+                Some((id, inner))
             }
             crate::Expression::Constant(handle) => {
                 let var = &ir_module.constants[*handle];
                 let inner = &ir_module.types[var.ty].inner;
                 let id = self.get_constant_id(*handle, ir_module);
-                (id, inner)
+                Some((id, inner))
             }
             crate::Expression::Compose { ty, components } => {
                 let var = &ir_module.types[*ty];
@@ -1116,7 +1116,7 @@ impl Writer {
                 for component in components {
                     let expression = &function.expressions[*component];
                     let (component_id, _) =
-                        self.write_expression(ir_module, &function, expression, output);
+                        self.write_expression(ir_module, &function, expression, output).unwrap();
                     constituent_ids.push(component_id);
                 }
 
@@ -1124,7 +1124,7 @@ impl Writer {
                     self.instruction_composite_construct(type_id, id, constituent_ids);
                 output.push(instruction);
 
-                (id, inner)
+                Some((id, inner))
             }
             crate::Expression::Binary { op, left, right } => {
                 match op {
@@ -1134,9 +1134,9 @@ impl Writer {
                         let left_expression = &function.expressions[*left];
                         let right_expression = &function.expressions[*right];
                         let (left_id, left_inner) =
-                            self.write_expression(ir_module, function, left_expression, output);
+                            self.write_expression(ir_module, function, left_expression, output).unwrap();
                         let (right_id, right_inner) =
-                            self.write_expression(ir_module, function, right_expression, output);
+                            self.write_expression(ir_module, function, right_expression, output).unwrap();
 
                         let (result_type_id, vector_id, scalar_id) = match (left_inner, right_inner)
                         {
@@ -1187,14 +1187,7 @@ impl Writer {
                         );
                         output.push(instruction);
 
-                        // TODO Not sure how or what to return
-                        (
-                            id,
-                            &crate::TypeInner::Scalar {
-                                kind: crate::ScalarKind::Float,
-                                width: 10,
-                            },
-                        )
+                        None
                     }
                     _ => unimplemented!("{:?}", op),
                 }
@@ -1210,7 +1203,7 @@ impl Writer {
                 let instruction =
                     self.instruction_variable(pointer_id, id, spirv::StorageClass::Function, None);
                 output.push(instruction);
-                (id, &ty.inner)
+                Some((id, &ty.inner))
             }
             _ => unimplemented!("{:?}", expression),
         }
@@ -1222,24 +1215,32 @@ impl Writer {
         function: &crate::Function,
         statement: &crate::Statement,
         output: &mut Vec<Instruction>,
-    ) -> Instruction {
+    ) {
         match statement {
-            crate::Statement::Return { .. } => match function.return_type {
-                Some(ty) => {
-                    let value_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty));
-                    self.instruction_return_value(value_id)
+            crate::Statement::Return { value } => {
+                match function.return_type {
+                    Some(ty) => {
+                        // let type_id = self.get_type_id(&ir_module.types, LookupType::Handle(ty));
+                        let pointer_id = self.generate_id();
+
+                        let expression = &function.expressions[value.unwrap()];
+                        let (id, _) = self.write_expression(ir_module, function, expression, output).unwrap();
+
+
+                        output.push(self.instruction_return_value(id))
+                    }
+                    None => output.push(self.instruction_return()),
                 }
-                None => self.instruction_return(),
             },
             crate::Statement::Store { pointer, value } => {
                 let pointer_expression = &function.expressions[*pointer];
                 let value_expression = &function.expressions[*value];
                 let (pointer_id, _) =
-                    self.write_expression(ir_module, function, pointer_expression, output);
+                    self.write_expression(ir_module, function, pointer_expression, output).unwrap();
                 let (value_id, _) =
-                    self.write_expression(ir_module, function, value_expression, output);
+                    self.write_expression(ir_module, function, value_expression, output).unwrap();
 
-                self.instruction_store(pointer_id, value_id)
+                output.push(self.instruction_store(pointer_id, value_id));
             }
             _ => unimplemented!(),
         }
@@ -1277,26 +1278,21 @@ impl Writer {
             annotation.to_words(&mut self.logical_layout.annotations);
         }
 
-        for capability in self.capabilities.iter() {
-            self.instruction_capability(*capability)
-                .to_words(&mut self.logical_layout.capabilities);
-        }
-
         for (handle, function) in ir_module.functions.iter() {
             let mut function_instructions: Vec<Instruction> = vec![];
             let id = self.generate_id();
 
-            let return_type_id = self.get_function_type(function.return_type, &ir_module.types);
+            let return_type_id = self.get_function_return_type(function.return_type, &ir_module.types);
             let mut parameter_type_ids = Vec::with_capacity(function.parameter_types.len());
 
             let mut function_parameter_instructions = vec![];
             for parameter_type in function.parameter_types.iter() {
-                let parameter_id =
-                    self.get_type_id(&ir_module.types, LookupType::Handle(*parameter_type));
-                parameter_type_ids.push(parameter_id);
+                parameter_type_ids.push(self.get_type_id(&ir_module.types, LookupType::Handle(*parameter_type)));
                 let id = self.generate_id();
+
+                let pointer_id = self.get_pointer_id(&ir_module.types, *parameter_type, spirv::StorageClass::Function);
                 function_parameter_instructions
-                    .push(self.instruction_function_parameter(parameter_id, id));
+                    .push(self.instruction_function_parameter(pointer_id, id));
             }
 
             let lookup_function_type = LookupFunctionType {
@@ -1304,7 +1300,7 @@ impl Writer {
                 parameter_type_ids,
             };
 
-            let type_function_id = self.write_function_type(lookup_function_type);
+            let type_function_id = self.get_function_type(lookup_function_type);
 
             function_instructions.push(self.instruction_function(
                 return_type_id,
@@ -1321,10 +1317,8 @@ impl Writer {
 
             for block in function.body.iter() {
                 let mut output: Vec<Instruction> = vec![];
-                let instruction =
-                    self.write_function_block(ir_module, function, &block, &mut output);
+                self.write_function_block(ir_module, function, &block, &mut output);
                 function_instructions.append(&mut output);
-                function_instructions.push(instruction);
             }
 
             function_instructions.push(self.instruction_function_end());
@@ -1336,6 +1330,11 @@ impl Writer {
         for entry_point in ir_module.entry_points.iter() {
             let entry_point_instruction = self.instruction_entry_point(entry_point, ir_module);
             entry_point_instruction.to_words(&mut self.logical_layout.entry_points);
+        }
+
+        for capability in self.capabilities.iter() {
+            self.instruction_capability(*capability)
+                .to_words(&mut self.logical_layout.capabilities);
         }
 
         self.instruction_memory_model()
