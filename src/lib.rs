@@ -37,12 +37,12 @@ pub use wgt::{
     ColorStateDescriptor, ColorWrite, CommandBufferDescriptor, CompareFunction, CullMode,
     DepthStencilStateDescriptor, DeviceDescriptor, DynamicOffset, Extent3d, Features, FilterMode,
     FrontFace, IndexFormat, InputStepMode, Limits, Origin3d, PowerPreference, PresentMode,
-    PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, ShaderLocation,
-    ShaderStage, StencilOperation, StencilStateDescriptor, StencilStateFaceDescriptor,
-    SwapChainDescriptor, SwapChainStatus, TextureAspect, TextureComponentType, TextureDataLayout,
-    TextureDimension, TextureFormat, TextureUsage, TextureViewDimension, VertexAttributeDescriptor,
-    VertexFormat, BIND_BUFFER_ALIGNMENT, COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT,
-    PUSH_CONSTANT_ALIGNMENT,
+    PrimitiveTopology, PushConstantRange, RasterizationStateDescriptor, SamplerBorderColor,
+    ShaderLocation, ShaderStage, StencilOperation, StencilStateDescriptor,
+    StencilStateFaceDescriptor, SwapChainDescriptor, SwapChainStatus, TextureAspect,
+    TextureComponentType, TextureDataLayout, TextureDimension, TextureFormat, TextureUsage,
+    TextureViewDimension, VertexAttributeDescriptor, VertexFormat, BIND_BUFFER_ALIGNMENT,
+    COPY_BUFFER_ALIGNMENT, COPY_BYTES_PER_ROW_ALIGNMENT, PUSH_CONSTANT_ALIGNMENT,
 };
 
 use backend::Context as C;
@@ -1052,6 +1052,8 @@ pub struct SamplerDescriptor<'a> {
     pub compare: Option<CompareFunction>,
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<NonZeroU8>,
+    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
+    pub border_color: Option<SamplerBorderColor>,
 }
 
 impl Default for SamplerDescriptor<'_> {
@@ -1068,6 +1070,7 @@ impl Default for SamplerDescriptor<'_> {
             lod_max_clamp: std::f32::MAX,
             compare: None,
             anisotropy_clamp: None,
+            border_color: None,
         }
     }
 }
