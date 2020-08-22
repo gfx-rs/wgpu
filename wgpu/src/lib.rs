@@ -842,7 +842,15 @@ pub enum BindingResource<'a> {
     ///
     /// Corresponds to [`BindingType::UniformBuffer`] and [`BindingType::StorageBuffer`]
     /// with [`BindGroupLayoutEntry::count`] set to None.
-    Buffer(BufferSlice<'a>),
+    Buffer {
+        /// The buffer to bind.
+        buffer: &'a Buffer,
+        /// Base offset of the buffer. For bindings with `dynamic == true`, this offset
+        /// will be added to the dynamic offset provided in [`RenderPass::set_bind_group`].
+        offset: BufferAddress,
+        /// Size of the binding, or `None` for using the rest of the buffer.
+        size: Option<BufferSize>,
+    },
     /// Binding is a sampler.
     ///
     /// Corresponds to [`BindingType::Sampler`] with [`BindGroupLayoutEntry::count`] set to None.
@@ -1646,6 +1654,15 @@ impl Drop for BufferViewMut<'_> {
 }
 
 impl Buffer {
+    /// Return the binding view of the entire buffer.
+    pub fn as_entire_binding(&self) -> BindingResource {
+        BindingResource::Buffer {
+            buffer: self,
+            offset: 0,
+            size: None,
+        }
+    }
+
     /// Use only a portion of this Buffer for a given operation. Choosing a range with no end
     /// will use the rest of the buffer. Using a totally unbounded range will use the entire buffer.
     pub fn slice<S: RangeBounds<BufferAddress>>(&self, bounds: S) -> BufferSlice {
