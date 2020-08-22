@@ -362,6 +362,8 @@ pub struct SamplerDescriptor<'a> {
     pub compare: Option<wgt::CompareFunction>,
     /// Valid values: 1, 2, 4, 8, and 16.
     pub anisotropy_clamp: Option<NonZeroU8>,
+    /// Border color to use when address_mode is [`AddressMode::ClampToBorder`]
+    pub border_color: Option<wgt::SamplerBorderColor>,
 }
 
 impl Default for SamplerDescriptor<'_> {
@@ -376,6 +378,7 @@ impl Default for SamplerDescriptor<'_> {
             lod_max_clamp: std::f32::MAX,
             compare: None,
             anisotropy_clamp: None,
+            border_color: None,
         }
     }
 }
@@ -397,6 +400,9 @@ pub enum CreateSamplerError {
     InvalidClamp(u8),
     #[error("cannot create any more samplers")]
     TooManyObjects,
+    /// AddressMode::ClampToBorder requires feature ADDRESS_MODE_CLAMP_TO_BORDER
+    #[error("Feature {0:?} must be enabled")]
+    MissingFeature(wgt::Features),
 }
 
 impl<B: hal::Backend> Borrow<RefCount> for Sampler<B> {

@@ -154,6 +154,9 @@ impl<B: hal::Backend> Adapter<B> {
             wgt::Features::MULTI_DRAW_INDIRECT_COUNT,
             adapter_features.contains(hal::Features::DRAW_INDIRECT_COUNT),
         );
+        #[cfg(not(target_os = "ios"))]
+        //TODO: https://github.com/gfx-rs/gfx/issues/3346
+        features.set(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER, true);
 
         let adapter_limits = raw.physical_device.limits();
 

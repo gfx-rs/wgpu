@@ -1490,6 +1490,19 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             .get(device_id)
             .map_err(|_| DeviceError::Invalid)?;
 
+        let clamp_to_border_enabled = device
+            .features
+            .contains(wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER);
+        let clamp_to_border_found = desc
+            .address_modes
+            .iter()
+            .any(|am| am == &wgt::AddressMode::ClampToBorder);
+        if clamp_to_border_found && !clamp_to_border_enabled {
+            return Err(resource::CreateSamplerError::MissingFeature(
+                wgt::Features::ADDRESS_MODE_CLAMP_TO_BORDER,
+            ));
+        }
+
         let actual_clamp = if let Some(clamp) = desc.anisotropy_clamp {
             let clamp = clamp.get();
             let valid_clamp = clamp <= MAX_ANISOTROPY && conv::is_power_of_two(clamp as u32);
@@ -1505,6 +1518,16 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             None
         };
 
+        let actual_border = desc
+            .border_color
+            .map(|c| match c {
+                wgt::SamplerBorderColor::TransparentBlack => [0.0, 0.0, 0.0, 0.0],
+                wgt::SamplerBorderColor::OpaqueBlack => [0.0, 0.0, 0.0, 1.0],
+                wgt::SamplerBorderColor::OpaqueWhite => [1.0, 1.0, 1.0, 1.0],
+            })
+            .map(hal::image::PackedColor::from)
+            .unwrap_or(hal::image::PackedColor(0));
+
         let info = hal::image::SamplerDesc {
             min_filter: conv::map_filter(desc.min_filter),
             mag_filter: conv::map_filter(desc.mag_filter),
@@ -1517,7 +1540,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
             lod_bias: hal::image::Lod(0.0),
             lod_range: hal::image::Lod(desc.lod_min_clamp)..hal::image::Lod(desc.lod_max_clamp),
             comparison: desc.compare.map(conv::map_compare_function),
-            border: hal::image::PackedColor(0),
+            border: actual_border,
             normalized: true,
             anisotropy_clamp: actual_clamp,
         };

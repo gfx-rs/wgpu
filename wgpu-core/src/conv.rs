@@ -759,6 +759,7 @@ pub fn map_wrap(address: wgt::AddressMode) -> hal::image::WrapMode {
         Am::ClampToEdge => W::Clamp,
         Am::Repeat => W::Tile,
         Am::MirrorRepeat => W::Mirror,
+        Am::ClampToBorder => W::Border,
     }
 }
 
