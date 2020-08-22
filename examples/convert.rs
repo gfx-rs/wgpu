@@ -189,8 +189,11 @@ fn main() {
             fs::write(&args[2], bytes.as_slice()).unwrap();
         }
         #[cfg(feature = "glsl-out")]
-        "vert" | "frag" => {
-            use naga::back::glsl;
+        stage @ "vert" | stage @ "frag" | stage @ "comp" => {
+            use naga::{
+                back::glsl::{self, Options, Version},
+                ShaderStage,
+            };
 
             let mut file = fs::OpenOptions::new()
                 .write(true)
@@ -199,7 +202,20 @@ fn main() {
                 .open(&args[2])
                 .unwrap();
 
-            glsl::write(&module, &mut file).unwrap();
+            let options = Options {
+                version: Version::Embedded(310),
+                entry_point: (
+                    String::from("main"),
+                    match stage {
+                        "vert" => ShaderStage::Vertex,
+                        "frag" => ShaderStage::Fragment,
+                        "comp" => ShaderStage::Compute,
+                        _ => unreachable!(),
+                    },
+                ),
+            };
+
+            glsl::write(&module, &mut file, options).unwrap();
         }
         #[cfg(feature = "serialize")]
         "ron" => {
