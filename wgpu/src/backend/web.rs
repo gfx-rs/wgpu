@@ -623,6 +623,7 @@ fn map_address_mode(mode: wgt::AddressMode) -> web_sys::GpuAddressMode {
         wgt::AddressMode::ClampToEdge => web_sys::GpuAddressMode::ClampToEdge,
         wgt::AddressMode::Repeat => web_sys::GpuAddressMode::Repeat,
         wgt::AddressMode::MirrorRepeat => web_sys::GpuAddressMode::MirrorRepeat,
+        wgt::AddressMode::ClampToBorder => unimplemented!(),
     }
 }
 
