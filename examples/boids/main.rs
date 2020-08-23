@@ -281,6 +281,7 @@ impl framework::Example for Example {
         let mut command_encoder =
             device.create_command_encoder(&wgpu::CommandEncoderDescriptor { label: None });
 
+        command_encoder.push_debug_group("compute boid movement");
         {
             // compute pass
             let mut cpass = command_encoder.begin_compute_pass();
@@ -288,7 +289,9 @@ impl framework::Example for Example {
             cpass.set_bind_group(0, &self.particle_bind_groups[self.frame_num % 2], &[]);
             cpass.dispatch(self.work_group_count, 1, 1);
         }
+        command_encoder.pop_debug_group();
 
+        command_encoder.push_debug_group("render boids");
         {
             // render pass
             let mut rpass = command_encoder.begin_render_pass(&render_pass_descriptor);
@@ -299,6 +302,7 @@ impl framework::Example for Example {
             rpass.set_vertex_buffer(1, self.vertices_buffer.slice(..));
             rpass.draw(0..3, 0..NUM_PARTICLES);
         }
+        command_encoder.pop_debug_group();
 
         // update frame count
         self.frame_num += 1;

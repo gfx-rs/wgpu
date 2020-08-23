@@ -96,6 +96,22 @@ mod pass_impl {
                 )
             }
         }
+        fn insert_debug_marker(&mut self, label: &str) {
+            unsafe {
+                let label = std::ffi::CString::new(label).unwrap();
+                wgpu_compute_pass_insert_debug_marker(self, label.as_ptr().into(), 0);
+            }
+        }
+
+        fn push_debug_group(&mut self, group_label: &str) {
+            unsafe {
+                let label = std::ffi::CString::new(group_label).unwrap();
+                wgpu_compute_pass_push_debug_group(self, label.as_ptr().into(), 0);
+            }
+        }
+        fn pop_debug_group(&mut self) {
+            wgpu_compute_pass_pop_debug_group(self);
+        }
         fn dispatch(&mut self, x: u32, y: u32, z: u32) {
             wgpu_compute_pass_dispatch(self, x, y, z)
         }
@@ -1242,6 +1258,22 @@ impl crate::Context for Context {
         let desc = wgt::CommandBufferDescriptor::default();
         let global = &self.0;
         wgc::gfx_select!(*encoder => global.command_encoder_finish(*encoder, &desc)).unwrap_pretty()
+    }
+
+    fn command_encoder_insert_debug_marker(&self, encoder: &Self::CommandEncoderId, label: &str) {
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_insert_debug_marker(*encoder, &label))
+            .unwrap_pretty()
+    }
+    fn command_encoder_push_debug_group(&self, encoder: &Self::CommandEncoderId, label: &str) {
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_push_debug_group(*encoder, &label))
+            .unwrap_pretty()
+    }
+    fn command_encoder_pop_debug_group(&self, encoder: &Self::CommandEncoderId) {
+        let global = &self.0;
+        wgc::gfx_select!(*encoder => global.command_encoder_pop_debug_group(*encoder))
+            .unwrap_pretty()
     }
 
     fn render_bundle_encoder_finish(
