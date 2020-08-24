@@ -44,48 +44,41 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        name:
-          [
-            MacOS Stable,
-            MacOS Nightly,
-            Ubuntu Stable,
-            Ubuntu Nightly,
-            Windows Stable,
-            Windows Nightly,
-          ]
+        os: [macos-10.15, ubuntu-18.04, windows-2019]
+        channel: [stable, nightly]
         include:
-          - os: macos-10.15
-            name: MacOS Stable
+          - name: MacOS Stable
             channel: stable
+            os: macos-10.15
             build_command: cargo clippy
             additional_core_features: trace
             additional_player_features: winit
-          - os: macos-10.15
-            name: MacOS Nightly
+          - name: MacOS Nightly
+            os: macos-10.15
             channel: nightly
             build_command: cargo test
             additional_core_features:
             additional_player_features:
-          - os: ubuntu-18.04
-            name: Ubuntu Stable
+          - name: Ubuntu Stable
+            os: ubuntu-18.04
             channel: stable
             build_command: cargo clippy
             additional_core_features: trace,replay
             additional_player_features:
-          - os: ubuntu-18.04
-            name: Ubuntu Nightly
+          - name: Ubuntu Nightly
+            os: ubuntu-18.04
             channel: nightly
             build_command: cargo test
             additional_core_features: serial-pass
             additional_player_features: winit
-          - os: windows-2019
-            name: Windows Stable
+          - name: Windows Stable
+            os: windows-2019
             channel: stable
             build_command: rustup default stable-msvc; cargo clippy
             additional_core_features: trace,serial-pass
             additional_player_features: renderdoc
-          - os: windows-2019
-            name: Windows Nightly
+          - name: Windows Nightly
+            os: windows-2019
             channel: nightly
             build_command: rustup default nightly-msvc; cargo test
             additional_core_features:
