@@ -575,6 +575,19 @@ pub fn map_texture_dimension_size(
     use resource::TextureDimensionError as Tde;
     use wgt::TextureDimension::*;
 
+    let zero_dim = if width == 0 {
+        Some(resource::TextureErrorDimension::X)
+    } else if height == 0 {
+        Some(resource::TextureErrorDimension::Y)
+    } else if depth == 0 {
+        Some(resource::TextureErrorDimension::Z)
+    } else {
+        None
+    };
+    if let Some(dim) = zero_dim {
+        return Err(resource::TextureDimensionError::Zero(dim));
+    }
+
     Ok(match dimension {
         D1 => {
             if height != 1 {
@@ -583,14 +596,14 @@ pub fn map_texture_dimension_size(
             if sample_size != 1 {
                 return Err(Tde::InvalidSampleCount(sample_size));
             }
-            let layers = depth.try_into().or(Err(Tde::TooManyLayers(depth)))?;
+            let layers = depth.try_into().unwrap_or(!0);
             H::D1(width, layers)
         }
         D2 => {
             if sample_size > 32 || !is_power_of_two(sample_size) {
                 return Err(Tde::InvalidSampleCount(sample_size));
             }
-            let layers = depth.try_into().or(Err(Tde::TooManyLayers(depth)))?;
+            let layers = depth.try_into().unwrap_or(!0);
             H::D2(width, height, layers, sample_size as u8)
         }
         D3 => {
