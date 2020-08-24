@@ -71,6 +71,10 @@ pub enum RenderCommandError {
     MissingTextureUsage(#[from] MissingTextureUsageError),
     #[error(transparent)]
     PushConstants(#[from] PushConstantUploadError),
+    #[error("Invalid Viewport parameters")]
+    InvalidViewport,
+    #[error("Invalid ScissorRect parameters")]
+    InvalidScissorRect,
 }
 
 #[derive(Clone, Copy, Debug, Default)]

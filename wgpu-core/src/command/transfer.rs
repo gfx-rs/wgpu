@@ -46,6 +46,8 @@ pub enum TransferError {
     InvalidBuffer(BufferId),
     #[error("texture {0:?} is invalid")]
     InvalidTexture(TextureId),
+    #[error("Source and destination cannot be the same buffer")]
+    AttemptToCopyWithinBuffer,
     #[error("source buffer/texture is missing the `COPY_SRC` usage flag")]
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
@@ -302,6 +304,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
     ) -> Result<(), CopyError> {
         span!(_guard, INFO, "CommandEncoder::copy_buffer_to_buffer");
 
+        if source == destination {
+            Err(TransferError::AttemptToCopyWithinBuffer)?
+        }
         let hub = B::hub(self);
         let mut token = Token::root();
 
@@ -322,11 +327,6 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 size,
             }),
             None => (),
-        }
-
-        if size == 0 {
-            tracing::trace!("Ignoring copy_buffer_to_buffer of size 0");
-            return Ok(());
         }
 
         let (src_buffer, src_pending) = cmd_buf
@@ -376,6 +376,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 buffer_size: dst_buffer.size,
                 side: CopySide::Destination,
             })?
+        }
+
+        if size == 0 {
+            tracing::trace!("Ignoring copy_buffer_to_buffer of size 0");
+            return Ok(());
         }
 
         let region = hal::command::BufferCopy {

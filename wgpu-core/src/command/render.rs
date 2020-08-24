@@ -466,6 +466,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let mut output_attachments = AttachmentDataVec::<OutputAttachment>::new();
 
+        let mut attachment_width = std::u32::MAX;
+        let mut attachment_height = std::u32::MAX;
+
         let context = {
             use hal::device::Device as _;
 
@@ -567,6 +570,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*view_guard, at.attachment, (), ())
                         .map_err(|_| RenderPassError::InvalidAttachment(at.attachment))?;
                     add_view(view)?;
+
+                    attachment_width = attachment_width.min(view.extent.width);
+                    attachment_height = attachment_height.min(view.extent.height);
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -1198,6 +1204,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     depth_max,
                 } => {
                     use std::{convert::TryFrom, i16};
+                    if rect.w <= 0.0
+                        || rect.h <= 0.0
+                        || depth_min < 0.0
+                        || depth_min > 1.0
+                        || depth_max < 0.0
+                        || depth_max > 1.0
+                    {
+                        Err(RenderCommandError::InvalidViewport)?
+                    }
                     let r = hal::pso::Rect {
                         x: i16::try_from(rect.x.round() as i64).unwrap_or(0),
                         y: i16::try_from(rect.y.round() as i64).unwrap_or(0),
@@ -1249,6 +1264,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 RenderCommand::SetScissor(ref rect) => {
                     use std::{convert::TryFrom, i16};
+                    if rect.w == 0
+                        || rect.h == 0
+                        || rect.x + rect.w > attachment_width
+                        || rect.y + rect.h > attachment_height
+                    {
+                        Err(RenderCommandError::InvalidScissorRect)?
+                    }
                     let r = hal::pso::Rect {
                         x: i16::try_from(rect.x).unwrap_or(0),
                         y: i16::try_from(rect.y).unwrap_or(0),
