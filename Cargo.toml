@@ -19,6 +19,7 @@ glsl = { version = "4.1", optional = true }
 pomelo = { version = "0.1.4", optional = true }
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"], optional = true }
+petgraph = { version ="0.5", optional = true }
 
 [features]
 default = []
@@ -28,6 +29,7 @@ glsl-validate = []
 glsl-out = []
 serialize = ["serde"]
 deserialize = ["serde"]
+spirv-in = ["petgraph", "spirv"]
 
 [dev-dependencies]
 env_logger = "0.6"

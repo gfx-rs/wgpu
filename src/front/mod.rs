@@ -4,7 +4,7 @@
 pub mod glsl;
 #[cfg(feature = "glsl-new")]
 pub mod glsl_new;
-#[cfg(feature = "spirv")]
+#[cfg(feature = "spirv-in")]
 pub mod spv;
 pub mod wgsl;
 

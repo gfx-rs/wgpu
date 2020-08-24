@@ -9,6 +9,17 @@ extra info, such as the related SPIR-V type ID.
 TODO: would be nice to find ways that avoid looking up as much
 
 !*/
+#![allow(dead_code)]
+
+mod convert;
+mod error;
+mod flow;
+mod function;
+
+use convert::*;
+use error::Error;
+use flow::*;
+use function::*;
 
 use crate::{
     arena::{Arena, Handle},
@@ -22,55 +33,8 @@ pub const SUPPORTED_CAPABILITIES: &[spirv::Capability] = &[spirv::Capability::Sh
 pub const SUPPORTED_EXTENSIONS: &[&str] = &[];
 pub const SUPPORTED_EXT_SETS: &[&str] = &["GLSL.std.450"];
 
-#[derive(Debug)]
-pub enum Error {
-    InvalidHeader,
-    InvalidWordCount,
-    UnknownInstruction(u16),
-    UnknownCapability(spirv::Word),
-    UnsupportedInstruction(ModuleState, spirv::Op),
-    UnsupportedCapability(spirv::Capability),
-    UnsupportedExtension(String),
-    UnsupportedExtSet(String),
-    UnsupportedExtInstSet(spirv::Word),
-    UnsupportedExtInst(spirv::Word),
-    UnsupportedType(Handle<crate::Type>),
-    UnsupportedExecutionModel(spirv::Word),
-    UnsupportedStorageClass(spirv::Word),
-    UnsupportedImageDim(spirv::Word),
-    UnsupportedBuiltIn(spirv::Word),
-    UnsupportedControlFlow(spirv::Word),
-    InvalidParameter(spirv::Op),
-    InvalidOperandCount(spirv::Op, u16),
-    InvalidOperand,
-    InvalidId(spirv::Word),
-    InvalidDecoration(spirv::Word),
-    InvalidTypeWidth(spirv::Word),
-    InvalidSign(spirv::Word),
-    InvalidInnerType(spirv::Word),
-    InvalidVectorSize(spirv::Word),
-    InvalidVariableClass(spirv::StorageClass),
-    InvalidAccessType(spirv::Word),
-    InvalidAccess(Handle<crate::Expression>),
-    InvalidAccessIndex(spirv::Word),
-    InvalidLoadType(spirv::Word),
-    InvalidStoreType(spirv::Word),
-    InvalidBinding(spirv::Word),
-    InvalidImageExpression(Handle<crate::Expression>),
-    InvalidSamplerExpression(Handle<crate::Expression>),
-    InvalidSampleImage(Handle<crate::Type>),
-    InvalidSampleSampler(Handle<crate::Type>),
-    InvalidSampleCoordinates(Handle<crate::Type>),
-    InvalidDepthReference(Handle<crate::Type>),
-    InconsistentComparisonSampling(Handle<crate::Type>),
-    WrongFunctionResultType(spirv::Word),
-    WrongFunctionParameterType(spirv::Word),
-    MissingDecoration(spirv::Decoration),
-    BadString,
-    IncompleteData,
-}
-
-struct Instruction {
+#[derive(Copy, Clone)]
+pub struct Instruction {
     op: spirv::Op,
     wc: u16,
 }
@@ -120,46 +84,6 @@ impl<T> LookupHelper for FastHashMap<spirv::Word, T> {
     fn lookup(&self, key: spirv::Word) -> Result<&T, Error> {
         self.get(&key).ok_or(Error::InvalidId(key))
     }
-}
-
-fn map_vector_size(word: spirv::Word) -> Result<crate::VectorSize, Error> {
-    match word {
-        2 => Ok(crate::VectorSize::Bi),
-        3 => Ok(crate::VectorSize::Tri),
-        4 => Ok(crate::VectorSize::Quad),
-        _ => Err(Error::InvalidVectorSize(word)),
-    }
-}
-
-fn map_storage_class(word: spirv::Word) -> Result<crate::StorageClass, Error> {
-    use spirv::StorageClass as Sc;
-    match Sc::from_u32(word) {
-        Some(Sc::UniformConstant) => Ok(crate::StorageClass::Constant),
-        Some(Sc::Function) => Ok(crate::StorageClass::Function),
-        Some(Sc::Input) => Ok(crate::StorageClass::Input),
-        Some(Sc::Output) => Ok(crate::StorageClass::Output),
-        Some(Sc::Private) => Ok(crate::StorageClass::Private),
-        Some(Sc::StorageBuffer) => Ok(crate::StorageClass::StorageBuffer),
-        Some(Sc::Uniform) => Ok(crate::StorageClass::Uniform),
-        Some(Sc::Workgroup) => Ok(crate::StorageClass::WorkGroup),
-        _ => Err(Error::UnsupportedStorageClass(word)),
-    }
-}
-
-fn map_image_dim(word: spirv::Word) -> Result<crate::ImageDimension, Error> {
-    match spirv::Dim::from_u32(word) {
-        Some(spirv::Dim::Dim1D) => Ok(crate::ImageDimension::D1),
-        Some(spirv::Dim::Dim2D) => Ok(crate::ImageDimension::D2),
-        Some(spirv::Dim::Dim3D) => Ok(crate::ImageDimension::D3),
-        Some(spirv::Dim::DimCube) => Ok(crate::ImageDimension::Cube),
-        _ => Err(Error::UnsupportedImageDim(word)),
-    }
-}
-
-fn map_width(word: spirv::Word) -> Result<crate::Bytes, Error> {
-    (word >> 3) // bits to bytes
-        .try_into()
-        .map_err(|_| Error::InvalidTypeWidth(word))
 }
 
 //TODO: this method may need to be gone, depending on whether
@@ -331,31 +255,16 @@ struct LookupSampledImage {
     image: Handle<crate::Expression>,
     sampler: Handle<crate::Expression>,
 }
-
 struct DeferredFunctionCall {
     source_handle: Handle<crate::Function>,
     expr_handle: Handle<crate::Expression>,
     dst_id: spirv::Word,
 }
 
-enum Terminator {
-    Return {
-        value: Option<Handle<crate::Expression>>,
-    },
-    Branch {
-        label_id: spirv::Word,
-        condition: Option<Handle<crate::Expression>>,
-    },
-}
-
-struct Assignment {
+#[derive(Clone, Debug)]
+pub struct Assignment {
     to: Handle<crate::Expression>,
     value: Handle<crate::Expression>,
-}
-
-struct ControlFlowNode {
-    assignments: Vec<Assignment>,
-    terminator: Terminator,
 }
 
 pub struct Parser<I> {
@@ -550,8 +459,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn next_block(
         &mut self,
+        block_id: spirv::Word,
         expressions: &mut Arena<crate::Expression>,
         local_arena: &mut Arena<crate::LocalVariable>,
         type_arena: &Arena<crate::Type>,
@@ -560,10 +471,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         local_function_calls: &mut FastHashMap<Handle<crate::Expression>, spirv::Word>,
     ) -> Result<ControlFlowNode, Error> {
         let mut assignments = Vec::new();
+        let mut merge = None;
         let terminator = loop {
             use spirv::Op;
             let inst = self.next_inst()?;
             log::debug!("\t\t{:?} [{}]", inst.op, inst.wc);
+
             match inst.op {
                 Op::Variable => {
                     inst.expect_at_least(4)?;
@@ -679,13 +592,11 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         };
                     }
 
-                    self.lookup_expression.insert(
-                        result_id,
-                        LookupExpression {
-                            handle: acex.base_handle,
-                            type_id: result_type_id,
-                        },
-                    );
+                    let lookup_expression = LookupExpression {
+                        handle: acex.base_handle,
+                        type_id: result_type_id,
+                    };
+                    self.lookup_expression.insert(result_id, lookup_expression);
                 }
                 Op::CompositeExtract => {
                     inst.expect_at_least(4)?;
@@ -808,25 +719,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         value: value_expr.handle,
                     });
                 }
-                Op::Return => {
-                    inst.expect(1)?;
-                    break Terminator::Return { value: None };
-                }
-                Op::Branch => {
-                    inst.expect(2)?;
-                    let label_id = self.next()?;
-                    break Terminator::Branch {
-                        label_id,
-                        condition: None,
-                    };
-                }
-                Op::FSub => {
+                // Arithmetic Instructions +, -, *, /, %
+                _ if inst.op >= Op::IAdd && inst.op <= Op::FMod => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Subtract)?;
-                }
-                Op::FMul => {
-                    inst.expect(5)?;
-                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Multiply)?;
                 }
                 Op::VectorTimesScalar => {
                     inst.expect(5)?;
@@ -1134,12 +1030,99 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                // Relational and Logical Instructions
+                op if inst.op >= Op::IEqual && inst.op <= Op::FUnordGreaterThanEqual => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, map_binary_operator(op)?)?;
+                }
+                Op::Return => {
+                    inst.expect(1)?;
+                    break Terminator::Return { value: None };
+                }
+                Op::Branch => {
+                    inst.expect(2)?;
+                    let target_id = self.next()?;
+                    break Terminator::Branch { target_id };
+                }
+                Op::BranchConditional => {
+                    inst.expect_at_least(4)?;
+
+                    let condition_id = self.next()?;
+                    let condition = self.lookup_expression.lookup(condition_id)?.handle;
+
+                    let true_id = self.next()?;
+                    let false_id = self.next()?;
+
+                    break Terminator::BranchConditional {
+                        condition,
+                        true_id,
+                        false_id,
+                    };
+                }
+                Op::Switch => {
+                    inst.expect_at_least(3)?;
+
+                    let selector = self.next()?;
+                    let selector = self.lookup_expression[&selector].handle;
+                    let default = self.next()?;
+
+                    let mut targets = Vec::new();
+                    for _ in 0..inst.wc - 3 {
+                        let literal = self.next()?;
+                        let target = self.next()?;
+                        targets.push((literal as i32, target));
+                    }
+
+                    break Terminator::Switch {
+                        selector,
+                        default,
+                        targets,
+                    };
+                }
+                Op::SelectionMerge => {
+                    inst.expect(3)?;
+                    let merge_block_id = self.next()?;
+                    // TODO: Selection Control Mask
+                    let _selection_control = self.next()?;
+                    let continue_block_id = None;
+                    merge = Some(MergeInstruction {
+                        merge_block_id,
+                        continue_block_id,
+                    });
+                }
+                Op::LoopMerge => {
+                    inst.expect_at_least(4)?;
+                    let merge_block_id = self.next()?;
+                    let continue_block_id = Some(self.next()?);
+
+                    // TODO: Loop Control Parameters
+                    for _ in 0..inst.wc - 3 {
+                        self.next()?;
+                    }
+
+                    merge = Some(MergeInstruction {
+                        merge_block_id,
+                        continue_block_id,
+                    });
+                }
                 _ => return Err(Error::UnsupportedInstruction(self.state, inst.op)),
             }
         };
+
+        let mut block = Vec::new();
+        for assignment in assignments.iter() {
+            block.push(crate::Statement::Store {
+                pointer: assignment.to,
+                value: assignment.value,
+            });
+        }
+
         Ok(ControlFlowNode {
-            assignments,
+            id: block_id,
+            ty: None,
+            block,
             terminator,
+            merge,
         })
     }
 
@@ -1231,7 +1214,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::Constant | Op::SpecConstant => self.parse_constant(inst, &mut module),
                 Op::ConstantComposite => self.parse_composite_constant(inst, &mut module),
                 Op::Variable => self.parse_global_variable(inst, &mut module),
-                Op::Function => self.parse_function(inst, &mut module),
+                Op::Function => parse_function(&mut self, inst, &mut module),
                 _ => Err(Error::UnsupportedInstruction(self.state, inst.op)), //TODO
             }?;
         }
@@ -1871,7 +1854,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let id = self.next()?;
         let type_lookup = self.lookup_type.lookup(type_id)?;
         let ty = type_lookup.handle;
-        let inner = match module.types[type_lookup.handle].inner {
+        let inner = match module.types[ty].inner {
             crate::TypeInner::Scalar {
                 kind: crate::ScalarKind::Uint,
                 width,
@@ -1897,7 +1880,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         inst.expect(4)?;
                         self.next()?
                     }
-                    Ordering::Equal => !0,
+                    Ordering::Equal => 0,
                 };
                 crate::ConstantInner::Sint(((u64::from(high) << 32) | u64::from(low)) as i64)
             }
@@ -2017,123 +2000,6 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 type_id,
             },
         );
-        Ok(())
-    }
-
-    fn parse_function(
-        &mut self,
-        inst: Instruction,
-        module: &mut crate::Module,
-    ) -> Result<(), Error> {
-        self.switch(ModuleState::Function, inst.op)?;
-        inst.expect(5)?;
-        let result_type = self.next()?;
-        let fun_id = self.next()?;
-        let _fun_control = self.next()?;
-        let fun_type = self.next()?;
-        let mut fun = {
-            let ft = self.lookup_function_type.lookup(fun_type)?;
-            if ft.return_type_id != result_type {
-                return Err(Error::WrongFunctionResultType(result_type));
-            }
-            crate::Function {
-                name: self.future_decor.remove(&fun_id).and_then(|dec| dec.name),
-                parameter_types: Vec::with_capacity(ft.parameter_type_ids.len()),
-                return_type: if self.lookup_void_type.contains(&result_type) {
-                    None
-                } else {
-                    Some(self.lookup_type.lookup(result_type)?.handle)
-                },
-                global_usage: Vec::new(),
-                local_variables: Arena::new(),
-                expressions: self.make_expression_storage(),
-                body: Vec::new(),
-            }
-        };
-        // read parameters
-        for i in 0..fun.parameter_types.capacity() {
-            match self.next_inst()? {
-                Instruction {
-                    op: spirv::Op::FunctionParameter,
-                    wc: 3,
-                } => {
-                    let type_id = self.next()?;
-                    let _id = self.next()?;
-                    //Note: we redo the lookup in order to work around `self` borrowing
-                    if type_id
-                        != self
-                            .lookup_function_type
-                            .lookup(fun_type)?
-                            .parameter_type_ids[i]
-                    {
-                        return Err(Error::WrongFunctionParameterType(type_id));
-                    }
-                    let ty = self.lookup_type.lookup(type_id)?.handle;
-                    fun.parameter_types.push(ty);
-                }
-                Instruction { op, .. } => return Err(Error::InvalidParameter(op)),
-            }
-        }
-        // read body
-        let mut local_function_calls = FastHashMap::default();
-        let mut control_flow_graph = FastHashMap::default();
-        loop {
-            let fun_inst = self.next_inst()?;
-            log::debug!("\t\t{:?}", fun_inst.op);
-            match fun_inst.op {
-                spirv::Op::Label => {
-                    fun_inst.expect(2)?;
-                    let label_id = self.next()?;
-                    let node = self.next_block(
-                        &mut fun.expressions,
-                        &mut fun.local_variables,
-                        &module.types,
-                        &module.constants,
-                        &module.global_variables,
-                        &mut local_function_calls,
-                    )?;
-                    // temp until the CFG is fully processed
-                    for assign in node.assignments.iter() {
-                        fun.body.push(crate::Statement::Store {
-                            pointer: assign.to,
-                            value: assign.value,
-                        });
-                    }
-                    match node.terminator {
-                        Terminator::Return { value } => {
-                            fun.body.push(crate::Statement::Return { value });
-                        }
-                        Terminator::Branch {
-                            label_id,
-                            condition,
-                        } => {
-                            let _ = (label_id, condition); //TODO
-                        }
-                    }
-                    control_flow_graph.insert(label_id, node);
-                }
-                spirv::Op::FunctionEnd => {
-                    fun_inst.expect(1)?;
-                    break;
-                }
-                _ => return Err(Error::UnsupportedInstruction(self.state, fun_inst.op)),
-            }
-        }
-        // done
-        fun.global_usage =
-            crate::GlobalUse::scan(&fun.expressions, &fun.body, &module.global_variables);
-        let handle = module.functions.append(fun);
-        for (expr_handle, dst_id) in local_function_calls {
-            self.deferred_function_calls.push(DeferredFunctionCall {
-                source_handle: handle,
-                expr_handle,
-                dst_id,
-            });
-        }
-
-        self.lookup_function.insert(fun_id, handle);
-        self.lookup_expression.clear();
-        self.lookup_sampled_image.clear();
         Ok(())
     }
 }
