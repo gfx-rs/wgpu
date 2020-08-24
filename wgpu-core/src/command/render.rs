@@ -316,6 +316,8 @@ pub enum RenderPassError {
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
+    #[error("attachments have different sizes")]
+    MismatchAttachments,
     #[error("attachment's sample count {0} is invalid")]
     InvalidSampleCount(u8),
     #[error("attachment with resolve target must be multi-sampled")]
@@ -466,6 +468,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let mut output_attachments = AttachmentDataVec::<OutputAttachment>::new();
 
+        let mut attachment_width = None;
+        let mut attachment_height = None;
+        let mut valid_attachment = true;
+
         let context = {
             use hal::device::Device as _;
 
@@ -568,6 +574,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_err(|_| RenderPassError::InvalidAttachment(at.attachment))?;
                     add_view(view)?;
 
+                    valid_attachment &= *attachment_width.get_or_insert(view.extent.width)
+                        == view.extent.width
+                        && *attachment_height.get_or_insert(view.extent.height)
+                            == view.extent.height;
+
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
                             let previous_use = base_trackers
@@ -621,6 +632,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         layouts,
                     };
                     colors.push((color_at, hal::image::Layout::ColorAttachmentOptimal));
+                }
+
+                if !valid_attachment {
+                    Err(RenderPassError::MismatchAttachments)?
                 }
 
                 for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
@@ -1198,6 +1213,15 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     depth_max,
                 } => {
                     use std::{convert::TryFrom, i16};
+                    if rect.w <= 0.0
+                        || rect.h <= 0.0
+                        || depth_min < 0.0
+                        || depth_min > 1.0
+                        || depth_max < 0.0
+                        || depth_max > 1.0
+                    {
+                        Err(RenderCommandError::InvalidViewport)?
+                    }
                     let r = hal::pso::Rect {
                         x: i16::try_from(rect.x.round() as i64).unwrap_or(0),
                         y: i16::try_from(rect.y.round() as i64).unwrap_or(0),
@@ -1249,6 +1273,13 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                 }
                 RenderCommand::SetScissor(ref rect) => {
                     use std::{convert::TryFrom, i16};
+                    if rect.w == 0
+                        || rect.h == 0
+                        || rect.x + rect.w > attachment_width.unwrap()
+                        || rect.y + rect.h > attachment_height.unwrap()
+                    {
+                        Err(RenderCommandError::InvalidScissorRect)?
+                    }
                     let r = hal::pso::Rect {
                         x: i16::try_from(rect.x).unwrap_or(0),
                         y: i16::try_from(rect.y).unwrap_or(0),
