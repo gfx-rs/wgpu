@@ -15,6 +15,9 @@ mod parser;
 mod parser_tests;
 mod token;
 
+#[cfg(test)]
+mod rosetta_tests;
+
 pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Module, ParseError> {
     log::debug!("------ GLSL-pomelo ------");
 

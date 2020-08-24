@@ -1,0 +1,112 @@
+(
+    header: (
+        version: (1, 0, 0),
+        generator: 0,
+    ),
+    types: [
+        (
+            name: None,
+            inner: Vector(
+                size: Bi,
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Vector(
+                size: Quad,
+                kind: Float,
+                width: 4,
+            ),
+        ),
+        (
+            name: None,
+            inner: Scalar(
+                kind: Float,
+                width: 4,
+            ),
+        ),
+    ],
+    constants: [
+        (
+            name: None,
+            specialization: None,
+            inner: Float(1),
+            ty: 3,
+        ),
+        (
+            name: None,
+            specialization: None,
+            inner: Float(0),
+            ty: 3,
+        ),
+    ],
+    global_variables: [
+        (
+            name: Some("a_pos"),
+            class: Input,
+            binding: Some(Location(0)),
+            ty: 1,
+            interpolation: None,
+        ),
+        (
+            name: Some("o_pos"),
+            class: Output,
+            binding: Some(Location(0)),
+            ty: 2,
+            interpolation: None,
+        ),
+    ],
+    functions: [
+        (
+            name: Some("main"),
+            parameter_types: [],
+            return_type: None,
+            global_usage: [
+                (
+                    bits: 1,
+                ),
+                (
+                    bits: 2,
+                ),
+            ],
+            local_variables: [
+                (
+                    name: Some("w"),
+                    ty: 3,
+                    init: Some(3),
+                ),
+            ],
+            expressions: [
+                GlobalVariable(1),
+                GlobalVariable(2),
+                Constant(1),
+                LocalVariable(1),
+                Constant(2),
+                Compose(
+                    ty: 2,
+                    components: [
+                        1,
+                        5,
+                        4,
+                    ],
+                ),
+            ],
+            body: [
+                Empty,
+                Store(
+                    pointer: 2,
+                    value: 6,
+                ),
+            ],
+        ),
+    ],
+    entry_points: [
+        (
+            stage: Vertex,
+            name: "main",
+            function: 1,
+        ),
+    ],
+)
