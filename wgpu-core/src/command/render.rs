@@ -316,6 +316,8 @@ pub enum RenderPassError {
     Encoder(#[from] CommandEncoderError),
     #[error("attachment texture view {0:?} is invalid")]
     InvalidAttachment(id::TextureViewId),
+    #[error("attachments have different sizes")]
+    MismatchAttachments,
     #[error("attachment's sample count {0} is invalid")]
     InvalidSampleCount(u8),
     #[error("attachment with resolve target must be multi-sampled")]
@@ -466,8 +468,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         }
         let mut output_attachments = AttachmentDataVec::<OutputAttachment>::new();
 
-        let mut attachment_width = std::u32::MAX;
-        let mut attachment_height = std::u32::MAX;
+        let mut attachment_width = None;
+        let mut attachment_height = None;
+        let mut valid_attachment = true;
 
         let context = {
             use hal::device::Device as _;
@@ -571,8 +574,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .map_err(|_| RenderPassError::InvalidAttachment(at.attachment))?;
                     add_view(view)?;
 
-                    attachment_width = attachment_width.min(view.extent.width);
-                    attachment_height = attachment_height.min(view.extent.height);
+                    valid_attachment &= *attachment_width.get_or_insert(view.extent.width)
+                        == view.extent.width
+                        && *attachment_height.get_or_insert(view.extent.height)
+                            == view.extent.height;
 
                     let layouts = match view.inner {
                         TextureViewInner::Native { ref source_id, .. } => {
@@ -627,6 +632,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         layouts,
                     };
                     colors.push((color_at, hal::image::Layout::ColorAttachmentOptimal));
+                }
+
+                if !valid_attachment {
+                    Err(RenderPassError::MismatchAttachments)?
                 }
 
                 for resolve_target in color_attachments.iter().flat_map(|at| at.resolve_target) {
@@ -1266,8 +1275,8 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                     use std::{convert::TryFrom, i16};
                     if rect.w == 0
                         || rect.h == 0
-                        || rect.x + rect.w > attachment_width
-                        || rect.y + rect.h > attachment_height
+                        || rect.x + rect.w > attachment_width.unwrap()
+                        || rect.y + rect.h > attachment_height.unwrap()
                     {
                         Err(RenderCommandError::InvalidScissorRect)?
                     }

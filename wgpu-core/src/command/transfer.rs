@@ -47,7 +47,7 @@ pub enum TransferError {
     #[error("texture {0:?} is invalid")]
     InvalidTexture(TextureId),
     #[error("Source and destination cannot be the same buffer")]
-    AttemptToCopyWithinBuffer,
+    SameSourceDestinationBuffer,
     #[error("source buffer/texture is missing the `COPY_SRC` usage flag")]
     MissingCopySrcUsageFlag,
     #[error("destination buffer/texture is missing the `COPY_DST` usage flag")]
@@ -305,7 +305,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
         span!(_guard, INFO, "CommandEncoder::copy_buffer_to_buffer");
 
         if source == destination {
-            Err(TransferError::AttemptToCopyWithinBuffer)?
+            Err(TransferError::SameSourceDestinationBuffer)?
         }
         let hub = B::hub(self);
         let mut token = Token::root();
