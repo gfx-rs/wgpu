@@ -10,7 +10,7 @@ use crate::{
     device::{all_buffer_stages, all_image_stages},
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Storage, Token},
     id::{BufferId, CommandEncoderId, TextureId},
-    resource::{BufferUse, Texture, TextureUse},
+    resource::{BufferUse, Texture, TextureErrorDimension, TextureUse},
     span,
     track::TextureSelector,
 };
@@ -30,13 +30,6 @@ pub type TextureCopyView = wgt::TextureCopyView<TextureId>;
 pub enum CopySide {
     Source,
     Destination,
-}
-
-#[derive(Clone, Debug)]
-pub enum TextureErrorDimension {
-    X,
-    Y,
-    Z,
 }
 
 /// Error encountered while attempting a data transfer.

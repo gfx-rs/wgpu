@@ -213,10 +213,17 @@ pub struct Texture<B: hal::Backend> {
     pub(crate) life_guard: LifeGuard,
 }
 
+#[derive(Clone, Debug)]
+pub enum TextureErrorDimension {
+    X,
+    Y,
+    Z,
+}
+
 #[derive(Clone, Debug, Error)]
 pub enum TextureDimensionError {
-    #[error("too many layers ({0}) for texture array")]
-    TooManyLayers(u32),
+    #[error("Dimension {0:?} is zero")]
+    Zero(TextureErrorDimension),
     #[error("1D textures must have height set to 1")]
     InvalidHeight,
     #[error("sample count {0} is invalid")]
