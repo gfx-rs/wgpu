@@ -102,7 +102,11 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
     let mut namer = |name: Option<&'a String>| {
         if let Some(name) = name {
-            if name.starts_with("gl_") || name == "main" || names.get(name.as_str()).is_some() {
+            if name.chars().next().map(char::is_numeric).unwrap_or(true)
+                || name.starts_with("gl_")
+                || name == "main"
+                || names.get(name.as_str()).is_some()
+            {
                 counter += 1;
                 while names.get(format!("_{}", counter).as_str()).is_some() {
                     counter += 1;
@@ -324,6 +328,13 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
     for (handle, name) in functions.iter() {
         let func = &module.functions[*handle];
 
+        let args: FastHashMap<_, _> = func
+            .parameter_types
+            .iter()
+            .enumerate()
+            .map(|(pos, ty)| (pos as u32, (namer(None), *ty)))
+            .collect();
+
         writeln!(
             out,
             "{} {}({}) {{",
@@ -333,9 +344,12 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
                 .as_deref()
                 .unwrap_or("void"),
             name,
-            func.parameter_types
-                .iter()
-                .map(|ty| write_type(*ty, &module.types, &structs, None, features))
+            args.values()
+                .map::<Result<_, Error>, _>(|(name, ty)| {
+                    let ty = write_type(*ty, &module.types, &structs, None, features)?;
+
+                    Ok(format!("{} {}", ty, name))
+                })
                 .collect::<Result<Vec<_>, _>>()?
                 .join(","),
         )?;
@@ -366,19 +380,14 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
             globals: &globals_lookup,
             locals_lookup: &locals,
             structs: &structs,
-            args: &func
-                .parameter_types
-                .iter()
-                .enumerate()
-                .map(|(pos, ty)| (pos as u32, (namer(None), *ty)))
-                .collect(),
+            args: &args,
             expressions: &func.expressions,
             locals: &func.local_variables,
             features,
         };
 
         for sta in func.body.iter() {
-            writeln!(out, "{}", write_statement(sta, module, &mut builder)?)?;
+            writeln!(out, "\t{}", write_statement(sta, module, &mut builder)?)?;
         }
 
         writeln!(out, "}}")?;
@@ -497,7 +506,7 @@ fn write_statement(
         Statement::Break => String::from("break;"),
         Statement::Continue => String::from("continue;"),
         Statement::Return { value } => format!(
-            "return  {};",
+            "return {};",
             value.map_or::<Result<_, Error>, _>(Ok(String::from("")), |expr| Ok(
                 write_expression(&builder.expressions[expr], module, builder)?.0
             ))?
