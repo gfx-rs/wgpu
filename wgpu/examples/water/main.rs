@@ -648,13 +648,8 @@ impl framework::Example for Example {
             // Stop rendering altogether.
             self.active = None;
             return;
-        } else {
-            // The next frame queued is the wrong size: (0, 0),
-            // so we skip a frame to avoid crashes where our
-            // textures are the correct (window) size, and the
-            // frame is still (0, 0).
-            self.active = Some(self.current_frame + 1);
         }
+        self.active = Some(self.current_frame);
 
         // Regenerate all of the buffers and textures.
 
