@@ -13,6 +13,11 @@ jobs:
           toolchain: stable
           override: true
       - uses: actions-rs/cargo@v1
+        name: Default test
+        with:
+          command: test
+      - uses: actions-rs/cargo@v1
+        name: Test all features
         with:
           command: test
           args: --all-features

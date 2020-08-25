@@ -15,7 +15,7 @@ mod parser;
 mod parser_tests;
 mod token;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "serialize"))]
 mod rosetta_tests;
 
 pub fn parse_str(source: &str, entry: String, stage: ShaderStage) -> Result<Module, ParseError> {
