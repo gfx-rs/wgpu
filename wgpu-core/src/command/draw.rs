@@ -59,8 +59,8 @@ pub enum RenderCommandError {
     InvalidDynamicOffsetCount { actual: usize, expected: usize },
     #[error("render pipeline {0:?} is invalid")]
     InvalidPipeline(id::RenderPipelineId),
-    #[error("render pipeline output formats and sample counts do not match render pass attachment formats")]
-    IncompatiblePipeline,
+    #[error("render pipeline is incompatible, {0}")]
+    IncompatiblePipeline(#[from] crate::device::RenderPassCompatibilityError),
     #[error("pipeline is not compatible with the depth-stencil read-only render pass")]
     IncompatibleReadOnlyDepthStencil,
     #[error("buffer {0:?} is in error {1:?}")]
