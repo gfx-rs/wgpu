@@ -106,13 +106,46 @@ pub(crate) struct RenderPassContext {
     pub attachments: AttachmentData<TextureFormat>,
     pub sample_count: u8,
 }
+#[derive(Clone, Debug, Error)]
+pub enum RenderPassCompatibilityError {
+    #[error("incompatible color attachment: {0:?} != {1:?}")]
+    IncompatibleColorAttachment(
+        ArrayVec<[TextureFormat; MAX_COLOR_TARGETS]>,
+        ArrayVec<[TextureFormat; MAX_COLOR_TARGETS]>,
+    ),
+    #[error("incompatible depth-stencil attachment: {0:?} != {1:?}")]
+    IncompatibleDepthStencilAttachment(Option<TextureFormat>, Option<TextureFormat>),
+    #[error("incompatible sample count: {0:?} != {1:?}")]
+    IncompatibleSampleCount(u8, u8),
+}
 
 impl RenderPassContext {
     // Assumed the renderpass only contains one subpass
-    pub(crate) fn compatible(&self, other: &RenderPassContext) -> bool {
-        self.attachments.colors == other.attachments.colors
-            && self.attachments.depth_stencil == other.attachments.depth_stencil
-            && self.sample_count == other.sample_count
+    pub(crate) fn check_compatible(
+        &self,
+        other: &RenderPassContext,
+    ) -> Result<(), RenderPassCompatibilityError> {
+        if self.attachments.colors != other.attachments.colors {
+            return Err(RenderPassCompatibilityError::IncompatibleColorAttachment(
+                self.attachments.colors.clone(),
+                other.attachments.colors.clone(),
+            ));
+        }
+        if self.attachments.depth_stencil != other.attachments.depth_stencil {
+            return Err(
+                RenderPassCompatibilityError::IncompatibleDepthStencilAttachment(
+                    self.attachments.depth_stencil.clone(),
+                    other.attachments.depth_stencil.clone(),
+                ),
+            );
+        }
+        if self.sample_count != other.sample_count {
+            return Err(RenderPassCompatibilityError::IncompatibleSampleCount(
+                self.sample_count,
+                other.sample_count,
+            ));
+        }
+        Ok(())
     }
 }
 

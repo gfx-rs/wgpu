@@ -11,8 +11,8 @@ use crate::{
     },
     conv,
     device::{
-        AttachmentData, AttachmentDataVec, FramebufferKey, RenderPassContext, RenderPassKey,
-        MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
+        AttachmentData, AttachmentDataVec, FramebufferKey, RenderPassCompatibilityError,
+        RenderPassContext, RenderPassKey, MAX_COLOR_TARGETS, MAX_VERTEX_BUFFERS,
     },
     hub::{GfxBackend, Global, GlobalIdentityHandlerFactory, Token},
     id,
@@ -361,8 +361,8 @@ pub enum RenderPassError {
     },
     #[error("cannot pop debug group, because number of pushed debug groups is zero")]
     InvalidPopDebugGroup,
-    #[error("render bundle output formats do not match render pass attachment formats")]
-    IncompatibleRenderBundle,
+    #[error("render bundle is incompatible, {0}")]
+    IncompatibleRenderBundle(#[from] RenderPassCompatibilityError),
     #[error(transparent)]
     RenderCommand(#[from] RenderCommandError),
     #[error(transparent)]
@@ -1016,9 +1016,10 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*pipeline_guard, pipeline_id, (), ())
                         .unwrap();
 
-                    if !context.compatible(&pipeline.pass_context) {
-                        return Err(RenderCommandError::IncompatiblePipeline.into());
-                    }
+                    context
+                        .check_compatible(&pipeline.pass_context)
+                        .map_err(|e| RenderCommandError::IncompatiblePipeline(e))?;
+
                     if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
                         && is_ds_read_only
                     {
@@ -1512,9 +1513,9 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         .use_extend(&*bundle_guard, bundle_id, (), ())
                         .unwrap();
 
-                    if !context.compatible(&bundle.context) {
-                        return Err(RenderPassError::IncompatibleRenderBundle);
-                    }
+                    context
+                        .check_compatible(&bundle.context)
+                        .map_err(|e| RenderPassError::IncompatibleRenderBundle(e))?;
 
                     unsafe {
                         bundle.execute(

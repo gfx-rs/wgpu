@@ -719,9 +719,11 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                             .use_extend(&*pipeline_guard, pipeline_id, (), ())
                             .unwrap();
 
-                        if !bundle_encoder.context.compatible(&pipeline.pass_context) {
-                            Err(RenderCommandError::IncompatiblePipeline)?
-                        }
+                        bundle_encoder
+                            .context
+                            .check_compatible(&pipeline.pass_context)
+                            .map_err(|e| RenderCommandError::IncompatiblePipeline(e))?;
+
                         //TODO: check read-only depth
 
                         let layout = &pipeline_layout_guard[pipeline.layout_id.value];
