@@ -397,133 +397,137 @@ impl<'a, T> std::ops::Deref for MaybeOwned<'a, T> {
 pub fn map_vertex_format(format: wgt::VertexFormat) -> naga::TypeInner {
     use naga::TypeInner as Ti;
     use wgt::VertexFormat as Vf;
+
+    //Note: Shader always sees data as int, uint, or float.
+    // It doesn't know if the original is normalized in a tighter form.
+    let width = 4;
     match format {
         Vf::Uchar2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Uint,
-            width: 1,
+            width,
         },
         Vf::Uchar4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Uint,
-            width: 1,
+            width,
         },
         Vf::Char2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Sint,
-            width: 1,
+            width,
         },
         Vf::Char4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Sint,
-            width: 1,
+            width,
         },
         Vf::Uchar2Norm => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Float,
-            width: 1,
+            width,
         },
         Vf::Uchar4Norm => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Float,
-            width: 1,
+            width,
         },
         Vf::Char2Norm => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Float,
-            width: 1,
+            width,
         },
         Vf::Char4Norm => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Float,
-            width: 1,
+            width,
         },
         Vf::Ushort2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Uint,
-            width: 2,
+            width,
         },
         Vf::Ushort4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Uint,
-            width: 2,
+            width,
         },
         Vf::Short2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Sint,
-            width: 2,
+            width,
         },
         Vf::Short4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Sint,
-            width: 2,
+            width,
         },
         Vf::Ushort2Norm | Vf::Short2Norm | Vf::Half2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Float,
-            width: 2,
+            width,
         },
         Vf::Ushort4Norm | Vf::Short4Norm | Vf::Half4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Float,
-            width: 2,
+            width,
         },
         Vf::Float => Ti::Scalar {
             kind: naga::ScalarKind::Float,
-            width: 4,
+            width,
         },
         Vf::Float2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Float,
-            width: 4,
+            width,
         },
         Vf::Float3 => Ti::Vector {
             size: naga::VectorSize::Tri,
             kind: naga::ScalarKind::Float,
-            width: 4,
+            width,
         },
         Vf::Float4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Float,
-            width: 4,
+            width,
         },
         Vf::Uint => Ti::Scalar {
             kind: naga::ScalarKind::Uint,
-            width: 4,
+            width,
         },
         Vf::Uint2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Uint,
-            width: 4,
+            width,
         },
         Vf::Uint3 => Ti::Vector {
             size: naga::VectorSize::Tri,
             kind: naga::ScalarKind::Uint,
-            width: 4,
+            width,
         },
         Vf::Uint4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Uint,
-            width: 4,
+            width,
         },
         Vf::Int => Ti::Scalar {
             kind: naga::ScalarKind::Sint,
-            width: 4,
+            width,
         },
         Vf::Int2 => Ti::Vector {
             size: naga::VectorSize::Bi,
             kind: naga::ScalarKind::Sint,
-            width: 4,
+            width,
         },
         Vf::Int3 => Ti::Vector {
             size: naga::VectorSize::Tri,
             kind: naga::ScalarKind::Sint,
-            width: 4,
+            width,
         },
         Vf::Int4 => Ti::Vector {
             size: naga::VectorSize::Quad,
             kind: naga::ScalarKind::Sint,
-            width: 4,
+            width,
         },
     }
 }
@@ -532,72 +536,75 @@ fn map_texture_format(format: wgt::TextureFormat) -> naga::TypeInner {
     use naga::{ScalarKind as Sk, TypeInner as Ti, VectorSize as Vs};
     use wgt::TextureFormat as Tf;
 
+    //Note: Shader always sees data as int, uint, or float.
+    // It doesn't know if the original is normalized in a tighter form.
+    let width = 4;
     match format {
         Tf::R8Unorm | Tf::R8Snorm => Ti::Scalar {
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::R8Uint => Ti::Scalar {
             kind: Sk::Uint,
-            width: 1,
+            width,
         },
         Tf::R8Sint => Ti::Scalar {
             kind: Sk::Sint,
-            width: 1,
+            width,
         },
         Tf::R16Uint => Ti::Scalar {
             kind: Sk::Uint,
-            width: 2,
+            width,
         },
         Tf::R16Sint => Ti::Scalar {
             kind: Sk::Sint,
-            width: 2,
+            width,
         },
         Tf::R16Float => Ti::Scalar {
             kind: Sk::Float,
-            width: 2,
+            width,
         },
         Tf::Rg8Unorm | Tf::Rg8Snorm => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::Rg8Uint => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Uint,
-            width: 1,
+            width,
         },
         Tf::Rg8Sint => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Sint,
-            width: 1,
+            width,
         },
         Tf::R32Uint => Ti::Scalar {
             kind: Sk::Uint,
-            width: 4,
+            width,
         },
         Tf::R32Sint => Ti::Scalar {
             kind: Sk::Sint,
-            width: 4,
+            width,
         },
         Tf::R32Float => Ti::Scalar {
             kind: Sk::Float,
-            width: 4,
+            width,
         },
         Tf::Rg16Uint => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Uint,
-            width: 2,
+            width,
         },
         Tf::Rg16Sint => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Sint,
-            width: 2,
+            width,
         },
         Tf::Rg16Float => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Float,
-            width: 2,
+            width,
         },
         Tf::Rgba8Unorm
         | Tf::Rgba8UnormSrgb
@@ -606,72 +613,72 @@ fn map_texture_format(format: wgt::TextureFormat) -> naga::TypeInner {
         | Tf::Bgra8UnormSrgb => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::Rgba8Uint => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Uint,
-            width: 1,
+            width,
         },
         Tf::Rgba8Sint => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Sint,
-            width: 1,
+            width,
         },
         Tf::Rgb10a2Unorm => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::Rg11b10Float => Ti::Vector {
             size: Vs::Tri,
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::Rg32Uint => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Uint,
-            width: 4,
+            width,
         },
         Tf::Rg32Sint => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Sint,
-            width: 4,
+            width,
         },
         Tf::Rg32Float => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Float,
-            width: 4,
+            width,
         },
         Tf::Rgba16Uint => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Uint,
-            width: 2,
+            width,
         },
         Tf::Rgba16Sint => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Sint,
-            width: 2,
+            width,
         },
         Tf::Rgba16Float => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Float,
-            width: 2,
+            width,
         },
         Tf::Rgba32Uint => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Uint,
-            width: 4,
+            width,
         },
         Tf::Rgba32Sint => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Sint,
-            width: 4,
+            width,
         },
         Tf::Rgba32Float => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Float,
-            width: 4,
+            width,
         },
         Tf::Depth32Float | Tf::Depth24Plus | Tf::Depth24PlusStencil8 => {
             panic!("Unexpected depth format")
@@ -686,21 +693,21 @@ fn map_texture_format(format: wgt::TextureFormat) -> naga::TypeInner {
         | Tf::Bc7RgbaUnormSrgb => Ti::Vector {
             size: Vs::Quad,
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::Bc4RUnorm | Tf::Bc4RSnorm => Ti::Scalar {
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::Bc5RgUnorm | Tf::Bc5RgSnorm => Ti::Vector {
             size: Vs::Bi,
             kind: Sk::Float,
-            width: 1,
+            width,
         },
         Tf::Bc6hRgbUfloat | Tf::Bc6hRgbSfloat => Ti::Vector {
             size: Vs::Tri,
             kind: Sk::Float,
-            width: 1,
+            width,
         },
     }
 }
