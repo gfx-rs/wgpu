@@ -59,12 +59,21 @@ pub fn map_storage_class(word: spirv::Word) -> Result<crate::StorageClass, Error
 }
 
 pub fn map_image_dim(word: spirv::Word) -> Result<crate::ImageDimension, Error> {
-    match spirv::Dim::from_u32(word) {
-        Some(spirv::Dim::Dim1D) => Ok(crate::ImageDimension::D1),
-        Some(spirv::Dim::Dim2D) => Ok(crate::ImageDimension::D2),
-        Some(spirv::Dim::Dim3D) => Ok(crate::ImageDimension::D3),
-        Some(spirv::Dim::DimCube) => Ok(crate::ImageDimension::Cube),
+    use spirv::Dim as D;
+    match D::from_u32(word) {
+        Some(D::Dim1D) => Ok(crate::ImageDimension::D1),
+        Some(D::Dim2D) => Ok(crate::ImageDimension::D2),
+        Some(D::Dim3D) => Ok(crate::ImageDimension::D3),
+        Some(D::DimCube) => Ok(crate::ImageDimension::Cube),
         _ => Err(Error::UnsupportedImageDim(word)),
+    }
+}
+
+pub fn map_image_format(word: spirv::Word) -> Result<crate::StorageFormat, Error> {
+    use spirv::ImageFormat as If;
+    match If::from_u32(word) {
+        Some(If::Rgba32f) => Ok(crate::StorageFormat::Rgba32f),
+        _ => Err(Error::UnsupportedImageFormat(word)),
     }
 }
 

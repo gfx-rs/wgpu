@@ -1,6 +1,6 @@
 use crate::{
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
-    FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageFlags, Interpolation,
+    FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageClass, Interpolation,
     IntrinsicFunction, LocalVariable, Module, ScalarKind, ShaderStage, Statement, StorageClass,
     StructMember, Type, TypeInner, UnaryOperator,
 };
@@ -182,13 +182,13 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
             continue;
         }
 
-        let block = matches!(
-            global.class,
+        let block = match global.class {
             StorageClass::Input
-                | StorageClass::Output
-                | StorageClass::StorageBuffer
-                | StorageClass::Uniform
-        );
+            | StorageClass::Output
+            | StorageClass::StorageBuffer
+            | StorageClass::Uniform => true,
+            _ => false,
+        };
 
         match module.types[global.ty].inner {
             TypeInner::Struct { .. } if block => {
@@ -396,9 +396,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         };
 
         for sta in func.body.iter() {
-            if !matches!(sta, Statement::Empty) {
-                writeln!(out, "{}", write_statement(sta, module, &mut builder, 1)?)?;
-            }
+            writeln!(out, "{}", write_statement(sta, module, &mut builder, 1)?)?;
         }
 
         writeln!(out, "}}")?;
@@ -459,25 +457,21 @@ fn write_statement(
             )?;
 
             for sta in accept {
-                if !matches!(sta, Statement::Empty) {
-                    writeln!(
-                        &mut out,
-                        "{}",
-                        write_statement(sta, module, builder, indent + 1)?
-                    )?;
-                }
+                writeln!(
+                    &mut out,
+                    "{}",
+                    write_statement(sta, module, builder, indent + 1)?
+                )?;
             }
 
             if !reject.is_empty() {
                 writeln!(&mut out, "{}}} else {{", "\t".repeat(indent),)?;
                 for sta in reject {
-                    if !matches!(sta, Statement::Empty) {
-                        writeln!(
-                            &mut out,
-                            "{}",
-                            write_statement(sta, module, builder, indent + 1)?
-                        )?;
-                    }
+                    writeln!(
+                        &mut out,
+                        "{}",
+                        write_statement(sta, module, builder, indent + 1)?
+                    )?;
                 }
             }
 
@@ -503,13 +497,11 @@ fn write_statement(
                 writeln!(&mut out, "{}case {}:", "\t".repeat(indent + 1), label)?;
 
                 for sta in block {
-                    if !matches!(sta, Statement::Empty) {
-                        writeln!(
-                            &mut out,
-                            "{}",
-                            write_statement(sta, module, builder, indent + 2)?
-                        )?;
-                    }
+                    writeln!(
+                        &mut out,
+                        "{}",
+                        write_statement(sta, module, builder, indent + 2)?
+                    )?;
                 }
 
                 if fallthrough.is_some() {
@@ -521,13 +513,11 @@ fn write_statement(
                 writeln!(&mut out, "{}default:", "\t".repeat(indent + 1),)?;
 
                 for sta in default {
-                    if !matches!(sta, Statement::Empty) {
-                        writeln!(
-                            &mut out,
-                            "{}",
-                            write_statement(sta, module, builder, indent + 2)?
-                        )?;
-                    }
+                    writeln!(
+                        &mut out,
+                        "{}",
+                        write_statement(sta, module, builder, indent + 2)?
+                    )?;
                 }
             }
 
@@ -541,13 +531,11 @@ fn write_statement(
             writeln!(&mut out, "{}while(true) {{", "\t".repeat(indent),)?;
 
             for sta in body.iter().chain(continuing.iter()) {
-                if !matches!(sta, Statement::Empty) {
-                    writeln!(
-                        &mut out,
-                        "{}",
-                        write_statement(sta, module, builder, indent + 1)?
-                    )?;
-                }
+                writeln!(
+                    &mut out,
+                    "{}",
+                    write_statement(sta, module, builder, indent + 1)?
+                )?;
             }
 
             write!(&mut out, "{}}}", "\t".repeat(indent),)?;
@@ -583,18 +571,15 @@ fn write_expression<'a>(
     module: &'a Module,
     builder: &mut StatementBuilder<'_>,
 ) -> Result<(String, Cow<'a, TypeInner>), Error> {
-    Ok(match expr {
+    Ok(match *expr {
         Expression::Access { base, index } => {
-            let (base_expr, ty) = write_expression(&builder.expressions[*base], module, builder)?;
+            let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            let inner = match ty.as_ref() {
+            let inner = match *ty.as_ref() {
                 TypeInner::Vector { kind, width, .. } | TypeInner::Matrix { kind, width, .. } => {
-                    Cow::Owned(TypeInner::Scalar {
-                        kind: *kind,
-                        width: *width,
-                    })
+                    Cow::Owned(TypeInner::Scalar { kind, width })
                 }
-                TypeInner::Array { base, .. } => Cow::Borrowed(&module.types[*base].inner),
+                TypeInner::Array { base, .. } => Cow::Borrowed(&module.types[base].inner),
                 _ => return Err(Error::Custom(format!("Cannot dynamically index {:?}", ty))),
             };
 
@@ -602,51 +587,48 @@ fn write_expression<'a>(
                 format!(
                     "{}[{}]",
                     base_expr,
-                    write_expression(&builder.expressions[*index], module, builder)?.0
+                    write_expression(&builder.expressions[index], module, builder)?.0
                 ),
                 inner,
             )
         }
         Expression::AccessIndex { base, index } => {
-            let (base_expr, ty) = write_expression(&builder.expressions[*base], module, builder)?;
+            let (base_expr, ty) = write_expression(&builder.expressions[base], module, builder)?;
 
-            match ty.as_ref() {
+            match *ty.as_ref() {
                 TypeInner::Vector { kind, width, .. } | TypeInner::Matrix { kind, width, .. } => (
                     format!("{}[{}]", base_expr, index),
-                    Cow::Owned(TypeInner::Scalar {
-                        kind: *kind,
-                        width: *width,
-                    }),
+                    Cow::Owned(TypeInner::Scalar { kind, width }),
                 ),
                 TypeInner::Array { base, .. } => (
                     format!("{}[{}]", base_expr, index),
-                    Cow::Borrowed(&module.types[*base].inner),
+                    Cow::Borrowed(&module.types[base].inner),
                 ),
-                TypeInner::Struct { members } => (
+                TypeInner::Struct { ref members } => (
                     format!(
                         "{}.{}",
                         base_expr,
-                        members[*index as usize]
+                        members[index as usize]
                             .name
                             .as_ref()
                             .unwrap_or(&format!("_{}", index))
                     ),
-                    Cow::Borrowed(&module.types[members[*index as usize].ty].inner),
+                    Cow::Borrowed(&module.types[members[index as usize].ty].inner),
                 ),
                 _ => return Err(Error::Custom(format!("Cannot index {:?}", ty))),
             }
         }
         Expression::Constant(constant) => (
             write_constant(
-                &module.constants[*constant],
+                &module.constants[constant],
                 module,
                 builder,
                 builder.features,
             )?,
-            Cow::Borrowed(&module.types[module.constants[*constant].ty].inner),
+            Cow::Borrowed(&module.types[module.constants[constant].ty].inner),
         ),
-        Expression::Compose { ty, components } => {
-            let constructor = match module.types[*ty].inner {
+        Expression::Compose { ty, ref components } => {
+            let constructor = match module.types[ty].inner {
                 TypeInner::Vector { size, kind, width } => format!(
                     "{}vec{}",
                     match kind {
@@ -690,14 +672,14 @@ fn write_expression<'a>(
                     rows as u8,
                 ),
                 TypeInner::Array { .. } => {
-                    write_type(*ty, &module.types, builder.structs, None, builder.features)?
+                    write_type(ty, &module.types, builder.structs, None, builder.features)?
                         .into_owned()
                 }
-                TypeInner::Struct { .. } => builder.structs.get(ty).unwrap().clone(),
+                TypeInner::Struct { .. } => builder.structs.get(&ty).unwrap().clone(),
                 _ => {
                     return Err(Error::Custom(format!(
                         "Cannot compose type {}",
-                        write_type(*ty, &module.types, builder.structs, None, builder.features)?
+                        write_type(ty, &module.types, builder.structs, None, builder.features)?
                     )))
                 }
             };
@@ -717,7 +699,7 @@ fn write_expression<'a>(
                         .collect::<Result<Vec<_>, _>>()?
                         .join(","),
                 ),
-                Cow::Borrowed(&module.types[*ty].inner),
+                Cow::Borrowed(&module.types[ty].inner),
             )
         }
         Expression::FunctionParameter(pos) => {
@@ -727,56 +709,43 @@ fn write_expression<'a>(
         }
         Expression::GlobalVariable(handle) => (
             builder.globals.get(&handle).unwrap().clone(),
-            Cow::Borrowed(&module.types[module.global_variables[*handle].ty].inner),
+            Cow::Borrowed(&module.types[module.global_variables[handle].ty].inner),
         ),
         Expression::LocalVariable(handle) => (
             builder.locals_lookup.get(&handle).unwrap().clone(),
-            Cow::Borrowed(&module.types[builder.locals[*handle].ty].inner),
+            Cow::Borrowed(&module.types[builder.locals[handle].ty].inner),
         ),
         Expression::Load { pointer } => {
-            write_expression(&builder.expressions[*pointer], module, builder)?
+            write_expression(&builder.expressions[pointer], module, builder)?
         }
         Expression::ImageSample {
             image,
             sampler,
             coordinate,
+            level,
             depth_ref,
         } => {
             let (image_expr, image_ty) =
-                write_expression(&builder.expressions[*image], module, builder)?;
+                write_expression(&builder.expressions[image], module, builder)?;
             let (sampler_expr, sampler_ty) =
-                write_expression(&builder.expressions[*sampler], module, builder)?;
+                write_expression(&builder.expressions[sampler], module, builder)?;
             let (coordinate_expr, coordinate_ty) =
-                write_expression(&builder.expressions[*coordinate], module, builder)?;
+                write_expression(&builder.expressions[coordinate], module, builder)?;
 
-            let (kind, dim, arrayed, ms, width) = match image_ty.as_ref() {
-                TypeInner::Image { base, dim, flags } => match module.types[*base].inner {
-                    TypeInner::Scalar { kind, width } => (
-                        kind,
-                        *dim,
-                        flags.contains(ImageFlags::ARRAYED),
-                        flags.contains(ImageFlags::MULTISAMPLED),
-                        width,
-                    ),
-                    _ => {
-                        return Err(Error::Custom(format!(
-                            "Cannot build image of {}",
-                            write_type(
-                                *base,
-                                &module.types,
-                                builder.structs,
-                                None,
-                                builder.features
-                            )?
-                        )))
-                    }
-                },
-                TypeInner::DepthImage { dim, arrayed } => {
-                    (ScalarKind::Float, *dim, *arrayed, false, 4)
-                }
+            let (kind, dim, arrayed, class) = match *image_ty.as_ref() {
+                TypeInner::Image {
+                    kind,
+                    dim,
+                    arrayed,
+                    class,
+                } => (kind, dim, arrayed, class),
                 _ => return Err(Error::Custom(format!("Cannot sample {:?}", image_ty))),
             };
 
+            let ms = match class {
+                crate::ImageClass::Multisampled => true,
+                _ => false,
+            };
             let shadow = match sampler_ty.as_ref() {
                 TypeInner::Sampler { comparison } => *comparison,
                 _ => {
@@ -786,7 +755,6 @@ fn write_expression<'a>(
                     )))
                 }
             };
-
             let size = match coordinate_ty.as_ref() {
                 TypeInner::Vector { size, .. } => *size,
                 _ => {
@@ -818,18 +786,29 @@ fn write_expression<'a>(
                     "vec{}({},{})",
                     size as u8 + 1,
                     coordinate_expr,
-                    write_expression(&builder.expressions[*depth_ref], module, builder)?.0
+                    write_expression(&builder.expressions[depth_ref], module, builder)?.0
                 )
             } else {
                 coordinate_expr
             };
 
-            let expr = if !ms {
-                format!("texture({},{})", sampler_constructor, coordinate)
-            } else {
-                todo!()
+            //TODO: handle MS
+            let expr = match level {
+                crate::SampleLevel::Auto => {
+                    format!("texture({},{})", sampler_constructor, coordinate)
+                }
+                crate::SampleLevel::Exact(expr) => {
+                    let (level_expr, _) =
+                        write_expression(&builder.expressions[expr], module, builder)?;
+                    format!(
+                        "textureLod({}, {}, {})",
+                        sampler_constructor, coordinate, level_expr
+                    )
+                }
+                crate::SampleLevel::Bias(_) => todo!(),
             };
 
+            let width = 4;
             let ty = if shadow {
                 Cow::Owned(TypeInner::Scalar { kind, width })
             } else {
@@ -838,8 +817,66 @@ fn write_expression<'a>(
 
             (expr, ty)
         }
+        Expression::ImageLoad {
+            image,
+            coordinate,
+            index: _,
+        } => {
+            let (image_expr, image_ty) =
+                write_expression(&builder.expressions[image], module, builder)?;
+            let (coordinate_expr, coordinate_ty) =
+                write_expression(&builder.expressions[coordinate], module, builder)?;
+
+            let (kind, dim, arrayed, class) = match *image_ty.as_ref() {
+                TypeInner::Image {
+                    kind,
+                    dim,
+                    arrayed,
+                    class,
+                } => (kind, dim, arrayed, class),
+                _ => return Err(Error::Custom(format!("Cannot load {:?}", image_ty))),
+            };
+
+            let ms = match class {
+                crate::ImageClass::Multisampled => true,
+                _ => false,
+            };
+            let size = match coordinate_ty.as_ref() {
+                TypeInner::Vector { size, .. } => *size,
+                _ => {
+                    return Err(Error::Custom(format!(
+                        "Cannot sample with coordinates of type {:?}",
+                        coordinate_ty
+                    )))
+                }
+            };
+
+            //TODO: fix this
+            let sampler_constructor = format!(
+                "{}sampler{}{}{}({})",
+                match kind {
+                    ScalarKind::Sint => "i",
+                    ScalarKind::Uint => "u",
+                    ScalarKind::Float => "",
+                    _ => return Err(Error::Custom(String::from("Cannot build image of bools",))),
+                },
+                ImageDimension(dim),
+                if ms { "MS" } else { "" },
+                if arrayed { "Array" } else { "" },
+                image_expr,
+            );
+
+            let expr = if !ms {
+                format!("texture({},{})", sampler_constructor, coordinate_expr)
+            } else {
+                todo!()
+            };
+
+            let width = 4;
+            (expr, Cow::Owned(TypeInner::Vector { kind, width, size }))
+        }
         Expression::Unary { op, expr } => {
-            let (expr, ty) = write_expression(&builder.expressions[*expr], module, builder)?;
+            let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
 
             (
                 format!(
@@ -855,9 +892,9 @@ fn write_expression<'a>(
         }
         Expression::Binary { op, left, right } => {
             let (left_expr, left_ty) =
-                write_expression(&builder.expressions[*left], module, builder)?;
+                write_expression(&builder.expressions[left], module, builder)?;
             let (right_expr, right_ty) =
-                write_expression(&builder.expressions[*right], module, builder)?;
+                write_expression(&builder.expressions[right], module, builder)?;
 
             let op = match op {
                 BinaryOperator::Add => "+",
@@ -902,7 +939,7 @@ fn write_expression<'a>(
             (format!("({} {} {})", left_expr, op, right_expr), ty)
         }
         Expression::Intrinsic { fun, argument } => {
-            let (expr, ty) = write_expression(&builder.expressions[*argument], module, builder)?;
+            let (expr, ty) = write_expression(&builder.expressions[argument], module, builder)?;
 
             (
                 format!(
@@ -922,8 +959,8 @@ fn write_expression<'a>(
         }
         Expression::DotProduct(left, right) => {
             let (left_expr, left_ty) =
-                write_expression(&builder.expressions[*left], module, builder)?;
-            let (right_expr, _) = write_expression(&builder.expressions[*right], module, builder)?;
+                write_expression(&builder.expressions[left], module, builder)?;
+            let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
 
             let ty = match left_ty.as_ref() {
                 TypeInner::Vector { kind, width, .. } => Cow::Owned(TypeInner::Scalar {
@@ -942,13 +979,13 @@ fn write_expression<'a>(
         }
         Expression::CrossProduct(left, right) => {
             let (left_expr, left_ty) =
-                write_expression(&builder.expressions[*left], module, builder)?;
-            let (right_expr, _) = write_expression(&builder.expressions[*right], module, builder)?;
+                write_expression(&builder.expressions[left], module, builder)?;
+            let (right_expr, _) = write_expression(&builder.expressions[right], module, builder)?;
 
             (format!("cross({},{})", left_expr, right_expr), left_ty)
         }
         Expression::Derivative { axis, expr } => {
-            let (expr, ty) = write_expression(&builder.expressions[*expr], module, builder)?;
+            let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
 
             (
                 format!(
@@ -963,9 +1000,12 @@ fn write_expression<'a>(
                 ty,
             )
         }
-        Expression::Call { origin, arguments } => {
-            let ty = match origin {
-                FunctionOrigin::Local(function) => module.functions[*function]
+        Expression::Call {
+            ref origin,
+            ref arguments,
+        } => {
+            let ty = match *origin {
+                FunctionOrigin::Local(function) => module.functions[function]
                     .return_type
                     .map(|ty| Cow::Borrowed(&module.types[ty].inner))
                     .unwrap_or(Cow::Owned(
@@ -979,8 +1019,8 @@ fn write_expression<'a>(
             (
                 format!(
                     "{}({})",
-                    match origin {
-                        FunctionOrigin::External(name) => name,
+                    match *origin {
+                        FunctionOrigin::External(ref name) => name,
                         FunctionOrigin::Local(handle) => builder.functions.get(&handle).unwrap(),
                     },
                     arguments
@@ -1141,8 +1181,13 @@ fn write_type(
                 Cow::Owned(structs.get(&ty).unwrap().clone())
             }
         }
-        TypeInner::Image { base, dim, flags } => {
-            if flags.contains(ImageFlags::ARRAYED)
+        TypeInner::Image {
+            kind,
+            dim,
+            arrayed,
+            class,
+        } => {
+            if arrayed
                 && dim != crate::ImageDimension::D2
                 && !features.contains(SupportedFeatures::NON_2D_TEXTURE_ARRAYS)
             {
@@ -1153,31 +1198,19 @@ fn write_type(
 
             Cow::Owned(format!(
                 "{}texture{}{}",
-                match types[base].inner {
-                    TypeInner::Scalar { kind, .. } => match kind {
-                        ScalarKind::Sint => "i",
-                        ScalarKind::Uint => "u",
-                        ScalarKind::Float => "",
-                        ScalarKind::Bool =>
-                            return Err(Error::Custom(String::from(
-                                "Cannot build image of booleans",
-                            ))),
-                    },
-                    _ =>
-                        return Err(Error::Custom(format!(
-                            "Cannot build image of type {}",
-                            write_type(base, types, structs, block, features)?
+                match kind {
+                    ScalarKind::Sint => "i",
+                    ScalarKind::Uint => "u",
+                    ScalarKind::Float => "",
+                    ScalarKind::Bool =>
+                        return Err(Error::Custom(String::from(
+                            "Cannot build image of booleans",
                         ))),
                 },
                 ImageDimension(dim),
-                write_image_flags(flags, features)?
+                write_image_flags(arrayed, class, features)?
             ))
         }
-        TypeInner::DepthImage { dim, arrayed } => Cow::Owned(format!(
-            "texture{}{}",
-            ImageDimension(dim),
-            if arrayed { "Array" } else { "" }
-        )),
         TypeInner::Sampler { comparison } => Cow::Borrowed(if comparison {
             "sampler"
         } else {
@@ -1240,32 +1273,29 @@ fn write_array_size(size: ArraySize) -> Result<String, Error> {
     })
 }
 
-fn write_image_flags(flags: ImageFlags, features: SupportedFeatures) -> Result<String, Error> {
-    let ms = if flags.contains(ImageFlags::MULTISAMPLED) {
-        if features.contains(SupportedFeatures::MULTISAMPLED_TEXTURES) {
+fn write_image_flags(
+    arrayed: bool,
+    class: ImageClass,
+    features: SupportedFeatures,
+) -> Result<String, Error> {
+    let ms = match class {
+        ImageClass::Multisampled => {
+            if !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURES) {
+                return Err(Error::Custom(String::from(
+                    "Multi sampled textures aren't supported",
+                )));
+            }
+            if arrayed && !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS) {
+                return Err(Error::Custom(String::from(
+                    "Multi sampled texture arrays aren't supported",
+                )));
+            }
             "MS"
-        } else {
-            return Err(Error::Custom(String::from(
-                "Multi sampled textures aren't supported",
-            )));
         }
-    } else {
-        ""
+        _ => "",
     };
 
-    let array = if flags.contains(ImageFlags::ARRAYED) {
-        "Array"
-    } else {
-        ""
-    };
-
-    if flags.contains(ImageFlags::ARRAYED & ImageFlags::MULTISAMPLED)
-        && !features.contains(SupportedFeatures::MULTISAMPLED_TEXTURE_ARRAYS)
-    {
-        return Err(Error::Custom(String::from(
-            "Multi sampled texture arrays aren't supported",
-        )));
-    }
+    let array = if arrayed { "Array" } else { "" };
 
     Ok(format!("{}{}", ms, array))
 }

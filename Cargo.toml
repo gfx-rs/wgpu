@@ -30,6 +30,7 @@ glsl-out = []
 serialize = ["serde"]
 deserialize = ["serde"]
 spirv-in = ["petgraph", "spirv"]
+spirv-out = ["spirv"]
 
 [dev-dependencies]
 difference = "2.0"

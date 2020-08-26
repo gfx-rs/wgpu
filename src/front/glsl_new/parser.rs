@@ -1,5 +1,4 @@
-#![allow(unused_braces)]
-#![allow(clippy::panic)]
+#![allow(clippy::panic, unused_braces)]
 use pomelo::pomelo;
 
 pomelo! {
@@ -566,8 +565,10 @@ pomelo! {
         for (id, initializer) in d.ids_initializers {
             // check if already declared in current scope
             #[cfg(feature = "glsl-validate")]
-            if extra.context.lookup_local_var_current_scope(&id).is_some() {
-                return Err(ErrorKind::VariableAlreadyDeclared(id))
+            {
+                if extra.context.lookup_local_var_current_scope(&id).is_some() {
+                    return Err(ErrorKind::VariableAlreadyDeclared(id))
+                }
             }
             let localVar = extra.context.local_variables.append(
                 LocalVariable {

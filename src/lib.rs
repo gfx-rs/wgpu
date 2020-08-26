@@ -4,7 +4,7 @@
 //!
 //! To improve performance and reduce memory usage, most structures are stored
 //! in an [`Arena`], and can be retrieved using the corresponding [`Handle`].
-#![allow(clippy::new_without_default)]
+#![allow(clippy::new_without_default, clippy::unneeded_field_pattern)]
 #![deny(clippy::panic)]
 
 mod arena;
@@ -207,18 +207,37 @@ bitflags::bitflags! {
     /// Flags describing an image.
     #[cfg_attr(feature = "serialize", derive(Serialize))]
     #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-    pub struct ImageFlags: u32 {
-        /// Image is an array.
-        const ARRAYED = 0x1;
-        /// Image is multisampled.
-        const MULTISAMPLED = 0x2;
-        /// Image is to be accessed with a sampler.
-        const SAMPLED = 0x4;
-        /// Image can be used as a source for load ops.
-        const CAN_LOAD = 0x10;
-        /// Image can be used as a target for store ops.
-        const CAN_STORE = 0x20;
+    pub struct StorageAccess: u32 {
+        /// Storage can be used as a source for load ops.
+        const LOAD = 0x1;
+        /// Storage can be used as a target for store ops.
+        const STORE = 0x2;
     }
+}
+
+// Storage image format.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum StorageFormat {
+    ///
+    Rgba32f,
+    //TODO
+}
+
+/// Sub-class of the image type.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum ImageClass {
+    /// Regular sampled image.
+    Sampled,
+    /// Multi-sampled image.
+    Multisampled,
+    /// Depth comparison image.
+    Depth,
+    /// Storage image.
+    Storage(StorageFormat, StorageAccess),
 }
 
 /// A data type declared in the module.
@@ -268,12 +287,11 @@ pub enum TypeInner {
     Struct { members: Vec<StructMember> },
     /// Possibly multidimensional array of texels.
     Image {
-        base: Handle<Type>,
+        kind: ScalarKind,
         dim: ImageDimension,
-        flags: ImageFlags,
+        arrayed: bool,
+        class: ImageClass,
     },
-    /// Depth-comparison image.
-    DepthImage { dim: ImageDimension, arrayed: bool },
     /// Can be used to sample values from images.
     Sampler { comparison: bool },
 }
@@ -431,6 +449,16 @@ pub enum FunctionOrigin {
     External(String),
 }
 
+/// Sampling modifier to control the level of detail.
+#[derive(Clone, Copy, Debug, PartialEq)]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+pub enum SampleLevel {
+    Auto,
+    Exact(Handle<Expression>),
+    Bias(Handle<Expression>),
+}
+
 /// An expression that can be evaluated to obtain a value.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -461,12 +489,20 @@ pub enum Expression {
     LocalVariable(Handle<LocalVariable>),
     /// Load a value indirectly.
     Load { pointer: Handle<Expression> },
-    /// Sample a point from an image.
+    /// Sample a point from a sampled or a depth image.
     ImageSample {
         image: Handle<Expression>,
         sampler: Handle<Expression>,
         coordinate: Handle<Expression>,
+        level: SampleLevel,
         depth_ref: Option<Handle<Expression>>,
+    },
+    /// Load a texel from an image.
+    ImageLoad {
+        image: Handle<Expression>,
+        coordinate: Handle<Expression>,
+        /// This is either LOD index, or sample index, based on the image class.
+        index: Handle<Expression>,
     },
     /// Apply an unary operator.
     Unary {

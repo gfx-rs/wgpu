@@ -63,7 +63,7 @@ pub enum Error {
     MixedExecutionModels(crate::Handle<crate::Function>),
     MissingBinding(crate::Handle<crate::GlobalVariable>),
     MissingBindTarget(BindSource),
-    InvalidImageFlags(crate::ImageFlags),
+    InvalidImageAccess(crate::StorageAccess),
     MutabilityViolation(crate::Handle<crate::GlobalVariable>),
     BadName(String),
     UnexpectedGlobalType(crate::Handle<crate::Type>),
@@ -74,6 +74,7 @@ pub enum Error {
     UnsupportedBinaryOp(crate::BinaryOperator),
     UnableToInferBinaryOpOutput(crate::TypeInner, crate::BinaryOperator, crate::TypeInner),
     UnexpectedImageType(crate::TypeInner),
+    UnexpectedSampleLevel(crate::SampleLevel),
     UnexpectedDistanceArgument(crate::TypeInner),
     UnsupportedCall(String),
     UnsupportedExpression(crate::Expression),
@@ -96,15 +97,6 @@ enum LocationMode {
     Uniform,
 }
 
-fn dim_str(dim: crate::ImageDimension) -> &'static str {
-    match dim {
-        crate::ImageDimension::D1 => "1d",
-        crate::ImageDimension::D2 => "2d",
-        crate::ImageDimension::D3 => "3d",
-        crate::ImageDimension::Cube => "Cube",
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct Options<'a> {
     pub binding_map: &'a BindingMap,
@@ -112,7 +104,7 @@ pub struct Options<'a> {
 
 impl Options<'_> {
     fn resolve_binding(
-        &self,
+        self,
         binding: &crate::Binding,
         mode: LocationMode,
     ) -> Result<ResolvedBinding, Error> {
@@ -591,16 +583,37 @@ impl<W: Write> Writer<W> {
                 image,
                 sampler,
                 coordinate,
+                level,
                 depth_ref: None,
             } => {
+                //TODO: handle arrayed images
                 let ty_image = self.put_expression(image, function, module)?;
                 write!(self.out, ".sample(")?;
                 self.put_expression(sampler, function, module)?;
                 write!(self.out, ", ")?;
                 self.put_expression(coordinate, function, module)?;
+                match level {
+                    crate::SampleLevel::Auto => {}
+                    crate::SampleLevel::Exact(h) => {
+                        write!(self.out, ", level(")?;
+                        self.put_expression(h, function, module)?;
+                        write!(self.out, ")")?;
+                    }
+                    crate::SampleLevel::Bias(h) => {
+                        write!(self.out, ", bias(")?;
+                        self.put_expression(h, function, module)?;
+                        write!(self.out, ")")?;
+                    }
+                }
                 write!(self.out, ")")?;
                 match *ty_image.borrow() {
-                    crate::TypeInner::Image { base, .. } => Ok(module.borrow_type(base)),
+                    crate::TypeInner::Image { kind, .. } => {
+                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector {
+                            size: crate::VectorSize::Quad,
+                            kind,
+                            width: 4,
+                        }))
+                    }
                     ref other => Err(Error::UnexpectedImageType(other.clone())),
                 }
             }
@@ -608,8 +621,10 @@ impl<W: Write> Writer<W> {
                 image,
                 sampler,
                 coordinate,
+                level,
                 depth_ref: Some(dref),
             } => {
+                //TODO: handle arrayed images
                 self.put_expression(image, function, module)?;
                 write!(self.out, ".sample_compare(")?;
                 self.put_expression(sampler, function, module)?;
@@ -617,11 +632,43 @@ impl<W: Write> Writer<W> {
                 self.put_expression(coordinate, function, module)?;
                 write!(self.out, ", ")?;
                 self.put_expression(dref, function, module)?;
+                match level {
+                    crate::SampleLevel::Auto => {}
+                    crate::SampleLevel::Exact(h) => {
+                        write!(self.out, ", level(")?;
+                        self.put_expression(h, function, module)?;
+                        write!(self.out, ")")?;
+                    }
+                    crate::SampleLevel::Bias(_) => return Err(Error::UnexpectedSampleLevel(level)),
+                }
                 write!(self.out, ")")?;
                 Ok(MaybeOwned::Owned(crate::TypeInner::Scalar {
                     kind: crate::ScalarKind::Float,
                     width: 4,
                 }))
+            }
+            crate::Expression::ImageLoad {
+                image,
+                coordinate,
+                index,
+            } => {
+                //TODO: handle arrayed images
+                let ty_image = self.put_expression(image, function, module)?;
+                write!(self.out, ".read(")?;
+                self.put_expression(coordinate, function, module)?;
+                write!(self.out, ", ")?;
+                self.put_expression(index, function, module)?;
+                write!(self.out, ")")?;
+                match *ty_image.borrow() {
+                    crate::TypeInner::Image { kind, .. } => {
+                        Ok(MaybeOwned::Owned(crate::TypeInner::Vector {
+                            size: crate::VectorSize::Quad,
+                            kind,
+                            width: 4,
+                        }))
+                    }
+                    ref other => Err(Error::UnexpectedImageType(other.clone())),
+                }
             }
             crate::Expression::Call {
                 origin: crate::FunctionOrigin::External(ref name),
@@ -895,48 +942,48 @@ impl<W: Write> Writer<W> {
                     }
                     write!(self.out, "}}")?;
                 }
-                crate::TypeInner::Image { base, dim, flags } => {
-                    let base_name = module.types[base].name.or_index(base);
-                    let dim_str = dim_str(dim);
-                    let msaa_str = if flags.contains(crate::ImageFlags::MULTISAMPLED) {
-                        "_ms"
-                    } else {
-                        ""
+                crate::TypeInner::Image {
+                    kind,
+                    dim,
+                    arrayed,
+                    class,
+                } => {
+                    let base_name = scalar_kind_string(kind);
+                    let dim_str = match dim {
+                        crate::ImageDimension::D1 => "1d",
+                        crate::ImageDimension::D2 => "2d",
+                        crate::ImageDimension::D3 => "3d",
+                        crate::ImageDimension::Cube => "Cube",
                     };
-                    let array_str = if flags.contains(crate::ImageFlags::ARRAYED) {
-                        "_array"
-                    } else {
-                        ""
+                    let texture_str = match class {
+                        crate::ImageClass::Depth => "depth",
+                        _ => "texture",
                     };
-                    let access = if flags.contains(crate::ImageFlags::SAMPLED) {
-                        if flags.intersects(crate::ImageFlags::CAN_STORE) {
-                            return Err(Error::InvalidImageFlags(flags));
-                        }
-                        "sample"
-                    } else if flags
-                        .contains(crate::ImageFlags::CAN_LOAD | crate::ImageFlags::CAN_STORE)
-                    {
-                        "read_write"
-                    } else if flags.contains(crate::ImageFlags::CAN_STORE) {
-                        "write"
-                    } else if flags.contains(crate::ImageFlags::CAN_LOAD) {
-                        "read"
-                    } else {
-                        return Err(Error::InvalidImageFlags(flags));
+                    let msaa_str = match class {
+                        crate::ImageClass::Multisampled => "_ms",
+                        _ => "",
                     };
-                    write!(
-                        self.out,
-                        "typedef texture{}{}{}<{}, access::{}> {}",
-                        dim_str, msaa_str, array_str, base_name, access, name
-                    )?;
-                }
-                crate::TypeInner::DepthImage { dim, arrayed } => {
-                    let dim_str = dim_str(dim);
                     let array_str = if arrayed { "_array" } else { "" };
+                    let access = match class {
+                        crate::ImageClass::Storage(_, access) => {
+                            if access
+                                .contains(crate::StorageAccess::LOAD | crate::StorageAccess::STORE)
+                            {
+                                "read_write"
+                            } else if access.contains(crate::StorageAccess::STORE) {
+                                "write"
+                            } else if access.contains(crate::StorageAccess::LOAD) {
+                                "read"
+                            } else {
+                                return Err(Error::InvalidImageAccess(access));
+                            }
+                        }
+                        _ => "sample",
+                    };
                     write!(
                         self.out,
-                        "typedef depth{}{}<float, access::sample> {}",
-                        dim_str, array_str, name
+                        "typedef {}{}{}{}<{}, access::{}> {}",
+                        texture_str, dim_str, msaa_str, array_str, base_name, access, name
                     )?;
                 }
                 crate::TypeInner::Sampler { comparison: _ } => {

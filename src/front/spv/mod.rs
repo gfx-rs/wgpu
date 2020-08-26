@@ -40,7 +40,7 @@ pub struct Instruction {
 }
 
 impl Instruction {
-    fn expect(&self, count: u16) -> Result<(), Error> {
+    fn expect(self, count: u16) -> Result<(), Error> {
         if self.wc == count {
             Ok(())
         } else {
@@ -48,7 +48,7 @@ impl Instruction {
         }
     }
 
-    fn expect_at_least(&self, count: u16) -> Result<(), Error> {
+    fn expect_at_least(self, count: u16) -> Result<(), Error> {
         if self.wc >= count {
             Ok(())
         } else {
@@ -817,18 +817,16 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     match type_arena[image_type_handle].inner {
                         //TODO: compare the result type
                         crate::TypeInner::Image {
-                            base: _,
+                            kind: _,
                             dim,
-                            flags,
-                        } if flags
-                            & (crate::ImageFlags::MULTISAMPLED | crate::ImageFlags::SAMPLED)
-                            == crate::ImageFlags::SAMPLED =>
-                        {
+                            arrayed,
+                            class: crate::ImageClass::Sampled,
+                        } => {
                             if !check_sample_coordinates(
                                 &type_arena[coord_type_handle],
                                 crate::ScalarKind::Float,
                                 dim,
-                                flags.contains(crate::ImageFlags::ARRAYED),
+                                arrayed,
                             ) {
                                 return Err(Error::InvalidSampleCoordinates(coord_type_handle));
                             }
@@ -840,6 +838,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         image: si_lexp.image,
                         sampler: si_lexp.sampler,
                         coordinate: coord_lexp.handle,
+                        level: crate::SampleLevel::Auto,
                         depth_ref: None,
                     };
                     self.lookup_expression.insert(
@@ -877,7 +876,12 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     };
                     match type_arena[image_type_handle].inner {
                         //TODO: compare the result type
-                        crate::TypeInner::DepthImage { dim, arrayed } => {
+                        crate::TypeInner::Image {
+                            kind: _,
+                            dim,
+                            arrayed,
+                            class: crate::ImageClass::Depth,
+                        } => {
                             if !check_sample_coordinates(
                                 &type_arena[coord_type_handle],
                                 crate::ScalarKind::Float,
@@ -904,6 +908,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         image: si_lexp.image,
                         sampler: si_lexp.sampler,
                         coordinate: coord_lexp.handle,
+                        level: crate::SampleLevel::Auto,
                         depth_ref: Some(dref_lexp.handle),
                     };
                     self.lookup_expression.insert(
@@ -1236,15 +1241,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     };
                     *comparison = true;
                 }
-                crate::TypeInner::Image {
-                    base: _,
-                    dim,
-                    flags,
-                } => {
-                    ty.inner = crate::TypeInner::DepthImage {
-                        dim,
-                        arrayed: flags.contains(crate::ImageFlags::ARRAYED),
-                    };
+                crate::TypeInner::Image { ref mut class, .. } => {
+                    assert_eq!(*class, crate::ImageClass::Sampled);
+                    *class = crate::ImageClass::Multisampled;
                 }
                 _ => panic!("Unexpected comparison type {:?}", ty),
             }
@@ -1753,36 +1752,43 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         let id = self.next()?;
         let sample_type_id = self.next()?;
         let dim = self.next()?;
-        let mut flags = crate::ImageFlags::empty();
         let _is_depth = self.next()?;
-        if self.next()? != 0 {
-            flags |= crate::ImageFlags::ARRAYED;
-        }
-        if self.next()? != 0 {
-            flags |= crate::ImageFlags::MULTISAMPLED;
-        }
-        let is_sampled = self.next()?;
-        if is_sampled != 0 {
-            flags |= crate::ImageFlags::SAMPLED;
-        }
-        let _format = self.next()?;
-        if inst.wc > 9 {
+        let is_array = self.next()? != 0;
+        let is_msaa = self.next()? != 0;
+        let _is_sampled = self.next()?;
+        let format = self.next()?;
+
+        let base_handle = self.lookup_type.lookup(sample_type_id)?.handle;
+        let kind = match module.types[base_handle].inner {
+            crate::TypeInner::Scalar { kind, .. } | crate::TypeInner::Vector { kind, .. } => kind,
+            _ => return Err(Error::InvalidImageBaseType(base_handle)),
+        };
+
+        let class = if inst.wc > 9 {
+            let storage_format = map_image_format(format)?;
+            let mut flags = crate::StorageAccess::empty();
             inst.expect(10)?;
             let access = self.next()?;
             if access == 0 || access == 2 {
-                flags |= crate::ImageFlags::CAN_LOAD;
+                flags |= crate::StorageAccess::LOAD;
             }
             if access == 1 || access == 2 {
-                flags |= crate::ImageFlags::CAN_STORE;
+                flags |= crate::StorageAccess::STORE;
             }
+            crate::ImageClass::Storage(storage_format, flags)
+        } else if is_msaa {
+            crate::ImageClass::Multisampled
+        } else {
+            crate::ImageClass::Sampled
         };
 
         let decor = self.future_decor.remove(&id).unwrap_or_default();
 
         let inner = crate::TypeInner::Image {
-            base: self.lookup_type.lookup(sample_type_id)?.handle,
+            class,
+            kind,
             dim: map_image_dim(dim)?,
-            flags,
+            arrayed: is_array,
         };
         let handle = module.types.append(crate::Type {
             name: decor.name,

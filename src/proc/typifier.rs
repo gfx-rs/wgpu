@@ -85,7 +85,8 @@ impl Typifier {
                     crate::Expression::GlobalVariable(h) => global_vars[h].ty,
                     crate::Expression::LocalVariable(h) => local_vars[h].ty,
                     crate::Expression::Load { .. } => unimplemented!(),
-                    crate::Expression::ImageSample { image, .. } => {
+                    crate::Expression::ImageSample { image, .. }
+                    | crate::Expression::ImageLoad { image, .. } => {
                         let image = self.resolve(
                             image,
                             expressions,
@@ -96,22 +97,21 @@ impl Typifier {
                             functions,
                         )?;
 
-                        let (kind, width) = match types[image].inner {
-                            TypeInner::Image { base, .. } => match types[base].inner {
-                                TypeInner::Scalar { kind, width } => (kind, width),
-                                _ => unimplemented!(),
+                        let inner = match types[image].inner {
+                            TypeInner::Image {
+                                kind,
+                                class: crate::ImageClass::Depth,
+                                ..
+                            } => TypeInner::Scalar { kind, width: 4 },
+                            TypeInner::Image { kind, .. } => TypeInner::Vector {
+                                kind,
+                                width: 4,
+                                size: VectorSize::Quad,
                             },
                             _ => unreachable!(),
                         };
 
-                        types.fetch_or_append(Type {
-                            name: None,
-                            inner: TypeInner::Vector {
-                                kind,
-                                width,
-                                size: VectorSize::Quad,
-                            },
-                        })
+                        types.fetch_or_append(Type { name: None, inner })
                     }
                     crate::Expression::Unary { expr, .. } => self.types[expr.index()],
                     crate::Expression::Binary { op, left, right } => match op {

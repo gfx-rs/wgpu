@@ -3,5 +3,5 @@
 #[cfg(feature = "glsl-out")]
 pub mod glsl;
 pub mod msl;
-#[cfg(feature = "spirv")]
+#[cfg(feature = "spirv-out")]
 pub mod spv;

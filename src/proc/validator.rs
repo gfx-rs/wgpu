@@ -53,7 +53,7 @@ impl Validator {
                         }
                     }
                 }
-                Ti::Image { .. } | Ti::DepthImage { .. } => {}
+                Ti::Image { .. } => {}
                 Ti::Sampler { comparison: _ } => {}
             }
         }

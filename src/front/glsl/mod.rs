@@ -877,6 +877,7 @@ impl<'a> Parser<'a> {
                             image: expressions.append(image),
                             sampler: expressions.append(sampler),
                             coordinate: expressions.append(coordinate),
+                            level: crate::SampleLevel::Auto,
                             depth_ref: None, //TODO
                         })
                     }
@@ -1005,7 +1006,7 @@ impl<'a> Parser<'a> {
 
     // None = void
     fn parse_type(&mut self, ty: TypeSpecifier) -> Option<Handle<Type>> {
-        let base_ty = helpers::glsl_to_spirv_type(ty.ty, &mut self.types)?;
+        let base_ty = helpers::glsl_to_spirv_type(ty.ty)?;
 
         let ty = if let Some(array_spec) = ty.array_specifier {
             let handle = self.types.fetch_or_append(Type {

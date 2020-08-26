@@ -34,14 +34,30 @@ impl<'a> Interface<'a> {
                 image,
                 sampler,
                 coordinate,
+                level,
                 depth_ref,
             } => {
                 self.add_inputs(image);
                 self.add_inputs(sampler);
                 self.add_inputs(coordinate);
+                match level {
+                    crate::SampleLevel::Auto => (),
+                    crate::SampleLevel::Exact(h) | crate::SampleLevel::Bias(h) => {
+                        self.add_inputs(h)
+                    }
+                }
                 if let Some(dref) = depth_ref {
                     self.add_inputs(dref);
                 }
+            }
+            E::ImageLoad {
+                image,
+                coordinate,
+                index,
+            } => {
+                self.add_inputs(image);
+                self.add_inputs(coordinate);
+                self.add_inputs(index);
             }
             E::Unary { expr, .. } => {
                 self.add_inputs(expr);

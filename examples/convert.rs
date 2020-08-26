@@ -38,7 +38,7 @@ fn main() {
         .to_str()
         .unwrap()
     {
-        #[cfg(feature = "spirv")]
+        #[cfg(feature = "spirv-in")]
         "spv" => {
             let input = fs::read(&args[1]).unwrap();
             naga::front::spv::parse_u8_slice(&input).unwrap()
@@ -165,7 +165,7 @@ fn main() {
             let msl = msl::write_string(&module, options).unwrap();
             fs::write(&args[2], msl).unwrap();
         }
-        #[cfg(feature = "spirv")]
+        #[cfg(feature = "spirv-out")]
         "spv" => {
             use naga::back::spv;
 

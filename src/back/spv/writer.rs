@@ -1,10 +1,9 @@
 /*! Standard Portable Intermediate Representation (SPIR-V) backend !*/
 use super::{helpers, Instruction, LogicalLayout, PhysicalLayout, WriterFlags};
-use crate::{Bytes, FastHashMap, FastHashSet, ImageFlags, VectorSize};
 use spirv::{Op, Word};
 use std::collections::hash_map::Entry;
 
-const BITS_PER_BYTE: Bytes = 8;
+const BITS_PER_BYTE: crate::Bytes = 8;
 
 enum Signedness {
     Unsigned = 0,
@@ -15,12 +14,12 @@ enum Signedness {
 enum LocalType {
     Scalar {
         kind: crate::ScalarKind,
-        width: Bytes,
+        width: crate::Bytes,
     },
     Vector {
         size: crate::VectorSize,
         kind: crate::ScalarKind,
-        width: Bytes,
+        width: crate::Bytes,
     },
     Pointer {
         base: crate::Handle<crate::Type>,
@@ -53,16 +52,16 @@ pub struct Writer {
     physical_layout: PhysicalLayout,
     logical_layout: LogicalLayout,
     id_count: u32,
-    capabilities: FastHashSet<spirv::Capability>,
+    capabilities: crate::FastHashSet<spirv::Capability>,
     debugs: Vec<Instruction>,
     annotations: Vec<Instruction>,
     writer_flags: WriterFlags,
     void_type: Option<u32>,
-    lookup_type: FastHashMap<LookupType, Word>,
-    lookup_function: FastHashMap<crate::Handle<crate::Function>, Word>,
-    lookup_function_type: FastHashMap<LookupFunctionType, Word>,
-    lookup_constant: FastHashMap<crate::Handle<crate::Constant>, Word>,
-    lookup_global_variable: FastHashMap<crate::Handle<crate::GlobalVariable>, Word>,
+    lookup_type: crate::FastHashMap<LookupType, Word>,
+    lookup_function: crate::FastHashMap<crate::Handle<crate::Function>, Word>,
+    lookup_function_type: crate::FastHashMap<LookupFunctionType, Word>,
+    lookup_constant: crate::FastHashMap<crate::Handle<crate::Constant>, Word>,
+    lookup_global_variable: crate::FastHashMap<crate::Handle<crate::GlobalVariable>, Word>,
 }
 
 impl Writer {
@@ -71,16 +70,16 @@ impl Writer {
             physical_layout: PhysicalLayout::new(header),
             logical_layout: LogicalLayout::default(),
             id_count: 0,
-            capabilities: FastHashSet::default(),
+            capabilities: crate::FastHashSet::default(),
             debugs: vec![],
             annotations: vec![],
             writer_flags,
             void_type: None,
-            lookup_type: FastHashMap::default(),
-            lookup_function: FastHashMap::default(),
-            lookup_function_type: FastHashMap::default(),
-            lookup_constant: FastHashMap::default(),
-            lookup_global_variable: FastHashMap::default(),
+            lookup_type: crate::FastHashMap::default(),
+            lookup_function: crate::FastHashMap::default(),
+            lookup_function_type: crate::FastHashMap::default(),
+            lookup_constant: crate::FastHashMap::default(),
+            lookup_global_variable: crate::FastHashMap::default(),
         }
     }
 
@@ -368,7 +367,7 @@ impl Writer {
         &self,
         id: Word,
         component_type_id: Word,
-        component_count: VectorSize,
+        component_count: crate::VectorSize,
     ) -> Instruction {
         let mut instruction = Instruction::new(Op::TypeVector);
         instruction.set_result(id);
@@ -381,7 +380,7 @@ impl Writer {
         &self,
         id: Word,
         column_type_id: Word,
-        column_count: VectorSize,
+        column_count: crate::VectorSize,
     ) -> Instruction {
         let mut instruction = Instruction::new(Op::TypeMatrix);
         instruction.set_result(id);
@@ -395,49 +394,50 @@ impl Writer {
         id: Word,
         sampled_type_id: Word,
         dim: spirv::Dim,
-        flags: ImageFlags,
-        comparison: bool,
+        arrayed: bool,
+        class: crate::ImageClass,
     ) -> Instruction {
         let mut instruction = Instruction::new(Op::TypeImage);
         instruction.set_result(id);
         instruction.add_operand(sampled_type_id);
         instruction.add_operand(dim as u32);
 
-        instruction.add_operand(if comparison { 1 } else { 0 });
-
-        instruction.add_operand(if flags.contains(crate::ImageFlags::ARRAYED) {
-            1
-        } else {
-            0
+        instruction.add_operand(match class {
+            crate::ImageClass::Depth => 1,
+            _ => 0,
+        });
+        instruction.add_operand(if arrayed { 1 } else { 0 });
+        instruction.add_operand(match class {
+            crate::ImageClass::Multisampled => 1,
+            _ => 0,
+        });
+        instruction.add_operand(match class {
+            crate::ImageClass::Sampled => 1,
+            _ => 0,
         });
 
-        instruction.add_operand(if flags.contains(crate::ImageFlags::MULTISAMPLED) {
-            1
-        } else {
-            0
-        });
+        let (format, access) = match class {
+            crate::ImageClass::Storage(format, access) => {
+                let spv_format = match format {
+                    crate::StorageFormat::Rgba32f => spirv::ImageFormat::Rgba32f,
+                };
+                (spv_format, access)
+            }
+            _ => (spirv::ImageFormat::Unknown, crate::StorageAccess::empty()),
+        };
 
-        instruction.add_operand(if flags.contains(crate::ImageFlags::SAMPLED) {
-            1
-        } else {
-            0
-        });
-
-        // TODO Image Format defaults to Unknown, not yet in IR
-        instruction.add_operand(spirv::ImageFormat::Unknown as u32);
-
+        instruction.add_operand(format as u32);
         // Access Qualifier
-        instruction.add_operand(
-            if flags.contains(crate::ImageFlags::CAN_STORE)
-                && flags.contains(crate::ImageFlags::CAN_LOAD)
-            {
+        if !access.is_empty() {
+            instruction.add_operand(if access == crate::StorageAccess::all() {
                 2
-            } else if flags.contains(crate::ImageFlags::CAN_STORE) {
+            } else if access.contains(crate::StorageAccess::STORE) {
                 1
             } else {
                 0
-            },
-        );
+            });
+        }
+
         instruction
     }
 
@@ -704,7 +704,7 @@ impl Writer {
     /// Primitive Instructions
     ///
 
-    fn write_scalar(&self, id: Word, kind: crate::ScalarKind, width: Bytes) -> Instruction {
+    fn write_scalar(&self, id: Word, kind: crate::ScalarKind, width: crate::Bytes) -> Instruction {
         let bits = (width * BITS_PER_BYTE) as u32;
         match kind {
             crate::ScalarKind::Sint => self.instruction_type_int(id, bits, Signedness::Signed),
@@ -786,23 +786,23 @@ impl Writer {
                 );
                 self.instruction_type_matrix(id, vector_id, columns)
             }
-            crate::TypeInner::Image { base, dim, flags } => {
-                let type_id = self.get_type_id(arena, LookupType::Handle(base));
+            crate::TypeInner::Image {
+                kind,
+                dim,
+                arrayed,
+                class,
+            } => {
+                let type_id = self.get_type_id(
+                    arena,
+                    LookupType::Local(LocalType::Vector {
+                        size: crate::VectorSize::Quad,
+                        kind,
+                        width: 4,
+                    }),
+                );
                 let dim = map_dim(dim);
                 self.try_add_capabilities(dim.required_capabilities());
-                self.instruction_type_image(id, type_id, dim, flags, false)
-            }
-            crate::TypeInner::DepthImage { dim, arrayed } => {
-                let type_id = 0; //TODO!
-                let dim = map_dim(dim);
-                self.try_add_capabilities(dim.required_capabilities());
-
-                let flags = if arrayed {
-                    crate::ImageFlags::ARRAYED
-                } else {
-                    crate::ImageFlags::empty()
-                };
-                self.instruction_type_image(id, type_id, dim, flags, true)
+                self.instruction_type_image(id, type_id, dim, arrayed, class)
             }
             crate::TypeInner::Sampler { comparison: _ } => self.instruction_type_sampler(id),
             crate::TypeInner::Array { size, stride, .. } => {

@@ -1,4 +1,4 @@
-use crate::{Arena, ImageDimension, ImageFlags, ScalarKind, Type, TypeInner, VectorSize};
+use crate::{ImageClass, ImageDimension, ScalarKind, TypeInner, VectorSize};
 use glsl::syntax::{BinaryOp, TypeSpecifierNonArray, UnaryOp};
 
 pub fn glsl_to_spirv_unary_op(op: UnaryOp) -> crate::UnaryOperator {
@@ -36,7 +36,7 @@ pub fn glsl_to_spirv_binary_op(op: BinaryOp) -> crate::BinaryOperator {
     }
 }
 
-pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray, types: &mut Arena<Type>) -> Option<TypeInner> {
+pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray) -> Option<TypeInner> {
     use TypeSpecifierNonArray::*;
 
     Some(match ty {
@@ -248,53 +248,28 @@ pub fn glsl_to_spirv_type(ty: TypeSpecifierNonArray, types: &mut Arena<Type>) ->
         },
         TypeName(ty_name) => {
             if let Some(t_pos) = ty_name.0.find("texture") {
-                let scalar_kind = match &ty_name.0[..t_pos] {
+                let kind = match &ty_name.0[..t_pos] {
                     "" => ScalarKind::Float,
                     "i" => ScalarKind::Sint,
                     "u" => ScalarKind::Uint,
                     _ => panic!(),
                 };
-                let base = types.fetch_or_append(Type {
-                    name: None,
-                    inner: TypeInner::Scalar {
-                        kind: scalar_kind,
-                        width: 4,
-                    },
-                });
-
-                let (dim, flags) = match &ty_name.0[(t_pos + 7)..] {
-                    "1D" => (ImageDimension::D1, ImageFlags::SAMPLED),
-                    "2D" => (ImageDimension::D2, ImageFlags::SAMPLED),
-                    "3D" => (ImageDimension::D3, ImageFlags::SAMPLED),
-                    "1DArray" => (
-                        ImageDimension::D1,
-                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
-                    ),
-                    "2DArray" => (
-                        ImageDimension::D2,
-                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
-                    ),
-                    "3DArray" => (
-                        ImageDimension::D3,
-                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
-                    ),
-                    "2DMS" => (
-                        ImageDimension::D2,
-                        ImageFlags::SAMPLED | ImageFlags::MULTISAMPLED,
-                    ),
-                    "2DMSArray" => (
-                        ImageDimension::D2,
-                        ImageFlags::SAMPLED | ImageFlags::ARRAYED | ImageFlags::MULTISAMPLED,
-                    ),
-                    "Cube" => (ImageDimension::Cube, ImageFlags::SAMPLED),
-                    "CubeArray" => (
-                        ImageDimension::Cube,
-                        ImageFlags::SAMPLED | ImageFlags::ARRAYED,
-                    ),
+                let arrayed = ty_name.0.ends_with("Array");
+                let (dim, class) = match &ty_name.0[(t_pos + 7)..] {
+                    "1D" | "1DArray" => (ImageDimension::D1, ImageClass::Sampled),
+                    "2D" | "2DArray" => (ImageDimension::D2, ImageClass::Sampled),
+                    "3D" | "3DArray" => (ImageDimension::D3, ImageClass::Sampled),
+                    "2DMS" | "2DMSArray" => (ImageDimension::D2, ImageClass::Multisampled),
+                    "Cube" | "CubeArray" => (ImageDimension::Cube, ImageClass::Sampled),
                     _ => panic!(),
                 };
 
-                return Some(TypeInner::Image { base, dim, flags });
+                return Some(TypeInner::Image {
+                    kind,
+                    dim,
+                    arrayed,
+                    class,
+                });
             }
 
             match ty_name.0.as_str() {
