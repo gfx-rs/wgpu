@@ -91,10 +91,10 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         )));
     }
 
-    writeln!(out, "#version {}", options.version)?;
+    writeln!(out, "#version {}\n", options.version)?;
 
     if es {
-        writeln!(out, "precision highp float;")?;
+        writeln!(out, "precision highp float;\n")?;
     }
 
     let mut counter = 0;
@@ -102,7 +102,8 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
     let mut namer = |name: Option<&'a String>| {
         if let Some(name) = name {
-            if name.chars().next().map(char::is_numeric).unwrap_or(true)
+            if name.starts_with(|c: char| !(c.is_ascii_alphabetic() || c == '_'))
+                || name.contains(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
                 || name.starts_with("gl_")
                 || name == "main"
                 || names.get(name.as_str()).is_some()
@@ -215,6 +216,8 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         }
     }
 
+    writeln!(out)?;
+
     let mut globals_lookup = FastHashMap::default();
 
     for ((handle, global), usage) in module.global_variables.iter().zip(func.global_usage.iter()) {
@@ -287,6 +290,8 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         globals_lookup.insert(handle, name);
     }
 
+    writeln!(out)?;
+
     let mut functions = FastHashMap::default();
 
     for (handle, func) in module.functions.iter() {
@@ -324,6 +329,8 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
 
         functions.insert(handle, name);
     }
+
+    writeln!(out)?;
 
     for (handle, name) in functions.iter() {
         let func = &module.functions[*handle];
@@ -363,7 +370,7 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         for (handle, name) in locals.iter() {
             writeln!(
                 out,
-                "{} {};",
+                "\t{} {};",
                 write_type(
                     func.local_variables[*handle].ty,
                     &module.types,
@@ -374,6 +381,8 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
                 name
             )?;
         }
+
+        writeln!(out)?;
 
         let mut builder = StatementBuilder {
             functions: &functions,
@@ -387,7 +396,9 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
         };
 
         for sta in func.body.iter() {
-            writeln!(out, "\t{}", write_statement(sta, module, &mut builder)?)?;
+            if !matches!(sta, Statement::Empty) {
+                writeln!(out, "{}", write_statement(sta, module, &mut builder, 1)?)?;
+            }
         }
 
         writeln!(out, "}}")?;
@@ -424,12 +435,13 @@ fn write_statement(
     sta: &Statement,
     module: &Module,
     builder: &mut StatementBuilder<'_>,
+    indent: usize,
 ) -> Result<String, Error> {
     Ok(match sta {
         Statement::Empty => String::new(),
         Statement::Block(block) => block
             .iter()
-            .map(|sta| write_statement(sta, module, builder))
+            .map(|sta| write_statement(sta, module, builder, indent))
             .collect::<Result<Vec<_>, _>>()?
             .join("\n"),
         Statement::If {
@@ -441,17 +453,35 @@ fn write_statement(
 
             writeln!(
                 &mut out,
-                "if({}) {{",
+                "{}if({}) {{",
+                "\t".repeat(indent),
                 write_expression(&builder.expressions[*condition], module, builder)?.0
             )?;
+
             for sta in accept {
-                writeln!(&mut out, "{}", write_statement(sta, module, builder)?)?;
+                if !matches!(sta, Statement::Empty) {
+                    writeln!(
+                        &mut out,
+                        "{}",
+                        write_statement(sta, module, builder, indent + 1)?
+                    )?;
+                }
             }
-            writeln!(&mut out, "}} else {{")?;
-            for sta in reject {
-                writeln!(&mut out, "{}", write_statement(sta, module, builder)?)?;
+
+            if !reject.is_empty() {
+                writeln!(&mut out, "{}}} else {{", "\t".repeat(indent),)?;
+                for sta in reject {
+                    if !matches!(sta, Statement::Empty) {
+                        writeln!(
+                            &mut out,
+                            "{}",
+                            write_statement(sta, module, builder, indent + 1)?
+                        )?;
+                    }
+                }
             }
-            write!(&mut out, "}}")?;
+
+            write!(&mut out, "{}}}", "\t".repeat(indent),)?;
 
             out
         }
@@ -464,56 +494,84 @@ fn write_statement(
 
             writeln!(
                 &mut out,
-                "switch({}) {{",
+                "{}switch({}) {{",
+                "\t".repeat(indent),
                 write_expression(&builder.expressions[*selector], module, builder)?.0
             )?;
 
             for (label, (block, fallthrough)) in cases {
-                writeln!(&mut out, "   case {}:", label)?;
+                writeln!(&mut out, "{}case {}:", "\t".repeat(indent + 1), label)?;
 
                 for sta in block {
-                    writeln!(&mut out, "      {}", write_statement(sta, module, builder)?)?;
+                    if !matches!(sta, Statement::Empty) {
+                        writeln!(
+                            &mut out,
+                            "{}",
+                            write_statement(sta, module, builder, indent + 2)?
+                        )?;
+                    }
                 }
 
                 if fallthrough.is_some() {
-                    writeln!(&mut out, "      break;")?;
+                    writeln!(&mut out, "{}break;", "\t".repeat(indent + 2),)?;
                 }
             }
 
-            writeln!(&mut out, "   default:")?;
+            if !default.is_empty() {
+                writeln!(&mut out, "{}default:", "\t".repeat(indent + 1),)?;
 
-            for sta in default {
-                writeln!(&mut out, "      {}", write_statement(sta, module, builder)?)?;
+                for sta in default {
+                    if !matches!(sta, Statement::Empty) {
+                        writeln!(
+                            &mut out,
+                            "{}",
+                            write_statement(sta, module, builder, indent + 2)?
+                        )?;
+                    }
+                }
             }
 
-            write!(&mut out, "}}")?;
+            write!(&mut out, "{}}}", "\t".repeat(indent),)?;
 
             out
         }
         Statement::Loop { body, continuing } => {
             let mut out = String::new();
 
-            writeln!(&mut out, "while(true) {{",)?;
+            writeln!(&mut out, "{}while(true) {{", "\t".repeat(indent),)?;
 
             for sta in body.iter().chain(continuing.iter()) {
-                writeln!(&mut out, "    {}", write_statement(sta, module, builder)?)?;
+                if !matches!(sta, Statement::Empty) {
+                    writeln!(
+                        &mut out,
+                        "{}",
+                        write_statement(sta, module, builder, indent + 1)?
+                    )?;
+                }
             }
 
-            write!(&mut out, "}}")?;
+            write!(&mut out, "{}}}", "\t".repeat(indent),)?;
 
             out
         }
-        Statement::Break => String::from("break;"),
-        Statement::Continue => String::from("continue;"),
+        Statement::Break => format!("{}break;", "\t".repeat(indent),),
+        Statement::Continue => format!("{}continue;", "\t".repeat(indent),),
         Statement::Return { value } => format!(
-            "return {};",
-            value.map_or::<Result<_, Error>, _>(Ok(String::from("")), |expr| Ok(
-                write_expression(&builder.expressions[expr], module, builder)?.0
-            ))?
+            "{}{}",
+            "\t".repeat(indent),
+            if let Some(expr) = value {
+                format!(
+                    "return {};",
+                    write_expression(&builder.expressions[*expr], module, builder)?.0
+                )
+            } else {
+                String::from("return;")
+            }
         ),
-        Statement::Kill => String::from("discard;"),
+        Statement::Kill => format!("{}discard;", "\t".repeat(indent)),
         Statement::Store { pointer, value } => format!(
-            "{} = {};",
+            "{}{} = {};",
+            "\t".repeat(indent),
             write_expression(&builder.expressions[*pointer], module, builder)?.0,
             write_expression(&builder.expressions[*value], module, builder)?.0
         ),
@@ -571,7 +629,7 @@ fn write_expression<'a>(
                         members[*index as usize]
                             .name
                             .as_ref()
-                            .unwrap_or(&index.to_string())
+                            .unwrap_or(&format!("_{}", index))
                     ),
                     Cow::Borrowed(&module.types[members[*index as usize].ty].inner),
                 ),
@@ -1070,7 +1128,7 @@ fn write_type(
                 for (idx, member) in members.iter().enumerate() {
                     writeln!(
                         &mut out,
-                        "{} {};",
+                        "\t{} {};",
                         write_type(member.ty, types, structs, None, features)?,
                         member.name.clone().unwrap_or_else(|| idx.to_string())
                     )?;
@@ -1261,9 +1319,9 @@ fn write_struct(
 
         writeln!(
             &mut tmp,
-            "   {} {};",
+            "\t{} {};",
             write_type(member.ty, &module.types, &structs, None, features)?,
-            member.name.clone().unwrap_or_else(|| idx.to_string())
+            member.name.clone().unwrap_or_else(|| format!("_{}", idx))
         )?;
     }
     writeln!(&mut tmp, "}};")?;
