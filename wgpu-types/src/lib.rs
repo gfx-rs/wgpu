@@ -1591,6 +1591,8 @@ pub enum TextureComponentType {
     Sint,
     /// They see it as a unsigned integer `utexture1D`, `utexture2D` etc
     Uint,
+    /// They see it as a floating point 0-1 result of comparison, i.e. `shadowTexture2D`
+    DepthComparison,
 }
 
 impl From<TextureFormat> for TextureComponentType {

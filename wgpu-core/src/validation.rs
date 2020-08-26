@@ -65,16 +65,22 @@ pub enum BindingError {
         dim: naga::ImageDimension,
         is_array: bool,
     },
-    #[error("component type {0:?} of a sampled texture doesn't match the shader")]
-    WrongTextureComponentType(Option<naga::ScalarKind>),
-    #[error("texture sampling capability doesn't match the shader")]
-    WrongTextureSampled,
-    #[error("multisampled flag doesn't match the shader")]
-    WrongTextureMultisampled,
+    #[error("component type {binding:?} of a sampled texture doesn't match the shader {shader:?}")]
+    WrongTextureComponentType {
+        binding: naga::ScalarKind,
+        shader: naga::ScalarKind,
+    },
+    #[error("texture class {binding:?} doesn't match the shader {shader:?}")]
+    WrongTextureClass {
+        binding: naga::ImageClass,
+        shader: naga::ImageClass,
+    },
     #[error("comparison flag doesn't match the shader")]
     WrongSamplerComparison,
     #[error("derived bind group layout type is not consistent between stages")]
     InconsistentlyDerivedType,
+    #[error("texture format {0:?} isn't recognized")]
+    UnknownStorageFormat(wgt::TextureFormat),
 }
 
 #[derive(Clone, Debug, Error)]
@@ -204,22 +210,19 @@ fn check_binding_use(
         naga::TypeInner::Sampler { comparison } => match entry.ty {
             BindingType::Sampler { comparison: cmp } => {
                 if cmp == comparison {
-                    Ok(naga::GlobalUse::empty())
+                    Ok(naga::GlobalUse::LOAD)
                 } else {
                     Err(BindingError::WrongSamplerComparison)
                 }
             }
             _ => Err(BindingError::WrongType),
         },
-        naga::TypeInner::Image { base, dim, flags } => {
-            if flags.contains(naga::ImageFlags::MULTISAMPLED) {
-                match entry.ty {
-                    BindingType::SampledTexture {
-                        multisampled: true, ..
-                    } => {}
-                    _ => return Err(BindingError::WrongTextureMultisampled),
-                }
-            }
+        naga::TypeInner::Image {
+            kind,
+            dim,
+            arrayed,
+            class,
+        } => {
             let view_dimension = match entry.ty {
                 BindingType::SampledTexture { dimension, .. }
                 | BindingType::StorageTexture { dimension, .. } => dimension,
@@ -230,7 +233,7 @@ fn check_binding_use(
                     })
                 }
             };
-            if flags.contains(naga::ImageFlags::ARRAYED) {
+            if arrayed {
                 match (dim, view_dimension) {
                     (naga::ImageDimension::D2, wgt::TextureViewDimension::D2Array) => (),
                     (naga::ImageDimension::Cube, wgt::TextureViewDimension::CubeArray) => (),
@@ -255,39 +258,66 @@ fn check_binding_use(
                     }
                 }
             }
-            let (allowed_usage, is_sampled) = match entry.ty {
-                BindingType::SampledTexture { component_type, .. } => {
-                    let expected_scalar_kind = match component_type {
-                        wgt::TextureComponentType::Float => naga::ScalarKind::Float,
-                        wgt::TextureComponentType::Sint => naga::ScalarKind::Sint,
-                        wgt::TextureComponentType::Uint => naga::ScalarKind::Uint,
-                    };
-                    match module.types[base].inner {
-                        naga::TypeInner::Scalar { kind, .. }
-                        | naga::TypeInner::Vector { kind, .. }
-                            if kind == expected_scalar_kind => {}
-                        naga::TypeInner::Scalar { kind, .. }
-                        | naga::TypeInner::Vector { kind, .. } => {
-                            return Err(BindingError::WrongTextureComponentType(Some(kind)))
+            let expected_class = match entry.ty {
+                BindingType::SampledTexture {
+                    dimension: _,
+                    component_type,
+                    multisampled,
+                } => {
+                    let (expected_scalar_kind, comparison) = match component_type {
+                        wgt::TextureComponentType::Float => (naga::ScalarKind::Float, false),
+                        wgt::TextureComponentType::Sint => (naga::ScalarKind::Sint, false),
+                        wgt::TextureComponentType::Uint => (naga::ScalarKind::Uint, false),
+                        wgt::TextureComponentType::DepthComparison => {
+                            (naga::ScalarKind::Float, true)
                         }
-                        _ => return Err(BindingError::WrongTextureComponentType(None)),
                     };
-                    (naga::GlobalUse::LOAD, true)
-                }
-                BindingType::StorageTexture { readonly, .. } => {
-                    if readonly {
-                        //TODO: check entry.storage_texture_format
-                        (naga::GlobalUse::LOAD, false)
-                    } else {
-                        (naga::GlobalUse::STORE, false)
+                    if kind != expected_scalar_kind {
+                        return Err(BindingError::WrongTextureComponentType {
+                            binding: expected_scalar_kind,
+                            shader: kind,
+                        });
                     }
+                    if multisampled {
+                        naga::ImageClass::Multisampled
+                    } else if comparison {
+                        naga::ImageClass::Depth
+                    } else {
+                        naga::ImageClass::Sampled
+                    }
+                }
+                BindingType::StorageTexture {
+                    readonly,
+                    format,
+                    dimension: _,
+                } => {
+                    let naga_format = match format {
+                        wgt::TextureFormat::Rgba32Float => naga::StorageFormat::Rgba32f,
+                        _ => return Err(BindingError::UnknownStorageFormat(format)),
+                    };
+                    let access = if readonly {
+                        naga::StorageAccess::LOAD
+                    } else {
+                        naga::StorageAccess::STORE
+                    };
+                    naga::ImageClass::Storage(naga_format, access)
                 }
                 _ => return Err(BindingError::WrongType),
             };
-            if is_sampled != flags.contains(naga::ImageFlags::SAMPLED) {
-                return Err(BindingError::WrongTextureSampled);
+            if class != expected_class {
+                return Err(BindingError::WrongTextureClass {
+                    binding: expected_class,
+                    shader: class,
+                });
             }
-            Ok(allowed_usage)
+            Ok(match class {
+                naga::ImageClass::Storage(_, access)
+                    if access.contains(naga::StorageAccess::STORE) =>
+                {
+                    naga::GlobalUse::STORE
+                }
+                _ => naga::GlobalUse::LOAD,
+            })
         }
         _ => Err(BindingError::WrongType),
     }
@@ -715,39 +745,49 @@ fn derive_binding_type(
             }
         }
         naga::TypeInner::Sampler { comparison } => BindingType::Sampler { comparison },
-        naga::TypeInner::Image { base, dim, flags } => {
-            let array = flags.contains(naga::ImageFlags::ARRAYED);
+        naga::TypeInner::Image {
+            kind,
+            dim,
+            arrayed,
+            class,
+        } => {
             let dimension = match dim {
                 naga::ImageDimension::D1 => wgt::TextureViewDimension::D1,
-                naga::ImageDimension::D2 if array => wgt::TextureViewDimension::D2Array,
+                naga::ImageDimension::D2 if arrayed => wgt::TextureViewDimension::D2Array,
                 naga::ImageDimension::D2 => wgt::TextureViewDimension::D2,
                 naga::ImageDimension::D3 => wgt::TextureViewDimension::D3,
-                naga::ImageDimension::Cube if array => wgt::TextureViewDimension::CubeArray,
+                naga::ImageDimension::Cube if arrayed => wgt::TextureViewDimension::CubeArray,
                 naga::ImageDimension::Cube => wgt::TextureViewDimension::Cube,
             };
-            if flags.contains(naga::ImageFlags::SAMPLED) {
-                BindingType::SampledTexture {
+            let component_type = match kind {
+                naga::ScalarKind::Float => wgt::TextureComponentType::Float,
+                naga::ScalarKind::Sint => wgt::TextureComponentType::Sint,
+                naga::ScalarKind::Uint => wgt::TextureComponentType::Uint,
+                naga::ScalarKind::Bool => unreachable!(),
+            };
+            match class {
+                naga::ImageClass::Sampled => BindingType::SampledTexture {
                     dimension,
-                    component_type: match module.types[base].inner {
-                        naga::TypeInner::Scalar { kind, .. }
-                        | naga::TypeInner::Vector { kind, .. } => match kind {
-                            naga::ScalarKind::Float => wgt::TextureComponentType::Float,
-                            naga::ScalarKind::Sint => wgt::TextureComponentType::Sint,
-                            naga::ScalarKind::Uint => wgt::TextureComponentType::Uint,
-                            other => {
-                                return Err(BindingError::WrongTextureComponentType(Some(other)))
-                            }
-                        },
-                        _ => return Err(BindingError::WrongTextureComponentType(None)),
+                    component_type,
+                    multisampled: false,
+                },
+                naga::ImageClass::Multisampled => BindingType::SampledTexture {
+                    dimension,
+                    component_type,
+                    multisampled: true,
+                },
+                naga::ImageClass::Depth => BindingType::SampledTexture {
+                    dimension,
+                    component_type: wgt::TextureComponentType::DepthComparison,
+                    multisampled: false,
+                },
+                naga::ImageClass::Storage(format, access) => BindingType::StorageTexture {
+                    dimension,
+                    format: match format {
+                        naga::StorageFormat::Rgba32f => wgt::TextureFormat::Rgba32Float,
                     },
-                    multisampled: flags.contains(naga::ImageFlags::MULTISAMPLED),
-                }
-            } else {
-                BindingType::StorageTexture {
-                    dimension,
-                    format: wgt::TextureFormat::Rgba8Unorm, //TODO
-                    readonly: !flags.contains(naga::ImageFlags::CAN_STORE),
-                }
+                    readonly: !access.contains(naga::StorageAccess::STORE),
+                },
             }
         }
         _ => return Err(BindingError::WrongType),
