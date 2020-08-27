@@ -480,6 +480,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         .future_decor
                         .remove(&result_id)
                         .and_then(|decor| decor.name);
+                    if let Some(ref name) = name {
+                        log::debug!("\t\t\tid={} name={}", result_id, name);
+                    }
                     let var_handle = local_arena.append(crate::LocalVariable {
                         name,
                         ty: self.lookup_type.lookup(result_type_id)?.handle,
@@ -1120,6 +1123,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(1)?;
                     break Terminator::Return { value: None };
                 }
+                Op::ReturnValue => {
+                    inst.expect(2)?;
+                    let value_id = self.next()?;
+                    let value_expr = self.lookup_expression.lookup(value_id)?;
+                    break Terminator::Return {
+                        value: Some(value_expr.handle),
+                    };
+                }
                 Op::Branch => {
                     inst.expect(2)?;
                     let target_id = self.next()?;
@@ -1215,21 +1226,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         }
         // register global variables
         for (&id, var) in self.lookup_variable.iter() {
+            let handle = expressions.append(crate::Expression::GlobalVariable(var.handle));
             self.lookup_expression.insert(
                 id,
                 LookupExpression {
                     type_id: var.type_id,
-                    handle: expressions.append(crate::Expression::GlobalVariable(var.handle)),
+                    handle,
                 },
             );
         }
         // register constants
         for (&id, con) in self.lookup_constant.iter() {
+            let handle = expressions.append(crate::Expression::Constant(con.handle));
             self.lookup_expression.insert(
                 id,
                 LookupExpression {
                     type_id: con.type_id,
-                    handle: expressions.append(crate::Expression::Constant(con.handle)),
+                    handle,
                 },
             );
         }

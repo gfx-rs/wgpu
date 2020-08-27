@@ -88,8 +88,15 @@ pub fn parse_function<I: Iterator<Item = u32>>(
                 wc: 3,
             } => {
                 let type_id = parser.next()?;
-                let _id = parser.next()?;
+                let id = parser.next()?;
+                let handle = fun
+                    .expressions
+                    .append(crate::Expression::FunctionParameter(i as u32));
+                parser
+                    .lookup_expression
+                    .insert(id, LookupExpression { type_id, handle });
                 //Note: we redo the lookup in order to work around `parser` borrowing
+
                 if type_id
                     != parser
                         .lookup_function_type
