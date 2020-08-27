@@ -2,7 +2,7 @@ use crate::{
     Arena, ArraySize, BinaryOperator, BuiltIn, Constant, ConstantInner, DerivativeAxis, Expression,
     FastHashMap, Function, FunctionOrigin, GlobalVariable, Handle, ImageClass, Interpolation,
     IntrinsicFunction, LocalVariable, MemberOrigin, Module, ScalarKind, ShaderStage, Statement,
-    StorageClass, StructMember, Type, TypeInner, UnaryOperator,
+    StorageAccess, StorageClass, StorageFormat, StructMember, Type, TypeInner, UnaryOperator,
 };
 use std::{
     borrow::Cow,
@@ -251,9 +251,43 @@ pub fn write<'a>(module: &'a Module, out: &mut impl Write, options: Options) -> 
             })?
         };
 
-        if let Some(ref binding) = global.binding {
-            if !es {
-                write!(out, "layout({}) ", Binding(binding))?;
+        let storage_format = match module.types[global.ty].inner {
+            TypeInner::Image {
+                class: ImageClass::Storage(format, _),
+                ..
+            } => Some(format),
+            _ => None,
+        };
+
+        if global.binding.is_some() {
+            write!(out, "layout(")?;
+
+            if let Some(ref binding) = global.binding {
+                if !es {
+                    write!(out, "{}", Binding(binding))?;
+                }
+            }
+
+            if storage_format.is_some() && global.binding.is_some() {
+                write!(out, ",")?;
+            }
+
+            if let Some(format) = storage_format {
+                write!(out, "{}", write_format_glsl(format))?;
+            }
+
+            write!(out, ") ")?;
+        }
+
+        if let TypeInner::Image {
+            class: ImageClass::Storage(_, access),
+            ..
+        } = module.types[global.ty].inner
+        {
+            if access == StorageAccess::LOAD {
+                write!(out, "readonly ")?;
+            } else if access == StorageAccess::STORE {
+                write!(out, "writeonly ")?;
             }
         }
 
@@ -499,7 +533,7 @@ fn write_statement<'a, 'b>(
                     )?;
                 }
 
-                if fallthrough.is_some() {
+                if fallthrough.is_none() {
                     writeln!(&mut out, "{}break;", "\t".repeat(indent + 2),)?;
                 }
             }
@@ -828,7 +862,14 @@ fn write_expression<'a, 'b>(
                         sampler_constructor, coordinate, level_expr
                     )
                 }
-                crate::SampleLevel::Bias(_) => todo!(),
+                crate::SampleLevel::Bias(bias) => {
+                    let (bias_expr, _) =
+                        write_expression(&builder.expressions[bias], module, builder)?;
+                    format!(
+                        "texture({},{},{})",
+                        sampler_constructor, coordinate, bias_expr
+                    )
+                }
             };
 
             let width = 4;
@@ -843,7 +884,7 @@ fn write_expression<'a, 'b>(
         Expression::ImageLoad {
             image,
             coordinate,
-            index: _,
+            index,
         } => {
             let (image_expr, image_ty) =
                 write_expression(&builder.expressions[image], module, builder)?;
@@ -860,10 +901,6 @@ fn write_expression<'a, 'b>(
                 _ => return Err(Error::Custom(format!("Cannot load {:?}", image_ty))),
             };
 
-            let ms = match class {
-                crate::ImageClass::Multisampled => true,
-                _ => false,
-            };
             let size = match coordinate_ty.as_ref() {
                 TypeInner::Vector { size, .. } => *size,
                 _ => {
@@ -874,25 +911,47 @@ fn write_expression<'a, 'b>(
                 }
             };
 
-            //TODO: fix this
-            let sampler_constructor = format!(
-                "{}sampler{}{}{}({})",
-                match kind {
-                    ScalarKind::Sint => "i",
-                    ScalarKind::Uint => "u",
-                    ScalarKind::Float => "",
-                    _ => return Err(Error::Custom(String::from("Cannot build image of bools",))),
-                },
-                ImageDimension(dim),
-                if ms { "MS" } else { "" },
-                if arrayed { "Array" } else { "" },
-                image_expr,
-            );
+            let expr = match class {
+                ImageClass::Sampled | ImageClass::Multisampled => {
+                    let ms = match class {
+                        crate::ImageClass::Multisampled => true,
+                        _ => false,
+                    };
 
-            let expr = if !ms {
-                format!("texture({},{})", sampler_constructor, coordinate_expr)
-            } else {
-                todo!()
+                    //TODO: fix this
+                    let sampler_constructor = format!(
+                        "{}sampler{}{}{}({})",
+                        match kind {
+                            ScalarKind::Sint => "i",
+                            ScalarKind::Uint => "u",
+                            ScalarKind::Float => "",
+                            _ =>
+                                return Err(Error::Custom(String::from(
+                                    "Cannot build image of bools"
+                                ))),
+                        },
+                        ImageDimension(dim),
+                        if ms { "MS" } else { "" },
+                        if arrayed { "Array" } else { "" },
+                        image_expr,
+                    );
+
+                    if !ms {
+                        format!("texelFetch({},{})", sampler_constructor, coordinate_expr)
+                    } else {
+                        let (index_expr, _) =
+                            write_expression(&builder.expressions[index], module, builder)?;
+
+                        format!(
+                            "texelFetch({},{},{})",
+                            sampler_constructor, coordinate_expr, index_expr
+                        )
+                    }
+                }
+                ImageClass::Storage(_, _) => {
+                    format!("imageLoad({},{})", image_expr, coordinate_expr)
+                }
+                ImageClass::Depth => todo!(),
             };
 
             let width = 4;
@@ -909,7 +968,25 @@ fn write_expression<'a, 'b>(
                     "({} {})",
                     match op {
                         UnaryOperator::Negate => "-",
-                        UnaryOperator::Not => "~",
+                        UnaryOperator::Not => match ty.as_ref() {
+                            TypeInner::Scalar {
+                                kind: ScalarKind::Sint,
+                                ..
+                            } => "~",
+                            TypeInner::Scalar {
+                                kind: ScalarKind::Uint,
+                                ..
+                            } => "~",
+                            TypeInner::Scalar {
+                                kind: ScalarKind::Bool,
+                                ..
+                            } => "!",
+                            _ =>
+                                return Err(Error::Custom(format!(
+                                    "Cannot apply not to type {:?}",
+                                    ty
+                                ))),
+                        },
                     },
                     expr
                 )),
@@ -922,7 +999,7 @@ fn write_expression<'a, 'b>(
             let (right_expr, right_ty) =
                 write_expression(&builder.expressions[right], module, builder)?;
 
-            let op = match op {
+            let op_str = match op {
                 BinaryOperator::Add => "+",
                 BinaryOperator::Subtract => "-",
                 BinaryOperator::Multiply => "*",
@@ -944,26 +1021,51 @@ fn write_expression<'a, 'b>(
                 BinaryOperator::ShiftRightArithmetic => ">>",
             };
 
-            let ty = match (left_ty.as_ref(), right_ty.as_ref()) {
-                (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
-                (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
-                (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
-                (TypeInner::Vector { .. }, TypeInner::Scalar { .. }) => left_ty,
-                (TypeInner::Vector { .. }, TypeInner::Vector { .. }) => left_ty,
-                (TypeInner::Vector { .. }, TypeInner::Matrix { .. }) => left_ty,
-                (TypeInner::Matrix { .. }, TypeInner::Scalar { .. }) => left_ty,
-                (TypeInner::Matrix { .. }, TypeInner::Vector { .. }) => right_ty,
-                (TypeInner::Matrix { .. }, TypeInner::Matrix { .. }) => left_ty,
-                _ => {
-                    return Err(Error::Custom(format!(
-                        "Cannot apply {} to {} and {}",
-                        op, left_expr, right_expr
-                    )))
+            let ty = match op {
+                BinaryOperator::Add
+                | BinaryOperator::Subtract
+                | BinaryOperator::Multiply
+                | BinaryOperator::Divide
+                | BinaryOperator::Modulo
+                | BinaryOperator::And
+                | BinaryOperator::ExclusiveOr
+                | BinaryOperator::InclusiveOr
+                | BinaryOperator::LogicalAnd
+                | BinaryOperator::LogicalOr
+                | BinaryOperator::ShiftLeftLogical
+                | BinaryOperator::ShiftRightLogical
+                | BinaryOperator::ShiftRightArithmetic => {
+                    match (left_ty.as_ref(), right_ty.as_ref()) {
+                        (TypeInner::Scalar { .. }, TypeInner::Scalar { .. }) => left_ty,
+                        (TypeInner::Scalar { .. }, TypeInner::Vector { .. }) => right_ty,
+                        (TypeInner::Scalar { .. }, TypeInner::Matrix { .. }) => right_ty,
+                        (TypeInner::Vector { .. }, TypeInner::Scalar { .. }) => left_ty,
+                        (TypeInner::Vector { .. }, TypeInner::Vector { .. }) => left_ty,
+                        (TypeInner::Vector { .. }, TypeInner::Matrix { .. }) => left_ty,
+                        (TypeInner::Matrix { .. }, TypeInner::Scalar { .. }) => left_ty,
+                        (TypeInner::Matrix { .. }, TypeInner::Vector { .. }) => right_ty,
+                        (TypeInner::Matrix { .. }, TypeInner::Matrix { .. }) => left_ty,
+                        _ => {
+                            return Err(Error::Custom(format!(
+                                "Cannot apply '{}' to {} and {}",
+                                op_str, left_expr, right_expr
+                            )))
+                        }
+                    }
                 }
+                BinaryOperator::Equal
+                | BinaryOperator::NotEqual
+                | BinaryOperator::Less
+                | BinaryOperator::LessEqual
+                | BinaryOperator::Greater
+                | BinaryOperator::GreaterEqual => Cow::Owned(TypeInner::Scalar {
+                    kind: ScalarKind::Bool,
+                    width: 1,
+                }),
             };
 
             (
-                Cow::Owned(format!("({} {} {})", left_expr, op, right_expr)),
+                Cow::Owned(format!("({} {} {})", left_expr, op_str, right_expr)),
                 ty,
             )
         }
@@ -1284,7 +1386,7 @@ fn write_type<'a>(
             }
 
             Cow::Owned(format!(
-                "{}texture{}{}",
+                "{}{}{}{}",
                 match kind {
                     ScalarKind::Sint => "i",
                     ScalarKind::Uint => "u",
@@ -1293,6 +1395,10 @@ fn write_type<'a>(
                         return Err(Error::Custom(String::from(
                             "Cannot build image of booleans",
                         ))),
+                },
+                match class {
+                    ImageClass::Storage(_, _) => "image",
+                    _ => "texture",
                 },
                 ImageDimension(dim),
                 write_image_flags(arrayed, class, features)?
@@ -1460,9 +1566,9 @@ fn write_struct(
 
 fn is_valid_ident(ident: &str) -> bool {
     ident.starts_with(|c: char| c.is_ascii_alphabetic() || c == '_')
-        || ident.contains(|c: char| c.is_ascii_alphanumeric() || c == '_')
-        || !ident.starts_with("gl_")
-        || ident != "main"
+        && ident.contains(|c: char| c.is_ascii_alphanumeric() || c == '_')
+        && !ident.starts_with("gl_")
+        && ident != "main"
 }
 
 fn builtin_to_glsl(builtin: BuiltIn) -> &'static str {
@@ -1482,5 +1588,11 @@ fn builtin_to_glsl(builtin: BuiltIn) -> &'static str {
         BuiltIn::LocalInvocationId => "gl_LocalInvocationID",
         BuiltIn::LocalInvocationIndex => "gl_LocalInvocationIndex",
         BuiltIn::WorkGroupId => "gl_WorkGroupID",
+    }
+}
+
+fn write_format_glsl(format: StorageFormat) -> &'static str {
+    match format {
+        StorageFormat::Rgba32f => "rgba32f",
     }
 }
