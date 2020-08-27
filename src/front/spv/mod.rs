@@ -765,14 +765,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
-                Op::ImageSampleImplicitLod => {
+                Op::ImageSampleImplicitLod | Op::ImageSampleExplicitLod => {
                     inst.expect_at_least(5)?;
                     let result_type_id = self.next()?;
                     let result_id = self.next()?;
                     let sampled_image_id = self.next()?;
                     let coordinate_id = self.next()?;
-                    let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?;
-                    let coord_lexp = self.lookup_expression.lookup(coordinate_id)?;
+                    let si_lexp = self.lookup_sampled_image.lookup(sampled_image_id)?.clone();
+                    let coord_lexp = self.lookup_expression.lookup(coordinate_id)?.clone();
                     let coord_type_handle = self.lookup_type.lookup(coord_lexp.type_id)?.handle;
 
                     let sampler_type_handle =
@@ -814,11 +814,34 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => return Err(Error::InvalidSampleImage(image_type_handle)),
                     };
 
+                    let mut level = crate::SampleLevel::Auto;
+                    let mut base_wc = 5;
+                    if base_wc < inst.wc {
+                        let image_ops = self.next()?;
+                        base_wc += 1;
+                        let mask = spirv::ImageOperands::from_bits_truncate(image_ops);
+                        if mask.contains(spirv::ImageOperands::BIAS) {
+                            let bias_expr = self.next()?;
+                            let bias_handle = self.lookup_expression.lookup(bias_expr)?.handle;
+                            level = crate::SampleLevel::Bias(bias_handle);
+                            base_wc += 1;
+                        }
+                        if mask.contains(spirv::ImageOperands::LOD) {
+                            let lod_expr = self.next()?;
+                            let lod_handle = self.lookup_expression.lookup(lod_expr)?.handle;
+                            level = crate::SampleLevel::Exact(lod_handle);
+                            base_wc += 1;
+                        }
+                        for _ in base_wc..inst.wc {
+                            self.next()?;
+                        }
+                    }
+
                     let expr = crate::Expression::ImageSample {
                         image: si_lexp.image,
                         sampler: si_lexp.sampler,
                         coordinate: coord_lexp.handle,
-                        level: crate::SampleLevel::Auto,
+                        level,
                         depth_ref: None,
                     };
                     self.lookup_expression.insert(
