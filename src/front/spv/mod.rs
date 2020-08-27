@@ -763,6 +763,23 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::Dot => {
+                    inst.expect(5)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let left_id = self.next()?;
+                    let right_id = self.next()?;
+                    let left_expr = self.lookup_expression.lookup(left_id)?;
+                    let right_expr = self.lookup_expression.lookup(right_id)?;
+                    let expr = crate::Expression::DotProduct(left_expr.handle, right_expr.handle);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 Op::SampledImage => {
                     inst.expect(5)?;
                     let _result_type_id = self.next()?;
@@ -1030,6 +1047,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             inst.expect(base_wc + 1)?;
                             "atan2"
                         }
+                        Some(spirv::GLOp::Pow) => {
+                            inst.expect(base_wc + 2)?;
+                            "pow"
+                        }
                         Some(spirv::GLOp::MatrixInverse) => {
                             inst.expect(base_wc + 1)?;
                             "inverse"
@@ -1041,6 +1062,18 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         Some(spirv::GLOp::SmoothStep) => {
                             inst.expect(base_wc + 3)?;
                             "smoothstep"
+                        }
+                        Some(spirv::GLOp::FMin) => {
+                            inst.expect(base_wc + 2)?;
+                            "min"
+                        }
+                        Some(spirv::GLOp::FMax) => {
+                            inst.expect(base_wc + 2)?;
+                            "max"
+                        }
+                        Some(spirv::GLOp::FClamp) => {
+                            inst.expect(base_wc + 3)?;
+                            "clamp"
                         }
                         Some(spirv::GLOp::Length) => {
                             inst.expect(base_wc + 1)?;
