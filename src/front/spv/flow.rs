@@ -8,6 +8,7 @@ use super::function::{BlockId, MergeInstruction, Terminator};
 use crate::FastHashMap;
 
 use petgraph::{
+    algo::has_path_connecting,
     graph::{node_index, NodeIndex},
     visit::EdgeRef,
     Directed, Direction,
@@ -81,9 +82,11 @@ impl FlowGraph {
             }
 
             // Branch Edges
-            match self.flow[source_node_index].terminator {
+            let terminator = self.flow[source_node_index].terminator.clone();
+            match terminator {
                 Terminator::Branch { target_id } => {
                     let target_node_index = block_to_node[&target_id];
+
                     self.flow.add_edge(
                         source_node_index,
                         target_node_index,
@@ -107,8 +110,28 @@ impl FlowGraph {
                         ControlFlowEdgeType::IfFalse,
                     );
                 }
-                Terminator::Switch { .. } => {
-                    // TODO
+                Terminator::Switch {
+                    selector: _,
+                    default,
+                    ref targets,
+                } => {
+                    let default_node_index = block_to_node[&default];
+
+                    self.flow.add_edge(
+                        source_node_index,
+                        default_node_index,
+                        ControlFlowEdgeType::Forward,
+                    );
+
+                    for (_, target_block_id) in targets.iter() {
+                        let target_node_index = block_to_node[&target_block_id];
+
+                        self.flow.add_edge(
+                            source_node_index,
+                            target_node_index,
+                            ControlFlowEdgeType::Forward,
+                        );
+                    }
                 }
                 Terminator::Return { .. } => {
                     self.flow[source_node_index].ty = Some(ControlFlowNodeType::Return)
@@ -120,6 +143,7 @@ impl FlowGraph {
             };
         }
 
+        // 2.
         // Classify Nodes/Edges as one of [Break, Continue, Back]
         for edge_index in self.flow.edge_indices() {
             let (node_source_index, node_target_index) =
@@ -167,36 +191,103 @@ impl FlowGraph {
 
     /// Traverses the flow graph and returns a list of Naga's statements.
     pub fn to_naga(&self) -> Result<crate::Block, Error> {
-        self.naga_traverse(node_index(0))
+        self.naga_traverse(node_index(0), None)
     }
 
-    fn naga_traverse(&self, node_index: BlockNodeIndex) -> Result<crate::Block, Error> {
+    fn naga_traverse(
+        &self,
+        node_index: BlockNodeIndex,
+        stop_node_index: Option<BlockNodeIndex>,
+    ) -> Result<crate::Block, Error> {
+        if let Some(stop_node_index) = stop_node_index {
+            if stop_node_index == node_index {
+                return Ok(vec![]);
+            }
+        }
+
         let node = &self.flow[node_index];
 
         match node.ty {
             Some(ControlFlowNodeType::Header) => {
+                let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
+                let mut result = node.block.clone();
+
                 match node.terminator {
                     Terminator::BranchConditional {
                         condition,
                         true_id,
                         false_id,
                     } => {
-                        let mut result = node.block.clone();
                         result.push(crate::Statement::If {
                             condition,
-                            accept: self.naga_traverse(self.block_to_node[&true_id])?,
-                            reject: self.naga_traverse(self.block_to_node[&false_id])?,
+                            accept: self.naga_traverse(
+                                self.block_to_node[&true_id],
+                                Some(merge_node_index),
+                            )?,
+                            reject: self.naga_traverse(
+                                self.block_to_node[&false_id],
+                                Some(merge_node_index),
+                            )?,
                         });
-                        Ok(result)
                     }
-                    Terminator::Switch { .. } => {
-                        // TODO
-                        Ok(node.block.clone())
+                    Terminator::Switch {
+                        selector,
+                        default,
+                        ref targets,
+                    } => {
+                        let mut cases = FastHashMap::default();
+
+                        for i in 0..targets.len() {
+                            let left_target_node_index = self.block_to_node[&targets[i].1];
+
+                            let fallthrough: Option<crate::FallThrough> = if i < targets.len() - 1 {
+                                let right_target_node_index = self.block_to_node[&targets[i + 1].1];
+                                if has_path_connecting(
+                                    &self.flow,
+                                    left_target_node_index,
+                                    right_target_node_index,
+                                    None,
+                                ) {
+                                    Some(crate::FallThrough {})
+                                } else {
+                                    None
+                                }
+                            } else {
+                                None
+                            };
+
+                            cases.insert(
+                                targets[i].0,
+                                (
+                                    self.naga_traverse(
+                                        left_target_node_index,
+                                        Some(merge_node_index),
+                                    )?,
+                                    fallthrough,
+                                ),
+                            );
+                        }
+
+                        result.push(crate::Statement::Switch {
+                            selector,
+                            cases,
+                            default: self.naga_traverse(
+                                self.block_to_node[&default],
+                                Some(merge_node_index),
+                            )?,
+                        });
                     }
-                    _ => Err(Error::InvalidTerminator),
-                }
+                    _ => {
+                        return Err(Error::InvalidTerminator);
+                    }
+                };
+
+                result.extend(self.naga_traverse(merge_node_index, None)?);
+
+                Ok(result)
             }
             Some(ControlFlowNodeType::Loop) => {
+                let merge_node_index = self.block_to_node[&node.merge.unwrap().merge_block_id];
                 let continuing: crate::Block = {
                     let continue_edge = self
                         .flow
@@ -215,12 +306,14 @@ impl FlowGraph {
                         false_id,
                     } => body.push(crate::Statement::If {
                         condition,
-                        accept: self.naga_traverse(self.block_to_node[&true_id])?,
-                        reject: self.naga_traverse(self.block_to_node[&false_id])?,
+                        accept: self
+                            .naga_traverse(self.block_to_node[&true_id], Some(merge_node_index))?,
+                        reject: self
+                            .naga_traverse(self.block_to_node[&false_id], Some(merge_node_index))?,
                     }),
-                    Terminator::Branch { target_id } => {
-                        body.extend(self.naga_traverse(self.block_to_node[&target_id])?)
-                    }
+                    Terminator::Branch { target_id } => body.extend(
+                        self.naga_traverse(self.block_to_node[&target_id], Some(merge_node_index))?,
+                    ),
                     _ => return Err(Error::InvalidTerminator),
                 };
 
@@ -235,8 +328,10 @@ impl FlowGraph {
                         false_id,
                     } => result.push(crate::Statement::If {
                         condition,
-                        accept: self.naga_traverse(self.block_to_node[&true_id])?,
-                        reject: self.naga_traverse(self.block_to_node[&false_id])?,
+                        accept: self
+                            .naga_traverse(self.block_to_node[&true_id], stop_node_index)?,
+                        reject: self
+                            .naga_traverse(self.block_to_node[&false_id], stop_node_index)?,
                     }),
                     _ => return Err(Error::InvalidTerminator),
                 };
@@ -267,7 +362,9 @@ impl FlowGraph {
             None => match node.terminator {
                 Terminator::Branch { target_id } => {
                     let mut result = node.block.clone();
-                    result.extend(self.naga_traverse(self.block_to_node[&target_id])?);
+                    result.extend(
+                        self.naga_traverse(self.block_to_node[&target_id], stop_node_index)?,
+                    );
                     Ok(result)
                 }
                 _ => Ok(node.block.clone()),

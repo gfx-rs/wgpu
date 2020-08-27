@@ -1040,6 +1040,14 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, map_binary_operator(op)?)?;
                 }
+                Op::Kill => {
+                    inst.expect(1)?;
+                    break Terminator::Kill;
+                }
+                Op::Unreachable => {
+                    inst.expect(1)?;
+                    break Terminator::Unreachable;
+                }
                 Op::Return => {
                     inst.expect(1)?;
                     break Terminator::Return { value: None };
@@ -1072,7 +1080,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let default = self.next()?;
 
                     let mut targets = Vec::new();
-                    for _ in 0..inst.wc - 3 {
+                    for _ in 0..(inst.wc - 3) / 2 {
                         let literal = self.next()?;
                         let target = self.next()?;
                         targets.push((literal as i32, target));
