@@ -5,12 +5,15 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        rust: [1.41.0, nightly]
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
         with:
           profile: minimal
-          toolchain: 1.41.0
+          toolchain: ${{ matrix.rust }}
           override: true
       - uses: actions-rs/cargo@v1
         name: Default test
