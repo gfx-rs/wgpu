@@ -1041,6 +1041,24 @@ fn write_expression<'a, 'b>(
                 left_ty,
             )
         }
+        Expression::As(value, kind) => {
+            let (value_expr, value_ty) =
+                write_expression(&builder.expressions[value], module, builder)?;
+            let (width, out_ty) = match *value_ty.as_ref() {
+                TypeInner::Scalar { width, kind: _ } => {
+                    (width, Cow::Owned(TypeInner::Scalar { kind, width }))
+                }
+                TypeInner::Vector {
+                    width,
+                    kind: _,
+                    size,
+                } => (width, Cow::Owned(TypeInner::Vector { kind, width, size })),
+                _ => return Err(Error::Custom(format!("Cannot cast {}", value_expr))),
+            };
+            let ty_expr = map_scalar(kind, width, builder.features)?;
+
+            (Cow::Owned(format!("{}({})", ty_expr, value_expr)), out_ty)
+        }
         Expression::Derivative { axis, expr } => {
             let (expr, ty) = write_expression(&builder.expressions[expr], module, builder)?;
 
@@ -1138,6 +1156,28 @@ fn write_constant(
     })
 }
 
+fn map_scalar(
+    kind: ScalarKind,
+    width: crate::Bytes,
+    features: SupportedFeatures,
+) -> Result<&'static str, Error> {
+    Ok(match kind {
+        ScalarKind::Sint => "int",
+        ScalarKind::Uint => "uint",
+        ScalarKind::Float => match width {
+            4 => "float",
+            8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => "double",
+            _ => {
+                return Err(Error::Custom(format!(
+                    "Cannot build float of width {}",
+                    width
+                )))
+            }
+        },
+        ScalarKind::Bool => "bool",
+    })
+}
+
 fn write_type<'a>(
     ty: Handle<Type>,
     types: &Arena<Type>,
@@ -1146,21 +1186,7 @@ fn write_type<'a>(
     features: SupportedFeatures,
 ) -> Result<Cow<'a, str>, Error> {
     Ok(match types[ty].inner {
-        TypeInner::Scalar { kind, width } => match kind {
-            ScalarKind::Sint => Cow::Borrowed("int"),
-            ScalarKind::Uint => Cow::Borrowed("uint"),
-            ScalarKind::Float => match width {
-                4 => Cow::Borrowed("float"),
-                8 if features.contains(SupportedFeatures::DOUBLE_TYPE) => Cow::Borrowed("double"),
-                _ => {
-                    return Err(Error::Custom(format!(
-                        "Cannot build float of width {}",
-                        width
-                    )))
-                }
-            },
-            ScalarKind::Bool => Cow::Borrowed("bool"),
-        },
+        TypeInner::Scalar { kind, width } => Cow::Borrowed(map_scalar(kind, width, features)?),
         TypeInner::Vector { size, kind, width } => Cow::Owned(format!(
             "{}vec{}",
             match kind {

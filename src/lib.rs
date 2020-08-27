@@ -526,6 +526,8 @@ pub enum Expression {
     DotProduct(Handle<Expression>, Handle<Expression>),
     /// Cross product between two vectors.
     CrossProduct(Handle<Expression>, Handle<Expression>),
+    /// Cast a scalar or a vector to another kind.
+    As(Handle<Expression>, ScalarKind),
     /// Compute the derivative on an axis.
     Derivative {
         axis: DerivativeAxis,

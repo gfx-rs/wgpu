@@ -1009,6 +1009,29 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         },
                     );
                 }
+                Op::ConvertSToF | Op::ConvertUToF | Op::ConvertFToU | Op::ConvertFToS => {
+                    inst.expect_at_least(4)?;
+                    let result_type_id = self.next()?;
+                    let result_id = self.next()?;
+                    let value_id = self.next()?;
+
+                    let value_expr = self.lookup_expression.lookup(value_id)?;
+                    let ty_lookup = self.lookup_type.lookup(result_type_id)?;
+                    let kind = match type_arena[ty_lookup.handle].inner {
+                        crate::TypeInner::Scalar { kind, .. }
+                        | crate::TypeInner::Vector { kind, .. } => kind,
+                        _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
+                    };
+
+                    let expr = crate::Expression::As(value_expr.handle, kind);
+                    self.lookup_expression.insert(
+                        result_id,
+                        LookupExpression {
+                            handle: expressions.append(expr),
+                            type_id: result_type_id,
+                        },
+                    );
+                }
                 Op::FunctionCall => {
                     inst.expect_at_least(4)?;
                     let result_type_id = self.next()?;

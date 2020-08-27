@@ -44,6 +44,7 @@ pub enum Error {
     InvalidSampleSampler(Handle<crate::Type>),
     InvalidSampleCoordinates(Handle<crate::Type>),
     InvalidDepthReference(Handle<crate::Type>),
+    InvalidAsType(Handle<crate::Type>),
     InconsistentComparisonSampling(Handle<crate::Type>),
     WrongFunctionResultType(spirv::Word),
     WrongFunctionParameterType(spirv::Word),

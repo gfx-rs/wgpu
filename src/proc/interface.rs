@@ -80,6 +80,9 @@ impl<'a> Interface<'a> {
                 self.add_inputs(left);
                 self.add_inputs(right);
             }
+            E::As(expr, _) => {
+                self.add_inputs(expr);
+            }
             E::Derivative { expr, .. } => {
                 self.add_inputs(expr);
             }

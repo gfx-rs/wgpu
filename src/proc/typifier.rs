@@ -182,8 +182,34 @@ impl Typifier {
                         };
                         types.fetch_or_append(Type { name: None, inner })
                     }
-                    crate::Expression::DotProduct(_, _) => unimplemented!(),
+                    crate::Expression::DotProduct(left_expr, _) => {
+                        let left_ty = self.types[left_expr.index()];
+                        let inner = match types[left_ty].inner {
+                            crate::TypeInner::Vector {
+                                kind,
+                                size: _,
+                                width,
+                            } => crate::TypeInner::Scalar { kind, width },
+                            ref other => panic!("incompatible dot of {:?}", other),
+                        };
+                        types.fetch_or_append(Type { name: None, inner })
+                    }
                     crate::Expression::CrossProduct(_, _) => unimplemented!(),
+                    crate::Expression::As(expr, kind) => {
+                        let ty_handle = self.types[expr.index()];
+                        let inner = match types[ty_handle].inner {
+                            crate::TypeInner::Scalar { kind: _, width } => {
+                                crate::TypeInner::Scalar { kind, width }
+                            }
+                            crate::TypeInner::Vector {
+                                kind: _,
+                                size,
+                                width,
+                            } => crate::TypeInner::Vector { kind, size, width },
+                            ref other => panic!("incompatible as of {:?}", other),
+                        };
+                        types.fetch_or_append(Type { name: None, inner })
+                    }
                     crate::Expression::Derivative { .. } => unimplemented!(),
                     crate::Expression::Call {
                         origin: crate::FunctionOrigin::External(ref name),
