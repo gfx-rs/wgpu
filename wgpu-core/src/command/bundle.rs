@@ -722,7 +722,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
                         bundle_encoder
                             .context
                             .check_compatible(&pipeline.pass_context)
-                            .map_err(|e| RenderCommandError::IncompatiblePipeline(e))?;
+                            .map_err(RenderCommandError::IncompatiblePipeline)?;
 
                         //TODO: check read-only depth
 

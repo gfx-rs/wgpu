@@ -1018,7 +1018,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     context
                         .check_compatible(&pipeline.pass_context)
-                        .map_err(|e| RenderCommandError::IncompatiblePipeline(e))?;
+                        .map_err(RenderCommandError::IncompatiblePipeline)?;
 
                     if pipeline.flags.contains(PipelineFlags::WRITES_DEPTH_STENCIL)
                         && is_ds_read_only
@@ -1515,7 +1515,7 @@ impl<G: GlobalIdentityHandlerFactory> Global<G> {
 
                     context
                         .check_compatible(&bundle.context)
-                        .map_err(|e| RenderPassError::IncompatibleRenderBundle(e))?;
+                        .map_err(RenderPassError::IncompatibleRenderBundle)?;
 
                     unsafe {
                         bundle.execute(
