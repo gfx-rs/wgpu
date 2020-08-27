@@ -411,6 +411,31 @@ impl<I: Iterator<Item = u32>> Parser<I> {
         Ok(())
     }
 
+    fn parse_expr_unary_op(
+        &mut self,
+        expressions: &mut Arena<crate::Expression>,
+        op: crate::UnaryOperator,
+    ) -> Result<(), Error> {
+        let result_type_id = self.next()?;
+        let result_id = self.next()?;
+        let p_id = self.next()?;
+
+        let p_lexp = self.lookup_expression.lookup(p_id)?;
+
+        let expr = crate::Expression::Unary {
+            op,
+            expr: p_lexp.handle,
+        };
+        self.lookup_expression.insert(
+            result_id,
+            LookupExpression {
+                handle: expressions.append(expr),
+                type_id: result_type_id,
+            },
+        );
+        Ok(())
+    }
+
     fn parse_expr_binary_op(
         &mut self,
         expressions: &mut Arena<crate::Expression>,
@@ -703,53 +728,37 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     });
                 }
                 // Arithmetic Instructions +, -, *, /, %
-                _ if inst.op >= Op::IAdd && inst.op <= Op::FMod => {
+                Op::SNegate | Op::FNegate => {
+                    inst.expect(4)?;
+                    self.parse_expr_unary_op(expressions, crate::UnaryOperator::Negate)?;
+                }
+                Op::IAdd | Op::FAdd => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Add)?;
+                }
+                Op::ISub | Op::FSub => {
                     inst.expect(5)?;
                     self.parse_expr_binary_op(expressions, crate::BinaryOperator::Subtract)?;
                 }
-                Op::VectorTimesScalar => {
+                Op::IMul | Op::FMul => {
                     inst.expect(5)?;
-                    let result_type_id = self.next()?;
-                    let result_id = self.next()?;
-                    let vector_id = self.next()?;
-                    let scalar_id = self.next()?;
-
-                    let vector_lexp = self.lookup_expression.lookup(vector_id)?;
-                    let scalar_lexp = self.lookup_expression.lookup(scalar_id)?;
-
-                    let expr = crate::Expression::Binary {
-                        op: crate::BinaryOperator::Multiply,
-                        left: vector_lexp.handle,
-                        right: scalar_lexp.handle,
-                    };
-                    self.lookup_expression.insert(
-                        result_id,
-                        LookupExpression {
-                            handle: expressions.append(expr),
-                            type_id: result_type_id,
-                        },
-                    );
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Multiply)?;
                 }
-                Op::MatrixTimesVector => {
+                Op::SDiv | Op::UDiv | Op::FDiv => {
                     inst.expect(5)?;
-                    let result_type_id = self.next()?;
-                    let result_id = self.next()?;
-                    let matrix_id = self.next()?;
-                    let vector_id = self.next()?;
-                    let matrix_lexp = self.lookup_expression.lookup(matrix_id)?;
-                    let vector_lexp = self.lookup_expression.lookup(vector_id)?;
-                    let expr = crate::Expression::Binary {
-                        op: crate::BinaryOperator::Multiply,
-                        left: matrix_lexp.handle,
-                        right: vector_lexp.handle,
-                    };
-                    self.lookup_expression.insert(
-                        result_id,
-                        LookupExpression {
-                            handle: expressions.append(expr),
-                            type_id: result_type_id,
-                        },
-                    );
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Divide)?;
+                }
+                Op::UMod | Op::FMod | Op::SRem | Op::FRem => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Modulo)?;
+                }
+                Op::VectorTimesScalar
+                | Op::VectorTimesMatrix
+                | Op::MatrixTimesScalar
+                | Op::MatrixTimesVector
+                | Op::MatrixTimesMatrix => {
+                    inst.expect(5)?;
+                    self.parse_expr_binary_op(expressions, crate::BinaryOperator::Multiply)?;
                 }
                 Op::Transpose => {
                     inst.expect(4)?;
@@ -772,9 +781,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_id = self.next()?;
                     let left_id = self.next()?;
                     let right_id = self.next()?;
-                    let left_expr = self.lookup_expression.lookup(left_id)?;
-                    let right_expr = self.lookup_expression.lookup(right_id)?;
-                    let expr = crate::Expression::DotProduct(left_expr.handle, right_expr.handle);
+                    let left_lexp = self.lookup_expression.lookup(left_id)?;
+                    let right_lexp = self.lookup_expression.lookup(right_id)?;
+                    let expr = crate::Expression::DotProduct(left_lexp.handle, right_lexp.handle);
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
@@ -1015,7 +1024,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     let result_id = self.next()?;
                     let value_id = self.next()?;
 
-                    let value_expr = self.lookup_expression.lookup(value_id)?;
+                    let value_lexp = self.lookup_expression.lookup(value_id)?;
                     let ty_lookup = self.lookup_type.lookup(result_type_id)?;
                     let kind = match type_arena[ty_lookup.handle].inner {
                         crate::TypeInner::Scalar { kind, .. }
@@ -1023,7 +1032,7 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         _ => return Err(Error::InvalidAsType(ty_lookup.handle)),
                     };
 
-                    let expr = crate::Expression::As(value_expr.handle, kind);
+                    let expr = crate::Expression::As(value_lexp.handle, kind);
                     self.lookup_expression.insert(
                         result_id,
                         LookupExpression {
@@ -1069,8 +1078,40 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                     }
                     let inst_id = self.next()?;
                     let name = match spirv::GLOp::from_u32(inst_id) {
-                        Some(spirv::GLOp::Atan2) => {
+                        Some(spirv::GLOp::FAbs) | Some(spirv::GLOp::SAbs) => {
                             inst.expect(base_wc + 1)?;
+                            "abs"
+                        }
+                        Some(spirv::GLOp::FSign) | Some(spirv::GLOp::SSign) => {
+                            inst.expect(base_wc + 1)?;
+                            "sign"
+                        }
+                        Some(spirv::GLOp::Floor) => {
+                            inst.expect(base_wc + 1)?;
+                            "floor"
+                        }
+                        Some(spirv::GLOp::Ceil) => {
+                            inst.expect(base_wc + 1)?;
+                            "ceil"
+                        }
+                        Some(spirv::GLOp::Fract) => {
+                            inst.expect(base_wc + 1)?;
+                            "fract"
+                        }
+                        Some(spirv::GLOp::Sin) => {
+                            inst.expect(base_wc + 1)?;
+                            "sin"
+                        }
+                        Some(spirv::GLOp::Cos) => {
+                            inst.expect(base_wc + 1)?;
+                            "cos"
+                        }
+                        Some(spirv::GLOp::Tan) => {
+                            inst.expect(base_wc + 1)?;
+                            "tan"
+                        }
+                        Some(spirv::GLOp::Atan2) => {
+                            inst.expect(base_wc + 2)?;
                             "atan2"
                         }
                         Some(spirv::GLOp::Pow) => {
@@ -1084,6 +1125,10 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                         Some(spirv::GLOp::FMix) => {
                             inst.expect(base_wc + 3)?;
                             "mix"
+                        }
+                        Some(spirv::GLOp::Step) => {
+                            inst.expect(base_wc + 2)?;
+                            "step"
                         }
                         Some(spirv::GLOp::SmoothStep) => {
                             inst.expect(base_wc + 3)?;
@@ -1105,9 +1150,17 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                             inst.expect(base_wc + 1)?;
                             "length"
                         }
+                        Some(spirv::GLOp::Cross) => {
+                            inst.expect(base_wc + 2)?;
+                            "cross"
+                        }
                         Some(spirv::GLOp::Normalize) => {
                             inst.expect(base_wc + 1)?;
                             "normalize"
+                        }
+                        Some(spirv::GLOp::Reflect) => {
+                            inst.expect(base_wc + 2)?;
+                            "reflect"
                         }
                         _ => return Err(Error::UnsupportedExtInst(inst_id)),
                     };
@@ -1149,9 +1202,9 @@ impl<I: Iterator<Item = u32>> Parser<I> {
                 Op::ReturnValue => {
                     inst.expect(2)?;
                     let value_id = self.next()?;
-                    let value_expr = self.lookup_expression.lookup(value_id)?;
+                    let value_lexp = self.lookup_expression.lookup(value_id)?;
                     break Terminator::Return {
-                        value: Some(value_expr.handle),
+                        value: Some(value_lexp.handle),
                     };
                 }
                 Op::Branch => {
